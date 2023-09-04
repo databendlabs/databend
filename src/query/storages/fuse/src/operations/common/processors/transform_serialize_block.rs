@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -30,7 +31,6 @@ use storages_common_index::BloomIndex;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
-use crate::io::BlockSerialization;
 use crate::metrics::metrics_inc_block_index_write_bytes;
 use crate::metrics::metrics_inc_block_index_write_milliseconds;
 use crate::metrics::metrics_inc_block_index_write_nums;
@@ -56,7 +56,9 @@ enum State {
         index: Option<BlockMetaIndex>,
     },
     Serialized {
-        serialized: BlockSerialization,
+        // serialized: BlockSerialization,
+        block: DataBlock,
+        stats_type: ClusterStatsGenType,
         index: Option<BlockMetaIndex>,
     },
 }
@@ -69,6 +71,8 @@ pub struct TransformSerializeBlock {
 
     block_builder: BlockBuilder,
     dal: Operator,
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 impl TransformSerializeBlock {
@@ -98,6 +102,8 @@ impl TransformSerializeBlock {
             output_data: None,
             block_builder,
             dal: table.get_operator(),
+            table: table.clone(),
+            prev_snapshot_time: None,
         })
     }
 
@@ -215,18 +221,11 @@ impl Processor for TransformSerializeBlock {
                 stats_type,
                 index,
             } => {
-                let serialized =
-                    self.block_builder
-                        .build(block, |block, generator| match &stats_type {
-                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
-                            ClusterStatsGenType::WithOrigin(origin_stats) => {
-                                let cluster_stats = generator
-                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
-                                Ok((cluster_stats, block))
-                            }
-                        })?;
-
-                self.state = State::Serialized { serialized, index };
+                self.state = State::Serialized {
+                    block,
+                    stats_type,
+                    index,
+                };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -236,7 +235,40 @@ impl Processor for TransformSerializeBlock {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized { serialized, index } => {
+            State::Serialized {
+                block,
+                stats_type,
+                index,
+            } => {
+                let prev_snapshot_time = match self.prev_snapshot_time {
+                    None => {
+                        let prev_snapshot_time = match self.table.read_table_snapshot().await? {
+                            Some(snapshot) => snapshot
+                                .timestamp
+                                .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                            None => Utc::now().timestamp(),
+                        };
+                        self.prev_snapshot_time = Some(prev_snapshot_time);
+                        prev_snapshot_time
+                    }
+                    Some(prev_snapshot_time) => prev_snapshot_time,
+                };
+                let serialized = self
+                    .block_builder
+                    .build(
+                        block,
+                        prev_snapshot_time,
+                        |block, generator| match &stats_type {
+                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                            ClusterStatsGenType::WithOrigin(origin_stats) => {
+                                let cluster_stats = generator
+                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
+                                Ok((cluster_stats, block))
+                            }
+                        },
+                    )
+                    .await?;
+
                 let start = Instant::now();
                 // write block data.
                 let raw_block_data = serialized.block_raw_data;

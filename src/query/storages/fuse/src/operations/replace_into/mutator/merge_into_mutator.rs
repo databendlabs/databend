@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use ahash::AHashMap;
+use chrono::Utc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::base::ProgressValues;
@@ -81,6 +82,7 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
+use crate::FuseTable;
 struct AggregationContext {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_slots_in_charge: Option<BlockSlotDescription>,
@@ -101,6 +103,7 @@ struct AggregationContext {
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
     io_request_semaphore: Arc<Semaphore>,
+    fuse_table: Arc<FuseTable>,
 }
 
 // Apply MergeIntoOperations to segments
@@ -123,6 +126,7 @@ impl MergeIntoOperationAggregator {
         read_settings: ReadSettings,
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
+        fuse_table: Arc<FuseTable>,
     ) -> Result<Self> {
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
@@ -190,6 +194,7 @@ impl MergeIntoOperationAggregator {
                 segment_reader,
                 block_builder,
                 io_request_semaphore,
+                fuse_table,
             }),
         })
     }
@@ -512,17 +517,22 @@ impl AggregationContext {
             }
         };
 
+        let prev_snapshot_time = match self.fuse_table.read_table_snapshot().await? {
+            Some(snapshot) => snapshot
+                .timestamp
+                .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+            None => Utc::now().timestamp(),
+        };
+
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
-        let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
-                block_builder.build(new_block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block))
-                })
+        let serialized = block_builder
+            .build(new_block, prev_snapshot_time, |block, generator| {
+                let cluster_stats =
+                    generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                Ok((cluster_stats, block))
             })
             .await?;
 

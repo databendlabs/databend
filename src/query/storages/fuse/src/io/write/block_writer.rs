@@ -168,13 +168,21 @@ pub struct BlockBuilder {
 }
 
 impl BlockBuilder {
-    pub fn build<F>(&self, data_block: DataBlock, f: F) -> Result<BlockSerialization>
-    where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
+    pub async fn build<F>(
+        &self,
+        data_block: DataBlock,
+        prev_snapshot_time: i64,
+        f: F,
+    ) -> Result<BlockSerialization>
+    where
+        F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>,
     {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
-        let (block_location, block_id) = self.meta_locations.gen_block_location();
+        let (block_location, block_id) = self.meta_locations.gen_block_location(prev_snapshot_time);
 
-        let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
+        let bloom_index_location = self
+            .meta_locations
+            .block_bloom_index_location(prev_snapshot_time, &block_id);
         let bloom_index_state = BloomIndexState::try_create(
             self.ctx.clone(),
             &data_block,

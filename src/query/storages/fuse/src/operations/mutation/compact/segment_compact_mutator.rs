@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_catalog::table::Table;
 use common_exception::Result;
 use log::info;
@@ -52,6 +53,8 @@ pub struct SegmentCompactMutator {
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
     default_cluster_key_id: Option<u32>,
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 impl SegmentCompactMutator {
@@ -61,6 +64,7 @@ impl SegmentCompactMutator {
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
         default_cluster_key_id: Option<u32>,
+        table: &FuseTable,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -69,6 +73,8 @@ impl SegmentCompactMutator {
             location_generator,
             compaction: Default::default(),
             default_cluster_key_id,
+            table: table.clone(),
+            prev_snapshot_time: None,
         })
     }
 
@@ -94,11 +100,29 @@ impl SegmentCompactMutator {
         let num_segments = base_segment_locations.len();
         let limit = std::cmp::max(2, self.compact_params.limit.unwrap_or(num_segments));
 
+        let prev_snapshot_time = match self.prev_snapshot_time {
+            None => {
+                let prev_snapshot_time = match self.table.read_table_snapshot().await? {
+                    Some(snapshot) => snapshot
+                        .timestamp
+                        .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                    None => Utc::now().timestamp(),
+                };
+                self.prev_snapshot_time = Some(prev_snapshot_time);
+                prev_snapshot_time
+            }
+            Some(prev_snapshot_time) => prev_snapshot_time,
+        };
+
         // prepare compactor
         let schema = Arc::new(self.compact_params.base_snapshot.schema.clone());
         let fuse_segment_io =
             SegmentsIO::create(self.ctx.clone(), self.data_accessor.clone(), schema);
-        let segment_writer = SegmentWriter::new(&self.data_accessor, &self.location_generator);
+        let segment_writer = SegmentWriter::new(
+            &self.data_accessor,
+            &self.location_generator,
+            prev_snapshot_time,
+        );
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,

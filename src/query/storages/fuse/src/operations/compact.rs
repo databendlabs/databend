@@ -90,8 +90,9 @@ impl FuseTable {
             ctx.clone(),
             options,
             self.meta_location_generator().clone(),
-            self.operator.clone(),
+            self.get_operator(),
             self.cluster_key_id(),
+            self,
         )?;
 
         if !segment_mutator.target_select().await? {
@@ -175,11 +176,8 @@ impl FuseTable {
         pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let compact_aggregator = CompactAggregator::new(
-                self.operator.clone(),
-                self.meta_location_generator().clone(),
-                mutator.clone(),
-            );
+            let compact_aggregator =
+                CompactAggregator::new(self.operator.clone(), self, mutator.clone());
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,
                 output,

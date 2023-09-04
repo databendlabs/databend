@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -71,6 +72,8 @@ pub struct TableMutationAggregator {
     kind: MutationKind,
     start_time: Instant,
     finished_tasks: usize,
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -121,6 +124,8 @@ impl TableMutationAggregator {
             kind,
             finished_tasks: 0,
             start_time: Instant::now(),
+            table: table.clone(),
+            prev_snapshot_time: None,
         }
     }
 
@@ -276,6 +281,19 @@ impl TableMutationAggregator {
         let thresholds = self.thresholds;
         let default_cluster_key_id = self.default_cluster_key_id;
         let mut tasks = Vec::with_capacity(segment_indices.len());
+        let prev_snapshot_time = match self.prev_snapshot_time {
+            None => {
+                let prev_snapshot_time = match self.table.read_table_snapshot().await? {
+                    Some(snapshot) => snapshot
+                        .timestamp
+                        .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                    None => Utc::now().timestamp(),
+                };
+                self.prev_snapshot_time = Some(prev_snapshot_time);
+                prev_snapshot_time
+            }
+            Some(prev_snapshot_time) => prev_snapshot_time,
+        };
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
             let location = self.base_segments[index].clone();
@@ -312,7 +330,7 @@ impl TableMutationAggregator {
                     let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                     // write the segment info.
-                    let location = location_gen.gen_segment_info_location();
+                    let location = location_gen.gen_segment_info_location(prev_snapshot_time);
                     let serialized_segment = SerializedSegment {
                         path: location.clone(),
                         segment: Arc::new(new_segment),

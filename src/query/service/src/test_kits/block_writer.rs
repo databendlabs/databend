@@ -39,6 +39,7 @@ use uuid::Uuid;
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
+    now: i64,
 }
 
 impl<'a> BlockWriter<'a> {
@@ -49,6 +50,7 @@ impl<'a> BlockWriter<'a> {
         Self {
             location_generator,
             data_accessor,
+            now: Utc::now().timestamp(),
         }
     }
 
@@ -60,7 +62,7 @@ impl<'a> BlockWriter<'a> {
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
     ) -> Result<(BlockMeta, Option<ThriftFileMetaData>)> {
-        let (location, block_id) = self.location_generator.gen_block_location();
+        let (location, block_id) = self.location_generator.gen_block_location(self.now);
 
         let data_accessor = &self.data_accessor;
         let row_count = block.num_rows() as u64;
@@ -104,7 +106,7 @@ impl<'a> BlockWriter<'a> {
     ) -> Result<(u64, Option<Location>, Option<ThriftFileMetaData>)> {
         let location = self
             .location_generator
-            .block_bloom_index_location(&block_id);
+            .block_bloom_index_location(self.now, &block_id);
 
         let bloom_index_cols = BloomIndexColumns::All;
         let bloom_columns_map =

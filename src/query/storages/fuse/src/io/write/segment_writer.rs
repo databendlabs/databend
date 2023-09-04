@@ -26,16 +26,19 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SegmentWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
     data_accessor: &'a Operator,
+    prev_snapshot_time: i64,
 }
 
 impl<'a> SegmentWriter<'a> {
     pub fn new(
         data_accessor: &'a Operator,
         location_generator: &'a TableMetaLocationGenerator,
+        prev_snapshot_time: i64,
     ) -> Self {
         Self {
             location_generator,
             data_accessor,
+            prev_snapshot_time,
         }
     }
 
@@ -58,7 +61,9 @@ impl<'a> SegmentWriter<'a> {
     }
 
     fn generate_location(&self) -> Location {
-        let path = self.location_generator.gen_segment_info_location();
+        let path = self
+            .location_generator
+            .gen_segment_info_location(self.prev_snapshot_time);
         (path, SegmentInfo::VERSION)
     }
 }

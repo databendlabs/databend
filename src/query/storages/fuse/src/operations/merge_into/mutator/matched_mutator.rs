@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use ahash::AHashMap;
+use chrono::Utc;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_base::base::tokio::sync::Semaphore;
@@ -63,6 +64,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
 use crate::operations::BlockMetaIndex;
+use crate::FuseTable;
 
 enum MutationKind {
     Update(UpdateDataBlockMutation),
@@ -87,6 +89,7 @@ struct AggregationContext {
     read_settings: ReadSettings,
     block_builder: BlockBuilder,
     block_reader: Arc<BlockReader>,
+    fuse_table: Arc<FuseTable>,
 }
 
 type RemainMap = HashMap<usize, (Vec<usize>, Vec<usize>)>;
@@ -121,6 +124,7 @@ impl MatchedAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
+        fuse_table: Arc<FuseTable>,
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
@@ -200,6 +204,7 @@ impl MatchedAggregator {
                 data_accessor,
                 block_builder,
                 block_reader,
+                fuse_table,
             }),
             io_request_semaphore,
             segment_reader,
@@ -468,19 +473,24 @@ impl AggregationContext {
         }
         let res_block = DataBlock::concat(&res_blocks)?;
 
+        let prev_snapshot_time = match self.fuse_table.read_table_snapshot().await? {
+            Some(snapshot) => snapshot
+                .timestamp
+                .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+            None => Utc::now().timestamp(),
+        };
+
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
         let block_builder = self.block_builder.clone();
         let origin_stats = block_meta.cluster_stats.clone();
-        let serialized = GlobalIORuntime::instance()
-            .spawn_blocking(move || {
-                block_builder.build(res_block, |block, generator| {
-                    info!("serialize block before get cluster_stats:\n {:?}", block);
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    info!("serialize block after get cluster_stats:\n {:?}", block);
-                    Ok((cluster_stats, block))
-                })
+        let serialized = block_builder
+            .build(res_block, prev_snapshot_time, |block, generator| {
+                info!("serialize block before get cluster_stats:\n {:?}", block);
+                let cluster_stats =
+                    generator.gen_with_origin_stats(&block, origin_stats.clone())?;
+                info!("serialize block after get cluster_stats:\n {:?}", block);
+                Ok((cluster_stats, block))
             })
             .await?;
 

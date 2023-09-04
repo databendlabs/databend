@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use chrono::Utc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -32,7 +33,6 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
 
-use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -50,7 +50,6 @@ enum State {
     GenerateSegment,
     SerializedSegment {
         data: Vec<u8>,
-        location: String,
         segment: Arc<SegmentInfo>,
     },
     PreCommitSegment {
@@ -63,7 +62,6 @@ enum State {
 pub struct TransformSerializeSegment {
     ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
-    meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
     state: State,
     input: Arc<InputPort>,
@@ -73,6 +71,8 @@ pub struct TransformSerializeSegment {
 
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 impl TransformSerializeSegment {
@@ -90,7 +90,6 @@ impl TransformSerializeSegment {
             output,
             output_data: None,
             data_accessor: table.get_operator(),
-            meta_locations: table.meta_location_generator().clone(),
             state: State::None,
             accumulator: Default::default(),
             block_per_seg: table
@@ -98,6 +97,8 @@ impl TransformSerializeSegment {
                 as u64,
             thresholds,
             default_cluster_key_id,
+            table: table.clone(),
+            prev_snapshot_time: None,
         }
     }
 
@@ -191,7 +192,6 @@ impl Processor for TransformSerializeSegment {
 
                 self.state = State::SerializedSegment {
                     data: segment_info.to_bytes()?,
-                    location: self.meta_locations.gen_segment_info_location(),
                     segment: Arc::new(segment_info),
                 }
             }
@@ -234,11 +234,24 @@ impl Processor for TransformSerializeSegment {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::SerializedSegment {
-                data,
-                location,
-                segment,
-            } => {
+            State::SerializedSegment { data, segment } => {
+                let prev_snapshot_time = match self.prev_snapshot_time {
+                    None => {
+                        let prev_snapshot_time = match self.table.read_table_snapshot().await? {
+                            Some(snapshot) => snapshot
+                                .timestamp
+                                .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                            None => Utc::now().timestamp(),
+                        };
+                        self.prev_snapshot_time = Some(prev_snapshot_time);
+                        prev_snapshot_time
+                    }
+                    Some(prev_snapshot_time) => prev_snapshot_time,
+                };
+                let location = self
+                    .table
+                    .meta_location_generator()
+                    .gen_segment_info_location(prev_snapshot_time);
                 self.data_accessor.write(&location, data).await?;
                 info!("fuse append wrote down segment {} ", location);
 

@@ -12,6 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use chrono::Utc;
 use common_exception::Result;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -22,7 +23,7 @@ use uuid::Uuid;
 fn test_meta_locations() -> Result<()> {
     let test_prefix = "test_pref";
     let locs = TableMetaLocationGenerator::with_prefix(test_prefix.to_owned());
-    let ((path, _ver), _id) = locs.gen_block_location();
+    let ((path, _ver), _id) = locs.gen_block_location(Utc::now().timestamp());
     assert!(path.starts_with(test_prefix));
     let seg_loc = locs.gen_segment_info_location();
     assert!(seg_loc.starts_with(test_prefix));

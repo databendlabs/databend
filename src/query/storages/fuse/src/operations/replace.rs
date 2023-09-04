@@ -124,6 +124,7 @@ impl FuseTable {
                 read_settings,
                 block_builder.clone(),
                 io_request_semaphore.clone(),
+                Arc::new(self.clone()),
             )?;
             items.push(item.into_pipe_item());
         }

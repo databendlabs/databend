@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -43,6 +44,7 @@ use crate::operations::ReclusterMutator;
 use crate::statistics::reduce_block_metas;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
+use crate::FuseTable;
 
 pub struct ReclusterAggregator {
     ctx: Arc<dyn TableContext>,
@@ -59,6 +61,9 @@ pub struct ReclusterAggregator {
 
     removed_segment_indexes: Vec<usize>,
     removed_statistics: Statistics,
+
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 #[async_trait::async_trait]
@@ -142,6 +147,7 @@ impl ReclusterAggregator {
         dal: Operator,
         location_gen: TableMetaLocationGenerator,
         block_per_seg: usize,
+        table: &FuseTable,
     ) -> Self {
         ReclusterAggregator {
             ctx: mutator.ctx.clone(),
@@ -155,6 +161,8 @@ impl ReclusterAggregator {
             removed_statistics: mutator.removed_segment_summary.clone(),
             start_time: Instant::now(),
             abort_operation: AbortOperation::default(),
+            table: table.clone(),
+            prev_snapshot_time: None,
         }
     }
 
@@ -163,6 +171,20 @@ impl ReclusterAggregator {
         self.merged_blocks.sort_by(|a, b| {
             sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, self.default_cluster_key)
         });
+
+        let prev_snapshot_time = match self.prev_snapshot_time {
+            None => {
+                let prev_snapshot_time = match self.table.read_table_snapshot().await? {
+                    Some(snapshot) => snapshot
+                        .timestamp
+                        .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                    None => Utc::now().timestamp(),
+                };
+                self.prev_snapshot_time = Some(prev_snapshot_time);
+                prev_snapshot_time
+            }
+            Some(prev_snapshot_time) => prev_snapshot_time,
+        };
 
         let mut tasks = Vec::new();
         let merged_blocks = std::mem::take(&mut self.merged_blocks);
@@ -182,7 +204,7 @@ impl ReclusterAggregator {
                 let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                 // write the segment info.
-                let location = location_gen.gen_segment_info_location();
+                let location = location_gen.gen_segment_info_location(prev_snapshot_time);
                 let serialized_segment = SerializedSegment {
                     path: location.clone(),
                     segment: Arc::new(new_segment),

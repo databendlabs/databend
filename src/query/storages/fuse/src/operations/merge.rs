@@ -54,6 +54,7 @@ impl FuseTable {
             block_builder,
             io_request_semaphore,
             segment_locations,
+            Arc::new(self.clone()),
         )?;
         Ok(aggregator.into_pipe_item())
     }

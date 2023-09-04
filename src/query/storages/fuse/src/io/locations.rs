@@ -69,12 +69,13 @@ impl TableMetaLocationGenerator {
         &self.part_prefix
     }
 
-    pub fn gen_block_location(&self) -> (Location, Uuid) {
+    pub fn gen_block_location(&self, prev_snapshot_time: i64) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
+            "{}/{}/{}_{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
+            prev_snapshot_time,
             &self.part_prefix,
             part_uuid.as_simple(),
             DataBlock::VERSION,
@@ -83,12 +84,13 @@ impl TableMetaLocationGenerator {
         ((location_path, DataBlock::VERSION), part_uuid)
     }
 
-    pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
+    pub fn block_bloom_index_location(&self, prev_snapshot_time: i64, block_id: &Uuid) -> Location {
         (
             format!(
-                "{}/{}/{}_v{}.parquet",
+                "{}/{}/{}_{}_v{}.parquet",
                 &self.prefix,
                 FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
+                prev_snapshot_time,
                 block_id.as_simple(),
                 BlockFilter::VERSION,
             ),
@@ -96,12 +98,13 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn gen_segment_info_location(&self) -> String {
+    pub fn gen_segment_info_location(&self, prev_snapshot_time: i64) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
-            "{}/{}/{}_v{}.mpk",
+            "{}/{}/{}_{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
+            prev_snapshot_time,
             segment_uuid,
             SegmentInfo::VERSION,
         )

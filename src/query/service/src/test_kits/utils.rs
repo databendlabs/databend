@@ -117,12 +117,13 @@ pub async fn generate_segments(
     blocks_per_segment: usize,
 ) -> Result<Vec<(Location, SegmentInfo)>> {
     let mut segs = vec![];
+    let now = Utc::now().timestamp();
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
         let summary = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
         let segment_info = SegmentInfo::new(block_metas, summary);
-        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
+        let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator(), now);
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
         segs.push((segment_location, segment_info))
     }

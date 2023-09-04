@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use chrono::Utc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,7 +35,6 @@ use storages_common_table_meta::meta::Versioned;
 
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
-use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
@@ -44,11 +44,11 @@ use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
+use crate::FuseTable;
 
 pub struct CompactAggregator {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
-    location_gen: TableMetaLocationGenerator,
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
 
@@ -62,18 +62,16 @@ pub struct CompactAggregator {
 
     start_time: Instant,
     total_tasks: usize,
+
+    table: FuseTable,
+    prev_snapshot_time: Option<i64>,
 }
 
 impl CompactAggregator {
-    pub fn new(
-        dal: Operator,
-        location_gen: TableMetaLocationGenerator,
-        mutator: BlockCompactMutator,
-    ) -> Self {
+    pub fn new(dal: Operator, table: &FuseTable, mutator: BlockCompactMutator) -> Self {
         Self {
             ctx: mutator.ctx.clone(),
             dal,
-            location_gen,
             default_cluster_key_id: mutator.cluster_key_id,
             merged_segments: mutator.unchanged_segments_map,
             merged_statistics: mutator.unchanged_segment_statistics,
@@ -82,6 +80,8 @@ impl CompactAggregator {
             abort_operation: AbortOperation::default(),
             start_time: Instant::now(),
             total_tasks: mutator.compact_tasks.len(),
+            table: table.clone(),
+            prev_snapshot_time: None,
         }
     }
 }
@@ -138,7 +138,19 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                 self.default_cluster_key_id,
             );
             let new_segment = SegmentInfo::new(blocks, new_summary);
-            let location = self.location_gen.gen_segment_info_location();
+            let prev_snapshot_time = match self.prev_snapshot_time {
+                None => match self.table.read_table_snapshot().await? {
+                    Some(snapshot) => snapshot
+                        .timestamp
+                        .map_or(Utc::now().timestamp(), |timestamp| timestamp.timestamp()),
+                    None => Utc::now().timestamp(),
+                },
+                Some(prev_snapshot_time) => prev_snapshot_time,
+            };
+            let location = self
+                .table
+                .meta_location_generator()
+                .gen_segment_info_location(prev_snapshot_time);
             self.abort_operation.add_segment(location.clone());
             self.merged_segments
                 .insert(segment_idx, (location.clone(), SegmentInfo::VERSION));

@@ -297,6 +297,7 @@ impl FuseTable {
                 self.get_operator(),
                 self.meta_location_generator().clone(),
                 block_per_seg,
+                self,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,

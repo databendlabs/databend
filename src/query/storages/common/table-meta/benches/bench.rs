@@ -189,7 +189,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
 
     let location_gen = TableMetaLocationGenerator::with_prefix("/root/12345/67890".to_owned());
 
-    let (block_location, block_uuid) = location_gen.gen_block_location();
+    let (block_location, block_uuid) = location_gen.gen_block_location(Utc::now().timestamp());
     let block_meta = BlockMeta {
         row_count: 0,
         block_size: 0,
@@ -198,7 +198,9 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         col_metas,
         cluster_stats: None,
         location: block_location,
-        bloom_filter_index_location: Some(location_gen.block_bloom_index_location(&block_uuid)),
+        bloom_filter_index_location: Some(
+            location_gen.block_bloom_index_location(Utc::now().timestamp(), &block_uuid),
+        ),
         bloom_filter_index_size: 0,
         compression: Compression::Lz4,
         create_on: Some(Utc::now()),
