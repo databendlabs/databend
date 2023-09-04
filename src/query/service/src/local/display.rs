@@ -48,7 +48,6 @@ use crate::sessions::QueryContext;
 #[async_trait::async_trait]
 pub trait ChunkDisplay {
     async fn display(&mut self) -> Result<()>;
-    fn total_rows(&self) -> usize;
 }
 
 pub struct FormatDisplay<'a> {
@@ -62,7 +61,6 @@ pub struct FormatDisplay<'a> {
     plan: Plan,
     schema: DataSchemaRef,
     stream: SendableDataBlockStream,
-
     rows: usize,
     start: Instant,
 }
@@ -89,10 +87,10 @@ impl<'a> FormatDisplay<'a> {
             is_repl,
             stmt,
             plan,
+            rows: 0,
             schema,
             stream,
             replace_newline,
-            rows: 0,
             start,
             ctx,
         }
@@ -152,7 +150,7 @@ impl<'a> FormatDisplay<'a> {
             Some(pg)
         }
 
-        let mut rows = 0;
+        self.rows = 0;
         let is_finished = Arc::new(AtomicBool::new(false));
         let is_finished_clone = is_finished.clone();
 
@@ -200,7 +198,7 @@ impl<'a> FormatDisplay<'a> {
         while let Some(item) = self.stream.next().await {
             match item {
                 Ok(datablock) => {
-                    rows += datablock.num_rows();
+                    self.rows += datablock.num_rows();
                     blocks.push(datablock);
                 }
                 Err(err) => {
@@ -232,7 +230,7 @@ impl<'a> FormatDisplay<'a> {
         }
 
         if let Some(err) = error {
-            eprintln!("error happens after fetched {} rows: {}", rows, err);
+            eprintln!("error happens after fetched {} rows: {}", self.rows, err);
         }
 
         self.display_stats(stats).await;
@@ -306,10 +304,6 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
         }
 
         Ok(())
-    }
-
-    fn total_rows(&self) -> usize {
-        self.rows
     }
 }
 
