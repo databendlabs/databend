@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_metrics::histogram::Histogram;
+use common_metrics::load_global_prometheus_registry;
 use metrics::counter;
 use metrics::increment_gauge;
 use prometheus_client::metrics::counter::Counter;
@@ -89,15 +90,25 @@ struct FuseMetrics {
 impl FuseMetrics {
     fn init() -> Self {
         let metrics = Self::default();
+        let mut registry = load_global_prometheus_registry();
+        metrics
     }
+}
+
+lazy_static! {
+    static ref FUSE_METRICS: FuseMetrics = FuseMetrics::init();
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
     counter!(key!("commit_mutation_unresolvable_conflict"), 1);
+    FUSE_METRICS.commit_mutation_unresolvable_conflict.inc();
 }
 
 pub fn metrics_inc_commit_mutation_latest_snapshot_append_only() {
     counter!(key!("commit_mutation_latest_snapshot_append_only"), 1);
+    FUSE_METRICS
+        .commit_mutation_latest_snapshot_append_only
+        .inc();
 }
 
 pub fn metrics_inc_commit_mutation_modified_segment_exists_in_latest() {
