@@ -2049,17 +2049,59 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
+pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
+    #[derive(Clone)]
+    enum ColumnConstraint {
+        Nullable(bool),
+        DefaultExpr(Box<Expr>),
+    }
+
+    let nullable = alt((
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    ));
+    let expr = alt((map(
+        rule! {
+            DEFAULT ~ ^#subexpr(NOT_PREC)
+        },
+        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+    ),));
+
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+
     map(
         rule! {
-            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
+            #ident
+            ~ #type_name
+            ~ ( #nullable | #expr )*
+            ~ ( #comment )?
+            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
-        |(column, type_name, default_expr_opt)| {
-            (
-                column,
-                type_name,
-                default_expr_opt.map(|default_expr| default_expr.1),
-            )
+        |(name, data_type, constraints, comment)| {
+            let mut def = ColumnDefinition {
+                name,
+                data_type,
+                expr: None,
+                comment,
+            };
+            for constraint in constraints {
+                match constraint {
+                    ColumnConstraint::Nullable(nullable) => {
+                        if nullable {
+                            def.data_type = def.data_type.wrap_nullable();
+                        }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                }
+            }
+            def
         },
     )(i)
 }
@@ -2090,14 +2132,14 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            #column_type ~ ("," ~ COLUMN ~ #column_type)*
+            #modify_column_type ~ ("," ~ COLUMN ~ #modify_column_type)*
         },
-        |(column_type, column_type_vec)| {
-            let mut column_types = vec![column_type];
-            column_type_vec
+        |(column_def, column_def_vec)| {
+            let mut column_defs = vec![column_def];
+            column_def_vec
                 .iter()
-                .for_each(|(_, _, column_type)| column_types.push(column_type.clone()));
-            ModifyColumnAction::SetDataType(column_types)
+                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
+            ModifyColumnAction::SetDataType(column_defs)
         },
     );
 
