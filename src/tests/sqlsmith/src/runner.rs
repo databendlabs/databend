@@ -62,22 +62,38 @@ impl Runner {
     fn gen_create_base_table_sql() -> String {
         "
         CREATE TABLE t1 (
-            c1 boolean,
-            c2 uint8,
-            c3 uint16,
-            c4 uint32,
-            c5 uint64,
-            c6 int8,
-            c7 int16,
-            c8 int32,
-            c9 int64,
-            c10 float32,
-            c11 float64,
-            c12 decimal(7, 2),
-            c13 decimal(15, 2),
-            c14 string,
-            c15 date,
-            c16 timestamp
+            c1 boolean not null,
+            c2 boolean null,
+            c3 uint8 not null,
+            c4 uint8 null,
+            c5 uint16 not null,
+            c6 uint16 null,
+            c7 uint32 not null,
+            c8 uint32 null,
+            c9 uint64 not null,
+            c10 uint64 null,
+            c11 int8 not null,
+            c12 int8 null,
+            c13 int16 not null,
+            c14 int16 null,
+            c15 int32 not null,
+            c16 int32 null,
+            c17 int64 not null,
+            c18 int64 null,
+            c19 float32 not null,
+            c20 float32 null,
+            c21 float64 not null,
+            c22 float64 null,
+            c23 decimal(7, 2) not null,
+            c24 decimal(7, 2) null,
+            c25 decimal(15, 2) not null,
+            c26 decimal(15, 2) null,
+            c27 string not null,
+            c28 string null,
+            c29 date not null,
+            c30 date null,
+            c31 timestamp not null,
+            c32 timestamp null
         );
         "
         .to_string()
@@ -124,12 +140,21 @@ impl Runner {
 
         let table = self.create_base_table().await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
-        let mut generater = SqlGenerator::new(&mut rng, vec![table]);
+        let mut generater = SqlGenerator::new(&mut rng, vec![table.clone()]);
+
+        let insert_stmt = generater.generate_insert(&table, 50);
+        let insert_sql = insert_stmt.to_string();
+        tracing::info!("insert_sql: {}", insert_sql);
+        conn.exec(&insert_sql).await.unwrap();
         for _ in 0..self.count {
             let query = generater.gen_query();
-            println!("query={:?}", query.to_string());
+            let query_sql = query.to_string();
+            tracing::info!("query_sql: {}", query_sql);
             // TODO check query result
-            conn.exec(&query.to_string()).await.unwrap();
+            if let Err(e) = conn.exec(&query_sql).await {
+                let err = format!("error: {}", e);
+                tracing::error!(err);
+            }
         }
     }
 }

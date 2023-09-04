@@ -32,6 +32,7 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_storage::STDIN_FD;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -393,8 +394,12 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
-            let cfg = StorageFsConfig { root };
-            StorageParams::Fs(cfg)
+            if root == "/" && path == STDIN_FD {
+                StorageParams::Memory
+            } else {
+                let cfg = StorageFsConfig { root };
+                StorageParams::Fs(cfg)
+            }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
         v => {
