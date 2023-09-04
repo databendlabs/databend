@@ -15,17 +15,17 @@ doc = false
 [dependencies]
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 
-chrono = { version = "0.4.26", default-features = false }
-csv = "1.2.2"
-futures = "0.3.28"
-napi = { version = "2.13.2", default-features = false, features = [
+chrono = { version = "0.4", default-features = false }
+csv = "1.2"
+futures = "0.3"
+napi = { version = "2.13", default-features = false, features = [
     "napi6",
     "async",
     "serde-json",
     "chrono_date",
 ] }
-napi-derive = "2.13.0"
-serde_json = "1.0.97"
+napi-derive = "2.13"
+serde_json = "1.0"
 
 [build-dependencies]
 napi-build = "2"
