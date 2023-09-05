@@ -379,6 +379,14 @@ impl<'a> Binder {
                 }
                 self.bind_replace(bind_context, stmt).await?
             }
+            Statement::MergeInto(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In Merge resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_merge_into(bind_context, stmt).await?
+            },
             Statement::Delete {
                 hints,
                 table_reference,

@@ -37,6 +37,7 @@ use poem::Route;
 use super::v1::upload_to_stage;
 use crate::auth::AuthMgr;
 use crate::servers::http::middleware::HTTPSessionMiddleware;
+use crate::servers::http::middleware::PanicHandler;
 use crate::servers::http::v1::clickhouse_router;
 use crate::servers::http::v1::list_suggestions;
 use crate::servers::http::v1::query_route;
@@ -122,7 +123,7 @@ impl HttpHandler {
                 .nest("/health", ep_health),
         };
         ep.with(NormalizePath::new(TrailingSlash::Trim))
-            .with(CatchPanic::new())
+            .with(CatchPanic::new().with_handler(PanicHandler::new()))
             .boxed()
     }
 

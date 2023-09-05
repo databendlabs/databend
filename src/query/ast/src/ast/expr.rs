@@ -25,7 +25,7 @@ use ethnum::i256;
 
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -269,9 +269,9 @@ pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
     /// `.a.b`
-    Period { key: Identifier },
+    Dot { key: Identifier },
     /// `.1`
-    PeriodNumber { key: u64 },
+    DotNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier },
 }
@@ -311,8 +311,12 @@ pub enum TypeName {
 }
 
 impl TypeName {
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, TypeName::Nullable(_))
+    }
+
     pub fn wrap_nullable(self) -> Self {
-        if !matches!(&self, &Self::Nullable(_)) {
+        if !self.is_nullable() {
             Self::Nullable(Box::new(self))
         } else {
             self
@@ -922,7 +926,7 @@ impl Display for Expr {
                 if f.alternate() {
                     write!(f, "{}", column)?;
                 } else {
-                    write_period_separated_list(f, database.iter().chain(table))?;
+                    write_dot_separated_list(f, database.iter().chain(table))?;
                     if table.is_some() {
                         write!(f, ".")?;
                     }
@@ -1131,8 +1135,8 @@ impl Display for Expr {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::Period { key } => write!(f, ".{key}")?,
-                    MapAccessor::PeriodNumber { key } => write!(f, ".{key}")?,
+                    MapAccessor::Dot { key } => write!(f, ".{key}")?,
+                    MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }

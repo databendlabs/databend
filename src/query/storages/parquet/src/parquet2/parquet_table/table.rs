@@ -37,7 +37,6 @@ use common_catalog::table::Parquet2TableColumnStatisticsProvider;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
@@ -46,14 +45,12 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
-use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use opendal::Operator;
 
 use crate::parquet2::parquet_table::table::pread::FileMetaData;
-use crate::parquet2::pruning::check_parquet_schema;
 use crate::parquet2::statistics::collect_basic_column_stats;
 
 pub struct Parquet2Table {
@@ -214,77 +211,6 @@ pub(super) fn create_parquet_table_info(schema: ArrowSchema, stage_info: &StageI
         },
         ..Default::default()
     }
-}
-
-pub(super) fn blocking_get_parquet2_file_meta(
-    files_to_read: &Option<Vec<StageFileInfo>>,
-    files_info: &StageFilesInfo,
-    operator: &Operator,
-    expect_schema: &SchemaDescriptor,
-    schema_from: &str,
-) -> Result<Vec<FileMetaData>> {
-    let locations = match files_to_read {
-        Some(files) => files
-            .iter()
-            .map(|f| (f.path.clone(), f.size))
-            .collect::<Vec<_>>(),
-        None => files_info
-            .blocking_list(operator, false, None)?
-            .into_iter()
-            .map(|f| (f.path, f.size))
-            .collect::<Vec<_>>(),
-    };
-
-    // Read parquet meta data, sync reading.
-    let mut file_metas = Vec::with_capacity(locations.len());
-    for (location, _) in locations.iter() {
-        let mut reader = operator.blocking().reader(location)?;
-        let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
-            ErrorCode::Internal(format!(
-                "Read parquet file '{}''s meta error: {}",
-                location, e
-            ))
-        })?;
-        check_parquet_schema(expect_schema, file_meta.schema(), location, schema_from)?;
-        file_metas.push(file_meta);
-    }
-    Ok(file_metas)
-}
-
-pub(super) async fn non_blocking_get_parquet2_file_meta(
-    files_to_read: &Option<Vec<StageFileInfo>>,
-    files_info: &StageFilesInfo,
-    operator: &Operator,
-    expect_schema: &SchemaDescriptor,
-    schema_from: &str,
-) -> Result<Vec<FileMetaData>> {
-    let locations = match files_to_read {
-        Some(files) => files
-            .iter()
-            .map(|f| (f.path.clone(), f.size))
-            .collect::<Vec<_>>(),
-        None => files_info
-            .list(operator, false, None)
-            .await?
-            .into_iter()
-            .map(|f| (f.path, f.size))
-            .collect::<Vec<_>>(),
-    };
-
-    // Read parquet meta data, async reading.
-    // TODO(Dousir9): get `max_memory_usage` from ctx.
-    let file_metas =
-        read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64, 79819535155)
-            .await?;
-    for (idx, file_meta) in file_metas.iter().enumerate() {
-        check_parquet_schema(
-            expect_schema,
-            file_meta.schema(),
-            &locations[idx].0,
-            schema_from,
-        )?;
-    }
-    Ok(file_metas)
 }
 
 pub(super) fn create_parquet2_statistics_provider(

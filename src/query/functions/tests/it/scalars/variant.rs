@@ -44,6 +44,8 @@ fn test_variant() {
     test_json_to_string(file);
     test_json_pretty(file);
     test_json_strip_nulls(file);
+    test_json_typeof(file);
+    test_json_array(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -726,4 +728,43 @@ fn test_json_strip_nulls(file: &mut impl Write) {
         r#"json_strip_nulls(parse_json('{"a":null, "b": {"c": 1, "d": null}, "c": [{"a": 1, "b": null}]}'))"#,
         &[],
     );
+}
+
+fn test_json_typeof(file: &mut impl Write) {
+    run_ast(file, r#"json_typeof(NULL)"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('null'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('true'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('"test"'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('-1.12'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('[1,2,3]'))"#, &[]);
+    run_ast(file, r#"json_typeof(parse_json('{"a":1,"b":2}'))"#, &[]);
+}
+
+fn test_json_array(file: &mut impl Write) {
+    run_ast(file, "json_array()", &[]);
+    run_ast(
+        file,
+        "json_array(true, 1, 'str', [1,2], {'k':'v'}, null)",
+        &[],
+    );
+    run_ast(file, "json_array(v1, v2, v3)", &[
+        (
+            "v1",
+            StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
+                true, true, false, true,
+            ]),
+        ),
+        (
+            "v2",
+            StringType::from_data_with_validity(&["j1", "k1", "l1", ""], vec![
+                true, true, true, false,
+            ]),
+        ),
+        (
+            "v3",
+            StringType::from_data_with_validity(&["a2", "", "c2", "d2"], vec![
+                true, false, true, true,
+            ]),
+        ),
+    ]);
 }

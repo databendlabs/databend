@@ -121,11 +121,14 @@ ctor = "0.1.26"
 dashmap = "5.4"
 ethnum = { workspace = true }
 futures = "0.3.24"
-futures-util = "0.3.24"
+futures-util = { workspace = true }
+
+common-meta-embedded = { path = "../../meta/embedded" }
 h2 = "0.3.17"
 headers = "0.3.8"
 http = "0.2.8"
 humantime = "2.1.0"
+indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
 log = { workspace = true }
@@ -148,6 +151,7 @@ regex = "1.8.1"
 reqwest = { workspace = true }
 rustls = "0.21.6"
 rustls-pemfile = "1.0.2"
+rustyline = "11.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
@@ -156,6 +160,7 @@ strength_reduce = "0.2.4"
 tempfile = "3.4.0"
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }
+toml = { version = "0.7.3", default-features = false }
 tonic = { workspace = true }
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
@@ -164,7 +169,6 @@ walkdir = "2.3.2"
 
 [dev-dependencies]
 arrow-cast = { version = "45.0.0", features = ["prettyprint"] }
-common-meta-embedded = { path = "../../meta/embedded" }
 ordered-float = { workspace = true }
 
 base64 = "0.21.0"
@@ -182,7 +186,6 @@ rmp-serde = "1.1.1"
 sysinfo = "0.28.3"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
-toml = { version = "0.7.3", default-features = false }
 tower = "0.4.13"
 url = "2.3.1"
 walkdir = "2.3.2"

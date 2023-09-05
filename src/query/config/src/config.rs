@@ -21,6 +21,7 @@ use std::str::FromStr;
 
 use clap::Args;
 use clap::Parser;
+use clap::Subcommand;
 use clap::ValueEnum;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
@@ -84,8 +85,14 @@ const CATALOG_HIVE: &str = "hive";
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
-    #[clap(long, default_value_t)]
-    pub cmd: String,
+    #[command(subcommand)]
+    #[serde(skip)]
+    pub subcommand: Option<Commands>,
+
+    // To be compatible with the old version, we keep the `cmd` arg
+    // We should always use `databend-query ver` instead `databend-query --cmd ver` in latest version
+    #[clap(long)]
+    pub cmd: Option<String>,
 
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
@@ -115,10 +122,6 @@ pub struct Config {
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 
-    // Local query config.
-    #[clap(flatten)]
-    pub local: LocalConfig,
-
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
@@ -137,6 +140,18 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
+}
+
+#[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Commands {
+    #[default]
+    Ver,
+    Local {
+        #[clap(long, short = 'q', default_value_t)]
+        query: String,
+        #[clap(long, default_value_t)]
+        output_format: String,
+    },
 }
 
 impl Default for Config {
@@ -163,6 +178,14 @@ impl Config {
 
         if with_args {
             arg_conf = Self::parse();
+        }
+
+        if arg_conf.cmd == Some("ver".to_string()) {
+            arg_conf.subcommand = Some(Commands::Ver);
+        }
+
+        if arg_conf.subcommand.is_some() {
+            return Ok(arg_conf);
         }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
@@ -1284,7 +1307,7 @@ pub struct QueryConfig {
     #[clap(long, default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long, parse(try_from_str), default_value = "false")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1368,7 +1391,7 @@ pub struct QueryConfig {
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long, parse(try_from_str), default_value = "true")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, default_value = "5000")]
@@ -2335,14 +2358,14 @@ mod cache_config_converters {
     impl From<InnerConfig> for Config {
         fn from(inner: InnerConfig) -> Self {
             Self {
-                cmd: inner.cmd,
+                subcommand: inner.subcommand,
+                cmd: None,
                 config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
-                local: inner.local.into(),
 
                 catalogs: inner
                     .catalogs
@@ -2374,13 +2397,12 @@ mod cache_config_converters {
             }
 
             Ok(InnerConfig {
-                cmd: self.cmd,
+                subcommand: self.subcommand,
                 config_file: self.config_file,
                 query: self.query.try_into()?,
                 log: self.log.try_into()?,
                 meta: self.meta.try_into()?,
                 storage: self.storage.try_into()?,
-                local: self.local.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
                 background: self.background.try_into()?,

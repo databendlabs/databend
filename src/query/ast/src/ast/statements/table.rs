@@ -19,7 +19,7 @@ use std::format;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -73,7 +73,7 @@ pub struct ShowCreateTableStmt {
 impl Display for ShowCreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -144,7 +144,7 @@ impl Display for CreateTableStmt {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -187,7 +187,7 @@ pub struct AttachTableStmt {
 impl Display for AttachTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ATTACH TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -201,7 +201,6 @@ impl Display for AttachTableStmt {
     }
 }
 
-#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource {
     Columns(Vec<ColumnDefinition>),
@@ -226,7 +225,7 @@ impl Display for CreateTableSource {
                 table,
             } => {
                 write!(f, "LIKE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
             }
         }
     }
@@ -242,7 +241,7 @@ pub struct DescribeTableStmt {
 impl Display for DescribeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -266,7 +265,7 @@ impl Display for DropTableStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -291,7 +290,7 @@ pub struct UndropTableStmt {
 impl Display for UndropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNDROP TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -447,7 +446,7 @@ impl Display for RenameTableStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -455,7 +454,7 @@ impl Display for RenameTableStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " TO ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.new_catalog
                 .iter()
@@ -476,7 +475,7 @@ pub struct TruncateTableStmt {
 impl Display for TruncateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TRUNCATE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -502,7 +501,7 @@ pub struct VacuumTableStmt {
 impl Display for VacuumTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -527,7 +526,7 @@ impl Display for VacuumDropTableStmt {
         write!(f, "VACUUM DROP TABLE ")?;
         if self.catalog.is_some() || self.database.is_some() {
             write!(f, "FROM ")?;
-            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
             write!(f, " ")?;
         }
         write!(f, "{}", &self.option)?;
@@ -548,7 +547,7 @@ pub struct OptimizeTableStmt {
 impl Display for OptimizeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "OPTIMIZE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -574,7 +573,7 @@ pub struct AnalyzeTableStmt {
 impl Display for AnalyzeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ANALYZE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -596,7 +595,7 @@ pub struct ExistsTableStmt {
 impl Display for ExistsTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXISTS TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -744,8 +743,8 @@ pub enum ModifyColumnAction {
     SetMaskingPolicy(Identifier, String),
     // column name id
     UnsetMaskingPolicy(Identifier),
-    // vec<(column name id, type name, default expr)>
-    SetDataType(Vec<(Identifier, TypeName, Option<Expr>)>),
+    // vec<ColumnDefinition>
+    SetDataType(Vec<ColumnDefinition>),
     // column name id
     ConvertStoredComputedColumn(Identifier),
 }
@@ -759,23 +758,34 @@ impl Display for ModifyColumnAction {
             ModifyColumnAction::UnsetMaskingPolicy(column) => {
                 write!(f, "{} UNSET MASKING POLICY", column)?
             }
-            ModifyColumnAction::SetDataType(column_type_name_vec) => {
-                let ret = column_type_name_vec
+            ModifyColumnAction::SetDataType(column_def_vec) => {
+                let ret = column_def_vec
                     .iter()
                     .enumerate()
-                    .map(|(i, (column, type_name, default_expr_opt))| {
-                        let default_expr_str = match default_expr_opt {
-                            Some(default_expr) => format!(" DEFAULT {}", default_expr),
+                    .map(|(i, column_def)| {
+                        let default_expr_str = match &column_def.expr {
+                            Some(default_expr) => default_expr.to_string(),
+                            None => "".to_string(),
+                        };
+                        let comment = match &column_def.comment {
+                            Some(comment) => format!(" COMMENT {}", comment),
                             None => "".to_string(),
                         };
                         if i > 0 {
-                            format!(" COLUMN {} {}{}", column, type_name, default_expr_str)
+                            format!(
+                                " COLUMN {} {}{}{}",
+                                column_def.name, column_def.data_type, default_expr_str, comment
+                            )
                         } else {
-                            format!("{} {}{}", column, type_name, default_expr_str)
+                            format!(
+                                "{} {}{}{}",
+                                column_def.name, column_def.data_type, default_expr_str, comment
+                            )
                         }
                     })
                     .collect::<Vec<_>>()
                     .join(",");
+
                 write!(f, "{}", ret)?
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {

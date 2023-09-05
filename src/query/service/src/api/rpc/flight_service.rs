@@ -31,6 +31,7 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::match_join_handle;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_settings::Settings;
 use common_tracing::func_name;
@@ -44,6 +45,8 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
+use crate::interpreters::Interpreter;
+use crate::interpreters::TruncateTableInterpreter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
@@ -172,6 +175,10 @@ impl FlightService for DatabendQueryFlightService {
                     let ctx = session.create_query_context().await?;
                     // Keep query id
                     ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
+                    ctx.attach_query_str(
+                        init_query_fragments_plan.executor_packet.query_kind.clone(),
+                        "".to_string(),
+                    );
 
                     let spawner = ctx.clone();
                     let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
@@ -212,6 +219,19 @@ impl FlightService for DatabendQueryFlightService {
 
                     FlightResult { body: vec![] }
                 }
+                FlightAction::TruncateTable(truncate_table) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    let ctx = session.create_query_context().await?;
+
+                    let interpreter =
+                        TruncateTableInterpreter::from_flight(ctx, truncate_table.packet)?;
+                    interpreter.execute2().await?;
+                    FlightResult { body: vec![] }
+                }
             };
 
             Ok(RawResponse::new(
@@ -237,7 +257,7 @@ impl FlightService for DatabendQueryFlightService {
                 ])) as FlightStream<ActionType>
             ))
         }
-        .in_span(root)
-        .await
+            .in_span(root)
+            .await
     }
 }

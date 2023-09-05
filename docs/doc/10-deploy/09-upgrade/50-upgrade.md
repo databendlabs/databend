@@ -8,9 +8,7 @@ description:
 This topic provides an overview of the typical steps involved in upgrading Databend.
 
 :::note
-- New Databend versions with breaking changes might lead to incompatibilities with an earlier version. In this case, Databend will provide detailed instructions in the release log or blog for upgrading from an incompatible version.
-
-- To upgrade Databend to version 1.0, follow [Upgrade Databend to 1.0](90-upgrade-1.0.md).
+New Databend versions with breaking changes might lead to incompatibilities with an earlier version. In this case, Databend will provide detailed instructions in the release log or blog for upgrading from an incompatible version.
 :::
 
 ## General Principles

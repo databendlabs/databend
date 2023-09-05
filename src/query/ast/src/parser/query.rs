@@ -293,6 +293,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.order_by = order_by;
             }
             SetOperationElement::Limit { limit } => {
+                if query.limit.is_empty() && limit.len() > 2 {
+                    return Err("[LIMIT n OFFSET m] or [LIMIT n,m]");
+                }
                 if !query.limit.is_empty() {
                     return Err("duplicated LIMIT clause");
                 }
@@ -302,6 +305,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.limit = limit;
             }
             SetOperationElement::Offset { offset } => {
+                if query.limit.len() == 2 {
+                    return Err("LIMIT n,m should not appear OFFSET");
+                }
                 if query.offset.is_some() {
                     return Err("duplicated OFFSET clause");
                 }
@@ -572,7 +578,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
         |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
             TableReferenceElement::Table {

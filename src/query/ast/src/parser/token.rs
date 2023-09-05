@@ -211,7 +211,7 @@ pub enum TokenKind {
     #[token(",")]
     Comma,
     #[token(".")]
-    Period,
+    Dot,
     #[token(":")]
     Colon,
     #[token("::")]
@@ -744,6 +744,12 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("MERGE", ignore(ascii_case))]
+    MERGE,
+    #[token("MATCHED", ignore(ascii_case))]
+    MATCHED,
+    #[token("UNMATCHED", ignore(ascii_case))]
+    UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
     #[token("ROWS", ignore(ascii_case))]
@@ -1002,6 +1008,13 @@ pub enum TokenKind {
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 impl TokenKind {
+    pub fn is_literal(&self) -> bool {
+        matches!(
+            self,
+            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+        )
+    }
+
     pub fn is_keyword(&self) -> bool {
         !matches!(
             self,
@@ -1031,7 +1044,7 @@ impl TokenKind {
                 | LParen
                 | RParen
                 | Comma
-                | Period
+                | Dot
                 | Colon
                 | DoubleColon
                 | SemiColon
