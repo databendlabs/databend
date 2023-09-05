@@ -34,7 +34,9 @@ pub enum Event {
 
 pub enum EventCause {
     Other,
+    // Which input of the processor triggers the event
     Input(usize),
+    // Which output of the processor triggers the event
     Output(usize),
 }
 

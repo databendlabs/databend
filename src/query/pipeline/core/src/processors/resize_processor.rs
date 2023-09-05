@@ -29,8 +29,8 @@ use crate::processors::Processor;
 #[derive(PartialEq)]
 enum PortStatus {
     Idle,
+    HasData,
     NeedData,
-    HashData,
     Finished,
 }
 
@@ -104,8 +104,8 @@ impl Processor for ResizeProcessor {
                     input.status = PortStatus::Finished;
                 }
             } else if input.port.has_data() {
-                if input.status != PortStatus::HashData {
-                    input.status = PortStatus::HashData;
+                if input.status != PortStatus::HasData {
+                    input.status = PortStatus::HasData;
                     self.waiting_inputs.push_back(*input_index);
                 }
             }
