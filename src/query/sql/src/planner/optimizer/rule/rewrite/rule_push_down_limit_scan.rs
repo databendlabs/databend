@@ -75,10 +75,11 @@ impl Rule for RulePushDownLimitScan {
             let mut get: Scan = child.plan().clone().try_into()?;
             count += limit.offset;
             get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-            let mut get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
+            let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
 
-            get.set_applied_rule(&self.id);
-            state.add_result(get);
+            let mut result = s_expr.replace_children(vec![Arc::new(get)]);
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
         Ok(())
     }
