@@ -21,7 +21,7 @@ use common_exception::Result;
 
 use super::Hint;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -96,7 +96,7 @@ pub struct MergeIntoStmt {
 impl Display for MergeIntoStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "MERGE INTO  ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()

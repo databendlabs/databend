@@ -6817,7 +6817,7 @@ Query(
                                     window: None,
                                     lambda: None,
                                 },
-                                accessor: Period {
+                                accessor: Dot {
                                     key: Identifier {
                                         name: "k1",
                                         quote: None,
