@@ -2703,7 +2703,6 @@ dependencies = [
  "minitrace",
  "opendal",
  "parquet-format-safe",
- "prometheus-client",
  "rand 0.8.5",
  "serde",
  "serde_json",

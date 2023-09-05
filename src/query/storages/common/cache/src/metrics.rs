@@ -13,13 +13,13 @@
 // limitations under the License.
 
 use common_metrics::register_counter_family;
-use common_metrics::register_histogram_in_milliseconds;
+use common_metrics::register_histogram_family_in_milliseconds;
 use common_metrics::Counter;
 use common_metrics::Family;
+use common_metrics::Histogram;
 use lazy_static::lazy_static;
 use metrics::increment_gauge;
 use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::histogram::Histogram;
 
 fn key_str(cache_name: &str, action: &str) -> String {
     format!("cache_{cache_name}_{action}")
@@ -36,7 +36,7 @@ lazy_static! {
     static ref CACHE_MISS_COUNT: Family<CacheLabels, Counter> =
         register_counter_family("cache_miss_count");
     static ref CACHE_MISS_LOAD_MILLISECOND: Family<CacheLabels, Histogram> =
-        register_histogram_in_milliseconds("cache_miss_load_millisecond");
+        register_histogram_family_in_milliseconds("cache_miss_load_millisecond");
     static ref CACHE_HIT_COUNT: Family<CacheLabels, Counter> =
         register_counter_family("cache_hit_count");
     static ref CACHE_POPULATION_PENDING_COUNT: Family<CacheLabels, Counter> =
