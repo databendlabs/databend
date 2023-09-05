@@ -10,6 +10,8 @@ edition = { workspace = true }
 chrono-tz = { workspace = true }
 clap = { workspace = true }
 databend-driver = "0.6.4"
+ethnum = { workspace = true }
+jsonb = { workspace = true }
 rand = "0.8.5"
 tokio = { workspace = true }
 tracing = "0.1.37"
@@ -19,6 +21,7 @@ common-ast = { path = "../../query/ast" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../../query/expression" }
 common-formats = { path = "../../query/formats" }
+common-functions = { path = "../../query/functions" }
 common-sql = { path = "../../query/sql" }
 
 [[bin]]
