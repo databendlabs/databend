@@ -709,3 +709,30 @@ select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.b
 2 6 4
 2 8 2
 2 8 4
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+create table t1 as select number as a from numbers(10);
+
+statement ok
+create table t2 as select number as b from numbers(100);
+
+query I rowsort
+select * from t1 left join t2 on t1.a = t2.b limit 10 offset 5;
+----
+5 5
+6 6
+7 7
+8 8
+9 9
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
