@@ -35,7 +35,7 @@ lazy_static! {
         register_histogram_in_milliseconds("copy_read_part_cost_milliseconds");
     static ref FILTER_OUT_COPIED_FILES_REQUEST_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("filter_out_copied_files_request_milliseconds");
-    static ref FILTER_OUT_COPIED_FILES_ENTRIE_MILLISECONDS: Histogram =
+    static ref FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("filter_out_copied_files_entire_milliseconds");
     static ref COLLECT_FILES_GET_ALL_SOURCE_FILES_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds("collect_files_get_all_source_files_milliseconds");
