@@ -52,3 +52,34 @@ query T
 SELECT json_typeof(parse_json('{"a":1,"b":2}'))
 ----
 object
+
+query T
+SELECT json_array()
+----
+[]
+
+query T
+SELECT json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
+----
+[true,1,"str",[1,2],{"k":"v"},null]
+
+statement ok
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(id Int, tag String NULL)
+
+statement ok
+INSERT INTO t1(id, tag) VALUES(1, 'a'), (2, 'b'), (3, 'c'), (4, 'null'), (5, NULL)
+
+query T
+SELECT json_array(id, tag) FROM t1
+----
+[1,"a"]
+[2,"b"]
+[3,"c"]
+[4,"null"]
+[5,null]
+
+statement ok
+DROP TABLE IF EXISTS t1
