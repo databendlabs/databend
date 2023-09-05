@@ -450,7 +450,7 @@ impl PipelineBuilder {
 
         let matched_split_processor = MatchedSplitProcessor::create(
             self.ctx.clone(),
-            row_id_idx.clone(),
+            *row_id_idx,
             matched.clone(),
             filed_index_of_input_schema.clone(),
             input.output_schema()?,
@@ -519,11 +519,10 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        let mut pipe_items = Vec::with_capacity(2);
-
-        // for matched update and delete
-        pipe_items.push(serialize_segment_transform.into_pipe_item());
-        pipe_items.push(create_dummy_item());
+        let mut pipe_items = vec![
+            serialize_segment_transform.into_pipe_item(),
+            create_dummy_item(),
+        ];
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
