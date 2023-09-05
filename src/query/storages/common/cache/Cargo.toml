@@ -17,8 +17,11 @@ enable-histogram-metrics = ["metrics/enable-histogram"]
 [dependencies]
 common-cache = { path = "../../../../common/cache" }
 common-exception = { path = "../../../../common/exception" }
+common-metrics = { path = "../../../../common/metrics" }
 
 async-backtrace = { workspace = true }
+lazy_static = { workspace = true }
+prometheus-client = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 crc32fast = "1.3.2"
 crossbeam-channel = "0.5.6"

@@ -12,10 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_cache::Cache;
+use common_metrics::registry::register_counter_family;
+use lazy_static::lazy_static;
 use metrics::increment_gauge;
+use prometheus_client::encoding::EncodeLabelSet;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
 
 fn key_str(cache_name: &str, action: &str) -> String {
     format!("cache_{cache_name}_{action}")
+}
+
+#[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
+struct CacheLabels {
+    cache_name: String,
+    action: String,
+}
+
+lazy_static! {
+    static ref CACHE_HIT_COUNT: Family<CacheLabels, Counter> =
+        register_counter_family("cache_access_count");
+    static ref CACHE_MISS_COUNT: Family<CacheLabels, Counter> =
+        register_counter_family("cache_miss_count");
 }
 
 pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {

@@ -16,7 +16,9 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 
 use lazy_static::lazy_static;
+use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Registry;
@@ -59,4 +61,32 @@ pub fn register_histogram_in_milliseconds(name: &str) -> Histogram {
 
 pub fn register_histogram_in_seconds(name: &str) -> Histogram {
     register_histogram(name, BUCKET_SECONDS.iter().copied())
+}
+
+pub fn register_counter_family<T>(name: &str) -> Family<T, Counter>
+where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+    let family = Family::<T, Counter>::default();
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", family.clone());
+    family
+}
+
+pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> Family<T, Histogram>
+where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+    let family = Family::<T, Histogram>::new_with_constructor(move || {
+        Histogram::new(BUCKET_MILLISECONDS.iter().copied())
+    });
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", family.clone());
+    family
+}
+
+pub fn register_histogram_family_in_seconds<T>(name: &str) -> Family<T, Histogram>
+where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+    let family = Family::<T, Histogram>::new_with_constructor(move || {
+        Histogram::new(BUCKET_MILLISECONDS.iter().copied())
+    });
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", family.clone());
+    family
 }
