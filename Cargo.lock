@@ -2643,7 +2643,6 @@ dependencies = [
  "opendal",
  "ordered-float 3.7.0",
  "parquet",
- "prometheus-client",
  "regex",
  "reqwest",
  "serde",
