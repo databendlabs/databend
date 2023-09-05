@@ -15,39 +15,54 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::connect;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::EventCause;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::processors::ResizeProcessor;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_resize_output_finish() -> Result<()> {
-    let mut resize_processor = ResizeProcessor::create(8, 1);
-    let resize_inputs = connect_inputs(resize_processor.get_inputs());
-    let resize_outputs = connect_outputs(resize_processor.get_outputs());
+    for outputs in 1..8 {
+        let mut resize_processor = ResizeProcessor::create(8, outputs);
+        let resize_inputs = connect_inputs(resize_processor.get_inputs());
+        let resize_outputs = connect_outputs(resize_processor.get_outputs());
 
-    for output in &resize_outputs {
-        output.finish();
-    }
+        for (index, output) in resize_outputs.iter().enumerate() {
+            output.set_need_data();
+            resize_processor.event_with_cause(EventCause::Output(index))?;
+        }
 
-    assert!(matches!(resize_processor.event()?, Event::Finished));
+        for (index, input) in resize_inputs.iter().enumerate() {
+            assert!(input.can_push());
+            input.push_data(Ok(DataBlock::empty()));
+            resize_processor.event_with_cause(EventCause::Input(index))?;
+        }
 
-    for input in &resize_inputs {
-        assert!(input.is_finished());
+        for (index, output) in resize_outputs.iter().enumerate() {
+            assert!(output.has_data());
+            output.finish();
+            resize_processor.event_with_cause(EventCause::Output(index))?;
+        }
+
+        for input in &resize_inputs {
+            assert!(input.is_finished());
+        }
     }
 
     Ok(())
 }
 
-fn connect_inputs(inputs: &[Arc<InputPort>]) -> Vec<Arc<OutputPort>> {
+fn connect_inputs(inputs: Vec<Arc<InputPort>>) -> Vec<Arc<OutputPort>> {
     let mut outputs = Vec::with_capacity(inputs.len());
 
     unsafe {
         for input in inputs {
             let output = OutputPort::create();
-            connect(input, &output);
+            connect(&input, &output);
             outputs.push(output);
         }
     }
@@ -55,13 +70,13 @@ fn connect_inputs(inputs: &[Arc<InputPort>]) -> Vec<Arc<OutputPort>> {
     outputs
 }
 
-fn connect_outputs(outputs: &[Arc<OutputPort>]) -> Vec<Arc<InputPort>> {
+fn connect_outputs(outputs: Vec<Arc<OutputPort>>) -> Vec<Arc<InputPort>> {
     let mut inputs = Vec::with_capacity(outputs.len());
 
     unsafe {
         for output in outputs {
             let input = InputPort::create();
-            connect(&input, output);
+            connect(&input, &output);
             inputs.push(input);
         }
     }

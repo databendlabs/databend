@@ -251,7 +251,7 @@ impl ExecutingGraph {
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
-                let event = node.processor.event2(event_cause)?;
+                let event = node.processor.event(event_cause)?;
                 trace!(
                     "node id: {:?}, name: {:?}, event: {:?}",
                     node.processor.id(),

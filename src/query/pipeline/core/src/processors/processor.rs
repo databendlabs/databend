@@ -46,7 +46,12 @@ pub trait Processor: Send {
     /// Reference used for downcast.
     fn as_any(&mut self) -> &mut dyn Any;
 
-    fn event(&mut self) -> Result<Event>;
+    fn event(&mut self) -> Result<Event> {
+        Err(ErrorCode::Unimplemented(format!(
+            "event is unimplemented in {}",
+            self.name()
+        )))
+    }
 
     fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
         self.event()
@@ -106,12 +111,7 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn event(&self) -> Result<Event> {
-        (*self.inner.get()).event()
-    }
-
-    /// # Safety
-    pub unsafe fn event2(&self, cause: EventCause) -> Result<Event> {
+    pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
         (*self.inner.get()).event_with_cause(cause)
     }
 
@@ -143,6 +143,10 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     fn event(&mut self) -> Result<Event> {
         (**self).event()
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        (**self).event_with_cause(cause)
     }
 
     fn interrupt(&self) {
