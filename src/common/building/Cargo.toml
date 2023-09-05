@@ -13,7 +13,7 @@ test = false
 [dependencies]
 anyhow = { workspace = true }
 cargo-license = "0.5.1"
-cargo_metadata = "0.15.0"
-gix = "0.42.0"
+cargo_metadata = "0.17.0"
+gix = "0.52.0"
 log = { workspace = true }
-vergen = { version = "8.2.4", features = ["build", "cargo", "git", "gitcl", "rustc"] }
+vergen = { version = "8.2.4", default-features = false, features = ["build", "cargo", "git", "gix", "rustc"] }
