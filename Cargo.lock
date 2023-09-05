@@ -1559,20 +1559,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cargo_metadata"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7daec1a2a2129eeba1644b220b4647ec537b0b5d4bfd6876fcc5a540056b592"
-dependencies = [
- "camino",
- "cargo-platform",
- "semver",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1984,7 +1970,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cargo-license",
- "cargo_metadata 0.17.0",
+ "cargo_metadata 0.15.3",
  "gix 0.52.0",
  "log",
  "vergen",
