@@ -28,7 +28,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
-use common_storage::common_metrics::copy::metrics_inc_copy_read_part_counter;
+use common_storage::metrics::copy::metrics_inc_copy_read_part_counter;
 use serde::Deserializer;
 use serde::Serializer;
 

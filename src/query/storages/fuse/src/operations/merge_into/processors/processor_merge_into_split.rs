@@ -24,8 +24,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_storage::common_metrics::merge_into::metrics_inc_merge_into_matched_rows;
-use common_storage::common_metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_matched_rows;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
 
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
 
