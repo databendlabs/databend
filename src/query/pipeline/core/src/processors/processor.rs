@@ -32,6 +32,12 @@ pub enum Event {
     Finished,
 }
 
+pub enum EventCause {
+    Other,
+    Input(usize),
+    Output(usize),
+}
+
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
@@ -41,6 +47,10 @@ pub trait Processor: Send {
     fn as_any(&mut self) -> &mut dyn Any;
 
     fn event(&mut self) -> Result<Event>;
+
+    fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
+        self.event()
+    }
 
     // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
     fn interrupt(&self) {}
@@ -98,6 +108,11 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn event(&self) -> Result<Event> {
         (*self.inner.get()).event()
+    }
+
+    /// # Safety
+    pub unsafe fn event2(&self, cause: EventCause) -> Result<Event> {
+        (*self.inner.get()).event_with_cause(cause)
     }
 
     /// # Safety
