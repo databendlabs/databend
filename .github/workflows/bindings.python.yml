@@ -63,7 +63,8 @@ jobs:
 
   release:
     # publish release only the version endsWith 0
-    if: endsWith(inputs.tag, '0')
+    # if: endsWith(inputs.tag, '0')
+    if: inputs.tag
     name: Publish to PyPI
     needs: [build_linux, build_macos]
     runs-on: ubuntu-latest
