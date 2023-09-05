@@ -34,6 +34,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::ModifyColumnAction;
+use common_ast::ast::NullableConstraint;
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
@@ -1196,7 +1197,8 @@ impl Binder {
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-        let data_type = resolve_type_name(&column.data_type)?;
+        let not_null = self.is_column_not_null(column)?;
+        let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
@@ -1236,7 +1238,8 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = resolve_type_name(&column.data_type)?;
+            let not_null = self.is_column_not_null(column)?;
+            let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
             let mut field = TableField::new(&name, schema_data_type.clone());
@@ -1457,5 +1460,16 @@ impl Binder {
                 | DataType::Boolean
                 | DataType::Decimal(_)
         )
+    }
+
+    fn is_column_not_null(&self, column: &ColumnDefinition) -> Result<bool> {
+        let column_not_null = !self.ctx.get_settings().get_ddl_column_type_nullable()?;
+        let not_null = match column.nullable_constraint {
+            Some(NullableConstraint::NotNull) => true,
+            Some(NullableConstraint::Null) => false,
+            None if column_not_null => true,
+            None => false,
+        };
+        Ok(not_null)
     }
 }

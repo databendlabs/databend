@@ -11,7 +11,7 @@ statement ok
 drop table if exists t_insert_default
 
 statement ok
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd')
+create table t_insert_default(a int null, b int default 2, c float not null, d varchar default 'd')
 
 statement ok
 insert into t_insert_default values (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a')
@@ -28,11 +28,11 @@ statement ok
 drop table t_insert_default
 
 statement error 1001
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd', e smallint default -872582066);
+create table t_insert_default(a int null, b int not null default 2, c float not null, d varchar not null default 'd', e smallint not null default -872582066);
 
 
 statement ok
-create table t_insert_default(a int null, b int default 2, c float, d varchar default 'd', e smallint null default -872582066);
+create table t_insert_default(a int null, b int not null default 2, c float not null, d varchar not null default 'd', e smallint null default -872582066);
 
 statement ok
 insert into t_insert_default(a, c) values (default, default), (1, 1.0)
