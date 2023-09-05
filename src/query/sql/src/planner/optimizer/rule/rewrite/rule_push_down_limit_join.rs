@@ -32,7 +32,7 @@ use crate::plans::RelOperator;
 ///            *      *
 ///
 /// Output:
-///             Limit
+///             Limit(offset removed)
 ///               |
 ///        Left Outer Join
 ///             /     \
