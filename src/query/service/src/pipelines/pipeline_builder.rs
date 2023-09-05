@@ -519,7 +519,7 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        let mut pipe_items = vec![
+        let pipe_items = vec![
             serialize_segment_transform.into_pipe_item(),
             create_dummy_item(),
         ];
