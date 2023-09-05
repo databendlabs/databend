@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::registry::register_counter;
-use common_metrics::registry::register_histogram_in_milliseconds;
+use common_metrics::register_counter;
+use common_metrics::register_histogram_in_milliseconds;
+use common_metrics::Counter;
+use common_metrics::Histogram;
 use lazy_static::lazy_static;
 use metrics::counter;
 use metrics::increment_gauge;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::histogram::Histogram;
 
 macro_rules! key {
     ($key: literal) => {

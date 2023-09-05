@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::registry::register_counter_family;
+use common_metrics::register_counter_family;
+use common_metrics::Counter;
+use common_metrics::Family;
 use lazy_static::lazy_static;
 use metrics::increment_gauge;
 use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::counter::Counter;
-use prometheus_client::metrics::family::Family;
 
 fn key_str(cache_name: &str, action: &str) -> String {
     format!("cache_{cache_name}_{action}")
