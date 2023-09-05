@@ -7,7 +7,7 @@ create table ti (b string, c int)
 query 
 copy /*+ set_var(max_threads=1) */ into ti from @data/tsv/ pattern = 'wrong_sample.*[.]tsv' file_format = (type = TSV) ON_ERROR=continue
 ----
-tsv/wrong_sample.tsv 4 2 fail to decode column 1 (c Int32): number is not exist, [column_data]=["b"], row data: "<SINGLE QUOTE>a<TAB>b" 4
+tsv/wrong_sample.tsv 4 2 fail to decode column 1 (c Int32 NULL): number is not exist, [column_data]=["b"], row data: "<SINGLE QUOTE>a<TAB>b" 4
 tsv/wrong_sample2.tsv 4 2 need 2 columns, find 1 only, row data: "3" 3
 
 query 
