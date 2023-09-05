@@ -21,7 +21,7 @@ jobs:
   integration:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
@@ -62,7 +62,7 @@ jobs:
           - { os: macos, arch: x64, target: x86_64-apple-darwin, runner: macos-11 }
           - { os: macos, arch: arm64, target: aarch64-apple-darwin, runner: macos-11 }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup Rust toolchain
         uses: ./.github/actions/setup
         with:
@@ -111,7 +111,7 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup node
         uses: actions/setup-node@v3
         with:

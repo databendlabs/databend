@@ -45,7 +45,7 @@ runs:
         # Enable backtraces
         echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
         # Enable logging
-        echo "RUST_LOG=debug" >> $GITHUB_ENV
+        echo "RUST_LOG=info" >> $GITHUB_ENV
         # Enable sparse index
         echo "CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse" >> $GITHUB_ENV
         # Enable sccache

@@ -14,7 +14,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           cache-key: check
@@ -33,7 +33,7 @@ jobs:
           - { os: macos, arch: x86_64, target: x86_64-apple-darwin }
           - { os: windows, arch: x86_64, target: x86_64-pc-windows-msvc }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           cache-key: build
@@ -44,7 +44,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           cache-key: unit
@@ -54,7 +54,7 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup
         with:
           cache-key: integration

@@ -19,6 +19,12 @@ runs:
       run: |
         cargo fmt --all -- --check
 
+    - name: Machete
+      shell: bash
+      run: |
+        cargo install cargo-machete --force
+        cargo machete
+
     - name: Audit dependencies
       shell: bash
       run: |

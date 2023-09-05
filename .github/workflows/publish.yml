@@ -11,7 +11,7 @@ jobs:
   crates:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup Cargo Release
       run: |
         curl -fsSLo /tmp/cargo-release.tar.gz https://github.com/crate-ci/cargo-release/releases/download/v0.24.8/cargo-release-v0.24.8-x86_64-unknown-linux-gnu.tar.gz
