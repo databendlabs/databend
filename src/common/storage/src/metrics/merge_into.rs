@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use metrics::increment_gauge;
-use lazy_static::lazy_static;
-use prometheus_client::metrics::counter::Counter;
 use common_metrics::registry::register_counter;
-
+use lazy_static::lazy_static;
+use metrics::increment_gauge;
+use prometheus_client::metrics::counter::Counter;
 
 macro_rules! key {
     ($key: literal) => {
@@ -25,10 +24,13 @@ macro_rules! key {
 }
 
 lazy_static! {
-    static ref MERGE_INTO_REPLACE_BLOCKS_COUNTER: Counter = register_counter(key!("merge_into_replace_blocks_counter"));
-    static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter = register_counter(key!("merge_into_append_blocks_counter"));
+    static ref MERGE_INTO_REPLACE_BLOCKS_COUNTER: Counter =
+        register_counter(key!("merge_into_replace_blocks_counter"));
+    static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter =
+        register_counter(key!("merge_into_append_blocks_counter"));
     static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter(key!("merge_into_matched_rows"));
-    static ref MERGE_INTO_UNMATCHED_ROWS: Counter = register_counter(key!("merge_into_unmatched_rows"));
+    static ref MERGE_INTO_UNMATCHED_ROWS: Counter =
+        register_counter(key!("merge_into_unmatched_rows"));
 }
 
 pub fn metrics_inc_merge_into_replace_blocks_counter(c: u32) {

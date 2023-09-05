@@ -71,6 +71,14 @@ where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send 
     family
 }
 
+pub fn register_gauge_family<T>(name: &str) -> Family<T, Gauge>
+where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
+    let family = Family::<T, Gauge>::default();
+    let mut registry = load_global_prometheus_registry();
+    registry.register(name, "", family.clone());
+    family
+}
+
 pub fn register_histogram_family_in_milliseconds<T>(name: &str) -> Family<T, Histogram>
 where T: EncodeLabelSet + std::hash::Hash + Eq + Clone + std::fmt::Debug + Send + Sync + 'static {
     let family = Family::<T, Histogram>::new_with_constructor(move || {
