@@ -19,7 +19,7 @@ use std::format;
 
 use crate::ast::statements::show::ShowLimit;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::write_space_separated_map;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -73,7 +73,7 @@ pub struct ShowCreateTableStmt {
 impl Display for ShowCreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "SHOW CREATE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -144,7 +144,7 @@ impl Display for CreateTableStmt {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -187,7 +187,7 @@ pub struct AttachTableStmt {
 impl Display for AttachTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ATTACH TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -225,7 +225,7 @@ impl Display for CreateTableSource {
                 table,
             } => {
                 write!(f, "LIKE ")?;
-                write_period_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
+                write_dot_separated_list(f, catalog.iter().chain(database).chain(Some(table)))
             }
         }
     }
@@ -241,7 +241,7 @@ pub struct DescribeTableStmt {
 impl Display for DescribeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "DESCRIBE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -265,7 +265,7 @@ impl Display for DropTableStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -290,7 +290,7 @@ pub struct UndropTableStmt {
 impl Display for UndropTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "UNDROP TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -446,7 +446,7 @@ impl Display for RenameTableStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -454,7 +454,7 @@ impl Display for RenameTableStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " TO ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.new_catalog
                 .iter()
@@ -475,7 +475,7 @@ pub struct TruncateTableStmt {
 impl Display for TruncateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "TRUNCATE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -501,7 +501,7 @@ pub struct VacuumTableStmt {
 impl Display for VacuumTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "VACUUM TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -526,7 +526,7 @@ impl Display for VacuumDropTableStmt {
         write!(f, "VACUUM DROP TABLE ")?;
         if self.catalog.is_some() || self.database.is_some() {
             write!(f, "FROM ")?;
-            write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+            write_dot_separated_list(f, self.catalog.iter().chain(&self.database))?;
             write!(f, " ")?;
         }
         write!(f, "{}", &self.option)?;
@@ -547,7 +547,7 @@ pub struct OptimizeTableStmt {
 impl Display for OptimizeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "OPTIMIZE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -573,7 +573,7 @@ pub struct AnalyzeTableStmt {
 impl Display for AnalyzeTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ANALYZE TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -595,7 +595,7 @@ pub struct ExistsTableStmt {
 impl Display for ExistsTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "EXISTS TABLE ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
