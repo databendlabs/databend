@@ -54,7 +54,7 @@ pub use parquet2::infer_schema_with_extension;
 pub use parquet2::read_parquet_metas_in_parallel;
 pub use parquet2::read_parquet_schema_async;
 
-mod parquet_rs;
+pub mod parquet_rs;
 pub use parquet_rs::read_parquet_schema_async_rs;
 
 mod stage;
@@ -62,3 +62,12 @@ pub use stage::init_stage_operator;
 pub use stage::StageFileInfo;
 pub use stage::StageFileStatus;
 pub use stage::StageFilesInfo;
+pub use stage::STDIN_FD;
+
+mod copy;
+mod statistics;
+
+pub use copy::CopyStatus;
+pub use copy::FileStatus;
+pub use statistics::Datum;
+pub use statistics::F64;

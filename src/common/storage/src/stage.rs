@@ -110,6 +110,10 @@ impl StageFilesInfo {
         first_only: bool,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
+        if self.path == STDIN_FD {
+            return Ok(vec![stdin_stage_info()?]);
+        }
+
         let max_files = max_files.unwrap_or(usize::MAX);
         if let Some(files) = &self.files {
             let mut res = Vec::new();
@@ -148,18 +152,12 @@ impl StageFilesInfo {
     #[async_backtrace::framed]
     pub async fn first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.list(operator, true, None).await?;
-        match files.pop() {
-            None => Err(ErrorCode::BadArguments("no file found")),
-            Some(f) => Ok(f),
-        }
+        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_first_file(&self, operator: &Operator) -> Result<StageFileInfo> {
         let mut files = self.blocking_list(operator, true, None)?;
-        match files.pop() {
-            None => Err(ErrorCode::BadArguments("no file found")),
-            Some(f) => Ok(f),
-        }
+        files.pop().ok_or(ErrorCode::BadArguments("no file found"))
     }
 
     pub fn blocking_list(
@@ -214,6 +212,9 @@ impl StageFilesInfo {
                 EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
                 EntryMode::DIR => {}
                 EntryMode::Unknown => {
+                    if path == STDIN_FD {
+                        return Ok(vec![stdin_stage_info()?]);
+                    }
                     return Err(ErrorCode::BadArguments("object mode is unknown"));
                 }
             },
@@ -249,10 +250,7 @@ impl StageFilesInfo {
 
 fn check_file(path: &str, mode: EntryMode, pattern: &Option<Regex>) -> bool {
     if mode.is_file() {
-        match pattern {
-            Some(p) => p.is_match(path),
-            None => true,
-        }
+        pattern.as_ref().map_or(true, |p| p.is_match(path))
     } else {
         false
     }
@@ -272,7 +270,12 @@ fn blocking_list_files_with_pattern(
         Ok(meta) => match meta.mode() {
             EntryMode::FILE => return Ok(vec![StageFileInfo::new(path.to_string(), &meta)]),
             EntryMode::DIR => {}
-            EntryMode::Unknown => return Err(ErrorCode::BadArguments("object mode is unknown")),
+            EntryMode::Unknown => {
+                if path == STDIN_FD {
+                    return Ok(vec![stdin_stage_info()?]);
+                }
+                return Err(ErrorCode::BadArguments("object mode is unknown"));
+            }
         },
         Err(e) => {
             if e.kind() == opendal::ErrorKind::NotFound {
@@ -328,4 +331,18 @@ pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>>
     }
 
     Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
+}
+
+pub const STDIN_FD: &str = "/dev/fd/0";
+
+fn stdin_stage_info() -> Result<StageFileInfo> {
+    Ok(StageFileInfo {
+        path: STDIN_FD.to_string(),
+        size: u64::MAX,
+        md5: None,
+        last_modified: Utc::now(),
+        etag: None,
+        status: StageFileStatus::NeedCopy,
+        creator: None,
+    })
 }

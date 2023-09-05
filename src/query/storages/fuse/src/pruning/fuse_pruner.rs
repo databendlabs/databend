@@ -30,6 +30,7 @@ use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::field_default_value;
 use common_sql::BloomIndexColumns;
+use log::warn;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
@@ -47,7 +48,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
-use tracing::warn;
 
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
@@ -70,6 +70,109 @@ pub struct PruningContext {
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
+
+impl PruningContext {
+    #[allow(clippy::too_many_arguments)]
+    pub fn try_create(
+        ctx: &Arc<dyn TableContext>,
+        dal: Operator,
+        table_schema: TableSchemaRef,
+        push_down: &Option<PushDownInfo>,
+        cluster_key_meta: Option<ClusterKey>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_index_cols: BloomIndexColumns,
+        max_concurrency: usize,
+    ) -> Result<Arc<PruningContext>> {
+        let func_ctx = ctx.get_function_context()?;
+
+        let filter_expr = push_down
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
+        // Limit pruner.
+        // if there are ordering/filter clause, ignore limit, even it has been pushed down
+        let limit = push_down
+            .as_ref()
+            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
+            .and_then(|p| p.limit);
+        // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
+        let limit_pruner = LimiterPrunerCreator::create(limit);
+
+        let default_stats: StatisticsOfColumns = filter_expr
+            .as_ref()
+            .map(|f| f.column_refs())
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, _)| {
+                let field = table_schema.field_with_name(&name).ok()?;
+                let default_scalar = field_default_value(ctx.clone(), field).ok()?;
+
+                let stats =
+                    ColumnStatistics::new(default_scalar.clone(), default_scalar, 0, 0, Some(1));
+                Some((field.column_id(), stats))
+            })
+            .collect();
+
+        // Range filter.
+        // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
+        let range_pruner = RangePrunerCreator::try_create_with_default_stats(
+            func_ctx.clone(),
+            &table_schema,
+            filter_expr.as_ref(),
+            default_stats,
+        )?;
+
+        // Bloom pruner.
+        // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
+        let bloom_pruner = BloomPrunerCreator::create(
+            func_ctx.clone(),
+            &table_schema,
+            dal.clone(),
+            filter_expr.as_ref(),
+            bloom_index_cols,
+        )?;
+
+        // Page pruner, used in native format
+        let page_pruner = PagePrunerCreator::try_create(
+            func_ctx.clone(),
+            &table_schema,
+            filter_expr.as_ref(),
+            cluster_key_meta,
+            cluster_keys,
+        )?;
+
+        // Internal column pruner, if there are predicates using internal columns,
+        // we can use them to prune segments and blocks.
+        let internal_column_pruner =
+            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
+
+        // Constraint the degree of parallelism
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+
+        // Pruning runtime.
+        let pruning_runtime = Arc::new(Runtime::with_worker_threads(
+            max_threads,
+            Some("pruning-worker".to_owned()),
+        )?);
+        let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let pruning_stats = Arc::new(FusePruningStatistics::default());
+
+        let pruning_ctx = Arc::new(PruningContext {
+            ctx: ctx.clone(),
+            dal,
+            pruning_runtime,
+            pruning_semaphore,
+            limit_pruner,
+            range_pruner,
+            bloom_pruner,
+            page_pruner,
+            internal_column_pruner,
+            pruning_stats,
+        });
+        Ok(pruning_ctx)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
 pub struct DeletedSegmentInfo {
     // segment index.
@@ -126,76 +229,6 @@ impl FusePruner {
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_index_cols: BloomIndexColumns,
     ) -> Result<Self> {
-        let func_ctx = ctx.get_function_context()?;
-
-        let filter_expr = push_down
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
-
-        // Limit pruner.
-        // if there are ordering/filter clause, ignore limit, even it has been pushed down
-        let limit = push_down
-            .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
-            .and_then(|p| p.limit);
-        // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
-        let limit_pruner = LimiterPrunerCreator::create(limit);
-
-        let default_stats: StatisticsOfColumns = filter_expr
-            .as_ref()
-            .map(|f| f.column_refs())
-            .into_iter()
-            .flatten()
-            .filter_map(|(name, _)| {
-                let field = table_schema.field_with_name(&name).ok()?;
-                let default_scalar = field_default_value(ctx.clone(), field).ok()?;
-
-                let stats = ColumnStatistics {
-                    min: default_scalar.clone(),
-                    max: default_scalar,
-                    null_count: 0,
-                    in_memory_size: 0,
-                    distinct_of_values: Some(1),
-                };
-                Some((field.column_id(), stats))
-            })
-            .collect();
-
-        // Range filter.
-        // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner = RangePrunerCreator::try_create_with_default_stats(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            default_stats,
-        )?;
-
-        // Bloom pruner.
-        // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)
-        let bloom_pruner = BloomPrunerCreator::create(
-            func_ctx.clone(),
-            &table_schema,
-            dal.clone(),
-            filter_expr.as_ref(),
-            bloom_index_cols,
-        )?;
-
-        // Page pruner, used in native format
-        let page_pruner = PagePrunerCreator::try_create(
-            func_ctx.clone(),
-            &table_schema,
-            filter_expr.as_ref(),
-            cluster_key_meta,
-            cluster_keys,
-        )?;
-
-        // Internal column pruner, if there are predicates using internal columns,
-        // we can use them to prune segments and blocks.
-        let internal_column_pruner =
-            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
-
-        // Constraint the degree of parallelism
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_concurrency = {
             let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
             // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
@@ -209,26 +242,16 @@ impl FusePruner {
             v
         };
 
-        // Pruning runtime.
-        let pruning_runtime = Arc::new(Runtime::with_worker_threads(
-            max_threads,
-            Some("pruning-worker".to_owned()),
-        )?);
-        let pruning_semaphore = Arc::new(Semaphore::new(max_concurrency));
-        let pruning_stats = Arc::new(FusePruningStatistics::default());
-
-        let pruning_ctx = Arc::new(PruningContext {
-            ctx: ctx.clone(),
+        let pruning_ctx = PruningContext::try_create(
+            ctx,
             dal,
-            pruning_runtime,
-            pruning_semaphore,
-            limit_pruner,
-            range_pruner,
-            bloom_pruner,
-            page_pruner,
-            internal_column_pruner,
-            pruning_stats,
-        });
+            table_schema.clone(),
+            push_down,
+            cluster_key_meta,
+            cluster_keys,
+            bloom_index_cols,
+            max_concurrency,
+        )?;
 
         Ok(FusePruner {
             max_concurrency,

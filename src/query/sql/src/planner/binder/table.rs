@@ -23,6 +23,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
+use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -35,10 +36,11 @@ use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table::ColumnStatistics;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::TableContext;
 use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,6 +48,7 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
+use common_expression::DataField;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -63,7 +66,8 @@ use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
-use common_storages_parquet::ParquetTable;
+use common_storages_parquet::Parquet2Table;
+use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
@@ -71,27 +75,27 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use parking_lot::RwLock;
 
 use crate::binder::copy::parse_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
-use crate::binder::ColumnBinding;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
+use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
 use crate::BaseTableColumn;
 use crate::BindContext;
 use crate::ColumnEntry;
-use crate::DerivedColumn;
 use crate::IndexType;
-use crate::TableInternalColumn;
-use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -178,11 +182,26 @@ impl Binder {
                 } else {
                     None
                 };
+                let mut bind_cte = true;
+                if let Some(cte_name) = &bind_context.cte_name {
+                    // If table name equals to cte name, then skip bind cte and find table from catalog
+                    // Or will dead loop and stack overflow
+                    if cte_name == &table_name {
+                        bind_cte = false;
+                    }
+                }
                 // Check and bind common table expression
-                if let Some(cte_info) = bind_context.ctes_map.get(&table_name) {
-                    return self
-                        .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                        .await;
+                let ctes_map = self.ctes_map.clone();
+                if let Some(cte_info) = ctes_map.get(&table_name) {
+                    if bind_cte {
+                        return if !cte_info.materialized {
+                            self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                .await
+                        } else {
+                            self.bind_m_cte(bind_context, cte_info, &table_name, alias, span)
+                                .await
+                        };
+                    }
                 }
 
                 let tenant = self.ctx.get_tenant();
@@ -205,20 +224,32 @@ impl Binder {
                 {
                     Ok(table) => table,
                     Err(_) => {
-                        let mut parent = bind_context.parent.as_ref();
+                        let mut parent = bind_context.parent.as_mut();
                         loop {
                             if parent.is_none() {
                                 break;
                             }
-                            if let Some(cte_info) = parent.unwrap().ctes_map.get(&table_name) {
-                                return self
-                                    .bind_cte(*span, bind_context, &table_name, alias, &cte_info)
-                                    .await;
+                            let bind_context = parent.unwrap().as_mut();
+                            let ctes_map = self.ctes_map.clone();
+                            if let Some(cte_info) = ctes_map.get(&table_name) {
+                                return if !cte_info.materialized {
+                                    self.bind_cte(*span, bind_context, &table_name, alias, cte_info)
+                                        .await
+                                } else {
+                                    self.bind_m_cte(
+                                        bind_context,
+                                        cte_info,
+                                        &table_name,
+                                        alias,
+                                        span,
+                                    )
+                                    .await
+                                };
                             }
-                            parent = parent.unwrap().parent.as_ref();
+                            parent = bind_context.parent.as_mut();
                         }
                         return Err(ErrorCode::UnknownTable(format!(
-                            "Unknown table '{table_name}'"
+                            "Unknown table `{database}`.`{table_name}` in catalog '{catalog}'"
                         ))
                         .set_span(*span));
                     }
@@ -359,6 +390,8 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
                 let table_args = bind_table_args(&mut scalar_binder, params, named_params).await?;
 
@@ -431,7 +464,7 @@ impl Binder {
                     .unwrap_or(false)
                 {
                     // If it is a set-returning function, we bind it as a subquery.
-                    let mut bind_context = BindContext::new();
+                    let mut bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
                     let stmt = SelectStmt {
                         span: *span,
                         hints: None,
@@ -448,6 +481,7 @@ impl Binder {
                                 params: vec![],
                                 args: params.clone(),
                                 window: None,
+                                lambda: None,
                             }),
                             alias: None,
                         }],
@@ -461,10 +495,10 @@ impl Binder {
                         .await
                 } else {
                     // Other table functions always reside is default catalog
-                    let table_meta: Arc<dyn TableFunction> = self
-                        .catalogs
-                        .get_catalog(CATALOG_DEFAULT)?
-                        .get_table_function(&func_name.name, table_args)?;
+                    let table_meta: Arc<dyn TableFunction> =
+                        self.catalogs
+                            .get_default_catalog()?
+                            .get_table_function(&func_name.name, table_args)?;
                     let table = table_meta.as_table();
                     let table_alias_name = if let Some(table_alias) = alias {
                         Some(
@@ -498,12 +532,19 @@ impl Binder {
             } => {
                 // For subquery, we need use a new context to bind it.
                 let mut new_bind_context = BindContext::with_parent(Box::new(bind_context.clone()));
-                let (s_expr, mut new_bind_context) =
+                let (s_expr, mut res_bind_context) =
                     self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
-                    new_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    // reset column name as alias column name
+                    for i in 0..alias.columns.len() {
+                        let column = &res_bind_context.columns[i];
+                        self.metadata
+                            .write()
+                            .change_derived_column_alias(column.index, column.column_name.clone());
+                    }
                 }
-                Ok((s_expr, new_bind_context))
+                Ok((s_expr, res_bind_context))
             }
             TableReference::Stage {
                 span: _,
@@ -524,7 +565,8 @@ impl Binder {
                     pattern: options.pattern.clone(),
                     files: options.files.clone(),
                 };
-                self.bind_stage_table(bind_context, stage_info, files_info, alias, None)
+                let table_ctx = self.ctx.clone();
+                self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
@@ -532,8 +574,28 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(crate) async fn bind_merge_into_source(
+        &mut self,
+        bind_context: &mut BindContext,
+        _span: Span,
+        source: &MergeSource,
+    ) -> Result<(SExpr, BindContext)> {
+        // merge source has three kinds type
+        // a. values b. streamingV2 c. query
+        match source {
+            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
+            MergeSource::StreamingV2 {
+                settings: _,
+                on_error_mode: _,
+                start: _,
+            } => unimplemented!(),
+        }
+    }
+
+    #[async_backtrace::framed]
     pub(crate) async fn bind_stage_table(
         &mut self,
+        table_ctx: Arc<dyn TableContext>,
         bind_context: &BindContext,
         stage_info: StageInfo,
         files_info: StageFilesInfo,
@@ -542,10 +604,26 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
+                let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
                 let read_options = ParquetReadOptions::default();
-
-                ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
+                if use_parquet2 {
+                    Parquet2Table::create(
+                        table_ctx.clone(),
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
                     .await?
+                } else {
+                    ParquetRSTable::create(
+                        stage_info.clone(),
+                        files_info,
+                        read_options,
+                        files_to_copy,
+                    )
+                    .await?
+                }
             }
             FileFormatParams::NdJson(..) => {
                 let schema = Arc::new(TableSchema::new(vec![TableField::new(
@@ -689,11 +767,38 @@ impl Binder {
         Ok((result_expr, result_ctx))
     }
 
+    fn bind_cte_scan(&mut self, cte_info: &CteInfo) -> Result<SExpr> {
+        let blocks = Arc::new(RwLock::new(vec![]));
+        self.ctx
+            .set_materialized_cte((cte_info.cte_idx, cte_info.used_count), blocks)?;
+        // Get the fields in the cte
+        let mut fields = vec![];
+        let mut offsets = vec![];
+        for (idx, column) in cte_info.columns.iter().enumerate() {
+            fields.push(DataField::new(
+                column.index.to_string().as_str(),
+                *column.data_type.clone(),
+            ));
+            offsets.push(idx);
+        }
+        let cte_scan = SExpr::create_leaf(Arc::new(
+            CteScan {
+                cte_idx: (cte_info.cte_idx, cte_info.used_count),
+                fields,
+                // It is safe to unwrap here because we have checked that the cte is materialized.
+                offsets,
+                stat: cte_info.stat_info.clone().unwrap(),
+            }
+            .into(),
+        ));
+        Ok(cte_scan)
+    }
+
     #[async_backtrace::framed]
-    async fn bind_cte(
+    pub(crate) async fn bind_cte(
         &mut self,
         span: Span,
-        bind_context: &BindContext,
+        bind_context: &mut BindContext,
         table_name: &str,
         alias: &Option<TableAlias>,
         cte_info: &CteInfo,
@@ -704,15 +809,18 @@ impl Binder {
             columns: vec![],
             aggregate_info: Default::default(),
             windows: Default::default(),
+            lambda_info: Default::default(),
+            cte_name: Some(table_name.to_string()),
+            cte_map_ref: Box::default(),
             in_grouping: false,
-            ctes_map: Box::new(DashMap::new()),
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
             window_definitions: DashMap::new(),
         };
-        let (s_expr, mut new_bind_context) = self
+
+        let (s_expr, mut res_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)
             .await?;
         let mut cols_alias = cte_info.columns_alias.clone();
@@ -729,22 +837,74 @@ impl Binder {
             .as_ref()
             .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
             .unwrap_or_else(|| table_name.to_string());
-        for column in new_bind_context.columns.iter_mut() {
+        for column in res_bind_context.columns.iter_mut() {
             column.database_name = None;
             column.table_name = Some(alias_table_name.clone());
         }
 
-        if cols_alias.len() > new_bind_context.columns.len() {
+        if cols_alias.len() > res_bind_context.columns.len() {
             return Err(ErrorCode::SemanticError(format!(
                 "table has {} columns available but {} columns specified",
-                new_bind_context.columns.len(),
+                res_bind_context.columns.len(),
                 cols_alias.len()
             ))
             .set_span(span));
         }
         for (index, column_name) in cols_alias.iter().enumerate() {
-            new_bind_context.columns[index].column_name = column_name.clone();
+            res_bind_context.columns[index].column_name = column_name.clone();
         }
+        Ok((s_expr, res_bind_context))
+    }
+
+    // Bind materialized cte
+    #[async_backtrace::framed]
+    pub(crate) async fn bind_m_cte(
+        &mut self,
+        bind_context: &mut BindContext,
+        cte_info: &CteInfo,
+        table_name: &String,
+        alias: &Option<TableAlias>,
+        span: &Span,
+    ) -> Result<(SExpr, BindContext)> {
+        let new_bind_context = if cte_info.used_count == 0 {
+            let (cte_s_expr, cte_bind_ctx) = self
+                .bind_cte(*span, bind_context, table_name, alias, cte_info)
+                .await?;
+            let stat_info = RelExpr::with_s_expr(&cte_s_expr).derive_cardinality()?;
+            self.ctes_map
+                .entry(table_name.clone())
+                .and_modify(|cte_info| {
+                    cte_info.stat_info = Some(stat_info);
+                    cte_info.columns = cte_bind_ctx.columns.clone();
+                });
+            self.set_m_cte_bound_ctx(cte_info.cte_idx, cte_bind_ctx.clone());
+            self.set_m_cte_bound_s_expr(cte_info.cte_idx, cte_s_expr);
+            cte_bind_ctx
+        } else {
+            // If the cte has been bound, get the bound context from `Binder`'s `m_cte_bound_ctx`
+            let mut bound_ctx = self.m_cte_bound_ctx.get(&cte_info.cte_idx).unwrap().clone();
+            // Resolve the alias name for the bound cte.
+            let alias_table_name = alias
+                .as_ref()
+                .map(|alias| normalize_identifier(&alias.name, &self.name_resolution_ctx).name)
+                .unwrap_or_else(|| table_name.to_string());
+            for column in bound_ctx.columns.iter_mut() {
+                column.database_name = None;
+                column.table_name = Some(alias_table_name.clone());
+            }
+            // Pass parent to bound_ctx
+            bound_ctx.parent = bind_context.parent.clone();
+            bound_ctx
+        };
+        // `bind_context` is the main BindContext for the whole query
+        // Update the `used_count` which will be used in runtime phase
+        self.ctes_map
+            .entry(table_name.clone())
+            .and_modify(|cte_info| {
+                cte_info.used_count += 1;
+            });
+        let cte_info = self.ctes_map.get(table_name).unwrap().clone();
+        let s_expr = self.bind_cte_scan(&cte_info)?;
         Ok((s_expr, new_bind_context))
     }
 
@@ -759,8 +919,7 @@ impl Binder {
         let columns = self.metadata.read().columns_by_table_index(table_index);
         let table = self.metadata.read().table(table_index).clone();
         let statistics_provider = table.table().column_statistics_provider().await?;
-
-        let mut col_stats: HashMap<IndexType, Option<ColumnStatistics>> = HashMap::new();
+        let mut col_stats: HashMap<IndexType, Option<BasicColumnStatistics>> = HashMap::new();
         for column in columns.iter() {
             match column {
                 ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -774,21 +933,22 @@ impl Binder {
                     virtual_computed_expr,
                     ..
                 }) => {
-                    let column_binding = ColumnBinding {
-                        database_name: Some(database_name.to_string()),
-                        table_name: Some(table.name().to_string()),
-                        table_index: Some(*table_index),
-                        column_name: column_name.clone(),
-                        column_position: *column_position,
-                        index: *column_index,
-                        data_type: Box::new(DataType::from(data_type)),
-                        visibility: if path_indices.is_some() {
+                    let column_binding = ColumnBindingBuilder::new(
+                        column_name.clone(),
+                        *column_index,
+                        Box::new(DataType::from(data_type)),
+                        if path_indices.is_some() {
                             Visibility::InVisible
                         } else {
                             Visibility::Visible
                         },
-                        virtual_computed_expr: virtual_computed_expr.clone(),
-                    };
+                    )
+                    .table_name(Some(table.name().to_string()))
+                    .database_name(Some(database_name.to_string()))
+                    .table_index(Some(*table_index))
+                    .column_position(*column_position)
+                    .virtual_computed_expr(virtual_computed_expr.clone())
+                    .build();
                     bind_context.add_column_binding(column_binding);
                     if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
@@ -810,24 +970,7 @@ impl Binder {
             SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
-                    columns: columns
-                        .into_iter()
-                        .map(|col| match col {
-                            ColumnEntry::BaseTableColumn(BaseTableColumn {
-                                column_index, ..
-                            }) => column_index,
-                            ColumnEntry::DerivedColumn(DerivedColumn { column_index, .. }) => {
-                                column_index
-                            }
-                            ColumnEntry::InternalColumn(TableInternalColumn {
-                                column_index,
-                                ..
-                            }) => column_index,
-                            ColumnEntry::VirtualColumn(VirtualColumn { column_index, .. }) => {
-                                column_index
-                            }
-                        })
-                        .collect(),
+                    columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
@@ -850,7 +993,7 @@ impl Binder {
         travel_point: &Option<NavigationPoint>,
     ) -> Result<Arc<dyn Table>> {
         // Resolve table with catalog
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let mut table_meta = catalog.get_table(tenant, database_name, table_name).await?;
 
         if let Some(tp) = travel_point {
@@ -911,7 +1054,7 @@ impl Binder {
         catalog_name: &str,
         table_id: MetaId,
     ) -> Result<Vec<(u64, String, IndexMeta)>> {
-        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let catalog = self.catalogs.get_catalog(tenant, catalog_name).await?;
         let index_metas = catalog
             .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;

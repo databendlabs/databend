@@ -25,28 +25,29 @@ use crate::sql::plans::Plan;
 #[async_trait::async_trait]
 pub trait AccessChecker: Sync + Send {
     // Check the access permission for the plan.
-    async fn check(&self, _plan: &Plan) -> Result<()>;
+    async fn check(&self, ctx: &Arc<QueryContext>, _plan: &Plan) -> Result<()>;
 }
 
 pub struct Accessor {
+    ctx: Arc<QueryContext>,
     accessors: HashMap<String, Box<dyn AccessChecker>>,
 }
 
 impl Accessor {
     pub fn create(ctx: Arc<QueryContext>) -> Self {
         let mut accessors: HashMap<String, Box<dyn AccessChecker>> = Default::default();
+        accessors.insert("management".to_string(), ManagementModeAccess::create());
         accessors.insert(
-            "management".to_string(),
-            ManagementModeAccess::create(ctx.clone()),
+            "privilege".to_string(),
+            PrivilegeAccess::create(ctx.clone()),
         );
-        accessors.insert("privilege".to_string(), PrivilegeAccess::create(ctx));
-        Accessor { accessors }
+        Accessor { ctx, accessors }
     }
 
     #[async_backtrace::framed]
     pub async fn check(&self, plan: &Plan) -> Result<()> {
         for accessor in self.accessors.values() {
-            accessor.check(plan).await?;
+            accessor.check(&self.ctx, plan).await?;
         }
         Ok(())
     }

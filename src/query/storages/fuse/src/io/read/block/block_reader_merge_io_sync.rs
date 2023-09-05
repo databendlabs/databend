@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::ops::Range;
 
 use common_base::rangemap::RangeMerger;
@@ -79,13 +80,10 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
-                None => Err(ErrorCode::Internal(format!(
-                    "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                    column_range, path, merged_ranges
-                ))),
-                Some((index, range)) => Ok((index, range)),
-            }?;
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+                "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
+                column_range, path, merged_ranges
+            )))?;
 
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
@@ -99,14 +97,20 @@ impl BlockReader {
     pub fn sync_read_columns_data_by_merge_io(
         &self,
         settings: &ReadSettings,
-        part: PartInfoPtr,
+        part: &PartInfoPtr,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
-        let part = FusePartInfo::from_part(&part)?;
+        let part = FusePartInfo::from_part(part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
 
         let mut ranges = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
             // first, check column array object cache
             let block_path = &part.location;
             let column_cache_key = TableDataCacheKey::new(block_path, *column_id);

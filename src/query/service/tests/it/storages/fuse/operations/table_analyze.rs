@@ -47,7 +47,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     let create_tbl_command = "create table t(c int)";
     execute_command(ctx.clone(), create_tbl_command).await?;
 
-    let catalog = ctx.get_catalog("default")?;
+    let catalog = ctx.get_catalog("default").await?;
 
     let num_inserts = 3;
     append_rows(ctx.clone(), num_inserts).await?;
@@ -123,8 +123,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let after_update = fuse_table.read_table_snapshot().await?.unwrap();
     let base_summary = after_update.summary.clone();
     let id_stats = base_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(0)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(0)));
 
     // get segments summary
     let mut segment_summary = Statistics::default();
@@ -140,8 +140,12 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
             put_cache: false,
         };
         let compact_segment = segment_reader.read(&param).await?;
-        let segment_info = SegmentInfo::try_from(compact_segment.as_ref())?;
-        merge_statistics_mut(&mut segment_summary, &segment_info.summary);
+        let segment_info = SegmentInfo::try_from(compact_segment)?;
+        merge_statistics_mut(
+            &mut segment_summary,
+            &segment_info.summary,
+            fuse_table.cluster_key_id(),
+        );
     }
 
     // analyze
@@ -153,8 +157,8 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
     let after_analyze = fuse_table.read_table_snapshot().await?.unwrap();
     let last_summary = after_analyze.summary.clone();
     let id_stats = last_summary.col_stats.get(&0).unwrap();
-    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
-    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(id_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
 
     assert_eq!(segment_summary, last_summary);
 
@@ -170,8 +174,8 @@ async fn check_column_ndv_statistics(
     for (i, num) in expected.iter() {
         let stat = provider.column_statistics(*i);
         assert!(stat.is_some());
-
-        assert_eq!(stat.unwrap().number_of_distinct_values, *num);
+        // Safe to unwrap: FuseTable's ndv is not None.
+        assert_eq!(stat.unwrap().ndv.unwrap(), *num);
     }
 
     Ok(())

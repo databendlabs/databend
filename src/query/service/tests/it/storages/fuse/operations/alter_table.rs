@@ -27,6 +27,7 @@ use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_sql::plans::AddColumnOption;
 use common_sql::plans::AddTableColumnPlan;
 use common_sql::plans::DropTableColumnPlan;
 use common_sql::Planner;
@@ -51,7 +52,7 @@ async fn check_segment_column_ids(
     expected_column_ids: Option<Vec<ColumnId>>,
     expected_column_min_max: Option<Vec<(ColumnId, (Scalar, Scalar))>>,
 ) -> Result<()> {
-    let catalog = fixture.ctx().get_catalog("default")?;
+    let catalog = fixture.ctx().get_catalog("default").await?;
     // get the latest tbl
     let table = catalog
         .get_table(
@@ -78,10 +79,10 @@ async fn check_segment_column_ids(
 
     let snapshot = snapshot_reader.read(&params).await?;
     if let Some(expected_column_min_max) = expected_column_min_max {
-        for (column_id, (min, max)) in expected_column_min_max {
-            if let Some(stat) = snapshot.summary.col_stats.get(&column_id) {
-                assert_eq!(min, stat.min);
-                assert_eq!(max, stat.max);
+        for (column_id, (min, max)) in &expected_column_min_max {
+            if let Some(stat) = snapshot.summary.col_stats.get(column_id) {
+                assert_eq!(min, stat.min());
+                assert_eq!(max, stat.max());
             }
         }
     }
@@ -89,11 +90,11 @@ async fn check_segment_column_ids(
     if let Some(expected_column_ids) = expected_column_ids {
         let expected_column_ids =
             HashSet::<ColumnId>::from_iter(expected_column_ids.clone().iter().cloned());
+        let compact_segment_reader = MetaReaders::segment_info_reader(
+            fuse_table.get_operator(),
+            TestFixture::default_table_schema(),
+        );
         for (seg_loc, _) in &snapshot.segments {
-            let compact_segment_reader = MetaReaders::segment_info_reader(
-                fuse_table.get_operator(),
-                TestFixture::default_table_schema(),
-            );
             let params = LoadParams {
                 location: seg_loc.clone(),
                 len_hint: None,
@@ -102,7 +103,7 @@ async fn check_segment_column_ids(
             };
 
             let compact_segment_info = compact_segment_reader.read(&params).await?;
-            let segment_info = SegmentInfo::try_from(compact_segment_info.as_ref())?;
+            let segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
             segment_info.blocks.iter().for_each(|block_meta| {
                 assert_eq!(
@@ -176,6 +177,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         table: fixture.default_table_name(),
         field,
         comment: "".to_string(),
+        option: AddColumnOption::End,
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
     interpreter.execute(ctx.clone()).await?;
@@ -193,7 +195,8 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     // get the latest tbl
     let table = fixture
         .ctx()
-        .get_catalog(&catalog_name)?
+        .get_catalog(&catalog_name)
+        .await?
         .get_table(
             fixture.default_tenant().as_str(),
             fixture.default_db_name().as_str(),

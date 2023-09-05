@@ -20,14 +20,13 @@ use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ShowCreateTablePlan;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
 use storages_common_table_meta::table::is_internal_opt_key;
-use tracing::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,14 +50,10 @@ impl Interpreter for ShowCreateTableInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
 
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)

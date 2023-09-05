@@ -26,6 +26,7 @@ use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use futures_util::stream;
+use log::warn;
 use tonic::Status;
 
 use crate::servers::flight_sql::flight_sql_service::DoGetStream;
@@ -36,7 +37,7 @@ impl CatalogInfoProvider {
     fn batch_to_get_stream(batch: RecordBatch) -> Result<DoGetStream, Status> {
         let schema = (*batch.schema()).clone();
         let batches = vec![batch];
-        let flight_data = batches_to_flight_data(schema, batches)
+        let flight_data = batches_to_flight_data(&schema, batches)
             .map_err(|e| Status::internal(format!("{e:?}")))?
             .into_iter()
             .map(Ok);
@@ -54,13 +55,14 @@ impl CatalogInfoProvider {
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = if let Some(catalog_name) = catalog_name {
             vec![(
                 catalog_name.clone(),
-                catalog_mgr.get_catalog(&catalog_name)?,
+                catalog_mgr.get_catalog(&tenant, &catalog_name).await?,
             )]
         } else {
             catalog_mgr
-                .catalogs
+                .list_catalogs(&tenant)
+                .await?
                 .iter()
-                .map(|r| (r.key().to_string(), r.value().clone()))
+                .map(|r| (r.name(), r.clone()))
                 .collect()
         };
 
@@ -81,7 +83,7 @@ impl CatalogInfoProvider {
                 let tables = match catalog.list_tables(tenant.as_str(), db_name).await {
                     Ok(tables) => tables,
                     Err(err) if err.code() == ErrorCode::EMPTY_SHARE_ENDPOINT_CONFIG => {
-                        tracing::warn!("list tables failed on db {}: {}", db.name(), err);
+                        warn!("list tables failed on db {}: {}", db.name(), err);
                         continue;
                     }
                     Err(err) => return Err(err),

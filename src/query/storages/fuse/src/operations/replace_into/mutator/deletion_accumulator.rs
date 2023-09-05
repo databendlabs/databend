@@ -21,7 +21,7 @@ use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 
-pub type BlockDeletionKeys = HashMap<BlockIndex, HashSet<UniqueKeyDigest>>;
+pub type BlockDeletionKeys = HashMap<BlockIndex, (HashSet<UniqueKeyDigest>, Vec<Vec<u64>>)>;
 #[derive(Default)]
 pub struct DeletionAccumulator {
     pub deletions: HashMap<SegmentIndex, BlockDeletionKeys>,
@@ -32,18 +32,35 @@ impl DeletionAccumulator {
         &mut self,
         segment_index: SegmentIndex,
         block_index: BlockIndex,
-        key_set: &HashSet<UniqueKeyDigest>,
+        source_on_conflict_key_set: &HashSet<UniqueKeyDigest>,
+        source_bloom_hashes: &Vec<Vec<u64>>,
     ) {
         match self.deletions.entry(segment_index) {
             Entry::Occupied(ref mut v) => {
                 let block_deletions = v.get_mut();
                 block_deletions
                     .entry(block_index)
-                    .and_modify(|es| es.extend(key_set))
-                    .or_insert(key_set.clone());
+                    .and_modify(|(unique_digests, bloom_hashes)| {
+                        unique_digests.extend(source_on_conflict_key_set);
+                        assert_eq!(bloom_hashes.len(), source_bloom_hashes.len());
+                        for (idx, acc) in bloom_hashes.iter_mut().enumerate() {
+                            let bloom_hashes = &source_bloom_hashes[idx];
+                            acc.extend(bloom_hashes);
+                        }
+                    })
+                    .or_insert((
+                        source_on_conflict_key_set.clone(),
+                        source_bloom_hashes.clone(),
+                    ));
             }
             Entry::Vacant(e) => {
-                e.insert(HashMap::from_iter([(block_index, key_set.clone())]));
+                e.insert(HashMap::from_iter([(
+                    block_index,
+                    (
+                        source_on_conflict_key_set.clone(),
+                        source_bloom_hashes.clone(),
+                    ),
+                )]));
             }
         }
     }

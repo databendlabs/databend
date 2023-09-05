@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::escape_string;
 use serde::Deserialize;
 use serde::Serialize;
@@ -31,6 +32,7 @@ const OPT_FILED_DELIMITER: &str = "field_delimiter";
 const OPT_RECORDE_DELIMITER: &str = "record_delimiter";
 const OPT_SKIP_HEADER: &str = "skip_header";
 const OPT_NAN_DISPLAY: &str = "nan_display";
+const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
@@ -58,15 +60,13 @@ impl FileFormatOptionsAst {
     fn take_type(&mut self) -> Result<StageFileFormatType> {
         let typ = match self.options.remove("type") {
             Some(t) => t,
-            None => match self.options.remove("format") {
-                Some(f) => f,
-                None => {
-                    return Err(ErrorCode::IllegalFileFormat(format!(
-                        "Missing type in file format options: {:?}",
-                        self.options
-                    )));
-                }
-            },
+            None => self
+                .options
+                .remove("format")
+                .ok_or(ErrorCode::IllegalFileFormat(format!(
+                    "Missing type in file format options: {:?}",
+                    self.options
+                )))?,
         };
         StageFileFormatType::from_str(&typ).map_err(ErrorCode::IllegalFileFormat)
     }
@@ -174,11 +174,13 @@ impl FileFormatParams {
                 let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = ast.take_string(OPT_ESCAPE, default.escape);
                 let quote = ast.take_string(OPT_QUOTE, default.quote);
+                let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
                     field_delimiter,
                     record_delimiter,
+                    null_display,
                     nan_display,
                     escape,
                     quote,
@@ -270,6 +272,7 @@ pub struct CsvFileFormatParams {
     pub headers: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
+    pub null_display: String,
     pub nan_display: String,
     pub escape: String,
     pub quote: String,
@@ -282,6 +285,7 @@ impl Default for CsvFileFormatParams {
             headers: 0,
             field_delimiter: ",".to_string(),
             record_delimiter: "\n".to_string(),
+            null_display: NULL_BYTES_ESCAPE.to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),

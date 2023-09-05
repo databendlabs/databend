@@ -19,6 +19,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
@@ -28,7 +29,6 @@ use crate::plans::Plan;
 use crate::plans::RelOperator;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::ColumnBinding;
 use crate::ScalarExpr;
 use crate::Visibility;
 
@@ -47,8 +47,6 @@ impl Plan {
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
             Plan::Copy(plan) => Ok(format!("{:?}", plan)),
-
-            Plan::Call(plan) => Ok(format!("{:?}", plan)),
 
             // catalog
             Plan::ShowCreateCatalog(show_create_catalog) => {
@@ -107,22 +105,23 @@ impl Plan {
             Plan::RefreshIndex(index) => Ok(format!("{index:?}")),
 
             // Virtual Columns
-            Plan::CreateVirtualColumns(create_virtual_columns) => {
-                Ok(format!("{:?}", create_virtual_columns))
+            Plan::CreateVirtualColumn(create_virtual_column) => {
+                Ok(format!("{:?}", create_virtual_column))
             }
-            Plan::AlterVirtualColumns(alter_virtual_columns) => {
-                Ok(format!("{:?}", alter_virtual_columns))
+            Plan::AlterVirtualColumn(alter_virtual_column) => {
+                Ok(format!("{:?}", alter_virtual_column))
             }
-            Plan::DropVirtualColumns(drop_virtual_columns) => {
-                Ok(format!("{:?}", drop_virtual_columns))
+            Plan::DropVirtualColumn(drop_virtual_column) => {
+                Ok(format!("{:?}", drop_virtual_column))
             }
-            Plan::GenerateVirtualColumns(generate_virtual_columns) => {
-                Ok(format!("{:?}", generate_virtual_columns))
+            Plan::RefreshVirtualColumn(refresh_virtual_column) => {
+                Ok(format!("{:?}", refresh_virtual_column))
             }
 
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),
+            Plan::MergeInto(merge_into) => Ok(format!("{:?}", merge_into)),
             Plan::Delete(delete) => format_delete(delete),
             Plan::Update(update) => Ok(format!("{:?}", update)),
 
@@ -198,17 +197,16 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         )
         .unwrap();
     let s_expr = if !delete.subquery_desc.is_empty() {
-        let row_id_column_binding = ColumnBinding {
-            database_name: Some(delete.database_name.clone()),
-            table_name: Some(delete.table_name.clone()),
-            column_position: None,
-            table_index: Some(table_index),
-            column_name: ROW_ID_COL_NAME.to_string(),
-            index: delete.subquery_desc[0].index,
-            data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-            visibility: Visibility::InVisible,
-            virtual_computed_expr: None,
-        };
+        let row_id_column_binding = ColumnBindingBuilder::new(
+            ROW_ID_COL_NAME.to_string(),
+            delete.subquery_desc[0].index,
+            Box::new(DataType::Number(NumberDataType::UInt64)),
+            Visibility::InVisible,
+        )
+        .database_name(Some(delete.database_name.clone()))
+        .table_name(Some(delete.table_name.clone()))
+        .table_index(Some(table_index))
+        .build();
         SExpr::create_unary(
             Arc::new(RelOperator::EvalScalar(EvalScalar {
                 items: vec![ScalarItem {

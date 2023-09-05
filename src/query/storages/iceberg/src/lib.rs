@@ -88,13 +88,15 @@
 //! ```
 
 #![feature(lazy_cell)]
+#![feature(impl_trait_in_assoc_type)]
 
 mod catalog;
-mod context;
 mod database;
 mod partition;
+mod stats;
 mod table;
 mod table_source;
 
 pub use catalog::IcebergCatalog;
+pub use catalog::IcebergCreator;
 pub use catalog::ICEBERG_CATALOG;

@@ -28,35 +28,34 @@ statement ok
 CREATE TABLE t1(a int, v json) Engine = Fuse
 
 statement error 1115
-ALTER VIRTUAL COLUMNS (v['k1'], v:k2, v[0]) FOR t1;
+ALTER VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR t1;
 
 statement error 1115
-DROP VIRTUAL COLUMNS FOR t1;
+DROP VIRTUAL COLUMN FOR t1;
 
 statement error 1065
-CREATE VIRTUAL COLUMNS (v) FOR t1;
+CREATE VIRTUAL COLUMN (v) FOR t1;
 
 statement error 1065
-CREATE VIRTUAL COLUMNS (a['k1']) FOR t1;
+CREATE VIRTUAL COLUMN (a['k1']) FOR t1;
 
 statement ok
-CREATE VIRTUAL COLUMNS (v['k1'], v:k2, v[0]) FOR t1;
+CREATE VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR t1;
 
 statement error 1116
-CREATE VIRTUAL COLUMNS (v['k1'], v:k2, v[0]) FOR t1;
+CREATE VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR t1;
 
 statement ok
-ALTER VIRTUAL COLUMNS (v['k1']['k2'], v[1][2], v[3]) FOR t1;
+ALTER VIRTUAL COLUMN (v['k1']['k2'], v[1][2], v[3]) FOR t1;
 
 statement ok
-DROP VIRTUAL COLUMNS FOR t1;
+DROP VIRTUAL COLUMN FOR t1;
 
 statement ok
-GENERATE VIRTUAL COLUMNS FOR t1;
+REFRESH VIRTUAL COLUMN FOR t1;
 
 statement ok
 USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_virtual_db
-

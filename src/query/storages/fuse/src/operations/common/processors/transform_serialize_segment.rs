@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -23,16 +24,16 @@ use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::OutputPort;
+use log::info;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::common::AbortOperation;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::pipelines::processors::port::InputPort;
@@ -60,6 +61,7 @@ enum State {
 }
 
 pub struct TransformSerializeSegment {
+    ctx: Arc<dyn TableContext>,
     data_accessor: Operator,
     meta_locations: TableMetaLocationGenerator,
     accumulator: StatisticsAccumulator,
@@ -68,26 +70,34 @@ pub struct TransformSerializeSegment {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     block_per_seg: u64,
+
+    thresholds: BlockThresholds,
+    default_cluster_key_id: Option<u32>,
 }
 
 impl TransformSerializeSegment {
     pub fn new(
+        ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         thresholds: BlockThresholds,
     ) -> Self {
+        let default_cluster_key_id = table.cluster_key_id();
         TransformSerializeSegment {
+            ctx,
             input,
             output,
             output_data: None,
             data_accessor: table.get_operator(),
             meta_locations: table.meta_location_generator().clone(),
             state: State::None,
-            accumulator: StatisticsAccumulator::new(thresholds),
+            accumulator: Default::default(),
             block_per_seg: table
                 .get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT)
                 as u64,
+            thresholds,
+            default_cluster_key_id,
         }
     }
 
@@ -175,17 +185,9 @@ impl Processor for TransformSerializeSegment {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegment => {
                 let acc = std::mem::take(&mut self.accumulator);
-                let col_stats = acc.summary();
+                let summary = acc.summary(self.thresholds, self.default_cluster_key_id);
 
-                let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
-                    row_count: acc.summary_row_count,
-                    block_count: acc.summary_block_count,
-                    perfect_block_count: acc.perfect_block_count,
-                    uncompressed_byte_size: acc.in_memory_size,
-                    compressed_byte_size: acc.file_size,
-                    index_size: acc.index_size,
-                    col_stats,
-                });
+                let segment_info = SegmentInfo::new(acc.blocks_metas, summary);
 
                 self.state = State::SerializedSegment {
                     data: segment_info.to_bytes()?,
@@ -198,15 +200,27 @@ impl Processor for TransformSerializeSegment {
                     segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
+                let mut abort_operation = AbortOperation::default();
+                for block_meta in &segment.blocks {
+                    abort_operation.add_block(block_meta);
+                }
+                abort_operation.add_segment(location.clone());
+
+                let format_version = SegmentInfo::VERSION;
+
                 // emit log entry.
                 // for newly created segment, always use the latest version
                 let meta = MutationLogs {
                     entries: vec![MutationLogEntry::AppendSegment {
-                        segment_location: location,
-                        segment_info: segment,
-                        format_version: SegmentInfo::VERSION,
+                        segment_location: location.clone(),
+                        format_version,
+                        abort_operation,
+                        summary: segment.summary.clone(),
                     }],
                 };
+
+                self.ctx.add_segment_location((location, format_version))?;
+
                 self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
             }
             _state => {

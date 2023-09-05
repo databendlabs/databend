@@ -45,10 +45,9 @@ impl PartInfo for SystemTablePart {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<SystemTablePart>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<SystemTablePart>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -59,6 +58,7 @@ impl PartInfo for SystemTablePart {
 pub trait SyncSystemTable: Send + Sync {
     const NAME: &'static str;
     const IS_LOCAL: bool = true;
+    const BROADCAST_TRUNCATE: bool = false;
 
     fn get_table_info(&self) -> &TableInfo;
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
@@ -151,6 +151,10 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>, _purge: bool) -> Result<()> {
         self.inner_table.truncate(ctx)
+    }
+
+    fn broadcast_truncate_to_cluster(&self) -> bool {
+        TTable::BROADCAST_TRUNCATE
     }
 }
 

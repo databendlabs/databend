@@ -23,6 +23,10 @@ use common_storages_fuse::table_functions::FuseColumnTable;
 use itertools::Itertools;
 use parking_lot::RwLock;
 
+use super::ExecuteBackgroundJobTable;
+use super::LicenseInfoTable;
+use super::SuggestedBackgroundTasksTable;
+use super::TenantQuotaTable;
 use crate::catalogs::SYS_TBL_FUC_ID_END;
 use crate::catalogs::SYS_TBL_FUNC_ID_BEGIN;
 use crate::storages::fuse::table_functions::ClusteringInformationTable;
@@ -165,6 +169,26 @@ impl TableFunctionFactory {
             (next_id(), Arc::new(GPT2SQLTable::create)),
         );
 
+        creators.insert(
+            "execute_background_job".to_string(),
+            (next_id(), Arc::new(ExecuteBackgroundJobTable::create)),
+        );
+
+        creators.insert(
+            "license_info".to_string(),
+            (next_id(), Arc::new(LicenseInfoTable::create)),
+        );
+
+        creators.insert(
+            "suggested_background_tasks".to_string(),
+            (next_id(), Arc::new(SuggestedBackgroundTasksTable::create)),
+        );
+
+        creators.insert(
+            "tenant_quota".to_string(),
+            (next_id(), Arc::new(TenantQuotaTable::create)),
+        );
+
         TableFunctionFactory {
             creators: RwLock::new(creators),
         }
@@ -178,6 +202,12 @@ impl TableFunctionFactory {
         })?;
         let func = factory.try_create("", &func_name, *id, tbl_args)?;
         Ok(func)
+    }
+
+    pub fn exists(&self, func_name: &str) -> bool {
+        let lock = self.creators.read();
+        let func_name = func_name.to_lowercase();
+        lock.contains_key(&func_name)
     }
 
     pub fn list(&self) -> Vec<String> {

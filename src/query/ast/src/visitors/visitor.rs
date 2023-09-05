@@ -222,6 +222,7 @@ pub trait Visitor<'ast>: Sized {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn visit_function_call(
         &mut self,
         _span: Span,
@@ -230,6 +231,7 @@ pub trait Visitor<'ast>: Sized {
         args: &'ast [Expr],
         _params: &'ast [Literal],
         over: &'ast Option<Window>,
+        lambda: &'ast Option<Lambda>,
     ) {
         for arg in args {
             walk_expr(self, arg);
@@ -237,6 +239,9 @@ pub trait Visitor<'ast>: Sized {
 
         if let Some(over) = over {
             self.visit_window(over);
+        }
+        if let Some(lambda) = lambda {
+            walk_expr(self, &lambda.expr)
         }
     }
 
@@ -399,7 +404,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_insert(&mut self, _insert: &'ast InsertStmt) {}
     fn visit_replace(&mut self, _replace: &'ast ReplaceStmt) {}
-
+    fn visit_merge_into(&mut self, _merge_into: &'ast MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &'ast InsertSource) {}
 
     fn visit_delete(
@@ -482,13 +487,13 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
     fn visit_refresh_index(&mut self, _stmt: &'ast RefreshIndexStmt) {}
 
-    fn visit_create_virtual_columns(&mut self, _stmt: &'ast CreateVirtualColumnsStmt) {}
+    fn visit_create_virtual_column(&mut self, _stmt: &'ast CreateVirtualColumnStmt) {}
 
-    fn visit_alter_virtual_columns(&mut self, _stmt: &'ast AlterVirtualColumnsStmt) {}
+    fn visit_alter_virtual_column(&mut self, _stmt: &'ast AlterVirtualColumnStmt) {}
 
-    fn visit_drop_virtual_columns(&mut self, _stmt: &'ast DropVirtualColumnsStmt) {}
+    fn visit_drop_virtual_column(&mut self, _stmt: &'ast DropVirtualColumnStmt) {}
 
-    fn visit_generate_virtual_columns(&mut self, _stmt: &'ast GenerateVirtualColumnsStmt) {}
+    fn visit_refresh_virtual_column(&mut self, _stmt: &'ast RefreshVirtualColumnStmt) {}
 
     fn visit_show_users(&mut self) {}
 

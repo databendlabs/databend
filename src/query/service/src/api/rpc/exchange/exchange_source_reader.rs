@@ -26,6 +26,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
 
+use crate::api::rpc::exchange::metrics::metrics_inc_exchange_read_bytes;
+use crate::api::rpc::exchange::metrics::metrics_inc_exchange_read_count;
 use crate::api::rpc::exchange::serde::exchange_deserializer::ExchangeDeserializeMeta;
 use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::DataPacket;
@@ -90,9 +92,16 @@ impl Processor for ExchangeSourceReader {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> common_exception::Result<()> {
         if self.output_data.is_empty() {
+            let mut bytes = 0;
             let mut dictionaries = Vec::new();
             while let Some(output_data) = self.flight_receiver.recv().await? {
+                bytes += output_data.bytes_size();
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
+                    {
+                        metrics_inc_exchange_read_count(dictionaries.len());
+                        metrics_inc_exchange_read_bytes(bytes);
+                    }
+
                     dictionaries.push(output_data);
                     self.output_data = dictionaries;
                     return Ok(());

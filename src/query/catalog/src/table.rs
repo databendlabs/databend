@@ -20,13 +20,11 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
-use common_expression::TableField;
 use common_expression::TableSchema;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
@@ -37,12 +35,14 @@ use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
+use storages_common_table_meta::meta::SnapshotId;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartStatistics;
 use crate::plan::Partitions;
 use crate::plan::PushDownInfo;
+use crate::statistics::BasicColumnStatistics;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
@@ -199,31 +199,15 @@ pub trait Table: Sync + Send {
             self.get_table_info().meta.engine
         )))
     }
-
-    #[async_backtrace::framed]
-    async fn replace_into(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        on_conflict_fields: Vec<TableField>,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, on_conflict_fields);
-
-        Err(ErrorCode::Unimplemented(format!(
-            "replace_into operation for table {} is not implemented. table engine : {}",
-            self.name(),
-            self.get_table_info().meta.engine
-        )))
-    }
-
     fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
+        prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, copied_files, pipeline, overwrite);
+        let (_, _, _, _, _) = (ctx, copied_files, pipeline, overwrite, prev_snapshot_id);
 
         Ok(())
     }
@@ -373,6 +357,10 @@ pub trait Table: Sync + Send {
     fn result_can_be_cached(&self) -> bool {
         false
     }
+
+    fn broadcast_truncate_to_cluster(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -382,7 +370,7 @@ pub trait TableExt: Table {
         let table_info = self.get_table_info();
         let name = table_info.name.clone();
         let tid = table_info.ident.table_id;
-        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
         let table_info: TableInfo = TableInfo {
             ident,
@@ -437,77 +425,16 @@ pub enum AppendMode {
 pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
-    fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics>;
-
-    // If the data type is int and max - min + 1 < ndv, then adjust ndv to max - min + 1.
-    fn adjust_ndv_by_min_max(&self, mut ndv: u64, min: Scalar, max: Scalar) -> u64 {
-        let mut range = match (min, max) {
-            (Scalar::Number(min), Scalar::Number(max)) => match (min, max) {
-                (NumberScalar::UInt8(min), NumberScalar::UInt8(max)) => (max - min) as u64,
-                (NumberScalar::UInt16(min), NumberScalar::UInt16(max)) => (max - min) as u64,
-                (NumberScalar::UInt32(min), NumberScalar::UInt32(max)) => (max - min) as u64,
-                (NumberScalar::UInt64(min), NumberScalar::UInt64(max)) => max - min,
-                (NumberScalar::Int8(min), NumberScalar::Int8(max)) => {
-                    (max as i16 - min as i16) as u64
-                }
-                (NumberScalar::Int16(min), NumberScalar::Int16(max)) => {
-                    (max as i32 - min as i32) as u64
-                }
-                (NumberScalar::Int32(min), NumberScalar::Int32(max)) => {
-                    (max as i64 - min as i64) as u64
-                }
-                (NumberScalar::Int64(min), NumberScalar::Int64(max)) => {
-                    (max as i128 - min as i128) as u64
-                }
-                _ => return ndv,
-            },
-            (Scalar::Timestamp(min), Scalar::Timestamp(max)) => (max as i128 - min as i128) as u64,
-            (Scalar::Date(min), Scalar::Date(max)) => (max as i64 - min as i64) as u64,
-            (Scalar::String(mut min), Scalar::String(mut max))
-            | (Scalar::Variant(mut min), Scalar::Variant(mut max)) => {
-                // There are 128 characters in ASCII code and 128^4 = 268435456 < 2^32 < 128^5.
-                if min.is_empty() || max.is_empty() || min.len() > 4 || max.len() > 4 {
-                    return ndv;
-                }
-                let mut min_value: u32 = 0;
-                let mut max_value: u32 = 0;
-                while min.len() != max.len() {
-                    if min.len() < max.len() {
-                        min.push(0);
-                    } else {
-                        max.push(0);
-                    }
-                }
-                for idx in 0..min.len() {
-                    min_value = min_value * 128 + min[idx] as u32;
-                    max_value = max_value * 128 + max[idx] as u32;
-                }
-                (max_value - min_value) as u64
-            }
-            (Scalar::Boolean(min), Scalar::Boolean(max)) => {
-                if min == max {
-                    1
-                } else {
-                    2
-                }
-            }
-            _ => return ndv,
-        };
-        range = range.saturating_add(1);
-        if range < ndv {
-            ndv = range;
-        }
-        ndv
-    }
+    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics>;
 }
 
-mod column_stats_provider_impls {
+pub mod column_stats_provider_impls {
     use super::*;
 
-    pub(super) struct DummyColumnStatisticsProvider;
+    pub struct DummyColumnStatisticsProvider;
 
     impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
-        fn column_statistics(&self, _column_id: ColumnId) -> Option<ColumnStatistics> {
+        fn column_statistics(&self, _column_id: ColumnId) -> Option<BasicColumnStatistics> {
             None
         }
     }
@@ -524,4 +451,35 @@ pub struct DeletionFilters {
     pub filter: RemoteExpr<String>,
     // just "not(filter)"
     pub inverted_filter: RemoteExpr<String>,
+}
+
+use std::collections::HashMap;
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct Parquet2TableColumnStatisticsProvider {
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    num_rows: u64,
+}
+
+impl Parquet2TableColumnStatisticsProvider {
+    pub fn new(column_stats: HashMap<ColumnId, BasicColumnStatistics>, num_rows: u64) -> Self {
+        let column_stats = column_stats
+            .into_iter()
+            .map(|(column_id, stat)| (column_id, stat.get_useful_stat(num_rows)))
+            .collect();
+        Self {
+            column_stats,
+            num_rows,
+        }
+    }
+
+    pub fn num_rows(&self) -> u64 {
+        self.num_rows
+    }
+}
+
+impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
+        self.column_stats.get(&column_id).cloned().flatten()
+    }
 }

@@ -21,12 +21,20 @@ use std::time::Instant;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::CatalogInfo;
+use common_storage::common_metrics::copy::metrics_inc_collect_files_get_all_source_files_milliseconds;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_entire_milliseconds;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
-use tracing::info;
+use log::info;
 
 use crate::plans::Plan;
 
@@ -78,9 +86,10 @@ impl CopyIntoTableMode {
 
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
-    pub catalog_name: String,
+    pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
+    pub from_attachment: bool,
 
     pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
     pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
@@ -97,7 +106,7 @@ pub struct CopyIntoTablePlan {
 }
 
 impl CopyIntoTablePlan {
-    pub async fn collect_files(&self, ctx: &Arc<dyn TableContext>) -> Result<Vec<StageFileInfo>> {
+    pub async fn collect_files(&self, ctx: &dyn TableContext) -> Result<Vec<StageFileInfo>> {
         ctx.set_status_info("begin to list files");
         let start = Instant::now();
 
@@ -134,6 +143,10 @@ impl CopyIntoTablePlan {
 
         let num_all_files = all_source_file_infos.len();
 
+        let end_get_all_source = Instant::now();
+        let cost_get_all_files = end_get_all_source.duration_since(start).as_millis();
+        metrics_inc_collect_files_get_all_source_files_milliseconds(cost_get_all_files as u64);
+
         ctx.set_status_info(&format!("end list files: got {} files", num_all_files));
 
         let need_copy_file_infos = if self.force {
@@ -145,9 +158,10 @@ impl CopyIntoTablePlan {
         } else {
             // Status.
             ctx.set_status_info("begin filtering out copied files");
+
             let files = ctx
                 .filter_out_copied_files(
-                    &self.catalog_name,
+                    self.catalog_info.catalog_name(),
                     &self.database_name,
                     &self.table_name,
                     &all_source_file_infos,
@@ -158,6 +172,13 @@ impl CopyIntoTablePlan {
                 "end filtering out copied files: {}",
                 num_all_files
             ));
+
+            let end_filter_out = Instant::now();
+            let cost_filter_out = end_filter_out
+                .duration_since(end_get_all_source)
+                .as_millis();
+            metrics_inc_filter_out_copied_files_entire_milliseconds(cost_filter_out as u64);
+
             files
         };
 
@@ -176,7 +197,7 @@ impl CopyIntoTablePlan {
 impl Debug for CopyIntoTablePlan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let CopyIntoTablePlan {
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
             validation_mode,
@@ -187,7 +208,8 @@ impl Debug for CopyIntoTablePlan {
         } = self;
         write!(
             f,
-            "Copy into {catalog_name:}.{database_name:}.{table_name:}"
+            "Copy into {:}.{database_name:}.{table_name:}",
+            catalog_info.catalog_name()
         )?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;
@@ -208,6 +230,32 @@ pub enum CopyPlan {
         validation_mode: ValidationMode,
         from: Box<Plan>,
     },
+}
+
+impl CopyPlan {
+    fn copy_into_table_schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("File", DataType::String),
+            DataField::new("Rows_loaded", DataType::Number(NumberDataType::Int32)),
+            DataField::new("Errors_seen", DataType::Number(NumberDataType::Int32)),
+            DataField::new(
+                "First_error",
+                DataType::Nullable(Box::new(DataType::String)),
+            ),
+            DataField::new(
+                "First_error_line",
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
+            ),
+        ])
+    }
+
+    pub fn schema(&self) -> DataSchemaRef {
+        match self {
+            CopyPlan::NoFileToCopy => Self::copy_into_table_schema(),
+            CopyPlan::IntoTable(p) if !p.from_attachment => Self::copy_into_table_schema(),
+            _ => Arc::new(DataSchema::empty()),
+        }
+    }
 }
 
 impl Debug for CopyPlan {

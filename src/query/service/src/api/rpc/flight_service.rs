@@ -31,8 +31,11 @@ use common_arrow::arrow_format::flight::data::Ticket;
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightService;
 use common_base::match_join_handle;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_settings::Settings;
+use common_tracing::func_name;
+use minitrace::prelude::*;
 use tokio_stream::Stream;
 use tonic::Request;
 use tonic::Response as RawResponse;
@@ -42,6 +45,8 @@ use tonic::Streaming;
 use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
+use crate::interpreters::Interpreter;
+use crate::interpreters::TruncateTableInterpreter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
@@ -104,9 +109,10 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoExchangeStream = FlightStream<FlightData>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let _guard = root.set_local_parent();
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
                 let target = request.get_metadata("x-target")?;
@@ -142,91 +148,116 @@ impl FlightService for DatabendQueryFlightService {
 
     type DoActionStream = FlightStream<FlightResult>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        common_tracing::extract_remote_span_as_parent(&request);
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        async {
+            let action = request.into_inner();
+            let flight_action: FlightAction = action.try_into()?;
 
-        let action = request.into_inner();
-        let flight_action: FlightAction = action.try_into()?;
+            let action_result = match flight_action {
+                FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    unsafe {
+                        // Keep settings
+                        settings.unchecked_apply_changes(
+                            init_query_fragments_plan
+                                .executor_packet
+                                .changed_settings
+                                .clone(),
+                        );
+                    }
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
 
-        let action_result = match flight_action {
-            FlightAction::InitQueryFragmentsPlan(init_query_fragments_plan) => {
-                let config = GlobalConfig::instance();
-                let session_manager = SessionManager::instance();
-                let settings = Settings::create(config.query.tenant_id.clone());
-                unsafe {
-                    // Keep settings
-                    settings.unchecked_apply_changes(
-                        init_query_fragments_plan
-                            .executor_packet
-                            .changed_settings
-                            .clone(),
+                    let ctx = session.create_query_context().await?;
+                    // Keep query id
+                    ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
+                    ctx.attach_query_str(
+                        init_query_fragments_plan.executor_packet.query_kind.clone(),
+                        "".to_string(),
                     );
-                }
-                let session =
-                    session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
 
-                let ctx = session.create_query_context().await?;
-                // Keep query id
-                ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
-
-                let spawner = ctx.clone();
-                let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
-                if let Err(cause) = match_join_handle(spawner.spawn(async move {
-                    DataExchangeManager::instance()
-                        .init_query_fragments_plan(&ctx, &init_query_fragments_plan.executor_packet)
-                }))
-                .await
-                {
-                    DataExchangeManager::instance().on_finished_query(&query_id);
-                    return Err(cause.into());
-                }
-
-                FlightResult { body: vec![] }
-            }
-            FlightAction::InitNodesChannel(init_nodes_channel) => {
-                let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
-                if let Err(cause) = DataExchangeManager::instance()
-                    .init_nodes_channel(publisher_packet)
+                    let spawner = ctx.clone();
+                    let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
+                    if let Err(cause) = match_join_handle(spawner.spawn(async move {
+                        DataExchangeManager::instance().init_query_fragments_plan(
+                            &ctx,
+                            &init_query_fragments_plan.executor_packet,
+                        )
+                    }))
                     .await
-                {
-                    let query_id = &init_nodes_channel.init_nodes_channel_packet.query_id;
-                    DataExchangeManager::instance().on_finished_query(query_id);
-                    return Err(cause.into());
+                    {
+                        DataExchangeManager::instance().on_finished_query(&query_id);
+                        return Err(cause.into());
+                    }
+
+                    FlightResult { body: vec![] }
                 }
+                FlightAction::InitNodesChannel(init_nodes_channel) => {
+                    let publisher_packet = &init_nodes_channel.init_nodes_channel_packet;
+                    if let Err(cause) = DataExchangeManager::instance()
+                        .init_nodes_channel(publisher_packet)
+                        .await
+                    {
+                        let query_id = &init_nodes_channel.init_nodes_channel_packet.query_id;
+                        DataExchangeManager::instance().on_finished_query(query_id);
+                        return Err(cause.into());
+                    }
 
-                FlightResult { body: vec![] }
-            }
-            FlightAction::ExecutePartialQuery(query_id) => {
-                if let Err(cause) = DataExchangeManager::instance().execute_partial_query(&query_id)
-                {
-                    DataExchangeManager::instance().on_finished_query(&query_id);
-                    return Err(cause.into());
+                    FlightResult { body: vec![] }
                 }
+                FlightAction::ExecutePartialQuery(query_id) => {
+                    if let Err(cause) =
+                        DataExchangeManager::instance().execute_partial_query(&query_id)
+                    {
+                        DataExchangeManager::instance().on_finished_query(&query_id);
+                        return Err(cause.into());
+                    }
 
-                FlightResult { body: vec![] }
-            }
-        };
+                    FlightResult { body: vec![] }
+                }
+                FlightAction::TruncateTable(truncate_table) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    let ctx = session.create_query_context().await?;
 
-        Ok(RawResponse::new(
-            Box::pin(tokio_stream::once(Ok(action_result))) as FlightStream<FlightResult>,
-        ))
+                    let interpreter =
+                        TruncateTableInterpreter::from_flight(ctx, truncate_table.packet)?;
+                    interpreter.execute2().await?;
+                    FlightResult { body: vec![] }
+                }
+            };
+
+            Ok(RawResponse::new(
+                Box::pin(tokio_stream::once(Ok(action_result))) as FlightStream<FlightResult>,
+            ))
+        }
+        .in_span(root)
+        .await
     }
 
     type ListActionsStream = FlightStream<ActionType>;
 
-    #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
-        common_tracing::extract_remote_span_as_parent(&request);
-        Result::Ok(RawResponse::new(
-            Box::pin(tokio_stream::iter(vec![
-                Ok(ActionType {
-                    r#type: "PrepareShuffleAction".to_string(),
-                    description: "Prepare a query stage that can be sent to the remote after receiving data from remote".to_string(),
-                })
-            ])) as FlightStream<ActionType>
-        ))
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        async {
+            Result::Ok(RawResponse::new(
+                Box::pin(tokio_stream::iter(vec![
+                    Ok(ActionType {
+                        r#type: "PrepareShuffleAction".to_string(),
+                        description: "Prepare a query stage that can be sent to the remote after receiving data from remote".to_string(),
+                    })
+                ])) as FlightStream<ActionType>
+            ))
+        }
+            .in_span(root)
+            .await
     }
 }

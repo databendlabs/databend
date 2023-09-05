@@ -19,24 +19,22 @@ use common_expression::types::number::UInt64Type;
 use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
-use common_sql::plans::ShowRolesPlan;
+use common_storages_fuse::TableContext;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 #[derive(Debug)]
 pub struct ShowRolesInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowRolesPlan,
 }
 
 impl ShowRolesInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowRolesPlan) -> Result<Self> {
-        Ok(ShowRolesInterpreter { ctx, plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowRolesInterpreter { ctx })
     }
 }
 
@@ -46,13 +44,11 @@ impl Interpreter for ShowRolesInterpreter {
         "ShowRolesInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_roles_execute");
+
         let session = self.ctx.get_current_session();
         let mut roles = session.get_all_available_roles().await?;
         roles.sort_by(|a, b| a.name.cmp(&b.name));

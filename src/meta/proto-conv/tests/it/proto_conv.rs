@@ -57,6 +57,7 @@ fn new_db_meta_share() -> mt::DatabaseMeta {
             tenant: "tenant".to_string(),
             share_name: "share".to_string(),
         }),
+        owner: None,
     }
 }
 
@@ -71,6 +72,7 @@ fn new_db_meta() -> mt::DatabaseMeta {
         drop_on: None,
         shared_by: BTreeSet::from_iter(vec![1].into_iter()),
         from_share: None,
+        owner: None,
     }
 }
 
@@ -139,6 +141,10 @@ fn new_share_account_meta() -> share::ShareAccountMeta {
     }
 }
 
+fn new_lvt() -> mt::LeastVisibleTime {
+    mt::LeastVisibleTime { time: 10267 }
+}
+
 fn new_table_meta() -> mt::TableMeta {
     mt::TableMeta {
         schema: Arc::new(ce::TableSchema::new_from(
@@ -203,6 +209,7 @@ fn new_table_meta() -> mt::TableMeta {
         statistics: Default::default(),
         shared_by: btreeset! {1},
         column_mask_policy: Some(btreemap! {s("a") => s("b")}),
+        owner: None,
     }
 }
 
@@ -214,6 +221,7 @@ fn new_index_meta() -> mt::IndexMeta {
         dropped_on: None,
         updated_on: None,
         query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
+        sync_creation: false,
     }
 }
 
@@ -333,6 +341,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = data_mask_meta.to_pb()?;
     let got = common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
     assert_eq!(data_mask_meta, got);
+
+    let lvt = new_lvt();
+    let p = lvt.to_pb()?;
+    let got = mt::LeastVisibleTime::from_pb(p)?;
+    assert_eq!(lvt, got);
 
     Ok(())
 }
@@ -489,6 +502,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("catalog catalog_meta:{:?}", buf);
+    }
+
+    // lvt
+    {
+        let lvt = new_lvt();
+        let p = lvt.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("lvt:{:?}", buf);
     }
 
     Ok(())

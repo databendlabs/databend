@@ -16,5 +16,8 @@ mod ie_join_state;
 mod ie_join_util;
 mod merge_join_state;
 mod range_join_state;
+mod transform_range_join;
 
 pub use range_join_state::RangeJoinState;
+pub use transform_range_join::TransformRangeJoinLeft;
+pub use transform_range_join::TransformRangeJoinRight;

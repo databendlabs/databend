@@ -58,6 +58,10 @@ fn test_env_config_s3() -> Result<()> {
                 "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
             ),
+            (
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_SIZE",
+                Some(format!("{}", 2u64 * 1024 * 1024 * 1024).as_str()),
+            ),
             ("STORAGE_TYPE", Some("s3")),
             ("STORAGE_NUM_CPUS", Some("16")),
             ("STORAGE_FS_DATA_PATH", Some("/tmp/test")),
@@ -141,6 +145,10 @@ fn test_env_config_s3() -> Result<()> {
                 1024 * 1024 * 1024,
                 configured.cache.table_bloom_index_filter_count
             );
+            assert_eq!(
+                2 * 1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_size
+            );
             assert_eq!(HashMap::new(), configured.catalogs);
         },
     );
@@ -178,6 +186,10 @@ fn test_env_config_fs() -> Result<()> {
             (
                 "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
+            (
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_SIZE",
+                Some(format!("{}", 2u64 * 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("fs")),
             ("STORAGE_NUM_CPUS", Some("16")),
@@ -261,6 +273,10 @@ fn test_env_config_fs() -> Result<()> {
                 1024 * 1024 * 1024,
                 configured.cache.table_bloom_index_filter_count
             );
+            assert_eq!(
+                2 * 1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_size
+            );
         },
     );
 
@@ -296,6 +312,10 @@ fn test_env_config_gcs() -> Result<()> {
             (
                 "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
+            (
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_SIZE",
+                Some(format!("{}", 3u64 * 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("gcs")),
             ("STORAGE_NUM_CPUS", Some("16")),
@@ -386,6 +406,10 @@ fn test_env_config_gcs() -> Result<()> {
                 1024 * 1024 * 1024,
                 configured.cache.table_bloom_index_filter_count
             );
+            assert_eq!(
+                3 * 1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_size
+            );
         },
     );
 
@@ -423,6 +447,10 @@ fn test_env_config_oss() -> Result<()> {
             (
                 "CACHE_TABLE_BLOOM_INDEX_FILTER_COUNT",
                 Some(format!("{}", 1024 * 1024 * 1024).as_str()),
+            ),
+            (
+                "CACHE_TABLE_BLOOM_INDEX_FILTER_SIZE",
+                Some(format!("{}", 4u64 * 1024 * 1024 * 1024).as_str()),
             ),
             ("STORAGE_TYPE", Some("oss")),
             ("STORAGE_NUM_CPUS", Some("16")),
@@ -521,6 +549,10 @@ fn test_env_config_oss() -> Result<()> {
             assert_eq!(
                 1024 * 1024 * 1024,
                 configured.cache.table_bloom_index_filter_count
+            );
+            assert_eq!(
+                4 * 1024 * 1024 * 1024,
+                configured.cache.table_bloom_index_filter_size
             );
         },
     );
@@ -713,7 +745,9 @@ share_endpoint_address = ""
 [log]
 level = "INFO"
 dir = "./.databend/logs"
-query_enabled = false
+
+[log.query]
+on = false
 
 [meta]
 endpoints = ["0.0.0.0:9191"]
@@ -809,6 +843,8 @@ path = "_cache"
                 .expect("config load success")
                 .into_config();
 
+            assert!(!cfg.log.query.query_log_on);
+
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.typ);
@@ -838,7 +874,7 @@ path = "_cache"
             let cfg = inner.unwrap();
             match cfg {
                 CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
+                    assert_eq!("127.0.0.1:9083", cfg.metastore_address, "address incorrect");
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
@@ -877,7 +913,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:10000".to_string(),
+                    metastore_address: "1.1.1.1:10000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );
@@ -917,7 +953,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["my_hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:12000".to_string(),
+                    metastore_address: "1.1.1.1:12000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );

@@ -32,11 +32,14 @@ bstr = "1.0.1"
 csv-core = "0.1.10"
 dashmap = "5.4.0"
 futures = "0.3.24"
-futures-util = "0.3.24"
+futures-util = { workspace = true }
+
+log = { workspace = true }
+minitrace = { workspace = true }
 opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
-tracing = "0.1.36"
+
 typetag = "0.2.3"
 xml-rs = "0.8.14"

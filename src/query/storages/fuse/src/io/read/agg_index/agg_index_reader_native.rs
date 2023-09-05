@@ -18,8 +18,8 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::native::read as nread;
 use common_exception::Result;
 use common_expression::DataBlock;
+use log::debug;
 use storages_common_table_meta::meta::ColumnMeta;
-use tracing::debug;
 
 use super::AggIndexReader;
 use crate::io::BlockReader;
@@ -50,7 +50,6 @@ impl AggIndexReader {
                     loc.to_string(),
                     num_rows,
                     columns_meta,
-                    None,
                     self.compression.into(),
                     None,
                     None,
@@ -58,7 +57,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .sync_read_native_columns_data(part)
+                    .sync_read_native_columns_data(&part, &None)
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;
                 Some(res)
@@ -102,7 +101,6 @@ impl AggIndexReader {
                     loc.to_string(),
                     num_rows,
                     columns_meta,
-                    None,
                     self.compression.into(),
                     None,
                     None,
@@ -110,7 +108,7 @@ impl AggIndexReader {
                 );
                 let res = self
                     .reader
-                    .async_read_native_columns_data(part)
+                    .async_read_native_columns_data(&part, &None)
                     .await
                     .inspect_err(|e| debug!("Read aggregating index `{loc}` failed: {e}"))
                     .ok()?;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::cmp::min;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -22,6 +23,7 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use std::time::SystemTime;
 
 use chrono_tz::Tz;
@@ -35,12 +37,14 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_config::GlobalConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -48,23 +52,31 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_sql::IndexType;
+use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use common_storages_fuse::TableContext;
-use common_storages_parquet::ParquetTable;
+use common_storages_parquet::Parquet2Table;
+use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
+use log::debug;
+use log::info;
 use parking_lot::RwLock;
-use tracing::debug;
+use storages_common_table_meta::meta::Location;
 
 use crate::api::DataExchangeManager;
 use crate::catalogs::Catalog;
@@ -81,13 +93,6 @@ use crate::storages::Table;
 const MYSQL_VERSION: &str = "8.0.26";
 const CLICKHOUSE_VERSION: &str = "8.12.14";
 const MAX_QUERY_COPIED_FILES_NUM: usize = 1000;
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub enum Origin {
-    #[default]
-    Default,
-    HttpHandler,
-    BuiltInProcedure,
-}
 
 #[derive(Clone)]
 pub struct QueryContext {
@@ -98,7 +103,8 @@ pub struct QueryContext {
     shared: Arc<QueryContextShared>,
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
-    origin: Arc<RwLock<Origin>>,
+    // Used by synchronized generate aggregating indexes when new data written.
+    inserted_segment_locs: Arc<RwLock<Vec<Location>>>,
 }
 
 impl QueryContext {
@@ -119,20 +125,37 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            origin: Arc::new(RwLock::new(Origin::Default)),
+            inserted_segment_locs: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
-    // Build fuse/system normal table by table info.
+    /// Build fuse/system normal table by table info.
+    ///
+    /// TODO(xuanwo): we should support build table via table info in the future.
     pub fn build_table_by_table_info(
         &self,
-        catalog_name: &str,
+        catalog_info: &CatalogInfo,
         table_info: &TableInfo,
         table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.shared.catalog_manager.build_catalog(catalog_info)?;
         match table_args {
-            None => catalog.get_table_by_info(table_info),
+            None => {
+                let table = catalog.get_table_by_info(table_info);
+                if table.is_err() {
+                    let table_function = catalog
+                        .get_table_function(&table_info.name, TableArgs::new_positioned(vec![]));
+
+                    if table_function.is_err() {
+                        table
+                    } else {
+                        Ok(table_function?.as_table())
+                    }
+                } else {
+                    table
+                }
+            }
+
             Some(table_args) => Ok(catalog
                 .get_table_function(&table_info.name, table_args)?
                 .as_table()),
@@ -144,7 +167,7 @@ impl QueryContext {
     // 's3://' here is a s3 external stage, and build it to the external table.
     fn build_external_by_table_info(
         &self,
-        _catalog: &str,
+        _catalog: &CatalogInfo,
         table_info: &StageTableInfo,
         _table_args: Option<TableArgs>,
     ) -> Result<Arc<dyn Table>> {
@@ -154,7 +177,9 @@ impl QueryContext {
     #[async_backtrace::framed]
     pub async fn set_current_database(&self, new_database_name: String) -> Result<()> {
         let tenant_id = self.get_tenant();
-        let catalog = self.get_catalog(self.get_current_catalog().as_str())?;
+        let catalog = self
+            .get_catalog(self.get_current_catalog().as_str())
+            .await?;
         match catalog
             .get_database(tenant_id.as_str(), &new_database_name)
             .await
@@ -171,12 +196,8 @@ impl QueryContext {
         Ok(())
     }
 
-    pub fn set_origin(&self, origin: Origin) {
-        let mut o = self.origin.write();
-        *o = origin;
-    }
-    pub fn get_origin(&self) -> Origin {
-        self.origin.read().clone()
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        self.shared.attach_table(catalog, database, name, table)
     }
 
     pub fn get_exchange_manager(&self) -> Arc<DataExchangeManager> {
@@ -232,6 +253,15 @@ impl QueryContext {
         self.shared.attach_stage(attachment);
     }
 
+    pub fn set_ua(&self, ua: String) {
+        *self.shared.user_agent.write() = ua;
+    }
+
+    pub fn get_ua(&self) -> String {
+        let ua = self.shared.user_agent.read();
+        ua.clone()
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
@@ -243,19 +273,27 @@ impl QueryContext {
 
 #[async_trait::async_trait]
 impl TableContext for QueryContext {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
     /// This method builds a `dyn Table`, which provides table specific io methods the plan needs.
     fn build_table_from_source_plan(&self, plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         match &plan.source_info {
-            DataSourceInfo::TableSource(table_info) => {
-                self.build_table_by_table_info(&plan.catalog, table_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::StageSource(stage_info) => {
-                self.build_external_by_table_info(&plan.catalog, stage_info, plan.tbl_args.clone())
-            }
-            DataSourceInfo::ParquetSource(table_info) => ParquetTable::from_info(table_info),
+            DataSourceInfo::TableSource(table_info) => self.build_table_by_table_info(
+                &plan.catalog_info,
+                table_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::StageSource(stage_info) => self.build_external_by_table_info(
+                &plan.catalog_info,
+                stage_info,
+                plan.tbl_args.clone(),
+            ),
+            DataSourceInfo::Parquet2Source(table_info) => Parquet2Table::from_info(table_info),
+            DataSourceInfo::ParquetSource(table_info) => ParquetRSTable::from_info(table_info),
             DataSourceInfo::ResultScanSource(table_info) => ResultScan::from_info(table_info),
         }
     }
@@ -300,7 +338,7 @@ impl TableContext for QueryContext {
     fn set_status_info(&self, info: &str) {
         // set_status_info is not called frequently, so we can use info! here.
         // make it easier to match the status to the log.
-        tracing::info!("{}: {}", self.get_id(), info);
+        info!("{}: {}", self.get_id(), info);
         let mut status = self.shared.status.write();
         *status = info.to_string();
     }
@@ -381,10 +419,16 @@ impl TableContext for QueryContext {
         self.fragment_id.fetch_add(1, Ordering::Release)
     }
 
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    #[async_backtrace::framed]
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>> {
         self.shared
             .catalog_manager
-            .get_catalog(catalog_name.as_ref())
+            .get_catalog(&self.get_tenant(), catalog_name.as_ref())
+            .await
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.shared.catalog_manager.get_default_catalog()
     }
 
     fn get_id(&self) -> String {
@@ -413,6 +457,10 @@ impl TableContext for QueryContext {
 
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
+    }
+
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.shared.session.get_all_available_roles().await
     }
 
     fn get_fuse_version(&self) -> String {
@@ -607,7 +655,7 @@ impl TableContext for QueryContext {
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
         let tenant = self.get_tenant();
-        let catalog = self.get_catalog(catalog_name)?;
+        let catalog = self.get_catalog(catalog_name).await?;
         let table = catalog
             .get_table(&tenant, database_name, table_name)
             .await?;
@@ -622,41 +670,70 @@ impl TableContext for QueryContext {
         for chunk in files.chunks(batch_size) {
             let files = chunk.iter().map(|v| v.path.clone()).collect::<Vec<_>>();
             let req = GetTableCopiedFileReq { table_id, files };
+            let start_request = Instant::now();
             let copied_files = catalog
                 .get_table_copied_file_info(&tenant, database_name, req)
                 .await?
                 .file_info;
+
+            metrics_inc_filter_out_copied_files_request_milliseconds(
+                Instant::now().duration_since(start_request).as_millis() as u64,
+            );
             // Colored
             for file in chunk {
-                if let Some(copied_file) = copied_files.get(&file.path) {
-                    match &copied_file.etag {
-                        Some(copied_etag) => {
-                            if let Some(file_etag) = &file.etag {
-                                // Check the 7 bytes etag prefix.
-                                if file_etag.starts_with(copied_etag) {
-                                    continue;
-                                }
-                            }
-                        }
-                        None => {
-                            // etag is none, compare with content_length and last_modified.
-                            if copied_file.content_length == file.size
-                                && copied_file.last_modified == Some(file.last_modified)
-                            {
-                                continue;
-                            }
-                        }
+                if !copied_files.contains_key(&file.path) {
+                    results.push(file.clone());
+                    limit += 1;
+                    if limit == max_files {
+                        return Ok(results);
                     }
-                }
-
-                results.push(file.clone());
-                limit += 1;
-                if limit == max_files {
-                    return Ok(results);
                 }
             }
         }
         Ok(results)
+    }
+
+    fn set_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+        blocks: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        let mut ctes = self.shared.materialized_cte_tables.write();
+        ctes.insert(idx, blocks);
+        Ok(())
+    }
+
+    fn get_materialized_cte(
+        &self,
+        idx: (IndexType, IndexType),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        let ctes = self.shared.materialized_cte_tables.read();
+        Ok(ctes.get(&idx).cloned())
+    }
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
+        self.shared.materialized_cte_tables.clone()
+    }
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
+        let mut segment_locations = self.inserted_segment_locs.write();
+        segment_locations.push(segment_loc);
+        Ok(())
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        Ok(self.inserted_segment_locs.read().to_vec())
+    }
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
+        if self.get_query_kind() == "Copy" {
+            self.shared.copy_status.add_chunk(file_path, file_status);
+        }
+        Ok(())
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        self.shared.copy_status.clone()
     }
 }
 

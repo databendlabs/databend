@@ -26,14 +26,14 @@ use common_http::pprof::debug_pprof_handler;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_meta_types::MetaNetworkError;
+use log::info;
+use log::warn;
 use poem::get;
 use poem::listener::RustlsCertificate;
 use poem::listener::RustlsConfig;
 use poem::Endpoint;
 use poem::EndpointExt;
 use poem::Route;
-use tracing::info;
-use tracing::warn;
 
 use crate::configs::Config;
 use crate::meta_service::MetaNode;
@@ -63,12 +63,12 @@ impl HttpService {
                 get(super::http::v1::ctrl::trigger_snapshot),
             )
             .at(
-                "/v1/ctrl/block_dump_snapshot",
-                get(super::http::v1::ctrl::block_dump_snapshot),
+                "/v1/ctrl/block_write_snapshot",
+                get(super::http::v1::ctrl::block_write_snapshot),
             )
             .at(
-                "/v1/ctrl/block_serde_snapshot",
-                get(super::http::v1::ctrl::block_serde_snapshot),
+                "/v1/ctrl/block_compact_snapshot",
+                get(super::http::v1::ctrl::block_compact_snapshot),
             )
             .at(
                 "/v1/cluster/nodes",

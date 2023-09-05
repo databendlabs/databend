@@ -50,6 +50,8 @@ pub trait BloomBlockFilterReader {
 
 #[async_trait::async_trait]
 impl BloomBlockFilterReader for Location {
+    // NOTE that the `columns` will be de-duplicated first,
+    // and the filters contained by the returned `BlockFilter` may not order by `columns`
     #[async_backtrace::framed]
     async fn read_block_filter(
         &self,
@@ -74,7 +76,7 @@ impl BloomBlockFilterReader for Location {
 }
 
 /// load index column data
-#[tracing::instrument(level = "debug", skip_all)]
+#[minitrace::trace]
 async fn load_bloom_filter_by_columns<'a>(
     dal: Operator,
     column_needed: &'a [String],
@@ -124,7 +126,7 @@ async fn load_bloom_filter_by_columns<'a>(
 
 /// Loads bytes and index of the given column.
 /// read data from cache, or populate cache items if possible
-#[tracing::instrument(level = "debug", skip_all)]
+#[minitrace::trace]
 async fn load_column_xor8_filter<'a>(
     idx: ColumnId,
     column_name: String,
@@ -150,7 +152,7 @@ async fn load_column_xor8_filter<'a>(
 
 /// Loads index meta data
 /// read data from cache, or populate cache items if possible
-#[tracing::instrument(level = "debug", skip_all)]
+#[minitrace::trace]
 async fn load_index_meta(dal: Operator, path: &str, length: u64) -> Result<Arc<BloomIndexMeta>> {
     let path_owned = path.to_owned();
     async move {

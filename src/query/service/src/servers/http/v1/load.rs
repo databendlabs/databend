@@ -30,6 +30,9 @@ use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
+use log::debug;
+use log::info;
+use log::warn;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
 use poem::error::Result as PoemResult;
@@ -40,7 +43,6 @@ use poem::Request;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::mpsc::Sender;
-use tracing::info;
 
 use super::HttpQueryContext;
 use crate::interpreters::InterpreterFactory;
@@ -160,6 +162,7 @@ pub async fn streaming_load(
                     .map_err(InternalServerError)?;
                 let input_context = Arc::new(
                     InputContext::try_create_from_insert_file_format(
+                        context.clone(),
                         rx,
                         context.get_settings(),
                         format.clone(),
@@ -174,7 +177,7 @@ pub async fn streaming_load(
                     .map_err(InternalServerError)?,
                 );
                 *input_context_option = Some(input_context.clone());
-                tracing::info!("streaming load with file_format {:?}", input_context);
+                info!("streaming load with file_format {:?}", input_context);
 
                 let handler = context.spawn(execute_query(context.clone(), plan));
                 let files = read_multi_part(multipart, tx, &input_context).await?;
@@ -239,7 +242,7 @@ async fn read_multi_part(
                     ))))
                     .await
                 {
-                    tracing::warn!("Multipart channel disconnect. {}", cause);
+                    warn!("Multipart channel disconnect. {}", cause);
                 }
                 return Err(cause.into());
             }
@@ -251,7 +254,7 @@ async fn read_multi_part(
                 let compression = input_context
                     .get_compression_alg(&filename)
                     .map_err(BadRequest)?;
-                tracing::debug!("Multipart start read {}", &filename);
+                debug!("Multipart start read {}", &filename);
                 files.push(filename.clone());
                 let mut async_reader = field.into_async_read();
                 let mut is_start = true;
@@ -264,7 +267,7 @@ async fn read_multi_part(
                         break;
                     } else {
                         batch.truncate(n);
-                        tracing::debug!("Multipart read {} bytes", n);
+                        debug!("Multipart read {} bytes", n);
                         if let Err(e) = tx
                             .send(Ok(StreamingReadBatch {
                                 data: batch,
@@ -274,7 +277,7 @@ async fn read_multi_part(
                             }))
                             .await
                         {
-                            tracing::warn!(" Multipart fail to send ReadBatch: {}", e);
+                            warn!(" Multipart fail to send ReadBatch: {}", e);
                         }
                         is_start = false;
                     }

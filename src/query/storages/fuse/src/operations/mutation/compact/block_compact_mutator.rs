@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -38,6 +37,7 @@ use crate::operations::mutation::CompactPartInfo;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::deduct_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 use crate::TableContext;
 
 #[derive(Clone)]
@@ -57,6 +57,8 @@ pub struct BlockCompactMutator {
     pub unchanged_segments_map: BTreeMap<usize, Location>,
     // summarised statistics of all the unchanged segments
     pub unchanged_segment_statistics: Statistics,
+
+    compacted_segment_cnt: usize,
 }
 
 impl BlockCompactMutator {
@@ -80,6 +82,7 @@ impl BlockCompactMutator {
             compact_tasks: Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
             unchanged_segments_map: BTreeMap::new(),
             unchanged_segment_statistics,
+            compacted_segment_cnt: 0,
         }
     }
 
@@ -92,7 +95,6 @@ impl BlockCompactMutator {
         let limit = self.compact_params.limit.unwrap_or(number_segments);
 
         let mut segment_idx = 0;
-        let mut compacted_segment_cnt = 0;
         let mut compacted_block_cnt = 0;
         let mut checked_end_at = 0;
 
@@ -110,18 +112,38 @@ impl BlockCompactMutator {
         let mut is_end = false;
         for chunk in segment_locations.chunks(chunk_size) {
             // Read the segments information in parallel.
-            let segment_infos = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, false)
-                .await?;
+            let mut segment_infos = segments_io
+                .read_segments::<SegmentInfo>(chunk, false)
+                .await?
+                .into_iter()
+                .zip(chunk.iter())
+                .map(|(sg, chunk)| sg.map(|v| (v, chunk)))
+                .collect::<Result<Vec<_>>>()?;
+
+            if let Some(default_cluster_key) = self.cluster_key_id {
+                // sort descending.
+                segment_infos.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        &b.0.summary.cluster_stats,
+                        &a.0.summary.cluster_stats,
+                        default_cluster_key,
+                    )
+                });
+            }
 
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
-            for (idx, segment) in segment_infos.into_iter().enumerate() {
-                let segment = segment?;
-                let segments_vec = checker.add(chunk[idx].clone(), segment.clone());
+            for (segment, loc) in segment_infos.into_iter() {
+                if is_end {
+                    self.unchanged_segments_map.insert(segment_idx, loc.clone());
+                    segment_idx += 1;
+                    continue;
+                }
+
+                let segments_vec = checker.add(loc.clone(), segment);
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
-                        compacted_segment_cnt += segments.len();
+                        self.compacted_segment_cnt += segments.len();
                         compacted_block_cnt +=
                             segments.iter().fold(0, |acc, x| acc + x.1.blocks.len());
                         // build the compact tasks.
@@ -135,14 +157,18 @@ impl BlockCompactMutator {
                     }
                     segment_idx += 1;
                 }
-                checked_end_at += 1;
-                if compacted_segment_cnt + checker.segments.len() >= limit
+
+                if self.compacted_segment_cnt + checker.segments.len() >= limit
                     || compacted_block_cnt >= MAX_BLOCK_COUNT
                 {
+                    // The remaining segments needs to be pushed into unchanged_map,
+                    // so execute finalize here.
+                    self.finalize(std::mem::take(&mut checker.segments), &mut segment_idx);
                     is_end = true;
-                    break;
                 }
             }
+
+            checked_end_at += chunk.len();
 
             // Status.
             {
@@ -161,17 +187,7 @@ impl BlockCompactMutator {
         }
 
         // finalize the compaction.
-        if !checker.segments.is_empty() {
-            let segments = std::mem::take(&mut checker.segments);
-            if SegmentCompactChecker::check_for_compact(&segments) {
-                compacted_segment_cnt += segments.len();
-                self.build_compact_tasks(segments.into_iter().map(|s| s.1).collect(), segment_idx);
-            } else {
-                self.unchanged_segments_map
-                    .insert(segment_idx, segment_locations[checked_end_at - 1].clone());
-            }
-            segment_idx += 1;
-        }
+        self.finalize(std::mem::take(&mut checker.segments), &mut segment_idx);
 
         // combine with the unprocessed segments (which are outside of the limit).
         for segment_location in segment_locations[checked_end_at..].iter() {
@@ -184,7 +200,7 @@ impl BlockCompactMutator {
         self.ctx.set_status_info(&format!(
             "compact: end to build compact tasks:{}, segments to be compacted:{}, cost:{} sec",
             self.compact_tasks.len(),
-            compacted_segment_cnt,
+            self.compacted_segment_cnt,
             start.elapsed().as_secs()
         ));
         Ok(())
@@ -193,7 +209,7 @@ impl BlockCompactMutator {
     // Select the row_count >= min_rows_per_block or block_size >= max_bytes_per_block
     // as the perfect_block condition(N for short). Gets a set of segments, iterates
     // through the blocks, and finds the blocks >= N and blocks < 2N as a task.
-    fn build_compact_tasks(&mut self, segments: Vec<Arc<SegmentInfo>>, segment_idx: usize) {
+    fn build_compact_tasks(&mut self, segments: Vec<SegmentInfo>, segment_idx: usize) {
         let mut builder = CompactTaskBuilder::new(self.column_ids.clone(), self.cluster_key_id);
         let mut tasks = VecDeque::new();
         let mut block_idx = 0;
@@ -205,31 +221,13 @@ impl BlockCompactMutator {
         // The order of the compact is from old to new.
         segments.into_iter().rev().for_each(|s| {
             deduct_statistics_mut(&mut self.unchanged_segment_statistics, &s.summary);
-            blocks.extend(s.blocks.clone());
+            blocks.extend(s.blocks);
         });
 
         if let Some(default_cluster_key) = self.cluster_key_id {
+            // sort ascending.
             blocks.sort_by(|a, b| {
-                if a.cluster_stats.is_none() {
-                    Ordering::Less
-                } else if b.cluster_stats.is_none() {
-                    Ordering::Greater
-                } else {
-                    let a = a.cluster_stats.clone().unwrap();
-                    let b = b.cluster_stats.clone().unwrap();
-                    if a.cluster_key_id != default_cluster_key {
-                        Ordering::Less
-                    } else if b.cluster_key_id != default_cluster_key {
-                        Ordering::Greater
-                    } else {
-                        let ord = a.min.cmp(&b.min);
-                        if ord == Ordering::Equal {
-                            a.max.cmp(&b.max)
-                        } else {
-                            ord
-                        }
-                    }
-                }
+                sort_by_cluster_stats(&a.cluster_stats, &b.cluster_stats, default_cluster_key)
             });
         }
 
@@ -283,10 +281,23 @@ impl BlockCompactMutator {
                 .insert(segment_idx, unchanged_blocks);
         }
     }
+
+    fn finalize(&mut self, segments: Vec<(Location, SegmentInfo)>, segment_idx: &mut usize) {
+        if !segments.is_empty() {
+            if SegmentCompactChecker::check_for_compact(&segments) {
+                self.compacted_segment_cnt += segments.len();
+                self.build_compact_tasks(segments.into_iter().map(|s| s.1).collect(), *segment_idx);
+            } else {
+                self.unchanged_segments_map
+                    .insert(*segment_idx, segments[0].0.clone());
+            }
+            *segment_idx += 1;
+        }
+    }
 }
 
 struct SegmentCompactChecker {
-    segments: Vec<(Location, Arc<SegmentInfo>)>,
+    segments: Vec<(Location, SegmentInfo)>,
     total_block_count: u64,
     threshold: u64,
 }
@@ -300,7 +311,7 @@ impl SegmentCompactChecker {
         }
     }
 
-    fn check_for_compact(segments: &Vec<(Location, Arc<SegmentInfo>)>) -> bool {
+    fn check_for_compact(segments: &Vec<(Location, SegmentInfo)>) -> bool {
         segments.len() != 1
             || (segments[0].1.summary.block_count > 1
                 && segments[0].1.summary.perfect_block_count != segments[0].1.summary.block_count)
@@ -309,8 +320,8 @@ impl SegmentCompactChecker {
     fn add(
         &mut self,
         location: Location,
-        segment: Arc<SegmentInfo>,
-    ) -> Vec<Vec<(Location, Arc<SegmentInfo>)>> {
+        segment: SegmentInfo,
+    ) -> Vec<Vec<(Location, SegmentInfo)>> {
         self.total_block_count += segment.summary.block_count;
         if self.total_block_count < self.threshold {
             self.segments.push((location, segment));

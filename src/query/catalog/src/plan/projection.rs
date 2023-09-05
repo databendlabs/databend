@@ -18,8 +18,12 @@ use std::fmt::Formatter;
 use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::TableSchema;
+use common_storage::parquet_rs::build_parquet_schema_tree;
+use common_storage::parquet_rs::traverse_parquet_schema_tree;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use parquet_rs::arrow::ProjectionMask;
+use parquet_rs::schema::types::SchemaDescriptor;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub enum Projection {
@@ -28,6 +32,18 @@ pub enum Projection {
     /// inner column indices for tuple data type with inner columns.
     /// the key is the column_index of ColumnEntry.
     /// the value is the path indices of inner columns.
+    /// the following is an example of a tuple and the corresponding path indices:
+    /// a: Tuple (          path: [0]
+    ///   b1: Tuple (       path: [0, 0]
+    ///     c1: Int32,      path: [0, 0, 0]
+    ///     c2: String,     path: [0, 0, 1]
+    ///   ),
+    ///   b2: Tuple (       path: [0, 1]
+    ///     d1: Int32,      path: [0, 1, 0]
+    ///     d2: String,     path: [0, 1, 1]
+    ///     d3: String,     path: [0, 1, 2]
+    ///   )
+    /// )
     InnerColumns(BTreeMap<FieldIndex, Vec<FieldIndex>>),
 }
 
@@ -98,6 +114,33 @@ impl Projection {
             }
             Projection::InnerColumns(path_indices) => {
                 path_indices.remove(&col);
+            }
+        }
+    }
+
+    /// Convert [`Projection`] to [`ProjectionMask`] and the underlying leaf indices.
+    pub fn to_arrow_projection(
+        &self,
+        schema: &SchemaDescriptor,
+    ) -> (ProjectionMask, Vec<FieldIndex>) {
+        match self {
+            Projection::Columns(indices) => {
+                let mask = ProjectionMask::roots(schema, indices.clone());
+                let leaves = (0..schema.num_columns())
+                    .filter(|i| mask.leaf_included(*i))
+                    .collect();
+                (mask, leaves)
+            }
+            Projection::InnerColumns(path_indices) => {
+                let mut leave_id = 0;
+                let tree = build_parquet_schema_tree(schema.root_schema(), &mut leave_id);
+                assert_eq!(leave_id, schema.num_columns());
+                let paths: Vec<&Vec<usize>> = path_indices.values().collect();
+                let mut leaves = vec![];
+                for path in paths {
+                    traverse_parquet_schema_tree(&tree, path, &mut leaves);
+                }
+                (ProjectionMask::leaves(schema, leaves.clone()), leaves)
             }
         }
     }

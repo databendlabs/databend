@@ -68,13 +68,7 @@ impl Binder {
                 column_binding.column_name = item.alias.clone();
                 column_binding
             } else {
-                self.create_column_binding(
-                    None,
-                    None,
-                    None,
-                    item.alias.clone(),
-                    item.scalar.data_type()?,
-                )
+                self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
             };
             if is_grouping_sets_item {
                 column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
@@ -186,6 +180,7 @@ impl Binder {
 
         let mut output = SelectList::default();
         let mut prev_aliases = Vec::new();
+
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName {
@@ -237,6 +232,10 @@ impl Binder {
                         }
                         _ => return Err(ErrorCode::SemanticError("Unsupported indirection type")),
                     };
+
+                    if let Some(last) = output.items.last() {
+                        prev_aliases.push((last.alias.clone(), last.scalar.clone()));
+                    }
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
                     let mut scalar_binder = ScalarBinder::new(
@@ -245,6 +244,8 @@ impl Binder {
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         &prev_aliases,
+                        self.m_cte_bound_ctx.clone(),
+                        self.ctes_map.clone(),
                     );
                     scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
@@ -255,9 +256,8 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
-                    if alias.is_some() {
-                        prev_aliases.push((expr_name.clone(), bound_expr.clone()));
-                    }
+                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
+
                     output.items.push(SelectItem {
                         select_target,
                         scalar: bound_expr,
@@ -286,6 +286,8 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
                 let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
                 let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
@@ -451,7 +453,7 @@ impl Binder {
                 }
                 if !match_table {
                     return Err(ErrorCode::UnknownTable(format!(
-                        "Unknown table '{}'.'{}'",
+                        "Unknown table `{}`.`{}`",
                         db_name.name.clone(),
                         table_name.name.clone()
                     ))

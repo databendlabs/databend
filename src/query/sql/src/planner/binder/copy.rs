@@ -50,8 +50,8 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use log::debug;
 use parking_lot::RwLock;
-use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::select::MaxColumnPosition;
@@ -94,6 +94,9 @@ impl<'a> Binder {
                     pattern: stmt.pattern.clone(),
                 };
 
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
+
                 let table = self
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
@@ -113,10 +116,11 @@ impl<'a> Binder {
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
                     validation_mode,
+                    from_attachment: false,
                     force: stmt.force,
                     stage_table_info: StageTableInfo {
                         schema: stage_schema,
@@ -175,6 +179,9 @@ impl<'a> Binder {
                 let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
                     .map_err(ErrorCode::SyntaxException)?;
 
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
+
                 let table = self
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
@@ -190,10 +197,11 @@ impl<'a> Binder {
                 let stage_schema = infer_table_schema(&required_values_schema)?;
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
                     validation_mode,
+                    from_attachment: false,
                     force: stmt.force,
                     stage_table_info: StageTableInfo {
                         schema: stage_schema,
@@ -327,6 +335,9 @@ impl<'a> Binder {
                     files: stmt.files.clone(),
                 };
 
+                let catalog = self.ctx.get_catalog(&catalog_name).await?;
+                let catalog_info = catalog.info();
+
                 let table = self
                     .ctx
                     .get_table(&catalog_name, &database_name, &table_name)
@@ -341,9 +352,10 @@ impl<'a> Binder {
                 );
 
                 let plan = CopyIntoTablePlan {
-                    catalog_name,
+                    catalog_info,
                     database_name,
                     table_name,
+                    from_attachment: false,
                     required_source_schema: required_values_schema.clone(),
                     required_values_schema: required_values_schema.clone(),
                     values_consts: vec![],
@@ -456,15 +468,18 @@ impl<'a> Binder {
                 .await?
         };
 
-        let (mut stage_info, files_info) = self.bind_attachment(attachment).await?;
-        stage_info.copy_options.purge = true;
+        let catalog = self.ctx.get_catalog(&catalog_name).await?;
+        let catalog_info = catalog.info();
+
+        let (stage_info, files_info) = self.bind_attachment(attachment).await?;
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
         let plan = CopyIntoTablePlan {
-            catalog_name,
+            catalog_info,
             database_name,
             table_name,
+            from_attachment: true,
             required_source_schema: data_schema.clone(),
             required_values_schema,
             values_consts: const_columns,
@@ -660,15 +675,17 @@ impl<'a> Binder {
         select_list: &'a [SelectTarget],
         alias: &Option<TableAlias>,
     ) -> Result<Plan> {
-        let need_copy_file_infos = plan.collect_files(&self.ctx).await?;
+        let need_copy_file_infos = plan.collect_files(self.ctx.as_ref()).await?;
 
         if need_copy_file_infos.is_empty() {
             return Ok(Plan::Copy(Box::new(CopyPlan::NoFileToCopy)));
         }
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
+        let table_ctx = self.ctx.clone();
         let (s_expr, mut from_context) = self
             .bind_stage_table(
+                table_ctx,
                 bind_context,
                 plan.stage_table_info.stage_info.clone(),
                 plan.stage_table_info.files_info.clone(),

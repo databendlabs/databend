@@ -9,14 +9,20 @@ echo "create stage ${STAGE} FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CON
 
 aws --endpoint-url http://127.0.0.1:9900 s3 cp s3://testbucket/admin/data/ontime_200.parquet s3://testbucket/admin/stage/internal/${STAGE}/ontime_200.parquet  >/dev/null 2>&1
 
-echo "select count(*) from @${STAGE};" | $MYSQL_CLIENT_CONNECT
+for USE_PARQUET2 in 0 1; do
 
-echo "select tail_number from @${STAGE} where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
+echo "USE_PARQUET2=${USE_PARQUET2}"
 
-echo "select tail_number from @${STAGE} where dayofmonth > 15 order by tail_number limit 5;" |  $MYSQL_CLIENT_CONNECT
+echo "set use_parquet2 = ${USE_PARQUET2} ; select count(*) from @${STAGE};" | $MYSQL_CLIENT_CONNECT
 
-echo "select tail_number from @${STAGE} where dayofmonth > 15 order by tail_number desc limit 5;" |  $MYSQL_CLIENT_CONNECT
+echo "set use_parquet2 = ${USE_PARQUET2} ; select tail_number from @${STAGE} where dayofmonth=1;" |  $MYSQL_CLIENT_CONNECT
 
-echo "select month from @${STAGE} where dayofmonth > 15 order by tail_number limit 5;" |  $MYSQL_CLIENT_CONNECT
+echo "set use_parquet2 = ${USE_PARQUET2} ; select tail_number from @${STAGE} where dayofmonth > 15 order by tail_number limit 5;" |  $MYSQL_CLIENT_CONNECT
 
-echo "select month from @${STAGE} where dayofmonth > 15 order by tail_number desc limit 5;" |  $MYSQL_CLIENT_CONNECT
+echo "set use_parquet2 = ${USE_PARQUET2} ; select tail_number from @${STAGE} where dayofmonth > 15 order by tail_number desc limit 5;" |  $MYSQL_CLIENT_CONNECT
+
+echo "set use_parquet2 = ${USE_PARQUET2} ; select month from @${STAGE} where dayofmonth > 15 order by tail_number limit 5;" |  $MYSQL_CLIENT_CONNECT
+
+echo "set use_parquet2 = ${USE_PARQUET2} ; select month from @${STAGE} where dayofmonth > 15 order by tail_number desc limit 5;" |  $MYSQL_CLIENT_CONNECT
+
+done

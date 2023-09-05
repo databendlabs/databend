@@ -56,8 +56,10 @@ pub type MetadataRef = Arc<RwLock<Metadata>>;
 pub struct Metadata {
     tables: Vec<TableEntry>,
     columns: Vec<ColumnEntry>,
-    //// Columns that are lazy materialized.
-    lazy_columns: HashSet<usize>,
+    /// Columns that are lazy materialized.
+    lazy_columns: HashSet<IndexType>,
+    /// Mappings from table index to _row_id column index.
+    table_row_id_index: HashMap<IndexType, IndexType>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
     max_column_position: usize, // for CSV
 }
@@ -87,8 +89,11 @@ impl Metadata {
         database_name: Option<&str>,
         table_name: &str,
     ) -> Option<IndexType> {
+        // Use `rev` is because a table may be queried multiple times in join clause,
+        // and the virtual columns should add to the table newly added.
         self.tables
             .iter()
+            .rev()
             .find(|table| match database_name {
                 Some(database_name) => {
                     table.database == database_name && table.name == table_name
@@ -126,6 +131,18 @@ impl Metadata {
 
     pub fn lazy_columns(&self) -> &HashSet<usize> {
         &self.lazy_columns
+    }
+
+    pub fn set_table_row_id_index(&mut self, table_index: IndexType, row_id_index: IndexType) {
+        self.table_row_id_index.insert(table_index, row_id_index);
+    }
+
+    pub fn row_id_index_by_table_index(&self, table_index: IndexType) -> Option<IndexType> {
+        self.table_row_id_index.get(&table_index).copied()
+    }
+
+    pub fn row_id_indexes(&self) -> Vec<IndexType> {
+        self.table_row_id_index.values().copied().collect()
     }
 
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
@@ -546,6 +563,17 @@ impl ColumnEntry {
             ColumnEntry::VirtualColumn(VirtualColumn { column_name, .. }) => {
                 column_name.to_string()
             }
+        }
+    }
+
+    pub fn table_index(&self) -> Option<IndexType> {
+        match self {
+            ColumnEntry::BaseTableColumn(BaseTableColumn { table_index, .. }) => Some(*table_index),
+            ColumnEntry::DerivedColumn(_) => None,
+            ColumnEntry::InternalColumn(TableInternalColumn { table_index, .. }) => {
+                Some(*table_index)
+            }
+            ColumnEntry::VirtualColumn(VirtualColumn { table_index, .. }) => Some(*table_index),
         }
     }
 }

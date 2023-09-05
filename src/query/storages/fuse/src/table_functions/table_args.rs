@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Expr;
@@ -29,6 +31,15 @@ pub fn string_value(value: &Scalar) -> Result<String> {
 
 pub fn string_literal(val: &str) -> Scalar {
     Scalar::String(val.as_bytes().to_vec())
+}
+
+pub fn cmp_with_null(v1: &Scalar, v2: &Scalar) -> Ordering {
+    match (v1.is_null(), v2.is_null()) {
+        (true, true) => Ordering::Equal,
+        (true, false) => Ordering::Greater,
+        (false, true) => Ordering::Less,
+        (false, false) => v1.cmp(v2),
+    }
 }
 
 pub fn parse_db_tb_args(table_args: &TableArgs, func_name: &str) -> Result<(String, String)> {

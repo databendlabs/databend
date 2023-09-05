@@ -63,6 +63,7 @@ pub enum SetOperationElement {
         op: SetOperator,
         all: bool,
     },
+    Values(Vec<Vec<Expr>>),
     OrderBy {
         order_by: Vec<OrderByExpr>,
     },
@@ -131,6 +132,12 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             }
         },
     );
+    let values = map(
+        rule! {
+            VALUES ~ ^#comma_separated_list1(row_values)
+        },
+        |(_, values)| SetOperationElement::Values(values),
+    );
     let order_by = map(
         rule! {
             ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr)
@@ -167,6 +174,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         | #with
         | #set_operator
         | #select_stmt
+        | #values
         | #order_by
         | #limit
         | #offset
@@ -225,6 +233,10 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 having: *having,
                 window_list,
             })),
+            SetOperationElement::Values(values) => SetExpr::Values {
+                span: transform_span(input.span.0),
+                values,
+            },
             _ => unreachable!(),
         };
         Ok(set_expr)
@@ -281,6 +293,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.order_by = order_by;
             }
             SetOperationElement::Limit { limit } => {
+                if query.limit.is_empty() && limit.len() > 2 {
+                    return Err("[LIMIT n OFFSET m] or [LIMIT n,m]");
+                }
                 if !query.limit.is_empty() {
                     return Err("duplicated LIMIT clause");
                 }
@@ -290,6 +305,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 query.limit = limit;
             }
             SetOperationElement::Offset { offset } => {
+                if query.limit.len() == 2 {
+                    return Err("LIMIT n,m should not appear OFFSET");
+                }
                 if query.offset.is_some() {
                     return Err("duplicated OFFSET clause");
                 }
@@ -304,15 +322,23 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
     }
 }
 
+pub fn row_values(i: Input) -> IResult<Vec<Expr>> {
+    map(
+        rule! {"(" ~ #comma_separated_list1(expr) ~ ")"},
+        |(_, row_values, _)| row_values,
+    )(i)
+}
+
 pub fn with(i: Input) -> IResult<With> {
     let cte = map(
         consumed(rule! {
-            #table_alias ~ AS ~ "(" ~ #query ~ ")"
+            #table_alias ~ AS ~ MATERIALIZED? ~ "(" ~ #query ~ ")"
         }),
-        |(span, (table_alias, _, _, query, _))| CTE {
+        |(span, (table_alias, _, materialized, _, query, _))| CTE {
             span: transform_span(span.0),
             alias: table_alias,
-            query,
+            materialized: materialized.is_some(),
+            query: Box::new(query),
         },
     );
 
@@ -552,7 +578,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #period_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
         |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
             TableReferenceElement::Table {

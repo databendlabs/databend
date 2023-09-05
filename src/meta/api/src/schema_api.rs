@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateCatalogReply;
@@ -30,6 +31,8 @@ use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DeleteTableLockRevReq;
+use common_meta_app::schema::DropCatalogReply;
+use common_meta_app::schema::DropCatalogReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -41,6 +44,7 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
+use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
@@ -48,9 +52,11 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableResp;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
@@ -59,6 +65,10 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReply;
+use common_meta_app::schema::SetLVTReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -131,6 +141,16 @@ pub trait SchemaApi: Send + Sync {
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
 
+    async fn list_index_ids_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<u64>, KVAppError>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+
     // virtual column
 
     async fn create_virtual_column(
@@ -201,6 +221,11 @@ pub trait SchemaApi: Send + Sync {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply, KVAppError>;
 
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply, KVAppError>;
+
     async fn get_drop_table_infos(
         &self,
         req: ListDroppedTableReq,
@@ -226,6 +251,16 @@ pub trait SchemaApi: Send + Sync {
 
     async fn create_catalog(&self, req: CreateCatalogReq)
     -> Result<CreateCatalogReply, KVAppError>;
+
+    async fn get_catalog(&self, req: GetCatalogReq) -> Result<Arc<CatalogInfo>, KVAppError>;
+
+    async fn drop_catalog(&self, req: DropCatalogReq) -> Result<DropCatalogReply, KVAppError>;
+
+    async fn list_catalogs(&self, req: ListCatalogReq)
+    -> Result<Vec<Arc<CatalogInfo>>, KVAppError>;
+
+    // least visible time
+    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
 }

@@ -19,6 +19,7 @@ common-functions = { path = "../../../functions" }
 storages-common-index = { path = "../index" }
 storages-common-table-meta = { path = "../table-meta" }
 
+log = { workspace = true }
 serde = { workspace = true }
-tracing = "0.1.36"
+
 typetag = "0.2.3"

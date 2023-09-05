@@ -27,6 +27,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -39,6 +40,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -63,12 +65,15 @@ use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -91,7 +96,9 @@ use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -100,6 +107,8 @@ use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
+use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -215,7 +224,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let fixture = TestFixture::new().await;
             fixture.create_default_table().await?;
             let ctx = fixture.ctx();
-            let catalog = ctx.get_catalog("default")?;
+            let catalog = ctx.get_catalog("default").await?;
 
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -331,6 +340,10 @@ impl CtxDelegation {
 
 #[async_trait::async_trait]
 impl TableContext for CtxDelegation {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn build_table_from_source_plan(&self, _plan: &DataSourcePlan) -> Result<Arc<dyn Table>> {
         todo!()
     }
@@ -420,7 +433,11 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+    async fn get_catalog(&self, _catalog_name: &str) -> Result<Arc<dyn Catalog>> {
+        Ok(self.catalog.clone())
+    }
+
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>> {
         Ok(self.catalog.clone())
     }
 
@@ -449,6 +466,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_current_role(&self) -> Option<RoleInfo> {
+        todo!()
+    }
+
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
         todo!()
     }
 
@@ -560,9 +581,44 @@ impl TableContext for CtxDelegation {
     ) -> Result<Vec<StageFileInfo>> {
         todo!()
     }
+
+    fn set_materialized_cte(
+        &self,
+        _idx: (usize, usize),
+        _blocks: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()> {
+        todo!()
+    }
+
+    fn get_materialized_cte(
+        &self,
+        _idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>> {
+        todo!()
+    }
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
+        todo!()
+    }
+
+    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+        todo!()
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        todo!()
+    }
+
+    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+        todo!()
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct FakedCatalog {
     cat: Arc<dyn Catalog>,
     error_injection: Option<ErrorCode>,
@@ -570,6 +626,14 @@ struct FakedCatalog {
 
 #[async_trait::async_trait]
 impl Catalog for FakedCatalog {
+    fn name(&self) -> String {
+        "FakedCatalog".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        self.cat.info()
+    }
+
     async fn get_database(&self, _tenant: &str, _db_name: &str) -> Result<Arc<dyn Database>> {
         todo!()
     }
@@ -660,6 +724,13 @@ impl Catalog for FakedCatalog {
         }
     }
 
+    async fn set_table_column_mask_policy(
+        &self,
+        _req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        todo!()
+    }
+
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         todo!()
     }
@@ -703,6 +774,19 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(
+        &self,
+        _req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 

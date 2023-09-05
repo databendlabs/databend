@@ -38,10 +38,14 @@ use super::AggregateCountFunction;
 use super::AggregateFunctionFactory;
 use super::AggregateIfCombinator;
 use crate::aggregates::aggregate_array_agg::aggregate_array_agg_function_desc;
+use crate::aggregates::aggregate_array_moving::aggregate_array_moving_avg_function_desc;
+use crate::aggregates::aggregate_array_moving::aggregate_array_moving_sum_function_desc;
 use crate::aggregates::aggregate_kurtosis::aggregate_kurtosis_function_desc;
 use crate::aggregates::aggregate_quantile_cont::aggregate_median_function_desc;
 use crate::aggregates::aggregate_quantile_cont::aggregate_quantile_cont_function_desc;
 use crate::aggregates::aggregate_quantile_disc::aggregate_quantile_disc_function_desc;
+use crate::aggregates::aggregate_quantile_tdigest::aggregate_median_tdigest_function_desc;
+use crate::aggregates::aggregate_quantile_tdigest::aggregate_quantile_tdigest_function_desc;
 use crate::aggregates::aggregate_retention::aggregate_retention_function_desc;
 use crate::aggregates::aggregate_skewness::aggregate_skewness_function_desc;
 use crate::aggregates::aggregate_string_agg::aggregate_string_agg_function_desc;
@@ -72,7 +76,12 @@ impl Aggregators {
         factory.register("quantile", aggregate_quantile_disc_function_desc());
         factory.register("quantile_disc", aggregate_quantile_disc_function_desc());
         factory.register("quantile_cont", aggregate_quantile_cont_function_desc());
+        factory.register(
+            "quantile_tdigest",
+            aggregate_quantile_tdigest_function_desc(),
+        );
         factory.register("median", aggregate_median_function_desc());
+        factory.register("median_tdigest", aggregate_median_tdigest_function_desc());
         factory.register("window_funnel", aggregate_window_funnel_function_desc());
         factory.register(
             "approx_count_distinct",
@@ -81,6 +90,14 @@ impl Aggregators {
         factory.register("retention", aggregate_retention_function_desc());
         factory.register("array_agg", aggregate_array_agg_function_desc());
         factory.register("list", aggregate_array_agg_function_desc());
+        factory.register(
+            "group_array_moving_avg",
+            aggregate_array_moving_avg_function_desc(),
+        );
+        factory.register(
+            "group_array_moving_sum",
+            aggregate_array_moving_sum_function_desc(),
+        );
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());

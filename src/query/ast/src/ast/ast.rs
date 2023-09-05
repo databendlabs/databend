@@ -65,6 +65,14 @@ impl Identifier {
             span: Span::default(),
         }
     }
+
+    pub fn from_name_with_quoted(name: impl Into<String>, quote: Option<char>) -> Self {
+        Self {
+            name: name.into(),
+            quote,
+            span: Span::default(),
+        }
+    }
 }
 
 impl Display for Identifier {
@@ -78,7 +86,7 @@ impl Display for Identifier {
     }
 }
 
-pub(crate) fn write_period_separated_list(
+pub(crate) fn write_dot_separated_list(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {

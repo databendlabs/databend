@@ -84,6 +84,12 @@ impl From<std::num::ParseIntError> for ErrorCode {
     }
 }
 
+impl From<std::str::ParseBoolError> for ErrorCode {
+    fn from(error: std::str::ParseBoolError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<String> for ErrorCode {
     fn from(error: String) -> Self {
         ErrorCode::from_string(error)
@@ -114,6 +120,23 @@ impl From<common_arrow::arrow::error::Error> for ErrorCode {
 
 impl From<common_arrow::parquet::error::Error> for ErrorCode {
     fn from(error: common_arrow::parquet::error::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<arrow_schema::ArrowError> for ErrorCode {
+    fn from(error: arrow_schema::ArrowError) -> Self {
+        match error {
+            arrow_schema::ArrowError::NotYetImplemented(v) => {
+                ErrorCode::Unimplemented(format!("arrow: {v}"))
+            }
+            v => ErrorCode::from_std_error(v),
+        }
+    }
+}
+
+impl From<parquet::errors::ParquetError> for ErrorCode {
+    fn from(error: parquet::errors::ParquetError) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

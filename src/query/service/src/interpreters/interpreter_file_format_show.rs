@@ -17,10 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
-use common_sql::plans::ShowFileFormatsPlan;
 use common_users::UserApiProvider;
+use log::debug;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -30,12 +29,11 @@ use crate::sessions::TableContext;
 #[derive(Debug)]
 pub struct ShowFileFormatsInterpreter {
     ctx: Arc<QueryContext>,
-    plan: ShowFileFormatsPlan,
 }
 
 impl ShowFileFormatsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: ShowFileFormatsPlan) -> Result<Self> {
-        Ok(ShowFileFormatsInterpreter { ctx, plan })
+    pub fn try_create(ctx: Arc<QueryContext>) -> Result<Self> {
+        Ok(ShowFileFormatsInterpreter { ctx })
     }
 }
 
@@ -45,13 +43,11 @@ impl Interpreter for ShowFileFormatsInterpreter {
         "ShowFileFormatsInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
-    #[tracing::instrument(level = "debug", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "show_file_formats_execute");
+
         let user_mgr = UserApiProvider::instance();
         let tenant = self.ctx.get_tenant();
         let mut formats = user_mgr.get_file_formats(&tenant).await?;

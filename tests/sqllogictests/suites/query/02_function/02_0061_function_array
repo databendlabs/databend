@@ -161,6 +161,11 @@ select array_aggregate(col1, 'max'), array_aggregate(col1, 'min'), array_aggrega
 ----
 3 1 9
 
+query III
+select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 'sum') from t
+----
+3 1 9
+
 query TTTTT
 select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
 ----
@@ -176,6 +181,52 @@ select array_sort(col1, 'asc', 'nulls fir') from t;
 
 statement error 1065
 select array_sort(col1, 'asca', 'nulls first') from t;
+
+query T
+select array_transform([1, 2, NULL, 3], x -> x + 1)
+----
+[2,3,NULL,4] 
+
+query T
+select array_transform(['data', 'a', 'b'], data -> CONCAT(data, 'bend'))
+----
+['databend','abend','bbend']
+
+query T
+select array_apply(array_apply([5, NULL, 6], x -> COALESCE(x, 0) + 1), y -> y + 10)
+----
+[16,11,17]
+
+query TT
+select array_transform(col1, a -> a * 2), array_apply(col2, b -> upper(b)) from t
+----
+[2,4,6,6] ['X','X','Y','Z']
+
+statement error 1065
+select array_transform([1, 2], x -> y + 1)
+
+query T
+select array_filter([5, -6, NULL, 7], x -> x > 0)
+----
+[5,7]
+
+query T
+select array_filter(['Hello', 'abc World'], x -> x LIKE '%World%');
+----
+['abc World']
+
+query T
+select array_filter(array_filter([2, 4, 3, 1, 20, 10, 3, 30], x -> x % 2 = 0), y -> y % 5 = 0)
+----
+[20,10,30]
+
+query TT
+select array_filter(col1, a -> a % 2 = 1), array_filter(col2, b -> b = 'x') from t
+----
+[1,3,3] ['x','x']
+
+statement error 1065
+select array_filter([1, 2], x -> x + 1)
 
 statement ok
 DROP DATABASE array_func_test

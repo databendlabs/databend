@@ -16,10 +16,12 @@ use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::AggregateAttribute;
 use common_profile::AggregateExpandAttribute;
+use common_profile::CteScanAttribute;
 use common_profile::EvalScalarAttribute;
 use common_profile::ExchangeAttribute;
 use common_profile::FilterAttribute;
 use common_profile::JoinAttribute;
+use common_profile::LambdaAttribute;
 use common_profile::LimitAttribute;
 use common_profile::OperatorAttribute;
 use common_profile::OperatorProfile;
@@ -36,6 +38,7 @@ use crate::executor::format::pretty_display_agg_desc;
 use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
 use crate::executor::WindowFunction;
+use crate::planner::Metadata;
 use crate::MetadataRef;
 
 pub struct ProfileHelper;
@@ -48,21 +51,22 @@ impl ProfileHelper {
         profs: &ProcessorProfiles,
     ) -> Result<QueryProfile> {
         let mut plan_node_profs = vec![];
-        flatten_plan_node_profile(metadata, plan, profs, &mut plan_node_profs)?;
+        let metadata = metadata.read().clone();
+        flatten_plan_node_profile(&metadata, plan, profs, &mut plan_node_profs)?;
 
         Ok(QueryProfile::new(query_id.to_string(), plan_node_profs))
     }
 }
 
 fn flatten_plan_node_profile(
-    metadata: &MetadataRef,
+    metadata: &Metadata,
     plan: &PhysicalPlan,
     profs: &ProcessorProfiles,
     plan_node_profs: &mut Vec<OperatorProfile>,
 ) -> Result<()> {
     match plan {
         PhysicalPlan::TableScan(scan) => {
-            let table = metadata.read().table(scan.table_index).clone();
+            let table = metadata.table(scan.table_index).clone();
             let qualified_name = format!("{}.{}", table.database(), table.name());
             let proc_prof = profs.get(&scan.plan_id).copied().unwrap_or_default();
             let prof = OperatorProfile {
@@ -71,6 +75,29 @@ fn flatten_plan_node_profile(
                 children: vec![],
                 execution_info: proc_prof.into(),
                 attribute: OperatorAttribute::TableScan(TableScanAttribute { qualified_name }),
+            };
+            plan_node_profs.push(prof);
+        }
+        PhysicalPlan::CteScan(scan) => {
+            let prof = OperatorProfile {
+                id: scan.plan_id,
+                operator_type: OperatorType::CteScan,
+                children: vec![],
+                execution_info: Default::default(),
+                attribute: OperatorAttribute::CteScan(CteScanAttribute {
+                    cte_idx: scan.cte_idx.0,
+                }),
+            };
+            plan_node_profs.push(prof)
+        }
+        PhysicalPlan::ConstantTableScan(scan) => {
+            let proc_prof = profs.get(&scan.plan_id).copied().unwrap_or_default();
+            let prof = OperatorProfile {
+                id: scan.plan_id,
+                operator_type: OperatorType::ConstantTableScan,
+                children: vec![],
+                execution_info: proc_prof.into(),
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
@@ -140,6 +167,33 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
+        PhysicalPlan::Lambda(lambda) => {
+            flatten_plan_node_profile(metadata, &lambda.input, profs, plan_node_profs)?;
+            let proc_prof = profs.get(&lambda.plan_id).copied().unwrap_or_default();
+            let prof = OperatorProfile {
+                id: lambda.plan_id,
+                operator_type: OperatorType::Lambda,
+                execution_info: proc_prof.into(),
+                children: vec![lambda.input.get_id()],
+                attribute: OperatorAttribute::Lambda(LambdaAttribute {
+                    scalars: lambda
+                        .lambda_funcs
+                        .iter()
+                        .map(|func| {
+                            let arg_exprs = func.arg_exprs.join(", ");
+                            let params = func.params.join(", ");
+                            let lambda_expr =
+                                func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display();
+                            format!(
+                                "{}({}, {} -> {})",
+                                func.func_name, arg_exprs, params, lambda_expr
+                            )
+                        })
+                        .join(", "),
+                }),
+            };
+            plan_node_profs.push(prof);
+        }
         PhysicalPlan::AggregateExpand(expand) => {
             flatten_plan_node_profile(metadata, &expand.input, profs, plan_node_profs)?;
             let proc_prof = profs.get(&expand.plan_id).copied().unwrap_or_default();
@@ -157,7 +211,7 @@ fn flatten_plan_node_profile(
                                 "[{}]",
                                 columns
                                     .iter()
-                                    .map(|column| metadata.read().column(*column).name())
+                                    .map(|column| metadata.column(*column).name())
                                     .join(", ")
                             )
                         })
@@ -179,7 +233,7 @@ fn flatten_plan_node_profile(
                     group_keys: agg_partial
                         .group_by
                         .iter()
-                        .map(|column| metadata.read().column(*column).name())
+                        .map(|column| metadata.column(*column).name())
                         .join(", "),
                     functions: agg_partial
                         .agg_funcs
@@ -202,7 +256,7 @@ fn flatten_plan_node_profile(
                     group_keys: agg_final
                         .group_by
                         .iter()
-                        .map(|column| metadata.read().column(*column).name())
+                        .map(|column| metadata.column(*column).name())
                         .join(", "),
                     functions: agg_final
                         .agg_funcs
@@ -220,7 +274,7 @@ fn flatten_plan_node_profile(
                 .partition_by
                 .iter()
                 .map(|&index| {
-                    let name = metadata.read().column(index).name();
+                    let name = metadata.column(index).name();
                     Ok(name)
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -230,7 +284,7 @@ fn flatten_plan_node_profile(
                 .order_by
                 .iter()
                 .map(|v| {
-                    let name = metadata.read().column(v.order_by).name();
+                    let name = metadata.column(v.order_by).name();
                     Ok(name)
                 })
                 .collect::<Result<Vec<_>>>()?
@@ -271,7 +325,7 @@ fn flatten_plan_node_profile(
                         .map(|desc| {
                             format!(
                                 "{} {}",
-                                metadata.read().column(desc.order_by).name(),
+                                metadata.column(desc.order_by).name(),
                                 if desc.asc { "ASC" } else { "DESC" }
                             )
                         })
@@ -449,9 +503,16 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
-        PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
-        PhysicalPlan::DistributedCopyIntoTableFromStage(_) => unreachable!(),
-        PhysicalPlan::CopyIntoTableFromQuery(_) => unreachable!(),
+        PhysicalPlan::MaterializedCte(_) => todo!(),
+        PhysicalPlan::DeletePartial(_)
+        | PhysicalPlan::MutationAggregate(_)
+        | PhysicalPlan::CopyIntoTable(_)
+        | PhysicalPlan::AsyncSourcer(_)
+        | PhysicalPlan::MergeInto(_)
+        | PhysicalPlan::MergeIntoSource(_)
+        | PhysicalPlan::Deduplicate(_)
+        | PhysicalPlan::ReplaceInto(_) => unreachable!(),
+        PhysicalPlan::FinalCommit(_) => unreachable!(),
     }
 
     Ok(())

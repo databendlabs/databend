@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::tokio;
 use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
-use databend_meta::init_meta_ut;
+use databend_meta::metrics::network_metrics;
+use databend_meta::metrics::raft_metrics;
+use databend_meta::metrics::server_metrics;
+use log::info;
 use maplit::btreeset;
 use poem::get;
 use poem::http::Method;
@@ -26,17 +28,25 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-use tracing::info;
+use test_harness::test;
 
+use crate::testing::meta_service_test_harness;
 use crate::tests::meta_node::start_meta_node_cluster;
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
     init_default_metrics_recorder();
 
     let (_, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {}).await?;
 
     let leader = tcs[0].meta_node.clone().unwrap();
+
+    // record some metrics to make the registry get initialized
+    server_metrics::incr_leader_change();
+    network_metrics::incr_recv_bytes(1);
+    raft_metrics::network::incr_recv_bytes_from_peer("addr".to_string(), 1);
+    raft_metrics::storage::incr_raft_storage_fail("fun", true);
 
     let cluster_router = Route::new()
         .at("/v1/metrics", get(metrics_handler))
@@ -115,11 +125,11 @@ async fn test_metrics() -> anyhow::Result<()> {
 
     // Only static keys are checked.
 
-    assert!(metric_keys.contains("metasrv_server_leader_changes"));
+    assert!(metric_keys.contains("metasrv_server_leader_changes_total"));
     assert!(metric_keys.contains("metasrv_server_last_log_index"));
     assert!(metric_keys.contains("metasrv_server_proposals_pending"));
     assert!(metric_keys.contains("metasrv_raft_network_active_peers"));
-    assert!(metric_keys.contains("metasrv_raft_network_recv_bytes"));
+    assert!(metric_keys.contains("metasrv_raft_network_recv_bytes_total"));
     assert!(metric_keys.contains("metasrv_server_is_leader"));
     assert!(metric_keys.contains("metasrv_server_node_is_health"));
     assert!(metric_keys.contains("metasrv_server_last_seq"));

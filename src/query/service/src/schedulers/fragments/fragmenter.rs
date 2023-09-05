@@ -16,8 +16,11 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::DistributedCopyIntoTableFromStage;
+use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::QuerySource;
+use common_sql::executor::ReplaceInto;
 
 use crate::api::BroadcastExchange;
 use crate::api::DataExchange;
@@ -48,9 +51,12 @@ pub struct Fragmenter {
 /// SelectLeaf: visiting a source fragment of select statement.
 ///
 /// DeleteLeaf: visiting a source fragment of delete statement.
+///
+/// Replace: visiting a fragment that contains a replace into plan.
 enum State {
     SelectLeaf,
     DeleteLeaf,
+    ReplaceInto,
     Other,
 }
 
@@ -90,9 +96,10 @@ impl Fragmenter {
                     Self::get_executors(ctx),
                     plan.keys.clone(),
                 ))),
-                FragmentKind::Merge => {
-                    Ok(Some(MergeExchange::create(Self::get_local_executor(ctx))))
-                }
+                FragmentKind::Merge => Ok(Some(MergeExchange::create(
+                    Self::get_local_executor(ctx),
+                    plan.ignore_exchange,
+                ))),
                 FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
                     from_multiple_nodes,
                     Self::get_executors(ctx),
@@ -139,14 +146,37 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_copy_into_table(
+    fn replace_replace_into(
         &mut self,
-        plan: &DistributedCopyIntoTableFromStage,
+        plan: &common_sql::executor::ReplaceInto,
     ) -> Result<PhysicalPlan> {
-        self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
-            plan.clone(),
-        )))
+        let input = self.replace(&plan.input)?;
+        self.state = State::ReplaceInto;
+
+        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
+    }
+
+    //  TODO(Sky): remove rebudant code
+    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+        match &plan.source {
+            CopyIntoTableSource::Stage(_) => {
+                self.state = State::SelectLeaf;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
+            }
+            CopyIntoTableSource::Query(query_ctx) => {
+                let input = self.replace(&query_ctx.plan)?;
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                        plan: input,
+                        ..*query_ctx.clone()
+                    })),
+                    ..plan.clone()
+                })))
+            }
+        }
     }
 
     fn replace_delete_partial(
@@ -171,6 +201,9 @@ impl PhysicalPlanReplacer for Fragmenter {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: plan.plan_id,
+            projections: plan.projections.clone(),
+            probe_projections: plan.probe_projections.clone(),
+            build_projections: plan.build_projections.clone(),
             build: Box::new(build_input),
             probe: Box::new(probe_input),
             build_keys: plan.build_keys.clone(),
@@ -179,6 +212,8 @@ impl PhysicalPlanReplacer for Fragmenter {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            probe_to_build: plan.probe_to_build.clone(),
+            output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
             stat_info: plan.stat_info.clone(),
         }))
@@ -207,11 +242,13 @@ impl PhysicalPlanReplacer for Fragmenter {
             // We will connect the fragments later, so we just
             // set the fragment id to a invalid value here.
             destination_fragment_id: usize::MAX,
+            ignore_exchange: plan.ignore_exchange,
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,
             State::DeleteLeaf => FragmentType::DeleteLeaf,
             State::Other => FragmentType::Intermediate,
+            State::ReplaceInto => FragmentType::ReplaceInto,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

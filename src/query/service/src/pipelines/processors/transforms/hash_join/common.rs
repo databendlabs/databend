@@ -38,23 +38,27 @@ use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
 use super::desc::MARKER_KIND_TRUE;
 use super::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::row::Chunk;
-use crate::pipelines::processors::JoinHashTable;
-use crate::sql::plans::JoinType;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 
 /// Some common methods for hash join.
-impl JoinHashTable {
+
+impl HashJoinProbeState {
     // Merge build chunk and probe chunk that have the same number of rows
     pub(crate) fn merge_eq_block(
         &self,
-        build_block: &DataBlock,
-        probe_block: &DataBlock,
-    ) -> Result<DataBlock> {
-        let mut probe_block = probe_block.clone();
-        for col in build_block.columns() {
-            probe_block.add_column(col.clone());
+        probe_block: Option<DataBlock>,
+        build_block: Option<DataBlock>,
+        num_rows: usize,
+    ) -> DataBlock {
+        match (probe_block, build_block) {
+            (Some(mut probe_block), Some(build_block)) => {
+                probe_block.merge_block(build_block);
+                probe_block
+            }
+            (Some(probe_block), None) => probe_block,
+            (None, Some(build_block)) => build_block,
+            (None, None) => DataBlock::new(vec![], num_rows),
         }
-        Ok(probe_block)
     }
 
     #[inline]
@@ -125,81 +129,6 @@ impl JoinHashTable {
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
-    pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize, markers: &mut [u8]) {
-        if cols
-            .iter()
-            .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
-        {
-            let mut valids = None;
-            for (col, _) in cols.iter() {
-                match col {
-                    Column::Nullable(c) => {
-                        let bitmap = &c.validity;
-                        if bitmap.unset_bits() == 0 {
-                            let mut m = MutableBitmap::with_capacity(num_rows);
-                            m.extend_constant(num_rows, true);
-                            valids = Some(m.into());
-                            break;
-                        } else {
-                            valids = or_validities(valids, Some(bitmap.clone()));
-                        }
-                    }
-                    Column::Null { .. } => {}
-                    _c => {
-                        let mut m = MutableBitmap::with_capacity(num_rows);
-                        m.extend_constant(num_rows, true);
-                        valids = Some(m.into());
-                        break;
-                    }
-                }
-            }
-            if let Some(v) = valids {
-                let mut idx = 0;
-                while idx < num_rows {
-                    if !v.get_bit(idx) {
-                        markers[idx] = MARKER_KIND_NULL;
-                    }
-                    idx += 1;
-                }
-            }
-        }
-    }
-
-    pub(crate) fn set_validity(
-        column: &BlockEntry,
-        num_rows: usize,
-        validity: &Bitmap,
-    ) -> BlockEntry {
-        let (value, data_type) = (&column.value, &column.data_type);
-        let col = value.convert_to_full_column(data_type, num_rows);
-
-        if matches!(col, Column::Null { .. }) {
-            column.clone()
-        } else if let Some(col) = col.as_nullable() {
-            if col.len() == 0 {
-                return BlockEntry::new(data_type.clone(), Value::Scalar(Scalar::Null));
-            }
-            // It's possible validity is longer than col.
-            let diff_len = validity.len() - col.validity.len();
-            let mut new_validity = MutableBitmap::with_capacity(validity.len());
-            for (b1, b2) in validity.iter().zip(col.validity.iter()) {
-                new_validity.push(b1 & b2);
-            }
-            new_validity.extend_constant(diff_len, false);
-            let col = Column::Nullable(Box::new(NullableColumn {
-                column: col.column.clone(),
-                validity: new_validity.into(),
-            }));
-            BlockEntry::new(data_type.clone(), Value::Column(col))
-        } else {
-            let col = Column::Nullable(Box::new(NullableColumn {
-                column: col.clone(),
-                validity: validity.clone(),
-            }));
-            BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
-        }
-    }
-
     // return an (option bitmap, all_true, all_false)
     pub(crate) fn get_other_filters(
         &self,
@@ -245,44 +174,82 @@ impl JoinHashTable {
             }))),
         }
     }
+}
 
-    // Add `data_block` for build table to `row_space`
-    pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let mut data_block = data_block;
-        if matches!(
-            self.hash_join_desc.join_type,
-            JoinType::Left | JoinType::Full
-        ) {
-            let mut validity = MutableBitmap::new();
-            validity.extend_constant(data_block.num_rows(), true);
-            let validity: Bitmap = validity.into();
-
-            let nullable_columns = data_block
-                .columns()
-                .iter()
-                .map(|c| Self::set_validity(c, validity.len(), &validity))
-                .collect::<Vec<_>>();
-            data_block = DataBlock::new(nullable_columns, data_block.num_rows());
-        }
-
-        let chunk = Chunk {
-            data_block,
-            keys_state: None,
-        };
-
+impl HashJoinState {
+    pub(crate) fn init_markers(
+        &self,
+        cols: &[(Column, DataType)],
+        num_rows: usize,
+        markers: &mut [u8],
+    ) {
+        if cols
+            .iter()
+            .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
         {
-            // Acquire write lock in current scope
-            let mut chunks = self.row_space.chunks.write();
-            if self.need_outer_scan() {
-                let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
-                outer_scan_map.push(vec![false; chunk.num_rows()]);
+            let mut valids = None;
+            for (col, _) in cols.iter() {
+                match col {
+                    Column::Nullable(c) => {
+                        let bitmap = &c.validity;
+                        if bitmap.unset_bits() == 0 {
+                            let mut m = MutableBitmap::with_capacity(num_rows);
+                            m.extend_constant(num_rows, true);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = or_validities(valids, Some(bitmap.clone()));
+                        }
+                    }
+                    Column::Null { .. } => {}
+                    _c => {
+                        let mut m = MutableBitmap::with_capacity(num_rows);
+                        m.extend_constant(num_rows, true);
+                        valids = Some(m.into());
+                        break;
+                    }
+                }
             }
-            if self.need_mark_scan() {
-                let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
-                mark_scan_map.push(vec![MARKER_KIND_FALSE; chunk.num_rows()]);
+            if let Some(v) = valids {
+                let mut idx = 0;
+                while idx < num_rows {
+                    if !v.get_bit(idx) {
+                        markers[idx] = MARKER_KIND_NULL;
+                    }
+                    idx += 1;
+                }
             }
-            chunks.push(chunk);
         }
-        Ok(())
+    }
+}
+
+pub(crate) fn set_validity(column: &BlockEntry, num_rows: usize, validity: &Bitmap) -> BlockEntry {
+    let (value, data_type) = (&column.value, &column.data_type);
+    let col = value.convert_to_full_column(data_type, num_rows);
+
+    if matches!(col, Column::Null { .. }) {
+        column.clone()
+    } else if let Some(col) = col.as_nullable() {
+        if col.len() == 0 {
+            return BlockEntry::new(data_type.clone(), Value::Scalar(Scalar::Null));
+        }
+        // It's possible validity is longer than col.
+        let diff_len = validity.len() - col.validity.len();
+        let mut new_validity = MutableBitmap::with_capacity(validity.len());
+        for (b1, b2) in validity.iter().zip(col.validity.iter()) {
+            new_validity.push(b1 & b2);
+        }
+        new_validity.extend_constant(diff_len, false);
+        let col = Column::Nullable(Box::new(NullableColumn {
+            column: col.column.clone(),
+            validity: new_validity.into(),
+        }));
+        BlockEntry::new(data_type.clone(), Value::Column(col))
+    } else {
+        let col = Column::Nullable(Box::new(NullableColumn {
+            column: col.clone(),
+            validity: validity.clone(),
+        }));
+        BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
 }

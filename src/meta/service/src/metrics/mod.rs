@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod meta_metrics;
+mod registry;
 
 pub use meta_metrics::meta_metrics_to_prometheus_string;
 pub use meta_metrics::network_metrics;

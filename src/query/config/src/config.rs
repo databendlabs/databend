@@ -21,6 +21,7 @@ use std::str::FromStr;
 
 use clap::Args;
 use clap::Parser;
+use clap::Subcommand;
 use clap::ValueEnum;
 use common_base::base::mask_string;
 use common_exception::ErrorCode;
@@ -43,7 +44,9 @@ use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig as InnerStorageConfig;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::QueryLogConfig as InnerQueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_tracing::TracingConfig;
 use common_users::idm_config::IDMConfig as InnerIDMConfig;
 use serde::Deserialize;
 use serde::Serialize;
@@ -82,8 +85,14 @@ const CATALOG_HIVE: &str = "hive";
 #[serde(default)]
 pub struct Config {
     /// Run a command and quit
-    #[clap(long, default_value_t)]
-    pub cmd: String,
+    #[command(subcommand)]
+    #[serde(skip)]
+    pub subcommand: Option<Commands>,
+
+    // To be compatible with the old version, we keep the `cmd` arg
+    // We should always use `databend-query ver` instead `databend-query --cmd ver` in latest version
+    #[clap(long)]
+    pub cmd: Option<String>,
 
     #[clap(long, short = 'c', default_value_t)]
     pub config_file: String,
@@ -113,10 +122,6 @@ pub struct Config {
     #[clap(flatten)]
     pub catalog: HiveCatalogConfig,
 
-    // Local query config.
-    #[clap(flatten)]
-    pub local: LocalConfig,
-
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
@@ -135,6 +140,18 @@ pub struct Config {
     /// when converted from inner config, all catalog configurations will store in `catalogs`
     #[clap(skip)]
     pub catalogs: HashMap<String, CatalogConfig>,
+}
+
+#[derive(Subcommand, Default, Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
+pub enum Commands {
+    #[default]
+    Ver,
+    Local {
+        #[clap(long, short = 'q', default_value_t)]
+        query: String,
+        #[clap(long, default_value_t)]
+        output_format: String,
+    },
 }
 
 impl Default for Config {
@@ -161,6 +178,14 @@ impl Config {
 
         if with_args {
             arg_conf = Self::parse();
+        }
+
+        if arg_conf.cmd == Some("ver".to_string()) {
+            arg_conf.subcommand = Some(Commands::Ver);
+        }
+
+        if arg_conf.subcommand.is_some() {
+            return Ok(arg_conf);
         }
 
         let mut builder: serfig::Builder<Self> = serfig::Builder::default();
@@ -471,7 +496,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -480,7 +505,7 @@ impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
 impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -505,7 +530,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
         }
 
         Ok(InnerCatalogHiveConfig {
-            address: self.address,
+            metastore_address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -514,7 +539,7 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
 impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            address: inner.address,
+            address: inner.metastore_address,
             protocol: inner.protocol.to_string(),
 
             // Deprecated fields
@@ -1269,6 +1294,12 @@ pub struct QueryConfig {
     #[clap(long, default_value = "120")]
     pub mysql_handler_tcp_keepalive_timeout_secs: u64,
 
+    #[clap(long, default_value_t)]
+    pub mysql_tls_server_cert: String,
+
+    #[clap(long, default_value_t)]
+    pub mysql_tls_server_key: String,
+
     #[clap(long, default_value = "256")]
     pub max_active_sessions: u64,
 
@@ -1276,7 +1307,7 @@ pub struct QueryConfig {
     #[clap(long, default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long, parse(try_from_str), default_value = "false")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
@@ -1356,8 +1387,11 @@ pub struct QueryConfig {
     #[clap(long, default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
+    #[clap(long, default_value = "0")]
+    pub rpc_client_timeout_secs: u64,
+
     /// Table engine memory enabled
-    #[clap(long, parse(try_from_str), default_value = "true")]
+    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
     #[clap(long, default_value = "5000")]
@@ -1513,6 +1547,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
             mysql_handler_tcp_keepalive_timeout_secs: self.mysql_handler_tcp_keepalive_timeout_secs,
+            mysql_tls_server_cert: self.mysql_tls_server_cert,
+            mysql_tls_server_key: self.mysql_tls_server_key,
             max_active_sessions: self.max_active_sessions,
             max_server_memory_usage: self.max_server_memory_usage,
             max_memory_limit_enabled: self.max_memory_limit_enabled,
@@ -1538,6 +1574,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             rpc_tls_server_key: self.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: self.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: self.rpc_tls_query_service_domain_name,
+            rpc_client_timeout_secs: self.rpc_client_timeout_secs,
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
@@ -1579,6 +1616,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             mysql_handler_port: inner.mysql_handler_port,
             mysql_handler_tcp_keepalive_timeout_secs: inner
                 .mysql_handler_tcp_keepalive_timeout_secs,
+            mysql_tls_server_cert: inner.mysql_tls_server_cert,
+            mysql_tls_server_key: inner.mysql_tls_server_key,
             max_active_sessions: inner.max_active_sessions,
             max_server_memory_usage: inner.max_server_memory_usage,
             max_memory_limit_enabled: inner.max_memory_limit_enabled,
@@ -1609,6 +1648,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             rpc_tls_server_key: inner.rpc_tls_server_key,
             rpc_tls_query_server_root_ca_cert: inner.rpc_tls_query_server_root_ca_cert,
             rpc_tls_query_service_domain_name: inner.rpc_tls_query_service_domain_name,
+            rpc_client_timeout_secs: inner.rpc_client_timeout_secs,
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
@@ -1668,9 +1708,9 @@ pub struct LogConfig {
     #[clap(skip)]
     pub log_dir: Option<String>,
 
-    /// Log file dir
-    #[clap(long = "log-query-enabled")]
-    pub query_enabled: bool,
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub query_enabled: Option<bool>,
 
     /// Deprecated fields, used for catching error, will be removed later.
     #[clap(skip)]
@@ -1681,6 +1721,9 @@ pub struct LogConfig {
 
     #[clap(flatten)]
     pub stderr: StderrLogConfig,
+
+    #[clap(flatten)]
+    pub query: QueryLogConfig,
 }
 
 impl Default for LogConfig {
@@ -1703,9 +1746,14 @@ impl TryInto<InnerLogConfig> for LogConfig {
                 "`log_level` is deprecated, use `level` instead".to_string(),
             ));
         }
+        if self.query_enabled.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`query_enabled` is deprecated, use `query.on` instead".to_string(),
+            ));
+        }
         if self.log_query_enabled.is_some() {
             return Err(ErrorCode::InvalidConfig(
-                "`log_query_enabled` is deprecated, use `query_enabled` instead".to_string(),
+                "`log_query_enabled` is deprecated, use `query.on` instead".to_string(),
             ));
         }
 
@@ -1717,9 +1765,23 @@ impl TryInto<InnerLogConfig> for LogConfig {
             file.dir = self.dir.to_string();
         }
 
+        let mut query: InnerQueryLogConfig = self.query.try_into()?;
+        if query.dir.is_empty() {
+            if file.dir.is_empty() {
+                return Err(ErrorCode::InvalidConfig(
+                    "`dir` or `file.dir` must be set when `query.dir` is empty".to_string(),
+                ));
+            }
+            query.dir = format!("{}/query-details", &file.dir);
+        }
+
+        let tracing = TracingConfig::from_env();
+
         Ok(InnerLogConfig {
             file,
             stderr: self.stderr.try_into()?,
+            query,
+            tracing,
         })
     }
 }
@@ -1729,13 +1791,14 @@ impl From<InnerLogConfig> for LogConfig {
         Self {
             level: inner.file.level.clone(),
             dir: inner.file.dir.clone(),
-            query_enabled: false,
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+            query: inner.query.into(),
 
             // Deprecated fields
             log_dir: None,
             log_level: None,
+            query_enabled: None,
             log_query_enabled: None,
         }
     }
@@ -1835,6 +1898,49 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
             stderr_on: inner.on,
             stderr_level: inner.level,
             stderr_format: inner.format,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct QueryLogConfig {
+    #[clap(long = "query-log-on", default_value = "true")]
+    #[serde(rename = "on")]
+    pub query_log_on: bool,
+
+    /// Query Log file dir
+    #[clap(
+        long = "query-log-dir",
+        default_value = "",
+        help = "Default to <log-file-dir>/query-details"
+    )]
+    #[serde(rename = "dir")]
+    pub query_log_dir: String,
+}
+
+impl Default for QueryLogConfig {
+    fn default() -> Self {
+        InnerQueryLogConfig::default().into()
+    }
+}
+
+impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<InnerQueryLogConfig> {
+        Ok(InnerQueryLogConfig {
+            on: self.query_log_on,
+            dir: self.query_log_dir,
+        })
+    }
+}
+
+impl From<InnerQueryLogConfig> for QueryLogConfig {
+    fn from(inner: InnerQueryLogConfig) -> Self {
+        Self {
+            query_log_on: inner.on,
+            query_log_dir: inner.dir,
         }
     }
 }
@@ -2144,16 +2250,23 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
     pub table_bloom_index_meta_count: u64,
 
+    /// DEPRECATING, will be deprecated in the next prduction release.
+    ///
     /// Max number of cached bloom index filters. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     //
     // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(
-        long = "cache-table-bloom-index-filter-count",
-        default_value = "1048576"
-    )]
+    #[clap(long = "cache-table-bloom-index-filter-count", default_value = "0")]
     pub table_bloom_index_filter_count: u64,
+
+    /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
+    // One bloom index filter per column of data block being indexed will be generated if necessary.
+    #[clap(
+        long = "cache-table-bloom-index-filter-size",
+        default_value = "2147483648"
+    )]
+    pub table_bloom_index_filter_size: u64,
 
     #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
     pub table_prune_partitions_count: u64,
@@ -2238,19 +2351,21 @@ pub struct DiskCacheConfig {
 }
 
 mod cache_config_converters {
+    use log::warn;
+
     use super::*;
 
     impl From<InnerConfig> for Config {
         fn from(inner: InnerConfig) -> Self {
             Self {
-                cmd: inner.cmd,
+                subcommand: inner.subcommand,
+                cmd: None,
                 config_file: inner.config_file,
                 query: inner.query.into(),
                 log: inner.log.into(),
                 meta: inner.meta.into(),
                 storage: inner.storage.into(),
                 catalog: HiveCatalogConfig::default(),
-                local: inner.local.into(),
 
                 catalogs: inner
                     .catalogs
@@ -2273,7 +2388,7 @@ mod cache_config_converters {
                 catalogs.insert(k, catalog);
             }
             if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
-                tracing::warn!(
+                warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );
                 let hive = self.catalog.try_into()?;
@@ -2282,13 +2397,12 @@ mod cache_config_converters {
             }
 
             Ok(InnerConfig {
-                cmd: self.cmd,
+                subcommand: self.subcommand,
                 config_file: self.config_file,
                 query: self.query.try_into()?,
                 log: self.log.try_into()?,
                 meta: self.meta.try_into()?,
                 storage: self.storage.try_into()?,
-                local: self.local.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
                 background: self.background.try_into()?,
@@ -2308,6 +2422,7 @@ mod cache_config_converters {
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.try_into()?,
                 table_data_cache_population_queue_size: value
@@ -2328,6 +2443,7 @@ mod cache_config_converters {
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
                 table_bloom_index_filter_count: value.table_bloom_index_filter_count,
+                table_bloom_index_filter_size: value.table_bloom_index_filter_size,
                 table_prune_partitions_count: value.table_prune_partitions_count,
                 data_cache_storage: value.data_cache_storage.into(),
                 table_data_cache_population_queue_size: value

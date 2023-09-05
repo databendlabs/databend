@@ -65,9 +65,14 @@ fn pretty_with(with: Option<With>) -> RcDoc<'static> {
 }
 
 fn pretty_cte(cte: CTE) -> RcDoc<'static> {
-    RcDoc::text(format!("{} AS", cte.alias))
+    RcDoc::text(format!("{} AS ", cte.alias))
         .append(RcDoc::softline())
-        .append(parenthesized(pretty_query(cte.query)))
+        .append(if cte.materialized {
+            RcDoc::text("MATERIALIZED ".to_string())
+        } else {
+            RcDoc::nil()
+        })
+        .append(parenthesized(pretty_query(*cte.query)))
 }
 
 fn pretty_body(body: SetExpr) -> RcDoc<'static> {
@@ -100,6 +105,13 @@ fn pretty_body(body: SetExpr) -> RcDoc<'static> {
             )
             .append(RcDoc::line())
             .append(pretty_body(*set_operation.right)),
+        SetExpr::Values { values, .. } => {
+            RcDoc::text("VALUES").append(inline_comma(values.into_iter().map(|row_values| {
+                RcDoc::text("(")
+                    .append(inline_comma(row_values.into_iter().map(pretty_expr)))
+                    .append(RcDoc::text(")"))
+            })))
+        }
     }
 }
 

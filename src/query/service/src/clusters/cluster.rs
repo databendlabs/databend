@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio;
@@ -48,11 +49,11 @@ use futures::future::select;
 use futures::future::Either;
 use futures::Future;
 use futures::StreamExt;
+use log::error;
+use log::warn;
 use metrics::gauge;
 use rand::thread_rng;
 use rand::Rng;
-use tracing::error;
-use tracing::warn;
 
 use crate::api::FlightClient;
 
@@ -235,10 +236,13 @@ impl ClusterDiscovery {
                 let mut res = Vec::with_capacity(cluster_nodes.len());
                 for node in &cluster_nodes {
                     if node.id != self.local_id {
+                        let start_at = Instant::now();
                         if let Err(cause) = create_client(config, &node.flight_address).await {
                             warn!(
-                                "Cannot connect node [{:?}], remove it in query. cause: {:?}",
-                                node.flight_address, cause
+                                "Cannot connect node [{:?}] after {:?}s, remove it in query. cause: {:?}",
+                                node.flight_address,
+                                start_at.elapsed().as_secs_f32(),
+                                cause
                             );
 
                             continue;
@@ -372,12 +376,11 @@ impl ClusterDiscovery {
                 if let Some(local_addr) = self.api_provider.get_local_addr().await? {
                     let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                     let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
-                    tracing::warn!(
+                    warn!(
                         "Used loopback or unspecified address as cluster flight address. \
                         we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
                         If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
-                        address,
-                        new_addr
+                        address, new_addr
                     );
 
                     address = new_addr;
@@ -520,17 +523,19 @@ impl ClusterHeartbeat {
 
 #[async_backtrace::framed]
 pub async fn create_client(config: &InnerConfig, address: &str) -> Result<FlightClient> {
-    match config.tls_query_cli_enabled() {
-        true => Ok(FlightClient::new(FlightServiceClient::new(
-            ConnectionFactory::create_rpc_channel(
-                address.to_owned(),
-                None,
-                Some(config.query.to_rpc_client_tls_config()),
-            )
-            .await?,
-        ))),
-        false => Ok(FlightClient::new(FlightServiceClient::new(
-            ConnectionFactory::create_rpc_channel(address.to_owned(), None, None).await?,
-        ))),
-    }
+    let timeout = if config.query.rpc_client_timeout_secs > 0 {
+        Some(Duration::from_secs(config.query.rpc_client_timeout_secs))
+    } else {
+        None
+    };
+
+    let rpc_tls_config = if config.tls_query_cli_enabled() {
+        Some(config.query.to_rpc_client_tls_config())
+    } else {
+        None
+    };
+
+    Ok(FlightClient::new(FlightServiceClient::new(
+        ConnectionFactory::create_rpc_channel(address.to_owned(), timeout, rpc_tls_config).await?,
+    )))
 }

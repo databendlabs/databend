@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::io::Read;
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -42,8 +43,11 @@ use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
+use common_storage::STDIN_FD;
 use dashmap::DashMap;
+use log::debug;
 use opendal::Operator;
+use opendal::Scheme;
 use parking_lot::Mutex;
 
 use crate::parquet_file::append_data_to_parquet_files;
@@ -84,10 +88,7 @@ impl StageTable {
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
         let guard = self.block_compact_threshold.lock();
-        match guard.deref() {
-            None => BlockThresholds::default(),
-            Some(t) => *t,
-        }
+        guard.deref().unwrap_or_default()
     }
 }
 
@@ -186,15 +187,23 @@ impl Table for StageTable {
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
-        let on_error_map = match ctx.get_on_error_map() {
-            Some(m) => m,
-            None => {
-                let m = Arc::new(DashMap::new());
-                ctx.set_on_error_map(m.clone());
-                m
-            }
-        };
+        let on_error_map = ctx.get_on_error_map().unwrap_or_else(|| {
+            let m = Arc::new(DashMap::new());
+            ctx.set_on_error_map(m.clone());
+            m
+        });
+
+        // inject stdin to memory
+        if operator.info().scheme() == Scheme::Memory {
+            let mut buffer = vec![];
+            std::io::stdin().lock().read_to_end(&mut buffer)?;
+
+            let bop = operator.blocking();
+            bop.write(STDIN_FD, buffer)?;
+        }
+
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
+            ctx.clone(),
             operator,
             settings,
             schema,
@@ -206,7 +215,7 @@ impl Table for StageTable {
             self.table_info.is_select,
             projection,
         )?);
-        tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
+        debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }

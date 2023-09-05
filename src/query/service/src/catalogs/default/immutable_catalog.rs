@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -42,12 +46,15 @@ use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -68,7 +75,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 
-use crate::catalogs::catalog::Catalog;
 use crate::catalogs::InMemoryMetas;
 use crate::catalogs::SYS_DB_ID_BEGIN;
 use crate::catalogs::SYS_TBL_ID_BEGIN;
@@ -84,6 +90,12 @@ pub struct ImmutableCatalog {
     info_schema_db: Arc<InformationSchemaDatabase>,
     sys_db: Arc<SystemDatabase>,
     sys_db_meta: Arc<InMemoryMetas>,
+}
+
+impl Debug for ImmutableCatalog {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ImmutableCatalog").finish_non_exhaustive()
+    }
 }
 
 impl ImmutableCatalog {
@@ -109,6 +121,14 @@ impl ImmutableCatalog {
 impl Catalog for ImmutableCatalog {
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn name(&self) -> String {
+        "default".to_string()
+    }
+
+    fn info(&self) -> CatalogInfo {
+        CatalogInfo::new_default()
     }
 
     #[async_backtrace::framed]
@@ -282,6 +302,17 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply> {
+        Err(ErrorCode::Unimplemented(format!(
+            "set_table_column_mask_policy not allowed for system database {:?}",
+            req
+        )))
+    }
+
+    #[async_backtrace::framed]
     async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
         Err(ErrorCode::Unimplemented(
             "list_table_lock_revs not allowed for system database",
@@ -342,6 +373,19 @@ impl Catalog for ImmutableCatalog {
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(
+        &self,
+        _req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 

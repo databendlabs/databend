@@ -16,10 +16,9 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::io::MetaReaders;
+use crate::io::SegmentsIO;
 use crate::metrics::metrics_inc_bytes_segment_range_pruning_after;
 use crate::metrics::metrics_inc_bytes_segment_range_pruning_before;
 use crate::metrics::metrics_inc_segments_range_pruning_after;
@@ -58,7 +57,13 @@ impl SegmentPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
 
         for segment_location in segment_locs {
-            let info = self.read_segment_info(&segment_location).await?;
+            let info = SegmentsIO::read_compact_segment(
+                self.pruning_ctx.dal.clone(),
+                segment_location.location.clone(),
+                self.table_schema.clone(),
+                true,
+            )
+            .await?;
 
             let total_bytes = info.summary.uncompressed_byte_size;
             // Perf.
@@ -82,25 +87,5 @@ impl SegmentPruner {
             }
         }
         Ok(res)
-    }
-
-    async fn read_segment_info(
-        &self,
-        segment_location: &SegmentLocation,
-    ) -> Result<Arc<CompactSegmentInfo>> {
-        let dal = self.pruning_ctx.dal.clone();
-        let table_schema = self.table_schema.clone();
-
-        // Keep in mind that segment_info_read must need a schema
-        let segment_reader = MetaReaders::segment_info_reader(dal, table_schema);
-        let (location, ver) = segment_location.location.clone();
-        let load_params = LoadParams {
-            location,
-            len_hint: None,
-            ver,
-            put_cache: true,
-        };
-
-        segment_reader.read(&load_params).await
     }
 }

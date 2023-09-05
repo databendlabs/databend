@@ -12,25 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
+use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_meta_app::schema::CatalogType;
 use common_profile::QueryProfileManager;
 use common_sharing::ShareEndpointManager;
 use common_storage::DataOperator;
 use common_storage::ShareTableConfig;
-use common_tracing::QueryLogger;
+use common_storages_hive::HiveCreator;
+use common_storages_iceberg::IcebergCreator;
+use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
-use crate::catalogs::CatalogManagerHelper;
+use crate::catalogs::DatabaseCatalog;
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::sessions::SessionManager;
@@ -51,7 +57,7 @@ impl GlobalServices {
 
         let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
 
-        QueryLogger::init(app_name_shuffle, &config.log)?;
+        GlobalLogger::init(&app_name_shuffle, &config.log);
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
@@ -67,7 +73,26 @@ impl GlobalServices {
         )?;
 
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
-        CatalogManager::init(&config).await?;
+
+        // TODO(xuanwo):
+        //
+        // This part is a bit complex because catalog are used widely in different
+        // crates that we don't have a good place for different kinds of creators.
+        //
+        // Maybe we can do some refactor to simplify the logic here.
+        {
+            // Init default catalog.
+
+            let default_catalog = DatabaseCatalog::try_create_with_config(config.clone()).await?;
+
+            let catalog_creator: Vec<(CatalogType, Arc<dyn CatalogCreator>)> = vec![
+                (CatalogType::Iceberg, Arc::new(IcebergCreator)),
+                (CatalogType::Hive, Arc::new(HiveCreator)),
+            ];
+
+            CatalogManager::init(&config, Arc::new(default_catalog), catalog_creator).await?;
+        }
+
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;

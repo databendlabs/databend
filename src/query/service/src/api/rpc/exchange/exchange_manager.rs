@@ -764,6 +764,7 @@ impl FragmentCoordinator {
                         fragment_id: self.fragment_id,
                         query_id: info.query_id.to_string(),
                         destination_id: exchange.destination_id.clone(),
+                        ignore_exchange: exchange.ignore_exchange,
                     }))
                 }
                 DataExchange::Broadcast(exchange) => {

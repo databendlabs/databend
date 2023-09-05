@@ -129,7 +129,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
                 // and replace `.<number>` map access to floating point literal.
                 if let ExprElement::MapAccess {
-                    accessor: MapAccessor::PeriodNumber { .. },
+                    accessor: MapAccessor::DotNumber { .. },
                 } = &expr_elements[curr as usize].elem
                 {
                     let span = expr_elements[curr as usize].span;
@@ -166,7 +166,7 @@ pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
     ))(i)
 }
 
-/// Parse one two three idents separated by a period, fulfilling from the right.
+/// Parse one two three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 #[allow(clippy::needless_lifetimes)]
@@ -291,8 +291,9 @@ pub enum ExprElement {
         distinct: bool,
         name: Identifier,
         args: Vec<Expr>,
-        window: Option<Window>,
         params: Vec<Literal>,
+        window: Option<Window>,
+        lambda: Option<Lambda>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -395,6 +396,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::BitwiseOr => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseAnd => Affix::Infix(Precedence(22), Associativity::Left),
                 BinaryOperator::BitwiseXor => Affix::Infix(Precedence(22), Associativity::Left),
+                BinaryOperator::L2Distance => Affix::Infix(Precedence(22), Associativity::Left),
 
                 BinaryOperator::BitwiseShiftLeft => {
                     Affix::Infix(Precedence(23), Associativity::Left)
@@ -491,6 +493,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 args,
                 params,
                 window,
+                lambda,
             } => Expr::FunctionCall {
                 span: transform_span(elem.span.0),
                 distinct,
@@ -498,6 +501,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 args,
                 params,
                 window,
+                lambda,
             },
             ExprElement::Case {
                 operand,
@@ -830,6 +834,25 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: vec![],
             window: None,
+            lambda: None,
+        },
+    );
+
+    let function_call_with_lambda = map(
+        rule! {
+            #function_name
+            ~ "(" ~ #subexpr(0) ~ "," ~ #ident ~ "->" ~ #subexpr(0) ~ ")"
+        },
+        |(name, _, arg, _, param, _, expr, _)| ExprElement::FunctionCall {
+            distinct: false,
+            name,
+            args: vec![arg],
+            params: vec![],
+            window: None,
+            lambda: Some(Lambda {
+                params: vec![param],
+                expr: Box::new(expr),
+            }),
         },
     );
 
@@ -845,6 +868,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: vec![],
             window: Some(window.1),
+            lambda: None,
         },
     );
 
@@ -860,6 +884,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             args: opt_args.unwrap_or_default(),
             params: params.map(|x| x.1).unwrap_or_default(),
             window: None,
+            lambda: None,
         },
     );
 
@@ -1028,6 +1053,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
             | #count_all_with_window : "`COUNT(*) OVER ...`"
+            | #function_call_with_lambda : "<function>"
             | #function_call_with_window : "<function>"
             | #function_call_with_params : "<function>"
             | #function_call : "<function>"
@@ -1068,6 +1094,7 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::Div, rule! { DIV }),
             value(BinaryOperator::Modulo, rule! { "%" }),
             value(BinaryOperator::StringConcat, rule! { "||" }),
+            value(BinaryOperator::L2Distance, rule! { "<->" }),
             value(BinaryOperator::Gt, rule! { ">" }),
             value(BinaryOperator::Lt, rule! { "<" }),
             value(BinaryOperator::Gte, rule! { ">=" }),
@@ -1260,15 +1287,19 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { (FLOAT64 | DOUBLE)  ~ ( PRECISION )? },
     );
     let ty_decimal = map_res(
-        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
-        |(_, _, precision, _, scale, _)| {
+        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ #literal_u64 )? ~ ")" },
+        |(_, _, precision, opt_scale, _)| {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
                     .map_err(|_| ErrorKind::Other("precision is too large"))?,
-                scale: scale
-                    .try_into()
-                    .map_err(|_| ErrorKind::Other("scale is too large"))?,
+                scale: if let Some((_, scale)) = opt_scale {
+                    scale
+                        .try_into()
+                        .map_err(|_| ErrorKind::Other("scale is too large"))?
+                } else {
+                    0
+                },
             })
         },
     );
@@ -1348,7 +1379,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         )),
         |(ty, opt_null)| {
             if opt_null.is_some() {
-                TypeName::Nullable(Box::new(ty))
+                ty.wrap_nullable()
             } else {
                 ty
             }
@@ -1413,20 +1444,20 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
-    let period = map(
+    let dot = map(
         rule! {
            "." ~ #ident
         },
-        |(_, key)| MapAccessor::Period { key },
+        |(_, key)| MapAccessor::Dot { key },
     );
-    let period_number = map_res(
+    let dot_number = map_res(
         rule! {
            LiteralFloat
         },
         |key| {
             if key.text().starts_with('.') {
                 if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                    return Ok(MapAccessor::PeriodNumber { key });
+                    return Ok(MapAccessor::DotNumber { key });
                 }
             }
             Err(ErrorKind::ExpectText("."))
@@ -1441,8 +1472,8 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #period
-        | #period_number
+        | #dot
+        | #dot_number
         | #colon
     )(i)
 }

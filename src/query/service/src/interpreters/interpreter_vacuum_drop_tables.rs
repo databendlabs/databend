@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_license::license::Feature::Vacuum;
 use common_license::license_manager::get_license_manager;
@@ -27,6 +26,8 @@ use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::TableInfoFilter;
 use common_sql::plans::VacuumDropTablePlan;
+use log::as_debug;
+use log::info;
 use vacuum_handler::get_vacuum_handler;
 
 use crate::interpreters::Interpreter;
@@ -36,7 +37,6 @@ use crate::sessions::TableContext;
 
 const DRY_RUN_LIMIT: usize = 1000;
 
-#[allow(dead_code)]
 pub struct VacuumDropTablesInterpreter {
     ctx: Arc<QueryContext>,
     plan: VacuumDropTablePlan,
@@ -54,10 +54,6 @@ impl Interpreter for VacuumDropTablesInterpreter {
         "VacuumDropTablesInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
@@ -73,7 +69,7 @@ impl Interpreter for VacuumDropTablesInterpreter {
             None => ctx.get_settings().get_retention_period()? as i64,
         };
         let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         // if database if empty, vacuum all tables
         let filter = if self.plan.database.is_empty() {
             TableInfoFilter::AllDroppedTables(Some(retention_time))
@@ -102,12 +98,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 },
             )
             .await?;
-        // gc meta data
-        let req = GcDroppedTableReq {
-            tenant: self.ctx.get_tenant(),
-            drop_ids,
-        };
-        let _ = catalog.gc_drop_tables(req).await?;
+        // gc meta data only when not dry run
+        if self.plan.option.dry_run.is_none() {
+            info!(drop_ids = as_debug!(&drop_ids); "vacuum drop table");
+            let req = GcDroppedTableReq {
+                tenant: self.ctx.get_tenant(),
+                drop_ids,
+            };
+            let _ = catalog.gc_drop_tables(req).await?;
+        }
 
         match files_opt {
             None => return Ok(PipelineBuildResult::create()),

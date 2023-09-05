@@ -15,18 +15,18 @@ name = "databend-sqllogictests"
 
 [dependencies]
 async-trait = "0.1.53"
-clap = { version = "4.1.11", features = ["derive", "env"] }
+clap = { version = "4.4.2", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 futures-util = "0.3.25"
 lazy_static = { workspace = true }
-mysql_async = { version = "0.31", default-features = false, features = ["rustls-tls"] }
+mysql_async = { workspace = true }
 rand = "0.8.5"
 regex = "1.8.1"
 reqwest = { workspace = true }
 serde = "1.0.150"
 serde_json = "1.0.89"
-sqllogictest = "0.13.0"
+sqllogictest = "0.15.1"
 thiserror = "1.0.37"
 tokio = { workspace = true }
 walkdir = "2.3.2"

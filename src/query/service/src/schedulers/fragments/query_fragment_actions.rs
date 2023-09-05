@@ -130,12 +130,9 @@ impl QueryFragmentsActions {
     }
 
     pub fn get_root_actions(&self) -> Result<&QueryFragmentActions> {
-        match self.fragments_actions.last() {
-            None => Err(ErrorCode::Internal(
-                "Logical error, call get_root_actions in empty QueryFragmentsActions",
-            )),
-            Some(entity) => Ok(entity),
-        }
+        self.fragments_actions.last().ok_or(ErrorCode::Internal(
+            "Logical error, call get_root_actions in empty QueryFragmentsActions",
+        ))
     }
 
     pub fn pop_root_actions(&mut self) -> Option<QueryFragmentActions> {
@@ -178,6 +175,7 @@ impl QueryFragmentsActions {
         let changed_settings = self.ctx.get_changed_settings();
         let local_query_fragments_plan_packet = QueryFragmentsPlanPacket::create(
             self.ctx.get_id(),
+            self.ctx.get_query_kind(),
             cluster.local_id.clone(),
             fragments_packets.remove(&cluster.local_id).unwrap(),
             nodes_info.clone(),
@@ -188,10 +186,12 @@ impl QueryFragmentsActions {
 
         for (executor, fragments) in fragments_packets.into_iter() {
             let query_id = self.ctx.get_id();
+            let query_kind = self.ctx.get_query_kind();
             let executors_info = nodes_info.clone();
 
             query_fragments_plan_packets.push(QueryFragmentsPlanPacket::create(
                 query_id,
+                query_kind,
                 executor,
                 fragments,
                 executors_info,

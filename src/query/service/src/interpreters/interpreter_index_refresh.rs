@@ -39,11 +39,13 @@ use common_sql::plans::Plan;
 use common_sql::plans::RefreshIndexPlan;
 use common_sql::plans::RelOperator;
 use common_storages_fuse::operations::AggIndexSink;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::SegmentLocation;
 use opendal::Operator;
+use storages_common_table_meta::meta::Location;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -97,11 +99,31 @@ impl RefreshIndexInterpreter {
     }
 
     #[async_backtrace::framed]
+    async fn get_partitions_with_given_segments(
+        &self,
+        plan: &DataSourcePlan,
+        fuse_table: Arc<FuseTable>,
+        dal: Operator,
+        segments: Vec<SegmentLocation>,
+    ) -> Result<Option<Partitions>> {
+        let table_info = self.plan.table_info.clone();
+        let push_downs = plan.push_downs.clone();
+        let ctx = self.ctx.clone();
+
+        let (_statistics, partitions) = fuse_table
+            .prune_snapshot_blocks(ctx, dal, push_downs, table_info, segments, 0)
+            .await?;
+
+        Ok(Some(partitions))
+    }
+
+    #[async_backtrace::framed]
     async fn get_read_source(
         &self,
         query_plan: &PhysicalPlan,
         fuse_table: Arc<FuseTable>,
         dal: Operator,
+        segments: Option<Vec<Location>>,
     ) -> Result<Option<DataSourcePlan>> {
         let mut source = vec![];
 
@@ -125,7 +147,19 @@ impl RefreshIndexInterpreter {
             ))
         } else {
             let mut source = source.remove(0);
-            let partitions = self.get_partitions(&source, fuse_table, dal).await?;
+            let partitions = match segments {
+                Some(segment_locs) => {
+                    let segment_locations = create_segment_location_vector(segment_locs, None);
+                    self.get_partitions_with_given_segments(
+                        &source,
+                        fuse_table,
+                        dal,
+                        segment_locations,
+                    )
+                    .await?
+                }
+                None => self.get_partitions(&source, fuse_table, dal).await?,
+            };
             if let Some(parts) = partitions {
                 source.parts = parts;
             }
@@ -213,7 +247,9 @@ impl Interpreter for RefreshIndexInterpreter {
                 let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
-                    builder.build(s_expr.as_ref()).await?,
+                    builder
+                        .build(s_expr.as_ref(), bind_context.column_set())
+                        .await?,
                     schema,
                     bind_context.columns.clone(),
                 )
@@ -231,7 +267,12 @@ impl Interpreter for RefreshIndexInterpreter {
 
         // generate new `DataSourcePlan` that skip refreshed parts.
         let new_read_source = self
-            .get_read_source(&query_plan, fuse_table.clone(), data_accessor.operator())
+            .get_read_source(
+                &query_plan,
+                fuse_table.clone(),
+                data_accessor.operator(),
+                self.plan.segment_locs.clone(),
+            )
             .await?;
 
         if new_read_source.is_none() {
@@ -327,7 +368,7 @@ impl Interpreter for RefreshIndexInterpreter {
 }
 
 async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
-    let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+    let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
     let handler = get_agg_index_handler();
     let _ = handler.do_update_index(catalog, req).await?;
     Ok(())

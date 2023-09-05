@@ -1,0 +1,28 @@
+query 
+select name, size, creator from list_stage(location => '@data/parquet/') order by name
+----
+parquet/complex.parquet 92762 NULL
+parquet/tuple.parquet 431 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/parquet/', pattern => 'complex[.]*')
+----
+parquet/complex.parquet 92762 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/', pattern => 'parquet/complex[.]*')
+----
+parquet/complex.parquet 92762 NULL
+
+
+query 
+select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') order by name limit 3
+----
+00_0005/data/f1.parquet 296 NULL
+00_0005/data/f2.parquet 296 NULL
+00_0005/data/f3.parquet 296 NULL
+
+query 
+select name, size, creator from list_stage(location => '@data/', pattern => '.*[.]parquet') where name = 'parquet/tuple.parquet'
+----
+parquet/tuple.parquet 431 NULL

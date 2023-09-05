@@ -24,6 +24,7 @@ use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
 use common_meta_app::storage::StorageHttpConfig;
 use common_meta_app::storage::StorageIpfsConfig;
+use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
@@ -31,6 +32,7 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_storage::STDIN_FD;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -261,6 +263,39 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
     Ok(sp)
 }
 
+fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+    let endpoint = l
+        .connection
+        .get("endpoint_url")
+        .cloned()
+        .map(secure_omission)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidInput,
+                anyhow!("endpoint_url is required for storage oss"),
+            )
+        })?;
+    let sp = StorageParams::Obs(StorageObsConfig {
+        endpoint_url: endpoint,
+        bucket: l.name.to_string(),
+        access_key_id: l
+            .connection
+            .get("access_key_id")
+            .cloned()
+            .unwrap_or_default(),
+        secret_access_key: l
+            .connection
+            .get("secret_access_key")
+            .cloned()
+            .unwrap_or_default(),
+        root,
+    });
+
+    l.connection.check()?;
+
+    Ok(sp)
+}
+
 #[cfg(feature = "storage-hdfs")]
 fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
     let sp = StorageParams::Hdfs(crate::StorageHdfsConfig {
@@ -332,24 +367,12 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
 
     let sp = match protocol {
         Scheme::Azblob => parse_azure_params(l, root)?,
-        // Wait for https://github.com/datafuselabs/opendal/pull/1101
-        //
-        // Scheme::Ftp => StorageParams::Ftp(StorageFtpConfig {
-        //     endpoint: if !l.protocol.is_empty() {
-        //         format!("{}://{}", l.protocol, l.name)
-        //     } else {
-        //         // no protocol prefix will be seen as using FTPS connection
-        //         format!("ftps://{}", l.name)
-        //     },
-        //     root: root.to_string(),
-        //     username: l.connection.get("username").cloned().unwrap_or_default(),
-        //     password: l.connection.get("password").cloned().unwrap_or_default(),
-        // }),
         Scheme::Gcs => parse_gcs_params(l)?,
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => parse_hdfs_params(l)?,
         Scheme::Ipfs => parse_ipfs_params(l)?,
         Scheme::S3 => parse_s3_params(l, root)?,
+        Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
         Scheme::Http => {
             // Make sure path has been percent decoded before parse pattern.
@@ -371,8 +394,12 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
-            let cfg = StorageFsConfig { root };
-            StorageParams::Fs(cfg)
+            if root == "/" && path == STDIN_FD {
+                StorageParams::Memory
+            } else {
+                let cfg = StorageFsConfig { root };
+                StorageParams::Fs(cfg)
+            }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
         v => {

@@ -43,12 +43,14 @@ fn test_to_partitions() -> Result<()> {
     let num_of_col = 10;
     let num_of_block = 5;
 
-    let col_stats_gen = |col_size| ColumnStatistics {
-        min: Scalar::from(1i64),
-        max: Scalar::from(2i64),
-        null_count: 0,
-        in_memory_size: col_size as u64,
-        distinct_of_values: None,
+    let col_stats_gen = |col_size| {
+        ColumnStatistics::new(
+            Scalar::from(1i64),
+            Scalar::from(2i64),
+            0,
+            col_size as u64,
+            None,
+        )
     };
 
     let col_metas_gen = |col_size| {
@@ -109,7 +111,7 @@ fn test_to_partitions() -> Result<()> {
     let column_nodes = ColumnNodes { column_nodes };
 
     // CASE I:  no projection
-    let (s, parts) = FuseTable::to_partitions(None, &blocks_metas, None, &column_nodes, None, None);
+    let (s, parts) = FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, None);
     assert_eq!(parts.len(), num_of_block as usize);
     let expected_block_size: u64 = cols_metas
         .values()
@@ -138,7 +140,7 @@ fn test_to_partitions() -> Result<()> {
     });
 
     let (stats, parts) =
-        FuseTable::to_partitions(None, &blocks_metas, None, &column_nodes, None, push_down);
+        FuseTable::to_partitions(None, &blocks_metas, &column_nodes, None, push_down);
     assert_eq!(parts.len(), num_of_block as usize);
     assert_eq!(expected_block_size * num_of_block, stats.read_bytes as u64);
 

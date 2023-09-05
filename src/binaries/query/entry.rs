@@ -18,6 +18,7 @@ use background_service::get_background_service_handler;
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
+use common_config::Commands;
 use common_config::InnerConfig;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_config::QUERY_SEMVER;
@@ -29,48 +30,35 @@ use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
 use databend_query::clusters::ClusterDiscovery;
+use databend_query::local;
 use databend_query::metrics::MetricService;
 use databend_query::servers::FlightSQLServer;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::servers::MySQLHandler;
+use databend_query::servers::MySQLTlsConfig;
 use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
-use tracing::info;
+use log::info;
 
-use crate::local;
-
-async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
-    if conf.cmd.is_empty() {
-        return Ok(false);
-    }
-
-    match conf.cmd.as_str() {
-        "ver" => {
+pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
+    match &conf.subcommand {
+        None => return Ok(false),
+        Some(Commands::Ver) => {
             println!("version: {}", *QUERY_SEMVER);
             println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        "local" => {
-            println!("exec local query: {}", conf.local.sql);
-            local::query_local(conf).await?
-        }
-        _ => {
-            eprintln!("Invalid cmd: {}", conf.cmd);
-            eprintln!("Available cmds:");
-            eprintln!("  --cmd ver");
-            eprintln!("    Print version and the min compatible databend-meta version");
-        }
+        Some(Commands::Local {
+            query,
+            output_format,
+        }) => local::query_local(query, output_format).await?,
     }
 
     Ok(true)
 }
 
 pub async fn init_services(conf: &InnerConfig) -> Result<()> {
-    if run_cmd(conf).await? {
-        return Ok(());
-    }
-
     init_default_metrics_recorder();
     set_panic_hook();
     set_alloc_error_hook();
@@ -133,6 +121,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     precheck_services(conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
+    let start_time = std::time::Instant::now();
 
     info!("Databend Query start with config: {:?}", conf);
 
@@ -141,7 +130,12 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         let hostname = conf.query.mysql_handler_host.clone();
         let listening = format!("{}:{}", hostname, conf.query.mysql_handler_port);
         let tcp_keepalive_timeout_secs = conf.query.mysql_handler_tcp_keepalive_timeout_secs;
-        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs)?;
+        let tls_config = MySQLTlsConfig::new(
+            conf.query.mysql_tls_server_cert.clone(),
+            conf.query.mysql_tls_server_key.clone(),
+        );
+
+        let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, tls_config)?;
         let listening = handler.start(listening.parse()?).await?;
         shutdown_handle.add_service(handler);
 
@@ -243,6 +237,8 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     println!("Logging:");
     println!("    file: {}", conf.log.file);
     println!("    stderr: {}", conf.log.stderr);
+    println!("    query: {}", conf.log.query);
+    println!("    tracing: {}", conf.log.tracing);
     println!(
         "Meta: {}",
         if conf.meta.is_embedded_meta()? {
@@ -338,7 +334,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         println!("    {}={}", k, v);
     }
 
-    info!("Ready for connections.");
+    info!(
+        "Ready for connections after {}s.",
+        start_time.elapsed().as_secs_f32()
+    );
+
     if conf.background.enable {
         println!("Start background service");
         get_background_service_handler().start().await?;
@@ -353,17 +353,19 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
 #[cfg(not(target_os = "macos"))]
 fn check_max_open_files() {
+    use log::warn;
+
     let limits = match limits_rs::get_own_limits() {
         Ok(limits) => limits,
         Err(err) => {
-            tracing::warn!("get system limit of databend-query failed: {:?}", err);
+            warn!("get system limit of databend-query failed: {:?}", err);
             return;
         }
     };
     let max_open_files_limit = limits.max_open_files.soft;
     if let Some(max_open_files) = max_open_files_limit {
         if max_open_files < 65535 {
-            tracing::warn!(
+            warn!(
                 "The open file limit is too low for the databend-query. Please consider increase it by running `ulimit -n 65535`"
             );
         }

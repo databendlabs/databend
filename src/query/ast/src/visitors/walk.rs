@@ -94,7 +94,8 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             args,
             params,
             window,
-        } => visitor.visit_function_call(*span, *distinct, name, args, params, window),
+            lambda,
+        } => visitor.visit_function_call(*span, *distinct, name, args, params, window, lambda),
         Expr::Case {
             span,
             operand,
@@ -175,6 +176,13 @@ pub fn walk_set_expr<'a, V: Visitor<'a>>(visitor: &mut V, set_expr: &'a SetExpr)
         }
         SetExpr::SetOperation(op) => {
             visitor.visit_set_operation(op);
+        }
+        SetExpr::Values { values, .. } => {
+            for row_values in values {
+                for value in row_values {
+                    visitor.visit_expr(value);
+                }
+            }
         }
     }
 }
@@ -328,6 +336,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Query(query) => visitor.visit_query(query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
+        Statement::MergeInto(merge_into) => visitor.visit_merge_into(merge_into),
         Statement::Delete {
             table_reference,
             selection,
@@ -390,10 +399,10 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
-        Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
-        Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
-        Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),
-        Statement::GenerateVirtualColumns(stmt) => visitor.visit_generate_virtual_columns(stmt),
+        Statement::CreateVirtualColumn(stmt) => visitor.visit_create_virtual_column(stmt),
+        Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
+        Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),
+        Statement::RefreshVirtualColumn(stmt) => visitor.visit_refresh_virtual_column(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),

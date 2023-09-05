@@ -66,6 +66,9 @@
       flex-wrap: wrap;
       row-gap: 12px;
       .nowItem {
+        &:hover {
+          opacity: 0.9;
+        }
         min-width: 294px;
         color: var(--color-white);
         background-color: var(--blue-5);
@@ -82,6 +85,9 @@
         }
         &.nowItemLinux {
           background-color: var(--indigo-5);
+        }
+        &.nowItemLinuxUbuntu {
+          background-color:  #ED6547;
         }
       }
     }
@@ -126,6 +132,9 @@
       flex-direction: column;
       row-gap: 12px;
       .button {
+        &:hover {
+          opacity: 0.9;
+        }
         display: flex;
         gap: 8px;
         background-color: var(--color-primary);
@@ -133,6 +142,9 @@
         font-weight: 700;
         &.buttonLinux {
           background-color: var(--indigo-5);
+        }
+        &.buttonLinuxUbuntu {
+          background-color: #ED6547;
         }
       }
       .listItem {
@@ -160,6 +172,7 @@
           row-gap: 12px;
           padding: 12px 12px!important;
           .downArea {
+            flex-wrap: wrap;
             gap: 6px;
           }
 

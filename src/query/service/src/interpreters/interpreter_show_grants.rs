@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_meta_app::principal::PrincipalIdentity;
 use common_sql::plans::ShowGrantsPlan;
@@ -46,10 +45,6 @@ impl Interpreter for ShowGrantsInterpreter {
         "ShowGrantsInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
@@ -71,7 +66,7 @@ impl Interpreter for ShowGrantsInterpreter {
                     let role = UserApiProvider::instance()
                         .get_role(&tenant, role.clone())
                         .await?;
-                    (format!("'{}'", role.identity()), role.grants)
+                    (format!("ROLE `{}`", role.identity()), role.grants)
                 }
             },
         };

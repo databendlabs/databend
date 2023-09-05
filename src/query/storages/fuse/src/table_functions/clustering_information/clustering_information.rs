@@ -30,13 +30,16 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
+use itertools::Itertools;
 use jsonb::Value as JsonbValue;
+use log::warn;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
+use crate::table_functions::cmp_with_null;
 use crate::FuseTable;
 use crate::Table;
 
@@ -87,11 +90,11 @@ impl<'a> ClusteringInformation<'a> {
         }
         let snapshot = snapshot.unwrap();
 
-        // Gather all cluster statistics points to a sorted Map.
+        // Gather all cluster statistics points to a hash Map.
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
-        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = BTreeMap::new();
+        let mut points_map: HashMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = HashMap::new();
         let mut constant_block_count = 0;
         let mut unclustered_block_count = 0;
         let mut index = 0;
@@ -106,7 +109,7 @@ impl<'a> ClusteringInformation<'a> {
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
 
             for segment in segments.into_iter().flatten() {
@@ -115,15 +118,15 @@ impl<'a> ClusteringInformation<'a> {
                         if cluster_stats.cluster_key_id != default_cluster_key_id {
                             unclustered_block_count += 1;
                         } else {
-                            if cluster_stats.min.eq(&cluster_stats.max) {
+                            if cluster_stats.is_const() {
                                 constant_block_count += 1;
                             }
                             points_map
-                                .entry(cluster_stats.min.clone())
+                                .entry(cluster_stats.min())
                                 .and_modify(|v| v.0.push(index))
                                 .or_insert((vec![index], vec![]));
                             points_map
-                                .entry(cluster_stats.max.clone())
+                                .entry(cluster_stats.max())
                                 .and_modify(|v| v.1.push(index))
                                 .or_insert((vec![], vec![index]));
                             index += 1;
@@ -141,13 +144,16 @@ impl<'a> ClusteringInformation<'a> {
         // key: the block index.
         // value: (overlaps, depth).
         let mut unfinished_parts: HashMap<u64, (usize, usize)> = HashMap::new();
-        for (_, (start, end)) in points_map.into_iter() {
+        for (_, (start, end)) in points_map
+            .into_iter()
+            .sorted_by(|(a, _), (b, _)| a.iter().cmp_by(b.iter(), cmp_with_null))
+        {
             let point_depth = unfinished_parts.len() + start.len();
 
-            for (_, val) in unfinished_parts.iter_mut() {
-                val.0 += start.len();
-                val.1 = cmp::max(val.1, point_depth);
-            }
+            unfinished_parts.values_mut().for_each(|(overlaps, depth)| {
+                *overlaps += start.len();
+                *depth = cmp::max(*depth, point_depth);
+            });
 
             start.iter().for_each(|&idx| {
                 unfinished_parts.insert(idx, (point_depth - 1, point_depth));
@@ -159,7 +165,11 @@ impl<'a> ClusteringInformation<'a> {
                 }
             });
         }
-        assert!(unfinished_parts.is_empty());
+        if !unfinished_parts.is_empty() {
+            warn!(
+                "clustering_information: unfinished_parts is not empty after calculate the blocks overlaps"
+            );
+        }
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
@@ -200,7 +210,7 @@ impl<'a> ClusteringInformation<'a> {
     }
 
     fn build_block(&self, info: ClusteringStatistics) -> Result<DataBlock> {
-        let cluster_by_keys = self
+        let cluster_key = self
             .table
             .cluster_key_str()
             .ok_or(ErrorCode::Internal("It's a bug"))?;
@@ -208,7 +218,7 @@ impl<'a> ClusteringInformation<'a> {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(cluster_key.as_bytes().to_vec())),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
@@ -251,7 +261,7 @@ impl<'a> ClusteringInformation<'a> {
 
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
-            TableField::new("cluster_by_keys", TableDataType::String),
+            TableField::new("cluster_key", TableDataType::String),
             TableField::new(
                 "total_block_count",
                 TableDataType::Number(NumberDataType::UInt64),

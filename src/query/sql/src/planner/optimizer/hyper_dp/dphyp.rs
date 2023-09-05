@@ -158,6 +158,7 @@ impl DPhpy {
                     left_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
+                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -169,6 +170,7 @@ impl DPhpy {
                     right_op,
                     RelOperator::EvalScalar(_)
                         | RelOperator::Aggregate(_)
+                        | RelOperator::Lambda(_)
                         | RelOperator::Sort(_)
                         | RelOperator::Limit(_)
                         | RelOperator::ProjectSet(_)
@@ -187,7 +189,7 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join || (left_is_subquery && right_is_subquery) {
+                if !is_inner_join {
                     let (new_s_expr, optimized) = self.new_children(s_expr)?;
                     self.join_relations.push(JoinRelation::new(&new_s_expr));
                     Ok((new_s_expr, optimized))
@@ -213,6 +215,7 @@ impl DPhpy {
             }
             RelOperator::ProjectSet(_)
             | RelOperator::Aggregate(_)
+            | RelOperator::Lambda(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_)
             | RelOperator::EvalScalar(_)
@@ -252,7 +255,10 @@ impl DPhpy {
             RelOperator::Exchange(_)
             | RelOperator::Pattern(_)
             | RelOperator::RuntimeFilterSource(_) => unreachable!(),
-            RelOperator::DummyTableScan(_) => Ok((s_expr, true)),
+            RelOperator::DummyTableScan(_)
+            | RelOperator::ConstantTableScan(_)
+            | RelOperator::CteScan(_)
+            | RelOperator::MaterializedCte(_) => Ok((s_expr, true)),
         }
     }
 

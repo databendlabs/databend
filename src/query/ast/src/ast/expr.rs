@@ -25,7 +25,7 @@ use ethnum::i256;
 
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -180,6 +180,7 @@ pub enum Expr {
         args: Vec<Expr>,
         params: Vec<Literal>,
         window: Option<Window>,
+        lambda: Option<Lambda>,
     },
     /// `CASE ... WHEN ... ELSE ...` expression
     Case {
@@ -268,9 +269,9 @@ pub enum MapAccessor {
     /// `[0][1]`
     Bracket { key: Box<Expr> },
     /// `.a.b`
-    Period { key: Identifier },
+    Dot { key: Identifier },
     /// `.1`
-    PeriodNumber { key: u64 },
+    DotNumber { key: u64 },
     /// `:a:b`
     Colon { key: Identifier },
 }
@@ -310,8 +311,12 @@ pub enum TypeName {
 }
 
 impl TypeName {
+    pub fn is_nullable(&self) -> bool {
+        matches!(self, TypeName::Nullable(_))
+    }
+
     pub fn wrap_nullable(self) -> Self {
-        if !matches!(&self, &Self::Nullable(_)) {
+        if !self.is_nullable() {
             Self::Nullable(Box::new(self))
         } else {
             self
@@ -376,6 +381,12 @@ pub enum WindowFrameBound {
     Following(Option<Box<Expr>>),
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct Lambda {
+    pub params: Vec<Identifier>,
+    pub expr: Box<Expr>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Plus,
@@ -412,6 +423,8 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
+
+    L2Distance,
 }
 
 impl BinaryOperator {
@@ -438,6 +451,7 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftLeft => "bit_shift_left".to_string(),
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
+            BinaryOperator::L2Distance => "l2_distance".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -656,6 +670,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::BitwiseShiftRight => {
                 write!(f, ">>")
+            }
+            BinaryOperator::L2Distance => {
+                write!(f, "<->")
             }
         }
     }
@@ -882,6 +899,21 @@ impl Display for WindowSpec {
     }
 }
 
+impl Display for Lambda {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.params.len() == 1 {
+            write!(f, "{}", self.params[0])?;
+        } else {
+            write!(f, "(")?;
+            write_comma_separated_list(f, self.params.clone())?;
+            write!(f, ")")?;
+        }
+        write!(f, " -> {}", self.expr)?;
+
+        Ok(())
+    }
+}
+
 impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -894,7 +926,7 @@ impl Display for Expr {
                 if f.alternate() {
                     write!(f, "{}", column)?;
                 } else {
-                    write_period_separated_list(f, database.iter().chain(table))?;
+                    write_dot_separated_list(f, database.iter().chain(table))?;
                     if table.is_some() {
                         write!(f, ".")?;
                     }
@@ -1043,6 +1075,7 @@ impl Display for Expr {
                 args,
                 params,
                 window,
+                lambda,
                 ..
             } => {
                 write!(f, "{name}")?;
@@ -1056,6 +1089,9 @@ impl Display for Expr {
                     write!(f, "DISTINCT ")?;
                 }
                 write_comma_separated_list(f, args)?;
+                if let Some(lambda) = lambda {
+                    write!(f, ", {lambda}")?;
+                }
                 write!(f, ")")?;
 
                 if let Some(window) = window {
@@ -1099,8 +1135,8 @@ impl Display for Expr {
                 write!(f, "{}", expr)?;
                 match accessor {
                     MapAccessor::Bracket { key } => write!(f, "[{key}]")?,
-                    MapAccessor::Period { key } => write!(f, ".{key}")?,
-                    MapAccessor::PeriodNumber { key } => write!(f, ".{key}")?,
+                    MapAccessor::Dot { key } => write!(f, ".{key}")?,
+                    MapAccessor::DotNumber { key } => write!(f, ".{key}")?,
                     MapAccessor::Colon { key } => write!(f, ":{key}")?,
                 }
             }

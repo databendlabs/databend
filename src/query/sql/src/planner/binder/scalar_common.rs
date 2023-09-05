@@ -203,6 +203,10 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .args
             .iter()
             .all(|arg| prune_by_children(arg, columns)),
+        ScalarExpr::LambdaFunction(scalar) => scalar
+            .args
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::FunctionCall(scalar) => scalar
             .arguments
             .iter()

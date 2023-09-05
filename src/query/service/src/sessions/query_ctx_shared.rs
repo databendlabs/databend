@@ -22,6 +22,8 @@ use std::time::SystemTime;
 
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
+use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,6 +33,7 @@ use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
@@ -38,7 +41,6 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use uuid::Uuid;
 
-use crate::catalogs::CatalogManager;
 use crate::clusters::Cluster;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::sessions::query_affect::QueryAffect;
@@ -78,12 +80,18 @@ pub struct QueryContextShared {
     pub(in crate::sessions) on_error_map:
         Arc<RwLock<Option<Arc<DashMap<String, HashMap<u16, InputError>>>>>>,
     pub(in crate::sessions) on_error_mode: Arc<RwLock<Option<OnErrorMode>>>,
+    pub(in crate::sessions) copy_status: Arc<CopyStatus>,
     /// partitions_sha for each table in the query. Not empty only when enabling query result cache.
     pub(in crate::sessions) partitions_shas: Arc<RwLock<Vec<String>>>,
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     pub(in crate::sessions) can_scan_from_agg_index: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+
+    // Client User-Agent
+    pub(in crate::sessions) user_agent: Arc<RwLock<String>>,
+    /// Key is (cte index, used_count), value contains cte's materialized blocks
+    pub(in crate::sessions) materialized_cte_tables: MaterializedCtesBlocks,
 }
 
 impl QueryContextShared {
@@ -113,10 +121,13 @@ impl QueryContextShared {
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
+            copy_status: Arc::new(Default::default()),
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             can_scan_from_agg_index: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            user_agent: Arc::new(RwLock::new("null".to_string())),
+            materialized_cte_tables: Arc::new(Default::default()),
         }))
     }
 
@@ -231,6 +242,15 @@ impl QueryContextShared {
         self.session.apply_changed_settings(changes)
     }
 
+    pub fn attach_table(&self, catalog: &str, database: &str, name: &str, table: Arc<dyn Table>) {
+        let mut tables_refs = self.tables_refs.lock();
+        let table_meta_key = (catalog.to_string(), database.to_string(), name.to_string());
+
+        if let Entry::Vacant(v) = tables_refs.entry(table_meta_key) {
+            v.insert(table);
+        };
+    }
+
     #[async_backtrace::framed]
     pub async fn get_table(
         &self,
@@ -263,7 +283,7 @@ impl QueryContextShared {
     ) -> Result<Arc<dyn Table>> {
         let tenant = self.get_tenant();
         let table_meta_key = (catalog.to_string(), database.to_string(), table.to_string());
-        let catalog = self.catalog_manager.get_catalog(catalog)?;
+        let catalog = self.catalog_manager.get_catalog(&tenant, catalog).await?;
         let cache_table = catalog.get_table(tenant.as_str(), database, table).await?;
 
         let mut tables_refs = self.tables_refs.lock();

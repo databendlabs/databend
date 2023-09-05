@@ -24,11 +24,9 @@ use common_exception::Result;
 use common_storages_system::LogType;
 use common_storages_system::QueryLogElement;
 use common_storages_system::QueryLogQueue;
-use common_tracing::QueryLogger;
+use log::error;
+use log::info;
 use serde_json;
-use tracing::error;
-use tracing::info;
-use tracing::subscriber;
 
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -61,13 +59,7 @@ fn error_fields(log_type: LogType, err: Option<ErrorCode>) -> (LogType, i32, Str
 impl InterpreterQueryLog {
     fn write_log(event: QueryLogElement) -> Result<()> {
         let event_str = serde_json::to_string(&event)?;
-        if let Some(logger) = QueryLogger::instance().get_subscriber() {
-            subscriber::with_default(logger, || {
-                info!("{}", event_str);
-            });
-        } else {
-            info!("{}", event_str);
-        };
+        info!(target: "query", "{}", event_str);
         QueryLogQueue::instance()?.append_data(event)
     }
 
@@ -119,7 +111,7 @@ impl InterpreterQueryLog {
             Some(addr) => format!("{:?}", addr),
             None => "".to_string(),
         };
-
+        let user_agent = ctx.get_ua();
         // Session settings
         let mut session_settings = String::new();
         let current_session = ctx.get_current_session();
@@ -171,6 +163,7 @@ impl InterpreterQueryLog {
             memory_usage,
             client_info: "".to_string(),
             client_address,
+            user_agent,
 
             exception_code,
             exception_text,
@@ -228,6 +221,7 @@ impl InterpreterQueryLog {
             Some(addr) => format!("{:?}", addr),
             None => "".to_string(),
         };
+        let user_agent = ctx.get_ua();
 
         // Schema.
         let current_database = ctx.get_current_database();
@@ -283,6 +277,7 @@ impl InterpreterQueryLog {
             memory_usage,
             client_info: "".to_string(),
             client_address,
+            user_agent,
             current_database,
 
             exception_code,

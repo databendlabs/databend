@@ -72,12 +72,12 @@ fn test_ft_stats_block_stats() -> common_exception::Result<()> {
     let r = gen_columns_statistics(&block, None, &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col_stats.max, Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min, Scalar::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max, Scalar::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min(), &Scalar::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max(), &Scalar::String(b"bb".to_vec()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -99,12 +99,12 @@ fn test_ft_stats_block_stats_with_column_distinct_count() -> common_exception::R
     let r = gen_columns_statistics(&block, Some(column_distinct_count), &schema)?;
     assert_eq!(2, r.len());
     let col_stats = r.get(&0).unwrap();
-    assert_eq!(col_stats.min, Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col_stats.max, Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(col_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
     assert_eq!(col_stats.distinct_of_values, Some(3));
     let col_stats = r.get(&1).unwrap();
-    assert_eq!(col_stats.min, Scalar::String(b"aa".to_vec()));
-    assert_eq!(col_stats.max, Scalar::String(b"bb".to_vec()));
+    assert_eq!(col_stats.min(), &Scalar::String(b"aa".to_vec()));
+    assert_eq!(col_stats.max(), &Scalar::String(b"bb".to_vec()));
     assert_eq!(col_stats.distinct_of_values, Some(2));
     Ok(())
 }
@@ -133,12 +133,12 @@ fn test_ft_tuple_stats_block_stats() -> common_exception::Result<()> {
     let r = gen_columns_statistics(&block, None, &schema)?;
     assert_eq!(2, r.len());
     let col0_stats = r.get(&0).unwrap();
-    assert_eq!(col0_stats.min, Scalar::Number(NumberScalar::Int32(1)));
-    assert_eq!(col0_stats.max, Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(col0_stats.min(), &Scalar::Number(NumberScalar::Int32(1)));
+    assert_eq!(col0_stats.max(), &Scalar::Number(NumberScalar::Int32(3)));
 
     let col1_stats = r.get(&1).unwrap();
-    assert_eq!(col1_stats.min, Scalar::Number(NumberScalar::Int32(4)));
-    assert_eq!(col1_stats.max, Scalar::Number(NumberScalar::Int32(6)));
+    assert_eq!(col1_stats.min(), &Scalar::Number(NumberScalar::Int32(4)));
+    assert_eq!(col1_stats.max(), &Scalar::Number(NumberScalar::Int32(6)));
     Ok(())
 }
 
@@ -158,32 +158,32 @@ fn test_ft_stats_col_stats_reduce() -> common_exception::Result<()> {
     assert_eq!(3, r.len());
     let col0_stats = r.get(&0).unwrap();
     assert_eq!(
-        col0_stats.min,
-        Scalar::Number(NumberScalar::Int32(val_start_with))
+        col0_stats.min(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with))
     );
     assert_eq!(
-        col0_stats.max,
-        Scalar::Number(NumberScalar::Int32(num_of_blocks as i32))
+        col0_stats.max(),
+        &Scalar::Number(NumberScalar::Int32(num_of_blocks as i32))
     );
 
     let col1_stats = r.get(&1).unwrap();
     assert_eq!(
-        col1_stats.min,
-        Scalar::Number(NumberScalar::Int32(val_start_with * 2))
+        col1_stats.min(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with * 2))
     );
 
     assert_eq!(
-        col1_stats.max,
-        Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32))
+        col1_stats.max(),
+        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 2) as i32))
     );
     let col2_stats = r.get(&2).unwrap();
     assert_eq!(
-        col2_stats.min,
-        Scalar::Number(NumberScalar::Int32(val_start_with * 3))
+        col2_stats.min(),
+        &Scalar::Number(NumberScalar::Int32(val_start_with * 3))
     );
     assert_eq!(
-        col2_stats.max,
-        Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32))
+        col2_stats.max(),
+        &Scalar::Number(NumberScalar::Int32((num_of_blocks * 3) as i32))
     );
     Ok(())
 }
@@ -193,13 +193,10 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     let iter = |mut idx| {
         std::iter::from_fn(move || {
             idx += 1;
-            Some((idx, ColumnStatistics {
-                min: Scalar::Null,
-                max: Scalar::Null,
-                null_count: 1,
-                in_memory_size: 1,
-                distinct_of_values: Some(1),
-            }))
+            Some((
+                idx,
+                ColumnStatistics::new(Scalar::Null, Scalar::Null, 1, 1, Some(1)),
+            ))
         })
     };
 
@@ -222,6 +219,99 @@ fn test_reduce_block_statistics_in_memory_size() -> common_exception::Result<()>
     Ok(())
 }
 
+#[test]
+fn test_reduce_cluster_statistics() -> common_exception::Result<()> {
+    let default_cluster_key_id = Some(0);
+    let cluster_stats_0 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(2i64)],
+        vec![Scalar::from(4i64)],
+        0,
+        None,
+    ));
+
+    let cluster_stats_1 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(3i64)],
+        1,
+        None,
+    ));
+
+    let cluster_stats_2 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::Null],
+        vec![Scalar::Null],
+        0,
+        None,
+    ));
+
+    let res_0 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_0.clone(), cluster_stats_1.clone()],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64)],
+        vec![Scalar::from(4i64)],
+        1,
+        None,
+    ));
+    assert_eq!(res_0, expect);
+
+    let res_1 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_2, cluster_stats_0.clone()],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(2i64)],
+        vec![Scalar::Null],
+        0,
+        None,
+    ));
+    assert_eq!(res_1, expect);
+
+    let res_2 = reducers::reduce_cluster_statistics(
+        &[cluster_stats_0.clone(), None],
+        default_cluster_key_id,
+    );
+    assert_eq!(res_2, None);
+
+    let res_3 = reducers::reduce_cluster_statistics(&[cluster_stats_0, cluster_stats_1], Some(1));
+    assert_eq!(res_3, None);
+
+    // multi cluster keys.
+    let multi_cluster_stats_0 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64), Scalar::from(4i64)],
+        vec![Scalar::from(1i64), Scalar::from(4i64)],
+        0,
+        None,
+    ));
+    let multi_cluster_stats_2 = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(3i64), Scalar::from(2i64)],
+        vec![Scalar::from(3i64), Scalar::from(2i64)],
+        0,
+        None,
+    ));
+    let res_4 = reducers::reduce_cluster_statistics(
+        &[multi_cluster_stats_0, multi_cluster_stats_2],
+        default_cluster_key_id,
+    );
+    let expect = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::from(1i64), Scalar::from(4i64)],
+        vec![Scalar::from(3i64), Scalar::from(2i64)],
+        0,
+        None,
+    ));
+    assert_eq!(res_4, expect);
+
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn test_accumulator() -> common_exception::Result<()> {
     let (schema, blocks) = TestFixture::gen_sample_blocks(10, 1);
@@ -239,8 +329,8 @@ async fn test_accumulator() -> common_exception::Result<()> {
         stats_acc.add_with_block_meta(block_meta);
     }
 
-    assert_eq!(10, stats_acc.blocks_statistics.len());
-    assert!(stats_acc.index_size > 0);
+    assert_eq!(10, stats_acc.blocks_metas.len());
+    assert!(stats_acc.summary_row_count > 0);
     Ok(())
 }
 
@@ -254,13 +344,13 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let columns = vec![Int32Type::from_data(vec![1i32, 2, 3])];
 
     let blocks = DataBlock::new_from_columns(columns);
-    let origin = Some(ClusterStatistics {
-        cluster_key_id: 0,
-        min: vec![Scalar::Number(NumberScalar::Int32(1))],
-        max: vec![Scalar::Number(NumberScalar::Int32(5))],
-        level: 0,
-        pages: None,
-    });
+    let origin = Some(ClusterStatistics::new(
+        0,
+        vec![Scalar::Number(NumberScalar::Int32(1))],
+        vec![Scalar::Number(NumberScalar::Int32(5))],
+        0,
+        None,
+    ));
 
     let block_compactor = BlockThresholds::new(1_000_000, 800_000, 100 * 1024 * 1024);
     let stats_gen = ClusterStatsGenerator::new(
@@ -277,8 +367,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(1))], stats.min);
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(3))], stats.max);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(1))], stats.min());
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int32(3))], stats.max());
 
     // add expression executor.
     let expr = RawExpr::FunctionCall {
@@ -299,8 +389,10 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
         ],
     };
     let expr = check(&expr, &BUILTIN_FUNCTIONS).unwrap();
-
-    let operators = vec![BlockOperator::Map { exprs: vec![expr] }];
+    let operators = vec![BlockOperator::Map {
+        exprs: vec![expr],
+        projections: None,
+    }];
 
     let stats_gen = ClusterStatsGenerator::new(
         0,
@@ -316,8 +408,8 @@ async fn test_ft_cluster_stats_with_stats() -> common_exception::Result<()> {
     let stats = stats_gen.gen_with_origin_stats(&blocks, origin.clone())?;
     assert!(stats.is_some());
     let stats = stats.unwrap();
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(2))], stats.min);
-    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(4))], stats.max);
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(2))], stats.min());
+    assert_eq!(vec![Scalar::Number(NumberScalar::Int64(4))], stats.max());
 
     // different cluster_key_id.
     let stats_gen = ClusterStatsGenerator::new(
@@ -359,8 +451,8 @@ fn test_ft_stats_block_stats_string_columns_trimming() -> common_exception::Resu
         let data_value_min = Scalar::String(min_expr.clone().into_bytes());
         let data_value_max = Scalar::String(max_expr.clone().into_bytes());
 
-        let trimmed_min = data_value_min.clone().trim_min();
-        let trimmed_max = data_value_max.clone().trim_max();
+        let trimmed_min = data_value_min.clone().trim_min(STATS_STRING_PREFIX_LEN);
+        let trimmed_max = data_value_max.clone().trim_max(STATS_STRING_PREFIX_LEN);
 
         let meaningless_to_collect_max = is_degenerated_case(max_expr.as_str());
 
@@ -453,16 +545,16 @@ fn test_ft_stats_block_stats_string_columns_trimming_using_eval() -> common_exce
             // check that, trimmed "col_stats.max" always large than or equal to the untrimmed "max_expr"
             let col_stats = stats_of_columns.get(&0).unwrap();
             assert!(
-                col_stats.max >= max_expr.to_owned(),
+                col_stats.max().clone() >= max_expr.to_owned(),
                 "left [{}]\nright [{}]",
-                col_stats.max,
+                col_stats.max().clone(),
                 max_expr
             );
-            // check that, trimmed "col_stats.min" always less than or equal to the untrimmed "mn_expr"
+            // check that, trimmed "col_stats.min always less than or equal to the untrimmed "mn_expr"
             assert!(
-                col_stats.min <= min_expr.to_owned(),
+                col_stats.min().clone() <= min_expr.to_owned(),
                 "left [{}]\nright [{}]",
-                col_stats.min,
+                col_stats.min().clone(),
                 min_expr
             );
         }
@@ -504,7 +596,7 @@ fn char_len(value: &[u8]) -> usize {
 fn test_reduce_block_meta() -> common_exception::Result<()> {
     // case 1: empty input should return the default statistics
     let block_metas: Vec<BlockMeta> = vec![];
-    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default());
+    let reduced = reduce_block_metas(&block_metas, BlockThresholds::default(), None);
     assert_eq!(Statistics::default(), reduced);
 
     // case 2: accumulated variants of size index should be as expected
@@ -542,7 +634,7 @@ fn test_reduce_block_meta() -> common_exception::Result<()> {
         blocks.push(block_meta);
     }
 
-    let stats = reduce_block_metas(&blocks, BlockThresholds::default());
+    let stats = reduce_block_metas(&blocks, BlockThresholds::default(), None);
 
     assert_eq!(acc_row_count, stats.row_count);
     assert_eq!(acc_block_size, stats.uncompressed_byte_size);

@@ -145,6 +145,9 @@ build_exceptions! {
     ColumnReferencedByComputedColumn(1117),
     // The table is not a clustered table.
     UnclusteredTable(1118),
+    UnknownCatalog(1119),
+    UnknownCatalogType(1120),
+    UnmatchMaskPolicyReturnType(1121),
 
     // Data Related Errors
 
@@ -182,6 +185,7 @@ build_exceptions! {
     BackgroundJobAlreadyExists(1501),
     UnknownBackgroundJob(1502),
 
+    InvalidRowIdIndex(1503),
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),

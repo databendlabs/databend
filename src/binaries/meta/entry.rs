@@ -41,10 +41,10 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
+use log::info;
+use log::warn;
 use tokio::time::sleep;
 use tokio::time::Instant;
-use tracing::info;
-use tracing::warn;
 
 use crate::kvapi::KvApiCommand;
 
@@ -129,6 +129,7 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Log:");
     println!("    File: {}", conf.log.file);
     println!("    Stderr: {}", conf.log.stderr);
+    println!("    Tracing: {}", conf.log.tracing);
     println!("Id: {}", conf.raft_config.id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
     println!("Raft Dir: {}", conf.raft_config.raft_dir);
@@ -254,7 +255,7 @@ async fn run_kvapi_command(conf: &Config, op: &str) {
 /// The meta service GRPC API address can be changed by administrator in the config file.
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
-#[tracing::instrument(level = "info", skip_all)]
+#[minitrace::trace]
 async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), anyhow::Error> {
     info!(
         "Register node to update raft_api_advertise_host_endpoint and grpc_api_advertise_address"
@@ -300,7 +301,7 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         );
         println!();
 
-        if meta_node.get_node(&leader_id).await?.is_none() {
+        if meta_node.get_node(&leader_id).await.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
             sleep(Duration::from_millis(500)).await
         }

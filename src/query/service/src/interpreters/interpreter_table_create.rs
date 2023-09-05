@@ -25,6 +25,7 @@ use common_expression::BLOCK_NAME_COL_NAME;
 use common_expression::ROW_ID_COL_NAME;
 use common_expression::SEGMENT_NAME_COL_NAME;
 use common_expression::SNAPSHOT_NAME_COL_NAME;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
@@ -45,6 +46,7 @@ use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
 use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_users::UserApiProvider;
+use log::error;
 use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
 use storages_common_index::BloomIndex;
@@ -58,7 +60,6 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::error;
 
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
@@ -108,7 +109,7 @@ impl Interpreter for CreateTableInterpreter {
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         if quota.max_tables_per_database > 0 {
             // Note:
             // max_tables_per_database is a config quota. Default is 0.
@@ -153,7 +154,7 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
         let reply = catalog.create_table(self.build_request(None)?).await?;
@@ -190,7 +191,7 @@ impl CreateTableInterpreter {
 
     #[async_backtrace::framed]
     async fn create_table(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
         let mut stat = None;
         if !GlobalConfig::instance().query.management_mode {
             if let Some(snapshot_loc) = self.plan.options.get(OPT_KEY_SNAPSHOT_LOCATION) {
@@ -257,7 +258,7 @@ impl CreateTableInterpreter {
         };
 
         is_valid_block_per_segment(&table_meta.options)?;
-
+        is_valid_row_per_block(&table_meta.options)?;
         // check bloom_index_columns.
         is_valid_bloom_index_columns(&table_meta.options, schema)?;
 
@@ -401,7 +402,22 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
         let blocks_per_segment = value.parse::<u64>()?;
         let error_str = "invalid block_per_segment option, can't be over 1000";
         if blocks_per_segment > 1000 {
-            error!(error_str);
+            error!("{}", &error_str);
+            return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+
+    Ok(())
+}
+
+pub fn is_valid_row_per_block(options: &BTreeMap<String, String>) -> Result<()> {
+    // check row_per_block can not be over 1000000.
+    if let Some(value) = options.get(FUSE_OPT_KEY_ROW_PER_BLOCK) {
+        let row_per_block = value.parse::<u64>()?;
+        let error_str = "invalid row_per_block option, can't be over 1000000";
+
+        if row_per_block > DEFAULT_BLOCK_MAX_ROWS as u64 {
+            error!("{}", error_str);
             return Err(ErrorCode::TableOptionInvalid(error_str));
         }
     }

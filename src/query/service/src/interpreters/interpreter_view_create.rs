@@ -50,7 +50,7 @@ impl Interpreter for CreateViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
         let table_function = catalog.list_table_functions();
         if catalog
@@ -78,8 +78,10 @@ impl Interpreter for CreateViewInterpreter {
                         && !table.table().is_stage_table()
                     {
                         return Err(common_exception::ErrorCode::UnknownTable(format!(
-                            "VIEW QUERY: {}.{} not exists",
-                            database_name, table_name,
+                            "VIEW QUERY: table `{}`.`{}` not exists in catalog '{}'",
+                            database_name,
+                            table_name,
+                            &catalog.name()
                         )));
                     }
                 }

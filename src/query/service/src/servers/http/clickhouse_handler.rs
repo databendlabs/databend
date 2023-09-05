@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
+use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
@@ -35,6 +36,9 @@ use common_sql::plans::Plan;
 use common_sql::Planner;
 use futures::StreamExt;
 use http::HeaderMap;
+use log::debug;
+use log::info;
+use log::warn;
 use naive_cityhash::cityhash128;
 use poem::error::BadRequest;
 use poem::error::InternalServerError;
@@ -50,7 +54,6 @@ use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
-use tracing::info;
 
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
@@ -104,12 +107,12 @@ impl StatementHandlerParams {
 async fn execute(
     ctx: Arc<QueryContext>,
     interpreter: InterpreterPtr,
+    schema: DataSchemaRef,
     format: ClickhouseFormatType,
     params: StatementHandlerParams,
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
-    let schema = interpreter.schema();
 
     // the reason of spawning new task to execute the interpreter:
     // (FIXME describe this in a more concise way)
@@ -254,7 +257,7 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
-    execute(context, interpreter, format, params, None)
+    execute(context, interpreter, plan.schema(), format, params, None)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)
@@ -327,6 +330,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_clickhouse(
+                    ctx.clone(),
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
@@ -376,6 +380,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_file_format(
+                    ctx.clone(),
                     rx,
                     ctx.get_settings(),
                     format.clone(),
@@ -418,7 +423,7 @@ pub async fn clickhouse_handler_post(
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, format, params, handle)
+    execute(ctx, interpreter, schema, format, params, handle)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)
@@ -512,10 +517,9 @@ async fn gen_batches(
     let mut is_start = true;
     let mut start = 0;
     let path = "clickhouse_insert".to_string();
-    tracing::debug!(
+    debug!(
         "begin sending {} bytes, batch_size={}",
-        buf_size,
-        batch_size
+        buf_size, batch_size
     );
     while start < buf_size {
         let data = if buf_size - start >= batch_size {
@@ -524,7 +528,7 @@ async fn gen_batches(
             buf[start..].to_vec()
         };
 
-        tracing::debug!("sending read {} bytes", data.len());
+        debug!("sending read {} bytes", data.len());
         if let Err(e) = tx
             .send(Ok(StreamingReadBatch {
                 data,
@@ -534,7 +538,7 @@ async fn gen_batches(
             }))
             .await
         {
-            tracing::warn!("clickhouse handler fail to send ReadBatch: {}", e);
+            warn!("clickhouse handler fail to send ReadBatch: {}", e);
         }
         is_start = false;
         start += batch_size;

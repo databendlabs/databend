@@ -44,12 +44,13 @@ use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_app::schema::TableStatistics;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
-use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
-use tracing::debug;
-use tracing::error;
-use tracing::info;
+use databend_query::table_functions::SuggestedBackgroundTasksSource;
+use log::as_debug;
+use log::debug;
+use log::error;
+use log::info;
 
 use crate::background_service::job::Job;
 
@@ -72,7 +73,7 @@ pub struct CompactionJob {
 #[async_trait::async_trait]
 impl Job for CompactionJob {
     async fn run(&mut self) {
-        info!(background = true, job_name = ?self.creator.clone(), "Compaction job started");
+        info!(background = true, job_name = as_debug!(&self.creator.clone()); "Compaction job started");
         self.do_compaction_job()
             .await
             .expect("failed to do compaction job");
@@ -166,7 +167,7 @@ impl CompactionJob {
         self.update_job_params(params).await?;
 
         for records in Self::do_get_target_tables_from_config(&self.conf, ctx.clone()).await? {
-            debug!(?records, "target_tables");
+            debug!(records = as_debug!(&records); "target_tables");
             let db_names = records
                 .column(0)
                 .as_any()
@@ -220,7 +221,7 @@ impl CompactionJob {
         }
         info!(
             job = "compaction",
-            background = true,
+            background = true;
             "compaction task is done"
         );
         if self.conf.background.compaction.params.job_type == ONESHOT {
@@ -289,7 +290,7 @@ impl CompactionJob {
         .await?;
         let (seg, blk, stats) = if !self.conf.background.compaction.has_target_tables() {
             if !seg && !blk {
-                info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
+                info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = as_debug!(&stats); "skip compact");
                 return Ok(());
             }
             (seg, blk, stats)
@@ -298,7 +299,7 @@ impl CompactionJob {
         };
 
         if !seg && !blk {
-            info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
+            info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = as_debug!(&stats); "skip compact");
             return Ok(());
         }
         let job_info = self.get_info().await?;
@@ -310,7 +311,7 @@ impl CompactionJob {
         }
         self.update_job_status(status.clone().unwrap()).await?;
 
-        info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "start compact");
+        info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = as_debug!(&stats); "start compact");
         let task_name = BackgroundTaskIdent {
             tenant: self.creator.tenant.clone(),
             task_id: status.unwrap().last_task_id.unwrap(),
@@ -352,7 +353,7 @@ impl CompactionJob {
                 .await?;
                 Self::set_task_stats(&mut info, new_stats.clone(), start.elapsed());
                 Self::set_task_status(&mut info, BackgroundTaskState::DONE);
-                info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), table_stats = ?new_stats, "finish compact");
+                info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), table_stats = as_debug!(&new_stats); "finish compact");
                 self.meta_api
                     .update_background_task(UpdateBackgroundTaskReq {
                         task_name,
@@ -458,8 +459,7 @@ impl CompactionJob {
     ) -> Result<Vec<RecordBatch>> {
         if !config.background.compaction.has_target_tables() {
             let res =
-                SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx)
-                    .await;
+                SuggestedBackgroundTasksSource::do_get_all_suggested_compaction_tables(ctx).await;
             return res;
         }
         Self::do_get_target_tables(config, ctx).await
@@ -538,10 +538,10 @@ impl CompactionJob {
                 info!(
                     job = "compaction",
                     background = true,
-                    sql = sql.as_str(),
+                    sql = sql.as_str();
                     "get target tables"
                 );
-                SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
+                SuggestedBackgroundTasksSource::do_execute_sql(ctx.clone(), sql)
             })
             .collect::<Vec<_>>();
         let mut res = Vec::new();
@@ -564,11 +564,11 @@ impl CompactionJob {
         debug!(
             job = "compaction",
             background = true,
-            sql = sql.as_str(),
+            sql = sql.as_str();
             "check target_table"
         );
         let ctx = session.create_query_context().await?;
-        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        let res = SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         if res.is_none() {
             return Ok((false, false, TableStatistics::default()));
         }
@@ -641,11 +641,11 @@ impl CompactionJob {
         debug!(
             job = "compaction",
             background = true,
-            sql = sql.as_str(),
+            sql = sql.as_str();
             "segment_compactor"
         );
         let ctx = session.create_query_context().await?;
-        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 
@@ -660,11 +660,11 @@ impl CompactionJob {
         debug!(
             job = "compaction",
             background = true,
-            sql = sql.as_str(),
+            sql = sql.as_str();
             "block_compaction"
         );
         let ctx = session.create_query_context().await?;
-        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await?;
+        SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await?;
         Ok(())
     }
 

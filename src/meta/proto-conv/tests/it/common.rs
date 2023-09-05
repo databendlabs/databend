@@ -85,7 +85,6 @@ macro_rules! func_name {
         }
         let name = type_name_of(f);
         let n = &name[..name.len() - 3];
-        let nn = n.replace("::{{closure}}", "");
-        nn
+        n.rsplit("::").next().unwrap()
     }};
 }

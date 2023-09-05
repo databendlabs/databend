@@ -77,6 +77,8 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         let schema = table.schema();
         let mut update_columns = HashMap::with_capacity(update_list.len());

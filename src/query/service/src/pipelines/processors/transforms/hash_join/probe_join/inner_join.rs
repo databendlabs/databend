@@ -15,6 +15,8 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -26,16 +28,18 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_inner_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -44,27 +48,26 @@ impl JoinHashTable {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The inner join will return multiple data blocks of similar size.
-        let mut occupied = 0;
-        let mut probed_blocks = vec![];
-        let mut probe_indexes_len = 0;
+        let mut matched_num = 0;
+        let mut result_blocks = vec![];
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
                 } else {
                     self.probe_key(
                         hash_table,
@@ -72,7 +75,7 @@ impl JoinHashTable {
                         valids,
                         i,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     )
                 };
@@ -80,26 +83,63 @@ impl JoinHashTable {
                 continue;
             }
 
-            occupied += match_count;
-            probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+            for _ in 0..match_count {
+                probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
-                    probed_blocks.push(
-                        self.merge_eq_block(
-                            &self
-                                .row_space
-                                .gather(build_indexes, &data_blocks, &num_rows)?,
-                            &DataBlock::take_compacted_indices(
-                                input,
-                                &probe_indexes[0..probe_indexes_len],
-                                occupied,
-                            )?,
-                        )?,
-                    );
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
 
-                    probe_indexes_len = 0;
-                    occupied = 0;
+                    let probe_block = if is_probe_projected {
+                        Some(DataBlock::take(input, probe_indexes)?)
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            build_columns,
+                            build_columns_data_type,
+                            build_num_rows,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let mut result_block =
+                        self.merge_eq_block(probe_block, build_block, matched_num);
+                    if self.hash_join_state.probe_to_build.len() > 0 {
+                        for (index, (is_probe_nullable, is_build_nullable)) in
+                            self.hash_join_state.probe_to_build.iter()
+                        {
+                            let entry = match (is_probe_nullable, is_build_nullable) {
+                                (true, true) | (false, false) => {
+                                    result_block.get_by_offset(*index).clone()
+                                }
+                                (true, false) => {
+                                    result_block.get_by_offset(*index).clone().remove_nullable()
+                                }
+                                (false, true) => {
+                                    let mut validity = MutableBitmap::new();
+                                    validity.extend_constant(result_block.num_rows(), true);
+                                    let validity: Bitmap = validity.into();
+                                    set_validity(
+                                        result_block.get_by_offset(*index),
+                                        validity.len(),
+                                        &validity,
+                                    )
+                                }
+                            };
+                            result_block.add_column(entry);
+                        }
+                    }
+
+                    result_blocks.push(result_block);
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -108,60 +148,92 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
-                    probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        probed_blocks.push(
-            self.merge_eq_block(
-                &self
-                    .row_space
-                    .gather(&build_indexes[0..occupied], &data_blocks, &num_rows)?,
-                &DataBlock::take_compacted_indices(
-                    input,
-                    &probe_indexes[0..probe_indexes_len],
-                    occupied,
-                )?,
-            )?,
-        );
+        if matched_num > 0 {
+            let probe_block = if is_probe_projected {
+                Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+            } else {
+                None
+            };
+            let build_block = if is_build_projected {
+                Some(self.hash_join_state.row_space.gather(
+                    &build_indexes[0..matched_num],
+                    build_columns,
+                    build_columns_data_type,
+                    build_num_rows,
+                )?)
+            } else {
+                None
+            };
+            let mut result_block = self.merge_eq_block(probe_block, build_block, matched_num);
+            if self.hash_join_state.probe_to_build.len() > 0 {
+                for (index, (is_probe_nullable, is_build_nullable)) in
+                    self.hash_join_state.probe_to_build.iter()
+                {
+                    let entry = match (is_probe_nullable, is_build_nullable) {
+                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                        (true, false) => {
+                            result_block.get_by_offset(*index).clone().remove_nullable()
+                        }
+                        (false, true) => {
+                            let mut validity = MutableBitmap::new();
+                            validity.extend_constant(result_block.num_rows(), true);
+                            let validity: Bitmap = validity.into();
+                            set_validity(
+                                result_block.get_by_offset(*index),
+                                validity.len(),
+                                &validity,
+                            )
+                        }
+                    };
+                    result_block.add_column(entry);
+                }
+            }
 
-        match &self.hash_join_desc.other_predicate {
-            None => Ok(probed_blocks),
+            result_blocks.push(result_block);
+        }
+
+        match &self.hash_join_state.hash_join_desc.other_predicate {
+            None => Ok(result_blocks),
             Some(other_predicate) => {
                 // Wrap `is_true` to `other_predicate`
                 let other_predicate = cast_expr_to_non_null_boolean(other_predicate.clone())?;
                 assert_eq!(other_predicate.data_type(), &DataType::Boolean);
 
                 let func_ctx = self.ctx.get_function_context()?;
-                let mut filtered_blocks = Vec::with_capacity(probed_blocks.len());
+                let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
 
-                for probed_block in probed_blocks {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                for result_block in result_blocks {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    let evaluator = Evaluator::new(&probed_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator = Evaluator::new(&result_block, &func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator
                         .run(&other_predicate)?
                         .try_downcast::<BooleanType>()
                         .unwrap();
-                    let res = probed_block.filter_boolean_value(&predicate)?;
+                    let res = result_block.filter_boolean_value(&predicate)?;
                     if !res.is_empty() {
                         filtered_blocks.push(res);
                     }

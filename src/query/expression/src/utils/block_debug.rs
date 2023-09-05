@@ -117,8 +117,16 @@ pub fn box_render(
     max_rows: usize,
     max_width: usize,
     max_col_width: usize,
+    replace_newline: bool,
 ) -> Result<String> {
-    let table = create_box_table(schema, blocks, max_rows, max_width, max_col_width);
+    let table = create_box_table(
+        schema,
+        blocks,
+        max_rows,
+        max_width,
+        max_col_width,
+        replace_newline,
+    );
     Ok(table.to_string())
 }
 
@@ -131,6 +139,7 @@ fn create_box_table(
     max_rows: usize,
     mut max_width: usize,
     max_col_width: usize,
+    replace_newline: bool,
 ) -> Table {
     let mut table = Table::new();
     table.load_preset("││──├─┼┤│    ──┌┐└┘");
@@ -175,7 +184,12 @@ fn create_box_table(
             for row in 0..block.num_rows() {
                 let mut v = vec![];
                 for block_entry in block.columns() {
-                    v.push(block_entry.value.index(row).unwrap().to_string());
+                    let value = block_entry.value.index(row).unwrap().to_string();
+                    if replace_newline {
+                        v.push(value.to_string().replace('\n', "\\n"));
+                    } else {
+                        v.push(value.to_string());
+                    }
                 }
                 res_vec.push(v);
             }
@@ -185,7 +199,12 @@ fn create_box_table(
         for row in 0..top_rows {
             let mut v = vec![];
             for block_entry in top_collection.columns() {
-                v.push(block_entry.value.index(row).unwrap().to_string());
+                let value = block_entry.value.index(row).unwrap().to_string();
+                if replace_newline {
+                    v.push(value.to_string().replace('\n', "\\n"));
+                } else {
+                    v.push(value.to_string());
+                }
             }
             res_vec.push(v);
         }
@@ -198,7 +217,12 @@ fn create_box_table(
         for row in take_num..bottom_collection.num_rows() {
             let mut v = vec![];
             for block_entry in top_collection.columns() {
-                v.push(block_entry.value.index(row).unwrap().to_string());
+                let value = block_entry.value.index(row).unwrap().to_string();
+                if replace_newline {
+                    v.push(value.to_string().replace('\n', "\\n"));
+                } else {
+                    v.push(value.to_string());
+                }
             }
             res_vec.push(v);
         }

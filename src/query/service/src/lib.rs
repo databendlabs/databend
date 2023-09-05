@@ -31,6 +31,7 @@
 #![feature(io_error_other)]
 #![feature(hash_drain_filter)]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(iterator_try_collect)]
 
 extern crate core;
 
@@ -40,9 +41,9 @@ pub mod catalogs;
 pub mod clusters;
 pub mod databases;
 pub mod interpreters;
+pub mod local;
 pub mod metrics;
 pub mod pipelines;
-pub mod procedures;
 pub mod schedulers;
 pub mod servers;
 pub mod sessions;

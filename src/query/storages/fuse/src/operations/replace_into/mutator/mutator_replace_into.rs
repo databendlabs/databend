@@ -12,42 +12,90 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+use std::iter::once;
+
 use ahash::HashSet;
 use ahash::HashSetExt;
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::AnyType;
+use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
+use common_expression::FieldIndex;
+use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
+use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::aggregates::eval_aggr;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::executor::OnConflictField;
+use log::info;
+use storages_common_index::BloomIndex;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::MinMax;
 
+use crate::metrics::metrics_inc_replace_original_row_number;
+use crate::metrics::metrics_inc_replace_partition_number;
+use crate::metrics::metrics_inc_replace_row_number_after_table_level_pruning;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
-use crate::operations::replace_into::OnConflictField;
+use crate::operations::replace_into::mutator::column_hash::RowScalarValue;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch
 // - update for "not-matched" branch (by sending MergeIntoOperation to downstream)
 pub struct ReplaceIntoMutator {
     on_conflict_fields: Vec<OnConflictField>,
+    table_range_index: HashMap<ColumnId, ColumnStatistics>,
     key_saw: HashSet<UniqueKeyDigest>,
+    partitioner: Option<Partitioner>,
 }
 
 impl ReplaceIntoMutator {
-    pub fn create(on_conflict_fields: Vec<OnConflictField>) -> Self {
-        Self {
+    pub fn try_create(
+        ctx: &dyn TableContext,
+        on_conflict_fields: Vec<OnConflictField>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
+        table_schema: &TableSchema,
+        table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Result<Self> {
+        let partitioner = if !cluster_keys.is_empty()
+            && ctx.get_settings().get_enable_replace_into_partitioning()?
+        {
+            Some(Partitioner::try_new(
+                ctx,
+                on_conflict_fields.clone(),
+                &cluster_keys,
+                bloom_filter_column_indexes,
+                table_schema,
+            )?)
+        } else {
+            None
+        };
+        Ok(Self {
             on_conflict_fields,
+            table_range_index: table_range_idx,
             key_saw: Default::default(),
-        }
+            partitioner,
+        })
     }
 }
 
 enum ColumnHash {
+    // no conflict, the hash set contains all the unique key digests
     NoConflict(HashSet<UniqueKeyDigest>),
     // the first row index that has conflict
     Conflict(usize),
@@ -55,25 +103,79 @@ enum ColumnHash {
 
 impl ReplaceIntoMutator {
     pub fn process_input_block(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
-        // TODO table level pruning:
-        // if we can deduced that `data_block` is insert only, return an MergeIntoOperation::None (None op for Matched Branch)
-        self.extract_on_conflict_columns(data_block)
+        // pruning rows by using table level range index
+        // rows that definitely have no conflict will be removed
+        metrics_inc_replace_original_row_number(data_block.num_rows() as u64);
+        let data_block_may_have_conflicts = self.table_level_row_prune(data_block)?;
+
+        let row_number_after_pruning = data_block_may_have_conflicts.num_rows();
+        metrics_inc_replace_row_number_after_table_level_pruning(row_number_after_pruning as u64);
+
+        if row_number_after_pruning == 0 {
+            info!("(replace-into) all rows are append-only");
+            return Ok(MergeIntoOperation::None);
+        }
+
+        let merge_into_operation = if let Some(partitioner) = &self.partitioner {
+            // if table has cluster keys; we partition the input data block by left most column of cluster keys
+            let partitions = partitioner.partition(data_block)?;
+            metrics_inc_replace_partition_number(partitions.len() as u64);
+            let vs = partitions
+                .into_iter()
+                .map(|partition| {
+                    let columns_min_max = partition
+                        .columns_min_max
+                        .into_iter()
+                        .map(|min_max| match min_max {
+                            MinMax::Point(v) => (v.clone(), v),
+                            MinMax::Range(min, max) => (min, max),
+                        })
+                        .collect::<Vec<_>>();
+                    let key_hashes = partition.digests;
+                    DeletionByColumn {
+                        columns_min_max,
+                        key_hashes,
+                        bloom_hashes: partition.bloom_hashes,
+                    }
+                })
+                .collect();
+            MergeIntoOperation::Delete(vs)
+        } else {
+            // otherwise, we just build a single delete action
+            self.build_merge_into_operation(&data_block_may_have_conflicts)?
+        };
+        Ok(merge_into_operation)
     }
 
-    fn extract_on_conflict_columns(
-        &mut self,
-        data_block: &DataBlock,
-    ) -> Result<MergeIntoOperation> {
+    // filter out rows that definitely have no conflict, by using table level range index
+    fn table_level_row_prune(&self, data_block: &DataBlock) -> Result<DataBlock> {
+        let column_stats: &HashMap<ColumnId, ColumnStatistics> = &self.table_range_index;
+        let mut bitmap = MutableBitmap::new();
+        // for each row, check if it may have conflict
+        for row_idx in 0..data_block.num_rows() {
+            let mut should_keep = true;
+            // for each column, check if it may have conflict
+            for field in &self.on_conflict_fields {
+                let column: &Value<AnyType> = &data_block.columns()[field.field_index].value;
+                let value = column.row_scalar(row_idx)?;
+                let stats = column_stats.get(&field.table_field.column_id);
+                if let Some(stats) = stats {
+                    should_keep = !(value < stats.min().as_ref() || value > stats.max().as_ref());
+                    if !should_keep {
+                        // if one column outsides the table level range, no need to check other columns
+                        break;
+                    }
+                }
+            }
+            bitmap.push(should_keep);
+        }
+        let bitmap = bitmap.into();
+        data_block.clone().filter_with_bitmap(&bitmap)
+    }
+
+    fn build_merge_into_operation(&mut self, data_block: &DataBlock) -> Result<MergeIntoOperation> {
         let num_rows = data_block.num_rows();
-        let column_values = self
-            .on_conflict_fields
-            .iter()
-            .map(|field| {
-                let filed_index = field.field_index;
-                let entry = &data_block.columns()[filed_index];
-                &entry.value
-            })
-            .collect::<Vec<_>>();
+        let column_values = on_conflict_key_column_values(&self.on_conflict_fields, data_block);
 
         match Self::build_column_hash(&column_values, &mut self.key_saw, num_rows)? {
             ColumnHash::NoConflict(key_hashes) => {
@@ -81,8 +183,9 @@ impl ReplaceIntoMutator {
                 let delete_action = DeletionByColumn {
                     columns_min_max,
                     key_hashes,
+                    bloom_hashes: vec![],
                 };
-                Ok(MergeIntoOperation::Delete(delete_action))
+                Ok(MergeIntoOperation::Delete(vec![delete_action]))
             }
             ColumnHash::Conflict(conflict_row_idx) => {
                 let conflict_description = {
@@ -117,12 +220,13 @@ impl ReplaceIntoMutator {
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
         for row_idx in 0..num_rows {
-            let hash = row_hash_of_columns(column_values, row_idx);
-            if saw.contains(&hash) {
-                return Ok(ColumnHash::Conflict(row_idx));
+            if let Some(hash) = row_hash_of_columns(column_values, row_idx)? {
+                if saw.contains(&hash) {
+                    return Ok(ColumnHash::Conflict(row_idx));
+                }
+                saw.insert(hash);
+                digests.insert(hash);
             }
-            saw.insert(hash);
-            digests.insert(hash);
         }
         Ok(ColumnHash::NoConflict(digests))
     }
@@ -180,6 +284,178 @@ impl ReplaceIntoMutator {
             v => v.to_string(),
         }
     }
+}
+
+type RowBloomHashes = Vec<u64>;
+#[derive(Debug)]
+struct Partition {
+    // digests of on-conflict fields, of all the rows in this partition
+    digests: HashSet<UniqueKeyDigest>,
+    // min max of all the on-conflict fields in this partition
+    columns_min_max: Vec<MinMax<Scalar>>,
+    // bloom hash of the on-conflict columns that will apply bloom pruning
+    bloom_hashes: Vec<RowBloomHashes>,
+}
+
+impl Partition {
+    fn try_new_with_row(
+        row_digest: u128,
+        // TODO refine this?
+        bloom_hash: &[Option<&u64>],
+        column_values: &[&Value<AnyType>],
+        row_idx: usize,
+    ) -> Result<Self> {
+        let columns_min_max = column_values
+            .iter()
+            .map(|column| {
+                let v = column.row_scalar(row_idx)?.to_owned();
+                Ok(MinMax::Point(v))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        Ok(Self {
+            digests: once(row_digest).collect(),
+            columns_min_max,
+            bloom_hashes: bloom_hash
+                .iter()
+                .map(|r| {
+                    let v = r.cloned().unwrap_or(0);
+                    once(v).collect()
+                })
+                .collect(),
+        })
+    }
+
+    fn push_row(
+        &mut self,
+        row_digest: u128,
+        bloom_hash: &[Option<&u64>],
+        column_values: &[&Value<AnyType>],
+        row_idx: usize,
+    ) -> Result<()> {
+        self.digests.insert(row_digest);
+        assert_eq!(bloom_hash.len(), self.bloom_hashes.len());
+        for (idx, v) in bloom_hash.iter().enumerate() {
+            self.bloom_hashes[idx].push(v.cloned().unwrap_or(0));
+        }
+        for (column_idx, min_max) in self.columns_min_max.iter_mut().enumerate() {
+            let value: Scalar = column_values[column_idx].row_scalar(row_idx)?.to_owned();
+            min_max.update(value);
+        }
+        Ok(())
+    }
+}
+
+struct Partitioner {
+    on_conflict_fields: Vec<OnConflictField>,
+    func_ctx: FunctionContext,
+    left_most_cluster_key: Expr,
+    // information about the columns that will apply bloom pruning
+    bloom_filter_column_info: Vec<(FieldIndex, DataType)>,
+}
+
+impl Partitioner {
+    fn try_new(
+        ctx: &dyn TableContext,
+        on_conflict_fields: Vec<OnConflictField>,
+        cluster_keys: &[RemoteExpr<String>],
+        bloom_filter_column_indexes: Vec<FieldIndex>,
+        table_schema: &TableSchema,
+    ) -> Result<Self> {
+        let left_most_cluster_key = &cluster_keys[0];
+        let expr: Expr = left_most_cluster_key
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .project_column_ref(|name| table_schema.index_of(name).unwrap());
+        let func_ctx = ctx.get_function_context()?;
+
+        let bloom_filter_column_info = bloom_filter_column_indexes
+            .into_iter()
+            .map(|idx| {
+                let data_type = (&on_conflict_fields[idx].table_field.data_type).into();
+                (idx, data_type)
+            })
+            .collect();
+
+        Ok(Self {
+            on_conflict_fields,
+            func_ctx,
+            left_most_cluster_key: expr,
+            bloom_filter_column_info,
+        })
+    }
+
+    fn partition(&self, data_block: &DataBlock) -> Result<Vec<Partition>> {
+        let evaluator = Evaluator::new(data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let cluster_key_values = evaluator.run(&self.left_most_cluster_key)?;
+
+        // extract the on-conflict column values
+        let on_conflict_column_values =
+            on_conflict_key_column_values(&self.on_conflict_fields, data_block);
+
+        // partitions by the left-most cluster key expression
+        let mut partitions: HashMap<Scalar, Partition> = HashMap::new();
+
+        // bloom hashes of the columns being pruned with
+        let column_bloom_hashes = self
+            .bloom_filter_column_info
+            .iter()
+            .filter_map(|(idx, typ)| {
+                let maybe_col = on_conflict_column_values[*idx].as_column();
+                maybe_col.map(|col| {
+                    BloomIndex::calculate_nullable_column_digest(&self.func_ctx, col, typ)
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        // partition the input block by the left-most cluster key expression
+        for row_idx in 0..data_block.num_rows() {
+            if let Some(row_digest) = row_hash_of_columns(&on_conflict_column_values, row_idx)? {
+                // collect the bloom hashes of the columns being pruned with
+                let row_bloom_hashes: Vec<Option<&u64>> = column_bloom_hashes
+                    .iter()
+                    .filter_map(|(hashes, validity)| match validity {
+                        Some(v) if v.unset_bits() != 0 => v
+                            .get(row_idx)
+                            .map(|v| if v { hashes.get(row_idx) } else { None }),
+                        _ => Some(hashes.get(row_idx)),
+                    })
+                    .collect();
+                let cluster_key_value = cluster_key_values.row_scalar(row_idx)?.to_owned();
+
+                match partitions.entry(cluster_key_value) {
+                    Entry::Occupied(ref mut entry) => entry.get_mut().push_row(
+                        row_digest,
+                        &row_bloom_hashes,
+                        &on_conflict_column_values,
+                        row_idx,
+                    )?,
+                    Entry::Vacant(entry) => {
+                        entry.insert(Partition::try_new_with_row(
+                            row_digest,
+                            &row_bloom_hashes,
+                            &on_conflict_column_values,
+                            row_idx,
+                        )?);
+                    }
+                }
+            }
+        }
+        Ok(partitions.into_values().collect::<Vec<_>>())
+    }
+}
+
+fn on_conflict_key_column_values<'a>(
+    on_conflict_fields: &[OnConflictField],
+    data_block: &'a DataBlock,
+) -> Vec<&'a Value<AnyType>> {
+    on_conflict_fields
+        .iter()
+        .map(|field| {
+            let filed_index = field.field_index;
+            let entry = &data_block.columns()[filed_index];
+            &entry.value
+        })
+        .collect::<Vec<_>>()
 }
 
 #[cfg(test)]

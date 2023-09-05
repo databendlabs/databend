@@ -112,22 +112,6 @@ For information about how to manage buckets and Access Keys for your cloud objec
 
 </TabItem>
 
-
-<TabItem value="Huawei OBS" label="Huawei OBS">
-
-Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
-
-- Create a bucket or container named `databend`.
-- Get the endpoint URL for connecting to the bucket or container you created.
-- Get the Access Key ID and Secret Access Key for your account.
-
-For information about how to manage buckets and Access Keys for your cloud object storage, refer to the user manual from the solution provider. Here are some useful links you may need:
-
-- <https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html>
-- <https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html>
-
-</TabItem>
-
 <TabItem value="Wasabi" label="Wasabi">
 
 Before deploying Databend, make sure you have successfully set up your object storage environment in the cloud, and the following tasks have been completed:
@@ -409,9 +393,9 @@ bucket = "databend"
 ```toml
 [storage]
 # s3
-type = "s3"
+type = "oss"
 
-[storage.s3]
+[storage.oss]
 # How to create a bucket:
 // highlight-next-line
 bucket = "databend"
@@ -423,7 +407,7 @@ bucket = "databend"
 # https://<bucket-name>.<region-id>[-internal].aliyuncs.com
 // highlight-next-line
 endpoint_url = "https://oss-cn-beijing-internal.aliyuncs.com"
-enable_virtual_host_style = true
+# enable_virtual_host_style = true
 
 # How to get access_key_id and secret_access_key:
 # https://help.aliyun.com/document_detail/53045.htm
@@ -462,38 +446,6 @@ secret_access_key = "<your-access-key>"
 
 :::tip
 In this example QingStor region is `pek3b`.
-:::
-
-</TabItem>
-
-
-<TabItem value="Huawei OBS" label="Huawei OBS">
-
-```toml
-[storage]
-# obs
-type = "obs"
-
-[storage.obs]
-# How to create a bucket:
-# https://support.huaweicloud.com/intl/en-us/usermanual-obs/en-us_topic_0045853662.html
-// highlight-next-line
-bucket = "databend"
-
-# You can get the URL from the bucket detail page.
-// highlight-next-line
-endpoint_url = "https://obs.cn-north-4.myhuaweicloud.com"
-
-# How to get access_key_id and secret_access_key:
-# https://support.huaweicloud.com/intl/en-us/api-obs/obs_04_0116.html
-// highlight-next-line
-access_key_id = "<your-key-id>"
-// highlight-next-line
-secret_access_key = "<your-access-key>"
-```
-
-:::tip
-In this example OBS region is `cn-north-4`.
 :::
 
 </TabItem>
@@ -561,7 +513,19 @@ root = "/analyses/databend/storage"
 </TabItem>
 </Tabs>
 
-c. Configure an admin user in the [query.users] section. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md).
+c. Configure an admin user with the [query.users] sections. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md). To proceed with the default root user and the authentication type "no_password", ensure that you remove the '#' character before the following lines in the file `databend-query.toml`:
+
+:::caution
+Using "no_password" authentication for the root user in this tutorial is just an example and not recommended for production due to potential security risks.
+:::
+
+```toml title='databend-query.toml'
+...
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+...
+```
 
 d. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
@@ -584,22 +548,6 @@ In this section, we will run some queries against Databend to verify the deploym
 a. Download and install a MySQL client on your local machine.
 
 b. Create a connection to 127.0.0.1 from your SQL client. In the connection, set the port to `3307`, and set the username to `root`.
-
-:::tip
-
-**Create new users**. The `root` user only works when you access Databend from localhost. You will need to create new users and grant proper privileges first to connect to Databend remotely. For example,
-
-```sql
--- Create a user named "eric" with the password "databend"
-CREATE USER eric IDENTIFIED BY 'databend';
-
--- Grant the ALL privilege on all existing tables in the default database to the user eric:
-GRANT ALL ON default.* TO eric;
-```
-
-For more information about creating new users, see [CREATE USER](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
-
-:::
 
 c. Run the following commands and check if the query is successful:
 
@@ -641,3 +589,12 @@ sudo chown -R $USER /var/lib/databend
 ```
 :::
 <GetLatest/>
+
+## Next Steps
+
+After deploying Databend, you might need to learn about the following topics:
+
+- [SQL Clients](/doc/integrations/clients): Learn to connect to Databend using SQL clients.
+- [Manage Settings](../13-sql-reference/42-manage-settings.md): Optimize Databend for your needs.
+- [Load & Unload Data](/doc/load): Manage data import/export in Databend.
+- [Visualize](/doc/integrations): Integrate Databend with visualization tools for insights.

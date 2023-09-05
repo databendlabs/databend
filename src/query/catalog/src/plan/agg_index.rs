@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 
 use common_exception::Result;
@@ -48,17 +47,26 @@ pub struct AggIndexInfo {
 
     // If the index is the result of an aggregation query.
     pub is_agg: bool,
+    pub num_agg_funcs: usize,
 }
 
 /// This meta just indicate the block is from aggregating index.
 #[derive(Debug, Clone)]
 pub struct AggIndexMeta {
     pub is_agg: bool,
+    // Number of aggregation functions.
+    pub num_agg_funcs: usize,
+    // Number of eval expressions (contains aggregation).
+    pub num_evals: usize,
 }
 
 impl AggIndexMeta {
-    pub fn create(is_agg: bool) -> BlockMetaInfoPtr {
-        Box::new(Self { is_agg })
+    pub fn create(is_agg: bool, num_evals: usize, num_agg_funcs: usize) -> BlockMetaInfoPtr {
+        Box::new(Self {
+            is_agg,
+            num_evals,
+            num_agg_funcs,
+        })
     }
 }
 
@@ -78,10 +86,6 @@ impl<'de> serde::Deserialize<'de> for AggIndexMeta {
 
 #[typetag::serde(name = "agg_index_meta")]
 impl BlockMetaInfo for AggIndexMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals AggIndexMeta")
     }

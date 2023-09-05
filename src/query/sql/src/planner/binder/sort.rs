@@ -35,6 +35,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
@@ -104,15 +105,16 @@ impl Binder {
                     });
                 }
                 _ => {
-                    debug_assert!(aliases.len() == projections.len());
-
                     let mut scalar_binder = ScalarBinder::new(
                         bind_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
                         aliases,
+                        self.m_cte_bound_ctx.clone(),
+                        self.ctes_map.clone(),
                     );
+                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
@@ -156,10 +158,7 @@ impl Binder {
                             if let ScalarExpr::BoundColumnRef(col) = &rewrite_scalar {
                                 col.column.clone()
                             } else {
-                                self.create_column_binding(
-                                    None,
-                                    None,
-                                    None,
+                                self.create_derived_column_binding(
                                     format!("{:#}", order.expr),
                                     rewrite_scalar.data_type()?,
                                 )
@@ -267,7 +266,10 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
+        scalar_binder.allow_pushdown();
         let mut order_by_items = Vec::with_capacity(order_by.len());
         for order in order_by.iter() {
             match order.expr {
@@ -343,6 +345,24 @@ impl Binder {
                         params: params.clone(),
                         args,
                         return_type: return_type.clone(),
+                    }))
+                }
+                ScalarExpr::LambdaFunction(lambda_func) => {
+                    let args = lambda_func
+                        .args
+                        .iter()
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                        span: lambda_func.span,
+                        func_name: lambda_func.func_name.clone(),
+                        display_name: lambda_func.display_name.clone(),
+                        args,
+                        params: lambda_func.params.clone(),
+                        lambda_expr: lambda_func.lambda_expr.clone(),
+                        return_type: lambda_func.return_type.clone(),
                     }))
                 }
                 window @ ScalarExpr::WindowFunction(_) => {

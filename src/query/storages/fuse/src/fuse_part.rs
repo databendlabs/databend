@@ -22,7 +22,6 @@ use std::sync::Arc;
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -40,7 +39,6 @@ pub struct FusePartInfo {
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
-    pub virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
@@ -54,10 +52,9 @@ impl PartInfo for FusePartInfo {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -68,12 +65,10 @@ impl PartInfo for FusePartInfo {
 }
 
 impl FusePartInfo {
-    #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
-        virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
@@ -83,7 +78,6 @@ impl FusePartInfo {
             location,
             create_on,
             columns_meta,
-            virtual_columns_meta,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
@@ -92,12 +86,11 @@ impl FusePartInfo {
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&FusePartInfo> {
-        match info.as_any().downcast_ref::<FusePartInfo>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
+        info.as_any()
+            .downcast_ref::<FusePartInfo>()
+            .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to FusePartInfo.",
-            )),
-        }
+            ))
     }
 
     pub fn range(&self) -> Option<&Range<usize>> {
@@ -116,11 +109,4 @@ impl FusePartInfo {
             .map(|meta| meta.page_size)
             .unwrap_or(self.nums_rows)
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
-pub struct VirtualColumnMeta {
-    pub index: usize,
-    pub meta: ColumnMeta,
-    pub desc: ColumnDescriptor,
 }

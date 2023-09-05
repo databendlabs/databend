@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_catalog::table::ColumnStatistics;
+use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -28,7 +28,6 @@ use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::ColumnStatSet;
-use crate::optimizer::Datum;
 use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -62,6 +61,7 @@ pub struct AggIndexInfo {
     pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
     pub is_agg: bool,
+    pub num_agg_funcs: usize,
 }
 
 impl AggIndexInfo {
@@ -82,7 +82,7 @@ pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
-    pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
+    pub col_stats: HashMap<IndexType, Option<BasicColumnStatistics>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -194,28 +194,26 @@ impl Operator for Scan {
             if !used_columns.contains(k) {
                 continue;
             }
-            if let Some(col_stat) = v {
-                let min = col_stat.min.clone();
-                let max = col_stat.max.clone();
-                let min_datum = Datum::from_scalar(&min);
-                let max_datum = Datum::from_scalar(&max);
-                if let (Some(min), Some(max)) = (min_datum, max_datum) {
-                    let histogram = histogram_from_ndv(
-                        col_stat.number_of_distinct_values,
-                        num_rows,
-                        Some((min.clone(), max.clone())),
-                        DEFAULT_HISTOGRAM_BUCKETS,
-                    )
-                    .ok();
-                    let column_stat = ColumnStat {
-                        min,
-                        max,
-                        ndv: col_stat.number_of_distinct_values as f64,
-                        null_count: col_stat.null_count,
-                        histogram,
-                    };
-                    column_stats.insert(*k as IndexType, column_stat);
-                }
+            if let Some(col_stat) = v.clone() {
+                // Safe to unwrap: min, max and ndv are all `Some(_)`.
+                let min = col_stat.min.unwrap();
+                let max = col_stat.max.unwrap();
+                let ndv = col_stat.ndv.unwrap();
+                let histogram = histogram_from_ndv(
+                    ndv,
+                    num_rows,
+                    Some((min.clone(), max.clone())),
+                    DEFAULT_HISTOGRAM_BUCKETS,
+                )
+                .ok();
+                let column_stat = ColumnStat {
+                    min,
+                    max,
+                    ndv: ndv as f64,
+                    null_count: col_stat.null_count,
+                    histogram,
+                };
+                column_stats.insert(*k as IndexType, column_stat);
             }
         }
 
@@ -231,7 +229,6 @@ impl Operator for Scan {
                     precise_cardinality: Some(precise_cardinality),
                     column_stats,
                 };
-
                 // Derive cardinality
                 let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                 let mut selectivity = MAX_SELECTIVITY;
@@ -241,8 +238,7 @@ impl Operator for Scan {
                 }
                 // Update other columns's statistic according to selectivity.
                 sb.update_other_statistic_by_selectivity(selectivity);
-
-                column_stats = sb.input_stat.column_stats.clone();
+                column_stats = statistics.column_stats;
                 (precise_cardinality as f64) * selectivity
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,

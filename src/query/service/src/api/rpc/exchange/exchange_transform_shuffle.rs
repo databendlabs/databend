@@ -71,10 +71,6 @@ impl<'de> serde::Deserialize<'de> for ExchangeShuffleMeta {
 
 #[typetag::serde(name = "exchange_shuffle")]
 impl BlockMetaInfo for ExchangeShuffleMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals ExchangeShuffleMeta")
     }
@@ -181,6 +177,10 @@ impl Processor for ExchangeShuffleTransform {
     fn event(&mut self) -> Result<Event> {
         loop {
             if !self.try_push_outputs() {
+                for input in &self.inputs {
+                    input.set_need_data();
+                }
+
                 return Ok(Event::NeedConsume);
             }
 

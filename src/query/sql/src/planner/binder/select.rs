@@ -41,15 +41,18 @@ use common_exception::Result;
 use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::warn;
+use log::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -162,6 +165,9 @@ impl Binder {
             .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
+        // analyze lambda
+        self.analyze_lambda(&mut from_context, &mut select_list)?;
+
         // This will potentially add some alias group items to `from_context` if find some.
         if let Some(group_by) = stmt.group_by.as_ref() {
             self.analyze_group_items(&mut from_context, &select_list, group_by)
@@ -230,6 +236,10 @@ impl Binder {
             )?;
         }
 
+        if !from_context.lambda_info.lambda_functions.is_empty() {
+            s_expr = self.bind_lambda(&mut from_context, s_expr).await?;
+        }
+
         if !from_context.aggregate_info.aggregate_functions.is_empty()
             || !from_context.aggregate_info.group_items.is_empty()
         {
@@ -278,7 +288,6 @@ impl Binder {
         let mut output_context = BindContext::new();
         output_context.parent = from_context.parent;
         output_context.columns = from_context.columns;
-        output_context.ctes_map = from_context.ctes_map;
 
         Ok((s_expr, output_context))
     }
@@ -308,6 +317,7 @@ impl Binder {
                 )
                 .await
             }
+            SetExpr::Values { span, values } => self.bind_values(bind_context, *span, values).await,
         }
     }
 
@@ -319,18 +329,24 @@ impl Binder {
         query: &Query,
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
-            for cte in with.ctes.iter() {
+            for (idx, cte) in with.ctes.iter().enumerate() {
                 let table_name = cte.alias.name.name.clone();
-                if bind_context.ctes_map.contains_key(&table_name) {
+                if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
                 }
                 let cte_info = CteInfo {
                     columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
-                    query: cte.query.clone(),
+                    query: *cte.query.clone(),
+                    materialized: cte.materialized,
+                    cte_idx: idx,
+                    used_count: 0,
+                    stat_info: None,
+                    columns: vec![],
                 };
-                bind_context.ctes_map.insert(table_name, cte_info);
+                self.ctes_map.insert(table_name.clone(), cte_info.clone());
+                bind_context.cte_map_ref.insert(table_name, cte_info);
             }
         }
 
@@ -356,7 +372,7 @@ impl Binder {
                 )
                 .await?
             }
-            SetExpr::SetOperation(_) => {
+            SetExpr::SetOperation(_) | SetExpr::Values { .. } => {
                 let (mut s_expr, mut bind_context) = self
                     .bind_set_expr(bind_context, &query.body, &[], limit.unwrap_or_default())
                     .await?;
@@ -393,6 +409,8 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             aliases,
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
@@ -656,17 +674,13 @@ impl Binder {
                     .metadata
                     .write()
                     .add_derived_column(left_col.column_name.clone(), coercion_types[idx].clone());
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: left_col.column_name.clone(),
-                    index: new_column_index,
-                    data_type: Box::new(coercion_types[idx].clone()),
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: None,
-                };
+                let column_binding = ColumnBindingBuilder::new(
+                    left_col.column_name.clone(),
+                    new_column_index,
+                    Box::new(coercion_types[idx].clone()),
+                    Visibility::Visible,
+                )
+                .build();
                 let left_coercion_expr = CastExpr {
                     span: left_span,
                     is_try: false,
@@ -759,7 +773,6 @@ impl Binder {
         if stmt.group_by.is_some()
             || stmt.having.is_some()
             || stmt.distinct
-            || !bind_context.ctes_map.is_empty()
             || !bind_context.aggregate_info.group_items.is_empty()
             || !bind_context.aggregate_info.aggregate_functions.is_empty()
         {
@@ -839,6 +852,16 @@ impl Binder {
         let lazy_cols = select_cols.difference(&non_lazy_cols).copied().collect();
         metadata.add_lazy_columns(lazy_cols);
 
+        // Single table, the table index is 0.
+        let table_index = 0;
+        if metadata.row_id_index_by_table_index(table_index).is_none() {
+            let internal_column = INTERNAL_COLUMN_FACTORY
+                .get_internal_column(ROW_ID_COL_NAME)
+                .unwrap();
+            let index = metadata.add_internal_column(table_index, internal_column);
+            metadata.set_table_row_id_index(table_index, index);
+        }
+
         Ok(())
     }
 }
@@ -905,6 +928,7 @@ impl<'a> SelectRewriter<'a> {
                 args,
                 params: vec![],
                 window: None,
+                lambda: None,
             }),
             alias,
         }

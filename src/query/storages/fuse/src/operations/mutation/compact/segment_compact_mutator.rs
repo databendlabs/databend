@@ -17,13 +17,13 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
+use log::info;
 use metrics::gauge;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use table_lock::TableLockHandlerWrapper;
-use tracing::info;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -31,6 +31,7 @@ use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::sort_by_cluster_stats;
 use crate::FuseTable;
 use crate::TableContext;
 
@@ -50,6 +51,7 @@ pub struct SegmentCompactMutator {
     data_accessor: Operator,
     location_generator: TableMetaLocationGenerator,
     compaction: SegmentCompactionState,
+    default_cluster_key_id: Option<u32>,
 }
 
 impl SegmentCompactMutator {
@@ -58,6 +60,7 @@ impl SegmentCompactMutator {
         compact_params: CompactOptions,
         location_generator: TableMetaLocationGenerator,
         operator: Operator,
+        default_cluster_key_id: Option<u32>,
     ) -> Result<Self> {
         Ok(Self {
             ctx,
@@ -65,6 +68,7 @@ impl SegmentCompactMutator {
             data_accessor: operator,
             location_generator,
             compaction: Default::default(),
+            default_cluster_key_id,
         })
     }
 
@@ -98,6 +102,7 @@ impl SegmentCompactMutator {
         let chunk_size = self.ctx.get_settings().get_max_threads()? as usize * 4;
         let compactor = SegmentCompactor::new(
             self.compact_params.block_per_seg as u64,
+            self.default_cluster_key_id,
             chunk_size,
             &fuse_segment_io,
             segment_writer,
@@ -165,8 +170,9 @@ pub struct SegmentCompactor<'a> {
     // Size of compacted segment should be in range R == [threshold, 2 * threshold)
     // within R, smaller one is preferred
     threshold: u64,
+    default_cluster_key_id: Option<u32>,
     // fragmented segment collected so far, it will be reset to empty if compaction occurs
-    fragmented_segments: Vec<(Arc<SegmentInfo>, Location)>,
+    fragmented_segments: Vec<(SegmentInfo, Location)>,
     // state which keep the number of blocks of all the fragmented segment collected so far,
     // it will be reset to 0 if compaction occurs
     accumulated_num_blocks: u64,
@@ -180,12 +186,14 @@ pub struct SegmentCompactor<'a> {
 impl<'a> SegmentCompactor<'a> {
     pub fn new(
         threshold: u64,
+        default_cluster_key_id: Option<u32>,
         chunk_size: usize,
         segment_reader: &'a SegmentsIO,
         segment_writer: SegmentWriter<'a>,
     ) -> Self {
         Self {
             threshold,
+            default_cluster_key_id,
             accumulated_num_blocks: 0,
             fragmented_segments: vec![],
             chunk_size,
@@ -213,23 +221,45 @@ impl<'a> SegmentCompactor<'a> {
         let mut checked_end_at = 0;
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
-            let segment_infos = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, false)
-                .await?;
+            let mut segment_infos = segments_io
+                .read_segments::<SegmentInfo>(chunk, false)
+                .await?
+                .into_iter()
+                .zip(chunk.iter())
+                .map(|(sg, chunk)| sg.map(|v| (v, chunk)))
+                .collect::<Result<Vec<_>>>()?;
 
-            for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
-                let segment = segment?;
+            if let Some(default_cluster_key) = self.default_cluster_key_id {
+                // sort ascending.
+                segment_infos.sort_by(|a, b| {
+                    sort_by_cluster_stats(
+                        &a.0.summary.cluster_stats,
+                        &b.0.summary.cluster_stats,
+                        default_cluster_key,
+                    )
+                });
+            }
+
+            for (segment, location) in segment_infos.into_iter() {
+                if is_end {
+                    self.compacted_state
+                        .segments_locations
+                        .push(location.clone());
+                    continue;
+                }
+
                 self.add(segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
-                checked_end_at += 1;
                 if compacted >= limit {
+                    if !self.fragmented_segments.is_empty() {
+                        // some fragments left, compact them
+                        self.compact_fragments().await?;
+                    }
                     is_end = true;
-                    // break if number of compacted segments reach the limit
-                    // note that during the finalization of compaction, there might be some extra
-                    // fragmented segments also need to be compacted, we just let it go
-                    break;
                 }
             }
+
+            checked_end_at += chunk.len();
 
             // Status.
             {
@@ -239,7 +269,7 @@ impl<'a> SegmentCompactor<'a> {
                     number_segments,
                     start.elapsed().as_secs()
                 );
-                info!(status);
+                info!("{}", &status);
                 (status_callback)(status);
             }
 
@@ -266,7 +296,7 @@ impl<'a> SegmentCompactor<'a> {
 
     // accumulate one segment
     #[async_backtrace::framed]
-    pub async fn add(&mut self, segment_info: Arc<SegmentInfo>, location: Location) -> Result<()> {
+    pub async fn add(&mut self, segment_info: SegmentInfo, location: Location) -> Result<()> {
         let num_blocks_current_segment = segment_info.blocks.len() as u64;
 
         if num_blocks_current_segment == 0 {
@@ -284,6 +314,7 @@ impl<'a> SegmentCompactor<'a> {
             self.fragmented_segments.push((segment_info, location));
             self.compact_fragments().await?;
         } else {
+            // JackTan25: I think this won't happen, right? so need to remove this branch??
             // no choice but to compact the fragmented segments collected so far.
             // in this situation, after compaction, the size of compacted segments may be
             // lesser than threshold. this happens if the size of segment BEFORE compaction
@@ -321,7 +352,11 @@ impl<'a> SegmentCompactor<'a> {
 
         self.compacted_state.num_fragments_compacted += fragments.len();
         for (segment, _location) in fragments {
-            merge_statistics_mut(&mut new_statistics, &segment.summary);
+            merge_statistics_mut(
+                &mut new_statistics,
+                &segment.summary,
+                self.default_cluster_key_id,
+            );
             blocks.append(&mut segment.blocks.clone());
         }
 

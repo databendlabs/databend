@@ -38,7 +38,7 @@ jobs:
           target: ${{ matrix.arch }}-apple-darwin
           profile: debug
 
-  # https://github.com/datafuselabs/databend/issues/5287
+  # # https://github.com/datafuselabs/databend/issues/5287
   # test_stateless_standalone_macos:
   #  runs-on: macos-11
   #  needs: build_macos
@@ -56,7 +56,7 @@ jobs:
         env:
           SQLALCHEMY_SILENCE_UBER_WARNING: "1"
 
-  # https://github.com/datafuselabs/databend/issues/6614
+  # # https://github.com/datafuselabs/databend/issues/6614
   # test_sqllogic_standalone_macos:
   #   name: "test_sqllogic_standalone_macos(optional)"
   #   runs-on: macos-11

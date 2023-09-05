@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::ops::Range;
 
 use common_expression::BlockMetaInfo;
@@ -61,15 +60,8 @@ impl AggregateSerdeMeta {
 
 #[typetag::serde(name = "aggregate_serde")]
 impl BlockMetaInfo for AggregateSerdeMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match AggregateSerdeMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
+        AggregateSerdeMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

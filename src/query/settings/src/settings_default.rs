@@ -245,14 +245,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("enable_hive_parquet_predict_pushdown", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable hive parquet predict pushdown  by setting this variable to 1, default value: 1",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                    #[cfg(feature = "hive")]
                 ("hive_parquet_chunk_size", DefaultSettingValue {
                     value: UserSettingValue::UInt64(16384),
                     desc: "the max number of rows each read from parquet to databend processor",
@@ -328,21 +326,70 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_experimental_merge_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable unstable merge into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_distributed_replace_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of replace into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable scanning aggregating index data while querying.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_auto_reclustering", DefaultSettingValue {
+
+                ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
-                    desc: "Enables auto re-clustering.",
+                    desc: "Enables re-clustering after write(copy/replace-into).",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("use_parquet2", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Use parquet2 instead of parquet_rs when infer_schema().",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_replace_into_partitioning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables partitioning for replace-into statement (if table has cluster keys).",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_replace_into_bloom_pruning", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(4),
+                    desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("replace_into_shuffle_strategy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "0 for Block level shuffle, 1 for segment level shuffle",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("recluster_timeout_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(12 * 60 * 60),
+                    desc: "Sets the seconds that recluster final will be timeout.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index after new data written",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -416,24 +463,34 @@ impl DefaultSettings {
 
         match default_settings.settings.get(&k) {
             None => Ok((k, None)),
-            Some(setting_value) => match setting_value.value {
-                UserSettingValue::UInt64(_) => {
-                    // decimal 10 * 1.5 to string may result in string like "15.0"
-                    let val = if let Some(p) = v.find('.') {
-                        if v[(p + 1)..].chars().all(|x| x == '0') {
-                            &v[..p]
-                        } else {
-                            return Err(ErrorCode::BadArguments("not a integer"));
-                        }
-                    } else {
-                        &v[..]
-                    };
-
-                    let u64_val = val.parse::<u64>()?;
-                    Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+            Some(setting_value) => {
+                if let Some(possible_values) = &setting_value.possible_values {
+                    if !possible_values.iter().any(|x| x.eq_ignore_ascii_case(&v)) {
+                        return Err(ErrorCode::WrongValueForVariable(format!(
+                            "Invalid setting value: {:?} for variable {:?}, possible values: {:?}",
+                            v, k, possible_values
+                        )));
+                    }
                 }
-                UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
-            },
+                match setting_value.value {
+                    UserSettingValue::UInt64(_) => {
+                        // decimal 10 * 1.5 to string may result in string like "15.0"
+                        let val = if let Some(p) = v.find('.') {
+                            if v[(p + 1)..].chars().all(|x| x == '0') {
+                                &v[..p]
+                            } else {
+                                return Err(ErrorCode::BadArguments("not a integer"));
+                            }
+                        } else {
+                            &v[..]
+                        };
+
+                        let u64_val = val.parse::<u64>()?;
+                        Ok((k, Some(UserSettingValue::UInt64(u64_val))))
+                    }
+                    UserSettingValue::String(_) => Ok((k, Some(UserSettingValue::String(v)))),
+                }
+            }
         }
     }
 
@@ -454,6 +511,25 @@ impl DefaultSettings {
                 "Unknown variable: {:?}",
                 key
             ))),
+        }
+    }
+}
+
+pub enum ReplaceIntoShuffleStrategy {
+    SegmentLevelShuffling,
+    BlockLevelShuffling,
+}
+
+impl TryFrom<u64> for ReplaceIntoShuffleStrategy {
+    type Error = ErrorCode;
+
+    fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ReplaceIntoShuffleStrategy::BlockLevelShuffling),
+            1 => Ok(ReplaceIntoShuffleStrategy::SegmentLevelShuffling),
+            _ => Err(ErrorCode::InvalidConfig(
+                "value of replace_into_shuffle_strategy should be one of {0,1}, 0 for block level shuffling, 1 for segment level shuffling",
+            )),
         }
     }
 }

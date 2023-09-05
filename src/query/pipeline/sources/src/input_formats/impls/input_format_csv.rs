@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::io::Cursor;
 use std::io::Read;
 use std::mem;
@@ -32,8 +31,9 @@ use common_io::format_diagnostic::verbose_char;
 use common_meta_app::principal::CsvFileFormatParams;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
-use common_pipeline_core::InputError;
+use common_storage::FileStatus;
 use csv_core::ReadRecordResult;
+use log::debug;
 
 use crate::input_formats::impls::input_format_tsv::format_column_error;
 use crate::input_formats::AligningStateCommon;
@@ -170,13 +170,9 @@ impl InputFormatTextBase for InputFormatCSV {
         })
     }
 
-    fn deserialize(
-        builder: &mut BlockBuilder<Self>,
-        batch: RowBatch,
-    ) -> Result<HashMap<u16, InputError>> {
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         let mut field_end_idx = 0;
         let field_decoder = builder
             .field_decoder
@@ -196,15 +192,21 @@ impl InputFormatTextBase for InputFormatCSV {
             ) {
                 builder
                     .ctx
-                    .on_error(e, Some((columns, builder.num_rows)), Some(&mut error_map))
+                    .on_error(
+                        e,
+                        Some((columns, builder.num_rows)),
+                        &mut builder.file_status,
+                        i + batch.start_row_in_split,
+                    )
                     .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
             } else {
                 builder.num_rows += 1;
+                builder.file_status.num_rows_loaded += 1;
             }
             start = *end;
             field_end_idx += num_fields;
         }
-        Ok(error_map)
+        Ok(())
     }
 }
 
@@ -229,6 +231,7 @@ impl CsvReaderState {
         &mut self,
         input: &[u8],
         output: &mut [u8],
+        file_status: &mut FileStatus,
     ) -> Result<(Option<usize>, usize, usize)> {
         let (result, n_in, n_out, n_end) =
             self.reader
@@ -248,7 +251,7 @@ impl CsvReaderState {
             ReadRecordResult::Record => {
                 if self.projection.is_none() {
                     if let Err(e) = self.check_num_field() {
-                        self.ctx.on_error(e, None, None)?;
+                        self.ctx.on_error(e, None, file_status, self.common.rows)?;
                         self.common.rows += 1;
                         self.common.offset += n_in;
                         self.n_end = 0;
@@ -275,10 +278,11 @@ impl CsvReaderState {
 
 impl AligningStateTextBased for CsvReaderState {
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+        let mut file_status = FileStatus::default();
         let mut out_tmp = vec![0u8; buf_in.len()];
         let mut buf = buf_in;
         while self.common.rows_to_skip > 0 {
-            let (_, n_in, _) = self.read_record(buf, &mut out_tmp)?;
+            let (_, n_in, _) = self.read_record(buf, &mut out_tmp, &mut file_status)?;
             buf = &buf[n_in..];
             self.common.rows_to_skip -= 1;
         }
@@ -301,7 +305,8 @@ impl AligningStateTextBased for CsvReaderState {
         };
 
         while !buf.is_empty() {
-            let (num_fields, n_in, n_out) = self.read_record(buf, &mut out_tmp[out_pos..])?;
+            let (num_fields, n_in, n_out) =
+                self.read_record(buf, &mut out_tmp[out_pos..], &mut file_status)?;
             buf = &buf[n_in..];
             out_pos += n_out;
             if let Some(num_fields) = num_fields {
@@ -319,8 +324,15 @@ impl AligningStateTextBased for CsvReaderState {
         }
 
         out_tmp.truncate(out_pos);
+        if file_status.error.is_some() {
+            self.ctx
+                .table_context
+                .get_copy_status()
+                .add_chunk(&self.split_info.file.path, file_status);
+        }
+
         if row_batch.row_ends.is_empty() {
-            tracing::debug!(
+            debug!(
                 "csv aligner: {} + {} bytes => 0 rows",
                 self.out.len(),
                 buf_in.len(),
@@ -332,7 +344,7 @@ impl AligningStateTextBased for CsvReaderState {
 
             self.common.batch_id += 1;
             self.out.extend_from_slice(&out_tmp[row_batch_end..]);
-            tracing::debug!(
+            debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),
                 buf_in.len(),
@@ -346,6 +358,7 @@ impl AligningStateTextBased for CsvReaderState {
             } else {
                 vec![last_remain, out_tmp].concat()
             };
+
             Ok(vec![row_batch])
         }
     }
@@ -355,11 +368,13 @@ impl AligningStateTextBased for CsvReaderState {
         let in_tmp = Vec::new();
         let mut out_tmp = vec![0u8; 1];
 
+        let mut file_status = FileStatus::default();
         if self.common.rows_to_skip > 0 {
-            let _ = self.read_record(&in_tmp, &mut out_tmp)?;
+            let _ = self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
         } else {
             let last_batch_remain_len = self.out.len();
-            let (num_fields, _, n_out) = self.read_record(&in_tmp, &mut out_tmp)?;
+            let (num_fields, _, n_out) =
+                self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
             if let Some(num_fields) = num_fields {
                 let data = mem::take(&mut self.out);
 
@@ -377,11 +392,17 @@ impl AligningStateTextBased for CsvReaderState {
                 res.push(row_batch);
 
                 self.common.batch_id += 1;
-                tracing::debug!(
+                debug!(
                     "csv aligner flush last row of {} bytes",
                     last_batch_remain_len,
                 );
             }
+        }
+        if file_status.error.is_some() {
+            self.ctx
+                .table_context
+                .get_copy_status()
+                .add_chunk(&self.split_info.file.path, file_status);
         }
         Ok(res)
     }

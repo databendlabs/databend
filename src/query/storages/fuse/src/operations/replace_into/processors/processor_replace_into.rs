@@ -13,10 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
+use common_expression::RemoteExpr;
+use common_expression::TableSchema;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -24,9 +31,12 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_sql::executor::OnConflictField;
+use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_block_number_input;
+use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
-use crate::operations::replace_into::OnConflictField;
 
 pub struct ReplaceIntoProcessor {
     replace_into_mutator: ReplaceIntoMutator,
@@ -44,13 +54,28 @@ pub struct ReplaceIntoProcessor {
 }
 
 impl ReplaceIntoProcessor {
-    pub fn create(on_conflict_fields: Vec<OnConflictField>, target_table_empty: bool) -> Self {
-        let replace_into_mutator = ReplaceIntoMutator::create(on_conflict_fields);
+    pub fn create(
+        ctx: &dyn TableContext,
+        on_conflict_fields: Vec<OnConflictField>,
+        cluster_keys: Vec<RemoteExpr<String>>,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
+        table_schema: &TableSchema,
+        target_table_empty: bool,
+        table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+    ) -> Result<Self> {
+        let replace_into_mutator = ReplaceIntoMutator::try_create(
+            ctx,
+            on_conflict_fields,
+            cluster_keys,
+            bloom_filter_column_indexes,
+            table_schema,
+            table_range_idx,
+        )?;
         let input_port = InputPort::create();
         let output_port_merge_into_action = OutputPort::create();
         let output_port_append_data = OutputPort::create();
 
-        Self {
+        Ok(Self {
             replace_into_mutator,
             input_port,
             output_port_merge_into_action,
@@ -59,7 +84,7 @@ impl ReplaceIntoProcessor {
             output_data_merge_into_action: None,
             output_data_append: None,
             target_table_empty,
-        }
+        })
     }
 
     pub fn into_pipe(self) -> Pipe {
@@ -140,7 +165,10 @@ impl Processor for ReplaceIntoProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
+            let start = Instant::now();
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
+            metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
+            metrics_inc_replace_block_number_input(1);
             if !self.target_table_empty {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));

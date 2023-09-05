@@ -112,20 +112,13 @@ impl<'a> FuseSegment<'a> {
         let mut row_num = 0;
         let mut end_flag = false;
         let chunk_size =
-            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len);
+            std::cmp::min(self.ctx.get_settings().get_max_threads()? as usize * 4, len).max(1);
         for chunk in segment_locations.chunks(chunk_size) {
             let segments = segments_io
-                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .read_segments::<SegmentInfo>(chunk, true)
                 .await?;
 
-            let take_num = if row_num + chunk_size >= len {
-                end_flag = true;
-                len - row_num
-            } else {
-                row_num += chunk_size;
-                chunk_size
-            };
-            for (idx, segment) in segments.into_iter().take(take_num).enumerate() {
+            for (idx, segment) in segments.into_iter().enumerate() {
                 let segment = segment?;
                 format_versions.push(segment_locations[idx].1);
                 block_count.push(segment.summary.block_count);
@@ -133,6 +126,12 @@ impl<'a> FuseSegment<'a> {
                 compressed.push(segment.summary.compressed_byte_size);
                 uncompressed.push(segment.summary.uncompressed_byte_size);
                 file_location.push(segment_locations[idx].0.clone().into_bytes());
+
+                row_num += 1;
+                if row_num >= limit {
+                    end_flag = true;
+                    break;
+                }
             }
 
             if end_flag {

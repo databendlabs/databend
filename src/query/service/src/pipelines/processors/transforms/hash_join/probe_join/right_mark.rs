@@ -15,7 +15,6 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -27,26 +26,32 @@ use common_hashtable::HashJoinHashtableLike;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_right_mark_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
         let markers = probe_state.markers.as_mut().unwrap();
         for (i, key) in keys_iter.enumerate() {
-            let contains = match self.hash_join_desc.from_correlated_subquery {
+            let contains = match self.hash_join_state.hash_join_desc.from_correlated_subquery {
                 true => hash_table.contains(key),
                 false => self.contains(hash_table, key, valids, i),
             };
@@ -56,10 +61,18 @@ impl JoinHashTable {
             }
         }
 
+        let probe_block = if is_probe_projected {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
+
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers, input.num_rows())?,
-            input,
-        )?])
+            probe_block,
+            marker_block,
+            input.num_rows(),
+        )])
     }
 
     pub(crate) fn probe_right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
@@ -68,6 +81,7 @@ impl JoinHashTable {
         probe_state: &mut ProbeState,
         keys_iter: IT,
         input: &DataBlock,
+        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
@@ -75,37 +89,46 @@ impl JoinHashTable {
     {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-        let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
+        let has_null = *self
+            .hash_join_state
+            .hash_join_desc
+            .marker_join_desc
+            .has_null
+            .read();
         let cols = input
             .columns()
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
         let markers = probe_state.markers.as_mut().unwrap();
-        Self::init_markers(&cols, input.num_rows(), markers);
+        self.hash_join_state
+            .init_markers(&cols, input.num_rows(), markers);
 
-        let _func_ctx = self.ctx.get_function_context()?;
-        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
 
-        let mut occupied = 0;
-        let mut probe_indexes_len = 0;
+        let mut matched_num = 0;
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
                 } else {
                     self.probe_key(
                         hash_table,
@@ -113,7 +136,7 @@ impl JoinHashTable {
                         valids,
                         i,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     )
                 };
@@ -121,53 +144,52 @@ impl JoinHashTable {
                 continue;
             }
 
-            occupied += match_count;
-            probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+            for _ in 0..match_count {
+                probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    let probe_block = DataBlock::take_compacted_indices(
-                        input,
-                        &probe_indexes[0..probe_indexes_len],
-                        occupied,
-                    )?;
-                    let build_block =
-                        self.row_space
-                            .gather(build_indexes, &data_blocks, &num_rows)?;
-                    let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                    let probe_block = if is_probe_projected {
+                        Some(DataBlock::take(input, probe_indexes)?)
+                    } else {
+                        None
+                    };
+                    let build_block = if is_build_projected {
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            build_columns,
+                            build_columns_data_type,
+                            build_num_rows,
+                        )?)
+                    } else {
+                        None
+                    };
+                    let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-                    let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
+                    let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
                     let filter_viewer =
                         NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                     let validity = &filter_viewer.validity;
                     let data = &filter_viewer.column;
 
-                    let mut idx = 0;
-                    let mut vec_idx = 0;
-                    while vec_idx < probe_indexes_len {
-                        let (index, cnt) = probe_indexes[vec_idx];
-                        vec_idx += 1;
-                        let marker = &mut markers[index as usize];
-                        for _ in 0..cnt {
-                            if !validity.get_bit(idx) {
-                                if *marker == MARKER_KIND_FALSE {
-                                    *marker = MARKER_KIND_NULL;
-                                }
-                            } else if data.get_bit(idx) {
-                                *marker = MARKER_KIND_TRUE;
+                    for (idx, index) in probe_indexes.iter().enumerate() {
+                        let marker = &mut markers[*index as usize];
+                        if !validity.get_bit(idx) {
+                            if *marker == MARKER_KIND_FALSE {
+                                *marker = MARKER_KIND_NULL;
                             }
-                            idx += 1;
+                        } else if data.get_bit(idx) {
+                            *marker = MARKER_KIND_TRUE;
                         }
                     }
-
-                    probe_indexes_len = 0;
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -176,46 +198,50 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
-                    probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        let probe_block = DataBlock::take_compacted_indices(
-            input,
-            &probe_indexes[0..probe_indexes_len],
-            occupied,
-        )?;
-        let build_block =
-            self.row_space
-                .gather(&build_indexes[0..occupied], &data_blocks, &num_rows)?;
-        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+        if matched_num > 0 {
+            let probe_block = if is_probe_projected {
+                Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+            } else {
+                None
+            };
+            let build_block = if is_build_projected {
+                Some(self.hash_join_state.row_space.gather(
+                    &build_indexes[0..matched_num],
+                    build_columns,
+                    build_columns_data_type,
+                    build_num_rows,
+                )?)
+            } else {
+                None
+            };
+            let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-        let filter = self.get_nullable_filter_column(&merged_block, other_predicate)?;
-        let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
-        let validity = &filter_viewer.validity;
-        let data = &filter_viewer.column;
+            let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+            let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
+            let validity = &filter_viewer.validity;
+            let data = &filter_viewer.column;
 
-        let mut idx = 0;
-        let mut vec_idx = 0;
-        while vec_idx < probe_indexes_len {
-            let (index, cnt) = probe_indexes[vec_idx];
-            vec_idx += 1;
-            let marker = &mut markers[index as usize];
-            for _ in 0..cnt {
+            for (idx, index) in probe_indexes.iter().enumerate().take(matched_num) {
+                let marker = &mut markers[*index as usize];
                 if !validity.get_bit(idx) {
                     if *marker == MARKER_KIND_FALSE {
                         *marker = MARKER_KIND_NULL;
@@ -223,13 +249,20 @@ impl JoinHashTable {
                 } else if data.get_bit(idx) {
                     *marker = MARKER_KIND_TRUE;
                 }
-                idx += 1;
             }
         }
 
+        let probe_block = if is_probe_projected {
+            Some(input.clone())
+        } else {
+            None
+        };
+        let marker_block = Some(self.create_marker_block(has_null, markers, input.num_rows())?);
+
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers, input.num_rows())?,
-            input,
-        )?])
+            probe_block,
+            marker_block,
+            input.num_rows(),
+        )])
     }
 }

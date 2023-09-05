@@ -13,11 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
+use log::info;
+use log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -28,8 +32,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::ReclusterTablePlan;
-
-const MAX_RECLUSTER_TIMES: usize = 1000;
 
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
@@ -54,7 +56,15 @@ impl Interpreter for ReclusterTableInterpreter {
         let ctx = self.ctx.clone();
         let settings = ctx.get_settings();
         let tenant = ctx.get_tenant();
-        let start = SystemTime::now();
+        let max_threads = settings.get_max_threads()?;
+        let recluster_timeout_secs = settings.get_recluster_timeout_secs()?;
+
+        // Status.
+        {
+            let status = "recluster: begin to run recluster";
+            ctx.set_status_info(status);
+            info!("{}", status);
+        }
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
@@ -71,24 +81,28 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
-        // Status.
-        {
-            let status = "recluster: begin to run recluster";
-            ctx.set_status_info(status);
-            tracing::info!(status);
-        }
         let mut times = 0;
         let mut block_count = 0;
-        let max_threads = settings.get_max_threads()?;
+        let start = SystemTime::now();
+        let timeout = Duration::from_secs(recluster_timeout_secs);
         loop {
+            if let Err(err) = ctx.check_aborting() {
+                error!(
+                    "execution of replace into statement aborted. server is shutting down or the query was killed. table: {}",
+                    plan.table,
+                );
+                return Err(err);
+            }
+
             let table = self
                 .ctx
-                .get_catalog(&plan.catalog)?
+                .get_catalog(&plan.catalog)
+                .await?
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
 
             // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
             let reply = catalog
                 .list_table_lock_revs(table.get_table_info().ident.table_id)
                 .await?;
@@ -118,19 +132,28 @@ impl Interpreter for ReclusterTableInterpreter {
             ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
 
+            let elapsed_time = SystemTime::now().duration_since(start).unwrap();
             times += 1;
             // Status.
             {
                 let status = format!(
                     "recluster: run recluster tasks:{} times, cost:{} sec",
                     times,
-                    start.elapsed().map_or(0, |d| d.as_secs())
+                    elapsed_time.as_secs()
                 );
                 ctx.set_status_info(&status);
-                tracing::info!(status);
+                info!("{}", &status);
             }
 
-            if !plan.is_final || times >= MAX_RECLUSTER_TIMES {
+            if !plan.is_final {
+                break;
+            }
+
+            if elapsed_time >= timeout {
+                warn!(
+                    "Recluster stopped because the runtime was over {} secs",
+                    timeout.as_secs()
+                );
                 break;
             }
         }

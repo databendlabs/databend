@@ -224,6 +224,10 @@ impl DataSchema {
             .find(|&(_, c)| c.name() == name)
     }
 
+    pub fn set_field_type(&mut self, i: FieldIndex, data_type: DataType) {
+        self.fields[i].data_type = data_type;
+    }
+
     pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
         self.fields[i].name = new_name.to_string();
     }
@@ -302,7 +306,7 @@ impl TableSchema {
         if next_column_id > 0 {
             // make sure that field column id has been inited.
             if fields.len() > 1 {
-                assert!(fields[1].column_id() > 0);
+                assert!(fields[1].column_id() > 0 || fields[0].column_id() > 0);
             }
             return (next_column_id, fields);
         }
@@ -392,6 +396,18 @@ impl TableSchema {
         Ok(())
     }
 
+    pub fn add_column(&mut self, field: &TableField, index: usize) -> Result<()> {
+        if self.index_of(field.name()).is_ok() {
+            return Err(ErrorCode::AddColumnExistError(format!(
+                "add column {} already exist",
+                field.name(),
+            )));
+        }
+        let field = field.build_column_id(&mut self.next_column_id);
+        self.fields.insert(index, field);
+        Ok(())
+    }
+
     // Every internal column has constant column id, no need to generate column id of internal columns.
     pub fn add_internal_field(
         &mut self,
@@ -407,7 +423,7 @@ impl TableSchema {
         self.fields.retain(|f| !is_internal_column_id(f.column_id));
     }
 
-    pub fn drop_column(&mut self, column: &str) -> Result<()> {
+    pub fn drop_column(&mut self, column: &str) -> Result<FieldIndex> {
         if self.fields.len() == 1 {
             return Err(ErrorCode::DropColumnEmptyError(
                 "cannot drop table column to empty",
@@ -416,7 +432,7 @@ impl TableSchema {
         let i = self.index_of(column)?;
         self.fields.remove(i);
 
-        Ok(())
+        Ok(i)
     }
 
     pub fn to_leaf_column_id_set(&self) -> HashSet<ColumnId> {
@@ -751,7 +767,12 @@ impl TableSchema {
         )))
     }
 
-    // return leaf fields with column id
+    /// Return leaf fields with column id.
+    ///
+    /// Note: the name of the inner fields is a full-path name.
+    ///
+    /// For example, if the field is `s Tuple(f1 Tuple(f2 Int32))`
+    /// its name will be `s:f1:f2` instead of `f2`.
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(
             field: &TableField,
@@ -765,7 +786,11 @@ impl TableSchema {
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
                         collect_in_field(
-                            &TableField::new_from_column_id(name, ty.clone(), *next_column_id),
+                            &TableField::new_from_column_id(
+                                &format!("{}:{}", field.name(), name),
+                                ty.clone(),
+                                *next_column_id,
+                            ),
                             fields,
                             next_column_id,
                         );

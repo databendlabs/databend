@@ -57,8 +57,8 @@ impl Interpreter for DropTableInterpreter {
 
         if tbl.is_none() && !self.plan.if_exists {
             return Err(ErrorCode::UnknownTable(format!(
-                "unknown table {}.{}",
-                db_name, tbl_name
+                "Unknown table `{}`.`{}` in catalog '{}'",
+                db_name, tbl_name, catalog_name
             )));
         }
         if let Some(tbl) = tbl {
@@ -68,7 +68,7 @@ impl Interpreter for DropTableInterpreter {
                     &self.plan.database, &self.plan.table, &self.plan.database, &self.plan.table
                 )));
             }
-            let catalog = self.ctx.get_catalog(catalog_name)?;
+            let catalog = self.ctx.get_catalog(catalog_name).await?;
 
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {

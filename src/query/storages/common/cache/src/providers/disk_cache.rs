@@ -29,11 +29,11 @@ use common_cache::FileSize;
 use common_cache::LruCache;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
+use log::warn;
 use parking_lot::RwLock;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
-use tracing::error;
-use tracing::warn;
 
 use crate::CacheAccessor;
 
@@ -70,7 +70,7 @@ impl From<&DiskCacheKey> for PathBuf {
 impl<C> DiskCache<C>
 where C: Cache<String, u64, DefaultHashBuilder, FileSize>
 {
-    /// Create an `DiskCache` with `ritelinked::DefaultHashBuilder` that stores files in `path`,
+    /// Create an `DiskCache` with `hashbrown::hash_map::DefaultHashBuilder` that stores files in `path`,
     /// limited to `size` bytes.
     ///
     /// Existing files in `path` will be stored with their last-modified time from the filesystem

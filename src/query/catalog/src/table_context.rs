@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
@@ -23,6 +25,7 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -32,10 +35,14 @@ use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
 use dashmap::DashMap;
+use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 
 use crate::catalog::Catalog;
 use crate::cluster_info::Cluster;
@@ -44,11 +51,13 @@ use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
 use crate::table::Table;
 
+pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
+
 #[derive(Debug)]
 pub struct ProcessInfo {
     pub id: String,
     pub typ: String,
-    pub state: String,
+    pub state: ProcessInfoState,
     pub database: String,
     pub user: Option<UserInfo>,
     pub settings: Arc<Settings>,
@@ -63,6 +72,23 @@ pub struct ProcessInfo {
     pub status_info: Option<String>,
 }
 
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum ProcessInfoState {
+    Query,
+    Aborting,
+    Idle,
+}
+
+impl Display for ProcessInfoState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProcessInfoState::Query => write!(f, "Query"),
+            ProcessInfoState::Aborting => write!(f, "Aborting"),
+            ProcessInfoState::Idle => write!(f, "Idle"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StageAttachment {
     pub location: String,
@@ -72,6 +98,7 @@ pub struct StageAttachment {
 
 #[async_trait::async_trait]
 pub trait TableContext: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
     /// Build a table instance the plan wants to operate on.
     ///
     /// A plan just contains raw information about a table or table function.
@@ -104,7 +131,8 @@ pub trait TableContext: Send + Sync {
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
-    fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    async fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
+    fn get_default_catalog(&self) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
     fn check_aborting(&self) -> Result<()>;
@@ -112,6 +140,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
+    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
@@ -153,4 +182,25 @@ pub trait TableContext: Send + Sync {
         files: &[StageFileInfo],
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>>;
+
+    fn set_materialized_cte(
+        &self,
+        idx: (usize, usize),
+        mem_table: Arc<RwLock<Vec<DataBlock>>>,
+    ) -> Result<()>;
+
+    fn get_materialized_cte(
+        &self,
+        idx: (usize, usize),
+    ) -> Result<Option<Arc<RwLock<Vec<DataBlock>>>>>;
+
+    fn get_materialized_ctes(&self) -> MaterializedCtesBlocks;
+
+    fn add_segment_location(&self, segment_loc: Location) -> Result<()>;
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>>;
+
+    fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
+
+    fn get_copy_status(&self) -> Arc<CopyStatus>;
 }

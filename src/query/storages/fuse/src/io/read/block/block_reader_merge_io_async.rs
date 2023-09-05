@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::ops::Range;
 use std::time::Instant;
 
@@ -42,7 +43,7 @@ impl BlockReader {
     /// It will *NOT* merge two requests:
     /// if the last io request size is larger than storage_io_page_bytes_for_read(Default is 512KB).
     #[async_backtrace::framed]
-    async fn merge_io_read(
+    pub async fn merge_io_read(
         read_settings: &ReadSettings,
         op: Operator,
         location: &str,
@@ -108,13 +109,10 @@ impl BlockReader {
             let column_range = raw_range.start..raw_range.end;
 
             // Find the range index and Range from merged ranges.
-            let (merged_range_idx, merged_range) = match range_merger.get(column_range.clone()) {
-                None => Err(ErrorCode::Internal(format!(
-                    "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
-                    column_range, location, merged_ranges
-                ))),
-                Some((index, range)) => Ok((index, range)),
-            }?;
+            let (merged_range_idx, merged_range) = range_merger.get(column_range.clone()).ok_or(ErrorCode::Internal(format!(
+                "It's a terrible bug, not found raw range:[{:?}], path:{} from merged ranges\n: {:?}",
+                column_range, location, merged_ranges
+            )))?;
 
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
@@ -132,6 +130,7 @@ impl BlockReader {
         settings: &ReadSettings,
         location: &str,
         columns_meta: &HashMap<ColumnId, ColumnMeta>,
+        ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<MergeIOReadResult> {
         // Perf
         {
@@ -145,6 +144,11 @@ impl BlockReader {
         let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
+            if let Some(ignore_column_ids) = ignore_column_ids {
+                if ignore_column_ids.contains(column_id) {
+                    continue;
+                }
+            }
             let column_cache_key = TableDataCacheKey::new(location, *column_id);
 
             // first, check column array object cache

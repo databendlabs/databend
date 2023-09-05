@@ -24,6 +24,7 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use log::trace;
 
 use crate::input_formats::input_pipeline::BlockBuilderTrait;
 use crate::input_formats::input_pipeline::InputFormatPipe;
@@ -98,7 +99,7 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
         } else {
             match self.processor.output_buffer.pop_front() {
                 Some(data_block) => {
-                    tracing::trace!("DeserializeTransformer push rows {}", data_block.num_rows());
+                    trace!("DeserializeTransformer push rows {}", data_block.num_rows());
                     self.output.push_data(Ok(data_block));
                     Ok(Event::NeedConsume)
                 }

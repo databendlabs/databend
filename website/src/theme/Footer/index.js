@@ -8,7 +8,6 @@ import React from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import {useThemeConfig} from '@docusaurus/theme-common';
-import useBaseUrl from '@docusaurus/useBaseUrl';
 import CookiesConsent from '../../components/CookiesConsent';
 import styles from './index.module.scss';
 import * as icons from "../../components/Icons"

@@ -24,6 +24,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_exception::Result;
+use common_expression::FieldIndex;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_types::MatchSeq;
@@ -31,6 +32,7 @@ use common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
+use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
@@ -237,6 +239,7 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    pub owner: Option<Ownership>,
 }
 
 impl TableMeta {
@@ -250,9 +253,23 @@ impl TableMeta {
         Ok(())
     }
 
+    pub fn add_column(
+        &mut self,
+        field: &TableField,
+        comment: &str,
+        index: FieldIndex,
+    ) -> Result<()> {
+        let mut new_schema = self.schema.as_ref().to_owned();
+        new_schema.add_column(field, index)?;
+        self.schema = Arc::new(new_schema);
+        self.field_comments.insert(index, comment.to_owned());
+        Ok(())
+    }
+
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
         let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.drop_column(column)?;
+        let index = new_schema.drop_column(column)?;
+        self.field_comments.remove(index);
         self.schema = Arc::new(new_schema);
         Ok(())
     }
@@ -334,6 +351,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            owner: None,
         }
     }
 }
@@ -604,6 +622,28 @@ impl Display for UpsertTableOptionReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum SetTableColumnMaskPolicyAction {
+    // new mask name, old mask name(if any)
+    Set(String, Option<String>),
+    // prev mask name
+    Unset(String),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReq {
+    pub tenant: String,
+    pub table_id: u64,
+    pub seq: MatchSeq,
+    pub column: String,
+    pub action: SetTableColumnMaskPolicyAction,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct SetTableColumnMaskPolicyReply {
+    pub share_table_info: Option<Vec<ShareTableInfoMap>>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableOptionReply {
     pub share_table_info: Option<Vec<ShareTableInfoMap>>,
 }
@@ -833,6 +873,7 @@ mod kvapi_key_impl {
 
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
+    use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileLockKey;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -847,6 +888,7 @@ mod kvapi_key_impl {
     use crate::schema::PREFIX_TABLE_ID_LIST;
     use crate::schema::PREFIX_TABLE_ID_TO_NAME;
     use crate::schema::PREFIX_TABLE_LOCK;
+    use crate::schema::PREFIX_TABLE_LVT;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
@@ -1017,6 +1059,26 @@ mod kvapi_key_impl {
             Ok(TableLockKey { table_id, revision })
         }
     }
+
+    /// "__fd_table_lvt/table_id"
+    impl kvapi::Key for LeastVisibleTimeKey {
+        const PREFIX: &'static str = PREFIX_TABLE_LVT;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(LeastVisibleTimeKey { table_id })
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1055,9 +1117,9 @@ mod tests {
             let res = TableCopiedFileNameIdent::from_str_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
-            assert_eq!(err, kvapi::KeyError::AtleastSegments {
+            assert_eq!(err, kvapi::KeyError::WrongNumberOfSegments {
                 expect: 3,
-                actual: 2,
+                got: key,
             });
         }
 

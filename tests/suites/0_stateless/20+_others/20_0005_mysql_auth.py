@@ -31,24 +31,34 @@ with NativeClient(name="client1>") as client1:
     client1.expect(prompt)
     client1.send("create network policy p1 allowed_ip_list=('127.0.0.0/24');")
     client1.expect(prompt)
-    client1.send("create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');")
+    client1.send(
+        "create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');"
+    )
     client1.expect(prompt)
     client1.send("create user u2 identified by 'abc123' with set network policy='p1';")
     client1.expect(prompt)
     client1.send("create user u3 identified by 'abc123' with set network policy='p2';")
     client1.expect(prompt)
 
-mydb = mysql.connector.connect(
-    host="127.0.0.1", user="u1", passwd="abc123", port="3307"
-)
-
-mydb = mysql.connector.connect(
-    host="127.0.0.1", user="u2", passwd="abc123", port="3307"
-)
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u1", passwd="abc123", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u1 is timeout")
 
 try:
     mydb = mysql.connector.connect(
-        host="127.0.0.1", user="u3", passwd="abc123", port="3307"
+        host="127.0.0.1", user="u2", passwd="abc123", port="3307", connection_timeout=3
     )
+except mysql.connector.errors.OperationalError:
+    print("u2 is timeout")
+
+try:
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="u3", passwd="abc123", port="3307", connection_timeout=3
+    )
+except mysql.connector.errors.OperationalError:
+    print("u3 is timeout")
 except mysql.connector.errors.ProgrammingError:
-    print('u3 is blocked by client ip')
+    print("u3 is blocked by client ip")

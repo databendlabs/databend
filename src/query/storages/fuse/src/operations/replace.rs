@@ -17,38 +17,33 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableField;
-use common_pipeline_core::pipe::Pipe;
+use common_expression::FieldIndex;
 use common_pipeline_core::pipe::PipeItem;
-use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::create_dummy_item;
+use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_sql::executor::MutationKind;
+use common_sql::executor::OnConflictField;
 use rand::prelude::SliceRandom;
+use storages_common_index::BloomIndex;
+use storages_common_table_meta::meta::BlockSlotDescription;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use super::common::MutationKind;
+use super::common::TransformMergeCommitMeta;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
-use crate::operations::common::TransformSerializeBlock;
-use crate::operations::common::TransformSerializeSegment;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::BroadcastProcessor;
 use crate::operations::replace_into::MergeIntoOperationAggregator;
-use crate::operations::replace_into::OnConflictField;
-use crate::operations::replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
 impl FuseTable {
-    // The pipeline going to be constructed
+    // The big picture of the replace into pipeline:
     //
     // - If table is not empty:
     //
@@ -101,205 +96,32 @@ impl FuseTable {
     //                      └─────►│ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
     //                             └───────────────────┘       └───────────────────────┘         └───────────────────┘
 
-    #[async_backtrace::framed]
-    pub async fn build_replace_pipeline<'a>(
-        &'a self,
-        ctx: Arc<dyn TableContext>,
-        on_conflict_field_identifiers: Vec<TableField>,
-        pipeline: &'a mut Pipeline,
-    ) -> Result<()> {
-        let schema = self.table_info.schema();
-
-        let mut on_conflicts = Vec::with_capacity(on_conflict_field_identifiers.len());
-        for f in on_conflict_field_identifiers {
-            let field_name = f.name();
-            let (field_index, _) = match schema.column_with_name(field_name) {
-                Some(idx) => idx,
-                None => {
-                    return Err(ErrorCode::Internal(
-                        "not expected, on conflict field not found (after binding)",
-                    ));
-                }
-            };
-            on_conflicts.push(OnConflictField {
-                table_field: f.clone(),
-                field_index,
-            })
-        }
-
-        let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, self.get_block_thresholds())?;
-
-        // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
-        pipeline.try_resize(1)?;
-
-        // 2. connect with ReplaceIntoProcessor
-
-        //                      ┌──────────────────────┐
-        //                      │                      ├──┐
-        // ┌─────────────┐      │                      ├──┘
-        // │ UpsertSource├─────►│ ReplaceIntoProcessor │
-        // └─────────────┘      │                      ├──┐
-        //                      │                      ├──┘
-        //                      └──────────────────────┘
-        // NOTE: here the pipe items of last pipe are arranged in the following order
-        // (0) -> output_port_append_data
-        // (1) -> output_port_merge_into_action
-        //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
-        //    in our case, it is the broadcast processor
-
-        let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
-        });
-
-        let empty_table = base_snapshot.segments.is_empty();
-        let replace_into_processor =
-            ReplaceIntoProcessor::create(on_conflicts.clone(), empty_table);
-        pipeline.add_pipe(replace_into_processor.into_pipe());
-
-        // 3. connect to broadcast processor and append transform
-
-        let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
-            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
-        });
-
-        let max_threads = ctx.get_settings().get_max_threads()?;
-        let segment_partition_num =
-            std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
-
-        let serialize_block_transform = TransformSerializeBlock::try_create(
-            ctx.clone(),
-            InputPort::create(),
-            OutputPort::create(),
-            self,
-            cluster_stats_gen,
-        )?;
-        let block_builder = serialize_block_transform.get_block_builder();
-
-        let serialize_segment_transform = TransformSerializeSegment::new(
-            InputPort::create(),
-            OutputPort::create(),
-            self,
-            self.get_block_thresholds(),
-        );
-
-        if segment_partition_num == 0 {
-            let dummy_item = create_dummy_item();
-            //                      ┌──────────────────────┐            ┌──────────────────┐
-            //                      │                      ├──┬────────►│  SerializeBlock  │
-            // ┌─────────────┐      │                      ├──┘         └──────────────────┘
-            // │ UpsertSource├─────►│ ReplaceIntoProcessor │
-            // └─────────────┘      │                      ├──┐         ┌──────────────────┐
-            //                      │                      ├──┴────────►│  DummyTransform  │
-            //                      └──────────────────────┘            └──────────────────┘
-            // wrap them into pipeline, order matters!
-            pipeline.add_pipe(Pipe::create(2, 2, vec![
-                serialize_block_transform.into_pipe_item(),
-                dummy_item,
-            ]));
-        } else {
-            //                      ┌──────────────────────┐            ┌──────────────────┐
-            //                      │                      ├──┬────────►│ SerializeBlock   │
-            // ┌─────────────┐      │                      ├──┘         └──────────────────┘
-            // │ UpsertSource├─────►│ ReplaceIntoProcessor │
-            // └─────────────┘      │                      ├──┐         ┌──────────────────┐
-            //                      │                      ├──┴────────►│BroadcastProcessor│
-            //                      └──────────────────────┘            └──────────────────┘
-            let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
-            // wrap them into pipeline, order matters!
-            pipeline.add_pipe(Pipe::create(2, segment_partition_num + 1, vec![
-                serialize_block_transform.into_pipe_item(),
-                broadcast_processor.into_pipe_item(),
-            ]));
-        };
-
-        // 4. connect with MergeIntoOperationAggregators
-        if segment_partition_num == 0 {
-            let dummy_item = create_dummy_item();
-            pipeline.add_pipe(Pipe::create(2, 2, vec![
-                serialize_segment_transform.into_pipe_item(),
-                dummy_item,
-            ]));
-        } else {
-            //      ┌──────────────────┐               ┌────────────────┐
-            // ────►│  SerializeBlock  ├──────────────►│SerializeSegment│
-            //      └──────────────────┘               └────────────────┘
-            //
-            //      ┌───────────────────┐              ┌──────────────────────┐
-            // ────►│                   ├──┬──────────►│MergeIntoOperationAggr│
-            //      │                   ├──┘           └──────────────────────┘
-            //      │ BroadcastProcessor│
-            //      │                   ├──┐           ┌──────────────────────┐
-            //      │                   ├──┴──────────►│MergeIntoOperationAggr│
-            //      │                   │              └──────────────────────┘
-            //      │                   ├──┐
-            //      │                   ├──┴──────────►┌──────────────────────┐
-            //      └───────────────────┘              │MergeIntoOperationAggr│
-            //                                         └──────────────────────┘
-
-            let item_size = segment_partition_num + 1;
-            let mut pipe_items = Vec::with_capacity(item_size);
-            // setup the dummy transform
-            pipe_items.push(serialize_segment_transform.into_pipe_item());
-
-            let max_io_request = ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
-
-            // setup the merge into operation aggregators
-            let mut merge_into_operation_aggregators = self
-                .merge_into_mutators(
-                    ctx.clone(),
-                    segment_partition_num,
-                    block_builder,
-                    on_conflicts.clone(),
-                    &base_snapshot,
-                    io_request_semaphore,
-                )
-                .await?;
-            assert_eq!(
-                segment_partition_num,
-                merge_into_operation_aggregators.len()
-            );
-            pipe_items.append(&mut merge_into_operation_aggregators);
-
-            // extend the pipeline
-            assert_eq!(pipeline.output_len(), item_size);
-            assert_eq!(pipe_items.len(), item_size);
-            pipeline.add_pipe(Pipe::create(item_size, item_size, pipe_items));
-        }
-
-        // 5. connect with mutation pipes, the TableMutationAggregator, then CommitSink
-        //
-        //    ┌───────────────────┐       ┌───────────────────────┐         ┌───────────────────┐
-        //    │ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
-        //    └───────────────────┘       └───────────────────────┘         └───────────────────┘
-        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot, MutationKind::Replace)?;
-
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn merge_into_mutators(
+    #[allow(clippy::too_many_arguments)]
+    pub fn merge_into_mutators(
         &self,
         ctx: Arc<dyn TableContext>,
         num_partition: usize,
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
-        table_snapshot: &TableSnapshot,
+        bloom_filter_column_indexes: Vec<FieldIndex>,
+        segments: &[(usize, Location)],
+        block_slots: Option<BlockSlotDescription>,
         io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
-        let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
+        let chunks = Self::partition_segments(segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
                 on_conflicts.clone(),
+                bloom_filter_column_indexes.clone(),
                 chunk_of_segment_locations,
+                block_slots.clone(),
                 self.operator.clone(),
                 self.table_info.schema(),
                 self.get_write_settings(),
-                read_settings.clone(),
+                read_settings,
                 block_builder.clone(),
                 io_request_semaphore.clone(),
             )?;
@@ -309,17 +131,17 @@ impl FuseTable {
     }
 
     pub fn partition_segments(
-        segments: &[Location],
+        segments: &[(usize, Location)],
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
         let chunk_size = segments.len() / num_partition;
         assert!(chunk_size >= 1);
+        let mut segments = segments.to_vec();
 
-        let mut indexed_segment = segments.iter().enumerate().collect::<Vec<_>>();
-        indexed_segment.shuffle(&mut rand::thread_rng());
+        segments.shuffle(&mut rand::thread_rng());
 
         let mut chunks = Vec::with_capacity(num_partition);
-        for chunk in indexed_segment.chunks(chunk_size) {
+        for chunk in segments.chunks(chunk_size) {
             let mut segment_chunk = chunk
                 .iter()
                 .map(|(segment_idx, location)| (*segment_idx, (*location).clone()))
@@ -333,42 +155,33 @@ impl FuseTable {
         chunks
     }
 
-    pub fn chain_mutation_pipes(
+    pub fn chain_mutation_aggregator(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
         mutation_kind: MutationKind,
     ) -> Result<()> {
-        // resize
         pipeline.try_resize(1)?;
 
-        // a) append TableMutationAggregator
         pipeline.add_transform(|input, output| {
             let base_segments = base_snapshot.segments.clone();
-            let base_summary = base_snapshot.summary.clone();
-            let thresholds = self.get_block_thresholds();
-            let location_gen = self.meta_location_generator.clone();
-            let schema = self.table_info.schema();
-            let dal = self.operator.clone();
-            let mutation_aggregator = TableMutationAggregator::create(
-                ctx.clone(),
-                base_segments,
-                base_summary,
-                thresholds,
-                location_gen,
-                schema,
-                dal,
-                mutation_kind,
-            );
+            let mutation_aggregator =
+                TableMutationAggregator::new(self, ctx.clone(), base_segments, mutation_kind);
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,
                 output,
                 mutation_aggregator,
             )))
-        })?;
+        })
+    }
 
-        // b) append  CommitSink
+    pub fn chain_commit_sink(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        base_snapshot: Arc<TableSnapshot>,
+    ) -> Result<()> {
         let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
             CommitSink::try_create(
@@ -379,8 +192,65 @@ impl FuseTable {
                 input,
                 None,
                 false,
+                None,
             )
-        })?;
-        Ok(())
+        })
+    }
+
+    pub fn chain_mutation_pipes(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
+    ) -> Result<()> {
+        self.chain_mutation_aggregator(ctx, pipeline, base_snapshot.clone(), mutation_kind)?;
+        self.chain_commit_sink(ctx, pipeline, base_snapshot)
+    }
+
+    pub fn chain_commit_meta_merger(
+        &self,
+        pipeline: &mut Pipeline,
+        default_cluster_key_id: Option<u32>,
+    ) -> Result<()> {
+        pipeline.try_resize(1)?;
+        pipeline.add_transform(|input, output| {
+            let merger = TransformMergeCommitMeta::create(default_cluster_key_id);
+            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                input, output, merger,
+            )))
+        })
+    }
+
+    // choose the bloom filter columns (from on-conflict fields).
+    // columns with larger number of number-of-distinct-values, will be kept, is their types
+    // are supported by bloom index.
+    pub async fn choose_bloom_filter_columns(
+        &self,
+        on_conflicts: &[OnConflictField],
+        max_num_columns: u64,
+    ) -> Result<Vec<FieldIndex>> {
+        let col_stats_provider = self.column_statistics_provider().await?;
+        let mut cols = on_conflicts
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, key)| {
+                if !BloomIndex::supported_type(&key.table_field.data_type) {
+                    None
+                } else {
+                    let maybe_col_stats =
+                        col_stats_provider.column_statistics(key.table_field.column_id);
+                    // Safe to unwrap: ndv in FuseTable's ColumnStatistics is not None.
+                    maybe_col_stats.map(|col_stats| (idx, col_stats.ndv.unwrap()))
+                }
+            })
+            .collect::<Vec<_>>();
+
+        cols.sort_by(|l, r| l.1.cmp(&r.1).reverse());
+        Ok(cols
+            .into_iter()
+            .map(|v| v.0)
+            .take(max_num_columns as usize)
+            .collect())
     }
 }

@@ -40,6 +40,7 @@ use super::status;
 use super::DoGetStream;
 use super::FlightSqlServiceImpl;
 use crate::interpreters::InterpreterFactory;
+use crate::sessions::QueryContext;
 use crate::sessions::Session;
 
 /// A app_metakey which indicates the data is a progress type
@@ -122,7 +123,7 @@ impl FlightSqlServiceImpl {
         context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), plan).await?;
 
-        let data_schema = interpreter.schema();
+        let data_schema = plan.schema();
         let data_stream = interpreter.execute(context.clone()).await?;
 
         let is_finished = Arc::new(AtomicBool::new(false));
@@ -170,36 +171,55 @@ impl FlightSqlServiceImpl {
                 let mut interval =
                     tokio::time::interval(tokio::time::Duration::from_millis(TICK_MS as u64));
                 let mut wait_times = 0;
+
+                let mut get_progress =
+                    |context: &Arc<QueryContext>, is_final: bool| -> Option<FlightData> {
+                        let progress = context.get_scan_progress_value();
+                        // only send progress when the increment progress is more than 3% or MAX_WAIT_MS elapsed
+                        if !is_final
+                            && progress.bytes - current_scan_value.bytes
+                                < total_scan_value.bytes * MIN_PERCENT_PROGRESS / 100
+                            && wait_times < MAX_WAIT_MS / TICK_MS
+                        {
+                            wait_times += 1;
+                            return None;
+                        }
+
+                        wait_times = 0;
+                        current_scan_value = progress;
+
+                        let mut progress = ProgressValue {
+                            total_rows: total_scan_value.rows,
+                            total_bytes: total_scan_value.bytes,
+
+                            read_rows: current_scan_value.rows,
+                            read_bytes: current_scan_value.bytes,
+                            write_rows: 0,
+                            write_bytes: 0,
+                        };
+
+                        if is_final {
+                            let write_progress = context.get_write_progress_value();
+                            progress.write_rows = write_progress.rows;
+                            progress.write_bytes = write_progress.bytes;
+                        }
+
+                        let progress = serde_json::to_vec(&progress).unwrap();
+                        Some(FlightData {
+                            app_metadata: vec![H_PROGRESS].into(),
+                            data_body: progress.into(),
+                            ..Default::default()
+                        })
+                    };
+
                 while !is_finished.load(Ordering::SeqCst) {
                     interval.tick().await;
-
-                    let progress = context.get_scan_progress_value();
-                    // only send progress when the increment progress is more than 3% or MAX_WAIT_MS elapsed
-                    if progress.bytes - current_scan_value.bytes
-                        < total_scan_value.bytes * MIN_PERCENT_PROGRESS / 100
-                        && wait_times < MAX_WAIT_MS / TICK_MS
-                    {
-                        wait_times += 1;
-                        continue;
+                    if let Some(progress_flight_data) = get_progress(&context, false) {
+                        let _ = sender.send(Ok(progress_flight_data)).await;
                     }
+                }
 
-                    wait_times = 0;
-                    current_scan_value = progress;
-
-                    let progress = ProgressValue {
-                        total_rows: total_scan_value.rows,
-                        total_bytes: total_scan_value.bytes,
-
-                        read_rows: current_scan_value.rows,
-                        read_bytes: current_scan_value.bytes,
-                    };
-
-                    let progress = serde_json::to_vec(&progress).unwrap();
-                    let progress_flight_data = FlightData {
-                        app_metadata: vec![H_PROGRESS].into(),
-                        data_body: progress.into(),
-                        ..Default::default()
-                    };
+                if let Some(progress_flight_data) = get_progress(&context, true) {
                     let _ = sender.send(Ok(progress_flight_data)).await;
                 }
             });
@@ -225,4 +245,7 @@ struct ProgressValue {
 
     pub read_rows: usize,
     pub read_bytes: usize,
+
+    pub write_rows: usize,
+    pub write_bytes: usize,
 }

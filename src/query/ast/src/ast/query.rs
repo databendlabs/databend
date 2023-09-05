@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_exception::Span;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
@@ -59,7 +59,8 @@ pub struct With {
 pub struct CTE {
     pub span: Span,
     pub alias: TableAlias,
-    pub query: Query,
+    pub materialized: bool,
+    pub query: Box<Query>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -117,6 +118,8 @@ pub enum SetExpr {
     Query(Box<Query>),
     // UNION/EXCEPT/INTERSECT operator
     SetOperation(Box<SetOperation>),
+    // Values clause
+    Values { span: Span, values: Vec<Vec<Expr>> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -327,6 +330,7 @@ impl SetExpr {
             SetExpr::Select(stmt) => stmt.span,
             SetExpr::Query(query) => query.span,
             SetExpr::SetOperation(op) => op.span,
+            SetExpr::Values { span, .. } => *span,
         }
     }
 
@@ -414,7 +418,7 @@ impl Display for TableReference {
                 pivot,
                 unpivot,
             } => {
-                write_period_separated_list(
+                write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
@@ -559,7 +563,7 @@ impl Display for SelectTarget {
                 }
             }
             SelectTarget::QualifiedName { qualified, exclude } => {
-                write_period_separated_list(f, qualified)?;
+                write_dot_separated_list(f, qualified)?;
                 if let Some(cols) = exclude {
                     // EXCLUDE
                     if !cols.is_empty() {
@@ -668,6 +672,17 @@ impl Display for SetExpr {
                 }
                 write!(f, "{}", set_operation.right)?;
             }
+            SetExpr::Values { values, .. } => {
+                write!(f, "VALUES")?;
+                for (i, value) in values.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "(")?;
+                    write_comma_separated_list(f, value)?;
+                    write!(f, ")")?;
+                }
+            }
         }
         Ok(())
     }
@@ -675,7 +690,11 @@ impl Display for SetExpr {
 
 impl Display for CTE {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} AS ({})", self.alias, self.query)?;
+        write!(f, "{} AS ", self.alias)?;
+        if self.materialized {
+            write!(f, "MATERIALIZED ")?;
+        }
+        write!(f, "({})", self.query)?;
         Ok(())
     }
 }

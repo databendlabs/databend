@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
+
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
@@ -20,6 +22,11 @@ use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
+
+use crate::statistics::column_statistic::Trim;
+use crate::table_functions::cmp_with_null;
+
+pub const CLUSTER_STATS_STRING_PREFIX_LEN: usize = 8;
 
 #[derive(Clone, Default)]
 pub struct ClusterStatsGenerator {
@@ -113,6 +120,7 @@ impl ClusterStatsGenerator {
         self.clusters_statistics(&block, origin_stats.level)
     }
 
+    /// for string value, only use the first 8 bytes.
     fn clusters_statistics(
         &self,
         data_block: &DataBlock,
@@ -127,11 +135,22 @@ impl ClusterStatsGenerator {
         for key in self.cluster_key_index.iter() {
             let val = data_block.get_by_offset(*key);
             let val_ref = val.value.as_ref();
-            let left = unsafe { val_ref.index_unchecked(0) };
-            min.push(left.to_owned());
+            let left = unsafe { val_ref.index_unchecked(0) }.to_owned();
+            min.push(
+                left.clone()
+                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
+                    .unwrap_or(left),
+            );
 
-            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) };
-            max.push(right.to_owned());
+            // The maximum in cluster statistics neednot larger than the non-trimmed one.
+            // So we use trim_min directly.
+            let right = unsafe { val_ref.index_unchecked(val_ref.len() - 1) }.to_owned();
+            max.push(
+                right
+                    .clone()
+                    .trim_min(CLUSTER_STATS_STRING_PREFIX_LEN)
+                    .unwrap_or(right),
+            );
         }
 
         let level = if min == max
@@ -161,12 +180,32 @@ impl ClusterStatsGenerator {
             None
         };
 
-        Ok(Some(ClusterStatistics {
-            cluster_key_id: self.cluster_key_id,
+        Ok(Some(ClusterStatistics::new(
+            self.cluster_key_id,
             min,
             max,
             level,
             pages,
-        }))
+        )))
+    }
+}
+
+pub fn sort_by_cluster_stats(
+    v1: &Option<ClusterStatistics>,
+    v2: &Option<ClusterStatistics>,
+    default_cluster_key: u32,
+) -> Ordering {
+    match (v1.as_ref(), v2.as_ref()) {
+        (Some(a), Some(b)) => {
+            if a.cluster_key_id != default_cluster_key && b.cluster_key_id != default_cluster_key {
+                return Ordering::Equal;
+            }
+
+            match a.min().iter().cmp_by(b.min().iter(), cmp_with_null) {
+                Ordering::Equal => a.max().iter().cmp_by(b.max().iter(), cmp_with_null),
+                ord => ord,
+            }
+        }
+        _ => Ordering::Equal,
     }
 }

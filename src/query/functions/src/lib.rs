@@ -16,6 +16,7 @@
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]
 #![feature(type_ascription)]
+#![feature(try_blocks)]
 
 use aggregates::AggregateFunctionFactory;
 use common_expression::FunctionRegistry;
@@ -30,6 +31,7 @@ pub fn is_builtin_function(name: &str) -> bool {
     BUILTIN_FUNCTIONS.contains(name)
         || AggregateFunctionFactory::instance().contains(name)
         || GENERAL_WINDOW_FUNCTIONS.contains(&name)
+        || GENERAL_LAMBDA_FUNCTIONS.contains(&name)
 }
 
 #[ctor]
@@ -50,6 +52,8 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 13] = [
     "ntile",
     "cume_dist",
 ];
+
+pub const GENERAL_LAMBDA_FUNCTIONS: [&str; 3] = ["array_transform", "array_apply", "array_filter"];
 
 fn builtin_functions() -> FunctionRegistry {
     let mut registry = FunctionRegistry::empty();

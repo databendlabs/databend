@@ -33,6 +33,7 @@ use storages_common_index::RangeIndex;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
+use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
@@ -103,9 +104,13 @@ impl FuseTable {
                 }
             }
 
-            let ops = vec![BlockOperator::Map { exprs }, BlockOperator::Project {
-                projection,
-            }];
+            let ops = vec![
+                BlockOperator::Map {
+                    exprs,
+                    projections: None,
+                },
+                BlockOperator::Project { projection },
+            ];
 
             let query_ctx = ctx.clone();
             let func_ctx = query_ctx.get_function_context()?;
@@ -207,6 +212,22 @@ impl FuseTable {
                 .transpose()?,
         );
 
+        let virtual_reader = Arc::new(
+            PushDownInfo::virtual_columns_of_push_downs(&plan.push_downs)
+                .as_ref()
+                .map(|virtual_columns| {
+                    VirtualColumnReader::try_create(
+                        ctx.clone(),
+                        self.operator.clone(),
+                        block_reader.schema(),
+                        plan,
+                        virtual_columns.clone(),
+                        self.table_compression,
+                    )
+                })
+                .transpose()?,
+        );
+
         Self::build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
@@ -216,6 +237,7 @@ impl FuseTable {
             topk,
             max_io_requests,
             index_reader,
+            virtual_reader,
         )?;
 
         // replace the column which has data mask if needed
@@ -234,6 +256,7 @@ impl FuseTable {
         top_k: Option<TopK>,
         max_io_requests: usize,
         index_reader: Arc<Option<AggIndexReader>>,
+        virtual_reader: Arc<Option<VirtualColumnReader>>,
     ) -> Result<()> {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
@@ -247,6 +270,7 @@ impl FuseTable {
                 top_k,
                 max_io_requests,
                 index_reader,
+                virtual_reader,
             ),
             FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
                 ctx,
@@ -256,6 +280,7 @@ impl FuseTable {
                 max_threads,
                 max_io_requests,
                 index_reader,
+                virtual_reader,
             ),
         }
     }

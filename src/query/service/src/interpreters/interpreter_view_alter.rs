@@ -50,7 +50,7 @@ impl Interpreter for AlterViewInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // drop view
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         if let Ok(tbl) = catalog
             .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
             .await

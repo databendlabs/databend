@@ -61,6 +61,7 @@ educe = "0.4"
 enum-as-inner = "0.5"
 globiter = "0.1"
 itertools = "0.10.5"
+log = { workspace = true }
 num-derive = "0.3.3"
 num-traits = "0.2.15"
 once_cell = "1.15.0"
@@ -73,6 +74,7 @@ roaring = "0.10.1"
 serde = { workspace = true }
 simsearch = "0.2"
 time = "0.3.14"
-tracing = "0.1.36"
+
+indexmap = "2.0.0"
 url = { version = "2.3" }
-z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }
+z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }

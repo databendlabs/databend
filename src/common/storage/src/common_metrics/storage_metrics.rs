@@ -24,6 +24,7 @@ use std::time::Instant;
 use async_trait::async_trait;
 use bytes::Bytes;
 use opendal::raw::oio;
+use opendal::raw::oio::Streamer;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
@@ -240,10 +241,7 @@ impl<R> StorageMetricsWrapper<R> {
 
 impl<R: oio::Read> oio::Read for StorageMetricsWrapper<R> {
     fn poll_read(&mut self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<Result<usize>> {
-        let start = match self.last_pending {
-            None => Instant::now(),
-            Some(t) => t,
-        };
+        let start = self.last_pending.unwrap_or(Instant::now());
 
         let result = self.inner.poll_read(cx, buf);
 
@@ -307,6 +305,11 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
     #[async_backtrace::framed]
     async fn abort(&mut self) -> Result<()> {
         self.inner.abort().await
+    }
+
+    #[async_backtrace::framed]
+    async fn sink(&mut self, size: u64, s: Streamer) -> Result<()> {
+        self.inner.sink(size, s).await
     }
 
     #[async_backtrace::framed]

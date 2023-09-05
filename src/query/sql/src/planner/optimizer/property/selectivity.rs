@@ -21,11 +21,11 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
+use common_storage::Datum;
+use common_storage::F64;
 
 use crate::optimizer::histogram_from_ndv;
-use crate::optimizer::property::datum::F64;
 use crate::optimizer::ColumnStat;
-use crate::optimizer::Datum;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::ComparisonOp;
@@ -124,7 +124,7 @@ impl<'a> SelectivityEstimator<'a> {
             } else {
                 return Ok(DEFAULT_SELECTIVITY);
             };
-            let const_datum = if let Some(datum) = Datum::from_scalar(&constant.value) {
+            let const_datum = if let Some(datum) = Datum::from_scalar(constant.value.clone()) {
                 datum
             } else {
                 return Ok(DEFAULT_SELECTIVITY);
@@ -290,13 +290,12 @@ impl<'a> SelectivityEstimator<'a> {
                 let new_ndv = (column_stat.ndv * selectivity).ceil();
                 column_stat.ndv = new_ndv;
                 if let Some(histogram) = &mut column_stat.histogram {
-                    let new_ndv = new_ndv as u64;
-                    if new_ndv <= 2 {
+                    if new_ndv as u64 <= 2 {
                         column_stat.histogram = None;
-                        return;
-                    }
-                    for bucket in histogram.buckets.iter_mut() {
-                        bucket.update(selectivity);
+                    } else {
+                        for bucket in histogram.buckets.iter_mut() {
+                            bucket.update(selectivity);
+                        }
                     }
                 }
             }
@@ -317,7 +316,7 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
 }
 
 fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
-    let constant_datum = Datum::from_scalar(&constant.value);
+    let constant_datum = Datum::from_scalar(constant.value.clone());
     match constant.value.as_ref().infer_data_type() {
         DataType::Null => 0.0,
         DataType::Number(number) => match number {
@@ -372,7 +371,10 @@ fn update_statistic(
 ) -> Result<()> {
     let new_ndv = (column_stat.ndv * selectivity).ceil();
     column_stat.ndv = new_ndv;
-    if matches!(new_min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
+    if matches!(
+        new_min,
+        Datum::Bool(_) | Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)
+    ) {
         new_min = Datum::Float(F64::from(new_min.to_double()?));
         new_max = Datum::Float(F64::from(new_max.to_double()?));
     }

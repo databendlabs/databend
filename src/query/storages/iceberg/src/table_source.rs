@@ -15,67 +15,57 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
 use common_base::base::Progress;
-use common_catalog::plan::PartInfoPtr;
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use futures::StreamExt;
-use icelake::io::parquet::ParquetStream;
-use icelake::io::parquet::ParquetStreamBuilder;
-use opendal::Operator;
+use common_storages_parquet::ParquetPart;
+use common_storages_parquet::ParquetRSReader;
+use opendal::Reader;
+use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
 use crate::partition::IcebergPartInfo;
 
 pub struct IcebergTableSource {
-    state: State,
-    ctx: Arc<dyn TableContext>,
-    dal: Operator,
-    _scan_progress: Arc<Progress>,
+    // Source processor related fields.
     output: Arc<OutputPort>,
+    scan_progress: Arc<Progress>,
+    // Used for event transforming.
+    ctx: Arc<dyn TableContext>,
+    generated_data: Option<DataBlock>,
+    is_finished: bool,
 
-    /// The schema before output. Some fields might be removed when outputting.
-    _source_schema: DataSchemaRef,
-    /// The final output schema
-    _output_schema: DataSchemaRef,
-}
-
-enum State {
-    /// Read parquet file meta data
-    ReadMeta(Option<PartInfoPtr>),
-
-    /// Read data from parquet file.
-    ///
-    /// `Option<RecordBatch>` means there are data blocks ready for push.
-    ReadData(ParquetStream, Option<RecordBatch>),
-
-    Finish,
+    // Used to read parquet.
+    output_schema: DataSchemaRef,
+    parquet_reader: Arc<ParquetRSReader>,
+    stream: Option<ParquetRecordBatchStream<Reader>>,
 }
 
 impl IcebergTableSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
-        dal: Operator,
         output: Arc<OutputPort>,
-        source_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
+        parquet_reader: Arc<ParquetRSReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {
-            ctx,
-            dal,
             output,
-            _scan_progress: scan_progress,
-            state: State::ReadMeta(None),
-            _source_schema: source_schema,
-            _output_schema: output_schema,
+            scan_progress,
+            ctx,
+            parquet_reader,
+            output_schema,
+            stream: None,
+            generated_data: None,
+            is_finished: false,
         })))
     }
 }
@@ -83,7 +73,7 @@ impl IcebergTableSource {
 #[async_trait::async_trait]
 impl Processor for IcebergTableSource {
     fn name(&self) -> String {
-        "IcebergEngineSource".to_string()
+        "IcebergSource".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -91,13 +81,9 @@ impl Processor for IcebergTableSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::ReadMeta(None)) {
-            match self.ctx.get_partition() {
-                None => self.state = State::Finish,
-                Some(part_info) => {
-                    self.state = State::ReadMeta(Some(part_info));
-                }
-            }
+        if self.is_finished {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
@@ -108,73 +94,92 @@ impl Processor for IcebergTableSource {
             return Ok(Event::NeedConsume);
         }
 
-        if matches!(self.state, State::ReadData(_, _)) {
-            if let State::ReadData(ps, mut data) = std::mem::replace(&mut self.state, State::Finish)
-            {
-                if let Some(arrow_block) = data.take() {
-                    let (data_block, _) =
-                        DataBlock::from_record_batch(&arrow_block).map_err(|err| {
-                            ErrorCode::ReadTableDataError(format!(
-                                "Cannot convert arrow record batch to data block: {err:?}"
-                            ))
-                        })?;
-                    self.output.push_data(Ok(data_block));
-                }
-
-                // Let's fetch more data.
-                self.state = State::ReadData(ps, None);
-
-                return Ok(Event::Async);
+        match self.generated_data.take() {
+            None => Ok(Event::Async),
+            Some(data_block) => {
+                let progress_values = ProgressValues {
+                    rows: data_block.num_rows(),
+                    bytes: data_block.memory_size(),
+                };
+                self.scan_progress.incr(&progress_values);
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
             }
         }
-
-        match self.state {
-            State::Finish => {
-                self.output.finish();
-                Ok(Event::Finished)
-            }
-            State::ReadMeta(_) => Ok(Event::Async),
-            State::ReadData(_, _) => Ok(Event::Async),
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        Err(ErrorCode::Internal(
-            "It's a bug for IcebergTableSource to go into Event::Sync.",
-        ))
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::Finish) {
-            State::ReadMeta(Some(part)) => {
-                let part = IcebergPartInfo::from_part(&part)?;
-                let r = self.dal.reader(&part.path).await?;
-                let s = ParquetStreamBuilder::new(r)
-                    .build()
-                    .await
-                    .map_err(parse_icelake_error)?;
-                self.state = State::ReadData(s, None);
-                Ok(())
+        if let Some(mut stream) = self.stream.take() {
+            if let Some(block) = self
+                .parquet_reader
+                .read_block_from_stream(&mut stream)
+                .await?
+                .map(|b| check_block_schema(&self.output_schema, b))
+                .transpose()?
+            {
+                self.generated_data = Some(block);
+                self.stream = Some(stream);
             }
-            State::ReadData(mut stream, None) => match stream.next().await {
-                None => {
-                    self.state = State::ReadMeta(None);
-                    Ok(())
+            // else:
+            // If `read_block` returns `None`, it means the stream is finished.
+            // And we should try to build another stream (in next event loop).
+        } else if let Some(part) = self.ctx.get_partition() {
+            match IcebergPartInfo::from_part(&part)? {
+                IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(files)) => {
+                    assert_eq!(files.files.len(), 1);
+                    let stream = self
+                        .parquet_reader
+                        .prepare_data_stream(&files.files[0].0)
+                        .await?;
+                    self.stream = Some(stream);
                 }
-                Some(data) => {
-                    let data = data.map_err(parse_icelake_error)?;
-                    self.state = State::ReadData(stream, Some(data));
-                    Ok(())
-                }
-            },
-            _ => Err(ErrorCode::Internal(
-                "It's a bug for IcebergTableSource to async_process current state.",
-            )),
+                _ => unreachable!(),
+            }
+        } else {
+            self.is_finished = true;
         }
+
+        Ok(())
     }
 }
 
-fn parse_icelake_error(err: icelake::Error) -> ErrorCode {
-    ErrorCode::ReadTableDataError(format!("icelake operation failed: {:?}", err))
+fn check_block_schema(schema: &DataSchema, mut block: DataBlock) -> Result<DataBlock> {
+    // Check if the schema of the data block is matched with the schema of the table.
+    if block.num_columns() != schema.num_fields() {
+        return Err(ErrorCode::TableSchemaMismatch(format!(
+            "Data schema mismatched. Data columns length: {}, schema fields length: {}",
+            block.num_columns(),
+            schema.num_fields()
+        )));
+    }
+
+    for (col, field) in block.columns_mut().iter_mut().zip(schema.fields().iter()) {
+        // If the actual data is nullable, the field must be nullbale.
+        if col.data_type.is_nullable_or_null() && !field.is_nullable() {
+            return Err(ErrorCode::TableSchemaMismatch(format!(
+                "Data schema mismatched (col name: {}). Data column is nullable, but schema field is not nullable",
+                field.name()
+            )));
+        }
+        // The inner type of the data and field should be the same.
+        let data_type = col.data_type.remove_nullable();
+        let schema_type = field.data_type().remove_nullable();
+        if data_type != schema_type {
+            return Err(ErrorCode::TableSchemaMismatch(format!(
+                "Data schema mismatched (col name: {}). Data column type is {:?}, but schema field type is {:?}",
+                field.name(),
+                col.data_type,
+                field.data_type()
+            )));
+        }
+        // If the field is nullable but the actual data is not nullable,
+        // we should wrap nullable for the data.
+        if field.is_nullable() && !col.data_type.is_nullable_or_null() {
+            col.data_type = col.data_type.wrap_nullable();
+            col.value = col.value.clone().wrap_nullable(None);
+        }
+    }
+
+    Ok(block)
 }

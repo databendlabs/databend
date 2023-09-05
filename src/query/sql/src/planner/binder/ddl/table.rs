@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_ast::ast::AddColumnOption as AstAddColumnOption;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
@@ -32,6 +33,7 @@ use common_ast::ast::ExistsTableStmt;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
+use common_ast::ast::ModifyColumnAction;
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
@@ -69,17 +71,18 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use log::debug;
+use log::error;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use tracing::debug;
-use tracing::error;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::Binder;
+use crate::binder::ColumnBindingBuilder;
 use crate::binder::Visibility;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
@@ -89,6 +92,7 @@ use crate::parse_default_expr_to_string;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::resolve_type_name;
 use crate::planner::semantic::IdentifierNormalizer;
+use crate::plans::AddColumnOption;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
@@ -98,6 +102,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
@@ -115,7 +120,6 @@ use crate::plans::VacuumDropTablePlan;
 use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::Planner;
 use crate::SelectBuilder;
 
@@ -358,7 +362,8 @@ impl Binder {
             Some(ident) => {
                 let database = normalize_identifier(ident, &self.name_resolution_ctx).name;
                 self.ctx
-                    .get_catalog(&ctl_name)?
+                    .get_catalog(&ctl_name)
+                    .await?
                     .get_database(&self.ctx.get_tenant(), &database)
                     .await?;
                 Ok(database)
@@ -500,7 +505,7 @@ impl Binder {
             //
             // Later, when database id is kept, let say in `TableInfo`, we can
             // safely eliminate this "FUSE" constant and the table meta option entry.
-            let catalog = self.ctx.get_catalog(&catalog)?;
+            let catalog = self.ctx.get_catalog(&catalog).await?;
             let db = catalog
                 .get_database(&self.ctx.get_tenant(), &database)
                 .await?;
@@ -761,13 +766,23 @@ impl Binder {
                     new_column,
                 })))
             }
-            AlterTableAction::AddColumn { column } => {
+            AlterTableAction::AddColumn {
+                column,
+                option: ast_option,
+            } => {
                 let schema = self
                     .ctx
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
                 let (field, comment) = self.analyze_add_column(column, schema).await?;
+                let option = match ast_option {
+                    AstAddColumnOption::First => AddColumnOption::First,
+                    AstAddColumnOption::After(ident) => AddColumnOption::After(
+                        normalize_identifier(ident, &self.name_resolution_ctx).name,
+                    ),
+                    AstAddColumnOption::End => AddColumnOption::End,
+                };
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
                     tenant: self.ctx.get_tenant(),
                     catalog,
@@ -775,15 +790,43 @@ impl Binder {
                     table,
                     field,
                     comment,
+                    option,
                 })))
             }
-            AlterTableAction::ModifyColumn { column, action } => {
+            AlterTableAction::ModifyColumn { action } => {
+                let action_in_plan = match action {
+                    ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                        ModifyColumnActionInPlan::SetMaskingPolicy(
+                            column.to_string(),
+                            name.to_string(),
+                        )
+                    }
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column.to_string())
+                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
+                    }
+                    ModifyColumnAction::SetDataType(column_def_vec) => {
+                        let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        let schema = self
+                            .ctx
+                            .get_table(&catalog, &database, &table)
+                            .await?
+                            .schema();
+                        for column in column_def_vec {
+                            let (field, comment) =
+                                self.analyze_add_column(column, schema.clone()).await?;
+                            field_and_comment.push((field, comment));
+                        }
+                        ModifyColumnActionInPlan::SetDataType(field_and_comment)
+                    }
+                };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    column: column.to_string(),
-                    action: action.clone(),
+                    action: action_in_plan,
                 })))
             }
             AlterTableAction::DropColumn { column } => {
@@ -835,6 +878,8 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    self.m_cte_bound_ctx.clone(),
+                    self.ctes_map.clone(),
                 );
 
                 let push_downs = if let Some(expr) = selection {
@@ -1340,17 +1385,14 @@ impl Binder {
         // Build a temporary BindContext to resolve the expr
         let mut bind_context = BindContext::new();
         for (index, field) in schema.fields().iter().enumerate() {
-            let column = ColumnBinding {
-                database_name: None,
-                table_name: None,
-                column_position: None,
-                table_index: None,
-                column_name: field.name().clone(),
+            let column = ColumnBindingBuilder::new(
+                field.name().clone(),
                 index,
-                data_type: Box::new(DataType::from(field.data_type())),
-                visibility: Visibility::Visible,
-                virtual_computed_expr: None,
-            };
+                Box::new(DataType::from(field.data_type())),
+                Visibility::Visible,
+            )
+            .build();
+
             bind_context.columns.push(column);
         }
         let mut scalar_binder = ScalarBinder::new(
@@ -1359,6 +1401,8 @@ impl Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            self.m_cte_bound_ctx.clone(),
+            self.ctes_map.clone(),
         );
         // cluster keys cannot be a udf expression.
         scalar_binder.forbid_udf();
@@ -1381,6 +1425,14 @@ impl Binder {
                 )));
             }
 
+            let data_type = expr.data_type();
+            if !Self::valid_cluster_key_type(data_type) {
+                return Err(ErrorCode::InvalidClusterKeys(format!(
+                    "Unsupported data type '{}' for cluster by expression `{:#}`",
+                    data_type, cluster_by
+                )));
+            }
+
             let mut cluster_by = cluster_by.clone();
             walk_expr_mut(
                 &mut IdentifierNormalizer {
@@ -1392,5 +1444,18 @@ impl Binder {
         }
 
         Ok(cluster_keys)
+    }
+
+    fn valid_cluster_key_type(data_type: &DataType) -> bool {
+        let inner_type = data_type.remove_nullable();
+        matches!(
+            inner_type,
+            DataType::Number(_)
+                | DataType::String
+                | DataType::Timestamp
+                | DataType::Date
+                | DataType::Boolean
+                | DataType::Decimal(_)
+        )
     }
 }

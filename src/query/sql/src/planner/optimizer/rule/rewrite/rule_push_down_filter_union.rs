@@ -18,6 +18,7 @@ use ahash::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::binder::ColumnBindingBuilder;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -28,6 +29,7 @@ use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -37,7 +39,6 @@ use crate::plans::UnionAll;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
-use crate::ColumnBinding;
 use crate::IndexType;
 use crate::Visibility;
 
@@ -147,17 +148,14 @@ fn replace_column_binding(
         ScalarExpr::BoundColumnRef(column) => {
             let index = column.column.index;
             if index_pairs.contains_key(&index) {
-                let new_column = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    column_position: None,
-                    table_index: None,
-                    column_name: column.column.column_name.clone(),
-                    index: *index_pairs.get(&index).unwrap(),
-                    data_type: column.column.data_type,
-                    visibility: Visibility::Visible,
-                    virtual_computed_expr: column.column.virtual_computed_expr.clone(),
-                };
+                let new_column = ColumnBindingBuilder::new(
+                    column.column.column_name.clone(),
+                    *index_pairs.get(&index).unwrap(),
+                    column.column.data_type,
+                    Visibility::Visible,
+                )
+                .virtual_computed_expr(column.column.virtual_computed_expr.clone())
+                .build();
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: column.span,
                     column: new_column,
@@ -248,6 +246,23 @@ fn replace_column_binding(
                 .map(|arg| replace_column_binding(index_pairs, arg))
                 .collect::<Result<Vec<_>>>()?,
         })),
+        ScalarExpr::LambdaFunction(lambda_func) => {
+            let args = lambda_func
+                .args
+                .into_iter()
+                .map(|arg| replace_column_binding(index_pairs, arg))
+                .collect::<Result<Vec<ScalarExpr>>>()?;
+
+            Ok(ScalarExpr::LambdaFunction(LambdaFunc {
+                span: lambda_func.span,
+                func_name: lambda_func.func_name.clone(),
+                display_name: lambda_func.display_name.clone(),
+                args,
+                params: lambda_func.params.clone(),
+                lambda_expr: lambda_func.lambda_expr.clone(),
+                return_type: lambda_func.return_type,
+            }))
+        }
         ScalarExpr::CastExpr(expr) => Ok(ScalarExpr::CastExpr(CastExpr {
             span: expr.span,
             is_try: expr.is_try,

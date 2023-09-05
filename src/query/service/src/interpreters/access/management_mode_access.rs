@@ -14,22 +14,21 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::interpreters::access::AccessChecker;
-use crate::sessions::query_ctx::Origin::BuiltInProcedure;
 use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
-pub struct ManagementModeAccess {
-    ctx: Arc<QueryContext>,
-}
+pub struct ManagementModeAccess {}
 
 impl ManagementModeAccess {
-    pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
-        Box::new(ManagementModeAccess { ctx })
+    pub fn create() -> Box<dyn AccessChecker> {
+        Box::new(ManagementModeAccess {})
     }
 }
 
@@ -37,15 +36,12 @@ impl ManagementModeAccess {
 impl AccessChecker for ManagementModeAccess {
     // Check what we can do if in management mode.
     #[async_backtrace::framed]
-    async fn check(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         // Allows for management-mode.
         if GlobalConfig::instance().query.management_mode {
             let ok = match plan {
                 Plan::Query {rewrite_kind, .. } => {
                     use common_sql::plans::RewriteKind;
-                    if self.ctx.get_origin() == BuiltInProcedure {
-                        true
-                    } else {
                         match rewrite_kind  {
                             Some(ref v) => matches!(v,
                             RewriteKind::ShowDatabases
@@ -59,10 +55,10 @@ impl AccessChecker for ManagementModeAccess {
                             | RewriteKind::ShowStages
                             | RewriteKind::DescribeStage
                             | RewriteKind::ListStage
+                            | RewriteKind::Call
                             | RewriteKind::ShowRoles),
                             _ => false
                         }
-                    }
                 },
                 // Show.
                 Plan::ShowCreateDatabase(_)
@@ -77,9 +73,10 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::DropDatabase(_)
 
                 // Table.
-                | Plan::DescribeTable(_)
                 | Plan::CreateTable(_)
                 | Plan::DropTable(_)
+                | Plan::DropView(_)
+                | Plan::CreateView(_)
 
                 // User.
                 | Plan::AlterUser(_)
@@ -108,9 +105,15 @@ impl AccessChecker for ManagementModeAccess {
                 | Plan::CreateUDF(_)
                 | Plan::AlterUDF(_)
                 | Plan::DropUDF(_)
-                | Plan::UseDatabase(_)
-                | Plan::Call(_) => true,
-                _ => false
+                | Plan::UseDatabase(_) => true,
+                Plan::DescribeTable(plan) => {
+                    let catalog = &plan.catalog;
+                    let database = &plan.database;
+                    let table = &plan.table;
+                    let table = ctx.get_table(catalog, database, table).await?;
+                    table.get_table_info().engine() != VIEW_ENGINE
+                },
+                _ => false,
             };
 
             if !ok {

@@ -21,7 +21,9 @@ use common_meta_raft_store::config::RaftConfig as InnerRaftConfig;
 use common_meta_types::MetaStartupError;
 use common_tracing::Config as InnerLogConfig;
 use common_tracing::FileConfig as InnerFileLogConfig;
+use common_tracing::QueryLogConfig;
 use common_tracing::StderrConfig as InnerStderrLogConfig;
+use common_tracing::TracingConfig;
 use serde::Deserialize;
 use serde::Serialize;
 use serfig::collectors::from_env;
@@ -59,7 +61,7 @@ pub struct Config {
     pub cmd: String,
 
     /// The key sent to databend-meta server and is only used when running with `--cmd kvapi::*`
-    #[clap(long, default_value = "", multiple = true)]
+    #[clap(long, default_value = "")]
     pub key: Vec<String>,
 
     /// The value sent to databend-meta server and is only used when running with `--cmd kvapi::upsert`
@@ -466,7 +468,7 @@ pub struct RaftConfig {
     /// If on-disk data is already initialized, this argument has no effect.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
-    #[clap(long, multiple_occurrences = true, multiple_values = true)]
+    #[clap(long)]
     pub join: Vec<String>,
 
     /// Do not run databend-meta, but just remove a node from its cluster via the provided endpoints.
@@ -577,6 +579,11 @@ impl Into<InnerLogConfig> for LogConfig {
         InnerLogConfig {
             file: self.file.into(),
             stderr: self.stderr.into(),
+            query: QueryLogConfig {
+                on: false,
+                dir: "".to_string(),
+            },
+            tracing: TracingConfig::from_env(),
         }
     }
 }
@@ -669,8 +676,10 @@ impl Default for StderrLogConfig {
 impl Into<InnerStderrLogConfig> for StderrLogConfig {
     fn into(self) -> InnerStderrLogConfig {
         InnerStderrLogConfig {
-            on: self.stderr_on,
-            level: self.stderr_level,
+            on: std::env::var("LOG_STDERR_ON").as_deref() == Ok("true")
+                || std::env::var("RUST_LOG").is_ok()
+                || self.stderr_on,
+            level: std::env::var("RUST_LOG").unwrap_or(self.stderr_level),
             format: self.stderr_format,
         }
     }

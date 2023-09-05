@@ -49,6 +49,8 @@ pub struct CompactAggregator {
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
+    thresholds: BlockThresholds,
+    default_cluster_key_id: Option<u32>,
 
     // locations all the merged segments.
     merged_segments: BTreeMap<usize, Location>,
@@ -56,7 +58,6 @@ pub struct CompactAggregator {
     merged_statistics: Statistics,
     // locations all the merged blocks.
     merge_blocks: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
-    thresholds: BlockThresholds,
     abort_operation: AbortOperation,
 
     start_time: Instant,
@@ -73,6 +74,7 @@ impl CompactAggregator {
             ctx: mutator.ctx.clone(),
             dal,
             location_gen,
+            default_cluster_key_id: mutator.cluster_key_id,
             merged_segments: mutator.unchanged_segments_map,
             merged_statistics: mutator.unchanged_segment_statistics,
             merge_blocks: mutator.unchanged_blocks_map,
@@ -94,7 +96,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         if let Some(meta) = data.get_owned_meta().and_then(MutationLogs::downcast_from) {
             for entry in meta.entries.into_iter() {
                 match entry {
-                    MutationLogEntry::Replaced { index, block_meta } => {
+                    MutationLogEntry::ReplacedBlock { index, block_meta } => {
                         self.abort_operation.add_block(&block_meta);
                         self.merge_blocks
                             .entry(index.segment_idx)
@@ -128,8 +130,13 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {
             // generate the new segment.
             let blocks: Vec<_> = block_map.into_values().collect();
-            let new_summary = reduce_block_metas(&blocks, self.thresholds);
-            merge_statistics_mut(&mut self.merged_statistics, &new_summary);
+            let new_summary =
+                reduce_block_metas(&blocks, self.thresholds, self.default_cluster_key_id);
+            merge_statistics_mut(
+                &mut self.merged_statistics,
+                &new_summary,
+                self.default_cluster_key_id,
+            );
             let new_segment = SegmentInfo::new(blocks, new_summary);
             let location = self.location_gen.gen_segment_info_location();
             self.abort_operation.add_segment(location.clone());

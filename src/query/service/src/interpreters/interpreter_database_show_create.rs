@@ -19,7 +19,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_sql::plans::ShowCreateDatabasePlan;
@@ -46,14 +45,10 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
         "ShowCreateDatabaseInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let db = catalog
             .get_database(tenant.as_str(), &self.plan.database)
             .await?;

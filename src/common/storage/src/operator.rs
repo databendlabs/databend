@@ -42,9 +42,9 @@ use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
+use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
-use opendal::layers::TracingLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
@@ -111,7 +111,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
-        .layer(TracingLayer)
+        .layer(MinitraceLayer)
         .finish();
 
     Ok(op)
@@ -402,6 +402,16 @@ impl DataOperator {
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
+    }
+
+    /// Create a new data operator without check.
+    pub fn try_new(sp: &StorageParams) -> common_exception::Result<DataOperator> {
+        let operator = init_operator(sp)?;
+
+        Ok(DataOperator {
+            operator,
+            params: sp.clone(),
+        })
     }
 
     #[async_backtrace::framed]

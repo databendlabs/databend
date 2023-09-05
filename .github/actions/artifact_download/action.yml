@@ -8,7 +8,7 @@ inputs:
     description: ""
     required: true
   category:
-    description: "default/hive"
+    description: "default/hdfs"
     required: false
     default: default
   path:
@@ -74,6 +74,23 @@ runs:
           else
             echo "==> fetching databend-$artifact ..."
             aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact --no-progress
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
+
+    - name: Download artifact from gcs
+      if: env.RUNNER_PROVIDER == 'gcp'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            echo "==> fetching open-sharing ..."
+            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing || true
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            echo "==> fetching databend-$artifact ..."
+            gcloud storage cp gs://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact
             chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
           fi
         done

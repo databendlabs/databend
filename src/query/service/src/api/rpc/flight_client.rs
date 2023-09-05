@@ -149,7 +149,7 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    #[tracing::instrument(level = "debug", skip_all)]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
@@ -193,6 +193,7 @@ impl FlightReceiver {
     }
 }
 
+#[derive(Clone)]
 pub struct FlightSender {
     tx: Sender<Result<FlightData, Status>>,
 }
@@ -200,6 +201,10 @@ pub struct FlightSender {
 impl FlightSender {
     pub fn create(tx: Sender<Result<FlightData, Status>>) -> FlightSender {
         FlightSender { tx }
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.tx.is_closed()
     }
 
     #[async_backtrace::framed]

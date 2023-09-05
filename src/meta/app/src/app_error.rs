@@ -285,6 +285,22 @@ impl UnknownDatabase {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownCatalog: `{catalog_name}` while `{context}`")]
+pub struct UnknownCatalog {
+    catalog_name: String,
+    context: String,
+}
+
+impl UnknownCatalog {
+    pub fn new(catalog_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            catalog_name: catalog_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatamask: `{name}` while `{context}`")]
 pub struct UnknownDatamask {
     name: String,
@@ -349,6 +365,33 @@ impl UnmatchColumnDataType {
         Self {
             name: name.into(),
             data_type: data_type.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error(
+    "UnmatchMaskPolicyReturnType: `{arg_name}`:`{arg_type}` mismatch with return type `{return_type}` while `{context}`"
+)]
+pub struct UnmatchMaskPolicyReturnType {
+    arg_name: String,
+    arg_type: String,
+    return_type: String,
+    context: String,
+}
+
+impl UnmatchMaskPolicyReturnType {
+    pub fn new(
+        arg_name: impl Into<String>,
+        arg_type: impl Into<String>,
+        return_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            arg_name: arg_name.into(),
+            arg_type: arg_type.into(),
+            return_type: return_type.into(),
             context: context.into(),
         }
     }
@@ -795,6 +838,9 @@ pub enum AppError {
     UnknownDatabase(#[from] UnknownDatabase),
 
     #[error(transparent)]
+    UnknownCatalog(#[from] UnknownCatalog),
+
+    #[error(transparent)]
     UnknownDatabaseId(#[from] UnknownDatabaseId),
 
     #[error(transparent)]
@@ -880,6 +926,9 @@ pub enum AppError {
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
+    UnmatchMaskPolicyReturnType(#[from] UnmatchMaskPolicyReturnType),
+
+    #[error(transparent)]
     VirtualColumnNotFound(#[from] VirtualColumnNotFound),
 
     #[error(transparent)]
@@ -901,6 +950,12 @@ impl AppErrorMessage for BackgroundJobAlreadyExists {
 impl AppErrorMessage for UnknownDatabase {
     fn message(&self) -> String {
         format!("Unknown database '{}'", self.db_name)
+    }
+}
+
+impl AppErrorMessage for UnknownCatalog {
+    fn message(&self) -> String {
+        format!("Unknown catalog '{}'", self.catalog_name)
     }
 }
 
@@ -1155,6 +1210,15 @@ impl AppErrorMessage for UnmatchColumnDataType {
     }
 }
 
+impl AppErrorMessage for UnmatchMaskPolicyReturnType {
+    fn message(&self) -> String {
+        format!(
+            "'{}':'{}' mismatch with return type '{}'",
+            self.arg_name, self.arg_type, self.return_type
+        )
+    }
+}
+
 impl AppErrorMessage for VirtualColumnNotFound {
     fn message(&self) -> String {
         format!("Virtual Column for table '{}' not found", self.table_id)
@@ -1177,6 +1241,7 @@ impl From<AppError> for ErrorCode {
             AppError::UnknownDatabaseId(err) => ErrorCode::UnknownDatabaseId(err.message()),
             AppError::UnknownTableId(err) => ErrorCode::UnknownTableId(err.message()),
             AppError::UnknownTable(err) => ErrorCode::UnknownTable(err.message()),
+            AppError::UnknownCatalog(err) => ErrorCode::UnknownCatalog(err.message()),
             AppError::DatabaseAlreadyExists(err) => ErrorCode::DatabaseAlreadyExists(err.message()),
             AppError::CatalogAlreadyExists(err) => ErrorCode::CatalogAlreadyExists(err.message()),
             AppError::CreateDatabaseWithDropTime(err) => {
@@ -1247,6 +1312,9 @@ impl From<AppError> for ErrorCode {
             }
             AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
+            AppError::UnmatchMaskPolicyReturnType(err) => {
+                ErrorCode::UnmatchMaskPolicyReturnType(err.message())
+            }
             AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
             AppError::VirtualColumnAlreadyExists(err) => {
                 ErrorCode::VirtualColumnAlreadyExists(err.message())

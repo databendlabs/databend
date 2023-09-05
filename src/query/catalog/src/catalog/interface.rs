@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Debug;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -45,12 +47,15 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetTableColumnMaskPolicyReply;
+use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -84,8 +89,19 @@ pub struct StorageDescription {
     pub support_cluster_key: bool,
 }
 
+pub trait CatalogCreator: Send + Sync + Debug {
+    fn try_create(&self, info: &CatalogInfo) -> Result<Arc<dyn Catalog>>;
+}
+
 #[async_trait::async_trait]
-pub trait Catalog: DynClone + Send + Sync {
+pub trait Catalog: DynClone + Send + Sync + Debug {
+    /// Catalog itself
+
+    // Get the name of the catalog.
+    fn name(&self) -> String;
+    // Get the info of the catalog.
+    fn info(&self) -> CatalogInfo;
+
     /// Database.
 
     // Get the database by name.
@@ -110,6 +126,13 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply>;
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
+
+    async fn list_index_ids_by_table_id(&self, req: ListIndexesByIdReq) -> Result<Vec<u64>>;
+
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>>;
 
     async fn create_virtual_column(
         &self,
@@ -216,6 +239,11 @@ pub trait Catalog: DynClone + Send + Sync {
         req: UpdateTableMetaReq,
     ) -> Result<UpdateTableMetaReply>;
 
+    async fn set_table_column_mask_policy(
+        &self,
+        req: SetTableColumnMaskPolicyReq,
+    ) -> Result<SetTableColumnMaskPolicyReply>;
+
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply>;
 
     async fn get_table_copied_file_info(
@@ -259,6 +287,10 @@ pub trait Catalog: DynClone + Send + Sync {
         Err(ErrorCode::Unimplemented(
             "'get_table_function' not implemented",
         ))
+    }
+
+    fn exists_table_function(&self, _func_name: &str) -> bool {
+        false
     }
 
     // List all table functions' names.

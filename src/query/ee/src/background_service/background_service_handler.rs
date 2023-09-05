@@ -43,12 +43,12 @@ use common_meta_app::principal::UserPrivilegeType;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use tracing::info;
-use tracing::warn;
+use databend_query::table_functions::SuggestedBackgroundTasksSource;
+use log::info;
+use log::warn;
 
 use crate::background_service::session::create_session;
 use crate::background_service::CompactionJob;
@@ -66,7 +66,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
     async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
         let ctx = self.session.create_query_context().await?;
-        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await
+        SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await
     }
 
     #[async_backtrace::framed]

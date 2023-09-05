@@ -14,18 +14,16 @@ insert into  bloom_test_t values(1,1), (7,8), (10,10)
 query T
 explain select * from bloom_test_t where c1 = 5
 ----
-EvalScalar
-├── expressions: [bloom_test_t.c1 (#0), bloom_test_t.c2 (#1)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_t
-    ├── read rows: 3
-    ├── read bytes: 44
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-    ├── push downs: [filters: [bloom_test_t.c1 (#0) = 5], limit: NONE]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.default.bloom_test_t
+├── output columns: [c1 (#0), c2 (#1)]
+├── read rows: 3
+├── read bytes: 44
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+├── push downs: [filters: [bloom_test_t.c1 (#0) = 5], limit: NONE]
+└── estimated rows: 1.00
 
 query T
 select * from bloom_test_t where c1 = 5
@@ -91,34 +89,30 @@ insert into  bloom_test_t values(2,2), (4,4)
 query T
 explain select * from bloom_test_t where c2=0;
 ----
-EvalScalar
-├── expressions: [bloom_test_t.c1 (#0), bloom_test_t.c2 (#1)]
-├── estimated rows: 0.00
-└── TableScan
-    ├── table: default.default.bloom_test_t
-    ├── read rows: 6
-    ├── read bytes: 44
-    ├── partitions total: 3
-    ├── partitions scanned: 2
-    ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
-    ├── push downs: [filters: [bloom_test_t.c2 (#1) = 0], limit: NONE]
-    └── estimated rows: 0.00
+TableScan
+├── table: default.default.bloom_test_t
+├── output columns: [c1 (#0), c2 (#1)]
+├── read rows: 6
+├── read bytes: 44
+├── partitions total: 3
+├── partitions scanned: 2
+├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
+├── push downs: [filters: [bloom_test_t.c2 (#1) = 0], limit: NONE]
+└── estimated rows: 0.00
 
 query T
 explain select * from bloom_test_t where c2=3;
 ----
-EvalScalar
-├── expressions: [bloom_test_t.c1 (#0), bloom_test_t.c2 (#1)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_t
-    ├── read rows: 0
-    ├── read bytes: 0
-    ├── partitions total: 3
-    ├── partitions scanned: 0
-    ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
-    ├── push downs: [filters: [bloom_test_t.c2 (#1) = 3], limit: NONE]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.default.bloom_test_t
+├── output columns: [c1 (#0), c2 (#1)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 3
+├── partitions scanned: 0
+├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
+├── push downs: [filters: [bloom_test_t.c2 (#1) = 3], limit: NONE]
+└── estimated rows: 1.00
 
 statement ok
 drop table bloom_test_t
@@ -135,18 +129,16 @@ insert into  bloom_test_nullable_t values(1,1), (7,8), (10,10)
 query T
 explain select * from bloom_test_nullable_t where c1 = 5 and c2 > 1;
 ----
-EvalScalar
-├── expressions: [bloom_test_nullable_t.c1 (#0), bloom_test_nullable_t.c2 (#1)]
-├── estimated rows: 1.00
-└── TableScan
-    ├── table: default.default.bloom_test_nullable_t
-    ├── read rows: 3
-    ├── read bytes: 56
-    ├── partitions total: 2
-    ├── partitions scanned: 1
-    ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-    ├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
-    └── estimated rows: 1.00
+TableScan
+├── table: default.default.bloom_test_nullable_t
+├── output columns: [c1 (#0), c2 (#1)]
+├── read rows: 3
+├── read bytes: 56
+├── partitions total: 2
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
+├── push downs: [filters: [and_filters(bloom_test_nullable_t.c1 (#0) = 5, bloom_test_nullable_t.c2 (#1) > 1)], limit: NONE]
+└── estimated rows: 1.00
 
 statement ok
 drop table bloom_test_nullable_t

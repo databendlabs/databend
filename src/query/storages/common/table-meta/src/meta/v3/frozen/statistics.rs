@@ -17,6 +17,8 @@ use std::collections::HashMap;
 use common_expression::ColumnId;
 use common_expression::Scalar;
 
+use crate::meta::MinMax;
+
 // the following types are supposed to be frozen
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -30,6 +32,25 @@ pub struct Statistics {
     pub index_size: u64,
 
     pub col_stats: HashMap<ColumnId, ColumnStatistics>,
+}
+
+impl From<Statistics> for crate::meta::v5::Statistics {
+    fn from(value: Statistics) -> Self {
+        Self {
+            row_count: value.row_count,
+            block_count: value.block_count,
+            perfect_block_count: value.perfect_block_count,
+            uncompressed_byte_size: value.uncompressed_byte_size,
+            compressed_byte_size: value.compressed_byte_size,
+            index_size: value.index_size,
+            col_stats: value
+                .col_stats
+                .into_iter()
+                .map(|(k, v)| (k, v.into()))
+                .collect(),
+            cluster_stats: None,
+        }
+    }
 }
 
 impl From<Statistics> for crate::meta::Statistics {
@@ -46,6 +67,7 @@ impl From<Statistics> for crate::meta::Statistics {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
+            cluster_stats: None,
         }
     }
 }
@@ -65,6 +87,17 @@ impl From<ColumnStatistics> for crate::meta::ColumnStatistics {
         Self {
             min: value.min,
             max: value.max,
+            null_count: value.null_count,
+            in_memory_size: value.in_memory_size,
+            distinct_of_values: value.distinct_of_values,
+        }
+    }
+}
+
+impl From<ColumnStatistics> for crate::meta::v5::ColumnStatistics {
+    fn from(value: ColumnStatistics) -> Self {
+        Self {
+            minmax: MinMax::new(value.min, value.max),
             null_count: value.null_count,
             in_memory_size: value.in_memory_size,
             distinct_of_values: value.distinct_of_values,

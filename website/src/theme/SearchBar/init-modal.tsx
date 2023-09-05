@@ -92,10 +92,10 @@ return (
     className={styles.modalWrap} {...props}>
     <div>
       <div className={styles.topInput}>
-        <input ref={inputRef} autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Please enter keywords for search purposes...'></input>
+        <input ref={inputRef} autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Please enter your keywords'></input>
       </div>
       <div className={styles.content}>  
-        <div className={styles.title}>Documentation</div>
+        <div className={styles.title}>Choose to search the documentation or ask Databend AI:</div>
         <div onMouseEnter={()=> {
           setIndecator(-1)
         }} className={styles.items}>

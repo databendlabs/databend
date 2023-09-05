@@ -39,9 +39,11 @@ use common_meta_types::TxnDeleteByPrefixRequest;
 use common_meta_types::TxnDeleteRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
-use databend_meta::init_meta_ut;
 use databend_meta::meta_service::MetaNode;
-use tracing::info;
+use log::info;
+use test_harness::test;
+
+use crate::testing::meta_service_test_harness;
 
 async fn test_watch_main(
     addr: String,
@@ -113,7 +115,8 @@ async fn test_watch_txn_main(
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Watch some key.
@@ -345,7 +348,8 @@ async fn test_watch() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_expired_events() -> anyhow::Result<()> {
     // Test events emitted when cleaning expired key:
     // - Before applying, 32 expired keys will be cleaned.
@@ -354,7 +358,9 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     let (_tc, addr) = crate::tests::start_metasrv().await?;
 
     let watch_prefix = "w_";
-    let now = now();
+    let now_sec = now();
+    let expire = now_sec + 11;
+    // dbg!(now_sec, expire);
 
     info!("--- prepare data that are gonna expire");
     {
@@ -366,106 +372,74 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
             else_then: vec![],
         };
 
-        // Every apply() will clean upto 32 expired keys.
-        // Assert next apply will clean up upto 32 expired keys.
+        // Every apply() will clean all expired keys.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
-            txn.if_then.push(TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: s(&k),
-                    value: b(&k),
-                    prev_value: true,
-                    expire_at: Some(now - 10),
-                })),
-            });
+            txn.if_then
+                .push(TxnOp::put_with_expire(&k, b(&k), Some(expire - 10)));
         }
 
-        // Other expired key will only be cleaned if they are read
+        // Expired key wont be cleaned when they are read, although read returns None.
 
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b1"),
-                value: b("w_b1"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b2"),
-                value: b("w_b2"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b3a"),
-                value: b("w_b3a"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
-        txn.if_then.push(TxnOp {
-            request: Some(txn_op::Request::Put(TxnPutRequest {
-                key: s("w_b3b"),
-                value: b("w_b3b"),
-                prev_value: true,
-                expire_at: Some(now - 1),
-            })),
-        });
+        txn.if_then
+            .push(TxnOp::put_with_expire("w_b1", b("w_b1"), Some(expire - 5)));
+        txn.if_then
+            .push(TxnOp::put_with_expire("w_b2", b("w_b2"), Some(expire - 5)));
+        txn.if_then.push(TxnOp::put_with_expire(
+            "w_b3a",
+            b("w_b3a"),
+            Some(expire - 5),
+        ));
+        txn.if_then.push(TxnOp::put_with_expire(
+            "w_b3b",
+            b("w_b3b"),
+            Some(expire + 5),
+        ));
 
         client.transaction(txn).await?;
     }
 
-    let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
-    let watch = WatchRequest {
-        key: start,
-        key_end: Some(end),
-        filter_type: FilterType::All.into(),
+    info!("--- start watching");
+    let watch_client = make_client(&addr)?;
+    let mut client_stream = {
+        let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
+        let watch = WatchRequest {
+            key: start,
+            key_end: Some(end),
+            filter_type: FilterType::All.into(),
+        };
+        watch_client.request(watch).await?
     };
 
-    let txn = TxnRequest {
-        condition: vec![],
-        if_then: vec![
-            TxnOp {
-                request: Some(txn_op::Request::Put(TxnPutRequest {
-                    key: s("w_b1"),
-                    value: b("w_b1_override"),
-                    prev_value: true,
-                    expire_at: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::Delete(TxnDeleteRequest {
-                    key: s("w_b2"),
-                    prev_value: true,
-                    match_seq: None,
-                })),
-            },
-            TxnOp {
-                request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
-                    prefix: s("w_b3"),
-                })),
-            },
-        ],
-        else_then: vec![],
-    };
+    info!("--- sleep {} for expiration", expire - now_sec);
+    tokio::time::sleep(Duration::from_secs(expire - now_sec)).await;
 
-    info!("--- apply txn and check emitted events");
+    info!("--- apply another txn in another thread to override keys");
     {
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![
+                TxnOp::put("w_b1", b("w_b1_override")),
+                TxnOp::delete("w_b2"),
+                TxnOp {
+                    request: Some(txn_op::Request::DeleteByPrefix(TxnDeleteByPrefixRequest {
+                        prefix: s("w_b3"),
+                    })),
+                },
+            ],
+            else_then: vec![],
+        };
+
         let client = make_client(&addr)?;
-        let mut client_stream = client.request(watch).await?;
+        let _h = tokio::spawn(async move {
+            let _res = client.transaction(txn).await;
+        });
+    }
 
-        {
-            let client = make_client(&addr)?;
-            let _h = tokio::spawn(async move {
-                let _res = client.transaction(txn).await;
-            });
-        }
-
+    info!("--- check emitted events");
+    {
         // 32 expired keys are auto cleaned.
-        for i in 0..32 {
+        for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
             let want = del_event(&k, 1 + i, &k);
             let msg = client_stream.message().await?.unwrap();
@@ -477,9 +451,9 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         let seq = 34;
         let watch_events = vec![
             del_event("w_b1", seq, "w_b1"),              // expired
-            add_event("w_b1", seq + 4, "w_b1_override"), // override
             del_event("w_b2", seq + 1, "w_b2"),          // expired
             del_event("w_b3a", seq + 2, "w_b3a"),        // expired
+            add_event("w_b1", seq + 4, "w_b1_override"), // override
             del_event("w_b3b", seq + 3, "w_b3b"),        // expired
         ];
 
@@ -492,7 +466,8 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
+#[test(harness = meta_service_test_harness)]
+#[minitrace::trace]
 async fn test_watch_stream_count() -> anyhow::Result<()> {
     // When the client drops the stream, databend-meta should reclaim the resources.
 

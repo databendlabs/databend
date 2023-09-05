@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 
@@ -24,10 +23,11 @@ use serde::Deserializer;
 use serde::Serializer;
 
 use crate::io::MergeIOReadResult;
+use crate::io::VirtualMergeIOReadResult;
 
 pub enum DataSource {
     AggIndex((PartInfoPtr, MergeIOReadResult)),
-    Normal(MergeIOReadResult),
+    Normal((MergeIOReadResult, Option<VirtualMergeIOReadResult>)),
 }
 
 pub struct DataSourceMeta {
@@ -65,10 +65,6 @@ impl<'de> serde::Deserialize<'de> for DataSourceMeta {
 
 #[typetag::serde(name = "fuse_data_source")]
 impl BlockMetaInfo for DataSourceMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, _: &Box<dyn BlockMetaInfo>) -> bool {
         unimplemented!("Unimplemented equals DataSourceMeta")
     }

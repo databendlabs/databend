@@ -21,8 +21,8 @@ use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use crossbeam_channel::TrySendError;
-use tracing::error;
-use tracing::info;
+use log::error;
+use log::info;
 
 use crate::metrics_inc_cache_access_count;
 use crate::metrics_inc_cache_hit_count;

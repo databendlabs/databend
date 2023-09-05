@@ -9,7 +9,8 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'cache'   | 'disk.path'                                | './.databend/_cache'                                           | ''       |
 | 'cache'   | 'enable_table_bloom_index_cache'           | 'true'                                                         | ''       |
 | 'cache'   | 'enable_table_meta_cache'                  | 'true'                                                         | ''       |
-| 'cache'   | 'table_bloom_index_filter_count'           | '1048576'                                                      | ''       |
+| 'cache'   | 'table_bloom_index_filter_count'           | '0'                                                            | ''       |
+| 'cache'   | 'table_bloom_index_filter_size'            | '2147483648'                                                   | ''       |
 | 'cache'   | 'table_bloom_index_meta_count'             | '3000'                                                         | ''       |
 | 'cache'   | 'table_data_cache_population_queue_size'   | '65536'                                                        | ''       |
 | 'cache'   | 'table_data_deserialized_data_bytes'       | '0'                                                            | ''       |
@@ -27,9 +28,11 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'log_dir'                                  | 'null'                                                         | ''       |
 | 'log'     | 'log_level'                                | 'null'                                                         | ''       |
 | 'log'     | 'log_query_enabled'                        | 'null'                                                         | ''       |
-| 'log'     | 'query_enabled'                            | 'false'                                                        | ''       |
+| 'log'     | 'query.dir'                                | './.databend/logs/query-details'                               | ''       |
+| 'log'     | 'query.on'                                 | 'true'                                                         | ''       |
+| 'log'     | 'query_enabled'                            | 'null'                                                         | ''       |
 | 'log'     | 'stderr.format'                            | 'text'                                                         | ''       |
-| 'log'     | 'stderr.level'                             | 'INFO'                                                         | ''       |
+| 'log'     | 'stderr.level'                             | 'WARN'                                                         | ''       |
 | 'log'     | 'stderr.on'                                | 'true'                                                         | ''       |
 | 'meta'    | 'auto_sync_interval'                       | '0'                                                            | ''       |
 | 'meta'    | 'client_timeout_in_second'                 | '10'                                                           | ''       |
@@ -82,6 +85,8 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'mysql_handler_host'                       | '127.0.0.1'                                                    | ''       |
 | 'query'   | 'mysql_handler_port'                       | '3307'                                                         | ''       |
 | 'query'   | 'mysql_handler_tcp_keepalive_timeout_secs' | '120'                                                          | ''       |
+| 'query'   | 'mysql_tls_server_cert'                    | ''                                                             | ''       |
+| 'query'   | 'mysql_tls_server_key'                     | ''                                                             | ''       |
 | 'query'   | 'num_cpus'                                 | '0'                                                            | ''       |
 | 'query'   | 'openai_api_chat_base_url'                 | 'https://api.openai.com/v1/'                                   | ''       |
 | 'query'   | 'openai_api_completion_model'              | 'gpt-3.5-turbo'                                                | ''       |
@@ -91,6 +96,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'openai_api_version'                       | ''                                                             | ''       |
 | 'query'   | 'parquet_fast_read_bytes'                  | 'null'                                                         | ''       |
 | 'query'   | 'quota'                                    | 'null'                                                         | ''       |
+| 'query'   | 'rpc_client_timeout_secs'                  | '0'                                                            | ''       |
 | 'query'   | 'rpc_tls_query_server_root_ca_cert'        | ''                                                             | ''       |
 | 'query'   | 'rpc_tls_query_service_domain_name'        | 'localhost'                                                    | ''       |
 | 'query'   | 'rpc_tls_server_cert'                      | ''                                                             | ''       |

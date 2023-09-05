@@ -1,7 +1,3 @@
 {
-  "label": "Stage",
-  "link": {
-    "type": "generated-index",
-    "slug": "/reference/sql/ddl/stage"
-  }
+  "label": "Stage"
 }

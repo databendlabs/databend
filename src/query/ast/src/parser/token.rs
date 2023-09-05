@@ -134,7 +134,7 @@ pub enum TokenKind {
     #[regex(r"[ \t\r\n\f]+", logos::skip)]
     Whitespace,
 
-    #[regex(r"--[^\t\n\f]*", logos::skip)]
+    #[regex(r"--[^\n\f]*", logos::skip)]
     Comment,
 
     #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
@@ -211,7 +211,7 @@ pub enum TokenKind {
     #[token(",")]
     Comma,
     #[token(".")]
-    Period,
+    Dot,
     #[token(":")]
     Colon,
     #[token("::")]
@@ -293,6 +293,8 @@ pub enum TokenKind {
     ALLOWED_IP_LIST,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AFTER", ignore(ascii_case))]
+    AFTER,
     #[token("AGGREGATING", ignore(ascii_case))]
     AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
@@ -407,6 +409,8 @@ pub enum TokenKind {
     DATABASE,
     #[token("DATABASES", ignore(ascii_case))]
     DATABASES,
+    #[token("DATA", ignore(ascii_case))]
+    DATA,
     #[token("DATE", ignore(ascii_case))]
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
@@ -489,6 +493,8 @@ pub enum TokenKind {
     FIELD_DELIMITER,
     #[token("NAN_DISPLAY", ignore(ascii_case))]
     NAN_DISPLAY,
+    #[token("NULL_DISPLAY", ignore(ascii_case))]
+    NULL_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]
@@ -533,8 +539,6 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
-    #[token("GENERATE", ignore(ascii_case))]
-    GENERATE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
@@ -609,6 +613,9 @@ pub enum TokenKind {
     LOCATION_PREFIX,
     #[token("ROLES", ignore(ascii_case))]
     ROLES,
+    /// L2DISTANCE op, from https://github.com/pgvector/pgvector
+    #[token("<->")]
+    L2DISTANCE,
     #[token("LEADING", ignore(ascii_case))]
     LEADING,
     #[token("LEFT", ignore(ascii_case))]
@@ -647,6 +654,8 @@ pub enum TokenKind {
     MONTH,
     #[token("MODIFY", ignore(ascii_case))]
     MODIFY,
+    #[token("MATERIALIZED", ignore(ascii_case))]
+    MATERIALIZED,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -735,6 +744,12 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("MERGE", ignore(ascii_case))]
+    MERGE,
+    #[token("MATCHED", ignore(ascii_case))]
+    MATCHED,
+    #[token("UNMATCHED", ignore(ascii_case))]
+    UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
     #[token("ROWS", ignore(ascii_case))]
@@ -763,6 +778,8 @@ pub enum TokenKind {
     RECURSIVE,
     #[token("RETURN", ignore(ascii_case))]
     RETURN,
+    #[token("RETURNS", ignore(ascii_case))]
+    RETURNS,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
@@ -849,6 +866,8 @@ pub enum TokenKind {
     SEMI,
     #[token("SOUNDS", ignore(ascii_case))]
     SOUNDS,
+    #[token("SYNC", ignore(ascii_case))]
+    SYNC,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -985,10 +1004,19 @@ pub enum TokenKind {
     INDEXES,
     #[token("ADDRESS", ignore(ascii_case))]
     ADDRESS,
+    #[token("OWNERSHIP", ignore(ascii_case))]
+    OWNERSHIP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 impl TokenKind {
+    pub fn is_literal(&self) -> bool {
+        matches!(
+            self,
+            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+        )
+    }
+
     pub fn is_keyword(&self) -> bool {
         !matches!(
             self,
@@ -1018,7 +1046,7 @@ impl TokenKind {
                 | LParen
                 | RParen
                 | Comma
-                | Period
+                | Dot
                 | Colon
                 | DoubleColon
                 | SemiColon
@@ -1044,6 +1072,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | L2DISTANCE
                 | Placeholder
                 | EOI
         )

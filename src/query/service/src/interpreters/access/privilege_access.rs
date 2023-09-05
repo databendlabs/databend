@@ -41,7 +41,7 @@ impl PrivilegeAccess {
 #[async_trait::async_trait]
 impl AccessChecker for PrivilegeAccess {
     #[async_backtrace::framed]
-    async fn check(&self, plan: &Plan) -> Result<()> {
+    async fn check(&self, ctx: &Arc<QueryContext>, plan: &Plan) -> Result<()> {
         let session = self.ctx.get_current_session();
         let user = self.ctx.get_current_user()?;
         let (identity, grant_set) = (user.identity().to_string(), user.grants);
@@ -101,7 +101,9 @@ impl AccessChecker for PrivilegeAccess {
                         .await?
                 }
             }
-            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => self.check(plan).await?,
+            Plan::ExplainAnalyze { plan } | Plan::Explain { plan, .. } => {
+                self.check(ctx, plan).await?
+            }
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
@@ -142,7 +144,7 @@ impl AccessChecker for PrivilegeAccess {
             }
 
             // Virtual Column.
-            Plan::CreateVirtualColumns(plan) => {
+            Plan::CreateVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -154,7 +156,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::AlterVirtualColumns(plan) => {
+            Plan::AlterVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -166,7 +168,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::DropVirtualColumns(plan) => {
+            Plan::DropVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -178,7 +180,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::GenerateVirtualColumns(plan) => {
+            Plan::RefreshVirtualColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -441,6 +443,18 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::MergeInto(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Insert, UserPrivilegeType::Delete],
+                    )
+                    .await?;
+            }
             Plan::Delete(plan) => {
                 session
                     .validate_privilege(
@@ -514,9 +528,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterShareTenants(_)
             | Plan::ShowObjectGrantPrivileges(_)
             | Plan::ShowGrantTenantsOfShare(_)
-            | Plan::SetRole(_)
             | Plan::ShowGrants(_)
-            | Plan::ShowRoles(_)
             | Plan::GrantRole(_)
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
@@ -544,7 +556,7 @@ impl AccessChecker for PrivilegeAccess {
                     session
                         .validate_privilege(
                             &GrantObject::Table(
-                                plan.catalog_name.to_string(),
+                                plan.catalog_info.catalog_name().to_string(),
                                 plan.database_name.to_string(),
                                 plan.table_name.to_string(),
                             ),
@@ -566,7 +578,6 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::DropShare(_)
             | Plan::DescShare(_)
             | Plan::ShowShares(_)
-            | Plan::Call(_)
             | Plan::ShowCreateCatalog(_)
             | Plan::CreateCatalog(_)
             | Plan::DropCatalog(_)
@@ -593,6 +604,9 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             // Note: No need to check privileges
+            // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
+            Plan::SetRole(_) => {}
+            Plan::ShowRoles(_) => {}
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}

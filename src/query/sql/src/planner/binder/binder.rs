@@ -34,11 +34,14 @@ use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
-use tracing::warn;
+use indexmap::IndexMap;
+use log::warn;
 
 use crate::binder::wrap_cast;
+use crate::binder::ColumnBindingBuilder;
+use crate::binder::CteInfo;
 use crate::normalize_identifier;
-use crate::plans::CallPlan;
+use crate::optimizer::SExpr;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
 use crate::plans::DropFileFormatPlan;
@@ -46,7 +49,9 @@ use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
+use crate::plans::MaterializedCte;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
 use crate::plans::RewriteKind;
 use crate::plans::ShowFileFormatsPlan;
 use crate::plans::ShowGrantsPlan;
@@ -57,6 +62,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::ScalarExpr;
 use crate::TypeChecker;
 use crate::Visibility;
 
@@ -72,6 +78,16 @@ pub struct Binder {
     pub catalogs: Arc<CatalogManager>,
     pub name_resolution_ctx: NameResolutionContext,
     pub metadata: MetadataRef,
+    // Save the equal scalar exprs for joins
+    // Eg: SELECT * FROM (twocolumn AS a JOIN twocolumn AS b USING(x) JOIN twocolumn AS c on a.x = c.x) ORDER BY x LIMIT 1
+    // The eq_scalars is [(a.x, b.x), (a.x, c.x)]
+    pub eq_scalars: Vec<(ScalarExpr, ScalarExpr)>,
+    // Save the bound context for materialized cte, the key is cte_idx
+    pub m_cte_bound_ctx: HashMap<IndexType, BindContext>,
+    pub m_cte_bound_s_expr: HashMap<IndexType, SExpr>,
+    /// Use `IndexMap` because need to keep the insertion order
+    /// Then wrap materialized ctes to main plan.
+    pub ctes_map: Box<IndexMap<String, CteInfo>>,
 }
 
 impl<'a> Binder {
@@ -86,7 +102,20 @@ impl<'a> Binder {
             catalogs,
             name_resolution_ctx,
             metadata,
+            m_cte_bound_ctx: Default::default(),
+            eq_scalars: vec![],
+            m_cte_bound_s_expr: Default::default(),
+            ctes_map: Box::default(),
         }
+    }
+
+    // After the materialized cte was bound, add it to `m_cte_bound_ctx`
+    pub fn set_m_cte_bound_ctx(&mut self, cte_idx: IndexType, bound_ctx: BindContext) {
+        self.m_cte_bound_ctx.insert(cte_idx, bound_ctx);
+    }
+
+    pub fn set_m_cte_bound_s_expr(&mut self, cte_idx: IndexType, s_expr: SExpr) {
+        self.m_cte_bound_s_expr.insert(cte_idx, s_expr);
     }
 
     #[async_backtrace::framed]
@@ -149,7 +178,20 @@ impl<'a> Binder {
     ) -> Result<Plan> {
         let plan = match stmt {
             Statement::Query(query) => {
-                let (s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
+                // Wrap `LogicalMaterializedCte` to `s_expr`
+                for (_, cte_info) in self.ctes_map.iter().rev() {
+                    if !cte_info.materialized {
+                        continue;
+                    }
+                    let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
+                    let left_output_columns = cte_info.columns.clone();
+                    s_expr = SExpr::create_binary(
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
+                        Arc::new(cte_s_expr.clone()),
+                        Arc::new(s_expr),
+                    );
+                }
                 let formatted_ast = if self.ctx.get_settings().get_enable_query_result_cache()? {
                     Some(format_statement(stmt.clone())?)
                 } else {
@@ -271,10 +313,10 @@ impl<'a> Binder {
             Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
 
             // Virtual Columns
-            Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
-            Statement::AlterVirtualColumns(stmt) => self.bind_alter_virtual_columns(stmt).await?,
-            Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
-            Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
+            Statement::CreateVirtualColumn(stmt) => self.bind_create_virtual_column(stmt).await?,
+            Statement::AlterVirtualColumn(stmt) => self.bind_alter_virtual_column(stmt).await?,
+            Statement::DropVirtualColumn(stmt) => self.bind_drop_virtual_column(stmt).await?,
+            Statement::RefreshVirtualColumn(stmt) => self.bind_refresh_virtual_column(stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
@@ -333,6 +375,14 @@ impl<'a> Binder {
                 }
                 self.bind_replace(bind_context, stmt).await?
             }
+            Statement::MergeInto(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In Merge resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_merge_into(bind_context, stmt).await?
+            },
             Statement::Delete {
                 hints,
                 table_reference,
@@ -395,10 +445,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 name: udf_name.to_string(),
             })),
-            Statement::Call(stmt) => Plan::Call(Box::new(CallPlan {
-                name: stmt.name.clone(),
-                args: stmt.args.clone(),
-            })),
+            Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 
             Statement::Presign(stmt) => self.bind_presign(bind_context, stmt).await?,
 
@@ -510,12 +557,9 @@ impl<'a> Binder {
         Ok(plan)
     }
 
-    /// Create a new ColumnBinding with assigned index
-    pub(crate) fn create_column_binding(
+    /// Create a new ColumnBinding for derived column
+    pub(crate) fn create_derived_column_binding(
         &mut self,
-        database_name: Option<String>,
-        table_name: Option<String>,
-        table_index: Option<IndexType>,
         column_name: String,
         data_type: DataType,
     ) -> ColumnBinding {
@@ -523,17 +567,8 @@ impl<'a> Binder {
             .metadata
             .write()
             .add_derived_column(column_name.clone(), data_type.clone());
-        ColumnBinding {
-            database_name,
-            table_name,
-            column_position: None,
-            table_index,
-            column_name,
-            index,
-            data_type: Box::new(data_type),
-            visibility: Visibility::Visible,
-            virtual_computed_expr: None,
-        }
+        ColumnBindingBuilder::new(column_name, index, Box::new(data_type), Visibility::Visible)
+            .build()
     }
 
     /// Normalize [[<catalog>].<database>].<object>
@@ -559,5 +594,11 @@ impl<'a> Binder {
     /// Normalize <identifier>
     pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
         normalize_identifier(ident, &self.name_resolution_ctx).name
+    }
+
+    pub fn judge_equal_scalars(&self, left: &ScalarExpr, right: &ScalarExpr) -> bool {
+        self.eq_scalars
+            .iter()
+            .any(|(l, r)| (l == left && r == right) || (l == right && r == left))
     }
 }

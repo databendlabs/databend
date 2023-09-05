@@ -13,13 +13,14 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::ops::Deref;
 
 use chrono::DateTime;
 use chrono::Utc;
 
 use crate::storage::StorageParams;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum CatalogType {
     Default = 1,
     Hive = 2,
@@ -39,22 +40,72 @@ impl Display for CatalogType {
 /// different options for creating catalogs
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum CatalogOption {
-    // hms_address
+    /// The default catalog.
+    ///
+    /// It's not allowed to create a new default catalog.
+    Default,
+    // Catalog option for hive.
     Hive(HiveCatalogOption),
-    // Uri location for iceberg
+    // Catalog option for Iceberg.
     Iceberg(IcebergCatalogOption),
+}
+
+impl CatalogOption {
+    pub fn catalog_type(&self) -> CatalogType {
+        match self {
+            CatalogOption::Default => CatalogType::Default,
+            CatalogOption::Hive(_) => CatalogType::Hive,
+            CatalogOption::Iceberg(_) => CatalogType::Iceberg,
+        }
+    }
 }
 
 /// Option for creating a iceberg catalog
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct HiveCatalogOption {
     pub address: String,
+    pub storage_params: Option<Box<StorageParams>>,
 }
 
 /// Option for creating a iceberg catalog
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct IcebergCatalogOption {
     pub storage_params: Box<StorageParams>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CatalogInfo {
+    pub id: CatalogId,
+    pub name_ident: CatalogNameIdent,
+    pub meta: CatalogMeta,
+}
+
+impl CatalogInfo {
+    /// Get the catalog type via catalog info.
+    pub fn catalog_type(&self) -> CatalogType {
+        self.meta.catalog_option.catalog_type()
+    }
+
+    /// Get the catalog name via catalog info.
+    pub fn catalog_name(&self) -> &str {
+        &self.name_ident.catalog_name
+    }
+
+    /// Create a new default catalog info.
+    pub fn new_default() -> CatalogInfo {
+        Self {
+            id: CatalogId { catalog_id: 0 },
+            name_ident: CatalogNameIdent {
+                // tenant for default catalog is not used.
+                tenant: "".to_string(),
+                catalog_name: "default".to_string(),
+            },
+            meta: CatalogMeta {
+                catalog_option: CatalogOption::Default,
+                created_on: Default::default(),
+            },
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -135,6 +186,46 @@ impl Display for DropCatalogReq {
             "drop_catalog(if_exists={}):{}/{}",
             self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
         )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropCatalogReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetCatalogReq {
+    pub inner: CatalogNameIdent,
+}
+
+impl Deref for GetCatalogReq {
+    type Target = CatalogNameIdent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl GetCatalogReq {
+    pub fn new(tenant: impl Into<String>, catalog_name: impl Into<String>) -> GetCatalogReq {
+        GetCatalogReq {
+            inner: CatalogNameIdent {
+                tenant: tenant.into(),
+                catalog_name: catalog_name.into(),
+            },
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ListCatalogReq {
+    pub tenant: String,
+}
+
+impl ListCatalogReq {
+    pub fn new(tenant: impl Into<String>) -> ListCatalogReq {
+        ListCatalogReq {
+            tenant: tenant.into(),
+        }
     }
 }
 

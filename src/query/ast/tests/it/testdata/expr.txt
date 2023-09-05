@@ -96,6 +96,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -760,6 +761,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -1089,7 +1091,7 @@ MapAccess {
             },
         },
     },
-    accessor: Period {
+    accessor: Dot {
         key: Identifier {
             name: "k2",
             quote: None,
@@ -1146,7 +1148,7 @@ MapAccess {
                 },
             },
         },
-        accessor: Period {
+        accessor: Dot {
             key: Identifier {
                 name: "k2",
                 quote: None,
@@ -1156,7 +1158,7 @@ MapAccess {
             },
         },
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1187,7 +1189,7 @@ MapAccess {
             },
         ),
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1215,7 +1217,7 @@ MapAccess {
             },
         ],
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1303,6 +1305,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -1328,6 +1331,7 @@ FunctionCall {
     args: [],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -1351,6 +1355,7 @@ FunctionCall {
     args: [],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -1407,6 +1412,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -1812,7 +1818,7 @@ MapAccess {
             },
         },
     },
-    accessor: Period {
+    accessor: Dot {
         key: Identifier {
             name: "b",
             quote: None,
@@ -2075,6 +2081,7 @@ BinaryOp {
                 ],
                 params: [],
                 window: None,
+                lambda: None,
             },
         },
         not: true,
@@ -2182,6 +2189,7 @@ BinaryOp {
         ],
         params: [],
         window: None,
+        lambda: None,
     },
     right: Case {
         span: Some(
@@ -2226,6 +2234,7 @@ BinaryOp {
                     ],
                     params: [],
                     window: None,
+                    lambda: None,
                 },
                 right: Literal {
                     span: Some(
@@ -2280,6 +2289,7 @@ BinaryOp {
                 ],
                 params: [],
                 window: None,
+                lambda: None,
             },
         ),
     },
@@ -2712,6 +2722,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -2768,6 +2779,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -2816,6 +2828,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -2888,6 +2901,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -2928,6 +2942,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -2984,6 +2999,7 @@ FunctionCall {
     ],
     params: [],
     window: None,
+    lambda: None,
 }
 
 
@@ -3190,6 +3206,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3239,6 +3256,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3305,6 +3323,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3402,6 +3421,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3506,6 +3526,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3582,6 +3603,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3643,6 +3665,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3702,6 +3725,7 @@ FunctionCall {
             },
         ),
     ),
+    lambda: None,
 }
 
 
@@ -3771,6 +3795,202 @@ FunctionCall {
                 ),
             },
         ),
+    ),
+    lambda: None,
+}
+
+
+---------- Input ----------
+ARRAY_APPLY([1,2,3], x -> x + 1)
+---------- Output ---------
+ARRAY_APPLY([1, 2, 3], x -> (x + 1))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..32,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ARRAY_APPLY",
+        quote: None,
+        span: Some(
+            0..11,
+        ),
+    },
+    args: [
+        Array {
+            span: Some(
+                12..19,
+            ),
+            exprs: [
+                Literal {
+                    span: Some(
+                        13..14,
+                    ),
+                    lit: UInt64(
+                        1,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        15..16,
+                    ),
+                    lit: UInt64(
+                        2,
+                    ),
+                },
+                Literal {
+                    span: Some(
+                        17..18,
+                    ),
+                    lit: UInt64(
+                        3,
+                    ),
+                },
+            ],
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: Some(
+        Lambda {
+            params: [
+                Identifier {
+                    name: "x",
+                    quote: None,
+                    span: Some(
+                        21..22,
+                    ),
+                },
+            ],
+            expr: BinaryOp {
+                span: Some(
+                    28..29,
+                ),
+                op: Plus,
+                left: ColumnRef {
+                    span: Some(
+                        26..27,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Name(
+                        Identifier {
+                            name: "x",
+                            quote: None,
+                            span: Some(
+                                26..27,
+                            ),
+                        },
+                    ),
+                },
+                right: Literal {
+                    span: Some(
+                        30..31,
+                    ),
+                    lit: UInt64(
+                        1,
+                    ),
+                },
+            },
+        },
+    ),
+}
+
+
+---------- Input ----------
+ARRAY_FILTER(col, y -> y % 2 = 0)
+---------- Output ---------
+ARRAY_FILTER(col, y -> ((y % 2) = 0))
+---------- AST ------------
+FunctionCall {
+    span: Some(
+        0..33,
+    ),
+    distinct: false,
+    name: Identifier {
+        name: "ARRAY_FILTER",
+        quote: None,
+        span: Some(
+            0..12,
+        ),
+    },
+    args: [
+        ColumnRef {
+            span: Some(
+                13..16,
+            ),
+            database: None,
+            table: None,
+            column: Name(
+                Identifier {
+                    name: "col",
+                    quote: None,
+                    span: Some(
+                        13..16,
+                    ),
+                },
+            ),
+        },
+    ],
+    params: [],
+    window: None,
+    lambda: Some(
+        Lambda {
+            params: [
+                Identifier {
+                    name: "y",
+                    quote: None,
+                    span: Some(
+                        18..19,
+                    ),
+                },
+            ],
+            expr: BinaryOp {
+                span: Some(
+                    29..30,
+                ),
+                op: Eq,
+                left: BinaryOp {
+                    span: Some(
+                        25..26,
+                    ),
+                    op: Modulo,
+                    left: ColumnRef {
+                        span: Some(
+                            23..24,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Name(
+                            Identifier {
+                                name: "y",
+                                quote: None,
+                                span: Some(
+                                    23..24,
+                                ),
+                            },
+                        ),
+                    },
+                    right: Literal {
+                        span: Some(
+                            27..28,
+                        ),
+                        lit: UInt64(
+                            2,
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        31..32,
+                    ),
+                    lit: UInt64(
+                        0,
+                    ),
+                },
+            },
+        },
     ),
 }
 

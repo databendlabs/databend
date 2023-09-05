@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 #![feature(io_error_other)]
+#![feature(iter_order_by)]
 #![feature(let_chains)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
@@ -31,7 +32,6 @@ pub mod statistics;
 pub mod table_functions;
 
 mod metrics;
-
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;

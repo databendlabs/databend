@@ -18,9 +18,8 @@ use std::time::SystemTime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
-use common_expression::DataSchemaRefExt;
 use common_expression::SendableDataBlockStream;
+use log::error;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -41,11 +40,6 @@ use crate::stream::PullingExecutorStream;
 pub trait Interpreter: Sync + Send {
     /// Return the name of Interpreter, such as "CreateDatabaseInterpreter"
     fn name(&self) -> &str;
-
-    /// Return the schema of Interpreter
-    fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![])
-    }
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
@@ -100,7 +94,7 @@ pub trait Interpreter: Sync + Send {
 
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
-            Ok(Box::pin(DataBlockStream::create(None, vec![])))
+            self.inject_result()
         } else {
             let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
 
@@ -121,6 +115,10 @@ pub trait Interpreter: Sync + Send {
             self.name()
         )))
     }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        Ok(Box::pin(DataBlockStream::create(None, vec![])))
+    }
 }
 
 pub type InterpreterPtr = Arc<dyn Interpreter>;
@@ -134,7 +132,7 @@ fn log_query_start(ctx: &QueryContext) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_start(ctx, now, None) {
-        tracing::error!("interpreter.start.error: {:?}", error)
+        error!("interpreter.start.error: {:?}", error)
     }
 }
 
@@ -148,6 +146,6 @@ fn log_query_finished(ctx: &QueryContext, error: Option<ErrorCode>) {
     }
 
     if let Err(error) = InterpreterQueryLog::log_finish(ctx, now, error) {
-        tracing::error!("interpreter.finish.error: {:?}", error)
+        error!("interpreter.finish.error: {:?}", error)
     }
 }

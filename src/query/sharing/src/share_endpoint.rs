@@ -32,9 +32,9 @@ use http::header::AUTHORIZATION;
 use http::header::CONTENT_LENGTH;
 use http::Method;
 use http::Request;
+use log::error;
 use opendal::raw::AsyncBody;
 use opendal::raw::HttpClient;
-use tracing::error;
 
 use crate::signer::TENANT_HEADER;
 

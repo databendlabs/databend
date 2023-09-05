@@ -24,9 +24,10 @@ use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
+use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::ColumnBinding;
 use common_sql::Visibility;
+use log::debug;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
@@ -58,9 +59,11 @@ impl Interpreter for UpdateInterpreter {
         "UpdateInterpreter"
     }
 
-    #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
+    #[minitrace::trace(name = "update_interpreter_execute")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "update_interpreter_execute");
+
         if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
@@ -81,7 +84,8 @@ impl Interpreter for UpdateInterpreter {
         // refresh table.
         let tbl = self
             .ctx
-            .get_catalog(catalog_name)?
+            .get_catalog(catalog_name)
+            .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
@@ -98,17 +102,16 @@ impl Interpreter for UpdateInterpreter {
                 .metadata
                 .read()
                 .get_table_index(Some(self.plan.database.as_str()), self.plan.table.as_str());
-            let row_id_column_binding = ColumnBinding {
-                database_name: Some(self.plan.database.clone()),
-                table_name: Some(self.plan.table.clone()),
-                column_position: None,
-                table_index,
-                column_name: ROW_ID_COL_NAME.to_string(),
-                index: self.plan.subquery_desc[0].index,
-                data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                visibility: Visibility::InVisible,
-                virtual_computed_expr: None,
-            };
+            let row_id_column_binding = ColumnBindingBuilder::new(
+                ROW_ID_COL_NAME.to_string(),
+                self.plan.subquery_desc[0].index,
+                Box::new(DataType::Number(NumberDataType::UInt64)),
+                Visibility::InVisible,
+            )
+            .database_name(Some(self.plan.database.clone()))
+            .table_name(Some(self.plan.table.clone()))
+            .table_index(table_index)
+            .build();
             let mut filters = VecDeque::new();
             for subquery_desc in &self.plan.subquery_desc {
                 let filter = subquery_filter(
@@ -153,6 +156,7 @@ impl Interpreter for UpdateInterpreter {
             self.ctx.clone(),
             tbl.schema().into(),
             col_indices.clone(),
+            true,
         )?;
 
         let computed_list = self

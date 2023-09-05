@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
+use common_expression::types::array::ArrayColumn;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -30,6 +31,7 @@ use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::FunctionContext;
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -39,31 +41,33 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
-use crate::IndexType;
+use crate::executor::LambdaFunctionDesc;
+use crate::optimizer::ColumnSet;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
 pub enum BlockOperator {
     /// Batch mode of map which merges map operators into one.
-    Map { exprs: Vec<Expr> },
-
-    MapWithOutput {
+    Map {
         exprs: Vec<Expr>,
         /// The index of the output columns, based on the exprs.
-        output_indexes: Vec<usize>,
+        projections: Option<ColumnSet>,
     },
 
     /// Filter the input [`DataBlock`] with the predicate `eval`.
-    Filter { expr: Expr },
+    Filter { projections: ColumnSet, expr: Expr },
 
     /// Reorganize the input [`DataBlock`] with `projection`.
     Project { projection: Vec<FieldIndex> },
 
     /// Expand the input [`DataBlock`] with set-returning functions.
     FlatMap {
+        projections: ColumnSet,
         srf_exprs: Vec<Expr>,
-        unused_indices: HashSet<IndexType>,
     },
+
+    /// Execute lambda function on input [`DataBlock`].
+    LambdaMap { funcs: Vec<LambdaFunctionDesc> },
 }
 
 impl BlockOperator {
@@ -72,61 +76,51 @@ impl BlockOperator {
             return Ok(DataBlock::empty());
         }
         match self {
-            BlockOperator::Map { .. }
-            | BlockOperator::MapWithOutput { .. }
-            | BlockOperator::Filter { .. }
-                if input
+            BlockOperator::Map { exprs, projections } => {
+                let num_evals = input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some() =>
-            {
-                // It's from aggregating index.
-                Ok(input)
-            }
-            BlockOperator::Map { exprs } => {
-                for expr in exprs {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
-                    let col = BlockEntry::new(expr.data_type().clone(), result);
-                    input.add_column(col);
+                    .map(|a| a.num_evals);
+
+                if let Some(num_evals) = num_evals {
+                    // It's from aggregating index.
+                    match projections {
+                        Some(projections) => {
+                            Ok(input.project_with_agg_index(projections, num_evals))
+                        }
+                        None => Ok(input),
+                    }
+                } else {
+                    for expr in exprs {
+                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                        let result = evaluator.run(expr)?;
+                        let col = BlockEntry::new(expr.data_type().clone(), result);
+                        input.add_column(col);
+                    }
+                    match projections {
+                        Some(projections) => Ok(input.project(projections)),
+                        None => Ok(input),
+                    }
                 }
-                Ok(input)
             }
 
-            BlockOperator::MapWithOutput {
-                exprs,
-                output_indexes,
-            } => {
-                let original_num_columns = input.num_columns();
-                for expr in exprs {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                    let result = evaluator.run(expr)?;
-                    let col = BlockEntry::new(expr.data_type().clone(), result);
-                    input.add_column(col);
-                }
-
-                let columns: Vec<BlockEntry> = input
-                    .columns()
-                    .iter()
-                    .enumerate()
-                    .filter(|(index, _)| {
-                        *index < original_num_columns || output_indexes.contains(index)
-                    })
-                    .map(|(_, col)| col.clone())
-                    .collect();
-
-                let rows = input.num_rows();
-                let meta = input.get_owned_meta();
-
-                Ok(DataBlock::new_with_meta(columns, rows, meta))
-            }
-
-            BlockOperator::Filter { expr } => {
+            BlockOperator::Filter { projections, expr } => {
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
-                let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
-                input.filter_boolean_value(&filter)
+                let num_evals = input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .map(|a| a.num_evals);
+
+                if let Some(num_evals) = num_evals {
+                    // It's from aggregating index.
+                    Ok(input.project_with_agg_index(projections, num_evals))
+                } else {
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    let filter = evaluator.run(expr)?.try_downcast::<BooleanType>().unwrap();
+                    let data_block = input.project(projections);
+                    data_block.filter_boolean_value(&filter)
+                }
             }
 
             BlockOperator::Project { projection } => {
@@ -138,8 +132,8 @@ impl BlockOperator {
             }
 
             BlockOperator::FlatMap {
+                projections,
                 srf_exprs,
-                unused_indices,
             } => {
                 let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
@@ -167,7 +161,7 @@ impl BlockOperator {
                 let mut result = DataBlock::empty();
                 let mut block_is_empty = true;
                 for index in 0..input_num_columns {
-                    if unused_indices.contains(&index) {
+                    if !projections.contains(&index) {
                         continue;
                     }
                     let column = input.get_by_offset(index);
@@ -317,6 +311,133 @@ impl BlockOperator {
                 }
                 Ok(result)
             }
+
+            BlockOperator::LambdaMap { funcs } => {
+                for func in funcs {
+                    let expr = func.lambda_expr.as_expr(&BUILTIN_FUNCTIONS);
+                    // TODO: Support multi args
+                    let input_column = input.get_by_offset(func.arg_indices[0]);
+                    match &input_column.value {
+                        Value::Scalar(s) => match s {
+                            Scalar::Null => {
+                                let col = BlockEntry::new(
+                                    expr.data_type().clone(),
+                                    input_column.value.clone(),
+                                );
+                                input.add_column(col);
+                            }
+                            Scalar::Array(c) => {
+                                let entry =
+                                    BlockEntry::new(c.data_type(), Value::Column(c.clone()));
+                                let block = DataBlock::new(vec![entry], c.len());
+
+                                let evaluator =
+                                    Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+                                let result = evaluator.run(&expr)?;
+                                let result_col =
+                                    result.convert_to_full_column(expr.data_type(), c.len());
+
+                                let col = if func.func_name == "array_filter" {
+                                    let result_col = result_col.remove_nullable();
+                                    let bitmap = result_col.as_boolean().unwrap();
+                                    let filtered_inner_col = c.filter(bitmap);
+                                    BlockEntry::new(
+                                        input_column.data_type.clone(),
+                                        Value::Scalar(Scalar::Array(filtered_inner_col)),
+                                    )
+                                } else {
+                                    BlockEntry::new(
+                                        DataType::Array(Box::new(expr.data_type().clone())),
+                                        Value::Scalar(Scalar::Array(result_col)),
+                                    )
+                                };
+                                input.add_column(col);
+                            }
+                            _ => unreachable!(),
+                        },
+                        Value::Column(c) => {
+                            let (inner_col, inner_ty, offsets, validity) = match c {
+                                Column::Array(box array_col) => (
+                                    array_col.values.clone(),
+                                    array_col.values.data_type(),
+                                    array_col.offsets.clone(),
+                                    None,
+                                ),
+                                Column::Nullable(box nullable_col) => match &nullable_col.column {
+                                    Column::Array(box array_col) => (
+                                        array_col.values.clone(),
+                                        array_col.values.data_type(),
+                                        array_col.offsets.clone(),
+                                        Some(nullable_col.validity.clone()),
+                                    ),
+                                    _ => unreachable!(),
+                                },
+                                _ => unreachable!(),
+                            };
+
+                            let entry = BlockEntry::new(inner_ty, Value::Column(inner_col.clone()));
+                            let block = DataBlock::new(vec![entry], inner_col.len());
+
+                            let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
+                            let result = evaluator.run(&expr)?;
+                            let result_col =
+                                result.convert_to_full_column(expr.data_type(), inner_col.len());
+
+                            let col = if func.func_name == "array_filter" {
+                                let result_col = result_col.remove_nullable();
+                                let bitmap = result_col.as_boolean().unwrap();
+                                let filtered_inner_col = inner_col.filter(bitmap);
+                                // generate new offsets after filter.
+                                let mut new_offset = 0;
+                                let mut filtered_offsets = Vec::with_capacity(offsets.len());
+                                filtered_offsets.push(0);
+                                for offset in offsets.windows(2) {
+                                    let off = offset[0] as usize;
+                                    let len = (offset[1] - offset[0]) as usize;
+                                    let unset_count = bitmap.null_count_range(off, len);
+                                    new_offset += (len - unset_count) as u64;
+                                    filtered_offsets.push(new_offset);
+                                }
+
+                                let array_col = Column::Array(Box::new(ArrayColumn {
+                                    values: filtered_inner_col,
+                                    offsets: filtered_offsets.into(),
+                                }));
+                                let col = match validity {
+                                    Some(validity) => {
+                                        Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                            column: array_col,
+                                            validity,
+                                        })))
+                                    }
+                                    None => Value::Column(array_col),
+                                };
+                                BlockEntry::new(input_column.data_type.clone(), col)
+                            } else {
+                                let array_col = Column::Array(Box::new(ArrayColumn {
+                                    values: result_col,
+                                    offsets,
+                                }));
+                                let array_ty = DataType::Array(Box::new(expr.data_type().clone()));
+                                let (ty, col) = match validity {
+                                    Some(validity) => (
+                                        DataType::Nullable(Box::new(array_ty)),
+                                        Value::Column(Column::Nullable(Box::new(NullableColumn {
+                                            column: array_col,
+                                            validity,
+                                        }))),
+                                    ),
+                                    None => (array_ty, Value::Column(array_col)),
+                                };
+                                BlockEntry::new(ty, col)
+                            };
+                            input.add_column(col);
+                        }
+                    }
+                }
+
+                Ok(input)
+            }
         }
     }
 }
@@ -356,11 +477,19 @@ impl CompoundBlockOperator {
 
         for op in operators {
             match op {
-                BlockOperator::Map { exprs } => {
-                    if let Some(BlockOperator::Map { exprs: pre_exprs }) = results.last_mut() {
-                        pre_exprs.extend(exprs);
+                BlockOperator::Map { exprs, projections } => {
+                    if let Some(BlockOperator::Map {
+                        exprs: pre_exprs,
+                        projections: pre_projections,
+                    }) = results.last_mut()
+                    {
+                        if pre_projections.is_none() && projections.is_none() {
+                            pre_exprs.extend(exprs);
+                        } else {
+                            results.push(BlockOperator::Map { exprs, projections });
+                        }
                     } else {
-                        results.push(BlockOperator::Map { exprs });
+                        results.push(BlockOperator::Map { exprs, projections });
                     }
                 }
                 _ => results.push(op),
@@ -391,10 +520,10 @@ impl Transform for CompoundBlockOperator {
                 .map(|op| {
                     match op {
                         BlockOperator::Map { .. } => "Map",
-                        BlockOperator::MapWithOutput { .. } => "MapWithOutput",
                         BlockOperator::Filter { .. } => "Filter",
                         BlockOperator::Project { .. } => "Project",
                         BlockOperator::FlatMap { .. } => "FlatMap",
+                        BlockOperator::LambdaMap { .. } => "LambdaMap",
                     }
                     .to_string()
                 })

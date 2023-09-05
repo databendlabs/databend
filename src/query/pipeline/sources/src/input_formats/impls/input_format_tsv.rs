@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -29,7 +28,7 @@ use common_io::format_diagnostic::verbose_string;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::TsvFileFormatParams;
-use common_pipeline_core::InputError;
+use log::debug;
 
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
@@ -199,11 +198,8 @@ impl InputFormatTextBase for InputFormatTSV {
         )
     }
 
-    fn deserialize(
-        builder: &mut BlockBuilder<Self>,
-        batch: RowBatch,
-    ) -> Result<HashMap<u16, InputError>> {
-        tracing::debug!(
+    fn deserialize(builder: &mut BlockBuilder<Self>, batch: RowBatch) -> Result<()> {
+        debug!(
             "tsv deserializing row batch {}, id={}, start_row={:?}, offset={}",
             batch.split_info.file.path,
             batch.batch_id,
@@ -222,7 +218,6 @@ impl InputFormatTextBase for InputFormatTSV {
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
             if let Err(e) = Self::read_row(
@@ -235,14 +230,20 @@ impl InputFormatTextBase for InputFormatTSV {
             ) {
                 builder
                     .ctx
-                    .on_error(e, Some((columns, builder.num_rows)), Some(&mut error_map))
+                    .on_error(
+                        e,
+                        Some((columns, builder.num_rows)),
+                        &mut builder.file_status,
+                        i + batch.start_row_in_split,
+                    )
                     .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
             } else {
                 builder.num_rows += 1;
+                builder.file_status.num_rows_loaded += 1;
             }
             start = *end;
         }
-        Ok(error_map)
+        Ok(())
     }
 }
 

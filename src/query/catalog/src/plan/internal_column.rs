@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
@@ -36,7 +34,8 @@ use common_expression::SNAPSHOT_NAME_COLUMN_ID;
 
 // Segment and Block id Bits when generate internal column `_row_id`
 // Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
-pub const NUM_BLOCK_ID_BITS: usize = 10;
+// for compact_segment, we will get 2*thresholds-1 blocks in one segment at most.
+pub const NUM_BLOCK_ID_BITS: usize = 11;
 pub const NUM_SEGMENT_ID_BITS: usize = 22;
 pub const NUM_ROW_ID_PREFIX_BITS: usize = NUM_BLOCK_ID_BITS + NUM_SEGMENT_ID_BITS;
 
@@ -52,13 +51,13 @@ pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {
 
 #[inline(always)]
 pub fn compute_row_id(prefix: u64, idx: u64) -> u64 {
-    (prefix << NUM_ROW_ID_PREFIX_BITS) | (idx & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1))
+    (prefix << (64 - NUM_ROW_ID_PREFIX_BITS)) | (idx & ((1 << (64 - NUM_ROW_ID_PREFIX_BITS)) - 1))
 }
 
 #[inline(always)]
 pub fn split_row_id(id: u64) -> (u64, u64) {
-    let prefix = id >> NUM_ROW_ID_PREFIX_BITS;
-    let idx = id & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1);
+    let prefix = id >> (64 - NUM_ROW_ID_PREFIX_BITS);
+    let idx = id & ((1 << (64 - NUM_ROW_ID_PREFIX_BITS)) - 1);
     (prefix, idx)
 }
 
@@ -87,22 +86,15 @@ pub struct InternalColumnMeta {
     pub block_id: usize,
     pub block_location: String,
     pub segment_location: String,
-    pub snapshot_location: String,
+    pub snapshot_location: Option<String>,
     /// The row offsets in the block.
     pub offsets: Option<Vec<usize>>,
 }
 
 #[typetag::serde(name = "internal_column_meta")]
 impl BlockMetaInfo for InternalColumnMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match InternalColumnMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
+        InternalColumnMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
@@ -112,16 +104,13 @@ impl BlockMetaInfo for InternalColumnMeta {
 
 impl InternalColumnMeta {
     pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&InternalColumnMeta> {
-        match InternalColumnMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
-            )),
-        }
+        InternalColumnMeta::downcast_ref_from(info).ok_or(ErrorCode::Internal(
+            "Cannot downcast from BlockMetaInfo to InternalColumnMeta.",
+        ))
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum InternalColumnType {
     RowId,
     BlockName,
@@ -129,7 +118,7 @@ pub enum InternalColumnType {
     SnapshotName,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct InternalColumn {
     pub column_name: String,
     pub column_type: InternalColumnType,
@@ -218,9 +207,14 @@ impl InternalColumn {
                 )
             }
             InternalColumnType::SnapshotName => {
-                let mut builder =
-                    StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
-                builder.put_str(&meta.snapshot_location);
+                let mut builder = StringColumnBuilder::with_capacity(
+                    1,
+                    meta.snapshot_location
+                        .clone()
+                        .unwrap_or("".to_string())
+                        .len(),
+                );
+                builder.put_str(&meta.snapshot_location.clone().unwrap_or("".to_string()));
                 builder.commit_row();
                 BlockEntry::new(
                     DataType::String,

@@ -121,6 +121,7 @@ impl TestFixture {
             },
         };
         ctx.get_catalog("default")
+            .await
             .unwrap()
             .create_database(plan.into())
             .await
@@ -185,7 +186,7 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_comments: vec![],
+            field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
         }
@@ -208,7 +209,7 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_comments: vec![],
+            field_comments: vec!["number".to_string(), "tuple".to_string()],
             as_select: None,
             cluster_key: None,
         }
@@ -331,6 +332,7 @@ impl TestFixture {
         rows_per_block: usize,
         start: i32,
     ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let repeat = rows_per_block % 3 == 0;
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
             TableField::new("t", TableDataType::Tuple {
@@ -345,10 +347,17 @@ impl TestFixture {
             schema,
             (0..num_of_block)
                 .map(|idx| {
+                    let mut curr = idx as i32 + start;
                     let column0 = Int32Type::from_data(
-                        std::iter::repeat_with(|| idx as i32 + start)
-                            .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                        std::iter::repeat_with(|| {
+                            let tmp = curr;
+                            if !repeat {
+                                curr *= 2;
+                            }
+                            tmp
+                        })
+                        .take(rows_per_block)
+                        .collect::<Vec<i32>>(),
                     );
                     let column1 = Int32Type::from_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 2)
@@ -505,7 +514,8 @@ impl TestFixture {
 
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
-            .get_catalog(CATALOG_DEFAULT)?
+            .get_catalog(CATALOG_DEFAULT)
+            .await?
             .get_table(
                 self.default_tenant().as_str(),
                 self.default_db_name().as_str(),
@@ -550,6 +560,7 @@ impl TestFixture {
                 &mut build_res.main_pipeline,
                 None,
                 overwrite,
+                None,
             )?;
         } else {
             build_res
@@ -660,8 +671,12 @@ pub async fn do_update(
     } else {
         (None, vec![])
     };
-    let update_list =
-        plan.generate_update_list(ctx.clone(), table.schema().into(), col_indices.clone())?;
+    let update_list = plan.generate_update_list(
+        ctx.clone(),
+        table.schema().into(),
+        col_indices.clone(),
+        true,
+    )?;
     let computed_list =
         plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
 

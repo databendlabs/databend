@@ -14,6 +14,8 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use log::error;
+use log::info;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -21,23 +23,25 @@ use poem::http::StatusCode;
 use poem::post;
 use poem::web::Json;
 use poem::web::Path;
+use poem::EndpointExt;
 use poem::IntoResponse;
 use poem::Route;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use tracing::error;
-use tracing::info;
 
 use super::query::ExecuteStateKind;
 use super::query::HttpQueryRequest;
 use super::query::HttpQueryResponseInternal;
+use crate::servers::http::metrics::metrics_incr_http_response_errors_count;
+use crate::servers::http::middleware::MetricsMiddleware;
 use crate::servers::http::v1::query::Progresses;
 use crate::servers::http::v1::HttpQueryContext;
 use crate::servers::http::v1::HttpQueryManager;
 use crate::servers::http::v1::HttpSessionConf;
 use crate::servers::http::v1::JsonBlock;
 use crate::sessions::QueryAffect;
+
 const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 const HEADER_QUERY_STATE: &str = "X-DATABEND-QUERY-STATE";
 const HEADER_QUERY_PAGE_ROWS: &str = "X-DATABEND-QUERY-PAGE-ROWS";
@@ -153,6 +157,10 @@ impl QueryResponse {
             }
         };
 
+        if let Some(err) = &r.state.error {
+            metrics_incr_http_response_errors_count(err.name(), err.code());
+        }
+
         let schema = data.schema().clone();
         let session_id = r.session_id.clone();
         let stats = QueryStats {
@@ -160,6 +168,7 @@ impl QueryResponse {
             running_time_ms: state.running_time_ms,
         };
         let rows = data.data.len();
+
         Json(QueryResponse {
             data: data.into(),
             state: state.state,
@@ -181,6 +190,7 @@ impl QueryResponse {
     }
 
     pub(crate) fn fail_to_start_sql(err: &ErrorCode) -> impl IntoResponse {
+        metrics_incr_http_response_errors_count(err.name(), err.code());
         Json(QueryResponse {
             id: "".to_string(),
             stats: QueryStats::default(),
@@ -316,18 +326,25 @@ pub(crate) async fn query_handler(
 
 pub fn query_route() -> Route {
     // Note: endpoints except /v1/query may change without notice, use uris in response instead
-    Route::new()
-        .at("/", post(query_handler))
-        .at("/:id", get(query_state_handler))
-        .at("/:id/page/:page_no", get(query_page_handler))
-        .at(
+    let rules = [
+        ("/", post(query_handler)),
+        ("/:id", get(query_state_handler)),
+        ("/:id/page/:page_no", get(query_page_handler)),
+        (
             "/:id/kill",
             get(query_cancel_handler).post(query_cancel_handler),
-        )
-        .at(
+        ),
+        (
             "/:id/final",
             get(query_final_handler).post(query_final_handler),
-        )
+        ),
+    ];
+
+    let mut route = Route::new();
+    for (path, endpoint) in rules.into_iter() {
+        route = route.at(path, endpoint.with(MetricsMiddleware::new(path)));
+    }
+    route
 }
 
 fn query_id_not_found(query_id: String) -> PoemError {

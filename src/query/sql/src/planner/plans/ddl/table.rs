@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
-use common_ast::ast::ModifyColumnAction;
 use common_catalog::table::NavigationPoint;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -222,12 +221,20 @@ pub struct AddTableColumnPlan {
     pub table: String,
     pub field: TableField,
     pub comment: String,
+    pub option: AddColumnOption,
 }
 
 impl AddTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum AddColumnOption {
+    First,
+    After(String),
+    End,
 }
 
 // Table rename column
@@ -263,13 +270,25 @@ impl DropTableColumnPlan {
     }
 }
 
+// ModifyColumnAction after name resolved, used in ModifyTableColumnPlan
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModifyColumnAction {
+    // (column name, masking policy name)
+    SetMaskingPolicy(String, String),
+    // column name
+    UnsetMaskingPolicy(String),
+    // modify column table field, field comments
+    SetDataType(Vec<(TableField, String)>),
+    // column name
+    ConvertStoredComputedColumn(String),
+}
+
 // Table modify column
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModifyTableColumnPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub column: String,
     pub action: ModifyColumnAction,
 }
 

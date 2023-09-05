@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
@@ -28,12 +27,12 @@ use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
 
-use crate::meta::statistics::ClusterStatistics;
-use crate::meta::statistics::ColumnStatistics;
-use crate::meta::statistics::FormatVersion;
 use crate::meta::v0;
 use crate::meta::v1;
+use crate::meta::ClusterStatistics;
+use crate::meta::ColumnStatistics;
 use crate::meta::Compression;
+use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
@@ -132,15 +131,8 @@ impl BlockMeta {
 
 #[typetag::serde(name = "blockmeta")]
 impl BlockMetaInfo for BlockMeta {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
     fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
-        match BlockMeta::downcast_ref_from(info) {
-            None => false,
-            Some(other) => self == other,
-        }
+        BlockMeta::downcast_ref_from(info).is_some_and(|other| self == other)
     }
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {

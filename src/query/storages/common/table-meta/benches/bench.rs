@@ -30,6 +30,7 @@ use storages_common_table_meta::meta::testing::MetaEncoding;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SingleColumnMeta;
@@ -120,13 +121,21 @@ fn bench_decode(c: &mut Criterion) {
 
     grp.bench_function("bincode-segment-deserialization", |b| {
         b.iter(|| {
-            let _ = SegmentInfo::from_slice(&segment_bincode_bytes).unwrap();
+            let _ = SegmentInfo::from_slice(black_box(&segment_bincode_bytes)).unwrap();
         })
     });
 
     grp.bench_function("msg-pack-segment-deserialization", |b| {
         b.iter(|| {
-            let _ = SegmentInfo::from_slice(&segment_msgpack_bytes).unwrap();
+            let _ = SegmentInfo::from_slice(black_box(&segment_msgpack_bytes)).unwrap();
+        })
+    });
+
+    let compact_segment = CompactSegmentInfo::from_slice(&segment_msgpack_bytes).unwrap();
+
+    grp.bench_function("msg-pack-segment-from-compact", |b| {
+        b.iter(|| {
+            let _ = SegmentInfo::try_from(black_box(&compact_segment)).unwrap();
         })
     });
 
@@ -145,21 +154,21 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         num_values: 0,
     });
 
-    let col_stat = ColumnStatistics {
-        min: Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
-        max: Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
-        null_count: 0,
-        in_memory_size: 0,
-        distinct_of_values: None,
-    };
+    let col_stat = ColumnStatistics::new(
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        0,
+        0,
+        None,
+    );
 
-    let number_col_stat = ColumnStatistics {
-        min: Scalar::Number(NumberScalar::Int32(0)),
-        max: Scalar::Number(NumberScalar::Int32(0)),
-        null_count: 0,
-        in_memory_size: 0,
-        distinct_of_values: None,
-    };
+    let number_col_stat = ColumnStatistics::new(
+        Scalar::Number(NumberScalar::Int32(0)),
+        Scalar::Number(NumberScalar::Int32(0)),
+        0,
+        0,
+        None,
+    );
 
     // 20 string columns, 5 number columns
     let num_string_columns = 20;
@@ -207,6 +216,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         compressed_byte_size: 0,
         index_size: 0,
         col_stats: col_stats.clone(),
+        cluster_stats: None,
     };
 
     Ok(SegmentInfo::new(block_metas, statistics))

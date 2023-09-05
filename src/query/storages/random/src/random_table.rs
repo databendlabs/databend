@@ -113,10 +113,7 @@ impl Table for RandomTable {
                         }
                     };
                 }
-                let limit = match push_downs.limit {
-                    Some(limit) => limit,
-                    None => block_size,
-                };
+                let limit = push_downs.limit.unwrap_or(block_size);
                 (schema, limit)
             }
             None => (self.schema(), block_size),
@@ -182,6 +179,14 @@ impl Table for RandomTable {
             builder.add_source(
                 output.clone(),
                 RandomSource::create(ctx.clone(), output, output_schema.clone(), parts.rows)?,
+            );
+        }
+
+        if plan.parts.is_empty() {
+            let output = OutputPort::create();
+            builder.add_source(
+                output.clone(),
+                RandomSource::create(ctx.clone(), output, output_schema, 0)?,
             );
         }
 

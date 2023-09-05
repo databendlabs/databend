@@ -82,7 +82,7 @@ SELECT  * FROM Employees;
 
 ### Replace with Staged Files
 
-Below is an example that demonstrates how to use staged files for updating data with a REPLACE INTO statement. It's important to note that the REPLACE INTO functionality with staged files is only available when using Databend's [HTTP Handler](../../03-develop/00-api/00-rest.md).
+Below is an example that demonstrates how to use staged files for updating data with a REPLACE INTO statement. It's important to note that the REPLACE INTO functionality with staged files is only available when using Databend's HTTP handler.
 
 First, create a table called "sample":
 
@@ -103,7 +103,7 @@ CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV);
 ```
 
 ```shell
-curl -u root: -H "stage_name:s1" -F "upload=@sample_3_replace.csv" -XPUT "http://localhost:8000/v1/upload_to_stage"
+curl -u root: -H "x-databend-stage-name:s1" -F "upload=@sample_3_replace.csv" -XPUT "http://localhost:8000/v1/upload_to_stage"
 
 {"id":"b8305187-c816-4bb5-8350-c441b85baaf9","stage_name":"s1","state":"SUCCESS","files":["sample_3_replace.csv"]}   
 ```

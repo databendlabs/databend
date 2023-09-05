@@ -15,7 +15,6 @@
 use std::time::SystemTime;
 use std::time::UNIX_EPOCH;
 
-use common_base::base::tokio;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_types::new_log_id;
@@ -33,21 +32,18 @@ use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::UpsertKV;
 use common_meta_types::With;
+use log::info;
 use pretty_assertions::assert_eq;
-use tracing::info;
+use test_harness::test;
 
-use crate::init_raft_store_ut;
 use crate::testing::new_raft_test_context;
+use crate::testing::raft_store_test_harness;
 
 mod expire;
 mod schema_api_impl;
-mod snapshot;
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -118,11 +114,8 @@ async fn test_state_machine_apply_add_node() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Result<()> {
     let tc = new_raft_test_context();
     let sm = StateMachine::open(&tc.raft_config, 1).await?;
@@ -259,11 +252,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_upsert_get() -> anyhow::Res
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Result<()> {
     // - Update a value-meta of None does nothing.
     // - Update a value-meta of Some() only updates the value-meta.
@@ -364,11 +354,8 @@ async fn test_state_machine_apply_non_dup_generic_kv_value_meta() -> anyhow::Res
     Ok(())
 }
 
-#[async_entry::test(
-    worker_threads = 3,
-    init = "init_raft_store_ut!()",
-    tracing_span = "debug"
-)]
+#[test(harness = raft_store_test_harness)]
+#[minitrace::trace]
 async fn test_state_machine_apply_non_dup_generic_kv_delete() -> anyhow::Result<()> {
     struct T {
         // input:
