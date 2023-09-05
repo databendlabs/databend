@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
@@ -105,6 +106,7 @@ impl MergeIntoInterpreter {
             matched_evaluators,
             unmatched_evaluators,
             target_table_idx,
+            field_index_map,
             ..
         } = &self.plan;
         let table_name = table.clone();
@@ -150,7 +152,7 @@ impl MergeIntoInterpreter {
                 .as_any()
                 .downcast_ref::<FuseTable>()
                 .ok_or(ErrorCode::Unimplemented(format!(
-                    "table {}, engine type {}, does not support REPLACE INTO",
+                    "table {}, engine type {}, does not support MERGE INTO",
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
@@ -234,6 +236,7 @@ impl MergeIntoInterpreter {
                         col_indices,
                         false,
                     )?;
+
                 let update_list = update_list
                     .iter()
                     .map(|(idx, remote_expr)| {
@@ -262,6 +265,12 @@ impl MergeIntoInterpreter {
             ))
         });
 
+        let mut filed_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
+        for (field_index, value) in field_index_map {
+            filed_index_of_input_schema
+                .insert(*field_index, join_output_schema.index_of(value).unwrap());
+        }
+
         // recv datablocks from matched upstream and unmatched upstream
         // transform and append dat
         let merge_into = PhysicalPlan::MergeInto(MergeInto {
@@ -270,6 +279,7 @@ impl MergeIntoInterpreter {
             catalog_info: catalog_.info(),
             unmatched,
             matched,
+            filed_index_of_input_schema,
             row_id_idx,
             segments: base_snapshot
                 .segments
