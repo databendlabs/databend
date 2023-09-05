@@ -25,6 +25,7 @@ use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::Processor;
 
+#[derive(Clone, Debug)]
 enum HashJoinBuildStep {
     // The running step of the build phase.
     Running,
@@ -86,7 +87,7 @@ impl TransformHashJoinBuild {
             debug!("Processor {} needs to wait spill", self.processor_id);
             self.step = HashJoinBuildStep::WaitSpill;
         } else {
-            debug!(
+            dbg!(
                 "Processor {} is the last processor, it will split spill tasks and notify all processors to spill",
                 self.processor_id
             );
@@ -150,7 +151,8 @@ impl Processor for TransformHashJoinBuild {
                 true => {
                     // If join spill is enabled, we should wait probe to spill.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.partitions.is_empty() {
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spill_coordinator.spill_tasks.read().is_empty() {
+                        dbg!("?");
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         self.build_state
                             .hash_join_state
@@ -158,6 +160,7 @@ impl Processor for TransformHashJoinBuild {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
+                        dbg!("??");
                         Ok(Event::Finished)
                     }
                 }
@@ -258,11 +261,21 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::WaitProbe => {
-                self.build_state.hash_join_state.wait_probe_spill().await;
+                dbg!("wait probe");
+                if !*self.build_state.hash_join_state.probe_spill_done.lock() {
+                    self.build_state.hash_join_state.wait_probe_spill().await;
+                } else {
+                    self.build_state
+                        .hash_join_state
+                        .notify_build
+                        .notified()
+                        .await;
+                }
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
                 let partition_id = *self.build_state.hash_join_state.partition_id.read();
+                dbg!("start to read data");
                 let spilled_data = self
                     .spill_state
                     .as_ref()
@@ -270,9 +283,11 @@ impl Processor for TransformHashJoinBuild {
                     .spiller
                     .read_spilled_data(&partition_id)
                     .await?;
+                dbg!("finish read");
                 debug!(
                     "processor: {}, finish reading spilled data",
-                    self.processor_id);
+                    self.processor_id
+                );
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 self.reset()?;
             }

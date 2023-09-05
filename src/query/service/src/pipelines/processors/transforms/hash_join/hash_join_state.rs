@@ -107,8 +107,9 @@ pub struct HashJoinState {
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     /// Spill partition set
     pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
-    /// After all probe processors finish spill, notify build processors.
-    pub(crate) probe_spill_done: Arc<Notify>,
+    /// After all probe processors finish spill or probe processors finish a round run, notify build processors.
+    pub(crate) notify_build: Arc<Notify>,
+    pub(crate) probe_spill_done: Mutex<bool>,
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
     pub(crate) partition_id: Arc<RwLock<u8>>,
@@ -149,7 +150,8 @@ impl HashJoinState {
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             spill_partition: Default::default(),
-            probe_spill_done: Arc::new(Default::default()),
+            notify_build: Arc::new(Default::default()),
+            probe_spill_done: Default::default(),
             partition_id: Arc::new(Default::default()),
         }))
     }
@@ -201,6 +203,9 @@ impl HashJoinState {
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_probe_spill(&self) {
-        self.probe_spill_done.notified().await;
+        if *self.probe_spill_done.lock() {
+            return;
+        }
+        self.notify_build.notified().await;
     }
 }

@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -60,8 +61,6 @@ pub struct HashJoinProbeState {
     pub(crate) probe_workers: Mutex<usize>,
     /// Record spill workers
     pub(crate) spill_workers: Mutex<usize>,
-    /// After `spill_workers` is 0, it will be set as true.
-    pub(crate) spill_done: Mutex<bool>,
     /// After `probe_workers` is 0, it will be set as true.
     pub(crate) probe_done: Mutex<bool>,
     /// Notify processors `probe hash table` is done. They can go to next phase.
@@ -98,7 +97,6 @@ impl HashJoinProbeState {
             hash_join_state,
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
-            spill_done: Default::default(),
             probe_done: Mutex::new(false),
             probe_done_notify: Arc::new(Notify::new()),
             probe_schema,
@@ -263,19 +261,23 @@ impl HashJoinProbeState {
         let mut count = self.spill_workers.lock();
         *count -= 1;
         if *count == 0 {
-            // Set spill done
-            let mut spill_done = self.spill_done.lock();
-            *spill_done = true;
-            // Set partition id to `HashJoinState`
-            let mut partition_id = self.hash_join_state.partition_id.write();
-            let mut spill_partition = self.hash_join_state.spill_partition.write();
-            if let Some(id) = spill_partition.iter().next().cloned() {
-                spill_partition.remove(&id);
-                *partition_id = id;
-            };
-            // All probe processors have finished spill, notify build processors to work
-            self.hash_join_state.probe_spill_done.notify_waiters();
+            self.notify_build();
         }
+    }
+
+    pub fn notify_build(&self) {
+        // Set partition id to `HashJoinState`
+        let mut partition_id = self.hash_join_state.partition_id.write();
+        let mut spill_partition = self.hash_join_state.spill_partition.write();
+        if let Some(id) = spill_partition.iter().next().cloned() {
+            spill_partition.remove(&id);
+            *partition_id = id;
+        };
+        // Set spill done
+        let mut spill_done = self.hash_join_state.probe_spill_done.lock();
+        *spill_done = true;
+        // All probe processors have finished spill, notify build processors to work
+        self.hash_join_state.notify_build.notify_waiters();
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
