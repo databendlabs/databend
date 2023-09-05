@@ -216,26 +216,13 @@ impl Pipeline {
         }
     }
 
-    /// there will be dependency-cycle here if we use create_dummy_item from transform
-    fn get_dummy_item_by_resize(&self) -> PipeItem {
-        let processor = ResizeProcessor::create(1, 1);
-        let inputs_port = processor.get_inputs().to_vec();
-        let outputs_port = processor.get_outputs().to_vec();
-        PipeItem::create(
-            ProcessorPtr::create(Box::new(processor)),
-            inputs_port,
-            outputs_port,
-        )
-    }
-
     /// resize_partial will merge pipe_item into one reference to each range of ranges
-    /// the last is the pipe items which is not in ranges, they will be the same with origin
     /// WARN!!!: you must make sure the order. for example:
     /// if there are 5 pipe_ports, given pipe_port0,pipe_port1,pipe_port2,pipe_port3,pipe_port4
     /// you can give ranges and last as [0,1],[2,3],[4]
     /// but you can't give [0,3],[1,4],[2]
     /// that says the number is successive.
-    pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>, last: Vec<usize>) -> Result<()> {
+    pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
             Some(pipe) if pipe.output_length == 0 => {
@@ -260,14 +247,6 @@ impl Pipeline {
                         inputs_port,
                         outputs_port,
                     ));
-                }
-                if !last.is_empty() {
-                    input_len += last.len();
-                    output_len += last.len();
-                    for _ in 0..last.len() {
-                        // add dummy_item
-                        pipe_items.push(self.get_dummy_item_by_resize())
-                    }
                 }
                 self.pipes
                     .push(Pipe::create(input_len, output_len, pipe_items));

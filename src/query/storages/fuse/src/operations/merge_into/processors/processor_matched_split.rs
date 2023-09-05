@@ -248,6 +248,7 @@ impl Processor for MatchedSplitProcessor {
             }
 
             if !current_block.is_empty() {
+                println!("current_block:\n {:?}", current_block);
                 self.output_data_updated_data = Some(current_block);
             }
         }
