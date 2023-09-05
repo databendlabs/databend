@@ -23,9 +23,9 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-io = { path = "../../../common/io" }
-common-metrics = { path = "../../../common/metrics" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
+common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
@@ -52,12 +52,13 @@ futures = "0.3.24"
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = "0.10.5"
+lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
-prometheus-client = { workspace = true }
 minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
+prometheus-client = { workspace = true }
 rand = "0.8.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -65,7 +66,6 @@ sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
 sys-info = "0.9"
-lazy_static = { workspace = true }
 
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
