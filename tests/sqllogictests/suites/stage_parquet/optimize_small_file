@@ -1,0 +1,117 @@
+# test with parquet_fast_read_bytes
+#  = 0 (all file as large)
+#  = 3000 (mixed small and large files)
+#  = 10000 (all file as small)
+# be careful when regenerating the data, the size of the files is important
+query 
+SELECT name, size FROM list_stage(location => '@data/parquet/multi_page/', pattern => '.*[.]parquet') order by name;
+----
+parquet/multi_page/multi_page_1.parquet 2711
+parquet/multi_page/multi_page_2.parquet 5328
+parquet/multi_page/multi_page_3.parquet 4020
+parquet/multi_page/multi_page_4.parquet 6636
+
+statement ok
+drop table if exists ai
+
+statement ok
+create table ai (col_arr array(int), col_int int)
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=0) */ into ai from @data/parquet/multi_page/ PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=0) */ into ai from ( select * from  @data/parquet/multi_page/ )  PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
+
+
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=30000) */ into ai from @data/parquet/multi_page/ PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=3000) */ into ai from ( select * from  @data/parquet/multi_page/ )  PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
+
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=10000) */ into ai from @data/parquet/multi_page/ PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
+
+query 
+copy /*+ set_var(parquet_fast_read_bytes=10000) */ into ai from ( select * from  @data/parquet/multi_page/ )  PATTERN='.*[.]parquet' force=true;
+----
+parquet/multi_page/multi_page_1.parquet 40 0 NULL NULL
+parquet/multi_page/multi_page_2.parquet 120 0 NULL NULL
+parquet/multi_page/multi_page_3.parquet 80 0 NULL NULL
+parquet/multi_page/multi_page_4.parquet 160 0 NULL NULL
+
+query 
+select count(*) from ai
+----
+400
+
+statement ok
+truncate table ai
