@@ -29,7 +29,7 @@ jobs:
           - x86_64
           - aarch64
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -43,7 +43,7 @@ jobs:
   #  runs-on: macos-11
   #  needs: build_macos
   #  steps:
-  #    - uses: actions/checkout@v3
+  #    - uses: actions/checkout@v4
   #    - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_macos:
@@ -51,7 +51,7 @@ jobs:
     runs-on: macos-11
     needs: build_macos
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_macos
         env:
           SQLALCHEMY_SILENCE_UBER_WARNING: "1"
@@ -62,5 +62,5 @@ jobs:
   #   runs-on: macos-11
   #   needs: build_macos
   #   steps:
-  #     - uses: actions/checkout@v3
+  #     - uses: actions/checkout@v4
   #     - uses: ./.github/actions/test_sqllogic_standalone_macos
