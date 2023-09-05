@@ -217,7 +217,7 @@ impl Pipeline {
     }
 
     /// there will be dependency-cycle here if we use create_dummy_item from transform
-    fn ge_dummy_item_by_resize(&self) -> PipeItem {
+    fn get_dummy_item_by_resize(&self) -> PipeItem {
         let processor = ResizeProcessor::create(1, 1);
         let inputs_port = processor.get_inputs().to_vec();
         let outputs_port = processor.get_outputs().to_vec();
@@ -231,7 +231,7 @@ impl Pipeline {
     /// resize_partial will merge pipe_item into one reference to each range of ranges
     /// the last is the pipe items which is not in ranges, they will be the same with origin
     /// WARN!!!: you must make sure the order. for example:
-    /// if there are 5 pipes, given pipe0,pipe1,pipe2,pipe3,pipe4
+    /// if there are 5 pipe_ports, given pipe_port0,pipe_port1,pipe_port2,pipe_port3,pipe_port4
     /// you can give ranges and last as [0,1],[2,3],[4]
     /// but you can't give [0,3],[1,4],[2]
     /// that says the number is successive.
@@ -241,7 +241,7 @@ impl Pipeline {
             Some(pipe) if pipe.output_length == 0 => {
                 Err(ErrorCode::Internal("Cannot resize empty pipe."))
             }
-            Some(pipe) => {
+            Some(_) => {
                 let mut input_len = 0;
                 let mut output_len = 0;
                 let mut pipe_items = Vec::new();
@@ -250,12 +250,9 @@ impl Pipeline {
                         return Err(ErrorCode::Internal("Cannot resize empty pipe."));
                     }
                     output_len += 1;
-                    let mut len = 0;
-                    for idx in range {
-                        len += pipe.items[idx].outputs_port.len();
-                    }
-                    input_len += len;
-                    let processor = ResizeProcessor::create(len, 1);
+                    input_len += range.len();
+
+                    let processor = ResizeProcessor::create(range.len(), 1);
                     let inputs_port = processor.get_inputs().to_vec();
                     let outputs_port = processor.get_outputs().to_vec();
                     pipe_items.push(PipeItem::create(
@@ -265,15 +262,11 @@ impl Pipeline {
                     ));
                 }
                 if !last.is_empty() {
-                    let mut len = 0;
-                    for idx in last {
-                        len += pipe.items[idx].outputs_port.len();
-                        output_len += pipe.items[idx].outputs_port.len();
-                    }
-                    input_len += len;
-                    for _ in 0..len {
+                    input_len += last.len();
+                    output_len += last.len();
+                    for _ in 0..last.len() {
                         // add dummy_item
-                        pipe_items.push(self.ge_dummy_item_by_resize())
+                        pipe_items.push(self.get_dummy_item_by_resize())
                     }
                 }
                 self.pipes

@@ -158,7 +158,8 @@ impl UpdateByExprMutator {
                 self.filed_index_of_input_schema.get(field_index).unwrap(),
                 field_index,
             );
-            filed_index2position.insert(field_index, self.origin_input_columns + 1 + idx);
+            // there is a filter column in data_block
+            filed_index2position.insert(field_index, idx + 1);
         }
         let mut block_entries = Vec::with_capacity(self.origin_input_columns + 1);
         for (idx, block_entry) in origin_block.columns().iter().enumerate() {
