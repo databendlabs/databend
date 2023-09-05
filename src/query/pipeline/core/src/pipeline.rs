@@ -235,11 +235,7 @@ impl Pipeline {
     /// you can give ranges and last as [0,1],[2,3],[4]
     /// but you can't give [0,3],[1,4],[2]
     /// that says the number is successive.
-    pub fn resize_partitial_one(
-        &mut self,
-        ranges: Vec<Vec<usize>>,
-        last: Vec<usize>,
-    ) -> Result<()> {
+    pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>, last: Vec<usize>) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
             Some(pipe) if pipe.output_length == 0 => {

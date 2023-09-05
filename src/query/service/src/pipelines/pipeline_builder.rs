@@ -498,7 +498,7 @@ impl PipelineBuilder {
         ));
 
         self.main_pipeline
-            .resize_partitial_one(vec![vec![1, 2]], vec![0])?;
+            .resize_partial_one(vec![vec![1, 2]], vec![0])?;
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));

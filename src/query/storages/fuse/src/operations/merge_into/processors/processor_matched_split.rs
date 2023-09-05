@@ -207,10 +207,10 @@ impl Processor for MatchedSplitProcessor {
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {
-                        let stage_blcok = update_mutation
+                        let stage_block = update_mutation
                             .update_mutator
                             .update_by_expr(current_block)?;
-                        current_block = stage_blcok;
+                        current_block = stage_block;
                     }
 
                     MutationKind::Delete(delete_mutation) => {
