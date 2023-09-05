@@ -140,7 +140,7 @@ You can now see a bar chart on the notebook:
 
 ![Alt text](../../public/img/integration/jupyter-ipython-sql.png)
 
-## Tutorial-3: Integrate with Jupyter Notebook with Databend Python Binding
+## Tutorial-3: Integrate with Jupyter Notebook with Python Binding Library
 
 In this tutorial, you will first deploy a local Databend instance and Jupyter Notebook, and then run queries in a notebook through the [Databend Python Binding](https://pypi.org/project/databend/) library, as well as write and visualize data within the notebook.
 
