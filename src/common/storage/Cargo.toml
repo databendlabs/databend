@@ -16,6 +16,7 @@ common-base = { path = "../base" }
 common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
+common-metrics = { path = "../../metrics" }
 
 anyhow = { workspace = true }
 arrow-schema = "45.0.0"
@@ -27,6 +28,8 @@ dashmap = { version = "5.5.1", features = ["serde"] }
 flagset = "0.4"
 futures = "0.3"
 log = { workspace = true }
+prometheus_client = { workspace = true }
+lazy_static = { workspace = true }
 metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
