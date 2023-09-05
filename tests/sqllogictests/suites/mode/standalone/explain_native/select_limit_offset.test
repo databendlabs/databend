@@ -129,7 +129,7 @@ explain select * from t left join t1 on t.a = t1.a limit 1,2
 Limit
 ├── output columns: [t1.a (#1), t.a (#0)]
 ├── limit: 2
-├── offset: 1
+├── offset: 0
 ├── estimated rows: 2.00
 └── HashJoin
     ├── output columns: [t1.a (#1), t.a (#0)]
@@ -170,7 +170,7 @@ explain select * from t1 right join t on t.a = t1.a limit 1,2
 Limit
 ├── output columns: [t1.a (#0), t.a (#1)]
 ├── limit: 2
-├── offset: 1
+├── offset: 0
 ├── estimated rows: 2.00
 └── HashJoin
     ├── output columns: [t1.a (#0), t.a (#1)]
