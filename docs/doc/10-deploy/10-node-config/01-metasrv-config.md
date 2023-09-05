@@ -8,7 +8,6 @@ This page describes the Meta configurations available in the [databend-meta.toml
 # Usage:
 # databend-meta -c databend-meta.toml
 
-log_dir                 = "/var/log/databend"
 admin_api_address       = "0.0.0.0:28101"
 grpc_api_address        = "0.0.0.0:9191"
 # databend-query fetch this address to update its databend-meta endpoints list,
