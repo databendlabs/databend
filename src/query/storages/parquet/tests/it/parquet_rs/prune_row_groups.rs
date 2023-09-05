@@ -175,86 +175,85 @@ async fn test_int32_eq_in_list_negated() {
     test(Scenario::Int32, "i not in (1)", vec![0, 1, 2, 3]).await;
 }
 
-// TODO(parquet): uncomment until decimal types support `calc_domain`.
-// #[tokio::test]
-// async fn test_decimal_lt() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three row groups:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(Scenario::Decimal, "decimal_col < 4", vec![0, 1]).await;
-//     // compare with the casted decimal value
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col < cast(4.55 as decimal(20,2))",
-//         vec![0, 1],
-//     )
-//     .await;
+#[tokio::test]
+async fn test_decimal_lt() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three row groups:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(Scenario::Decimal, "decimal_col < 4", vec![0, 1]).await;
+    // compare with the casted decimal value
+    test(
+        Scenario::Decimal,
+        "decimal_col < cast(4.55 as decimal(20,2))",
+        vec![0, 1],
+    )
+    .await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(Scenario::DecimalLargePrecision, "decimal_col < 4", vec![
-//         0, 1,
-//     ])
-//     .await;
-//     // compare with the casted decimal value
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col < cast(4.55 as decimal(20,2))",
-//         vec![0, 1],
-//     )
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(Scenario::DecimalLargePrecision, "decimal_col < 4", vec![
+        0, 1,
+    ])
+    .await;
+    // compare with the casted decimal value
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col < cast(4.55 as decimal(20,2))",
+        vec![0, 1],
+    )
+    .await;
+}
 
-// #[tokio::test]
-// async fn test_decimal_eq() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three row groups:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(Scenario::Decimal, "decimal_col = 4", vec![0, 1]).await;
-//     test(Scenario::Decimal, "decimal_col = 4.00", vec![0, 1]).await;
+#[tokio::test]
+async fn test_decimal_eq() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three row groups:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(Scenario::Decimal, "decimal_col = 4", vec![0, 1]).await;
+    test(Scenario::Decimal, "decimal_col = 4.00", vec![0, 1]).await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(Scenario::DecimalLargePrecision, "decimal_col = 4", vec![
-//         0, 1,
-//     ])
-//     .await;
-//     test(Scenario::DecimalLargePrecision, "decimal_col = 4.00", vec![
-//         0, 1,
-//     ])
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(Scenario::DecimalLargePrecision, "decimal_col = 4", vec![
+        0, 1,
+    ])
+    .await;
+    test(Scenario::DecimalLargePrecision, "decimal_col = 4.00", vec![
+        0, 1,
+    ])
+    .await;
+}
 
-// #[tokio::test]
-// async fn test_decimal_in_list() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three row groups:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col in (4,3,2,123456789123)",
-//         vec![0, 1],
-//     )
-//     .await;
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col in (4.00,3.00,11.2345,1)",
-//         vec![0, 1],
-//     )
-//     .await;
+#[tokio::test]
+async fn test_decimal_in_list() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three row groups:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(
+        Scenario::Decimal,
+        "decimal_col in (4,3,123456789123)",
+        vec![0, 1],
+    )
+    .await;
+    test(
+        Scenario::Decimal,
+        "decimal_col in (4.00,3.00,11.2345)",
+        vec![0, 1],
+    )
+    .await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col in (4,3,2,123456789123)",
-//         vec![0, 1],
-//     )
-//     .await;
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col in (4.00,3.00,11.2345,1)",
-//         vec![0, 1],
-//     )
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col in (4,3,123456789123)",
+        vec![0, 1],
+    )
+    .await;
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col in (4.00,3.00,11.2345)",
+        vec![0, 1],
+    )
+    .await;
+}
 
 #[tokio::test]
 async fn test_periods_in_column_names() {

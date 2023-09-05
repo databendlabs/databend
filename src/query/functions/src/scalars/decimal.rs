@@ -42,6 +42,7 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use ethnum::i256;
 use num_traits::AsPrimitive;
+use ordered_float::OrderedFloat;
 
 macro_rules! op_decimal {
     ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
@@ -300,11 +301,9 @@ macro_rules! register_decimal_compare_op {
                             }
                             (_, _) => FunctionDomain::Full,
                         }),
-                        eval: Box::new(wrap_nullable(Box::new(
-                            move |args: &[ValueRef<AnyType>], _ctx: &mut EvalContext| {
-                                op_decimal!(&args[0], &args[1], &common_type, $op)
-                            },
-                        ))),
+                        eval: Box::new(wrap_nullable(move |args, _ctx| {
+                            op_decimal!(&args[0], &args[1], &common_type, $op)
+                        })),
                     },
                 }
             } else {
@@ -472,8 +471,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         if params.len() != 2 {
             return None;
         }
+
+        let from_type = args_type[0].remove_nullable();
+
         if !matches!(
-            args_type[0].remove_nullable(),
+            from_type,
             DataType::Number(_) | DataType::Decimal(_) | DataType::String
         ) {
             return None;
@@ -483,7 +485,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             precision: params[0] as u8,
             scale: params[1] as u8,
         };
-        let from_type = args_type[0].remove_nullable();
+
         let domain_type = DecimalDataType::from_size(decimal_size).ok()?;
         let return_type = DataType::Decimal(domain_type);
 
@@ -521,36 +523,60 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
+macro_rules! single_decimal128_to_float {
+    ($from: expr, $size: expr, $to_type: ty) => {{
+        let base: $to_type = 10.0;
+        let div: $to_type = base.powi($size.scale as i32);
+        let v: OrderedFloat<$to_type> = ($from as $to_type / div).into();
+        v
+    }};
+}
+
+macro_rules! single_decimal256_to_float {
+    ($from: expr, $size: expr, $to_type: ty) => {{
+        let base: $to_type = 10.0;
+        let div: $to_type = base.powi($size.scale as i32);
+        let v: OrderedFloat<$to_type> = (<$to_type>::from($from) / div).into();
+        v
+    }};
+}
+
 pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_float64", |_params, args_type| {
         if args_type.len() != 1 {
             return None;
         }
 
-        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-        let arg_type = args_type[0].clone();
+        let arg_type = args_type[0].remove_nullable();
 
-        if !arg_type.remove_nullable().is_decimal() {
+        if !arg_type.is_decimal() {
             return None;
         }
 
-        let f = Function {
+        Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "to_float64".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float64Type::data_type(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| decimal_to_float64(args, arg_type.clone(), tx)),
+                calc_domain: Box::new(|_, d| match d[0].as_decimal().unwrap() {
+                    DecimalDomain::Decimal128(d, size) => FunctionDomain::Domain(Domain::Number(
+                        NumberDomain::Float64(SimpleDomain {
+                            min: single_decimal128_to_float! {d.min, size, f64},
+                            max: single_decimal128_to_float! {d.max, size, f64},
+                        }),
+                    )),
+                    DecimalDomain::Decimal256(d, size) => FunctionDomain::Domain(Domain::Number(
+                        NumberDomain::Float64(SimpleDomain {
+                            min: single_decimal256_to_float! {d.min, size, f64},
+                            max: single_decimal256_to_float! {d.max, size, f64},
+                        }),
+                    )),
+                }),
+                eval: Box::new(move |args, tx| decimal_to_float64(&args[0], arg_type.clone(), tx)),
             },
-        };
-
-        if has_null {
-            Some(Arc::new(f.wrap_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        }))
     });
 }
 
@@ -560,30 +586,35 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-
-        let arg_type = args_type[0].clone();
-        if !arg_type.remove_nullable().is_decimal() {
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
             return None;
         }
 
-        let f = Function {
+        Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "to_float32".to_string(),
                 args_type: vec![arg_type.clone()],
                 return_type: Float32Type::data_type(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| decimal_to_float32(args, arg_type.clone(), tx)),
+                calc_domain: Box::new(|_, d| match d[0].as_decimal().unwrap() {
+                    DecimalDomain::Decimal128(d, size) => FunctionDomain::Domain(Domain::Number(
+                        NumberDomain::Float32(SimpleDomain {
+                            min: single_decimal128_to_float! {d.min, size, f32},
+                            max: single_decimal128_to_float! {d.max, size, f32},
+                        }),
+                    )),
+                    DecimalDomain::Decimal256(d, size) => FunctionDomain::Domain(Domain::Number(
+                        NumberDomain::Float32(SimpleDomain {
+                            min: single_decimal256_to_float! {d.min, size, f32},
+                            max: single_decimal256_to_float! {d.max, size, f32},
+                        }),
+                    )),
+                }),
+                eval: Box::new(move |args, tx| decimal_to_float32(&args[0], arg_type.clone(), tx)),
             },
-        };
-
-        if has_null {
-            Some(Arc::new(f.wrap_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
+        }))
     });
 }
 
@@ -1209,12 +1240,10 @@ fn decimal_to_decimal_domain(
 }
 
 fn decimal_to_float64(
-    args: &[ValueRef<AnyType>],
+    arg: &ValueRef<AnyType>,
     from_type: DataType,
     _ctx: &mut EvalContext,
 ) -> Value<AnyType> {
-    let arg = &args[0];
-
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
@@ -1259,12 +1288,10 @@ fn decimal_to_float64(
 }
 
 fn decimal_to_float32(
-    args: &[ValueRef<AnyType>],
+    arg: &ValueRef<AnyType>,
     from_type: DataType,
     _ctx: &mut EvalContext,
 ) -> Value<AnyType> {
-    let arg = &args[0];
-
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
