@@ -16,6 +16,8 @@ use std::cmp::Ord;
 use std::ops::*;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
@@ -414,7 +416,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         if !matches!(
             args_type[0].remove_nullable(),
-            DataType::Number(_) | DataType::Decimal(_) | DataType::String
+            DataType::Boolean | DataType::Number(_) | DataType::Decimal(_) | DataType::String
         ) {
             return None;
         }
@@ -526,6 +528,39 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
     });
 }
 
+pub(crate) fn register_decimal_to_boolean(registry: &mut FunctionRegistry) {
+    registry.register_function_factory("to_boolean", |_params, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+
+        let arg_type = args_type[0].clone();
+        if !arg_type.remove_nullable().is_decimal() {
+            return None;
+        }
+
+        let f = Function {
+            signature: FunctionSignature {
+                name: "to_boolean".to_string(),
+                args_type: vec![arg_type.clone()],
+                return_type: DataType::Boolean,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(move |args, tx| decimal_to_boolean(args, arg_type.clone(), tx)),
+            },
+        };
+
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
+}
+
 fn convert_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
@@ -533,6 +568,7 @@ fn convert_to_decimal(
     dest_type: DataType,
 ) -> Value<AnyType> {
     match from_type {
+        DataType::Boolean => boolean_to_decimal(arg, ctx, dest_type),
         DataType::Number(ty) => {
             if ty.is_float() {
                 float_to_decimal(arg, ctx, from_type, dest_type)
@@ -543,6 +579,69 @@ fn convert_to_decimal(
         DataType::Decimal(_) => decimal_to_decimal(arg, ctx, from_type, dest_type),
         DataType::String => string_to_decimal(arg, ctx, dest_type),
         _ => unreachable!("to_decimal not support this DataType"),
+    }
+}
+
+fn boolean_to_decimal_column<T: Decimal>(
+    _ctx: &mut EvalContext,
+    boolean_column: &Bitmap,
+    size: DecimalSize,
+) -> DecimalColumn {
+    let mut values = Vec::<T>::with_capacity(boolean_column.len());
+    for val in boolean_column.iter() {
+        if val {
+            values.push(T::e(size.scale as u32));
+        } else {
+            values.push(T::zero());
+        }
+    }
+    T::to_column(values, size)
+}
+
+fn boolean_to_decimal_scalar<T: Decimal>(
+    _ctx: &mut EvalContext,
+    val: bool,
+    size: DecimalSize,
+) -> DecimalScalar {
+    if val {
+        T::to_scalar(T::e(size.scale as u32), size)
+    } else {
+        T::to_scalar(T::zero(), size)
+    }
+}
+
+fn boolean_to_decimal(
+    arg: &ValueRef<AnyType>,
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    let dest_type = dest_type.as_decimal().unwrap();
+
+    match arg {
+        ValueRef::Column(column) => {
+            let boolean_column = BooleanType::try_downcast_column(column).unwrap();
+            let column = match dest_type {
+                DecimalDataType::Decimal128(size) => {
+                    boolean_to_decimal_column::<i128>(ctx, &boolean_column, *size)
+                }
+                DecimalDataType::Decimal256(size) => {
+                    boolean_to_decimal_column::<i256>(ctx, &boolean_column, *size)
+                }
+            };
+            Value::Column(Column::Decimal(column))
+        }
+        ValueRef::Scalar(scalar) => {
+            let val = BooleanType::try_downcast_scalar(scalar).unwrap();
+            let scalar = match dest_type {
+                DecimalDataType::Decimal128(size) => {
+                    boolean_to_decimal_scalar::<i128>(ctx, val, *size)
+                }
+                DecimalDataType::Decimal256(size) => {
+                    boolean_to_decimal_scalar::<i128>(ctx, val, *size)
+                }
+            };
+            Value::Scalar(Scalar::Decimal(scalar))
+        }
     }
 }
 
@@ -1016,6 +1115,63 @@ fn decimal_to_float32(
                 .map(|x| (f32::from(*x) / div).into())
                 .collect();
             Float32Type::upcast_column(values)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(scalar.to_owned())
+    } else {
+        Value::Column(result)
+    }
+}
+
+fn decimal_to_boolean(
+    args: &[ValueRef<AnyType>],
+    from_type: DataType,
+    _ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let arg = &args[0];
+
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+
+    let from_type = from_type.as_decimal().unwrap();
+
+    let result = match from_type {
+        DecimalDataType::Decimal128(_) => {
+            let (values, _) = i128::try_downcast_column(&column).unwrap();
+
+            let mut bitmap = MutableBitmap::with_capacity(values.len());
+            for value in values {
+                if value > 0 {
+                    bitmap.push(true);
+                } else {
+                    bitmap.push(false);
+                }
+            }
+            BooleanType::upcast_column(bitmap.into())
+        }
+
+        DecimalDataType::Decimal256(_) => {
+            let (values, _) = i256::try_downcast_column(&column).unwrap();
+
+            let mut bitmap = MutableBitmap::with_capacity(values.len());
+            for value in values {
+                if value > 0 {
+                    bitmap.push(true);
+                } else {
+                    bitmap.push(false);
+                }
+            }
+            BooleanType::upcast_column(bitmap.into())
         }
     };
 
