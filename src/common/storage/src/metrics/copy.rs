@@ -80,7 +80,7 @@ pub fn metrics_inc_filter_out_copied_files_entire_milliseconds(c: u64) {
         key!("filter_out_copied_files_entire_milliseconds"),
         c as f64
     );
-    FILTER_OUT_COPIED_FILES_ENTRIE_MILLISECONDS.observe(c as f64);
+    FILTER_OUT_COPIED_FILES_ENTIRE_MILLISECONDS.observe(c as f64);
 }
 
 pub fn metrics_inc_collect_files_get_all_source_files_milliseconds(c: u64) {
