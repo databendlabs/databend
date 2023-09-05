@@ -30,6 +30,7 @@ use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use tonic::Streaming;
 use url::Url;
 
+use databend_client::presign::{presign_upload_to_stage, PresignedResponse};
 use databend_sql::error::{Error, Result};
 use databend_sql::rows::{
     QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows,
@@ -95,15 +96,26 @@ impl Connection for FlightSQLConnection {
         Ok((schema, RowProgressIterator::new(Box::pin(rows))))
     }
 
-    async fn stream_load(
-        &self,
-        _sql: &str,
-        _data: Reader,
-        _size: u64,
-        _file_format_options: Option<BTreeMap<&str, &str>>,
-        _copy_options: Option<BTreeMap<&str, &str>>,
-    ) -> Result<QueryProgress> {
-        unimplemented!("stream_load is not supported in FlightSQL")
+    async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {
+        let sql = format!("PRESIGN {} {}", operation, stage);
+        let row = self.query_row(&sql).await?.ok_or(Error::InvalidResponse(
+            "Empty response from server for presigned request".to_string(),
+        ))?;
+        let (method, _, url): (String, String, String) = row.try_into().map_err(Error::Parsing)?;
+        // FIXME: headers is variant, not handled by driver yet
+        let headers: BTreeMap<String, String> = BTreeMap::new();
+        Ok(PresignedResponse {
+            method,
+            headers,
+            url,
+        })
+    }
+
+    /// Always use presigned url to upload stage for FlightSQL
+    async fn upload_to_stage(&self, stage: &str, data: Reader, size: u64) -> Result<()> {
+        let presign = self.get_presigned_url("UPLOAD", stage).await?;
+        presign_upload_to_stage(presign, data, size).await?;
+        Ok(())
     }
 }
 

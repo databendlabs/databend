@@ -40,7 +40,7 @@ async fn insert_with_stage(presigned: bool) {
     };
 
     client
-        .upload_to_stage(&stage_location, file, metadata.len())
+        .upload_to_stage(&stage_location, Box::new(file), metadata.len())
         .await
         .unwrap();
     let sql = format!(

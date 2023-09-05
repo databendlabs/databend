@@ -13,10 +13,7 @@ crate-type = ["cdylib"]
 doc = false
 
 [dependencies]
-databend-client = { workspace = true }
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
-
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures = "0.3"
 pyo3 = { version = "0.19", features = ["abi3-py37"] }
 pyo3-asyncio = { version = "0.19", features = ["tokio-runtime"] }

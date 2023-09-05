@@ -24,7 +24,6 @@ napi = { version = "2.13", default-features = false, features = [
     "chrono_date",
 ] }
 napi-derive = "2.13"
-serde_json = "1.0"
 tokio-stream = "0.1"
 
 [build-dependencies]

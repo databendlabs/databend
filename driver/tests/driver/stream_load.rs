@@ -74,13 +74,8 @@ async fn stream_load(presigned: bool, file_type: &str) {
 
     let sql = format!("SELECT * FROM `{}`", table);
     let rows = conn.query_iter(&sql).await.unwrap();
-    let result: Vec<(String, String, String, NaiveDateTime)> = rows
-        .map(|r| {
-            println!("{:?}", r);
-            r.unwrap().try_into().unwrap()
-        })
-        .collect()
-        .await;
+    let result: Vec<(String, String, String, NaiveDateTime)> =
+        rows.map(|r| r.unwrap().try_into().unwrap()).collect().await;
 
     let expected = vec![
         (

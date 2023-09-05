@@ -15,7 +15,9 @@
 mod client;
 
 pub mod error;
+pub mod presign;
 pub mod request;
 pub mod response;
+pub mod stage;
 
 pub use client::APIClient;
