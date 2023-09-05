@@ -4,6 +4,8 @@ drop table if exists iti
 statement ok
 create table iti (a int, b string, c int)
 
+# CsvFileFormatParams not the same in clickhouse handler
+skipif clickhouse
 # copy 2 files in one threads to test appending 2 batch of rows to the same column builders
 query 
 copy /*+ set_var(max_threads=1) */into iti from @data/csv/ pattern = 'wrong_sample.*[.]csv' file_format = (type = CSV) ON_ERROR=continue
@@ -11,6 +13,7 @@ copy /*+ set_var(max_threads=1) */into iti from @data/csv/ pattern = 'wrong_samp
 csv/wrong_sample.csv 3 4 too many fields, expect 3, got 4, split csv/wrong_sample.csv(110 bytes), row=1=0+1, offset=16=0+16, options=Csv(CsvFileFormatParams { compression: None, headers: 0, field_delimiter: ",", record_delimiter: "\n", null_display: "\\N", nan_display: "NaN", escape: "", quote: "\"" }), schema=[TableField { name: "a", default_expr: None, data_type: Number(Int32), column_id: 0, computed_expr: None }, TableField { name: "b", default_expr: None, data_type: String, column_id: 1, computed_expr: None }, TableField { name: "c", default_expr: None, data_type: Number(Int32), column_id: 2, computed_expr: None }] 2
 csv/wrong_sample2.csv 4 3 fail to decode column 2 (c Int32): number is not exist, [column_data]=["b1"] 4
 
+skipif clickhouse
 query 
 select * from iti order by a
 ----
