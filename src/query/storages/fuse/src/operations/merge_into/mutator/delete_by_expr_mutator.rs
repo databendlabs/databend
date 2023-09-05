@@ -42,13 +42,13 @@ impl DeleteByExprMutator {
     // return block after delete, and the rowIds which are deleted
     pub fn delete_by_expr(&self, data_block: DataBlock) -> Result<(DataBlock, DataBlock)> {
         if self.expr.is_none() {
-            return Ok((
+            Ok((
                 DataBlock::empty(),
                 DataBlock::new(
                     vec![data_block.get_by_offset(self.row_id_idx).clone()],
                     data_block.num_rows(),
                 ),
-            ));
+            ))
         } else {
             let filter: Expr = cast_expr_to_non_null_boolean(self.expr.as_ref().unwrap().clone())?;
             assert_eq!(filter.data_type(), &DataType::Boolean);

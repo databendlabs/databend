@@ -155,7 +155,7 @@ impl UpdateByExprMutator {
         let mut filed_index2position = HashMap::new();
         for (idx, (field_index, _)) in self.update_lists.iter().enumerate() {
             updated_column_position.insert(
-                self.filed_index_of_input_schema.get(&field_index).unwrap(),
+                self.filed_index_of_input_schema.get(field_index).unwrap(),
                 field_index,
             );
             filed_index2position.insert(field_index, self.origin_input_columns + 1 + idx);
