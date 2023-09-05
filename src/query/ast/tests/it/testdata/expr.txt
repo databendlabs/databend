@@ -1091,7 +1091,7 @@ MapAccess {
             },
         },
     },
-    accessor: Period {
+    accessor: Dot {
         key: Identifier {
             name: "k2",
             quote: None,
@@ -1148,7 +1148,7 @@ MapAccess {
                 },
             },
         },
-        accessor: Period {
+        accessor: Dot {
             key: Identifier {
                 name: "k2",
                 quote: None,
@@ -1158,7 +1158,7 @@ MapAccess {
             },
         },
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1189,7 +1189,7 @@ MapAccess {
             },
         ),
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1217,7 +1217,7 @@ MapAccess {
             },
         ],
     },
-    accessor: PeriodNumber {
+    accessor: DotNumber {
         key: 0,
     },
 }
@@ -1818,7 +1818,7 @@ MapAccess {
             },
         },
     },
-    accessor: Period {
+    accessor: Dot {
         key: Identifier {
             name: "b",
             quote: None,

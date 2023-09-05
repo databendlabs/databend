@@ -88,6 +88,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn gen_select(&mut self) -> SelectStmt {
         let select_list = self.gen_select_list();
+        let selection = self.gen_selection();
         let from = self.gen_from();
         SelectStmt {
             span: None,
@@ -97,8 +98,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             distinct: false,
             select_list,
             from,
-            // TODO
-            selection: None,
+            selection,
             // TODO
             group_by: None,
             // TODO
@@ -155,6 +155,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
             // TODO
             _ => unreachable!(),
+        }
+    }
+
+    fn gen_selection(&mut self) -> Option<Expr> {
+        match self.rng.gen_range(0..=9) {
+            0..=6 => Some(self.gen_expr()),
+            _ => None,
         }
     }
 }

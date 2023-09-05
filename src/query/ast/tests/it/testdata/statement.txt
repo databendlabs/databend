@@ -6817,7 +6817,7 @@ Query(
                                     window: None,
                                     lambda: None,
                                 },
-                                accessor: Period {
+                                accessor: Dot {
                                     key: Identifier {
                                         name: "k1",
                                         quote: None,
@@ -7743,37 +7743,116 @@ AlterTable(
         action: ModifyColumn {
             action: SetDataType(
                 [
-                    (
-                        Identifier {
+                    ColumnDefinition {
+                        name: Identifier {
                             name: "a",
                             quote: None,
                             span: Some(
                                 28..29,
                             ),
                         },
-                        Int32,
-                        Some(
-                            Literal {
-                                span: Some(
-                                    42..43,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        data_type: Int32,
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        42..43,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
-                    ),
-                    (
-                        Identifier {
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
                             name: "b",
                             quote: None,
                             span: Some(
                                 52..53,
                             ),
                         },
-                        Float32,
-                        None,
-                    ),
+                        data_type: Float32,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN a Int32 NULL DEFAULT 1, COLUMN b Float32 COMMENT column b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            action: SetDataType(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                28..29,
+                            ),
+                        },
+                        data_type: Nullable(
+                            Int32,
+                        ),
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        47..48,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
+                        ),
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                57..58,
+                            ),
+                        },
+                        data_type: Float32,
+                        expr: None,
+                        comment: Some(
+                            "column b",
+                        ),
+                    },
                 ],
             ),
         },
@@ -7810,17 +7889,18 @@ AlterTable(
         action: ModifyColumn {
             action: SetDataType(
                 [
-                    (
-                        Identifier {
+                    ColumnDefinition {
+                        name: Identifier {
                             name: "a",
                             quote: None,
                             span: Some(
                                 28..29,
                             ),
                         },
-                        Int32,
-                        None,
-                    ),
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
                 ],
             ),
         },
