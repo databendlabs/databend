@@ -48,7 +48,7 @@ jobs:
         include:
           - { os: macos, target: aarch64-apple-darwin }
           - { os: macos, target: x86_64-apple-darwin }
-          - { os: windows, target: x86_64-pc-windows-gnu }
+          # - { os: windows, target: x86_64-pc-windows-gnu }
           - { os: windows, target: x86_64-pc-windows-msvc }
     runs-on: ${{ matrix.os }}-latest
     steps:
