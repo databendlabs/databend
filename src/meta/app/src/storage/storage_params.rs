@@ -27,7 +27,6 @@ pub enum StorageParams {
     Fs(StorageFsConfig),
     Ftp(StorageFtpConfig),
     Gcs(StorageGcsConfig),
-    #[cfg(feature = "storage-hdfs")]
     Hdfs(StorageHdfsConfig),
     Http(StorageHttpConfig),
     Ipfs(StorageIpfsConfig),
@@ -61,7 +60,6 @@ impl StorageParams {
             StorageParams::Azblob(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Fs(_) => false,
             StorageParams::Ftp(v) => v.endpoint.starts_with("ftps://"),
-            #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(_) => false,
             StorageParams::Http(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Ipfs(c) => c.endpoint_url.starts_with("https://"),
@@ -84,7 +82,6 @@ impl StorageParams {
             StorageParams::Azblob(v) => v.root = f(&v.root),
             StorageParams::Fs(v) => v.root = f(&v.root),
             StorageParams::Ftp(v) => v.root = f(&v.root),
-            #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => v.root = f(&v.root),
             StorageParams::Http(_) => {}
             StorageParams::Ipfs(v) => v.root = f(&v.root),
@@ -126,7 +123,6 @@ impl Display for StorageParams {
                 "gcs | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
-            #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
                 write!(f, "hdfs | root={},name_node={}", v.root, v.name_node)
             }
