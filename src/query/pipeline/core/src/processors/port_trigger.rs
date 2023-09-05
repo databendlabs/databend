@@ -24,9 +24,6 @@ use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
 use petgraph::prelude::NodeIndex;
 use petgraph::prelude::StableGraph;
-use petgraph::visit::IntoEdges;
-
-use crate::pipe::Pipe;
 
 pub struct UpdateList {
     inner: UnsafeCell<UpdateListMutable>,
