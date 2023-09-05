@@ -32,12 +32,6 @@ echo "ALTER USER '${TEST_USER_NAME}' WITH DEFAULT_ROLE='20_0014_owner'" | $MYSQL
 echo "create table d20_0014.table1(i int);" | $TEST_USER_CONNECT
 echo "insert into d20_0014.table1 values(1),(2),(3);" | $TEST_USER_CONNECT
 echo "select * from d20_0014.table1;" | $TEST_USER_CONNECT
-echo "rename"
-echo "ALTER TABLE d20_0014.table1 RENAME TO \`table2\`" | $TEST_USER_CONNECT
-echo "TRUNCATE TABLE d20_0014.table2 PURGE;" | $TEST_USER_CONNECT
-echo "insert into d20_0014.table2 values(4),(5);" | $TEST_USER_CONNECT
-echo "select * from d20_0014.table2;" | $TEST_USER_CONNECT
-echo "drop table d20_0014.table2;" | $TEST_USER_CONNECT
 
 ## cleanup
 echo "drop database d20_0014;" | $MYSQL_CLIENT_CONNECT

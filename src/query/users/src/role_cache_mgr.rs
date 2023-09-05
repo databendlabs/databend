@@ -127,6 +127,9 @@ impl RoleCacheManager {
         let owner = match object {
             // may separate different grant object into separate functions.
             GrantObject::Database(_, db_name) => {
+                if db_name.to_uppercase() == *"SYSTEM" {
+                    return Ok(None);
+                }
                 let db_meta = self
                     .user_manager
                     .get_meta_store_client()
@@ -141,6 +144,9 @@ impl RoleCacheManager {
                 db_meta.meta.owner.clone()
             }
             GrantObject::Table(_, db_name, table_name) => {
+                if db_name.to_uppercase() == *"SYSTEM" {
+                    return Ok(None);
+                }
                 let table_meta = self
                     .user_manager
                     .get_meta_store_client()

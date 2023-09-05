@@ -104,6 +104,9 @@ impl RoleMgr {
         _catalog: &str,
         db_name: &String,
     ) -> common_exception::Result<()> {
+        if db_name.to_string().to_uppercase() == *"SYSTEM" {
+            return Ok(());
+        }
         let mut retry = 0;
         let tenant = self.tenant.clone();
         while retry < TXN_MAX_RETRY_TIMES {
@@ -174,6 +177,9 @@ impl RoleMgr {
         db_name: &String,
         table_name: &String,
     ) -> common_exception::Result<()> {
+        if db_name.to_string().to_uppercase() == *"SYSTEM" {
+            return Ok(());
+        }
         let mut retry = 0;
         let tenant = self.tenant.clone();
         while retry < TXN_MAX_RETRY_TIMES {
