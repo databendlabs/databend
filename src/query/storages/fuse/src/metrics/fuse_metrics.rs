@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::histogram::Histogram;
 use common_metrics::registry::register_counter;
-use common_metrics::registry::register_histogram;
+use common_metrics::registry::register_histogram_in_milliseconds;
 use lazy_static::lazy_static;
 use metrics::counter;
 use metrics::increment_gauge;
 use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::histogram::Histogram;
 
 macro_rules! key {
     ($key: literal) => {
@@ -46,23 +46,23 @@ lazy_static! {
         register_counter(key!("remote_io_read_bytes_after_merged"));
     static ref REMOTE_IO_READ_PARTS: Counter = register_counter(key!("remote_io_read_parts"));
     static ref REMOTE_IO_READ_MILLISECONDS: Histogram =
-        register_histogram(key!("remote_io_read_milliseconds"));
+        register_histogram_in_milliseconds(key!("remote_io_read_milliseconds"));
     static ref REMOTE_IO_DESERIALIZE_MILLISECONDS: Histogram =
-        register_histogram(key!("remote_io_deserialize_seconds"));
+        register_histogram_in_milliseconds(key!("remote_io_deserialize_milliseconds"));
     static ref BLOCK_WRITE_NUMS: Counter = register_counter(key!("block_write_nums"));
     static ref BLOCK_WRITE_BYTES: Counter = register_counter(key!("block_write_bytes"));
     static ref BLOCK_WRITE_MILLISECONDS: Histogram =
-        register_histogram(key!("block_write_seconds"));
+        register_histogram_in_milliseconds(key!("block_write_millioseconds"));
     static ref BLOCK_INDEX_WRITE_NUMS: Counter = register_counter(key!("block_index_write_nums"));
     static ref BLOCK_INDEX_WRITE_BYTES: Counter = register_counter(key!("block_index_write_bytes"));
     static ref BLOCK_INDEX_WRITE_MILLISECONDS: Histogram =
-        register_histogram(key!("block_index_write_seconds"));
+        register_histogram_in_milliseconds(key!("block_index_write_milliseconds"));
     static ref BLOCK_INDEX_READ_BYTES: Counter = register_counter(key!("block_index_read_bytes"));
     static ref COMPACT_BLOCK_READ_NUMS: Counter = register_counter(key!("compact_block_read_nums"));
     static ref COMPACT_BLOCK_READ_BYTES: Counter =
         register_counter(key!("compact_block_read_bytes"));
     static ref COMPACT_BLOCK_READ_MILLISECONDS: Histogram =
-        register_histogram(key!("compact_block_read_milliseconds"));
+        register_histogram_in_milliseconds(key!("compact_block_read_milliseconds"));
     static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
         register_counter(key!("segments_range_pruning_before"));
     static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
@@ -88,7 +88,8 @@ lazy_static! {
     static ref BYTES_BLOCK_BLOOM_PRUNING_AFTER: Counter =
         register_counter(key!("bytes_block_bloom_pruning_after"));
     static ref PRUNING_PREWHERE_NUMS: Counter = register_counter(key!("pruning_prewhere_nums"));
-    static ref PRUNING_MILLISECONDS: Histogram = register_histogram(key!("pruning_milliseconds"));
+    static ref PRUNING_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds(key!("pruning_milliseconds"));
     static ref DELETION_BLOCK_RANGE_PRUNED_NUMS: Counter =
         register_counter(key!("deletion_block_range_pruned_nums"));
     static ref DELETION_SEGMENT_RANGE_PRUNED_WHOLE_SEGMENT_NUMS: Counter =
@@ -120,15 +121,15 @@ lazy_static! {
     static ref REPLACE_INTO_PARTITION_NUMBER: Counter =
         register_counter(key!("replace_into_partition_number"));
     static ref REPLACE_INTO_TIME_PROCESS_INPUT_BLOCK_MS: Histogram =
-        register_histogram(key!("replace_into_time_process_input_block_ms"));
+        register_histogram_in_milliseconds(key!("replace_into_time_process_input_block_ms"));
     static ref REPLACE_INTO_NUMBER_ACCUMULATED_MERGE_ACTION: Counter =
         register_counter(key!("replace_into_number_accumulated_merge_action"));
     static ref REPLACE_INTO_NUMBER_APPLY_DELETION: Counter =
         register_counter(key!("replace_into_number_apply_deletion"));
     static ref REPLACE_INTO_TIME_ACCUMULATED_MERGE_ACTION_MS: Histogram =
-        register_histogram(key!("replace_into_time_accumulated_merge_action_ms"));
+        register_histogram_in_milliseconds(key!("replace_into_time_accumulated_merge_action_ms"),);
     static ref REPLACE_INTO_TIME_APPLY_DELETION_MS: Histogram =
-        register_histogram(key!("replace_into_time_apply_deletion_ms"));
+        register_histogram_in_milliseconds(key!("replace_into_time_apply_deletion_ms"),);
     static ref REPLACE_INTO_BLOCK_NUMBER_BLOOM_PRUNED: Counter =
         register_counter(key!("replace_into_block_number_bloom_pruned"));
     static ref REPLACE_INTO_BLOCK_NUMBER_SOURCE: Counter =
