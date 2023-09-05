@@ -74,7 +74,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         Some(from) => {
                             debug!("grant ownership from role: {}", from.name);
                             user_mgr
-                                .grant_ownership_to_role(&tenant, Some(&from.name), &role, plan.on)
+                                .grant_ownership_to_role(&tenant, &from.name, &role, plan.on)
                                 .await?;
                         }
                         None => {

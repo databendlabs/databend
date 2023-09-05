@@ -141,10 +141,14 @@ impl UserApiProvider {
     pub async fn grant_ownership_to_role(
         &self,
         tenant: &str,
-        from: Option<&String>,
+        from: &String,
         to: &String,
         object: GrantObject,
     ) -> Result<()> {
+        // from and to role must exists
+        self.get_role(tenant, from.clone()).await?;
+        self.get_role(tenant, to.clone()).await?;
+
         let client = self.get_role_api_client(tenant)?;
         client
             .grant_ownership(from, to, &object)

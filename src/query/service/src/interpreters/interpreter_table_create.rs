@@ -28,7 +28,6 @@ use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::Ownership;
 use common_meta_app::schema::TableMeta;
@@ -225,22 +224,9 @@ impl CreateTableInterpreter {
         }?;
         // current role who created the table/database would be
         if let Some(current_role) = self.ctx.get_current_role() {
-            req.table_meta.owner = Some(Ownership::new(current_role.name.clone()));
-            let user_mgr = UserApiProvider::instance();
-            user_mgr
-                .grant_ownership_to_role(
-                    req.name_ident.tenant.as_str(),
-                    None,
-                    &current_role.name,
-                    GrantObject::Table(
-                        req.table_meta.catalog.clone(),
-                        req.name_ident.db_name.clone(),
-                        req.name_ident.table_name.clone(),
-                    ),
-                )
-                .await?;
+            req.table_meta.owner = Some(Ownership::new(current_role.name));
         }
-        catalog.create_table(req).await?;
+        catalog.create_table(req.clone()).await?;
 
         Ok(PipelineBuildResult::create())
     }

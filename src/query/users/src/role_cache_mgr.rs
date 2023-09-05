@@ -21,7 +21,14 @@ use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use common_meta_api::SchemaApi;
+use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::schema::DatabaseNameIdent;
+use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::TableNameIdent;
+use common_meta_kvapi::kvapi::AsKVApi;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -109,6 +116,57 @@ impl RoleCacheManager {
             Some(cached_roles) => cached_roles,
         };
         Ok(cached_roles.roles.get(role).cloned())
+    }
+
+    #[async_backtrace::framed]
+    pub async fn find_object_owner(
+        &self,
+        tenant: &str,
+        object: &GrantObject,
+    ) -> Result<Option<RoleInfo>> {
+        let owner = match object {
+            // may separate different grant object into separate functions.
+            GrantObject::Database(_, db_name) => {
+                let db_meta = self
+                    .user_manager
+                    .get_meta_store_client()
+                    .as_kv_api()
+                    .get_database(GetDatabaseReq {
+                        inner: DatabaseNameIdent {
+                            tenant: tenant.to_owned(),
+                            db_name: db_name.clone(),
+                        },
+                    })
+                    .await?;
+                db_meta.meta.owner.clone()
+            }
+            GrantObject::Table(_, db_name, table_name) => {
+                let table_meta = self
+                    .user_manager
+                    .get_meta_store_client()
+                    .as_kv_api()
+                    .get_table(GetTableReq {
+                        inner: TableNameIdent {
+                            tenant: tenant.to_owned(),
+                            db_name: db_name.clone(),
+                            table_name: table_name.clone(),
+                        },
+                    })
+                    .await?;
+                table_meta.meta.owner.clone()
+            }
+            _ => None,
+        };
+        if let Some(owner) = owner {
+            // cache manager would not look into built-in roles.
+            let role = self
+                .user_manager
+                .get_role(tenant, owner.owner_role_name)
+                .await?;
+            return Ok(Some(role));
+        }
+
+        Ok(None)
     }
 
     // find_related_roles is called on validating an user's privileges.

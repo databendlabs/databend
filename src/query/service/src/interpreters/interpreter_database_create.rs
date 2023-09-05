@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::Ownership;
 use common_meta_app::share::ShareGrantObjectPrivilege;
@@ -121,19 +120,7 @@ impl Interpreter for CreateDatabaseInterpreter {
 
         let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
         if let Some(role) = self.ctx.get_current_role() {
-            create_db_req.meta.owner = Some(Ownership::new(role.name.clone()));
-            let user_mgr = UserApiProvider::instance();
-            user_mgr
-                .grant_ownership_to_role(
-                    tenant.as_ref(),
-                    None,
-                    &role.name,
-                    GrantObject::Database(
-                        "default".to_string(),
-                        create_db_req.name_ident.db_name.clone(),
-                    ),
-                )
-                .await?;
+            create_db_req.meta.owner = Some(Ownership::new(role.name))
         }
         catalog.create_database(create_db_req).await?;
 

@@ -3038,6 +3038,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-management",
+ "common-meta-api",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",
