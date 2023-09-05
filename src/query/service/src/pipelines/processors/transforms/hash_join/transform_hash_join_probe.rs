@@ -159,6 +159,17 @@ impl TransformHashJoinProbe {
                 self.join_probe_state.probe_done()?;
                 Ok(Event::Async)
             } else {
+                if !self
+                    .join_probe_state
+                    .hash_join_state
+                    .spill_partition
+                    .read()
+                    .is_empty()
+                {
+                    self.step = HashJoinProbeStep::WaitBuild;
+                    self.join_probe_state.finish_final_scan();
+                    return Ok(Event::Async);
+                }
                 self.output_port.finish();
                 Ok(Event::Finished)
             };
@@ -194,11 +205,12 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
+                    dbg!("input finish");
                     self.join_probe_state.finish_spill();
                     // Wait build side to build hash table
                     self.step = HashJoinProbeStep::WaitBuild;
+                    return Ok(Event::Async);
                 }
-                dbg!("probe need data");
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
@@ -243,23 +255,7 @@ impl Processor for TransformHashJoinProbe {
                             .is_empty()
                         {
                             self.step = HashJoinProbeStep::WaitBuild;
-                            // If build side has spilled data, we need to wait build side to next round.
-                            // Set partition id to `HashJoinState`
-                            let mut partition_id =
-                                self.join_probe_state.hash_join_state.partition_id.write();
-                            let mut spill_partition = self
-                                .join_probe_state
-                                .hash_join_state
-                                .spill_partition
-                                .write();
-                            if let Some(id) = spill_partition.iter().next().cloned() {
-                                spill_partition.remove(&id);
-                                *partition_id = id;
-                            }
-                            self.join_probe_state
-                                .hash_join_state
-                                .notify_build
-                                .notify_waiters();
+                            self.join_probe_state.finish_final_scan();
                             return Ok(Event::Async);
                         }
                         self.output_port.finish();

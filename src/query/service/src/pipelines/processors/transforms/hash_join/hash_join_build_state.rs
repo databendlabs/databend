@@ -206,6 +206,13 @@ impl HashJoinBuildState {
         let mut count = self.row_space_builders.lock();
         *count -= 1;
         if *count == 0 {
+            // Need to reset `final_scan_done` before processor into `WaitProbe`
+            {
+                let mut final_scan_done = self.hash_join_state.final_scan_done.lock();
+                if *final_scan_done {
+                    *final_scan_done = false;
+                }
+            }
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {

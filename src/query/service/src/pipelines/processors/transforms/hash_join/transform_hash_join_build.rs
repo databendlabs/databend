@@ -265,11 +265,7 @@ impl Processor for TransformHashJoinBuild {
                 if !*self.build_state.hash_join_state.probe_spill_done.lock() {
                     self.build_state.hash_join_state.wait_probe_spill().await;
                 } else {
-                    self.build_state
-                        .hash_join_state
-                        .notify_build
-                        .notified()
-                        .await;
+                    self.build_state.hash_join_state.wait_final_scan().await;
                 }
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
@@ -284,10 +280,6 @@ impl Processor for TransformHashJoinBuild {
                     .read_spilled_data(&partition_id)
                     .await?;
                 dbg!("finish read");
-                debug!(
-                    "processor: {}, finish reading spilled data",
-                    self.processor_id
-                );
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 self.reset()?;
             }

@@ -1842,6 +1842,7 @@ impl PipelineBuilder {
             &join.probe_projections,
             join.probe.output_schema()?,
             &join.join_type,
+            self.main_pipeline.output_len(),
         ));
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformHashJoinProbe::create(
