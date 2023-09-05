@@ -19,5 +19,5 @@ This page describes the Meta configurations available in the [databend-meta.toml
 | [raft_config] raft_api_port       | Port for the Raft API of Databend.                                                                                      |
 | [raft_config] raft_listen_host    | IP address for Raft to listen on.                                                                                       |
 | [raft_config] raft_advertise_host | IP address used for advertising the Raft API.                                                                           |
-| single                          | Boolean indicating whether Databend should run in single-node cluster mode (true or false).                             |
-| join                            | List of addresses (<raft_advertise_host>:<raft_api_port>) of nodes in an existing cluster that a new node is joined to. |
+| [raft_config] single              | Boolean indicating whether Databend should run in single-node cluster mode (true or false).                             |
+| [raft_config] join                | List of addresses (<raft_advertise_host>:<raft_api_port>) of nodes in an existing cluster that a new node is joined to. |
