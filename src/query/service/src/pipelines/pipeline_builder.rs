@@ -504,13 +504,13 @@ impl PipelineBuilder {
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
 
         let pipe_items = vec![
-            serialize_block_transform.into_pipe_item(),
             table.matched_mutator(
                 self.ctx.clone(),
                 block_builder,
                 io_request_semaphore,
                 segments.clone(),
             )?,
+            serialize_block_transform.into_pipe_item(),
         ];
 
         self.main_pipeline.add_pipe(Pipe::create(
@@ -520,8 +520,8 @@ impl PipelineBuilder {
         ));
 
         let pipe_items = vec![
-            serialize_segment_transform.into_pipe_item(),
             create_dummy_item(),
+            serialize_segment_transform.into_pipe_item(),
         ];
 
         self.main_pipeline.add_pipe(Pipe::create(
