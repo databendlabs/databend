@@ -169,8 +169,33 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         Ok(())
     }
 
-    fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()> {
-        unreachable!()
+    fn accumulate_row(&self, place: StateAddr, columns: &[Column], row: usize) -> Result<()> {
+        let mut not_null_columns = Vec::with_capacity(columns.len());
+        let mut validity = None;
+        for col in columns.iter() {
+            validity = column_merge_validity(col, validity);
+            not_null_columns.push(col.remove_nullable());
+        }
+
+        match validity {
+            Some(v) if v.unset_bits() > 0 => {
+                // all nulls
+                if v.unset_bits() == v.len() {
+                    return Ok(());
+                }
+
+                if v.get_bit(row) {
+                    self.set_flag(place, 1);
+                    self.nested.accumulate_row(place, &not_null_columns, row)?;
+                }
+            }
+            _ => {
+                self.nested.accumulate_row(place, &not_null_columns, row)?;
+                self.set_flag(place, 1);
+            }
+        }
+
+        Ok(())
     }
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {

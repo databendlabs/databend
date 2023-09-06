@@ -179,7 +179,7 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
                     return Ok(());
                 }
 
-                if unsafe { v.get_bit_unchecked(row) } {
+                if v.get_bit(row) {
                     self.set_flag(place, 1);
                     self.nested.accumulate_row(place, not_null_columns, row)?;
                 }
