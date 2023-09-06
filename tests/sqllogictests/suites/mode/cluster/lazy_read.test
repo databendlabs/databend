@@ -2,7 +2,7 @@ statement ok
 drop table if exists t_lazy
 
 statement ok
-create table t_lazy (a int, b float, c string, d tuple(a int, b int), e date)
+create table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 query T
 explain select * from t_lazy order by a desc limit 2

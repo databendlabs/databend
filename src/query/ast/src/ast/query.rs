@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_exception::Span;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
@@ -418,7 +418,7 @@ impl Display for TableReference {
                 pivot,
                 unpivot,
             } => {
-                write_period_separated_list(
+                write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
@@ -563,7 +563,7 @@ impl Display for SelectTarget {
                 }
             }
             SelectTarget::QualifiedName { qualified, exclude } => {
-                write_period_separated_list(f, qualified)?;
+                write_dot_separated_list(f, qualified)?;
                 if let Some(cols) = exclude {
                     // EXCLUDE
                     if !cols.is_empty() {

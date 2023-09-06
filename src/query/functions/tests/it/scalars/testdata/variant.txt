@@ -2534,3 +2534,46 @@ output domain  : {"object"..="object"}
 output         : 'object'
 
 
+ast            : json_array()
+raw expr       : json_array()
+checked expr   : json_array<>()
+optimized expr : 0x80000000
+output type    : Variant
+output domain  : Undefined
+output         : []
+
+
+ast            : json_array(true, 1, 'str', [1,2], {'k':'v'}, null)
+raw expr       : json_array(true, 1, 'str', array(1, 2), map(array('k'), array('v')), NULL)
+checked expr   : json_array<T0=Boolean, T1=UInt8, T2=String, T3=Array(UInt8), T4=Map(String, String), T5=NULL><T0, T1, T2, T3, T4, T5>(true, 1_u8, "str", array<T0=UInt8><T0, T0>(1_u8, 2_u8), map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0>("k"), array<T0=String><T0>("v")), NULL)
+optimized expr : 0x80000006400000002000000210000003500000105000000e000000005001737472800000022000000220000002500150024000000110000001100000016b76
+output type    : Variant
+output domain  : Undefined
+output         : [true,1,"str",[1,2],{"k":"v"},null]
+
+
+ast            : json_array(v1, v2, v3)
+raw expr       : json_array(v1::String NULL, v2::String NULL, v3::String NULL)
+checked expr   : json_array<T0=String NULL, T1=String NULL, T2=String NULL><T0, T1, T2>(v1, v2, v3)
+evaluation:
++--------+----------------------+----------------------+----------------------+------------------+
+|        | v1                   | v2                   | v3                   | Output           |
++--------+----------------------+----------------------+----------------------+------------------+
+| Type   | String NULL          | String NULL          | String NULL          | Variant          |
+| Domain | {""..="d1"} ∪ {NULL} | {""..="l1"} ∪ {NULL} | {""..="d2"} ∪ {NULL} | Unknown          |
+| Row 0  | 'a1'                 | 'j1'                 | 'a2'                 | ["a1","j1","a2"] |
+| Row 1  | 'b1'                 | 'k1'                 | NULL                 | ["b1","k1",null] |
+| Row 2  | NULL                 | 'l1'                 | 'c2'                 | [null,"l1","c2"] |
+| Row 3  | 'd1'                 | NULL                 | 'd2'                 | ["d1",null,"d2"] |
++--------+----------------------+----------------------+----------------------+------------------+
+evaluation (internal):
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                                                                                                                                        |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| v1     | NullableColumn { column: StringColumn { data: 0x613162316431, offsets: [0, 2, 4, 4, 6] }, validity: [0b____1011] }                                                                                                          |
+| v2     | NullableColumn { column: StringColumn { data: 0x6a316b316c31, offsets: [0, 2, 4, 6, 6] }, validity: [0b____0111] }                                                                                                          |
+| v3     | NullableColumn { column: StringColumn { data: 0x613263326432, offsets: [0, 2, 2, 4, 6] }, validity: [0b____1101] }                                                                                                          |
+| Output | StringColumn { data: 0x8000000310000002100000021000000261316a3161328000000310000002100000020000000062316b31800000030000000010000002100000026c3163328000000310000002000000001000000264316432, offsets: [0, 22, 42, 62, 82] } |
++--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+
+

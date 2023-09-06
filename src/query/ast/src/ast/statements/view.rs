@@ -16,7 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -36,7 +36,7 @@ impl Display for CreateViewStmt {
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -64,7 +64,7 @@ pub struct AlterViewStmt {
 impl Display for AlterViewStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER VIEW ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()
@@ -94,7 +94,7 @@ impl Display for DropViewStmt {
         if self.if_exists {
             write!(f, "IF EXISTS ")?;
         }
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()

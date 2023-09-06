@@ -201,8 +201,8 @@ impl Pipeline {
             Some(pipe) if !force && pipe.output_length == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_length, new_size);
-                let inputs_port = processor.get_inputs().to_vec();
-                let outputs_port = processor.get_outputs().to_vec();
+                let inputs_port = processor.get_inputs();
+                let outputs_port = processor.get_outputs();
                 self.pipes
                     .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
                         PipeItem::create(

@@ -1,5 +1,5 @@
 statement ok
-create table temp (col uint8)
+create table temp (col uint8 not null)
 
 statement ok
 insert into temp values(1)

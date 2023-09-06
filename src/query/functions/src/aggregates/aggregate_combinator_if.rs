@@ -174,8 +174,9 @@ impl AggregateFunction for AggregateIfCombinator {
     }
 
     fn get_if_condition(&self, columns: &[Column]) -> Option<Bitmap> {
+        let condition_col = &columns[self.argument_len - 1];
         let predicate: Bitmap =
-            BooleanType::try_downcast_column(&columns[self.argument_len - 1]).unwrap();
+            BooleanType::try_downcast_column(&condition_col.remove_nullable()).unwrap();
         Some(predicate)
     }
 }

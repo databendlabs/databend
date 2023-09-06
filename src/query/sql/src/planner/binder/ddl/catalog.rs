@@ -192,6 +192,14 @@ fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<Sto
             "".to_string(),
             options,
         )
+    } else if let Some(path) = uri.strip_prefix("hdfs://") {
+        UriLocation::new(
+            "hdfs".to_string(),
+            "".to_string(),
+            path.to_string(),
+            "".to_string(),
+            options,
+        )
     } else {
         let parsed = Url::parse(&uri)
             .map_err(|err| ErrorCode::InvalidArgument(format!("expected valid URL: {:?}", err)))?;
