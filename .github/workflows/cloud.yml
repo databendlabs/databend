@@ -23,7 +23,7 @@ jobs:
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
@@ -47,7 +47,7 @@ jobs:
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
@@ -101,4 +101,4 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
-      runner_provider: gcp
+      runner_provider: aws

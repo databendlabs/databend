@@ -332,6 +332,7 @@ impl TestFixture {
         rows_per_block: usize,
         start: i32,
     ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let repeat = rows_per_block % 3 == 0;
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
             TableField::new("t", TableDataType::Tuple {
@@ -346,10 +347,17 @@ impl TestFixture {
             schema,
             (0..num_of_block)
                 .map(|idx| {
+                    let mut curr = idx as i32 + start;
                     let column0 = Int32Type::from_data(
-                        std::iter::repeat_with(|| idx as i32 + start)
-                            .take(rows_per_block)
-                            .collect::<Vec<i32>>(),
+                        std::iter::repeat_with(|| {
+                            let tmp = curr;
+                            if !repeat {
+                                curr *= 2;
+                            }
+                            tmp
+                        })
+                        .take(rows_per_block)
+                        .collect::<Vec<i32>>(),
                     );
                     let column1 = Int32Type::from_data(
                         std::iter::repeat_with(|| (idx as i32 + start) * 2)
@@ -663,8 +671,12 @@ pub async fn do_update(
     } else {
         (None, vec![])
     };
-    let update_list =
-        plan.generate_update_list(ctx.clone(), table.schema().into(), col_indices.clone())?;
+    let update_list = plan.generate_update_list(
+        ctx.clone(),
+        table.schema().into(),
+        col_indices.clone(),
+        true,
+    )?;
     let computed_list =
         plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
 

@@ -19,7 +19,6 @@ use std::io::Seek;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Field as ArrowField;
-use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::arrow::io::parquet::read::get_field_pages;
 use common_arrow::arrow::io::parquet::read::indexes::compute_page_row_intervals;
 use common_arrow::arrow::io::parquet::read::indexes::read_columns_indexes;
@@ -30,6 +29,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::read_metadata_with_size;
 use common_arrow::parquet::read::read_pages_locations;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -42,16 +42,18 @@ use common_expression::FunctionContext;
 use common_expression::TableSchemaRef;
 use common_storage::read_parquet_metas_in_parallel;
 use common_storage::ColumnNodes;
+use common_storage::CopyStatus;
+use common_storage::FileStatus;
 use log::info;
 use opendal::Operator;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
+use super::partition::ColumnMeta;
+use super::Parquet2RowGroupPart;
 use crate::parquet2::statistics::collect_row_group_stats;
 use crate::parquet2::statistics::BatchStatistics;
 use crate::parquet_part::collect_small_file_parts;
-use crate::parquet_part::ColumnMeta;
-use crate::parquet_part::Parquet2RowGroupPart;
 use crate::parquet_part::ParquetPart;
 
 /// Prune parquet row groups and pages.
@@ -80,21 +82,6 @@ pub struct PartitionPruner {
     pub max_memory_usage: u64,
 }
 
-pub fn check_parquet_schema(
-    expect: &SchemaDescriptor,
-    actual: &SchemaDescriptor,
-    path: &str,
-    schema_from: &str,
-) -> Result<()> {
-    if expect.fields() != actual.fields() || expect.columns() != actual.columns() {
-        return Err(ErrorCode::BadBytes(format!(
-            "infer schema from '{}', but get diff schema in file '{}'. Expected schema: {:?}, actual: {:?}",
-            schema_from, path, expect, actual
-        )));
-    }
-    Ok(())
-}
-
 impl PartitionPruner {
     pub fn prune_one_file(
         &self,
@@ -118,12 +105,6 @@ impl PartitionPruner {
         file_meta: FileMetaData,
         operator: Operator,
     ) -> Result<(PartStatistics, Vec<Parquet2RowGroupPart>)> {
-        check_parquet_schema(
-            &self.schema_descr,
-            file_meta.schema(),
-            path,
-            &self.schema_from,
-        )?;
         let mut stats = PartStatistics::default();
         let mut partitions = vec![];
 
@@ -232,6 +213,9 @@ impl PartitionPruner {
         &self,
         operator: Operator,
         locations: &Vec<(String, u64)>,
+        num_threads: usize,
+        copy_status: &Arc<CopyStatus>,
+        is_copy: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // part stats
         let mut stats = PartStatistics::default();
@@ -248,32 +232,14 @@ impl PartitionPruner {
 
         let mut partitions = Vec::with_capacity(locations.len());
 
-        let is_blocking_io = operator.info().can_blocking();
-
         // 1. Read parquet meta data. Distinguish between sync and async reading.
-        let file_metas = if is_blocking_io {
-            let mut file_metas = Vec::with_capacity(locations.len());
-            for (location, _size) in &large_files {
-                let mut reader = operator.blocking().reader(location)?;
-                let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
-                    ErrorCode::Internal(format!(
-                        "Read parquet file '{}''s meta error: {}",
-                        location, e
-                    ))
-                })?;
-                file_metas.push(file_meta);
-            }
-            file_metas
-        } else {
-            read_parquet_metas_in_parallel(
-                operator.clone(),
-                large_files.clone(),
-                16,
-                64,
-                self.max_memory_usage,
-            )
-            .await?
-        };
+        let file_metas = read_parquet_metas_in_parallel(
+            operator.clone(),
+            large_files.clone(),
+            num_threads,
+            self.max_memory_usage,
+        )
+        .await?;
 
         // 2. Use file meta to prune row groups or pages.
         let mut max_compression_ratio = self.compression_ratio;
@@ -281,47 +247,53 @@ impl PartitionPruner {
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
+            let path = &large_files[file_id].0;
+            if is_copy {
+                copy_status.add_chunk(path, FileStatus {
+                    num_rows_loaded: file_meta.num_rows,
+                    error: None,
+                });
+            }
             stats.partitions_total += file_meta.row_groups.len();
-            let (sub_stats, parts) = self.read_and_prune_file_meta(
-                &large_files[file_id].0,
-                file_meta,
-                operator.clone(),
-            )?;
+            let (sub_stats, parts) =
+                self.read_and_prune_file_meta(path, file_meta, operator.clone())?;
+
             for p in parts {
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
-                partitions.push(ParquetPart::Parquet2RowGroup(p));
+                partitions.push(Arc::new(
+                    Box::new(ParquetPart::Parquet2RowGroup(p)) as Box<dyn PartInfo>
+                ));
             }
-            stats.partitions_total += sub_stats.partitions_total;
-            stats.partitions_scanned += sub_stats.partitions_scanned;
-            stats.read_bytes += sub_stats.read_bytes;
-            stats.read_rows += sub_stats.read_rows;
+            stats.merge(&sub_stats);
         }
 
         let num_large_partitions = partitions.len();
+        let mut partitions = Partitions::create_nolazy(PartitionsShuffleKind::Mod, partitions);
 
-        collect_small_file_parts(
-            small_files,
-            max_compression_ratio,
-            max_compressed_size,
-            &mut partitions,
-            &mut stats,
-            self.columns_to_read.len(),
-        );
+        // If there are only row group parts, the `stats` is exact.
+        // It will be changed to `false` if there are small files parts.
+        if small_files.is_empty() {
+            stats.is_exact = true;
+        } else {
+            stats.is_exact = false;
+            collect_small_file_parts(
+                small_files,
+                max_compression_ratio,
+                max_compressed_size,
+                &mut partitions,
+                &mut stats,
+                self.columns_to_read.len(),
+            );
+        }
 
         info!(
             "copy {num_large_partitions} large partitions and {} small partitions.",
             partitions.len() - num_large_partitions
         );
 
-        let partition_kind = PartitionsShuffleKind::Mod;
-        let partitions = partitions
-            .into_iter()
-            .map(|p| p.convert_to_part_info())
-            .collect();
-
-        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
+        Ok((stats, partitions))
     }
 }
 

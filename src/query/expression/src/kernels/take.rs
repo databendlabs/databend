@@ -13,11 +13,12 @@
 // limitations under the License.
 
 use common_exception::Result;
-use itertools::Itertools;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
+use crate::types::decimal::Decimal128Type;
+use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -31,7 +32,6 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
-use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -71,24 +71,36 @@ impl DataBlock {
 impl Column {
     pub fn take<I>(&self, indices: &[I]) -> Self
     where I: common_arrow::arrow::types::Index {
-        let length = indices.len();
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..length)
+                self.slice(0..indices.len())
             }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) =>
                     Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
             }),
-            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
-                DecimalColumn::DECIMAL_TYPE(values, size) => {
-                    let builder = indices
-                        .iter()
-                        .map(|index| unsafe { *values.get_unchecked(index.to_usize()) })
-                        .collect_vec();
-                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
+            Column::Decimal(column) => match column {
+                DecimalColumn::Decimal128(values, size) => {
+                    let mut builder = Decimal128Type::create_builder(indices.len(), &[]);
+                    for index in indices {
+                        Decimal128Type::push_item(&mut builder, unsafe {
+                            Decimal128Type::index_column_unchecked(values, index.to_usize())
+                        });
+                    }
+                    let column = Decimal128Type::build_column(builder);
+                    Column::Decimal(DecimalColumn::Decimal128(column, *size))
                 }
-            }),
+                DecimalColumn::Decimal256(values, size) => {
+                    let mut builder = Decimal256Type::create_builder(indices.len(), &[]);
+                    for index in indices {
+                        Decimal256Type::push_item(&mut builder, unsafe {
+                            Decimal256Type::index_column_unchecked(values, index.to_usize())
+                        });
+                    }
+                    let column = Decimal256Type::build_column(builder);
+                    Column::Decimal(DecimalColumn::Decimal256(column, *size))
+                }
+            },
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
             Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
             Column::Timestamp(column) => {
@@ -108,14 +120,14 @@ impl Column {
                 Column::Date(d)
             }
             Column::Array(column) => {
-                let mut offsets = Vec::with_capacity(length + 1);
+                let mut offsets = Vec::with_capacity(indices.len() + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::with_capacity(&column.values.data_type(), self.len());
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_value_types::<ArrayType<AnyType>, _>(column, builder, indices)
             }
             Column::Map(column) => {
-                let mut offsets = Vec::with_capacity(length + 1);
+                let mut offsets = Vec::with_capacity(indices.len() + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
                     ColumnBuilder::with_capacity(&column.values.data_type(), self.len()).build(),
@@ -151,13 +163,14 @@ impl Column {
 
     fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
     where I: common_arrow::arrow::types::Index {
-        let col = T::column_from_ref_iter(
-            indices
-                .iter()
-                .map(|index| unsafe { T::index_column_unchecked(col, index.to_usize()) }),
-            &[],
-        );
-        T::upcast_column(col)
+        let mut builder = T::create_builder(indices.len(), &[]);
+        for index in indices {
+            T::push_item(&mut builder, unsafe {
+                T::index_column_unchecked(col, index.to_usize())
+            });
+        }
+        let column = T::build_column(builder);
+        T::upcast_column(column)
     }
 
     fn take_value_types<T: ValueType, I>(
@@ -168,13 +181,10 @@ impl Column {
     where
         I: common_arrow::arrow::types::Index,
     {
-        unsafe {
-            for index in indices {
-                T::push_item(
-                    &mut builder,
-                    T::index_column_unchecked(col, index.to_usize()),
-                )
-            }
+        for index in indices {
+            T::push_item(&mut builder, unsafe {
+                T::index_column_unchecked(col, index.to_usize())
+            });
         }
         T::upcast_column(T::build_column(builder))
     }

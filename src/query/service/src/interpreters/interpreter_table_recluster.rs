@@ -19,6 +19,7 @@ use std::time::SystemTime;
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use log::error;
 use log::info;
 use log::warn;
 
@@ -85,6 +86,14 @@ impl Interpreter for ReclusterTableInterpreter {
         let start = SystemTime::now();
         let timeout = Duration::from_secs(recluster_timeout_secs);
         loop {
+            if let Err(err) = ctx.check_aborting() {
+                error!(
+                    "execution of replace into statement aborted. server is shutting down or the query was killed. table: {}",
+                    plan.table,
+                );
+                return Err(err);
+            }
+
             let table = self
                 .ctx
                 .get_catalog(&plan.catalog)

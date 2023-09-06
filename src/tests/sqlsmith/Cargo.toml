@@ -1,0 +1,26 @@
+[package]
+name = "databend-sqlsmith"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+chrono-tz = { workspace = true }
+clap = { workspace = true }
+databend-driver = "0.6.4"
+rand = "0.8.5"
+tokio = { workspace = true }
+tracing = "0.1.37"
+tracing-subscriber = "0.3.17"
+
+common-ast = { path = "../../query/ast" }
+common-exception = { path = "../../common/exception" }
+common-expression = { path = "../../query/expression" }
+common-formats = { path = "../../query/formats" }
+common-sql = { path = "../../query/sql" }
+
+[[bin]]
+name = "sqlsmith"
+path = "src/bin/main.rs"

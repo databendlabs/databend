@@ -20,6 +20,7 @@ use common_meta_app::principal::UserSettingValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
+use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -383,6 +384,14 @@ impl Settings {
         self.try_set_u64("enable_distributed_copy_into", u64::from(val))
     }
 
+    pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
+    }
+
+    pub fn set_enable_experimental_merge_into(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_experimental_merge_into", u64::from(val))
+    }
+
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
     }
@@ -437,6 +446,16 @@ impl Settings {
         self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
     }
 
+    pub fn get_replace_into_shuffle_strategy(&self) -> Result<ReplaceIntoShuffleStrategy> {
+        let v = self.try_get_u64("replace_into_shuffle_strategy")?;
+        ReplaceIntoShuffleStrategy::try_from(v)
+    }
+
+    pub fn set_replace_into_shuffle_strategy(&self, val: u64) -> Result<()> {
+        ReplaceIntoShuffleStrategy::try_from(val)?;
+        self.try_set_u64("replace_into_shuffle_strategy", val)
+    }
+
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("recluster_timeout_secs")
     }
@@ -453,5 +472,13 @@ impl Settings {
             "enable_refresh_aggregating_index_after_write",
             u64::from(val),
         )
+    }
+
+    pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
+    }
+
+    pub fn set_ddl_column_type_nullable(&self, val: bool) -> Result<()> {
+        self.try_set_u64("ddl_column_type_nullable", u64::from(val))
     }
 }

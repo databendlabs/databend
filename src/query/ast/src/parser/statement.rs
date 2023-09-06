@@ -42,6 +42,7 @@ use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
+use crate::Error;
 use crate::ErrorKind;
 
 const MAX_COPIED_FILES_NUM: usize = 2000;
@@ -101,7 +102,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let insert = map(
         rule! {
             INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
-            ~ #period_separated_idents_1_to_3
+            ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
@@ -123,7 +124,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let replace = map(
         rule! {
             REPLACE ~ #hint? ~ INTO?
-            ~ #period_separated_idents_1_to_3
+            ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
             ~ #insert_source
@@ -147,6 +148,36 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
                 source,
+            })
+        },
+    );
+
+    let merge = map(
+        rule! {
+            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
+            ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+        },
+        |(
+            _,
+            opt_hints,
+            _,
+            (catalog, database, table),
+            alias_target,
+            _,
+            source,
+            _,
+            join_expr,
+            merge_options,
+        )| {
+            Statement::MergeInto(MergeIntoStmt {
+                hints: opt_hints,
+                catalog,
+                database,
+                table_ident: table,
+                source,
+                alias_target,
+                join_expr,
+                merge_options,
             })
         },
     );
@@ -305,7 +336,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_create_database = map(
         rule! {
-            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #period_separated_idents_1_to_2
+            SHOW ~ CREATE ~ ( DATABASE | SCHEMA ) ~ #dot_separated_idents_1_to_2
         },
         |(_, _, _, (catalog, database))| {
             Statement::ShowCreateDatabase(ShowCreateDatabaseStmt { catalog, database })
@@ -313,7 +344,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #period_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
         },
         |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
             match create_database_option {
@@ -350,7 +381,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_2
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_2
         },
         |(_, _, opt_if_exists, (catalog, database))| {
             Statement::DropDatabase(DropDatabaseStmt {
@@ -363,7 +394,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let undrop_database = map(
         rule! {
-            UNDROP ~ DATABASE ~ #period_separated_idents_1_to_2
+            UNDROP ~ DATABASE ~ #dot_separated_idents_1_to_2
         },
         |(_, _, (catalog, database))| {
             Statement::UndropDatabase(UndropDatabaseStmt { catalog, database })
@@ -372,7 +403,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let alter_database = map(
         rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_2 ~ #alter_database_action
+            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #alter_database_action
         },
         |(_, _, opt_if_exists, (catalog, database), action)| {
             Statement::AlterDatabase(AlterDatabaseStmt {
@@ -391,7 +422,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_tables = map(
         rule! {
-            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #period_separated_idents_1_to_2 )? ~ #show_limit?
+            SHOW ~ FULL? ~ TABLES ~ HISTORY? ~ ( ( FROM | IN ) ~ #dot_separated_idents_1_to_2 )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_history, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -410,7 +441,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_columns = map(
         rule! {
-            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ ((FROM | IN) ~ #period_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ ((FROM | IN) ~ #dot_separated_idents_1_to_2)? ~ #show_limit?
         },
         |(_, opt_full, _, _, table, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -429,7 +460,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_create_table = map(
         rule! {
-            SHOW ~ CREATE ~ TABLE ~ #period_separated_idents_1_to_3
+            SHOW ~ CREATE ~ TABLE ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, (catalog, database, table))| {
             Statement::ShowCreateTable(ShowCreateTableStmt {
@@ -441,7 +472,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let describe_table = map(
         rule! {
-            ( DESC | DESCRIBE ) ~ #period_separated_idents_1_to_3
+            ( DESC | DESCRIBE ) ~ #dot_separated_idents_1_to_3
         },
         |(_, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
@@ -455,7 +486,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // parse `show fields from` statement
     let show_fields = map(
         rule! {
-            SHOW ~ FIELDS ~ FROM ~ #period_separated_idents_1_to_3
+            SHOW ~ FIELDS ~ FROM ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, (catalog, database, table))| {
             Statement::DescribeTable(DescribeTableStmt {
@@ -490,7 +521,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #period_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
         },
         |(_, _, (catalog, database, table), uri_location)| {
             Statement::AttachTable(AttachTableStmt {
@@ -504,7 +535,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #period_separated_idents_1_to_3
+            ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
             ~ ( #uri_location )?
@@ -544,7 +575,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3 ~ ( ALL )?
+            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ( ALL )?
         },
         |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
             Statement::DropTable(DropTableStmt {
@@ -558,7 +589,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let undrop_table = map(
         rule! {
-            UNDROP ~ TABLE ~ #period_separated_idents_1_to_3
+            UNDROP ~ TABLE ~ #dot_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::UndropTable(UndropTableStmt {
@@ -582,7 +613,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let rename_table = map(
         rule! {
-            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3 ~ TO ~ #period_separated_idents_1_to_3
+            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
         },
         |(
             _,
@@ -605,7 +636,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ #period_separated_idents_1_to_3 ~ PURGE?
+            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ PURGE?
         },
         |(_, _, (catalog, database, table), opt_purge)| {
             Statement::TruncateTable(TruncateTableStmt {
@@ -618,7 +649,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
+            OPTIMIZE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
         },
         |(_, _, (catalog, database, table), action, opt_limit)| {
             Statement::OptimizeTable(OptimizeTableStmt {
@@ -632,7 +663,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_table = map(
         rule! {
-            VACUUM ~ TABLE ~ #period_separated_idents_1_to_3 ~ #vacuum_table_option
+            VACUUM ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #vacuum_table_option
         },
         |(_, _, (catalog, database, table), option)| {
             Statement::VacuumTable(VacuumTableStmt {
@@ -645,7 +676,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #period_separated_idents_1_to_2)? ~ #vacuum_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #dot_separated_idents_1_to_2)? ~ #vacuum_table_option
         },
         |(_, _, _, database_option, option)| {
             let (catalog, database) = database_option.map_or_else(
@@ -661,7 +692,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let analyze_table = map(
         rule! {
-            ANALYZE ~ TABLE ~ #period_separated_idents_1_to_3
+            ANALYZE ~ TABLE ~ #dot_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::AnalyzeTable(AnalyzeTableStmt {
@@ -673,7 +704,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let exists_table = map(
         rule! {
-            EXISTS ~ TABLE ~ #period_separated_idents_1_to_3
+            EXISTS ~ TABLE ~ #dot_separated_idents_1_to_3
         },
         |(_, _, (catalog, database, table))| {
             Statement::ExistsTable(ExistsTableStmt {
@@ -686,7 +717,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_view = map(
         rule! {
             CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #period_separated_idents_1_to_3
+            ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
@@ -705,7 +736,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_view = map(
         rule! {
-            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #period_separated_idents_1_to_3
+            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3
         },
         |(_, _, opt_if_exists, (catalog, database, view))| {
             Statement::DropView(DropViewStmt {
@@ -719,7 +750,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let alter_view = map(
         rule! {
             ALTER ~ VIEW
-            ~ #period_separated_idents_1_to_3
+            ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
         },
@@ -777,12 +808,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let create_virtual_columns = map(
+    let create_virtual_column = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            CREATE ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+            Statement::CreateVirtualColumn(CreateVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -791,12 +822,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let alter_virtual_columns = map(
+    let alter_virtual_column = map(
         rule! {
-            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            ALTER ~ VIRTUAL ~ COLUMN ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
-            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+            Statement::AlterVirtualColumn(AlterVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -805,12 +836,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let drop_virtual_columns = map(
+    let drop_virtual_column = map(
         rule! {
-            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+            Statement::DropVirtualColumn(DropVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -818,12 +849,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let generate_virtual_columns = map(
+    let refresh_virtual_column = map(
         rule! {
-            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+            REFRESH ~ VIRTUAL ~ COLUMN ~ FOR ~ #dot_separated_idents_1_to_3
         },
         |(_, _, _, _, (catalog, database, table))| {
-            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+            Statement::RefreshVirtualColumn(RefreshVirtualColumnStmt {
                 catalog,
                 database,
                 table,
@@ -1460,6 +1491,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #insert : "`INSERT INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
             | #replace : "`REPLACE INTO [TABLE] <table> [(<column>, ...)] (FORMAT <format> | VALUES <values> | <query>)`"
+            | #merge : "`MERGE INTO <target_table> USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]`"
         ),
         rule!(
             #set_variable : "`SET <variable> = <value>`"
@@ -1498,10 +1530,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
-            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
-            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
-            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            #create_virtual_column: "`CREATE VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_column: "`ALTER VIRTUAL COLUMN (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_column: "`DROP VIRTUAL COLUMN FOR [<database>.]<table>`"
+            | #refresh_virtual_column: "`REFRESH VIRTUAL COLUMN FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1633,6 +1665,28 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     )(i)
 }
 
+pub fn merge_source(i: Input) -> IResult<MergeSource> {
+    let streaming_v2 = map(
+        rule! {
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+        },
+        |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
+            settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
+            start,
+        },
+    );
+
+    let query = map(query, |query| MergeSource::Select {
+        query: Box::new(query),
+    });
+
+    rule!(
+          #streaming_v2
+        | #query
+    )(i)
+}
+
 pub fn unset_source(i: Input) -> IResult<UnSetSource> {
     //#ident ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")?
     let var = map(
@@ -1733,7 +1787,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
-    map(
+    let (i, (mut def, constraints)) = map(
         rule! {
             #ident
             ~ #type_name
@@ -1742,33 +1796,45 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
-            let mut def = ColumnDefinition {
+            let def = ColumnDefinition {
                 name,
                 data_type,
                 expr: None,
                 comment,
+                nullable_constraint: None,
             };
-            for constraint in constraints {
-                match constraint {
-                    ColumnConstraint::Nullable(nullable) => {
-                        if nullable {
-                            def.data_type = def.data_type.wrap_nullable();
-                        }
-                    }
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.expr = Some(ColumnExpr::Default(default_expr))
-                    }
-                    ColumnConstraint::VirtualExpr(virtual_expr) => {
-                        def.expr = Some(ColumnExpr::Virtual(virtual_expr))
-                    }
-                    ColumnConstraint::StoredExpr(stored_expr) => {
-                        def.expr = Some(ColumnExpr::Stored(stored_expr))
-                    }
+            (def, constraints)
+        },
+    )(i)?;
+
+    for constraint in constraints {
+        match constraint {
+            ColumnConstraint::Nullable(nullable) => {
+                if nullable {
+                    def.data_type = def.data_type.wrap_nullable();
+                    def.nullable_constraint = Some(NullableConstraint::Null);
+                } else if def.data_type.is_nullable() {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                    )));
+                } else {
+                    def.nullable_constraint = Some(NullableConstraint::NotNull);
                 }
             }
-            def
-        },
-    )(i)
+            ColumnConstraint::DefaultExpr(default_expr) => {
+                def.expr = Some(ColumnExpr::Default(default_expr))
+            }
+            ColumnConstraint::VirtualExpr(virtual_expr) => {
+                def.expr = Some(ColumnExpr::Virtual(virtual_expr))
+            }
+            ColumnConstraint::StoredExpr(stored_expr) => {
+                def.expr = Some(ColumnExpr::Stored(stored_expr))
+            }
+        }
+    }
+
+    Ok((i, def))
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
@@ -1837,6 +1903,7 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Set, rule! { SET }),
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
+        value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
     ))(i)
 }
 
@@ -1967,7 +2034,7 @@ pub fn create_table_source(i: Input) -> IResult<CreateTableSource> {
     );
     let like = map(
         rule! {
-            LIKE ~ #period_separated_idents_1_to_3
+            LIKE ~ #dot_separated_idents_1_to_3
         },
         |(_, (catalog, database, table))| CreateTableSource::Like {
             catalog,
@@ -1995,17 +2062,63 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
-fn column_type(i: Input) -> IResult<(Identifier, TypeName, Option<Expr>)> {
+pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
+    #[derive(Clone)]
+    enum ColumnConstraint {
+        Nullable(bool),
+        DefaultExpr(Box<Expr>),
+    }
+
+    let nullable = alt((
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    ));
+    let expr = alt((map(
+        rule! {
+            DEFAULT ~ ^#subexpr(NOT_PREC)
+        },
+        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+    ),));
+
+    let comment = map(
+        rule! {
+            COMMENT ~ #literal_string
+        },
+        |(_, comment)| comment,
+    );
+
     map(
         rule! {
-            #ident ~ #type_name ~ (DEFAULT ~ ^#subexpr(NOT_PREC))?
+            #ident
+            ~ #type_name
+            ~ ( #nullable | #expr )*
+            ~ ( #comment )?
+            : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
-        |(column, type_name, default_expr_opt)| {
-            (
-                column,
-                type_name,
-                default_expr_opt.map(|default_expr| default_expr.1),
-            )
+        |(name, data_type, constraints, comment)| {
+            let mut def = ColumnDefinition {
+                name,
+                data_type,
+                expr: None,
+                comment,
+                nullable_constraint: None,
+            };
+            for constraint in constraints {
+                match constraint {
+                    ColumnConstraint::Nullable(nullable) => {
+                        if nullable {
+                            def.data_type = def.data_type.wrap_nullable();
+                            def.nullable_constraint = Some(NullableConstraint::Null);
+                        } else {
+                            def.nullable_constraint = Some(NullableConstraint::NotNull);
+                        }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                }
+            }
+            def
         },
     )(i)
 }
@@ -2036,14 +2149,14 @@ pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
 
     let modify_column_type = map(
         rule! {
-            #column_type ~ ("," ~ COLUMN ~ #column_type)*
+            #modify_column_type ~ ("," ~ COLUMN ~ #modify_column_type)*
         },
-        |(column_type, column_type_vec)| {
-            let mut column_types = vec![column_type];
-            column_type_vec
+        |(column_def, column_def_vec)| {
+            let mut column_defs = vec![column_def];
+            column_def_vec
                 .iter()
-                .for_each(|(_, _, column_type)| column_types.push(column_type.clone()));
-            ModifyColumnAction::SetDataType(column_types)
+                .for_each(|(_, _, column_def)| column_defs.push(column_def.clone()));
+            ModifyColumnAction::SetDataType(column_defs)
         },
     );
 
@@ -2147,6 +2260,67 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     )(i)
 }
 
+pub fn match_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation
+        },
+        |(_, _, expr_op, _, match_operation)| match expr_op {
+            Some(expr) => MergeOption::Match(MatchedClause {
+                selection: Some(expr.1),
+                operation: match_operation,
+            }),
+            None => MergeOption::Match(MatchedClause {
+                selection: None,
+                operation: match_operation,
+            }),
+        },
+    )(i)
+}
+
+fn match_operation(i: Input) -> IResult<MatchOperation> {
+    alt((
+        value(MatchOperation::Delete, rule! {DELETE}),
+        map(
+            rule! {
+                UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
+            },
+            |(_, _, update_list)| MatchOperation::Update { update_list },
+        ),
+    ))(i)
+}
+
+pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
+    map(
+        rule! {
+            WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            ~ VALUES ~ ^#row_values
+        },
+        |(_, _, _, expr_op, _, _, columns_op, _, values)| {
+            let selection = match expr_op {
+                Some(e) => Some(e.1),
+                None => None,
+            };
+            match columns_op {
+                Some(columns) => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: Some(columns.1),
+                        values,
+                    },
+                    selection,
+                }),
+                None => MergeOption::Unmatch(UnmatchedClause {
+                    insert_operation: InsertOperation {
+                        columns: None,
+                        values,
+                    },
+                    selection,
+                }),
+            }
+        },
+    )(i)
+}
+
 pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {
     alt((
         value(AddColumnOption::First, rule! { FIRST }),
@@ -2222,7 +2396,7 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     let table = |i| {
         map(
             rule! {
-            #period_separated_idents_1_to_3
+            #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             },
             |((catalog, database, table), opt_columns)| CopyUnit::Table {
@@ -2471,11 +2645,11 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
             CopyOption::Force(force)
         }),
-        map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
+        map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
         map(
-            rule! {DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool},
+            rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
         ),
     ))(i)
@@ -2512,7 +2686,7 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {
     map(
         consumed(rule! {
-            #period_separated_idents_1_to_3
+            #dot_separated_idents_1_to_3
         }),
         |(span, (catalog, database, table))| TableReference::Table {
             span: transform_span(span.0),
@@ -2531,4 +2705,16 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
     })(i)
+}
+
+pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
+    map(
+        rule! { ( #dot_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
+        |((catalog, table, name), _, expr)| MergeUpdateExpr {
+            catalog,
+            table,
+            name,
+            expr,
+        },
+    )(i)
 }

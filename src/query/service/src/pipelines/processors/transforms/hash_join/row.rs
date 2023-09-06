@@ -15,29 +15,21 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_hashtable::RowPtr;
-use common_sql::optimizer::ColumnSet;
+use common_sql::ColumnSet;
 use common_storages_fuse::TableContext;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;
 
-pub struct Chunk {
-    pub data_block: DataBlock,
-}
-
-impl Chunk {
-    pub fn num_rows(&self) -> usize {
-        self.data_block.num_rows()
-    }
-}
-
 pub struct RowSpace {
     pub build_schema: DataSchemaRef,
-    pub chunks: RwLock<Vec<Chunk>>,
+    pub write_lock: RwLock<bool>,
     pub buffer: RwLock<Vec<DataBlock>>,
     pub buffer_row_size: RwLock<usize>,
 }
@@ -58,31 +50,26 @@ impl RowSpace {
         let build_schema = DataSchemaRefExt::create(projected_build_fields);
         Ok(Self {
             build_schema,
-            chunks: RwLock::new(vec![]),
+            write_lock: RwLock::new(false),
             buffer: RwLock::new(Vec::with_capacity(buffer_size as usize)),
             buffer_row_size: RwLock::new(0),
         })
     }
 
-    pub fn datablocks(&self) -> Vec<DataBlock> {
-        let chunks = self.chunks.read();
-        chunks.iter().map(|c| c.data_block.clone()).collect()
-    }
-
     pub fn gather(
         &self,
         row_ptrs: &[RowPtr],
-        data_blocks: &Vec<&DataBlock>,
+        build_columns: &[ColumnVec],
+        build_columns_data_type: &[DataType],
         num_rows: &usize,
     ) -> Result<DataBlock> {
-        let mut indices = Vec::with_capacity(row_ptrs.len());
-
-        for row_ptr in row_ptrs {
-            indices.push((row_ptr.chunk_index, row_ptr.row_index, 1usize));
-        }
-
-        if !data_blocks.is_empty() && *num_rows != 0 {
-            let data_block = DataBlock::take_blocks(data_blocks, indices.as_slice(), indices.len());
+        if *num_rows != 0 {
+            let data_block = DataBlock::take_column_vec(
+                build_columns,
+                build_columns_data_type,
+                row_ptrs,
+                row_ptrs.len(),
+            );
             Ok(data_block)
         } else {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))

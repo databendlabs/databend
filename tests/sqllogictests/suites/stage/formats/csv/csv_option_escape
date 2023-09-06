@@ -1,0 +1,28 @@
+statement ok
+drop table if exists v
+
+statement ok
+create table v (a variant not null)
+
+query TIITI
+copy into v from @data/csv/escape_default.csv file_format = (type = CSV)
+----
+csv/escape_default.csv 1 0 NULL NULL
+
+query T
+select a:hello from v;
+----
+"world"
+
+statement ok
+truncate table v
+
+query TIITI
+copy into v from @data/csv/escape_quote_with_slash.csv file_format = (type = CSV escape = '\\')
+----
+csv/escape_quote_with_slash.csv 1 0 NULL NULL
+
+query T
+select a:hello from v;
+----
+"world"

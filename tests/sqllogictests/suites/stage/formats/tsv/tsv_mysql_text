@@ -1,0 +1,26 @@
+statement ok
+drop table if exists tt
+
+statement ok
+create table tt (a string not null, b string not null)
+
+query II
+select hex($1), hex($2) from @data/tsv/mysql_text.tsv (file_format => 'tsv') a order by $1
+----
+6109 6109
+610a62 610a62
+615c 615c
+615c09 615c09
+
+query 
+copy into tt from @data/tsv/mysql_text.tsv file_format = (type = TSV)
+----
+tsv/mysql_text.tsv 4 0 NULL NULL
+
+query II
+select hex($1), hex($2) from tt order by a
+----
+6109 6109
+610a62 610a62
+615c 615c
+615c09 615c09

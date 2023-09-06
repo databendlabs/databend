@@ -22,7 +22,7 @@ jobs:
   check:
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -36,7 +36,7 @@ jobs:
     outputs:
       license: ${{ steps.license.outputs.license }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get License from S3
         if: inputs.runner_provider == 'aws'
         run: |
@@ -61,7 +61,7 @@ jobs:
         include:
           - { arch: x86_64, libc: gnu }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -82,7 +82,7 @@ jobs:
           - { arch: aarch64, libc: musl }
           - { arch: aarch64, libc: gnu }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -96,7 +96,7 @@ jobs:
   test_unit:
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -105,48 +105,48 @@ jobs:
 
   test_metactl:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
   test_meta-data-compat-openraft-07:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_data_compat_openraft_07
         timeout-minutes: 10
 
   test_compat:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat
         timeout-minutes: 10
 
   test_compat_fuse:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/fuse_compat
         timeout-minutes: 20
 
   test_meta_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
   sqllogic_management_mode:
     name: sqllogic_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
@@ -154,7 +154,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
@@ -164,7 +164,7 @@ jobs:
   sqllogic_standalone:
     name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
@@ -176,7 +176,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
@@ -184,7 +184,7 @@ jobs:
           handlers: ${{ matrix.handlers }}
           storage-format: all
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
@@ -192,7 +192,7 @@ jobs:
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
@@ -205,7 +205,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
@@ -213,7 +213,7 @@ jobs:
           handlers: ${{ matrix.handlers }}
           storage-format: ${{ matrix.format }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
@@ -222,7 +222,7 @@ jobs:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
-    needs: [build, license]
+    needs: [build, check, license]
     strategy:
       matrix:
         dirs:
@@ -233,7 +233,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Decode license
         id: license
         run: |
@@ -247,7 +247,7 @@ jobs:
           handlers: ${{ matrix.handlers }}
           storage-format: ${{ matrix.format }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-ee-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
@@ -255,7 +255,7 @@ jobs:
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
@@ -268,14 +268,14 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
@@ -283,7 +283,7 @@ jobs:
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
@@ -292,70 +292,128 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
+  sqllogic_stage:
+    name: sqllogic_stage_${{ matrix.storage }}
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    strategy:
+      matrix:
+        dirs:
+          - "stage"
+        handlers:
+          - "mysql,http,clickhouse"
+        storage:
+          - "s3"
+          - "fs"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_stage
+        timeout-minutes: 15
+        with:
+          storage: ${{ matrix.storage }}
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handlers }}-${{ matrix.dirs }}
+
+  sqllogic_stage_parquet:
+    name: sqllogic_stage_${{ matrix.parquetlib }}_${{ matrix.storage }}
+    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
+    needs: [ build, check ]
+    strategy:
+      matrix:
+        dirs:
+          - "stage_parquet"
+        handlers:
+          - "mysql,http,clickhouse"
+        storage:
+          - "s3"
+          - "fs"
+        parquetlib:
+          - "parquet2"
+          - "parquet_rs"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqllogic_stage
+        timeout-minutes: 15
+        with:
+          storage: ${{ matrix.storage }}
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          parquetlib: ${{ matrix.parquetlib }}
+      - name: Upload failure
+        if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handlers }}-${{ matrix.dirs }}-${{ matrix.parquetlib }}
+
   test_stateless_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 10
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_linux
         timeout-minutes: 10
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
         timeout-minutes: 10
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
 
   test_stateful_sharing:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_sharing
         if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-sharing-linux
 
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_cluster_linux
         timeout-minutes: 15
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-cluster-linux
@@ -363,27 +421,27 @@ jobs:
   test_stateful_large_data:
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
   test_fuzz_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_fuzz_standalone_linux
         timeout-minutes: 10
         continue-on-error: true
 
   test_ee_standalone:
-    needs: [build, license]
+    needs: [build, check, license]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Decode license
         id: license
         run: |
@@ -393,17 +451,17 @@ jobs:
         env:
           DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
 
   test_ee_standalone_background:
-    needs: [build, license]
+    needs: [build, check, license]
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
       - name: Decode license
         id: license
@@ -415,7 +473,7 @@ jobs:
           DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
-        if: failure() || cancelled()
+        if: failure()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux

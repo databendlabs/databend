@@ -117,7 +117,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -285,7 +285,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -425,7 +425,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -611,7 +611,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -668,18 +668,25 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
 }
 
 struct FuzzParams {
-    num_index_blocks: usize,
     query_sql: String,
     index_sql: String,
     is_index_scan: bool,
+    num_blocks: usize,
+    num_rows_per_block: usize,
+    index_block_ratio: f64,
 }
 
 impl Display for FuzzParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Query: {}\nIndex: {}\nIsIndexScan: {}\numIndexBlocks: {}\n",
-            self.query_sql, self.index_sql, self.is_index_scan, self.num_index_blocks,
+            "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\n",
+            self.query_sql,
+            self.index_sql,
+            self.is_index_scan,
+            self.num_blocks,
+            self.num_rows_per_block,
+            self.index_block_ratio,
         )
     }
 }
@@ -687,11 +694,14 @@ impl Display for FuzzParams {
 async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let fuzz_info = params.to_string();
     let FuzzParams {
-        num_index_blocks,
         query_sql,
         index_sql,
         is_index_scan,
+        num_blocks,
+        index_block_ratio,
+        ..
     } = params;
+    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
 
     // Create agg index
     execute_sql(
@@ -751,28 +761,10 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     assert!(!actual.is_empty(), "{}", fuzz_info);
 
     let expect = DataBlock::concat(&expect)?;
-    let expect = DataBlock::sort(
-        &expect,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let expect = DataBlock::sort(&expect, &get_sort_col_descs(expect.num_columns()), None)?;
 
     let actual = DataBlock::concat(&actual)?;
-    let actual = DataBlock::sort(
-        &actual,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let actual = DataBlock::sort(&actual, &get_sort_col_descs(actual.num_columns()), None)?;
 
     let formated_expect = pretty_format_blocks(&[expect])?;
     let formated_actual = pretty_format_blocks(&[actual])?;
@@ -787,6 +779,19 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     drop_index(ctx, "index").await?;
 
     Ok(())
+}
+
+fn get_sort_col_descs(num_cols: usize) -> Vec<SortColumnDescription> {
+    let mut sorts = Vec::with_capacity(num_cols);
+    for i in 0..num_cols {
+        sorts.push(SortColumnDescription {
+            offset: i,
+            nulls_first: false,
+            asc: true,
+            is_nullable: false,
+        });
+    }
+    sorts
 }
 
 #[derive(Default)]
@@ -1012,6 +1017,24 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select b, sum(a) from t where b > 0 group by b",
             is_index_scan: true,
         },
+        // query: eval-agg-scan, index: eval-agg-scan without group by
+        TestSuite {
+            query: "select sum(a) from t",
+            index: "select sum(a) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with multiple agg funcs and without group by
+        TestSuite {
+            query: "select sum(a), approx_count_distinct(b) from t",
+            index: "select sum(a), approx_count_distinct(b) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 
@@ -1048,13 +1071,14 @@ async fn test_fuzz_impl(format: &str) -> Result<()> {
 
             // Run fuzz tests with different index block ratios.
             for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
-                let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
                 for suite in test_suites.iter() {
                     fuzz(fixture.ctx(), FuzzParams {
-                        num_index_blocks,
                         query_sql: suite.query.to_string(),
                         index_sql: suite.index.to_string(),
                         is_index_scan: suite.is_index_scan,
+                        num_blocks,
+                        num_rows_per_block,
+                        index_block_ratio,
                     })
                     .await?;
                 }

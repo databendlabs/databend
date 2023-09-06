@@ -151,7 +151,7 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
                     scale: 0,
                 },
             ))),
-            _ => resolve_type_name_by_str(name.as_str()),
+            _ => resolve_type_name_by_str(name.as_str(), false),
         }
     }
 }

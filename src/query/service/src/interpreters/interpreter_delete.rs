@@ -34,8 +34,6 @@ use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
-use common_sql::executor::MutationAggregate;
-use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::optimizer::CascadesOptimizer;
 use common_sql::optimizer::DPhpy;
@@ -71,6 +69,7 @@ use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::FinalCommit;
 use crate::sql::plans::DeletePlan;
 use crate::stream::PullingExecutorStream;
 
@@ -288,6 +287,7 @@ impl DeleteInterpreter {
             catalog_info: catalog_info.clone(),
             col_indices,
             query_row_id_col,
+            snapshot: snapshot.clone(),
         }));
 
         if is_distributed {
@@ -296,18 +296,16 @@ impl DeleteInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: vec![],
+                ignore_exchange: false,
             });
         }
 
-        Ok(PhysicalPlan::MutationAggregate(Box::new(
-            MutationAggregate {
-                input: Box::new(root),
-                snapshot,
-                table_info,
-                catalog_info,
-                mutation_kind: MutationKind::Delete,
-            },
-        )))
+        Ok(PhysicalPlan::FinalCommit(Box::new(FinalCommit {
+            input: Box::new(root),
+            snapshot,
+            table_info,
+            catalog_info,
+        })))
     }
 }
 

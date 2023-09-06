@@ -1,0 +1,44 @@
+# issue 12489
+
+statement ok
+DROP DATABASE IF EXISTS issue_12489
+
+statement ok
+CREATE DATABASE issue_12489
+
+statement ok
+USE issue_12489
+
+statement ok
+create table test_overflow(a int, b int8, c int16, d int32, e int64)
+
+statement ok
+insert into test_overflow values(-1,-1,-1,-1,-1),(1,1,1,1,1),(0,0,0,0,0)
+
+query IIIII
+select * from test_overflow where -a > 0;
+----
+-1 -1 -1 -1 -1
+
+query IIIII
+select * from test_overflow where -b > 0;
+----
+-1 -1 -1 -1 -1
+
+query IIIII
+select * from test_overflow where -c > 0;
+----
+-1 -1 -1 -1 -1
+
+query IIIII
+select * from test_overflow where -d > 0;
+----
+-1 -1 -1 -1 -1
+
+query IIIII
+select * from test_overflow where -e > 0;
+----
+-1 -1 -1 -1 -1
+
+statement ok
+drop DATABASE issue_12489

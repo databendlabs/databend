@@ -47,7 +47,7 @@ use opendal::Operator;
 use storages_common_cache::LoadParams;
 
 #[async_backtrace::framed]
-pub async fn do_generate_virtual_columns(
+pub async fn do_refresh_virtual_column(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
     virtual_columns: Vec<String>,

@@ -5,13 +5,13 @@ statement ok
 CREATE DATABASE showcolumn
 
 statement ok
-CREATE TABLE showcolumn.t1(c1 int) ENGINE = Null
+CREATE TABLE showcolumn.t1(c1 int not null) ENGINE = Null
 
 statement ok
-CREATE TABLE showcolumn.t2(c1 int) ENGINE = Null
+CREATE TABLE showcolumn.t2(c1 int not null) ENGINE = Null
 
 statement ok
-CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime default '2022-02-02 12:00:00', c3 String Default 'c3') ENGINE = Null;
+CREATE TABLE showcolumn.t3(c1 int null default 4, c2 Datetime not null default '2022-02-02 12:00:00', c3 String not null Default 'c3') ENGINE = Null;
 
 query TTTTTT
 SHOW COLUMNS FROM t3 FROM showcolumn

@@ -33,6 +33,8 @@ use common_ast::ast::ExistsTableStmt;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
+use common_ast::ast::ModifyColumnAction;
+use common_ast::ast::NullableConstraint;
 use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
@@ -101,6 +103,7 @@ use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::ModifyColumnAction as ModifyColumnActionInPlan;
 use crate::plans::ModifyTableColumnPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
@@ -792,11 +795,39 @@ impl Binder {
                 })))
             }
             AlterTableAction::ModifyColumn { action } => {
+                let action_in_plan = match action {
+                    ModifyColumnAction::SetMaskingPolicy(column, name) => {
+                        ModifyColumnActionInPlan::SetMaskingPolicy(
+                            column.to_string(),
+                            name.to_string(),
+                        )
+                    }
+                    ModifyColumnAction::UnsetMaskingPolicy(column) => {
+                        ModifyColumnActionInPlan::UnsetMaskingPolicy(column.to_string())
+                    }
+                    ModifyColumnAction::ConvertStoredComputedColumn(column) => {
+                        ModifyColumnActionInPlan::ConvertStoredComputedColumn(column.to_string())
+                    }
+                    ModifyColumnAction::SetDataType(column_def_vec) => {
+                        let mut field_and_comment = Vec::with_capacity(column_def_vec.len());
+                        let schema = self
+                            .ctx
+                            .get_table(&catalog, &database, &table)
+                            .await?
+                            .schema();
+                        for column in column_def_vec {
+                            let (field, comment) =
+                                self.analyze_add_column(column, schema.clone()).await?;
+                            field_and_comment.push((field, comment));
+                        }
+                        ModifyColumnActionInPlan::SetDataType(field_and_comment)
+                    }
+                };
                 Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
                     catalog,
                     database,
                     table,
-                    action: action.clone(),
+                    action: action_in_plan,
                 })))
             }
             AlterTableAction::DropColumn { column } => {
@@ -1166,7 +1197,8 @@ impl Binder {
         table_schema: TableSchemaRef,
     ) -> Result<(TableField, String)> {
         let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-        let data_type = resolve_type_name(&column.data_type)?;
+        let not_null = self.is_column_not_null(column)?;
+        let data_type = resolve_type_name(&column.data_type, not_null)?;
         let mut field = TableField::new(&name, data_type);
         if let Some(expr) = &column.expr {
             match expr {
@@ -1206,7 +1238,8 @@ impl Binder {
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
-            let schema_data_type = resolve_type_name(&column.data_type)?;
+            let not_null = self.is_column_not_null(column)?;
+            let schema_data_type = resolve_type_name(&column.data_type, not_null)?;
             fields_comments.push(column.comment.clone().unwrap_or_default());
 
             let mut field = TableField::new(&name, schema_data_type.clone());
@@ -1427,5 +1460,16 @@ impl Binder {
                 | DataType::Boolean
                 | DataType::Decimal(_)
         )
+    }
+
+    fn is_column_not_null(&self, column: &ColumnDefinition) -> Result<bool> {
+        let column_not_null = !self.ctx.get_settings().get_ddl_column_type_nullable()?;
+        let not_null = match column.nullable_constraint {
+            Some(NullableConstraint::NotNull) => true,
+            Some(NullableConstraint::Null) => false,
+            None if column_not_null => true,
+            None => false,
+        };
+        Ok(not_null)
     }
 }

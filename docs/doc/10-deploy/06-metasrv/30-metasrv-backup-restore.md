@@ -36,7 +36,7 @@ Note: without the `--db` argument, the exported data will output to the stdio in
 ### Export from a running server
 
 Similar to exporting from data dir, but with the service endpoint argument `--grpc-api-address <ip:port>` in place of the `--raft-dir`,
-where `<ip:port>` is the `grpc_api_address` in [databend-meta config.toml](./15-metasrv-config.md), e.g.:
+where `<ip:port>` is the `grpc_api_address` in [databend-meta.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-meta.toml), e.g.:
 
 ```shell
 ./target/debug/databend-metactl --export --grpc-api-address "127.0.0.1:9191" --db <output_fn>
@@ -74,9 +74,9 @@ The `--initial-cluster` format is: `node_id=raft_advertise_host:raft_api_port`, 
 E.g.:
 
 ```
-/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=1 --db meta.db --initial-cluster 1=localhost:29103 2=localhost:29203 3=localhost:29303
-/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=2 --db meta.db --initial-cluster 1=localhost:29103 2=localhost:29203 3=localhost:29303
-/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=3 --db meta.db --initial-cluster 1=localhost:29103 2=localhost:29203 3=localhost:29303
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta1 --id=1 --db meta.db --initial-cluster 1=localhost:29103 --initial-cluster 2=localhost:29203 --initial-cluster 3=localhost:29303
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta2 --id=2 --db meta.db --initial-cluster 1=localhost:29103 --initial-cluster 2=localhost:29203 --initial-cluster 3=localhost:29303
+/target/debug/databend-metactl --import --raft-dir ./.databend/new_meta3 --id=3 --db meta.db --initial-cluster 1=localhost:29103 --initial-cluster 2=localhost:29203 --initial-cluster 3=localhost:29303
 ```
 
 The script above imports the exported data from `meta.db` and initializes the three cluster nodes: id 1, which raft directory is `./.databend/new_meta1`, and so are id 2 and 3 with different raft directory.

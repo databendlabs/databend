@@ -114,13 +114,12 @@ async fn test_int32_lt() {
     .await;
     // result of sql "SELECT * FROM t where i < 1" is same as
     // "SELECT * FROM t where -i > -1"
-    // TODO(parquet): uncomment until [ISSUE](https://github.com/datafuselabs/databend/issues/12489) fixed.
-    // test(
-    //     Scenario::Int32,
-    //     "where -i > -1",
-    //     RowSelection::from(vec![RowSelector::select(15), RowSelector::skip(5)]),
-    // )
-    // .await;
+    test(
+        Scenario::Int32,
+        "-i > -1",
+        RowSelection::from(vec![RowSelector::select(15), RowSelector::skip(5)]),
+    )
+    .await;
 }
 
 #[tokio::test]
@@ -132,13 +131,12 @@ async fn test_int32_gt() {
     )
     .await;
 
-    // TODO(parquet): uncomment until [ISSUE](https://github.com/datafuselabs/databend/issues/12489) fixed.
-    // test(
-    //     Scenario::Int32,
-    //     "where -i < -8",
-    //     RowSelection::from(vec![RowSelector::skip(15), RowSelector::select(5)]),
-    // )
-    // .await;
+    test(
+        Scenario::Int32,
+        "-i < -8",
+        RowSelection::from(vec![RowSelector::skip(15), RowSelector::select(5)]),
+    )
+    .await;
 }
 
 #[tokio::test]

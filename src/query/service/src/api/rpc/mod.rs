@@ -52,3 +52,4 @@ pub use packets::FragmentPlanPacket;
 pub use packets::InitNodesChannelPacket;
 pub use packets::Packet;
 pub use packets::QueryFragmentsPlanPacket;
+pub use packets::TruncateTablePacket;

@@ -20,7 +20,7 @@ runs:
         bash ./tests/meta-cluster/test-meta-cluster.sh
 
     - name: Upload failure
-      if: failure() || cancelled()
+      if: failure()
       uses: ./.github/actions/artifact_failure
       with:
         name: test-meta-cluster

@@ -433,7 +433,7 @@ query T
 explain select * from t1 inner join t2 on t1.a = t2.a where t1.a > 10
 ----
 HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
@@ -441,7 +441,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [t2.a (#2) > 10]
+│   ├── filters: [is_true(t2.a (#2) > 10)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -450,11 +450,11 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
+│       ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [t1.a (#0) > 10]
+    ├── filters: [is_true(t1.a (#0) > 10)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -463,14 +463,14 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
+        ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
         └── estimated rows: 0.00
 
 query T
 explain select * from t1 inner join t2 on t1.a = t2.a where t1.a + t1.b> 10
 ----
 HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]
@@ -487,7 +487,7 @@ HashJoin
 │   └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
+    ├── filters: [is_true(t1.a (#0) + t1.b (#1) > 10)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -496,7 +496,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
+        ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -511,7 +511,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [t2.a (#2) > 10]
+│   ├── filters: [is_true(t2.a (#2) > 10)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -520,11 +520,11 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [t2.a (#2) > 10], limit: NONE]
+│       ├── push downs: [filters: [is_true(t2.a (#2) > 10)], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [t1.a (#0) > 10]
+    ├── filters: [is_true(t1.a (#0) > 10)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -533,7 +533,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) > 10], limit: NONE]
+        ├── push downs: [filters: [is_true(t1.a (#0) > 10)], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -548,7 +548,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [t2.a (#2) + t2.b (#3) > 10]
+│   ├── filters: [is_true(t2.a (#2) + t2.b (#3) > 10)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -557,11 +557,11 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [t2.a (#2) + t2.b (#3) > 10], limit: NONE]
+│       ├── push downs: [filters: [is_true(t2.a (#2) + t2.b (#3) > 10)], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [t1.a (#0) + t1.b (#1) > 10]
+    ├── filters: [is_true(t1.a (#0) + t1.b (#1) > 10)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -570,7 +570,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.a (#0) + t1.b (#1) > 10], limit: NONE]
+        ├── push downs: [filters: [is_true(t1.a (#0) + t1.b (#1) > 10)], limit: NONE]
         └── estimated rows: 0.00
 
 query T
@@ -585,7 +585,7 @@ HashJoin
 ├── estimated rows: 0.00
 ├── Filter(Build)
 │   ├── output columns: [t2.a (#2), t2.b (#3)]
-│   ├── filters: [t2.b (#3) + t2.a (#2) > 10]
+│   ├── filters: [is_true(t2.b (#3) + t2.a (#2) > 10)]
 │   ├── estimated rows: 0.00
 │   └── TableScan
 │       ├── table: default.default.t2
@@ -594,11 +594,11 @@ HashJoin
 │       ├── read bytes: 0
 │       ├── partitions total: 0
 │       ├── partitions scanned: 0
-│       ├── push downs: [filters: [t2.b (#3) + t2.a (#2) > 10], limit: NONE]
+│       ├── push downs: [filters: [is_true(t2.b (#3) + t2.a (#2) > 10)], limit: NONE]
 │       └── estimated rows: 0.00
 └── Filter(Probe)
     ├── output columns: [t1.a (#0), t1.b (#1)]
-    ├── filters: [t1.b (#1) + t1.a (#0) > 10]
+    ├── filters: [is_true(t1.b (#1) + t1.a (#0) > 10)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t1
@@ -607,7 +607,7 @@ HashJoin
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t1.b (#1) + t1.a (#0) > 10], limit: NONE]
+        ├── push downs: [filters: [is_true(t1.b (#1) + t1.a (#0) > 10)], limit: NONE]
         └── estimated rows: 0.00
 
 
@@ -615,7 +615,7 @@ query T
 explain select * from t1, t2 where t1.a = t2.a and t1.b > t2.b
 ----
 HashJoin
-├── output columns: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
+├── output columns: [t1.a (#0), t1.b (#1), t2.b (#3), t2.a (#2)]
 ├── join type: INNER
 ├── build keys: [t2.a (#2)]
 ├── probe keys: [t1.a (#0)]

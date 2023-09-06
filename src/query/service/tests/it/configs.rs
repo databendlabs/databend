@@ -745,7 +745,9 @@ share_endpoint_address = ""
 [log]
 level = "INFO"
 dir = "./.databend/logs"
-query_enabled = false
+
+[log.query]
+on = false
 
 [meta]
 endpoints = ["0.0.0.0:9191"]
@@ -841,6 +843,8 @@ path = "_cache"
                 .expect("config load success")
                 .into_config();
 
+            assert!(!cfg.log.query.query_log_on);
+
             assert_eq!("tenant_id_from_env", cfg.query.tenant_id);
             assert_eq!("access_key_id_from_env", cfg.storage.s3.access_key_id);
             assert_eq!("s3", cfg.storage.typ);
@@ -870,7 +874,7 @@ path = "_cache"
             let cfg = inner.unwrap();
             match cfg {
                 CatalogConfig::Hive(cfg) => {
-                    assert_eq!("127.0.0.1:9083", cfg.address, "address incorrect");
+                    assert_eq!("127.0.0.1:9083", cfg.metastore_address, "address incorrect");
                     assert_eq!("binary", cfg.protocol.to_string(), "protocol incorrect");
                 }
             }
@@ -909,7 +913,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:10000".to_string(),
+                    metastore_address: "1.1.1.1:10000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );
@@ -949,7 +953,7 @@ protocol = "binary"
             assert_eq!(
                 cfg.catalogs["my_hive"],
                 CatalogConfig::Hive(CatalogHiveConfig {
-                    address: "1.1.1.1:12000".to_string(),
+                    metastore_address: "1.1.1.1:12000".to_string(),
                     protocol: ThriftProtocol::Binary,
                 })
             );

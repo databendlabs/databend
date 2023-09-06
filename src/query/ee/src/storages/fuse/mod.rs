@@ -18,4 +18,4 @@ pub mod operations;
 pub use io::snapshots::get_snapshot_referenced_segments;
 pub use operations::vacuum_drop_tables::do_vacuum_drop_tables;
 pub use operations::vacuum_table::do_vacuum;
-pub use operations::virtual_columns::do_generate_virtual_columns;
+pub use operations::virtual_columns::do_refresh_virtual_column;

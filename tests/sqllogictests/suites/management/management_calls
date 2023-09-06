@@ -2,7 +2,16 @@ statement ok
 DROP TABLE if EXISTS call_t
 
 statement ok
+DROP VIEW if EXISTS v_call_t
+
+statement ok
 CREATE TABLE call_t(a UInt64 null, b UInt32 null) CLUSTER BY(a+1) Engine = Fuse
+
+statement ok
+create view v_call_t as select * from call_t
+
+statement error 1062
+show fields from v_call_t
 
 # need to check the result later, currently just use ok to skip
 onlyif todo

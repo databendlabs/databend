@@ -20,10 +20,10 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn probe_right_anti_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -36,11 +36,11 @@ impl JoinHashTable {
     {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
-        let mut occupied = 0;
+        let mut matched_num = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -49,16 +49,16 @@ impl JoinHashTable {
                 valids,
                 i,
                 local_build_indexes_ptr,
-                occupied,
+                matched_num,
                 max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
-            if occupied >= max_block_size {
+            matched_num += match_count;
+            if matched_num >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
@@ -69,7 +69,7 @@ impl JoinHashTable {
                             true;
                     }
 
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -78,23 +78,23 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
+                    matched_num += match_count;
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        for row_ptr in local_build_indexes.iter().take(occupied) {
+        for row_ptr in local_build_indexes.iter().take(matched_num) {
             outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
         }
 
@@ -116,22 +116,20 @@ impl JoinHashTable {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The right join will return multiple data blocks of similar size.
-        let mut occupied = 0;
-        let mut probe_indexes_len = 0;
+        let mut matched_num = 0;
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
-        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -140,47 +138,50 @@ impl JoinHashTable {
                 valids,
                 i,
                 local_build_indexes_ptr,
-                occupied,
+                matched_num,
                 max_block_size,
             );
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
-            local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+
+            for _ in 0..match_count {
+                local_probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take_compacted_indices(
-                            input,
-                            &local_probe_indexes[0..probe_indexes_len],
-                            occupied,
-                        )?)
+                        Some(DataBlock::take(input, local_probe_indexes)?)
                     } else {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(self.row_space.gather(
+                        Some(self.hash_join_state.row_space.gather(
                             local_build_indexes,
-                            &data_blocks,
-                            &build_num_rows,
+                            build_columns,
+                            build_columns_data_type,
+                            build_num_rows,
                         )?)
                     } else {
                         None
                     };
-                    let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+                    let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
                     if !result_block.is_empty() {
                         let (bm, all_true, all_false) = self.get_other_filters(
                             &result_block,
-                            self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                            self.hash_join_state
+                                .hash_join_desc
+                                .other_predicate
+                                .as_ref()
+                                .unwrap(),
                         )?;
 
                         if all_true {
@@ -192,7 +193,7 @@ impl JoinHashTable {
                             // Safe to unwrap.
                             let validity = bm.unwrap();
                             let mut idx = 0;
-                            while idx < occupied {
+                            while idx < matched_num {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
                                     outer_scan_map[local_build_indexes[idx].chunk_index as usize]
@@ -202,9 +203,7 @@ impl JoinHashTable {
                             }
                         }
                     }
-
-                    probe_indexes_len = 0;
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -213,63 +212,68 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
-                    local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        local_probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        if occupied == 0 {
+        if matched_num == 0 {
             return Ok(vec![]);
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take_compacted_indices(
+            Some(DataBlock::take(
                 input,
-                &local_probe_indexes[0..probe_indexes_len],
-                occupied,
+                &local_probe_indexes[0..matched_num],
             )?)
         } else {
             None
         };
         let build_block = if is_build_projected {
-            Some(self.row_space.gather(
-                &local_build_indexes[0..occupied],
-                &data_blocks,
-                &build_num_rows,
+            Some(self.hash_join_state.row_space.gather(
+                &local_build_indexes[0..matched_num],
+                build_columns,
+                build_columns_data_type,
+                build_num_rows,
             )?)
         } else {
             None
         };
-        let result_block = self.merge_eq_block(probe_block, build_block, occupied);
+        let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
         if !result_block.is_empty() {
             let (bm, all_true, all_false) = self.get_other_filters(
                 &result_block,
-                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                self.hash_join_state
+                    .hash_join_desc
+                    .other_predicate
+                    .as_ref()
+                    .unwrap(),
             )?;
 
             if all_true {
-                for row_ptr in local_build_indexes.iter().take(occupied) {
+                for row_ptr in local_build_indexes.iter().take(matched_num) {
                     outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
                 let validity = bm.unwrap();
                 let mut idx = 0;
-                while idx < occupied {
+                while idx < matched_num {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
                         outer_scan_map[local_build_indexes[idx].chunk_index as usize]

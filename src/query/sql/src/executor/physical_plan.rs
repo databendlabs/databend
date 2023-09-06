@@ -60,6 +60,8 @@ use crate::IndexType;
 
 pub type ColumnID = String;
 
+pub type MatchExpr = Vec<(Option<RemoteExpr>, Option<Vec<(FieldIndex, RemoteExpr)>>)>;
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TableScan {
     /// A unique id of operator in a `PhysicalPlan` tree.
@@ -615,6 +617,10 @@ pub struct HashJoin {
     pub join_type: JoinType,
     pub marker_index: Option<IndexType>,
     pub from_correlated_subquery: bool,
+    // Use the column of probe side to construct build side column.
+    // (probe index, (is probe column nullable, is build column nullable))
+    pub probe_to_build: Vec<(usize, (bool, bool))>,
+    pub output_schema: DataSchemaRef,
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
 
@@ -624,100 +630,7 @@ pub struct HashJoin {
 
 impl HashJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let build_schema = match self.join_type {
-            JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
-                let build_schema = self.build.output_schema()?;
-                // Wrap nullable type for columns in build side.
-                let build_schema = DataSchemaRefExt::create(
-                    build_schema
-                        .fields()
-                        .iter()
-                        .map(|field| {
-                            DataField::new(field.name(), field.data_type().wrap_nullable())
-                        })
-                        .collect::<Vec<_>>(),
-                );
-                build_schema
-            }
-            _ => self.build.output_schema()?,
-        };
-
-        let probe_schema = match self.join_type {
-            JoinType::Right | JoinType::RightSingle | JoinType::Full => {
-                let probe_schema = self.probe.output_schema()?;
-                // Wrap nullable type for columns in probe side.
-                let probe_schema = DataSchemaRefExt::create(
-                    probe_schema
-                        .fields()
-                        .iter()
-                        .map(|field| {
-                            DataField::new(field.name(), field.data_type().wrap_nullable())
-                        })
-                        .collect::<Vec<_>>(),
-                );
-                probe_schema
-            }
-            _ => self.probe.output_schema()?,
-        };
-
-        let mut probe_fields = Vec::with_capacity(self.probe_projections.len());
-        let mut build_fields = Vec::with_capacity(self.build_projections.len());
-        for (i, field) in probe_schema.fields().iter().enumerate() {
-            if self.probe_projections.contains(&i) {
-                probe_fields.push(field.clone());
-            }
-        }
-        for (i, field) in build_schema.fields().iter().enumerate() {
-            if self.build_projections.contains(&i) {
-                build_fields.push(field.clone());
-            }
-        }
-
-        let merged_fields = match self.join_type {
-            JoinType::Cross
-            | JoinType::Inner
-            | JoinType::Left
-            | JoinType::LeftSingle
-            | JoinType::Right
-            | JoinType::RightSingle
-            | JoinType::Full => {
-                probe_fields.extend(build_fields);
-                probe_fields
-            }
-            JoinType::LeftSemi | JoinType::LeftAnti => probe_fields,
-            JoinType::RightSemi | JoinType::RightAnti => build_fields,
-            JoinType::LeftMark => {
-                let name = if let Some(idx) = self.marker_index {
-                    idx.to_string()
-                } else {
-                    "marker".to_string()
-                };
-                build_fields.push(DataField::new(
-                    name.as_str(),
-                    DataType::Nullable(Box::new(DataType::Boolean)),
-                ));
-                build_fields
-            }
-            JoinType::RightMark => {
-                let name = if let Some(idx) = self.marker_index {
-                    idx.to_string()
-                } else {
-                    "marker".to_string()
-                };
-                probe_fields.push(DataField::new(
-                    name.as_str(),
-                    DataType::Nullable(Box::new(DataType::Boolean)),
-                ));
-                probe_fields
-            }
-        };
-        let mut fields = Vec::with_capacity(self.projections.len());
-        for (i, field) in merged_fields.iter().enumerate() {
-            if self.projections.contains(&i) {
-                fields.push(field.clone());
-            }
-        }
-        Ok(DataSchemaRefExt::create(fields))
+        Ok(self.output_schema.clone())
     }
 }
 
@@ -763,6 +676,7 @@ pub struct Exchange {
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
+    pub ignore_exchange: bool,
 }
 
 impl Exchange {
@@ -816,6 +730,7 @@ pub struct ExchangeSink {
     pub destination_fragment_id: usize,
     /// Addresses of destination nodes
     pub query_id: String,
+    pub ignore_exchange: bool,
 }
 
 impl ExchangeSink {
@@ -843,6 +758,27 @@ impl UnionAll {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(self.schema.clone())
     }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergeIntoSource {
+    // join result:  source_columns, target_columns, target_table._row_id
+    pub input: Box<PhysicalPlan>,
+    pub row_id_idx: u32,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct MergeInto {
+    pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
+    // the first option stands for the condition
+    // the second option stands for update/delete
+    pub matched: MatchExpr,
+    pub row_id_idx: usize,
+    pub segments: Vec<(usize, Location)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -933,6 +869,7 @@ pub struct DeletePartial {
     pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
+    pub snapshot: TableSnapshot,
 }
 
 impl DeletePartial {
@@ -958,13 +895,25 @@ pub struct MutationAggregate {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
-/// This is used by MutationAccumulator, so no compact here.
+/// This is used by TableMutationAggregator, so no compact here.
 pub enum MutationKind {
     Delete,
     Update,
     Replace,
     Recluster,
     Insert,
+}
+
+impl Display for MutationKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MutationKind::Delete => write!(f, "Delete"),
+            MutationKind::Insert => write!(f, "Insert"),
+            MutationKind::Recluster => write!(f, "Recluster"),
+            MutationKind::Update => write!(f, "Update"),
+            MutationKind::Replace => write!(f, "Replace"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1010,6 +959,14 @@ pub struct ReplaceInto {
     pub segments: Vec<(usize, Location)>,
     pub block_slots: Option<BlockSlotDescription>,
     pub need_insert: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct FinalCommit {
+    pub input: Box<PhysicalPlan>,
+    pub catalog_info: CatalogInfo,
+    pub table_info: TableInfo,
+    pub snapshot: TableSnapshot,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1075,6 +1032,10 @@ pub enum PhysicalPlan {
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Deduplicate),
     ReplaceInto(ReplaceInto),
+    FinalCommit(Box<FinalCommit>),
+    // MergeInto
+    MergeIntoSource(MergeIntoSource),
+    MergeInto(MergeInto),
 }
 
 impl PhysicalPlan {
@@ -1114,11 +1075,14 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
-            | PhysicalPlan::ReplaceInto(_) => {
+            | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::FinalCommit(_) => {
                 unreachable!()
             }
         }
@@ -1153,8 +1117,11 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
+            PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
+            | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
+            | PhysicalPlan::FinalCommit(_)
             | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
         }
     }
@@ -1188,9 +1155,12 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
             PhysicalPlan::Deduplicate(_) => "Deduplicate".to_string(),
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
+            PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
+            PhysicalPlan::MergeIntoSource(_) => "MergeIntoSource".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
+            PhysicalPlan::FinalCommit(_) => "FinalCommit".to_string(),
         }
     }
 
@@ -1236,9 +1206,12 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
+            PhysicalPlan::FinalCommit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -1273,7 +1246,10 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
+            | PhysicalPlan::FinalCommit(_)
             | PhysicalPlan::CteScan(_) => None,
         }
     }

@@ -26,6 +26,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
+use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::ColumnBinding;
@@ -93,7 +94,16 @@ impl SelectInterpreter {
     }
 
     #[async_backtrace::framed]
-    pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
+    pub async fn build_pipeline(
+        &self,
+        mut physical_plan: PhysicalPlan,
+    ) -> Result<PipelineBuildResult> {
+        if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
+            if exchange.kind == FragmentKind::Merge && self.ignore_result {
+                exchange.ignore_exchange = self.ignore_result;
+            }
+        }
+
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
@@ -190,6 +200,18 @@ impl SelectInterpreter {
         }
         Ok(None)
     }
+
+    fn attach_tables_to_ctx(&self) {
+        let metadata = self.metadata.read();
+        for table in metadata.tables() {
+            self.ctx.attach_table(
+                table.catalog(),
+                table.database(),
+                table.name(),
+                table.table(),
+            )
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -203,6 +225,8 @@ impl Interpreter for SelectInterpreter {
     #[minitrace::trace(name = "select_interpreter_execute")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.attach_tables_to_ctx();
+
         self.ctx.set_status_info("preparing plan");
 
         // 0. Need to build physical plan first to get the partitions.

@@ -52,6 +52,7 @@ use common_expression::vectorize_with_builder_2_arg;
 use common_expression::with_float_mapped_type;
 use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
+use common_expression::with_number_mapped_type_without_64;
 use common_expression::with_unsigned_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -483,7 +484,7 @@ fn register_unary_arithmetic(registry: &mut FunctionRegistry) {
 
 fn register_unary_minus(registry: &mut FunctionRegistry) {
     for num_ty in ALL_NUMBER_CLASSES {
-        with_number_mapped_type!(|NUM_TYPE| match num_ty {
+        with_number_mapped_type_without_64!(|NUM_TYPE| match num_ty {
             NumberClass::NUM_TYPE => {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
@@ -497,6 +498,63 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                     |a, _| -(AsPrimitive::<T>::as_(a)),
                 );
             }
+            NumberClass::UInt64 => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<u64>, NumberType<i64>, _, _>(
+                        "minus",
+                        |_, val| {
+                            let min = (val.max as i128).wrapping_neg();
+                            let max = (val.min as i128).wrapping_neg();
+
+                            if min < std::i64::MIN as i128 || max > std::i64::MAX as i128 {
+                                return FunctionDomain::MayThrow;
+                            }
+
+                            FunctionDomain::Domain(SimpleDomain::<i64> {
+                                min: min as i64,
+                                max: max as i64,
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<NumberType<u64>, NumberType<i64>>(
+                            |a, output, ctx| {
+                                let val = (a as i128).wrapping_neg();
+                                if val < std::i64::MIN as i128 {
+                                    ctx.set_error(output.len(), "number overflowed");
+                                    output.push(0);
+                                } else {
+                                    output.push(val as i64);
+                                }
+                            },
+                        ),
+                    );
+            }
+            NumberClass::Int64 => {
+                registry
+                    .register_passthrough_nullable_1_arg::<NumberType<i64>, NumberType<i64>, _, _>(
+                        "minus",
+                        |_, val| {
+                            let min = val.max.checked_neg();
+                            let max = val.min.checked_neg();
+                            if min.is_none() || max.is_none() {
+                                return FunctionDomain::MayThrow;
+                            }
+                            FunctionDomain::Domain(SimpleDomain::<i64> {
+                                min: min.unwrap(),
+                                max: max.unwrap(),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<NumberType<i64>, NumberType<i64>>(
+                            |a, output, ctx| match a.checked_neg() {
+                                Some(a) => output.push(a),
+                                None => {
+                                    ctx.set_error(output.len(), "number overflowed");
+                                    output.push(0);
+                                }
+                            },
+                        ),
+                    );
+            }
+
             NumberClass::Decimal128 => {
                 register_decimal_minus(registry)
             }

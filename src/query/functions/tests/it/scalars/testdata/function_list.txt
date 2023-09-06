@@ -1825,6 +1825,7 @@ Functions overloads:
 1 is_not_null(T0 NULL) :: Boolean
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 json_array FACTORY
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY
@@ -1835,8 +1836,14 @@ Functions overloads:
 1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL
 0 json_path_query_first(Variant, String) :: Variant NULL
 1 json_path_query_first(Variant NULL, String NULL) :: Variant NULL
+0 json_pretty(Variant) :: String
+1 json_pretty(Variant NULL) :: String NULL
+0 json_strip_nulls(Variant) :: Variant
+1 json_strip_nulls(Variant NULL) :: Variant NULL
 0 json_to_string(Variant) :: String
 1 json_to_string(Variant NULL) :: String NULL
+0 json_typeof(Variant) :: String
+1 json_typeof(Variant NULL) :: String NULL
 0 l2_distance(Array(Float32), Array(Float32)) :: Float32
 1 l2_distance(Array(Float32) NULL, Array(Float32) NULL) :: Float32 NULL
 0 left(String, UInt64) :: String
@@ -2042,16 +2049,16 @@ Functions overloads:
 1 md5(String NULL) :: String NULL
 0 minus(UInt8) :: Int16
 1 minus(UInt8 NULL) :: Int16 NULL
-2 minus(Int8) :: Int8
-3 minus(Int8 NULL) :: Int8 NULL
+2 minus(Int8) :: Int16
+3 minus(Int8 NULL) :: Int16 NULL
 4 minus(UInt16) :: Int32
 5 minus(UInt16 NULL) :: Int32 NULL
-6 minus(Int16) :: Int16
-7 minus(Int16 NULL) :: Int16 NULL
+6 minus(Int16) :: Int32
+7 minus(Int16 NULL) :: Int32 NULL
 8 minus(UInt32) :: Int64
 9 minus(UInt32 NULL) :: Int64 NULL
-10 minus(Int32) :: Int32
-11 minus(Int32 NULL) :: Int32 NULL
+10 minus(Int32) :: Int64
+11 minus(Int32 NULL) :: Int64 NULL
 12 minus(UInt64) :: Int64
 13 minus(UInt64 NULL) :: Int64 NULL
 14 minus(Int64) :: Int64

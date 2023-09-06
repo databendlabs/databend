@@ -14,7 +14,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.a (#0) = 1], limit: NONE]
+├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1)], limit: NONE]
 └── estimated rows: 0.00
 
 query T
@@ -27,7 +27,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.a (#0) = t_where_optimizer.b (#1)], limit: NONE]
+├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = t_where_optimizer.b (#1))], limit: NONE]
 └── estimated rows: 0.00
 
 query T
@@ -40,7 +40,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2], limit: NONE]
+├── push downs: [filters: [is_true(t_where_optimizer.a (#0) = 1 OR t_where_optimizer.b (#1) > 2)], limit: NONE]
 └── estimated rows: 0.00
 
 query T
@@ -53,7 +53,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(CAST(t_where_optimizer.a (#0) = 1 AS Boolean NULL), CAST(t_where_optimizer.b (#1) > 2 AS Boolean NULL))], limit: NONE]
+├── push downs: [filters: [and_filters(t_where_optimizer.a (#0) = 1, t_where_optimizer.b (#1) > 2)], limit: NONE]
 └── estimated rows: 0.00
 
 query T
@@ -66,7 +66,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.b (#1) = 1], limit: NONE]
+├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
 └── estimated rows: 0.00
 
 query T
@@ -79,7 +79,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.b (#1) = 1], limit: NONE]
+├── push downs: [filters: [is_true(t_where_optimizer.b (#1) = 1)], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
@@ -98,7 +98,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]
+├── push downs: [filters: [is_true(get(1)(CAST(t_where_optimizer.s (#1) AS Tuple(Int32 NULL, Int32 NULL) NULL)) > 0)], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok

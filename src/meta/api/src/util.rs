@@ -224,7 +224,7 @@ pub fn deserialize_u64(v: &[u8]) -> Result<Id, MetaNetworkError> {
 /// Ids are categorized by generators.
 /// Ids may not be consecutive.
 pub async fn fetch_id<T: kvapi::Key>(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     generator: T,
 ) -> Result<u64, KVAppError> {
     let res = kv_api

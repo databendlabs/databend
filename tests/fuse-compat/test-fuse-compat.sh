@@ -8,6 +8,8 @@ cd "$SCRIPT_PATH/../../"
 ROOT="$(pwd)"
 pwd
 
+export RUST_BACKTRACE=full
+
 BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"

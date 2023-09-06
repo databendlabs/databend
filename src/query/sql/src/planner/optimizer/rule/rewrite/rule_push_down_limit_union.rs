@@ -92,6 +92,7 @@ impl Rule for RulePushDownLimitUnion {
                 .limit
                 .map(|origin_limit| cmp::max(origin_limit, limit_offset)),
             offset: 0,
+            before_exchange: false,
         };
 
         // Push down new_limit to union children

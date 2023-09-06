@@ -141,3 +141,8 @@ query III
 SELECT 4>>1, 8>>2, 16>>3
 ----
 2 2 2
+
+query I
+select * from numbers(4) where -number > -1;
+----
+0

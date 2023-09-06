@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
-use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::RefreshIndexStmt;
@@ -27,6 +26,7 @@ use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_statement_mut;
 use common_ast::Dialect;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::GetIndexReq;
@@ -42,6 +42,7 @@ use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::Plan;
 use crate::plans::RefreshIndexPlan;
+use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
@@ -62,8 +63,19 @@ impl Binder {
         } = stmt;
 
         // check if query support index
-        Self::check_index_support(query)?;
-
+        {
+            let mut agg_index_checker = AggregatingIndexChecker::default();
+            agg_index_checker.visit_query(query);
+            if !agg_index_checker.is_supported() {
+                return Err(ErrorCode::UnsupportedIndex(format!(
+                    "Currently create aggregating index just support simple query, like: {}, \
+                and these aggregate funcs: {}, \
+                and non-deterministic functions are not support like: NOW()",
+                    "SELECT ... FROM ... WHERE ... GROUP BY ...",
+                    SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(",")
+                )));
+            }
+        }
         let index_name = self.normalize_object_identifier(index_name);
 
         bind_context.planning_agg_index = true;
@@ -167,6 +179,7 @@ impl Binder {
     ) -> Result<RefreshIndexPlan> {
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+
         // rewrite aggregate function
         // The file name and block only correspond to each other at the time of table_scan,
         // after multiple transformations, this correspondence does not exist,
@@ -174,11 +187,10 @@ impl Binder {
         // to generate the index file corresponding to the source table data file,
         // so we rewrite the sql here to add `_block_name` to select targets,
         // so that we inline the file name into the data block.
-        let mut index_rewriter = AggregatingIndexRewriter {
-            // note: if user already use the `_block_name` in their sql
-            // we no need add it and **MUST NOT** drop this column in sink phase.
-            user_defined_block_name: false,
-        };
+
+        // NOTE: if user already use the `_block_name` in their sql
+        // we no need add it and **MUST NOT** drop this column in sink phase.
+        let mut index_rewriter = AggregatingIndexRewriter::default();
         walk_statement_mut(&mut index_rewriter, &mut stmt);
 
         bind_context.planning_agg_index = true;
@@ -218,49 +230,6 @@ impl Binder {
         };
 
         Ok(plan)
-    }
-
-    fn check_index_support(query: &Query) -> Result<()> {
-        let err = Err(ErrorCode::UnsupportedIndex(format!(
-            "Currently create aggregating index just support simple query, like: {}",
-            "SELECT ... FROM ... WHERE ... GROUP BY ..."
-        )));
-
-        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
-            return err;
-        }
-
-        if let SetExpr::Select(stmt) = &query.body {
-            if stmt.having.is_some() || stmt.window_list.is_some() {
-                return err;
-            }
-            match &stmt.group_by {
-                None => {}
-                Some(group_by) => match group_by {
-                    GroupBy::Normal(_) => {}
-                    _ => {
-                        return err;
-                    }
-                },
-            }
-            for target in &stmt.select_list {
-                if target.has_window() {
-                    return err;
-                }
-                if let Some(fn_name) = target.function_call_name() {
-                    if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*fn_name) {
-                        return Err(ErrorCode::UnsupportedIndex(format!(
-                            "Currently create aggregating index just support these aggregate functions: {}",
-                            SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(", ")
-                        )));
-                    }
-                }
-            }
-        } else {
-            return err;
-        }
-
-        Ok(())
     }
 
     fn rewrite_query_with_database(query: &mut Query, name: &str) {
