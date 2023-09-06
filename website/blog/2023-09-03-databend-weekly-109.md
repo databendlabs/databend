@@ -63,7 +63,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 **Databend Local Mode** aims to provide a simple Databend environment where users can directly interact with Databend using SQL without the need to perform a full Databend deployment. This makes it convenient for developers to perform basic data processing using Databend.
 
-In local mode, a temporary `databend-query` process is started, which integrates both the client and server support. The storage is located in a temporary directory and its lifecycle follows the process. Once the process ends, the resources are also destroyed. You can start multiple local processes on one server, and their resources are isolated from each other.
+`databend-query local` starts a temporary databend-query process which functions as both client and server.The storage is located in a temporary directory and its lifecycle follows the process. Once the process ends, the resources are also destroyed. You can start multiple local processes on one server, and their resources are isolated from each other.
 
 ```sql!
 ❯ alias databend-local="databend-query local"
@@ -95,7 +95,7 @@ If you are interested in learning more, please check out the resources listed be
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Preliminary support for `MERGE INTO`.
+- Added initial support for `MERGE INTO`.
 - Implemented SQLsmith testing framework to support more accurate fuzzy testing.
 - Read the document [Docs | Setting Environment Variables](https://databend.rs/doc/deploy/node-config/environment-variables) for how to change Databend configurations through environment variables.
 - Implemented `json_strip_nulls` and `json_typeof` functions. You can also read [Docs | Semi-Structured Functions](https://databend.rs/doc/reference/functions/variant-functions) to check out Databend functions for semi-structured data processing.
