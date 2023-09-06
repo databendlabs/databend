@@ -95,6 +95,10 @@ impl OutputsBuffer {
         }
     }
 
+    pub fn is_all_empty(&self) -> bool {
+        self.inner.iter().all(|x| x.is_empty())
+    }
+
     pub fn is_empty(&self, index: usize) -> bool {
         self.inner[index].is_empty()
     }
@@ -219,7 +223,7 @@ impl Processor for ExchangeShuffleTransform {
             return Ok(Event::Finished);
         }
 
-        if self.finished_inputs == self.inputs.len() {
+        if self.finished_inputs == self.inputs.len() && self.buffer.is_all_empty() {
             for output in &self.outputs {
                 output.port.finish();
             }
