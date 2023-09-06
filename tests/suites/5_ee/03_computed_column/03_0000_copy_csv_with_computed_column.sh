@@ -3,9 +3,6 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-# Should be <root>/tests/data/
-DATADIR=$(realpath $CURDIR/../../../data/)
-
 echo "drop table if exists sample" | $MYSQL_CLIENT_CONNECT
 
 ## Create table
@@ -21,7 +18,7 @@ CREATE TABLE sample
 EOF
 
 copy_from_test_csv=(
-  "copy into sample from 'fs://${DATADIR}/sample.csv' FILE_FORMAT = (field_delimiter = ',' record_delimiter = '\n' type = CSV) ON_ERROR = ABORT"
+  "copy into sample from 'fs://${TESTS_DATA_DIR}/csv/sample.csv' FILE_FORMAT = (field_delimiter = ',' record_delimiter = '\n' type = CSV) ON_ERROR = ABORT"
 )
 
 echo "---test csv field with computed columns"
