@@ -215,7 +215,6 @@ impl Processor for TransformSerializeBlock {
                 stats_type,
                 index,
             } => {
-                println!("block serialize:\n {:?}", block);
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
