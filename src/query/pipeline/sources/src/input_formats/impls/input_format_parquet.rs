@@ -214,7 +214,7 @@ impl RowGroupInMemory {
             split_info,
             meta,
             field_meta_indexes,
-            field_arrays: field_arrays,
+            field_arrays,
             fields_to_read: fields,
         })
     }
