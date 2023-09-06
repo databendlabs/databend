@@ -104,9 +104,6 @@ impl RoleMgr {
         _catalog: &str,
         db_name: &String,
     ) -> common_exception::Result<()> {
-        if db_name.to_string().to_uppercase() == *"SYSTEM" {
-            return Ok(());
-        }
         let mut retry = 0;
         let tenant = self.tenant.clone();
         while retry < TXN_MAX_RETRY_TIMES {
@@ -122,17 +119,6 @@ impl RoleMgr {
                 })
                 .await?;
             let mut db_meta = db_info.meta.clone();
-            // if current owner is not none and not from, return error
-            if db_meta.owner.is_some()
-                && db_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
-            {
-                return Err(ErrorCode::IllegalGrant(format!(
-                    "{:?} is not owner of {}, current owner is {:?}",
-                    from,
-                    db_name,
-                    db_meta.owner.as_ref().unwrap().owner_role_name
-                )));
-            }
 
             let db_meta_seq = db_info.ident.seq;
             let db_id_key = DatabaseId {
@@ -177,9 +163,6 @@ impl RoleMgr {
         db_name: &String,
         table_name: &String,
     ) -> common_exception::Result<()> {
-        if db_name.to_string().to_uppercase() == *"SYSTEM" {
-            return Ok(());
-        }
         let mut retry = 0;
         let tenant = self.tenant.clone();
         while retry < TXN_MAX_RETRY_TIMES {
@@ -195,19 +178,6 @@ impl RoleMgr {
                 })
                 .await?;
             let mut table_meta = table_info.meta.clone();
-
-            // if current owner is not none and not from, return error
-            if table_meta.owner.is_some()
-                && table_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
-            {
-                return Err(ErrorCode::IllegalGrant(format!(
-                    "{:?} is not owner of {}.{}, current owner is {:?}",
-                    from,
-                    db_name,
-                    table_name,
-                    table_meta.owner.as_ref().unwrap().owner_role_name
-                )));
-            }
 
             let tb_meta_seq = table_info.ident.seq;
             let tb_id_key = TableId {
