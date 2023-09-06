@@ -103,8 +103,8 @@ impl Binder {
         let table_id = table.get_id();
         let table_schema = table.schema();
         // Todo: (JackTan25) support computed expr
-        for filed in table.schema().fields() {
-            if filed.computed_expr().is_some() {
+        for field in table.schema().fields() {
+            if field.computed_expr().is_some() {
                 return Err(ErrorCode::Unimplemented(
                     "merge into doesn't support computed expr for now",
                 ));

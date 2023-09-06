@@ -101,8 +101,8 @@ impl MatchedSplitProcessor {
             }
         }
         let mut update_projections = Vec::with_capacity(field_index_of_input_schema.len());
-        for filed_index in 0..field_index_of_input_schema.len() {
-            update_projections.push(*field_index_of_input_schema.get(&filed_index).unwrap());
+        for field_index in 0..field_index_of_input_schema.len() {
+            update_projections.push(*field_index_of_input_schema.get(&field_index).unwrap());
         }
         let input_port = InputPort::create();
         let output_port_row_id = OutputPort::create();

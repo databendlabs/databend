@@ -131,8 +131,8 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
-        for (idx, data_filed) in join_output_schema.fields().iter().enumerate() {
-            if *data_filed.name() == row_id_idx.to_string() {
+        for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
+            if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
                 break;

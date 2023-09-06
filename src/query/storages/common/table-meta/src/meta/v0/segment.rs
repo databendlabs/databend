@@ -63,6 +63,6 @@ impl ColumnMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct BlockLocation {
     pub path: String,
-    // for parquet, this filed can be used to fetch the meta data without seeking around
+    // for parquet, this field can be used to fetch the meta data without seeking around
     pub meta_size: u64,
 }

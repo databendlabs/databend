@@ -152,19 +152,19 @@ impl UpdateByExprMutator {
         };
         let data_block = op.execute(&self.func_ctx, data_block)?;
         let mut updated_column_position = HashMap::new();
-        let mut filed_index2position = HashMap::new();
+        let mut field_index2position = HashMap::new();
         for (idx, (field_index, _)) in self.update_lists.iter().enumerate() {
             updated_column_position.insert(
                 self.field_index_of_input_schema.get(field_index).unwrap(),
                 field_index,
             );
             // there is a filter column in data_block
-            filed_index2position.insert(field_index, idx + 1);
+            field_index2position.insert(field_index, idx + 1);
         }
         let mut block_entries = Vec::with_capacity(self.origin_input_columns + 1);
         for (idx, block_entry) in origin_block.columns().iter().enumerate() {
             if updated_column_position.contains_key(&idx) {
-                let pos = filed_index2position
+                let pos = field_index2position
                     .get(updated_column_position.get(&idx).unwrap())
                     .unwrap();
                 block_entries.push(data_block.get_by_offset(*pos).clone());

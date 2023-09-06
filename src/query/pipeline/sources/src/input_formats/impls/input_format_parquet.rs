@@ -204,17 +204,17 @@ impl RowGroupInMemory {
     ) -> Result<Self> {
         let field_names = fields.iter().map(|x| x.name.as_str()).collect::<Vec<_>>();
         let field_meta_indexes = split_column_metas_by_field(meta.columns(), &field_names);
-        let mut filed_arrays = vec![];
+        let mut field_arrays = vec![];
         for field_name in field_names {
             let meta_data = read_columns(reader, meta.columns(), field_name)?;
             let data = meta_data.into_iter().map(|t| t.1).collect::<Vec<_>>();
-            filed_arrays.push(data)
+            field_arrays.push(data)
         }
         Ok(Self {
             split_info,
             meta,
             field_meta_indexes,
-            field_arrays: filed_arrays,
+            field_arrays: field_arrays,
             fields_to_read: fields,
         })
     }
