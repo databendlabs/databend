@@ -176,32 +176,35 @@ impl Function {
         };
 
         let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
-            if domains
-                .iter()
-                .any(|domain| domain.as_nullable().unwrap().value.is_none())
-            {
-                return FunctionDomain::Domain(Domain::Nullable(NullableDomain {
-                    has_null: true,
-                    value: None,
-                }));
+            let mut args_has_null = false;
+            let mut args_domain = Vec::with_capacity(domains.len());
+            for domain in domains {
+                match domain {
+                    Domain::Nullable(NullableDomain {
+                        has_null,
+                        value: Some(value),
+                    }) => {
+                        args_has_null = args_has_null || *has_null;
+                        args_domain.push(value.as_ref().clone());
+                    }
+                    Domain::Nullable(NullableDomain { value: None, .. }) => {
+                        return FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                            has_null: true,
+                            value: None,
+                            ..
+                        }));
+                    }
+                    _ => unreachable!(),
+                }
             }
 
-            let inner_domains = domains
-                .iter()
-                .map(|domain| (**domain.as_nullable().unwrap().value.as_ref().unwrap()).clone())
-                .collect::<Vec<_>>();
-            let result = calc_domain(ctx, &inner_domains);
-            result.map(|domain| {
-                let (result_has_null, result_domain) = match domain {
+            calc_domain(ctx, &args_domain).map(|result_domain| {
+                let (result_has_null, result_domain) = match result_domain {
                     Domain::Nullable(NullableDomain { has_null, value }) => (has_null, value),
                     domain => (false, Some(Box::new(domain))),
                 };
-                let has_null = result_has_null
-                    || domains
-                        .iter()
-                        .any(|domain| domain.as_nullable().unwrap().has_null);
                 Domain::Nullable(NullableDomain {
-                    has_null,
+                    has_null: args_has_null || result_has_null,
                     value: result_domain,
                 })
             })
