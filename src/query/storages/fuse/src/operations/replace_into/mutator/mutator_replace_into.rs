@@ -451,8 +451,8 @@ fn on_conflict_key_column_values<'a>(
     on_conflict_fields
         .iter()
         .map(|field| {
-            let filed_index = field.field_index;
-            let entry = &data_block.columns()[filed_index];
+            let field_index = field.field_index;
+            let entry = &data_block.columns()[field_index];
             &entry.value
         })
         .collect::<Vec<_>>()

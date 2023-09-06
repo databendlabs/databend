@@ -17,9 +17,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_pipeline_core::pipe::PipeItem;
-use common_sql::executor::MatchExpr;
 use storages_common_table_meta::meta::Location;
 
 use super::merge_into::MatchedAggregator;
@@ -36,18 +34,12 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
-        row_id_idx: usize,
-        matched: MatchExpr,
-        input_schema: DataSchemaRef,
         segment_locations: Vec<(SegmentIndex, Location)>,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let aggregator = MatchedAggregator::create(
             ctx.clone(),
-            row_id_idx,
-            matched,
             self.table_info.schema(),
-            input_schema,
             self.get_operator(),
             self.get_write_settings(),
             read_settings,
