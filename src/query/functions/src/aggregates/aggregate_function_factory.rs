@@ -26,6 +26,8 @@ use super::AggregateFunctionOrNullAdaptor;
 use crate::aggregates::AggregateFunctionRef;
 use crate::aggregates::Aggregators;
 
+const STATE_SUFFIX: &str = "_state";
+
 pub type AggregateFunctionCreator =
     Box<dyn Fn(&str, Vec<Scalar>, Vec<DataType>) -> Result<AggregateFunctionRef> + Sync + Send>;
 
@@ -182,8 +184,15 @@ impl AggregateFunctionFactory {
         }
 
         if !arguments.is_empty() && arguments.iter().any(|f| f.is_nullable_or_null()) {
-            let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
-            let new_arguments = AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+            let (new_params, new_arguments) = match name.to_lowercase().strip_suffix(STATE_SUFFIX) {
+                Some(_) => (params.clone(), arguments.clone()),
+                None => {
+                    let new_params = AggregateFunctionCombinatorNull::transform_params(&params)?;
+                    let new_arguments =
+                        AggregateFunctionCombinatorNull::transform_arguments(&arguments)?;
+                    (new_params, new_arguments)
+                }
+            };
 
             let nested = self.get_impl(name, new_params, new_arguments, &mut features)?;
             let agg = AggregateFunctionCombinatorNull::try_create(
@@ -233,7 +242,7 @@ impl AggregateFunctionFactory {
                     }
                     Some(nested_desc) => {
                         *features = nested_desc.features.clone();
-                        if suffix == "_state" {
+                        if suffix.eq_ignore_ascii_case(STATE_SUFFIX) {
                             features.returns_default_when_only_null = true;
                         }
                         return (desc.creator)(

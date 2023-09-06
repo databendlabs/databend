@@ -8,7 +8,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # PURGE BEFORE SNAPSHOT
 
 ## Setup
-echo "create table t17_0002(c int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t17_0002(c int not null)" | $MYSQL_CLIENT_CONNECT
 ## - 1st snapshot contains 2 rows, 1 block, 1 segment
 echo "insert into t17_0002 values(1),(2)" | $MYSQL_CLIENT_CONNECT
 ## - 2nd snapshot contains 3 rows, 2 blocks, 2 segments
@@ -51,7 +51,7 @@ echo "drop table t17_0002 all" | $MYSQL_CLIENT_CONNECT
 # PURGE BEFORE TIMESTAMP
 
 ## Setup
-echo "create table t17_0002(c int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t17_0002(c int not null)" | $MYSQL_CLIENT_CONNECT
 ## - 1st snapshot contains 2 rows, 1 block, 1 segment
 echo "insert into t17_0002 values(1),(2)" | $MYSQL_CLIENT_CONNECT
 ## - 2nd snapshot contains 3 rows, 2 blocks, 2 segments

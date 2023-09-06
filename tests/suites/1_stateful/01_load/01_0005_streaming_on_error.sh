@@ -9,7 +9,7 @@ echo "create table wrong_csv(a int, b string, c int);" | $MYSQL_CLIENT_CONNECT
 DATADIR=$CURDIR/../../../data
 
 # load parquet
-curl -H "insert_sql:insert into wrong_csv file_format = (type = CSV) on_error=abort_5" -F "upload=@/${DATADIR}/wrong_sample.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into wrong_csv file_format = (type = CSV) on_error=abort_5" -F "upload=@/${DATADIR}/csv/wrong_sample.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 echo "select count(*) from wrong_csv" | $MYSQL_CLIENT_CONNECT
 echo "drop table wrong_csv;" | $MYSQL_CLIENT_CONNECT
 
