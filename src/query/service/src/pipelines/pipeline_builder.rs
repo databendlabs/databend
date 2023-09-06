@@ -434,7 +434,7 @@ impl PipelineBuilder {
             catalog_info,
             unmatched,
             matched,
-            filed_index_of_input_schema,
+            field_index_of_input_schema,
             row_id_idx,
             segments,
         } = merge_into;
@@ -452,7 +452,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             *row_id_idx,
             matched.clone(),
-            filed_index_of_input_schema.clone(),
+            field_index_of_input_schema.clone(),
             input.output_schema()?,
         )?;
 

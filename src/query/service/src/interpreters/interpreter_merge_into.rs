@@ -265,9 +265,9 @@ impl MergeIntoInterpreter {
             ))
         });
 
-        let mut filed_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
+        let mut field_index_of_input_schema = HashMap::<FieldIndex, usize>::new();
         for (field_index, value) in field_index_map {
-            filed_index_of_input_schema
+            field_index_of_input_schema
                 .insert(*field_index, join_output_schema.index_of(value).unwrap());
         }
 
@@ -279,7 +279,7 @@ impl MergeIntoInterpreter {
             catalog_info: catalog_.info(),
             unmatched,
             matched,
-            filed_index_of_input_schema,
+            field_index_of_input_schema,
             row_id_idx,
             segments: base_snapshot
                 .segments

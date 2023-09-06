@@ -67,7 +67,7 @@ impl MatchedSplitProcessor {
         ctx: Arc<dyn TableContext>,
         row_id_idx: usize,
         matched: MatchExpr,
-        filed_index_of_input_schema: HashMap<FieldIndex, usize>,
+        field_index_of_input_schema: HashMap<FieldIndex, usize>,
         input_schema: DataSchemaRef,
     ) -> Result<Self> {
         let mut ops = Vec::<MutationKind>::new();
@@ -93,16 +93,16 @@ impl MatchedSplitProcessor {
                     update_mutator: UpdateByExprMutator::create(
                         filter,
                         ctx.get_function_context()?,
-                        filed_index_of_input_schema.clone(),
+                        field_index_of_input_schema.clone(),
                         update_lists.clone(),
                         input_schema.num_fields(),
                     ),
                 }))
             }
         }
-        let mut update_projections = Vec::with_capacity(filed_index_of_input_schema.len());
-        for filed_index in 0..filed_index_of_input_schema.len() {
-            update_projections.push(*filed_index_of_input_schema.get(&filed_index).unwrap());
+        let mut update_projections = Vec::with_capacity(field_index_of_input_schema.len());
+        for filed_index in 0..field_index_of_input_schema.len() {
+            update_projections.push(*field_index_of_input_schema.get(&filed_index).unwrap());
         }
         let input_port = InputPort::create();
         let output_port_row_id = OutputPort::create();

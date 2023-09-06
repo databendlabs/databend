@@ -35,7 +35,7 @@ use common_sql::executor::cast_expr_to_non_null_boolean;
 pub struct UpdateByExprMutator {
     expr: Option<Expr>,
     func_ctx: FunctionContext,
-    filed_index_of_input_schema: HashMap<FieldIndex, usize>,
+    field_index_of_input_schema: HashMap<FieldIndex, usize>,
     origin_input_columns: usize,
 
     update_lists: Vec<(FieldIndex, RemoteExpr)>,
@@ -45,14 +45,14 @@ impl UpdateByExprMutator {
     pub fn create(
         expr: Option<Expr>,
         func_ctx: FunctionContext,
-        filed_index_of_input_schema: HashMap<FieldIndex, usize>,
+        field_index_of_input_schema: HashMap<FieldIndex, usize>,
         update_lists: Vec<(FieldIndex, RemoteExpr)>,
         origin_input_columns: usize,
     ) -> Self {
         Self {
             expr,
             func_ctx,
-            filed_index_of_input_schema,
+            field_index_of_input_schema,
             origin_input_columns,
             update_lists,
         }
@@ -155,7 +155,7 @@ impl UpdateByExprMutator {
         let mut filed_index2position = HashMap::new();
         for (idx, (field_index, _)) in self.update_lists.iter().enumerate() {
             updated_column_position.insert(
-                self.filed_index_of_input_schema.get(field_index).unwrap(),
+                self.field_index_of_input_schema.get(field_index).unwrap(),
                 field_index,
             );
             // there is a filter column in data_block
