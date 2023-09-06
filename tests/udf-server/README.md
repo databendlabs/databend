@@ -7,7 +7,7 @@ python3 udf_test.py
 ```
 
 ```sh
-./target/debug/databend-sqllogictests --run_dir udf-server
+./target/debug/databend-sqllogictests --run_dir udf_server
 ```
 
 ## Databend Python UDF Server API
@@ -17,7 +17,8 @@ This library provides a Python API for creating user-defined functions (UDF) ser
 Databend supports user-defined functions implemented as external functions. With the Databend Python UDF API, users can define custom UDFs using Python and start a Python process as a UDF server. Then users can call the customized UDFs in Databend. Databend will remotely access the UDF server to execute the defined functions.
 
 ### Usage
-Define functions in a Python file:
+
+#### 1. Define your functions in a Python file
 ```python
 from udf import *
 
@@ -69,15 +70,40 @@ if __name__ == '__main__':
 
 `@udf` is an annotation for creating a UDF. It supports following parameters:
 
-    - input_types: A list of strings or Arrow data types that specifies the input data types.
-    - result_type: A string or an Arrow data type that specifies the return value type.
-    - name: An optional string specifying the function name. If not provided, the original name will be used.
-    - io_threads: Number of I/O threads used per data chunk for I/O bound functions.
-    - skip_null: A boolean value specifying whether to skip NULL value. If it is set to True, NULL values will not be passed to the function, and the corresponding return value is set to NULL. Default to False.
+- input_types: A list of strings or Arrow data types that specifies the input data types.
+- result_type: A string or an Arrow data type that specifies the return value type.
+- name: An optional string specifying the function name. If not provided, the original name will be used.
+- io_threads: Number of I/O threads used per data chunk for I/O bound functions.
+- skip_null: A boolean value specifying whether to skip NULL value. If it is set to True, NULL values will not be passed to the function, and the corresponding return value is set to NULL. Default to False.
 
+#### 2. Start the UDF Server
 Then we can Start the UDF Server by running:
 ```sh
 python3 udf_server.py
+```
+
+#### 3. Add the functions to Databend
+We can use the `CREATE FUNCTION` command to add the functions you defined to Databend:
+```
+CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>
+```
+The `udf_name` is the name of UDF you declared in Databend. The `handler` is the function name you defined in the python UDF server.
+
+For example:
+```sql
+CREATE FUNCTION split_and_join (VARCHAR, VARCHAR, VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'split_and_join' ADDRESS = 'http://0.0.0.0:8815';
+```
+
+> In the above step, when you starting the UDF server, the corresponding sql statement of each function will be printed out. You can use them directly.
+
+#### 4. Use the functions in Databend
+```
+mysql> select split_and_join('3,5,7', ',', ':');
++-----------------------------------+
+| split_and_join('3,5,7', ',', ':') |
++-----------------------------------+
+| 3:5:7                             |
++-----------------------------------+
 ```
 
 ### Data Types

@@ -30,6 +30,8 @@ pub enum UDFDefinition {
         arg_types: Vec<TypeName>,
         return_type: TypeName,
         address: String,
+        handler: String,
+        language: String,
     },
 }
 
@@ -50,12 +52,12 @@ pub struct AlterUDFStmt {
 
 impl Display for UDFDefinition {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, " (")?;
         match self {
             UDFDefinition::LambdaUDF {
                 parameters,
                 definition,
             } => {
+                write!(f, "AS (")?;
                 write_comma_separated_list(f, parameters)?;
                 write!(f, ") -> {definition}")?;
             }
@@ -63,9 +65,15 @@ impl Display for UDFDefinition {
                 arg_types,
                 return_type,
                 address,
+                handler,
+                language,
             } => {
+                write!(f, "(")?;
                 write_comma_separated_list(f, arg_types)?;
-                write!(f, ") -> {return_type} ADDRESS = {address}")?;
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
+                )?;
             }
         }
         Ok(())
@@ -78,7 +86,7 @@ impl Display for CreateUDFStmt {
         if self.if_not_exists {
             write!(f, " IF NOT EXISTS")?;
         }
-        write!(f, " {} AS {}", self.udf_name, self.definition)?;
+        write!(f, " {} {}", self.udf_name, self.definition)?;
         if let Some(description) = &self.description {
             write!(f, " DESC = '{description}'")?;
         }
@@ -89,7 +97,7 @@ impl Display for CreateUDFStmt {
 impl Display for AlterUDFStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         write!(f, "ALTER FUNCTION")?;
-        write!(f, " {} AS {}", self.udf_name, self.definition)?;
+        write!(f, " {} {}", self.udf_name, self.definition)?;
         if let Some(description) = &self.description {
             write!(f, " DESC = '{description}'")?;
         }

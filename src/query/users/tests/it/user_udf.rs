@@ -105,6 +105,8 @@ async fn test_user_udf_server() -> Result<()> {
     let isempty_udf = UserDefinedFunction::create_udf_server(
         isempty,
         address,
+        isempty,
+        "python",
         arg_types.clone(),
         return_type.clone(),
         description,
@@ -117,6 +119,8 @@ async fn test_user_udf_server() -> Result<()> {
     let isnotempty_udf = UserDefinedFunction::create_udf_server(
         isnotempty,
         address,
+        isnotempty,
+        "python",
         arg_types.clone(),
         return_type.clone(),
         description,

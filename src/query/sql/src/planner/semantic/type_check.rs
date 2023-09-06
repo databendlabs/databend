@@ -2574,7 +2574,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf(
         &mut self,
         span: Span,
-        func_name: &str,
+        udf_name: &str,
         arguments: &[Expr],
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         if self.forbid_udf {
@@ -2582,7 +2582,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let udf = UserApiProvider::instance()
-            .get_udf(self.ctx.get_tenant().as_str(), func_name)
+            .get_udf(self.ctx.get_tenant().as_str(), udf_name)
             .await;
 
         let udf = if let Ok(udf) = udf {
@@ -2596,8 +2596,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_lambda_udf(span, arguments, udf_def).await?,
             )),
             UDFDefinition::UDFServer(udf_def) => Ok(Some(
-                self.resolve_udf_server(span, func_name, arguments, udf_def)
-                    .await?,
+                self.resolve_udf_server(span, arguments, udf_def).await?,
             )),
         }
     }
@@ -2607,7 +2606,6 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf_server(
         &mut self,
         span: Span,
-        func_name: &str,
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
@@ -2620,7 +2618,7 @@ impl<'a> TypeChecker<'a> {
         let raw_expr_args = args.iter().map(|arg| arg.as_raw_expr()).collect_vec();
         let raw_expr = RawExpr::UDFServerCall {
             span,
-            func_name: func_name.to_string(),
+            func_name: udf_definition.handler.clone(),
             server_addr: udf_definition.address.clone(),
             arg_types: udf_definition.arg_types.clone(),
             return_type: udf_definition.return_type.clone(),
@@ -2633,7 +2631,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((
             UDFServerCall {
                 span,
-                func_name: func_name.to_string(),
+                func_name: udf_definition.handler,
                 server_addr: udf_definition.address,
                 arg_types: udf_definition.arg_types,
                 return_type: Box::new(udf_definition.return_type.clone()),

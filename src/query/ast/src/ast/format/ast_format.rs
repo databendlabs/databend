@@ -1950,6 +1950,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 arg_types,
                 return_type,
                 address,
+                handler,
+                language,
             } => {
                 if !arg_types.is_empty() {
                     let mut arg_types_children = Vec::with_capacity(arg_types.len());
@@ -1970,6 +1972,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let return_type_format_ctx =
                     AstFormatContext::new(format!("UdfReturnType {return_type}"));
                 children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx =
+                    AstFormatContext::new(format!("UdfServerHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx =
+                    AstFormatContext::new(format!("UdfServerLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
 
                 let address_format_ctx =
                     AstFormatContext::new(format!("UdfServerAddress {address}"));
@@ -2036,6 +2046,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 arg_types,
                 return_type,
                 address,
+                handler,
+                language,
             } => {
                 if !arg_types.is_empty() {
                     let mut arg_types_children = Vec::with_capacity(arg_types.len());
@@ -2056,6 +2068,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let return_type_format_ctx =
                     AstFormatContext::new(format!("UdfReturnType {return_type}"));
                 children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx =
+                    AstFormatContext::new(format!("UdfServerHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx =
+                    AstFormatContext::new(format!("UdfServerLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
 
                 let address_format_ctx =
                     AstFormatContext::new(format!("UdfServerAddress {address}"));

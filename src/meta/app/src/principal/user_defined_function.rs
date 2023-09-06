@@ -26,6 +26,8 @@ pub struct LambdaUDF {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct UDFServer {
     pub address: String,
+    pub handler: String,
+    pub language: String,
     pub arg_types: Vec<DataType>,
     pub return_type: DataType,
 }
@@ -63,6 +65,8 @@ impl UserDefinedFunction {
     pub fn create_udf_server(
         name: &str,
         address: &str,
+        handler: &str,
+        language: &str,
         arg_types: Vec<DataType>,
         return_type: DataType,
         description: &str,
@@ -72,6 +76,8 @@ impl UserDefinedFunction {
             description: description.to_string(),
             definition: UDFDefinition::UDFServer(UDFServer {
                 address: address.to_string(),
+                handler: handler.to_string(),
+                language: language.to_string(),
                 arg_types,
                 return_type,
             }),
@@ -99,6 +105,8 @@ impl Display for UDFDefinition {
                 address,
                 arg_types,
                 return_type,
+                handler,
+                language,
             }) => {
                 for (i, item) in arg_types.iter().enumerate() {
                     if i > 0 {
@@ -106,7 +114,10 @@ impl Display for UDFDefinition {
                     }
                     write!(f, "{item}")?;
                 }
-                write!(f, ") -> {return_type} ADDRESS {address}")?;
+                write!(
+                    f,
+                    ") RETURNS {return_type} LANGUAGE {language} HANDLER = {handler} ADDRESS = {address}"
+                )?;
             }
         }
         Ok(())

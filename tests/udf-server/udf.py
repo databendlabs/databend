@@ -231,7 +231,7 @@ class UDFServer(pa.flight.FlightServerBase):
             _arrow_field_to_string(field) for field in udf._input_schema
         )
         output_type = _arrow_field_to_string(udf._result_schema[0])
-        sql = f"CREATE FUNCTION {name} AS ({input_types}) -> {output_type} ADDRESS='http://{self._location}';"
+        sql = f"CREATE FUNCTION {name} ({input_types}) RETURNS {output_type} LANGUAGE python HANDLER = '{name}' ADDRESS = 'http://{self._location}';"
         print(f"added function: {name}, corresponding SQL:\n{sql}\n")
 
     def serve(self):

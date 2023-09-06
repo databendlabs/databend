@@ -31,8 +31,10 @@ message UDFServer {
   uint64 min_reader_ver = 101;
 
   string address = 1;
-  repeated DataType arg_types = 2;
-  DataType return_type = 3;
+  string handler = 2;
+  string language = 3;
+  repeated DataType arg_types = 4;
+  DataType return_type = 5;
 }
 
 message UserDefinedFunction {

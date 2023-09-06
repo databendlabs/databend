@@ -62,6 +62,8 @@ impl Binder {
                 arg_types,
                 return_type,
                 address,
+                handler,
+                language,
             } => {
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
@@ -69,19 +71,20 @@ impl Binder {
                 }
                 let return_type = DataType::from(&resolve_type_name(return_type)?);
 
-                let func_name = udf_name.to_string();
                 let mut client = UDFFlightClient::connect(address).await?;
                 client
-                    .check_schema(&func_name, &arg_datatypes, &return_type)
+                    .check_schema(handler, &arg_datatypes, &return_type)
                     .await?;
 
                 Ok(UserDefinedFunction {
-                    name: func_name,
+                    name: udf_name.to_string(),
                     description: udf_description.clone().unwrap_or_default(),
                     definition: PlanUDFDefinition::UDFServer(UDFServer {
                         address: address.clone(),
                         arg_types: arg_datatypes,
                         return_type,
+                        handler: handler.clone(),
+                        language: language.clone(),
                     }),
                 })
             }

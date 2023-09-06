@@ -973,10 +973,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_udf = map(
         rule! {
             CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #ident ~ AS ~ #udf_definition
+            ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, _, opt_if_not_exists, udf_name, _, definition, opt_description)| {
+        |(_, _, opt_if_not_exists, udf_name, definition, opt_description)| {
             Statement::CreateUDF(CreateUDFStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 udf_name,
@@ -997,10 +997,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let alter_udf = map(
         rule! {
             ALTER ~ FUNCTION
-            ~ #ident ~ AS ~ #udf_definition
+            ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, _, udf_name, _, definition, opt_description)| {
+        |(_, _, udf_name, definition, opt_description)| {
             Statement::AlterUDF(AlterUDFStmt {
                 udf_name,
                 description: opt_description.map(|(_, _, description)| description),
@@ -1525,7 +1525,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> AS {(<parameter>, ...) -> <definition expr> | (<arg_type>, ...) -> <return_type> ADDRESS=<udf_server_address>} [DESC = <description>]`"
+            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
@@ -2684,10 +2684,10 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     let lambda_udf = map(
         rule! {
-            "(" ~ #comma_separated_list0(ident) ~ ")"
+            AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
             ~ "->" ~ #expr
         },
-        |(_, parameters, _, _, definition)| UDFDefinition::LambdaUDF {
+        |(_, _, parameters, _, _, definition)| UDFDefinition::LambdaUDF {
             parameters,
             definition: Box::new(definition),
         },
@@ -2696,19 +2696,25 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     let udf_server = map(
         rule! {
             "(" ~ #comma_separated_list0(type_name) ~ ")"
-            ~ "->" ~ #type_name
+            ~ RETURNS ~ #type_name
+            ~ LANGUAGE ~ #ident
+            ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ADDRESS ~ ^"=" ~ ^#literal_string
         },
-        |(_, arg_types, _, _, return_type, _, _, address)| UDFDefinition::UDFServer {
-            arg_types,
-            return_type,
-            address,
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, _, address)| {
+            UDFDefinition::UDFServer {
+                arg_types,
+                return_type,
+                address,
+                handler,
+                language: language.to_string(),
+            }
         },
     );
 
     rule!(
-        #udf_server: "(<arg_type>, ...) -> <return_type> ADDRESS=<udf_server_address>"
-        | #lambda_udf: "(<parameter>, ...) -> <definition expr>"
+        #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
+        | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
     )(i)
 }
 

@@ -161,6 +161,8 @@ fn create_test_udf_server() -> UserDefinedFunction {
     UserDefinedFunction::create_udf_server(
         "strlen",
         "http://localhost:8888",
+        "strlen_py",
+        "python",
         vec![DataType::String],
         DataType::Number(NumberDataType::Int64),
         "This is a description",
