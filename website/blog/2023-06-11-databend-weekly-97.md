@@ -52,7 +52,7 @@ select $1, $2, a, b from t1;
 └─────────────────────────────────┘
 ```
 
-You can also use column positions when you SELECT FROM a staged NDJSON file. We are also actively working on extending this support to other formats. When using the COPY INTO statement to copy data from a stage, Databend matches the field names at the top level of the NDJSON file with the column names in the destination table, rather than relying on column positions. 
+You can also use column positions when you SELECT FROM a staged NDJSON file. We are also actively working on extending this support to other formats. When using the COPY INTO statement to copy data from a stage, Databend matches the field names at the top level of the NDJSON file with the column names in the destination table, rather than relying on column positions.
 
 ```sql
 SELECT $1 FROM @my_stage (FILE_FORMAT=>'ndjson')
@@ -60,7 +60,7 @@ SELECT $1 FROM @my_stage (FILE_FORMAT=>'ndjson')
 COPY INTO my_table FROM (SELECT $1 SELECT @my_stage t) FILE_FORMAT = (type = NDJSON)
 ```
 
-It is important to note that when using the SELECT statement for NDJSON in Databend, only $1 is allowed, representing the entire row and having the data type variant. 
+It is important to note that when using the SELECT statement for NDJSON in Databend, only $1 is allowed, representing the entire row and having the data type variant.
 
 ```sql
 -- Select the entire row using column position:
@@ -88,7 +88,7 @@ Databend now has a very complex workflow for handling code auditing, testing, be
 Like other workflows, we need to use actions/checkout to check out the code.
 
 ```yaml
-- uses: actions/checkout@v3
+- uses: actions/checkout@v4
   with:
     clean: "true"
 ```

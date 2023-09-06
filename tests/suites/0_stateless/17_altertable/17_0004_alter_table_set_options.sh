@@ -3,13 +3,13 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "create table t(a int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t(a int not null)" | $MYSQL_CLIENT_CONNECT
 echo "insert into t values(1)" | $MYSQL_CLIENT_CONNECT
 
 # get snapshot location
 SNAPSHOT_LOCATION=$(echo "select _snapshot_name from t;" | $MYSQL_CLIENT_CONNECT)
 
-echo "create table t2(a int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t2(a int not null)" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(snapshot_location = '$SNAPSHOT_LOCATION',block_per_segment = 500)" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(snapshot_loc = '$SNAPSHOT_LOCATION',block_per_segment = 500)" | $MYSQL_CLIENT_CONNECT
 echo "alter table t2 set options(extrenal_location = '$SNAPSHOT_LOCATION',block_per_segment = 500)" | $MYSQL_CLIENT_CONNECT
@@ -22,7 +22,7 @@ echo "alter table t2 set options(storage_format = 'memory')" | $MYSQL_CLIENT_CON
 echo "alter table t2 set options(bloom_index_columns = 'b')" | $MYSQL_CLIENT_CONNECT
 
 # valid bloom index column data type.
-echo "create table t3(a decimal(4,2))" | $MYSQL_CLIENT_CONNECT
+echo "create table t3(a decimal(4,2) not null)" | $MYSQL_CLIENT_CONNECT
 echo "alter table t3 set options(bloom_index_columns = 'a')" | $MYSQL_CLIENT_CONNECT
 
 #drop table

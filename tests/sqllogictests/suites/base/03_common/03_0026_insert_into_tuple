@@ -81,7 +81,7 @@ select t:a:m, t:a:n, t:a, t:b:x, t:b:y, t:b from v
 
 
 statement ok
-create table t4 (a Tuple(Int, Int) )
+create table t4 (a Tuple(Int, Int) not null)
 
 query TTTT
 desc t4
@@ -91,7 +91,7 @@ a TUPLE(1 INT32, 2 INT32) NO (0, 0) (empty)
 # decimal precision <=9, <=18, other are serialize to different underlying types.
 # decimal precision <=38 to Decimal128, >38 to Decimal256
 statement ok
-CREATE TABLE IF NOT EXISTS t5(id Int, t Tuple(a Tuple(m Int64, n Decimal(9, 7)), b Tuple(w Decimal(9, 7), x Decimal(18, 7), y Decimal(34, 7), z Decimal(55, 7)))) Engine = Fuse
+CREATE TABLE IF NOT EXISTS t5(id Int not null, t Tuple(a Tuple(m Int64, n Decimal(9, 7)), b Tuple(w Decimal(9, 7), x Decimal(18, 7), y Decimal(34, 7), z Decimal(55, 7))) not null) Engine = Fuse
 
 statement ok
 INSERT INTO t5 (id, t) VALUES(1, ((10, 11.888), (20.777, 21.666, 22.555, 23.444))), (2, ((20, 21.888), (30.777, 31.666, 32.555, 33.444)))

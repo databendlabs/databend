@@ -3251,6 +3251,7 @@ dependencies = [
  "common-exception",
  "common-grpc",
  "common-management",
+ "common-meta-api",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",
@@ -3828,10 +3829,10 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.6.3"
-source = "git+https://github.com/datafuselabs/bendsql?rev=d48a647#d48a6475757f149245e31d18df35ede882f73ccb"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6fd1d9d1b4f474f743549112dfb85e71ccd9530abd47edd19241f4567ff336a2"
 dependencies = [
- "bytes",
  "http",
  "once_cell",
  "percent-encoding",
@@ -3840,16 +3841,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-retry",
+ "tokio-stream",
  "tokio-util",
- "tower",
- "tower-http",
  "url",
 ]
 
 [[package]]
 name = "databend-driver"
-version = "0.6.3"
-source = "git+https://github.com/datafuselabs/bendsql?rev=d48a647#d48a6475757f149245e31d18df35ede882f73ccb"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c402b1f20c258ac6a910b66d8cc195cf6c118e8e52f8b9650c47e2b9782c1ec8"
 dependencies = [
  "arrow 46.0.0",
  "async-trait",
@@ -3858,11 +3859,8 @@ dependencies = [
  "databend-driver-macros",
  "databend-sql",
  "dyn-clone",
- "futures",
  "glob",
- "http",
  "percent-encoding",
- "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
@@ -3871,10 +3869,10 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.6.3"
-source = "git+https://github.com/datafuselabs/bendsql?rev=d48a647#d48a6475757f149245e31d18df35ede882f73ccb"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ce225a910749970199d090f4e2b13724e757e9b383b24c808a1fb45ae81b534"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn 2.0.29",
 ]
@@ -4078,11 +4076,11 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.6.3"
-source = "git+https://github.com/datafuselabs/bendsql?rev=d48a647#d48a6475757f149245e31d18df35ede882f73ccb"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c2f7f18c2bd9ff509937fc4601cb9ce8c1b5134539c1f8650d1a397c2325ec8"
 dependencies = [
  "arrow 46.0.0",
- "async-trait",
  "chrono",
  "databend-client",
  "glob",
@@ -4124,8 +4122,11 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-formats",
+ "common-functions",
  "common-sql",
  "databend-driver",
+ "ethnum",
+ "jsonb",
  "rand 0.8.5",
  "tokio",
  "tracing",
@@ -6798,12 +6799,6 @@ dependencies = [
  "http",
  "pin-project-lite",
 ]
-
-[[package]]
-name = "http-range-header"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "add0ab9360ddbd88cfeb3bd9574a1d85cfdfa14db10b3e21d3700dbc4328758f"
 
 [[package]]
 name = "http-types"
@@ -11948,24 +11943,6 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
-]
-
-[[package]]
-name = "tower-http"
-version = "0.4.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55ae70283aba8d2a8b411c695c437fe25b8b5e44e23e780662002fc72fb47a82"
-dependencies = [
- "bitflags 2.4.0",
- "bytes",
- "futures-core",
- "futures-util",
- "http",
- "http-body",
- "http-range-header",
- "pin-project-lite",
- "tower-layer",
- "tower-service",
 ]
 
 [[package]]

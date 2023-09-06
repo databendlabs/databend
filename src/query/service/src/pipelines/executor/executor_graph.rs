@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
 use common_exception::Result;
+use common_pipeline_core::processors::processor::EventCause;
 use log::debug;
 use log::trace;
 use petgraph::dot::Config;
@@ -47,9 +48,14 @@ use crate::pipelines::processors::UpdateTrigger;
 
 enum State {
     Idle,
-    // Preparing,
     Processing,
     Finished,
+}
+
+#[derive(Debug)]
+struct EdgeInfo {
+    input_index: usize,
+    output_index: usize,
 }
 
 struct Node {
@@ -86,7 +92,7 @@ impl Node {
 }
 
 struct ExecutingGraph {
-    graph: StableGraph<Arc<Node>, ()>,
+    graph: StableGraph<Arc<Node>, EdgeInfo>,
 }
 
 type StateLockGuard = ExecutingGraph;
@@ -108,7 +114,7 @@ impl ExecutingGraph {
         Ok(ExecutingGraph { graph })
     }
 
-    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, ()>) {
+    fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
         #[derive(Debug)]
         struct Edge {
             source_port: usize,
@@ -162,7 +168,11 @@ impl ExecutingGraph {
 
         for pipe_edges in &pipes_edges {
             for edge in pipe_edges {
-                let edge_index = graph.add_edge(edge.source_node, edge.target_node, ());
+                let edge_index = graph.add_edge(edge.source_node, edge.target_node, EdgeInfo {
+                    input_index: edge.target_port,
+                    output_index: edge.source_port,
+                });
+
                 unsafe {
                     let (target_node, target_port) = (edge.target_node, edge.target_port);
                     let input_trigger = graph[target_node].create_trigger(edge_index);
@@ -211,10 +221,20 @@ impl ExecutingGraph {
         while !need_schedule_nodes.is_empty() || !need_schedule_edges.is_empty() {
             // To avoid lock too many times, we will try to cache lock.
             let mut state_guard_cache = None;
+            let mut event_cause = EventCause::Other;
 
             if need_schedule_nodes.is_empty() {
                 let edge = need_schedule_edges.pop_front().unwrap();
                 let target_index = DirectedEdge::get_target(&edge, &locker.graph)?;
+
+                event_cause = match edge {
+                    DirectedEdge::Source(index) => {
+                        EventCause::Input(locker.graph.edge_weight(index).unwrap().input_index)
+                    }
+                    DirectedEdge::Target(index) => {
+                        EventCause::Output(locker.graph.edge_weight(index).unwrap().output_index)
+                    }
+                };
 
                 let node = &locker.graph[target_index];
                 let node_state = node.state.lock().unwrap();
@@ -231,7 +251,7 @@ impl ExecutingGraph {
                 if state_guard_cache.is_none() {
                     state_guard_cache = Some(node.state.lock().unwrap());
                 }
-                let event = node.processor.event()?;
+                let event = node.processor.event(event_cause)?;
                 trace!(
                     "node id: {:?}, name: {:?}, event: {:?}",
                     node.processor.id(),

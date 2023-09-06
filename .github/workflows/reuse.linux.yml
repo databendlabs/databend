@@ -22,7 +22,7 @@ jobs:
   check:
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -36,7 +36,7 @@ jobs:
     outputs:
       license: ${{ steps.license.outputs.license }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Get License from S3
         if: inputs.runner_provider == 'aws'
         run: |
@@ -61,7 +61,7 @@ jobs:
         include:
           - { arch: x86_64, libc: gnu }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -82,7 +82,7 @@ jobs:
           - { arch: aarch64, libc: musl }
           - { arch: aarch64, libc: gnu }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -96,7 +96,7 @@ jobs:
   test_unit:
     runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -107,7 +107,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
@@ -115,7 +115,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_data_compat_openraft_07
         timeout-minutes: 10
 
@@ -123,7 +123,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_compat
         timeout-minutes: 10
 
@@ -131,7 +131,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/fuse_compat
         timeout-minutes: 20
 
@@ -139,7 +139,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
@@ -154,7 +154,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
@@ -176,7 +176,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
@@ -234,7 +234,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
@@ -262,7 +262,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Decode license
         id: license
         run: |
@@ -297,7 +297,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
@@ -321,7 +321,7 @@ jobs:
         handlers:
           - "mysql,http,clickhouse"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 20
         with:
@@ -347,7 +347,7 @@ jobs:
           - "s3"
           - "fs"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
         timeout-minutes: 15
         with:
@@ -377,7 +377,7 @@ jobs:
           - "parquet2"
           - "parquet_rs"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
         timeout-minutes: 15
         with:
@@ -395,7 +395,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_standalone_linux
         timeout-minutes: 10
 
@@ -403,7 +403,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateless_cluster_linux
         timeout-minutes: 10
 
@@ -411,7 +411,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_standalone_linux
         timeout-minutes: 10
       - name: Upload failure
@@ -424,7 +424,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_sharing
         if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
@@ -438,7 +438,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_cluster_linux
         timeout-minutes: 15
       - name: Upload failure
@@ -452,7 +452,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_large_data
         timeout-minutes: 60
 
@@ -460,7 +460,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_fuzz_standalone_linux
         timeout-minutes: 10
         continue-on-error: true
@@ -470,7 +470,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Decode license
         id: license
         run: |
@@ -490,7 +490,7 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     if: needs.license.outputs.license
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
       - name: Decode license
         id: license

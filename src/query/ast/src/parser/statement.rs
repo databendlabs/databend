@@ -1783,6 +1783,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
+                nullable_constraint: None,
             };
             (def, constraints)
         },
@@ -1793,11 +1794,14 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
             ColumnConstraint::Nullable(nullable) => {
                 if nullable {
                     def.data_type = def.data_type.wrap_nullable();
+                    def.nullable_constraint = Some(NullableConstraint::Null);
                 } else if def.data_type.is_nullable() {
                     return Err(nom::Err::Error(Error::from_error_kind(
                         i,
                         ErrorKind::Other("ambiguous NOT NULL constraint"),
                     )));
+                } else {
+                    def.nullable_constraint = Some(NullableConstraint::NotNull);
                 }
             }
             ColumnConstraint::DefaultExpr(default_expr) => {
@@ -2079,12 +2083,16 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
                 data_type,
                 expr: None,
                 comment,
+                nullable_constraint: None,
             };
             for constraint in constraints {
                 match constraint {
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
+                            def.nullable_constraint = Some(NullableConstraint::Null);
+                        } else {
+                            def.nullable_constraint = Some(NullableConstraint::NotNull);
                         }
                     }
                     ColumnConstraint::DefaultExpr(default_expr) => {
