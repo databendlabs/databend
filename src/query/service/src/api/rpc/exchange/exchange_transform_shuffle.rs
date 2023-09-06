@@ -167,13 +167,13 @@ impl Processor for ExchangeShuffleTransform {
                     let data_block = self.buffer.pop(*output_index).unwrap();
                     output.status = PortStatus::Idle;
                     output.port.push_data(Ok(data_block));
+
+                    self.wakeup_inputs();
                 } else if output.status != PortStatus::NeedData {
                     output.status = PortStatus::NeedData;
                     self.waiting_outputs.push(*output_index);
                 }
             }
-
-            self.wakeup_inputs();
         }
 
         if !self.initialized && !self.waiting_outputs.is_empty() {
@@ -202,13 +202,13 @@ impl Processor for ExchangeShuffleTransform {
             } else if input.port.has_data() {
                 if !self.buffer.is_full() {
                     self.take_input_data_into_buffer(*input_index);
+
+                    self.wakeup_outputs();
                 } else if input.status != PortStatus::HasData {
                     input.status = PortStatus::HasData;
                     self.waiting_inputs.push_back(*input_index);
                 }
             }
-
-            self.wakeup_outputs();
         }
 
         if self.finished_outputs == self.outputs.len() {
