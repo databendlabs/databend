@@ -61,7 +61,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Exploring Databend Local Mode
 
-**Databend Local Mode** aims to provide a simple Databend environment where users can directly interact with Databend using SQL without the need to deploy Databend services. This makes it convenient for developers to perform basic data processing using Databend.
+**Databend Local Mode** aims to provide a simple Databend environment where users can directly interact with Databend using SQL without the need to perform a full Databend deployment. This makes it convenient for developers to perform basic data processing using Databend.
 
 In local mode, a temporary `databend-query` process is started, which integrates both the client and server support. The storage is located in a temporary directory and its lifecycle follows the process. Once the process ends, the resources are also destroyed. You can start multiple local processes on one server, and their resources are isolated from each other.
 
@@ -85,7 +85,7 @@ databend-local:) select number %3 n, number %4 m, sum(number) from numbers(10000
 0 row result in 1.669 sec. Processed 1 billion rows, 953.67 MiB (599.02 million rows/s, 4.46 GiB/s)
 ```
 
-If you need to use Databend in a production environment, we recommend deploying the Databend service according to the official documentation or using Databend Cloud. However, if you are a developer or a testing engineer, you can experience Databend using local mode.
+If you need to use Databend in a production environment, we recommend deploying a Databend cluster according to the official documentation or using Databend Cloud. databend-local is a good choice for developers to quickly leverage Databend's capabilities without the need to deploy a full Databend instance.
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -97,8 +97,8 @@ We have also made these improvements to Databend that we hope you will find help
 
 - Preliminary support for `MERGE INTO`.
 - Implemented SQLsmith testing framework to support more accurate fuzzy testing.
-- Read the document [Docs | Setting Environment Variables](https://databend.rs/doc/deploy/node-config/environment-variables) to learn how to change Databend configuration through environment variables.
-- Implemented `json_strip_nulls` and `json_typeof` functions. You can also read [Docs | Semi-Structured Functions](https://databend.rs/doc/reference/functions/variant-functions) to understand the functions designed and implemented by Databend for semi-structured data processing.
+- Read the document [Docs | Setting Environment Variables](https://databend.rs/doc/deploy/node-config/environment-variables) for how to change Databend configurations through environment variables.
+- Implemented `json_strip_nulls` and `json_typeof` functions. You can also read [Docs | Semi-Structured Functions](https://databend.rs/doc/reference/functions/variant-functions) to check out Databend functions for semi-structured data processing.
 
 ## What's Up Next
 
