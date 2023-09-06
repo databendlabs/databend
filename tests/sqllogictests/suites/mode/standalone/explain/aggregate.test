@@ -122,7 +122,7 @@ EvalScalar
 
 
 statement ok
-create table explain_agg_t1(a int, b int);
+create table explain_agg_t1(a int not null, b int not null);
 
 query T
 explain select a from explain_agg_t1 group by a having 1 = 0;

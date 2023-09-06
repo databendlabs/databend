@@ -2,7 +2,7 @@ statement ok
 drop table if exists dt
 
 statement ok
-create table dt(a datetime, b string)
+create table dt(a datetime not null, b string not null)
 
 query error 1046
 copy into dt from @data/csv/bad_datetime.csv file_format = (type = CSV)
@@ -12,7 +12,7 @@ statement ok
 drop table if exists iv
 
 statement ok
-create table iv(a int, b variant)
+create table iv(a int not null, b variant not null)
 
 query TIITI
 copy into iv from @data/csv/invalid_variant.csv FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE

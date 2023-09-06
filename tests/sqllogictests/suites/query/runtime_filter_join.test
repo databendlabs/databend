@@ -241,7 +241,7 @@ create table t2(c smallint unsigned null)
 statement ok
 insert into t2 values(1),(2),(null)
 
-query IF
+query T
 select TRY_CAST((c + 1) AS Int64 NULL) from t2;
 ----
 2

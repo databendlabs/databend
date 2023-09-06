@@ -5,7 +5,7 @@ statement ok
 CREATE DATABASE `test`
 
 statement ok
-CREATE TABLE `test`.`a` (    a bigint, b int default 3, c varchar(255) default 'x', d smallint null, e Date) Engine = Null
+CREATE TABLE `test`.`a` (    a bigint not null, b int not null default 3, c varchar(255) not null default 'x', d smallint null, e Date not null) Engine = Null
 
 query TT
 SHOW CREATE TABLE `test`.`a`
@@ -13,7 +13,7 @@ SHOW CREATE TABLE `test`.`a`
 a CREATE TABLE `a` (   `a` BIGINT,   `b` INT DEFAULT 3,   `c` VARCHAR DEFAULT 'x',   `d` SMALLINT NULL,   `e` DATE ) ENGINE=NULL
 
 statement ok
-CREATE TABLE `test`.`b` (    a bigint, b int null default null, c varchar(255), d smallint unsigned null) Engine = Null COMMENT = 'test b'
+CREATE TABLE `test`.`b` (    a bigint not null, b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'test b'
 
 query TT
 SHOW CREATE TABLE `test`.`b`
@@ -37,7 +37,7 @@ show create table test.v_b
 v_b CREATE VIEW `test`.`v_b` AS SELECT * FROM `test`.`b`
 
 statement ok
-CREATE TABLE test.c (a int) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 query TT
 SHOW CREATE TABLE `test`.`c`

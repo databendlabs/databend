@@ -1,5 +1,5 @@
 [package]
-name = "databend_sqlsmith"
+name = "databend-sqlsmith"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -9,7 +9,7 @@ edition = { workspace = true }
 [dependencies]
 chrono-tz = { workspace = true }
 clap = { workspace = true }
-databend-driver = { git = "https://github.com/datafuselabs/bendsql", rev = "cfe42be" }
+databend-driver = "0.6.4"
 rand = "0.8.5"
 tokio = { workspace = true }
 tracing = "0.1.37"
