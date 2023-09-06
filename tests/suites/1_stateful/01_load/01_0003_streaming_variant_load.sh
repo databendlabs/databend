@@ -11,8 +11,8 @@ cat $CURDIR/../ddl/variant_test.sql | $MYSQL_CLIENT_CONNECT
 DATADIR=$CURDIR/../../../data
 
 # load csv
-curl -H "insert_sql:insert into variant_test file_format = (type = CSV field_delimiter = ',' quote = '\'')" -F "upload=@/${DATADIR}/json_sample1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
-curl -H "insert_sql:insert into variant_test file_format = (type = CSV field_delimiter = '|' quote = '\'')" -F "upload=@/${DATADIR}/json_sample2.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into variant_test file_format = (type = CSV field_delimiter = ',' quote = '\'')" -F "upload=@/${DATADIR}/csv/json_sample1.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
+curl -H "insert_sql:insert into variant_test file_format = (type = CSV field_delimiter = '|' quote = '\'')" -F "upload=@/${DATADIR}/csv/json_sample2.csv" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" > /dev/null 2>&1
 
 echo "select * from variant_test order by Id asc;" | $MYSQL_CLIENT_CONNECT
 
