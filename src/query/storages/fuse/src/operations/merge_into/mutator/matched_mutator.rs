@@ -144,8 +144,8 @@ impl MatchedAggregator {
 
         for prefix in self.block_mutation_row_offset.keys() {
             let (segment_idx, _) = split_prefix(*prefix);
-            let segment_idx = segment_idx as usize;
-
+            // the row_id's segment_idx is reversed
+            let segment_idx = (segment_infos.len() - segment_idx as usize - 1) as usize;
             if let Entry::Vacant(e) = segment_infos.entry(segment_idx) {
                 let (path, ver) = self.segment_locations.get(&segment_idx).ok_or_else(|| {
                     ErrorCode::Internal(format!(
