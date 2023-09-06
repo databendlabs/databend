@@ -191,7 +191,6 @@ impl Function {
                         return FunctionDomain::Domain(Domain::Nullable(NullableDomain {
                             has_null: true,
                             value: None,
-                            ..
                         }));
                     }
                     _ => unreachable!(),
