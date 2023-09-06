@@ -15,7 +15,7 @@ explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 
 ----
 Filter
 ├── output columns: [t1.a (#0), t1.b (#1)]
-├── filters: [t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100]
+├── filters: [is_true(t1.a (#0) = 1), is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)]
 ├── estimated rows: 0.00
 └── TableScan
     ├── table: default.default.t1
@@ -24,5 +24,5 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) = 1 AS Boolean NULL), CAST(t1.b (#1) > 2 OR t1.b (#1) < 100 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
     └── estimated rows: 0.00

@@ -20,5 +20,5 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(CAST(t1.a (#0) = 1 AS Boolean NULL), CAST(t1.b (#1) > 2 OR t1.b (#1) < 100 AS Boolean NULL))], limit: NONE]
+├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
 └── estimated rows: 0.00
