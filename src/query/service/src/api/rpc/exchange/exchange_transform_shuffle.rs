@@ -29,6 +29,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::EventCause;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
@@ -94,8 +95,8 @@ impl OutputsBuffer {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.inner.iter().all(VecDeque::is_empty)
+    pub fn is_empty(&self, index: usize) -> bool {
+        self.inner[index].is_empty()
     }
 
     pub fn is_full(&self) -> bool {
@@ -116,14 +117,187 @@ impl OutputsBuffer {
     }
 }
 
-pub struct ExchangeShuffleTransform {
-    inputs: Vec<Arc<InputPort>>,
-    outputs: Vec<Arc<OutputPort>>,
+#[derive(PartialEq)]
+enum PortStatus {
+    Idle,
+    HasData,
+    NeedData,
+    Finished,
+}
+
+struct PortWithStatus<Port> {
+    pub status: PortStatus,
+    pub port: Arc<Port>,
+}
+
+struct ExchangeShuffleTransform {
+    initialized: bool,
+
+    finished_inputs: usize,
+    finished_outputs: usize,
+
+    waiting_outputs: Vec<usize>,
+    waiting_inputs: VecDeque<usize>,
 
     buffer: OutputsBuffer,
-    cur_input_index: usize,
-    all_inputs_finished: bool,
-    all_outputs_finished: bool,
+    inputs: Vec<PortWithStatus<InputPort>>,
+    outputs: Vec<PortWithStatus<OutputPort>>,
+}
+
+impl Processor for ExchangeShuffleTransform {
+    fn name(&self) -> String {
+        String::from("ExchangeShuffleTransform")
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        if let EventCause::Output(output_index) = &cause {
+            let output = &mut self.outputs[*output_index];
+
+            if output.port.is_finished() {
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+            } else if output.port.can_push() {
+                if !self.buffer.is_empty(*output_index) {
+                    let data_block = self.buffer.pop(*output_index).unwrap();
+                    output.status = PortStatus::Idle;
+                    output.port.push_data(Ok(data_block));
+                } else if output.status != PortStatus::NeedData {
+                    output.status = PortStatus::NeedData;
+                    self.waiting_outputs.push(*output_index);
+                }
+            }
+
+            self.wakeup_inputs();
+        }
+
+        if !self.initialized && !self.waiting_outputs.is_empty() {
+            self.initialized = true;
+            for input in &self.inputs {
+                input.port.set_need_data();
+            }
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            for input in &self.inputs {
+                input.port.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        if let EventCause::Input(input_index) = &cause {
+            let input = &mut self.inputs[*input_index];
+
+            if input.port.is_finished() {
+                if input.status != PortStatus::Finished {
+                    self.finished_inputs += 1;
+                    input.status = PortStatus::Finished;
+                }
+            } else if input.port.has_data() {
+                if !self.buffer.is_full() {
+                    self.take_input_data_into_buffer(*input_index);
+                } else if input.status != PortStatus::HasData {
+                    input.status = PortStatus::HasData;
+                    self.waiting_inputs.push_back(*input_index);
+                }
+            }
+
+            self.wakeup_outputs();
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            for input in &self.inputs {
+                input.port.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        if self.finished_inputs == self.inputs.len() {
+            for output in &self.outputs {
+                output.port.finish();
+            }
+
+            return Ok(Event::Finished);
+        }
+
+        match self.waiting_outputs.is_empty() {
+            true => Ok(Event::NeedConsume),
+            false => Ok(Event::NeedData),
+        }
+    }
+}
+
+impl ExchangeShuffleTransform {
+    fn wakeup_inputs(&mut self) {
+        while !self.waiting_inputs.is_empty() && !self.buffer.is_full() {
+            let input_index = self.waiting_inputs.pop_front().unwrap();
+
+            self.take_input_data_into_buffer(input_index);
+        }
+    }
+
+    fn wakeup_outputs(&mut self) {
+        let mut new_waiting_output = Vec::with_capacity(self.waiting_outputs.len());
+
+        for waiting_output in &self.waiting_outputs {
+            let output = &mut self.outputs[*waiting_output];
+
+            if output.port.is_finished() {
+                self.finished_outputs += 1;
+                self.buffer.clear(*waiting_output);
+                output.status = PortStatus::Finished;
+                continue;
+            }
+
+            if self.buffer.is_empty(*waiting_output) {
+                new_waiting_output.push(*waiting_output);
+                continue;
+            }
+
+            let data_block = self.buffer.pop(*waiting_output).unwrap();
+            output.status = PortStatus::Idle;
+            output.port.push_data(Ok(data_block));
+        }
+
+        self.waiting_outputs = new_waiting_output;
+    }
+
+    fn take_input_data_into_buffer(&mut self, input_index: usize) {
+        let input = &mut self.inputs[input_index];
+
+        input.status = PortStatus::Idle;
+        let mut data_block = input.port.pull_data().unwrap().unwrap();
+
+        if let Some(block_meta) = data_block.take_meta() {
+            if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                    if (!block.is_empty() || block.get_meta().is_some())
+                        && self.outputs[index].status != PortStatus::Finished
+                    {
+                        self.buffer.push_back(index, block);
+                    }
+                }
+            }
+        }
+
+        if input.port.is_finished() {
+            if input.status != PortStatus::Finished {
+                self.finished_inputs += 1;
+                input.status = PortStatus::Finished;
+            }
+
+            return;
+        }
+
+        input.port.set_need_data();
+    }
 }
 
 impl ExchangeShuffleTransform {
@@ -132,136 +306,37 @@ impl ExchangeShuffleTransform {
         let mut outputs_port = Vec::with_capacity(outputs);
 
         for _index in 0..inputs {
-            inputs_port.push(InputPort::create());
+            inputs_port.push(PortWithStatus {
+                status: PortStatus::Idle,
+                port: InputPort::create(),
+            });
         }
 
         for _index in 0..outputs {
-            outputs_port.push(OutputPort::create());
+            outputs_port.push(PortWithStatus {
+                status: PortStatus::Idle,
+                port: OutputPort::create(),
+            });
         }
 
         ExchangeShuffleTransform {
+            initialized: false,
+            finished_inputs: 0,
+            finished_outputs: 0,
             inputs: inputs_port,
             outputs: outputs_port,
             buffer: OutputsBuffer::create(buffer, outputs),
-            cur_input_index: 0,
-            all_inputs_finished: false,
-            all_outputs_finished: false,
+            waiting_inputs: VecDeque::with_capacity(inputs),
+            waiting_outputs: Vec::with_capacity(outputs),
         }
     }
 
     pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
-        self.inputs.to_vec()
+        self.inputs.iter().map(|x| x.port.clone()).collect()
     }
 
     pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
-        self.outputs.to_vec()
-    }
-}
-
-impl Processor for ExchangeShuffleTransform {
-    fn name(&self) -> String {
-        String::from("ExchangeShuffleProcessor")
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if !self.all_outputs_finished {
-            self.try_push_outputs();
-        }
-
-        if self.all_outputs_finished {
-            for input in &self.inputs {
-                input.finish();
-            }
-
-            return Ok(Event::Finished);
-        }
-
-        if !self.all_inputs_finished {
-            let pull_pending = self.try_pull_inputs()?;
-            if pull_pending && !self.all_outputs_finished && !self.all_inputs_finished {
-                self.try_push_outputs();
-            }
-        }
-
-        if self.all_inputs_finished && self.buffer.is_empty() {
-            for output in &self.outputs {
-                output.finish();
-            }
-
-            return Ok(Event::Finished);
-        }
-
-        Ok(Event::NeedData)
-    }
-}
-
-impl ExchangeShuffleTransform {
-    fn try_push_outputs(&mut self) {
-        self.all_outputs_finished = true;
-
-        for (index, output) in self.outputs.iter().enumerate() {
-            if output.is_finished() {
-                self.buffer.clear(index);
-                continue;
-            }
-
-            self.all_outputs_finished = false;
-
-            if output.can_push() {
-                if let Some(data_block) = self.buffer.pop(index) {
-                    output.push_data(Ok(data_block));
-                }
-            }
-        }
-    }
-
-    fn try_pull_inputs(&mut self) -> Result<bool> {
-        self.all_inputs_finished = true;
-        let mut pull_pending = false;
-        for index in (self.cur_input_index..self.inputs.len()).chain(0..self.cur_input_index) {
-            if self.inputs[index].is_finished() {
-                continue;
-            }
-
-            self.all_inputs_finished = false;
-            if !self.inputs[index].has_data() {
-                self.inputs[index].set_need_data();
-                continue;
-            }
-
-            if self.buffer.is_full() {
-                self.cur_input_index = index;
-                return Ok(pull_pending);
-            }
-
-            let mut data_block = self.inputs[index].pull_data().unwrap()?;
-            self.inputs[index].set_need_data();
-
-            if let Some(block_meta) = data_block.take_meta() {
-                if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                    for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                        if (!block.is_empty() || block.get_meta().is_some())
-                            && !self.outputs[index].is_finished()
-                        {
-                            pull_pending |= self.buffer.push_back(index, block) == 1;
-                        }
-                    }
-
-                    continue;
-                }
-            }
-
-            self.cur_input_index = index;
-            return Err(ErrorCode::Internal(
-                "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
-            ));
-        }
-
-        Ok(pull_pending)
+        self.outputs.iter().map(|x| x.port.clone()).collect()
     }
 }
 
