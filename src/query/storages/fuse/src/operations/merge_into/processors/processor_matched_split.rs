@@ -219,6 +219,12 @@ impl Processor for MatchedSplitProcessor {
                             .delete_by_expr(current_block)?;
                         row_id_blocks.push(row_ids);
                         if stage_block.is_empty() {
+                            // delete all
+                            // the row_id is small, so use concat is well.
+                            let row_id_block = DataBlock::concat(&row_id_blocks)?;
+                            if !row_id_block.is_empty() {
+                                self.output_data_row_id_data = Some(row_id_block);
+                            }
                             return Ok(());
                         }
 

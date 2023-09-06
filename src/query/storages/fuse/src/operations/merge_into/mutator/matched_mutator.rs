@@ -112,9 +112,7 @@ impl MatchedAggregator {
             }),
             io_request_semaphore,
             segment_reader,
-            // updatede_block: HashMap::new(),
             block_mutation_row_offset: HashMap::new(),
-            // remain_projections_map: Arc::new(remain_projections_map),
             segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
         })
     }
@@ -129,6 +127,8 @@ impl MatchedAggregator {
         let row_ids = get_row_id(&data_block, 0)?;
         for row_id in row_ids {
             let (prefix, offset) = split_row_id(row_id);
+            let (_, blk_idx) = split_prefix(prefix);
+            println!("delete row_id: {},blk_idx: {}", row_id, blk_idx);
             self.block_mutation_row_offset
                 .entry(prefix)
                 .and_modify(|v| {
@@ -143,14 +143,6 @@ impl MatchedAggregator {
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
-        let progress_values = ProgressValues {
-            rows: self.block_mutation_row_offset.len(),
-            bytes: 0,
-        };
-        self.aggregation_ctx
-            .ctx
-            .get_write_progress()
-            .incr(&progress_values);
 
         for prefix in self.block_mutation_row_offset.keys() {
             let (segment_idx, _) = split_prefix(*prefix);
@@ -173,6 +165,12 @@ impl MatchedAggregator {
 
                 let compact_segment_info = self.segment_reader.read(&load_param).await?;
                 let segment_info: SegmentInfo = compact_segment_info.try_into()?;
+                for (blk_idx, row_count) in segment_info.blocks.iter().enumerate() {
+                    println!(
+                        "segmentInfo blk_idx: {},row_count:{}",
+                        blk_idx, row_count.row_count
+                    );
+                }
                 e.insert(segment_info);
             } else {
                 continue;
@@ -239,7 +237,11 @@ impl AggregationContext {
             "apply update and delete to segment idx {}, block idx {}",
             segment_idx, block_idx,
         );
-
+        let progress_values = ProgressValues {
+            rows: modified_offsets.len(),
+            bytes: 0,
+        };
+        self.ctx.get_write_progress().incr(&progress_values);
         let origin_data_block = read_block(
             self.write_settings.storage_format,
             &self.block_reader,
