@@ -167,6 +167,7 @@ impl SessionExecutor {
             match rl.readline(&self.prompt().await) {
                 Ok(line) => {
                     let queries = self.append_query(&line);
+
                     for query in queries {
                         let _ = rl.add_history_entry(&query);
                         match self.handle_query(true, &query).await {
@@ -313,7 +314,7 @@ impl SessionExecutor {
 
     async fn prompt(&self) -> String {
         if !self.query.is_empty() {
-            "databend-local:) ".to_owned()
+            "> ".to_owned()
         } else {
             let mut prompt = self.settings.prompt.clone();
             prompt = prompt.replace("{database}", &self.session.get_current_database());

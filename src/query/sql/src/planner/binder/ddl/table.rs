@@ -1467,8 +1467,7 @@ impl Binder {
         let not_null = match column.nullable_constraint {
             Some(NullableConstraint::NotNull) => true,
             Some(NullableConstraint::Null) => false,
-            None if column_not_null => true,
-            None => false,
+            None => column_not_null,
         };
         Ok(not_null)
     }
