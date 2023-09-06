@@ -58,8 +58,9 @@ pub async fn query_local(query_sql: &str, output_format: &str) -> Result<()> {
 
     let is_terminal = stdin().is_terminal();
     let is_repl = is_terminal && query_sql.is_empty();
-    let mut executor =
-        executor::SessionExecutor::try_new(is_repl, query_sql, output_format).await?;
-    executor.handle().await;
+    let mut executor = executor::SessionExecutor::try_new(is_repl, output_format).await?;
+
+    let query_sql = query_sql.replace("$STDIN", "'fs:///dev/fd/0'");
+    executor.handle(&query_sql).await;
     Ok(())
 }

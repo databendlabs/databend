@@ -52,7 +52,7 @@ if __name__ == "__main__":
         client1.send("drop table if exists data_mask_test;")
         client1.expect(prompt)
 
-        client1.send("create table data_mask_test(a int, b string);")
+        client1.send("create table data_mask_test(a int not null, b string not null);")
         client1.expect(prompt)
 
         sql = "insert into table data_mask_test(a,b) values(1, 'abc')"

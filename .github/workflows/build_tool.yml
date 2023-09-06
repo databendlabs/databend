@@ -16,7 +16,7 @@ jobs:
   base:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup_docker
         id: login
@@ -57,7 +57,7 @@ jobs:
           - gnu
           - musl
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup_docker
         id: login
@@ -94,7 +94,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: base
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - uses: ./.github/actions/setup_docker
         id: login

@@ -2,7 +2,7 @@ statement ok
 drop table if exists t_distributed_topn;
 
 statement ok
-create table t_distributed_topn (a int, b float, c string, d tuple(a int, b int), e date)
+create table t_distributed_topn (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 statement ok
 set lazy_read_threshold = 0;

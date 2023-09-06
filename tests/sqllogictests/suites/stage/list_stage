@@ -1,7 +1,15 @@
 query 
 select name, size, creator from list_stage(location => '@data/parquet/') order by name
 ----
+parquet/alltypes_plain.parquet 1851 NULL
+parquet/alltypes_plain.parquet.csv 610 NULL
 parquet/complex.parquet 92762 NULL
+parquet/int96.parquet 1675 NULL
+parquet/multi_page/gen.py 696 NULL
+parquet/multi_page/multi_page_1.parquet 2711 NULL
+parquet/multi_page/multi_page_2.parquet 5328 NULL
+parquet/multi_page/multi_page_3.parquet 4020 NULL
+parquet/multi_page/multi_page_4.parquet 6636 NULL
 parquet/tuple.parquet 431 NULL
 
 query 

@@ -14,7 +14,7 @@ statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0_3`
 
 statement ok
-CREATE TABLE `05_0028_at_t0`(a int, b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double)
+CREATE TABLE `05_0028_at_t0`(a int not null, b Tuple(Bool, Int64, Float64, String, Date, Timestamp) not null, c Array(UInt8) not null, d double not null)
 
 statement ok
 INSERT INTO TABLE `05_0028_at_t0` values(1,(true, 100, 12.34, 'abc', '2020-01-01', '2020-01-01 00:00:00'),[101,2],4.0)
@@ -25,7 +25,7 @@ SELECT * FROM `05_0028_at_t0`
 1 (1,100,12.34,'abc','2020-01-01','2020-01-01 00:00:00.000000') [101,2] 4.0
 
 statement ok
-create table `05_0028_at_t0_1`(a int, b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double) AS SELECT * FROM `05_0028_at_t0`;
+create table `05_0028_at_t0_1`(a int not null, b Tuple(Bool, Int64, Float64, String, Date, Timestamp) not null, c Array(UInt8) not null, d double not null) AS SELECT * FROM `05_0028_at_t0`;
 
 query ITIF
 SELECT * FROM `05_0028_at_t0_1`
@@ -39,7 +39,7 @@ statement ok
 ALTER TABLE `05_0028_at_t0` DROP COLUMN a
 
 statement ok
-create table `05_0028_at_t0_2`(b Tuple(Bool, Int64, Float64, String, Date, Timestamp),c Array(UInt8),d double) AS SELECT * FROM `05_0028_at_t0`;
+create table `05_0028_at_t0_2`(b Tuple(Bool, Int64, Float64, String, Date, Timestamp) not null, c Array(UInt8) not null, d double not null) AS SELECT * FROM `05_0028_at_t0`;
 
 query FIII
 SELECT d,b.1,c,b.2 FROM `05_0028_at_t0_2`
@@ -79,10 +79,10 @@ statement error 1109
 ALTER TABLE `05_0028_at_t0` DROP COLUMN c
 
 statement error 1108
-ALTER TABLE `05_0028_at_t0` ADD COLUMN c float
+ALTER TABLE `05_0028_at_t0` ADD COLUMN c float not null
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN a float default 101
+ALTER TABLE `05_0028_at_t0` ADD COLUMN a float not null default 101
 
 statement ok
 INSERT INTO TABLE `05_0028_at_t0` values([4,5],5.0)
@@ -94,10 +94,10 @@ SELECT * FROM `05_0028_at_t0` order by a
 [101,2] 101.0
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN b Tuple(double, int) default (202.0, 13)
+ALTER TABLE `05_0028_at_t0` ADD COLUMN b Tuple(double, int) not null default (202.0, 13)
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN e int
+ALTER TABLE `05_0028_at_t0` ADD COLUMN e int not null
 
 statement ok
 INSERT INTO TABLE `05_0028_at_t0` values([9,10],6.0,(111.0,2),202)
@@ -137,7 +137,7 @@ SELECT * FROM `05_0028_at_t0` order by a
 101.0 (202.0,13)
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN t Tuple(a Tuple(m Int64, n double), b Tuple(x Int64, y Int64)) default ((1,2.0),(3,4))
+ALTER TABLE `05_0028_at_t0` ADD COLUMN t Tuple(a Tuple(m Int64, n double), b Tuple(x Int64, y Int64)) not null default ((1,2.0),(3,4))
 
 query FTT
 SELECT * FROM `05_0028_at_t0` order by a
@@ -158,7 +158,7 @@ SELECT t:a,t:a:m,t:a:n,t:b,t:b:x,t:b:y FROM `05_0028_at_t0` order by t:a:m
 (3,4.0) 3 4.0 (5,6) 5 6
 
 statement ok
-ALTER TABLE `05_0028_at_t0` ADD COLUMN m Map(Int64, String) default map([1],['ab']);
+ALTER TABLE `05_0028_at_t0` ADD COLUMN m Map(Int64, String) not null default map([1],['ab']);
 
 statement ok
 INSERT INTO TABLE `05_0028_at_t0` (a, m) values(1.0, {2:'mn'})
@@ -176,13 +176,13 @@ statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0`
 
 statement ok
-CREATE TABLE `05_0028_at_t0_3`(c int)
+CREATE TABLE `05_0028_at_t0_3`(c int not null)
 
 statement ok
 insert into `05_0028_at_t0_3` values(1)
 
 statement ok
-ALTER TABLE `05_0028_at_t0_3` ADD COLUMN a float default 0.1 COMMENT 'first' FIRST
+ALTER TABLE `05_0028_at_t0_3` ADD COLUMN a float not null default 0.1 COMMENT 'first' FIRST
 
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
@@ -193,7 +193,7 @@ statement ok
 insert into `05_0028_at_t0_3` values(0.2, 2)
 
 statement ok
-ALTER TABLE `05_0028_at_t0_3` ADD COLUMN b string default 'b' COMMENT 'second' AFTER a
+ALTER TABLE `05_0028_at_t0_3` ADD COLUMN b string not null default 'b' COMMENT 'second' AFTER a
 
 query TT
 SHOW CREATE TABLE `05_0028_at_t0_3`
@@ -230,7 +230,7 @@ SELECT a,c FROM `05_0028_at_t0_3` order by a
 0.4 4
 
 statement ok
-ALTER TABLE `05_0028_at_t0_3` ADD COLUMN d int AFTER c
+ALTER TABLE `05_0028_at_t0_3` ADD COLUMN d int not null AFTER c
 
 statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0_3`

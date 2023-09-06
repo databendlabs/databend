@@ -18,6 +18,7 @@ use common_ast::ast::Statement;
 use common_ast::parser::token::TokenKind;
 use common_ast::parser::token::Tokenizer;
 use common_base::base::tokio;
+use common_base::base::tokio::io::AsyncRead;
 use common_base::base::tokio::time::Instant;
 use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
@@ -63,7 +64,7 @@ pub(crate) struct SessionExecutor {
 static PROMPT_SQL: &str = "select name from system.tables union all select name from system.columns union all select name from system.databases union all select name from system.functions";
 
 impl SessionExecutor {
-    pub async fn try_new(is_repl: bool, query: &str, output_format: &str) -> Result<Self> {
+    pub async fn try_new(is_repl: bool, output_format: &str) -> Result<Self> {
         let mut keywords = Vec::with_capacity(1024);
         let session = SessionManager::instance()
             .create_session(SessionType::Local)
@@ -115,12 +116,11 @@ impl SessionExecutor {
             }
         }
 
-        let query = query.replace("$STDIN", "'fs:///dev/fd/0'");
         Ok(Self {
             session,
             is_repl,
             settings,
-            query,
+            query: String::new(),
             keywords: Arc::new(keywords),
         })
     }
@@ -143,17 +143,13 @@ impl SessionExecutor {
         ))
     }
 
-    pub async fn handle(&mut self) {
+    pub async fn handle(&mut self, query_sql: &str) {
         if self.is_repl {
             self.handle_repl().await;
-        } else if self.query.is_empty() {
+        } else if query_sql.is_empty() {
             self.handle_reader(tokio::io::stdin()).await;
         } else {
-            let query = self.query.clone();
-            self.query.clear();
-            if let Err(e) = self.handle_query(false, &query).await {
-                eprintln!("{}", e);
-            }
+            self.handle_reader(query_sql.as_bytes()).await;
         }
     }
 
@@ -171,6 +167,7 @@ impl SessionExecutor {
             match rl.readline(&self.prompt().await) {
                 Ok(line) => {
                     let queries = self.append_query(&line);
+
                     for query in queries {
                         let _ = rl.add_history_entry(&query);
                         match self.handle_query(true, &query).await {
@@ -205,7 +202,7 @@ impl SessionExecutor {
         let _ = rl.save_history(&get_history_path());
     }
 
-    pub async fn handle_reader(&mut self, r: tokio::io::Stdin) {
+    pub async fn handle_reader<R: AsyncRead + Unpin>(&mut self, r: R) {
         let start = Instant::now();
 
         use tokio::io::AsyncBufReadExt;
@@ -317,7 +314,7 @@ impl SessionExecutor {
 
     async fn prompt(&self) -> String {
         if !self.query.is_empty() {
-            "databend-local:) ".to_owned()
+            "> ".to_owned()
         } else {
             let mut prompt = self.settings.prompt.clone();
             prompt = prompt.replace("{database}", &self.session.get_current_database());
