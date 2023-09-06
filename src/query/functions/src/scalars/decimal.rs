@@ -271,7 +271,7 @@ macro_rules! register_decimal_compare_op {
                 },
             };
             if has_nullable {
-                Some(Arc::new(function.wrap_nullable()))
+                Some(Arc::new(function.passthrough_nullable()))
             } else {
                 Some(Arc::new(function))
             }
@@ -378,7 +378,7 @@ macro_rules! register_decimal_binary_op {
                 },
             };
             if has_nullable {
-                Some(Arc::new(function.wrap_nullable()))
+                Some(Arc::new(function.passthrough_nullable()))
             } else {
                 Some(Arc::new(function))
             }
@@ -446,7 +446,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
     registry.register_function_factory("to_decimal", move |params, args_type| {
         let f = factory(params, args_type)?;
-        Some(Arc::new(f.wrap_nullable()))
+        Some(Arc::new(f.passthrough_nullable()))
     });
     registry.register_function_factory("try_to_decimal", move |params, args_type| {
         let mut f = factory(params, args_type)?;
@@ -456,7 +456,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("try_to_decimal", move |params, args_type| {
         let mut f = factory(params, args_type)?;
         f.signature.name = "try_to_decimal".to_string();
-        Some(Arc::new(f.error_to_null().wrap_nullable()))
+        Some(Arc::new(f.error_to_null().passthrough_nullable()))
     });
 }
 
@@ -486,7 +486,7 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -519,7 +519,7 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
