@@ -25,12 +25,6 @@ ERROR 1105 (HY000) at line 1: Unimplemented. Code: 1002, Text = query stage file
 4	6
 5	6
 5	6
---- copy from s3
-tuple.parquet	3	0	NULL	NULL
-2
-3
-4
 --- copy from uri with transform
-1
 2
 5

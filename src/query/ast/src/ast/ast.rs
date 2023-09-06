@@ -86,7 +86,7 @@ impl Display for Identifier {
     }
 }
 
-pub(crate) fn write_period_separated_list(
+pub(crate) fn write_dot_separated_list(
     f: &mut Formatter<'_>,
     items: impl IntoIterator<Item = impl Display>,
 ) -> std::fmt::Result {

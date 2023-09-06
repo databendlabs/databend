@@ -211,7 +211,7 @@ pub enum TokenKind {
     #[token(",")]
     Comma,
     #[token(".")]
-    Period,
+    Dot,
     #[token(":")]
     Colon,
     #[token("::")]
@@ -1008,6 +1008,13 @@ pub enum TokenKind {
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 impl TokenKind {
+    pub fn is_literal(&self) -> bool {
+        matches!(
+            self,
+            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+        )
+    }
+
     pub fn is_keyword(&self) -> bool {
         !matches!(
             self,
@@ -1037,7 +1044,7 @@ impl TokenKind {
                 | LParen
                 | RParen
                 | Comma
-                | Period
+                | Dot
                 | Colon
                 | DoubleColon
                 | SemiColon

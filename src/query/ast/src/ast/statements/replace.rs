@@ -16,7 +16,7 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;
@@ -39,7 +39,7 @@ impl Display for ReplaceStmt {
             write!(f, "{} ", hints)?;
         }
         write!(f, "INTO ")?;
-        write_period_separated_list(
+        write_dot_separated_list(
             f,
             self.catalog
                 .iter()

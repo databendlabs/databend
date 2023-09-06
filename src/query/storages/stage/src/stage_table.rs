@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::io::Read;
 use std::ops::Deref;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
@@ -42,9 +43,11 @@ use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
 use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
+use common_storage::STDIN_FD;
 use dashmap::DashMap;
 use log::debug;
 use opendal::Operator;
+use opendal::Scheme;
 use parking_lot::Mutex;
 
 use crate::parquet_file::append_data_to_parquet_files;
@@ -189,6 +192,16 @@ impl Table for StageTable {
             ctx.set_on_error_map(m.clone());
             m
         });
+
+        // inject stdin to memory
+        if operator.info().scheme() == Scheme::Memory {
+            let mut buffer = vec![];
+            std::io::stdin().lock().read_to_end(&mut buffer)?;
+
+            let bop = operator.blocking();
+            bop.write(STDIN_FD, buffer)?;
+        }
+
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             ctx.clone(),
             operator,

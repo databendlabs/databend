@@ -57,6 +57,23 @@ pub enum DataPacket {
     CopyStatus(CopyStatus),
 }
 
+fn calc_size(flight_data: &FlightData) -> usize {
+    flight_data.data_body.len() + flight_data.data_header.len() + flight_data.app_metadata.len()
+}
+
+impl DataPacket {
+    pub fn bytes_size(&self) -> usize {
+        match self {
+            DataPacket::ErrorCode(_) => 0,
+            DataPacket::FetchProgress => 0,
+            DataPacket::CopyStatus(_) => 0,
+            DataPacket::SerializeProgress(_) => 0,
+            DataPacket::Dictionary(v) => calc_size(v),
+            DataPacket::FragmentData(v) => calc_size(&v.data) + v.meta.len(),
+        }
+    }
+}
+
 impl TryFrom<DataPacket> for FlightData {
     type Error = ErrorCode;
 

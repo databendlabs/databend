@@ -79,6 +79,18 @@ error:
 
 
 ---------- Input ----------
+CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+---------- Output ---------
+error: 
+  --> SQL:1:41
+  |
+1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+  | ------                                  ^ ambiguous NOT NULL constraint
+  | |                                        
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 
