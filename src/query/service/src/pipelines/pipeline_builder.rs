@@ -2202,8 +2202,12 @@ impl ValueSource {
             if reader.eof() {
                 break;
             }
+
             // Not the first row
             if row != 0 {
+                if reader.ignore_byte(b';') {
+                    break;
+                }
                 reader.must_ignore_byte(b',')?;
             }
 
