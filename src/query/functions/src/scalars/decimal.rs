@@ -332,8 +332,140 @@ macro_rules! register_decimal_compare_op {
     };
 }
 
+fn domain_plus<T: Decimal>(
+    lhs: &SimpleDomain<T>,
+    rhs: &SimpleDomain<T>,
+    _lscale: u32,
+    _rscale: u32,
+    precision: u8,
+) -> Option<SimpleDomain<T>> {
+    // For plus, the scale of the two operands must be the same.
+    let min = T::min_for_precision(precision);
+    let max = T::max_for_precision(precision);
+    Some(SimpleDomain {
+        min: lhs
+            .min
+            .checked_add(rhs.min)
+            .filter(|&m| m >= min && m <= max)?,
+        max: lhs
+            .max
+            .checked_add(rhs.max)
+            .filter(|&m| m >= min && m <= max)?,
+    })
+}
+
+fn domain_minus<T: Decimal>(
+    lhs: &SimpleDomain<T>,
+    rhs: &SimpleDomain<T>,
+    _lscale: u32,
+    _rscale: u32,
+    precision: u8,
+) -> Option<SimpleDomain<T>> {
+    // For minus, the scale of the two operands must be the same.
+    let min = T::min_for_precision(precision);
+    let max = T::max_for_precision(precision);
+    Some(SimpleDomain {
+        min: lhs
+            .min
+            .checked_sub(rhs.max)
+            .filter(|&m| m >= min && m <= max)?,
+        max: lhs
+            .max
+            .checked_sub(rhs.min)
+            .filter(|&m| m >= min && m <= max)?,
+    })
+}
+
+fn domain_mul<T: Decimal>(
+    lhs: &SimpleDomain<T>,
+    rhs: &SimpleDomain<T>,
+    lscale: u32,
+    rscale: u32,
+    precision: u8,
+) -> Option<SimpleDomain<T>> {
+    // For mul, the scale of the two operands are not the same.
+    let lscale = T::e(lscale);
+    let rscale = T::e(rscale);
+    let min = T::min_for_precision(precision);
+    let max = T::max_for_precision(precision);
+
+    let a = lhs
+        .min
+        .checked_mul(lscale)?
+        .checked_mul(rhs.min)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let b = lhs
+        .min
+        .checked_mul(lscale)?
+        .checked_mul(rhs.max)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let c = lhs
+        .max
+        .checked_mul(lscale)?
+        .checked_mul(rhs.min)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let d = lhs
+        .max
+        .checked_mul(lscale)?
+        .checked_mul(rhs.max)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+
+    Some(SimpleDomain {
+        min: a.min(b).min(c).min(d),
+        max: a.max(b).max(c).max(d),
+    })
+}
+
+fn domain_div<T: Decimal>(
+    lhs: &SimpleDomain<T>,
+    rhs: &SimpleDomain<T>,
+    lscale: u32,
+    rscale: u32,
+    precision: u8,
+) -> Option<SimpleDomain<T>> {
+    // For div, the scale of the two operands are not the same.
+    let lscale = T::e(lscale);
+    let rscale = T::e(rscale);
+    let min = T::min_for_precision(precision);
+    let max = T::max_for_precision(precision);
+
+    let a = lhs
+        .min
+        .checked_mul(lscale)?
+        .checked_div(rhs.min)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let b = lhs
+        .min
+        .checked_mul(lscale)?
+        .checked_div(rhs.max)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let c = lhs
+        .max
+        .checked_mul(lscale)?
+        .checked_div(rhs.min)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+    let d = lhs
+        .max
+        .checked_mul(lscale)?
+        .checked_div(rhs.max)?
+        .checked_div(rscale)
+        .filter(|&m| m >= min && m <= max)?;
+
+    Some(SimpleDomain {
+        min: a.min(b).min(c).min(d),
+        max: a.max(b).max(c).max(d),
+    })
+}
+
 macro_rules! register_decimal_binary_op {
-    ($registry: expr, $name: expr, $op: ident) => {
+    ($registry: expr, $name: expr, $op: ident, $domain_op: ident) => {
         $registry.register_function_factory($name, |_, args_type| {
             if args_type.len() != 2 {
                 return None;
@@ -389,7 +521,47 @@ macro_rules! register_decimal_binary_op {
                     return_type: DataType::Decimal(return_decimal_type),
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                    calc_domain: Box::new(move |_, d| {
+                        let size = common_decimal_type.size();
+                        let lhs = convert_to_decimal_domain(&d[0], common_decimal_type);
+                        if lhs.is_none() {
+                            return FunctionDomain::Full;
+                        }
+                        let rhs = convert_to_decimal_domain(&d[1], common_decimal_type);
+                        if rhs.is_none() {
+                            return FunctionDomain::Full;
+                        }
+                        let lhs = lhs.unwrap();
+                        let rhs = rhs.unwrap();
+                        {
+                            match (lhs, rhs) {
+                                (
+                                    DecimalDomain::Decimal128(d1, s1),
+                                    DecimalDomain::Decimal128(d2, s2),
+                                ) if s1 == s2 => {
+                                    $domain_op(&d1, &d2, scale_a, scale_b, size.precision)
+                                        .map(|d| DecimalDomain::Decimal128(d, size))
+                                }
+                                (
+                                    DecimalDomain::Decimal256(d1, s1),
+                                    DecimalDomain::Decimal256(d2, s2),
+                                ) if s1 == s2 => {
+                                    $domain_op(&d1, &d2, scale_a, scale_b, size.precision)
+                                        .map(|d| DecimalDomain::Decimal256(d, size))
+                                }
+                                _ => unreachable!(),
+                            }
+                        }
+                        .and_then(|d| {
+                            if common_decimal_type != return_decimal_type {
+                                decimal_to_decimal_domain(&d, &return_decimal_type)
+                            } else {
+                                Some(d)
+                            }
+                        })
+                        .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
+                        .unwrap_or(FunctionDomain::Full)
+                    }),
                     eval: Box::new(move |args, ctx| {
                         let lhs =
                             convert_to_decimal(&args[0], ctx, &args_type[0], common_decimal_type);
@@ -441,10 +613,10 @@ pub(crate) fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
 
 pub(crate) fn register_decimal_arithmetic(registry: &mut FunctionRegistry) {
     // TODO checked overflow by default
-    register_decimal_binary_op!(registry, "plus", add);
-    register_decimal_binary_op!(registry, "minus", sub);
-    register_decimal_binary_op!(registry, "divide", div);
-    register_decimal_binary_op!(registry, "multiply", mul);
+    register_decimal_binary_op!(registry, "plus", add, domain_plus);
+    register_decimal_binary_op!(registry, "minus", sub, domain_minus);
+    register_decimal_binary_op!(registry, "divide", div, domain_div);
+    register_decimal_binary_op!(registry, "multiply", mul, domain_mul);
 }
 
 // int float to decimal
