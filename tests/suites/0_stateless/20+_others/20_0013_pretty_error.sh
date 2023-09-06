@@ -14,11 +14,11 @@ echo "select base64(1);" |  $MYSQL_CLIENT_CONNECT
 echo "select to_base64(1);" | $MYSQL_CLIENT_CONNECT
 echo "select 1 + 'a';" | $MYSQL_CLIENT_CONNECT
 
-echo "create table t1 (a tuple(b int, c int))" | $MYSQL_CLIENT_CONNECT
+echo "create table t1 (a tuple(b int, c int) not null)" | $MYSQL_CLIENT_CONNECT
 echo "select t1.a:z from t" | $MYSQL_CLIENT_CONNECT
 
-echo "create table t2 (a int, b int)" | $MYSQL_CLIENT_CONNECT
-echo "create table t3 (c int, d int)" | $MYSQL_CLIENT_CONNECT
+echo "create table t2 (a int not null, b int not null)" | $MYSQL_CLIENT_CONNECT
+echo "create table t3 (c int not null, d int not null)" | $MYSQL_CLIENT_CONNECT
 echo "select * from t2 join t3 using (c)" | $MYSQL_CLIENT_CONNECT
 
 echo "DROP TABLE t;" | $MYSQL_CLIENT_CONNECT

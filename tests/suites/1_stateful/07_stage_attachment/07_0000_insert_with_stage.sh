@@ -10,10 +10,10 @@ echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
 cat <<EOF | $MYSQL_CLIENT_CONNECT
 CREATE TABLE sample
 (
-    Id      INT,
-    City    VARCHAR,
-    Score   INT,
-    Country VARCHAR DEFAULT 'China'
+    Id      INT NOT NULL,
+    City    VARCHAR NOT NULL,
+    Score   INT NOT NULL,
+    Country VARCHAR NOT NULL DEFAULT 'China'
 );
 EOF
 

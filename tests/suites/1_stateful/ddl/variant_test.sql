@@ -1,18 +1,18 @@
 CREATE TABLE variant_test
 (
-    Id  Int,
-    Var Variant
+    Id  Int NOT NULL,
+    Var Variant NOT NULL
 );
 
 CREATE TABLE variant_test2
 (
-    a Boolean,
-    b Int,
-    c Float,
-    d String,
-    e Date,
-    f Timestamp,
-    g Array(Int),
-    h Tuple(Int, String),
-    i Variant
+    a Boolean NOT NULL,
+    b Int NOT NULL,
+    c Float NOT NULL,
+    d String NOT NULL,
+    e Date NOT NULL,
+    f Timestamp NOT NULL,
+    g Array(Int) NOT NULL,
+    h Tuple(Int, String) NOT NULL,
+    i Variant NOT NULL
 );

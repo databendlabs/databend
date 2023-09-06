@@ -11,7 +11,7 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 Array(Timestamp), col5 Array(Array(Int null)))
+create table t(col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
 
 statement ok
 insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])

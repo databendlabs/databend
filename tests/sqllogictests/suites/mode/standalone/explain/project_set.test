@@ -30,7 +30,7 @@ EvalScalar
         └── ProjectSet
             ├── output columns: [unnest (#2)]
             ├── estimated rows: 1.00
-            ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL)))
+            ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL) NULL))
             └── TableScan
                 ├── table: default.default.fold_count
                 ├── output columns: [id (#0)]

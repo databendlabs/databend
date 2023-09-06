@@ -11,11 +11,11 @@ drop table if exists default.t1
 
 
 statement ok
-create table default.t (id int, c1 tuple(int, int))
+create table default.t (id int not null, c1 tuple(int, int) not null)
 
 
 statement ok
-create table default.t1 (id int, c2 tuple(int, int))
+create table default.t1 (id int not null, c2 tuple(int, int) not null)
 
 
 statement ok
@@ -23,15 +23,15 @@ create database db
 
 
 statement ok
-create table db.t (id int, c1 tuple(int, int))
+create table db.t (id int not null, c1 tuple(int, int) not null)
 
 
 statement ok
-create table db.t1 (id int, c1 tuple(int, int))
+create table db.t1 (id int not null, c1 tuple(int, int) not null)
 
 
 statement ok
-create table db.t2 (id2 int, c1 tuple(int, int))
+create table db.t2 (id2 int not null, c1 tuple(int, int) not null)
 
 
 statement ok

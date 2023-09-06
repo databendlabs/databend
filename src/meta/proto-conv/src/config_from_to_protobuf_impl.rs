@@ -16,6 +16,7 @@ use common_meta_app as mt;
 use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
+use common_meta_app::storage::StorageHdfsConfig;
 use common_meta_app::storage::StorageObsConfig;
 use common_meta_app::storage::StorageOssConfig;
 use common_meta_app::storage::StorageS3Config;
@@ -57,6 +58,9 @@ impl FromToProto for mt::storage::StorageParams {
             Some(pb::storage_config::Storage::Cos(s)) => Ok(mt::storage::StorageParams::Cos(
                 mt::storage::StorageCosConfig::from_pb(s)?,
             )),
+            Some(pb::storage_config::Storage::Hdfs(s)) => Ok(mt::storage::StorageParams::Hdfs(
+                mt::storage::StorageHdfsConfig::from_pb(s)?,
+            )),
             None => Err(Incompatible {
                 reason: "StageStorage.storage cannot be None".to_string(),
             }),
@@ -85,6 +89,9 @@ impl FromToProto for mt::storage::StorageParams {
             }),
             mt::storage::StorageParams::Cos(v) => Ok(pb::StorageConfig {
                 storage: Some(pb::storage_config::Storage::Cos(v.to_pb()?)),
+            }),
+            mt::storage::StorageParams::Hdfs(v) => Ok(pb::StorageConfig {
+                storage: Some(pb::storage_config::Storage::Hdfs(v.to_pb()?)),
             }),
             others => Err(Incompatible {
                 reason: format!("stage type: {} not supported", others),
@@ -322,6 +329,32 @@ impl FromToProto for StorageCosConfig {
             root: self.root.clone(),
             secret_id: self.secret_id.clone(),
             secret_key: self.secret_key.clone(),
+        })
+    }
+}
+
+impl FromToProto for StorageHdfsConfig {
+    type PB = pb::HdfsStorageConfig;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.version
+    }
+
+    fn from_pb(p: pb::HdfsStorageConfig) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.version, p.min_reader_ver)?;
+
+        Ok(StorageHdfsConfig {
+            root: p.root,
+            name_node: p.name_node,
+        })
+    }
+
+    fn to_pb(&self) -> Result<pb::HdfsStorageConfig, Incompatible> {
+        Ok(pb::HdfsStorageConfig {
+            version: VER,
+            min_reader_ver: MIN_READER_VER,
+            root: self.root.clone(),
+            name_node: self.name_node.clone(),
         })
     }
 }
