@@ -25,6 +25,7 @@ use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -66,6 +67,7 @@ impl AsyncSystemTable for DatabasesTable {
         let mut catalog_names = vec![];
         let mut db_names = vec![];
         let mut db_id = vec![];
+        let mut owners: Vec<Option<Vec<u8>>> = vec![];
 
         let user = ctx.get_current_user()?;
         let roles = ctx.get_current_available_roles().await?;
@@ -84,6 +86,13 @@ impl AsyncSystemTable for DatabasesTable {
                 db_names.push(db_name);
                 let id = db.get_db_info().ident.db_id;
                 db_id.push(id);
+                owners.push(
+                    db.get_db_info()
+                        .meta
+                        .owner
+                        .as_ref()
+                        .map(|v| v.owner_role_name.as_bytes().to_vec()),
+                );
             }
         }
 
@@ -91,6 +100,7 @@ impl AsyncSystemTable for DatabasesTable {
             StringType::from_data(catalog_names),
             StringType::from_data(db_names),
             UInt64Type::from_data(db_id),
+            StringType::from_opt_data(owners),
         ]))
     }
 }
@@ -101,6 +111,10 @@ impl DatabasesTable {
             TableField::new("catalog", TableDataType::String),
             TableField::new("name", TableDataType::String),
             TableField::new("database_id", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new(
+                "owner",
+                TableDataType::Nullable(Box::from(TableDataType::String)),
+            ),
         ]);
 
         let table_info = TableInfo {

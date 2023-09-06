@@ -80,14 +80,14 @@ async fn test_simple_union_output_type() -> Result<()> {
         let (_, schema) =
             get_interpreter(fixture.ctx(), "select * from a union all select * from b").await?;
         assert!(matches!(
-            schema.field(0).data_type(),
+            schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
         ));
 
         let (_, schema) =
             get_interpreter(fixture.ctx(), "select * from b union all select * from a").await?;
         assert!(matches!(
-            schema.field(0).data_type(),
+            schema.field(0).data_type().remove_nullable(),
             DataType::Number(NumberDataType::Float64),
         ));
     }

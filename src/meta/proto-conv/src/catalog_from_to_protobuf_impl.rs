@@ -107,7 +107,7 @@ impl FromToProto for mt::CatalogMeta {
             option: match self.catalog_option.clone() {
                 CatalogOption::Default => {
                     return Err(Incompatible {
-                        reason: "CatalogOption.default is invalid for metsrv".to_string(),
+                        reason: "CatalogOption.default is invalid for metasrv".to_string(),
                     });
                 }
                 CatalogOption::Hive(v) => Some(pb::CatalogOption {

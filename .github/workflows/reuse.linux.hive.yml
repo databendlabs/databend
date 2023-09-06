@@ -27,7 +27,7 @@ jobs:
         include:
           - { arch: x86_64, libc: gnu }
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
@@ -44,7 +44,7 @@ jobs:
     needs: build
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: ./.github/actions/test_stateful_hive_standalone
         timeout-minutes: 10
         with:
