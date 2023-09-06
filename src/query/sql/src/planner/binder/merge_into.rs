@@ -204,14 +204,13 @@ impl Binder {
         let mut field_index_map = HashMap::<usize, String>::new();
         // if true, read all columns of target table
         let has_update = self.has_update(&matched_clauses);
-        for (idx, field) in table_schema.fields().iter().enumerate() {
-            let used_idx = self.find_column_index(&column_entries, &field.name())?;
-            if has_update {
+        if has_update {
+            for (idx, field) in table_schema.fields().iter().enumerate() {
+                let used_idx = self.find_column_index(&column_entries, &field.name())?;
                 columns_set.insert(used_idx);
+                field_index_map.insert(idx, used_idx.to_string());
             }
-            field_index_map.insert(idx, used_idx.to_string());
         }
-
         // bind clause column
         for clause in &matched_clauses {
             matched_evaluators.push(
