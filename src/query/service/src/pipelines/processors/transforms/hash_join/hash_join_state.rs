@@ -116,7 +116,8 @@ pub struct HashJoinState {
     pub(crate) final_scan_done_notify: Arc<Notify>,
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
-    pub(crate) partition_id: Arc<RwLock<u8>>,
+    /// If partition_id is -1, it means all partitions are spilled.
+    pub(crate) partition_id: Arc<RwLock<i8>>,
 }
 
 impl HashJoinState {
@@ -220,8 +221,6 @@ impl HashJoinState {
         if *self.final_scan_done.lock() {
             return;
         }
-        dbg!("wait notify");
         self.final_scan_done_notify.notified().await;
-        dbg!("notified");
     }
 }

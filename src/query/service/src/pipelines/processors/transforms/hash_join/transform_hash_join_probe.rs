@@ -166,10 +166,11 @@ impl TransformHashJoinProbe {
                     .read()
                     .is_empty()
                 {
-                    self.step = HashJoinProbeStep::WaitBuild;
                     self.join_probe_state.finish_final_scan();
+                    self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
                 }
+                self.join_probe_state.finish_final_scan();
                 self.output_port.finish();
                 Ok(Event::Finished)
             };
@@ -205,7 +206,6 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    dbg!("input finish");
                     self.join_probe_state.finish_spill();
                     // Wait build side to build hash table
                     self.step = HashJoinProbeStep::WaitBuild;
@@ -254,10 +254,11 @@ impl Processor for TransformHashJoinProbe {
                             .read()
                             .is_empty()
                         {
-                            self.step = HashJoinProbeStep::WaitBuild;
                             self.join_probe_state.finish_final_scan();
+                            self.step = HashJoinProbeStep::WaitBuild;
                             return Ok(Event::Async);
                         }
+                        self.join_probe_state.finish_final_scan();
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }

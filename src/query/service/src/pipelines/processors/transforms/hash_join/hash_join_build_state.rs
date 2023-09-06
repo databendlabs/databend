@@ -629,6 +629,7 @@ impl HashJoinBuildState {
             }
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = true;
+            dbg!("notify probe");
             self.hash_join_state.build_done_notify.notify_waiters();
         }
         Ok(())

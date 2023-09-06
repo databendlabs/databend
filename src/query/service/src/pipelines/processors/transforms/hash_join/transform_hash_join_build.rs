@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -42,6 +43,8 @@ enum HashJoinBuildStep {
     FollowSpill,
     // Wait probe
     WaitProbe,
+    // The whole build phase is finished.
+    Finished,
 }
 
 pub struct TransformHashJoinBuild {
@@ -87,10 +90,6 @@ impl TransformHashJoinBuild {
             debug!("Processor {} needs to wait spill", self.processor_id);
             self.step = HashJoinBuildStep::WaitSpill;
         } else {
-            dbg!(
-                "Processor {} is the last processor, it will split spill tasks and notify all processors to spill",
-                self.processor_id
-            );
             // Make `need_spill` to false for `SpillCoordinator`
             spill_state.spill_coordinator.no_need_spill();
             // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
@@ -109,6 +108,8 @@ impl TransformHashJoinBuild {
         self.build_state.build_attach()?;
         self.step = HashJoinBuildStep::Running;
         self.finalize_finished = false;
+        let mut row_space_build_done = self.build_state.row_space_build_done.lock();
+        *row_space_build_done = false;
         Ok(())
     }
 }
@@ -152,20 +153,22 @@ impl Processor for TransformHashJoinBuild {
                     // If join spill is enabled, we should wait probe to spill.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spill_coordinator.spill_tasks.read().is_empty() {
-                        dbg!("?");
                         // Send spilled partition to `HashJoinState`, used by probe spill.
-                        self.build_state
-                            .hash_join_state
-                            .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
+                        // The method should be called only once.
+                        if !spill_state.send_partition_set.load(Ordering::SeqCst) {
+                            self.build_state
+                                .hash_join_state
+                                .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
+                            spill_state.send_partition_set.store(true, Ordering::SeqCst);
+                        }
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
-                        dbg!("??");
                         Ok(Event::Finished)
                     }
                 }
             },
-            HashJoinBuildStep::FastReturn => Ok(Event::Finished),
+            HashJoinBuildStep::FastReturn | HashJoinBuildStep::Finished => Ok(Event::Finished),
             HashJoinBuildStep::WaitSpill
             | HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
@@ -220,7 +223,8 @@ impl Processor for TransformHashJoinBuild {
             | HashJoinBuildStep::WaitSpill
             | HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
-            | HashJoinBuildStep::WaitProbe => unreachable!(),
+            | HashJoinBuildStep::WaitProbe
+            | HashJoinBuildStep::Finished => unreachable!(),
         }
     }
 
@@ -261,7 +265,6 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::WaitProbe => {
-                dbg!("wait probe");
                 if !*self.build_state.hash_join_state.probe_spill_done.lock() {
                     self.build_state.hash_join_state.wait_probe_spill().await;
                 } else {
@@ -271,19 +274,22 @@ impl Processor for TransformHashJoinBuild {
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
                 let partition_id = *self.build_state.hash_join_state.partition_id.read();
-                dbg!("start to read data");
+                if partition_id == -1 {
+                    self.step = HashJoinBuildStep::Finished;
+                    return Ok(());
+                }
                 let spilled_data = self
                     .spill_state
                     .as_ref()
                     .unwrap()
                     .spiller
-                    .read_spilled_data(&partition_id)
+                    .read_spilled_data(&(partition_id as u8))
                     .await?;
-                dbg!("finish read");
+                dbg!("finish read", partition_id);
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 self.reset()?;
             }
-            _ => {}
+            _ => unreachable!(),
         }
         Ok(())
     }

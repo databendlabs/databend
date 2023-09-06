@@ -257,6 +257,9 @@ impl HashJoinProbeState {
         *count -= 1;
         if *count == 0 {
             drop(count);
+            // Reset build done to false
+            let mut build_done = self.hash_join_state.build_done.lock();
+            *build_done = false;
             // Do some reset work for next round.
             // Reset probe workers
             let mut probe_workers = self.probe_workers.lock();
@@ -270,9 +273,12 @@ impl HashJoinProbeState {
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partition = self.hash_join_state.spill_partition.write();
+            dbg!(&*spill_partition);
             if let Some(id) = spill_partition.iter().next().cloned() {
                 spill_partition.remove(&id);
-                *partition_id = id;
+                *partition_id = id as i8;
+            } else {
+                *partition_id = -1;
             }
             let mut final_scan_done = self.hash_join_state.final_scan_done.lock();
             *final_scan_done = true;
@@ -285,6 +291,9 @@ impl HashJoinProbeState {
         let mut count = self.probe_workers.lock();
         *count -= 1;
         if *count == 0 {
+            // Reset build done to false
+            let mut build_done = self.hash_join_state.build_done.lock();
+            *build_done = false;
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
 
@@ -305,9 +314,13 @@ impl HashJoinProbeState {
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partition = self.hash_join_state.spill_partition.write();
+            dbg!(&*spill_partition);
             if let Some(id) = spill_partition.iter().next().cloned() {
+                dbg!(id);
                 spill_partition.remove(&id);
-                *partition_id = id;
+                *partition_id = id as i8;
+            } else {
+                *partition_id = -1;
             };
             // Set spill done
             let mut spill_done = self.hash_join_state.probe_spill_done.lock();
