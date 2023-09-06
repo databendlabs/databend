@@ -67,9 +67,9 @@ impl Binder {
             } => {
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
                 for arg_type in arg_types {
-                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type)?));
+                    arg_datatypes.push(DataType::from(&resolve_type_name(arg_type, true)?));
                 }
-                let return_type = DataType::from(&resolve_type_name(return_type)?);
+                let return_type = DataType::from(&resolve_type_name(return_type, true)?);
 
                 let mut client = UDFFlightClient::connect(address).await?;
                 client
