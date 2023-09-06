@@ -21,7 +21,7 @@ DATADIR_PATH="/tmp/data_05_00_00"
 rm -rf ${DATADIR_PATH}
 mkdir ${DATADIR_PATH}
 DATADIR="fs://$DATADIR_PATH/"
-cp "$CURDIR"/../../../data/sample.csv ${DATADIR_PATH}/
+cp "$CURDIR"/../../../data/csv/sample.csv ${DATADIR_PATH}/
 cp "$CURDIR"/../../../data/parquet/tuple.parquet ${DATADIR_PATH}/
 
 # test create stage
