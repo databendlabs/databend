@@ -176,6 +176,7 @@ impl ToReadDataSourcePlan for dyn Table {
                     let mut mask_policy_map = BTreeMap::new();
                     let meta_api = UserApiProvider::instance().get_meta_store_client();
                     let handler = get_datamask_handler();
+                    let column_not_null = !ctx.get_settings().get_ddl_column_type_nullable()?;
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
                             if let Ok(policy) = handler
@@ -189,8 +190,10 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let args = &policy.args;
                                 let mut aliases = Vec::with_capacity(args.len());
                                 for (i, (arg_name, arg_type)) in args.iter().enumerate() {
-                                    let table_data_type =
-                                        resolve_type_name_by_str(arg_type.as_str())?;
+                                    let table_data_type = resolve_type_name_by_str(
+                                        arg_type.as_str(),
+                                        column_not_null,
+                                    )?;
                                     let data_type = (&table_data_type).into();
                                     let bound_column = BoundColumnRef {
                                         span: None,

@@ -1,0 +1,16 @@
+statement ok
+drop table if exists i
+
+statement ok
+create table i (a int) row_per_block=10
+
+query 
+copy into i from @data/csv/numbers.csv file_format = (type = CSV)
+----
+csv/numbers.csv 18 0 NULL NULL
+
+query 
+SELECT row_count FROM FUSE_BLOCK('default', 'i') order by row_count
+----
+8
+10

@@ -226,12 +226,12 @@ query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
 CREATE TABLE t3 (
-    a Int64 NOT NULL,
-    b UInt64 NOT NULL,
-    c Float64 NOT NULL,
-    d STRING NOT NULL,
-    e ARRAY(Int32) NOT NULL,
-    f TUPLE(f1 BOOLEAN, f2 STRING) NOT NULL
+    a Int64,
+    b UInt64,
+    c Float64,
+    d STRING,
+    e ARRAY(Int32),
+    f TUPLE(f1 BOOLEAN, f2 STRING)
 ) ENGINE = FUSE
 CLUSTER BY (
     a,
@@ -1000,7 +1000,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
@@ -1040,5 +1040,5 @@ EvalScalar
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
+    ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
     └── estimated rows: 0.00

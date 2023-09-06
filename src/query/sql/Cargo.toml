@@ -12,7 +12,7 @@ test = false
 
 [features]
 default = []
-
+storage-hdfs = ["common-config/storage-hdfs"]
 z3-prove = ["common-constraint", "z3"]
 
 [dependencies] # In alphabetical order

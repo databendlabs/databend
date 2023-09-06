@@ -24,6 +24,15 @@ pub struct Ownership {
     pub updated_on: DateTime<Utc>,
 }
 
+impl Ownership {
+    pub fn new(owner_role_name: String) -> Self {
+        Ownership {
+            owner_role_name,
+            updated_on: Utc::now(),
+        }
+    }
+}
+
 impl Default for Ownership {
     fn default() -> Self {
         Ownership {
