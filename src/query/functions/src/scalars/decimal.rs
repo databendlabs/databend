@@ -47,32 +47,26 @@ use ordered_float::OrderedFloat;
 macro_rules! op_decimal {
     ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
         match $common_type {
-            DataType::Decimal(d) => match d {
-                DecimalDataType::Decimal128(size) => {
-                    binary_decimal!(
-                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i128, Decimal128, $is_divide
-                    )
-                }
-                DecimalDataType::Decimal256(size) => {
-                    binary_decimal!(
-                        $a, $b, $ctx, $op, *size, $scale_a, $scale_b, i256, Decimal256, $is_divide
-                    )
-                }
-            },
-            _ => unreachable!("return type of binary op is not decimal"),
+            DecimalDataType::Decimal128(size) => {
+                binary_decimal!(
+                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i128, Decimal128, $is_divide
+                )
+            }
+            DecimalDataType::Decimal256(size) => {
+                binary_decimal!(
+                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i256, Decimal256, $is_divide
+                )
+            }
         }
     };
     ($a: expr, $b: expr, $return_type: expr, $op: ident) => {
         match $return_type {
-            DataType::Decimal(d) => match d {
-                DecimalDataType::Decimal128(_) => {
-                    compare_decimal!($a, $b, $op, Decimal128)
-                }
-                DecimalDataType::Decimal256(_) => {
-                    compare_decimal!($a, $b, $op, Decimal256)
-                }
-            },
-            _ => unreachable!("return type of cmp op is not decimal"),
+            DecimalDataType::Decimal128(_) => {
+                compare_decimal!($a, $b, $op, Decimal128)
+            }
+            DecimalDataType::Decimal256(_) => {
+                compare_decimal!($a, $b, $op, Decimal256)
+            }
         }
     };
 }
@@ -302,7 +296,7 @@ macro_rules! register_decimal_compare_op {
                             (_, _) => FunctionDomain::Full,
                         }),
                         eval: Box::new(wrap_nullable(move |args, _ctx| {
-                            op_decimal!(&args[0], &args[1], &common_type, $op)
+                            op_decimal!(&args[0], &args[1], common_type.as_decimal().unwrap(), $op)
                         })),
                     },
                 }
@@ -329,7 +323,7 @@ macro_rules! register_decimal_compare_op {
                             new_domain.map(|d| Domain::Boolean(d))
                         }),
                         eval: Box::new(move |args, _ctx| {
-                            op_decimal!(&args[0], &args[1], &common_type, $op)
+                            op_decimal!(&args[0], &args[1], common_type.as_decimal().unwrap(), $op)
                         }),
                     },
                 }
@@ -364,7 +358,7 @@ macro_rules! register_decimal_binary_op {
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
 
-            let return_type = DecimalDataType::binary_result_type(
+            let return_decimal_type = DecimalDataType::binary_result_type(
                 &decimal_a,
                 &decimal_b,
                 is_multiply,
@@ -373,62 +367,53 @@ macro_rules! register_decimal_binary_op {
             )
             .ok()?;
 
-            let common_type = if is_divide {
-                let d = DecimalDataType::div_common_type(&decimal_a, &decimal_b).ok()?;
-                DataType::Decimal(d)
+            let common_decimal_type = if is_divide {
+                DecimalDataType::div_common_type(&decimal_a, &decimal_b).ok()?
             } else {
-                DataType::Decimal(return_type.clone())
+                return_decimal_type
             };
 
             let mut scale_a = 0;
             let mut scale_b = 0;
 
             if is_multiply {
-                scale_b = return_type.scale() as u32;
+                scale_b = return_decimal_type.scale() as u32;
             } else if is_divide {
-                scale_a = common_type.as_decimal().unwrap().scale() as u32;
+                scale_a = common_decimal_type.scale() as u32;
             }
 
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
                     args_type: args_type.clone(),
-                    return_type: DataType::Decimal(return_type.clone()),
+                    return_type: DataType::Decimal(return_decimal_type),
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_, _| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
-                        let lhs = convert_to_decimal(
-                            &args[0],
-                            ctx,
-                            args_type[0].clone(),
-                            common_type.clone(),
-                        );
+                        let lhs =
+                            convert_to_decimal(&args[0], ctx, &args_type[0], common_decimal_type);
 
-                        let rhs = convert_to_decimal(
-                            &args[1],
-                            ctx,
-                            args_type[1].clone(),
-                            common_type.clone(),
-                        );
+                        let rhs =
+                            convert_to_decimal(&args[1], ctx, &args_type[1], common_decimal_type);
 
                         let res = op_decimal!(
                             &lhs.as_ref(),
                             &rhs.as_ref(),
                             ctx,
-                            &common_type,
+                            common_decimal_type,
                             $op,
                             scale_a,
                             scale_b,
                             is_divide
                         );
 
-                        if common_type != DataType::Decimal(return_type.clone()) {
-                            convert_to_decimal(
+                        if common_decimal_type != return_decimal_type {
+                            decimal_to_decimal(
                                 &res.as_ref(),
                                 ctx,
-                                common_type.clone(),
-                                DataType::Decimal(return_type.clone()),
+                                common_decimal_type,
+                                return_decimal_type,
                             )
                         } else {
                             res
@@ -486,19 +471,22 @@ pub fn register(registry: &mut FunctionRegistry) {
             scale: params[1] as u8,
         };
 
-        let domain_type = DecimalDataType::from_size(decimal_size).ok()?;
-        let return_type = DataType::Decimal(domain_type);
+        let decimal_type = DecimalDataType::from_size(decimal_size).ok()?;
 
         Some(Function {
             signature: FunctionSignature {
                 name: "to_decimal".to_string(),
                 args_type: vec![from_type.clone()],
-                return_type: return_type.clone(),
+                return_type: DataType::Decimal(decimal_type),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, d| convert_to_decimal_domain(&d[0], domain_type)),
+                calc_domain: Box::new(move |_, d| {
+                    convert_to_decimal_domain(&d[0], decimal_type)
+                        .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
+                        .unwrap_or(FunctionDomain::Full)
+                }),
                 eval: Box::new(move |args, ctx| {
-                    convert_to_decimal(&args[0], ctx, from_type.clone(), return_type.clone())
+                    convert_to_decimal(&args[0], ctx, &from_type, decimal_type)
                 }),
             },
         })
@@ -621,24 +609,24 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
 fn convert_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
-    dest_type: DataType,
+    from_type: &DataType,
+    dest_type: DecimalDataType,
 ) -> Value<AnyType> {
     match from_type {
         DataType::Number(ty) => {
             if ty.is_float() {
-                float_to_decimal(arg, ctx, from_type, dest_type)
+                float_to_decimal(arg, ctx, *ty, dest_type)
             } else {
-                integer_to_decimal(arg, ctx, from_type, dest_type)
+                integer_to_decimal(arg, ctx, *ty, dest_type)
             }
         }
-        DataType::Decimal(_) => decimal_to_decimal(arg, ctx, from_type, dest_type),
+        DataType::Decimal(from) => decimal_to_decimal(arg, ctx, *from, dest_type),
         DataType::String => string_to_decimal(arg, ctx, dest_type),
         _ => unreachable!("to_decimal not support this DataType"),
     }
 }
 
-fn convert_to_decimal_domain(domain: &Domain, ty: DecimalDataType) -> FunctionDomain<AnyType> {
+fn convert_to_decimal_domain(domain: &Domain, ty: DecimalDataType) -> Option<DecimalDomain> {
     match domain {
         Domain::Number(number_domain) => {
             with_integer_mapped_type!(|NUM_TYPE| match number_domain {
@@ -649,9 +637,8 @@ fn convert_to_decimal_domain(domain: &Domain, ty: DecimalDataType) -> FunctionDo
         }
         Domain::Decimal(d) => decimal_to_decimal_domain(d, &ty),
         Domain::String(d) => string_to_decimal_domain(d, &ty),
-        _ => Some(FunctionDomain::Full),
+        _ => None,
     }
-    .unwrap_or(FunctionDomain::Full)
 }
 
 fn string_to_decimal_column<T: Decimal>(
@@ -690,19 +677,17 @@ fn string_to_decimal_scalar<T: Decimal>(
 fn string_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    dest_type: DataType,
+    dest_type: DecimalDataType,
 ) -> Value<AnyType> {
-    let dest_type = dest_type.as_decimal().unwrap();
-
     match arg {
         ValueRef::Column(column) => {
             let string_column = StringType::try_downcast_column(column).unwrap();
             let column = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    string_to_decimal_column::<i128>(ctx, &string_column, *size)
+                    string_to_decimal_column::<i128>(ctx, &string_column, size)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    string_to_decimal_column::<i256>(ctx, &string_column, *size)
+                    string_to_decimal_column::<i256>(ctx, &string_column, size)
                 }
             };
             Value::Column(Column::Decimal(column))
@@ -711,10 +696,10 @@ fn string_to_decimal(
             let buf = StringType::try_downcast_scalar(scalar).unwrap();
             let scalar = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    string_to_decimal_scalar::<i128>(ctx, buf, *size)
+                    string_to_decimal_scalar::<i128>(ctx, buf, size)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    string_to_decimal_scalar::<i128>(ctx, buf, *size)
+                    string_to_decimal_scalar::<i128>(ctx, buf, size)
                 }
             };
             Value::Scalar(Scalar::Decimal(scalar))
@@ -725,54 +710,47 @@ fn string_to_decimal(
 fn string_to_decimal_domain(
     from: &StringDomain,
     dest_type: &DecimalDataType,
-) -> Option<FunctionDomain<AnyType>> {
+) -> Option<DecimalDomain> {
     let min = &from.min;
     let max = from.max.as_ref()?;
     Some(match dest_type {
-        DecimalDataType::Decimal128(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
-                SimpleDomain {
-                    min: read_decimal_with_size::<i128>(min, *size, true).ok()?.0,
-                    max: read_decimal_with_size::<i128>(max, *size, true).ok()?.0,
-                },
-                *size,
-            )))
-        }
-        DecimalDataType::Decimal256(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
-                SimpleDomain {
-                    min: read_decimal_with_size::<i256>(min, *size, true).ok()?.0,
-                    max: read_decimal_with_size::<i256>(max, *size, true).ok()?.0,
-                },
-                *size,
-            )))
-        }
+        DecimalDataType::Decimal128(size) => DecimalDomain::Decimal128(
+            SimpleDomain {
+                min: read_decimal_with_size::<i128>(min, *size, true).ok()?.0,
+                max: read_decimal_with_size::<i128>(max, *size, true).ok()?.0,
+            },
+            *size,
+        ),
+        DecimalDataType::Decimal256(size) => DecimalDomain::Decimal256(
+            SimpleDomain {
+                min: read_decimal_with_size::<i256>(min, *size, true).ok()?.0,
+                max: read_decimal_with_size::<i256>(max, *size, true).ok()?.0,
+            },
+            *size,
+        ),
     })
 }
 
 fn integer_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
-    dest_type: DataType,
+    from_type: NumberDataType,
+    dest_type: DecimalDataType,
 ) -> Value<AnyType> {
-    let dest_type = dest_type.as_decimal().unwrap();
-
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
         ValueRef::Scalar(s) => {
             is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            let builder = ColumnBuilder::repeat(s, 1, &DataType::Number(from_type));
             builder.build()
         }
     };
 
-    let from_type = from_type.as_number().unwrap();
     let result = with_integer_mapped_type!(|NUM_TYPE| match from_type {
         NumberDataType::NUM_TYPE => {
             let column = NumberType::<NUM_TYPE>::try_downcast_column(&column).unwrap();
-            integer_to_decimal_internal(column, ctx, dest_type)
+            integer_to_decimal_internal(column, ctx, &dest_type)
         }
         _ => unreachable!(),
     });
@@ -852,26 +830,22 @@ macro_rules! single_integer_to_decimal {
 fn integer_to_decimal_domain<T: Number + AsPrimitive<i128>>(
     from: &SimpleDomain<T>,
     dest_type: &DecimalDataType,
-) -> Option<FunctionDomain<AnyType>> {
+) -> Option<DecimalDomain> {
     Some(match dest_type {
-        DecimalDataType::Decimal128(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
-                SimpleDomain {
-                    min: single_integer_to_decimal! {from.min, *size, i128}?,
-                    max: single_integer_to_decimal! {from.max, *size, i128}?,
-                },
-                *size,
-            )))
-        }
-        DecimalDataType::Decimal256(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
-                SimpleDomain {
-                    min: single_integer_to_decimal! {from.min, *size, i256}?,
-                    max: single_integer_to_decimal! {from.max, *size, i256}?,
-                },
-                *size,
-            )))
-        }
+        DecimalDataType::Decimal128(size) => DecimalDomain::Decimal128(
+            SimpleDomain {
+                min: single_integer_to_decimal! {from.min, *size, i128}?,
+                max: single_integer_to_decimal! {from.max, *size, i128}?,
+            },
+            *size,
+        ),
+        DecimalDataType::Decimal256(size) => DecimalDomain::Decimal256(
+            SimpleDomain {
+                min: single_integer_to_decimal! {from.min, *size, i256}?,
+                max: single_integer_to_decimal! {from.max, *size, i256}?,
+            },
+            *size,
+        ),
     })
 }
 
@@ -902,30 +876,27 @@ macro_rules! m_float_to_decimal {
 fn float_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
-    dest_type: DataType,
+    from_type: NumberDataType,
+    dest_type: DecimalDataType,
 ) -> Value<AnyType> {
-    let dest_type = dest_type.as_decimal().unwrap();
-
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
         ValueRef::Scalar(s) => {
             is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            let builder = ColumnBuilder::repeat(s, 1, &DataType::Number(from_type));
             builder.build()
         }
     };
 
-    let from_type = from_type.as_number().unwrap();
     let result = match from_type {
         NumberDataType::Float32 => {
             let column = NumberType::<F32>::try_downcast_column(&column).unwrap();
-            float_to_decimal_internal(column, ctx, dest_type)
+            float_to_decimal_internal(column, ctx, &dest_type)
         }
         NumberDataType::Float64 => {
             let column = NumberType::<F64>::try_downcast_column(&column).unwrap();
-            float_to_decimal_internal(column, ctx, dest_type)
+            float_to_decimal_internal(column, ctx, &dest_type)
         }
         _ => unreachable!(),
     };
@@ -971,26 +942,22 @@ macro_rules! single_float_to_decimal {
 fn float_to_decimal_domain<T: Number + AsPrimitive<f64>>(
     from: &SimpleDomain<T>,
     dest_type: &DecimalDataType,
-) -> Option<FunctionDomain<AnyType>> {
+) -> Option<DecimalDomain> {
     Some(match dest_type {
-        DecimalDataType::Decimal128(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
-                SimpleDomain {
-                    min: single_float_to_decimal! {from.min, *size, i128}?,
-                    max: single_float_to_decimal! {from.max, *size, i128}?,
-                },
-                *size,
-            )))
-        }
-        DecimalDataType::Decimal256(size) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
-                SimpleDomain {
-                    min: single_float_to_decimal! {from.min, *size, i256}?,
-                    max: single_float_to_decimal! {from.max, *size, i256}?,
-                },
-                *size,
-            )))
-        }
+        DecimalDataType::Decimal128(size) => DecimalDomain::Decimal128(
+            SimpleDomain {
+                min: single_float_to_decimal! {from.min, *size, i128}?,
+                max: single_float_to_decimal! {from.max, *size, i128}?,
+            },
+            *size,
+        ),
+        DecimalDataType::Decimal256(size) => DecimalDomain::Decimal256(
+            SimpleDomain {
+                min: single_float_to_decimal! {from.min, *size, i256}?,
+                max: single_float_to_decimal! {from.max, *size, i256}?,
+            },
+            *size,
+        ),
     })
 }
 
@@ -1105,38 +1072,35 @@ macro_rules! m_decimal_to_decimal {
 fn decimal_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
-    from_type: DataType,
-    dest_type: DataType,
+    from_type: DecimalDataType,
+    dest_type: DecimalDataType,
 ) -> Value<AnyType> {
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
         ValueRef::Scalar(s) => {
             is_scalar = true;
-            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            let builder = ColumnBuilder::repeat(s, 1, &DataType::Decimal(from_type));
             builder.build()
         }
     };
 
-    let from_type = from_type.as_decimal().unwrap();
-    let dest_type = dest_type.as_decimal().unwrap();
-
     let result: DecimalColumn = match (from_type, dest_type) {
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal128(dest_size)) => {
             let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
-            m_decimal_to_decimal! {from_size, *dest_size, buffer, i128, i128, ctx}
+            m_decimal_to_decimal! {from_size, dest_size, buffer, i128, i128, ctx}
         }
         (DecimalDataType::Decimal128(_), DecimalDataType::Decimal256(dest_size)) => {
             let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
-            m_decimal_to_decimal! {from_size, *dest_size, buffer, i128, i256, ctx}
+            m_decimal_to_decimal! {from_size, dest_size, buffer, i128, i256, ctx}
         }
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal256(dest_size)) => {
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
-            m_decimal_to_decimal! {from_size, *dest_size, buffer, i256, i256, ctx}
+            m_decimal_to_decimal! {from_size, dest_size, buffer, i256, i256, ctx}
         }
         (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(dest_size)) => {
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
-            decimal_256_to_128(buffer, from_size, *dest_size, ctx)
+            decimal_256_to_128(buffer, from_size, dest_size, ctx)
         }
     };
 
@@ -1198,43 +1162,43 @@ fn single_decimal_256_to_128(
 fn decimal_to_decimal_domain(
     from: &DecimalDomain,
     dest_type: &DecimalDataType,
-) -> Option<FunctionDomain<AnyType>> {
+) -> Option<DecimalDomain> {
     Some(match (from, dest_type) {
         (DecimalDomain::Decimal128(d, from_size), DecimalDataType::Decimal128(dest_size)) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+            DecimalDomain::Decimal128(
                 SimpleDomain {
                     min: single_decimal_to_decimal! {d.min, *from_size, *dest_size, i128, i128}?,
                     max: single_decimal_to_decimal! {d.max, *from_size, *dest_size, i128, i128}?,
                 },
                 *dest_size,
-            )))
+            )
         }
         (DecimalDomain::Decimal128(d, from_size), DecimalDataType::Decimal256(dest_size)) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+            DecimalDomain::Decimal256(
                 SimpleDomain {
                     min: single_decimal_to_decimal! {d.min, *from_size, *dest_size, i128, i256}?,
                     max: single_decimal_to_decimal! {d.max, *from_size, *dest_size, i128, i256}?,
                 },
                 *dest_size,
-            )))
+            )
         }
         (DecimalDomain::Decimal256(d, from_size), DecimalDataType::Decimal256(dest_size)) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+            DecimalDomain::Decimal256(
                 SimpleDomain {
                     min: single_decimal_to_decimal! {d.min, *from_size, *dest_size, i256, i256}?,
                     max: single_decimal_to_decimal! {d.max, *from_size, *dest_size, i256, i256}?,
                 },
                 *dest_size,
-            )))
+            )
         }
         (DecimalDomain::Decimal256(d, from_size), DecimalDataType::Decimal128(dest_size)) => {
-            FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+            DecimalDomain::Decimal128(
                 SimpleDomain {
                     min: single_decimal_256_to_128(d.min, *from_size, *dest_size)?,
                     max: single_decimal_256_to_128(d.max, *from_size, *dest_size)?,
                 },
                 *dest_size,
-            )))
+            )
         }
     })
 }
