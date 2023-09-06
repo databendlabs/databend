@@ -11,6 +11,7 @@ parquet/multi_page/multi_page_2.parquet 5328 NULL
 parquet/multi_page/multi_page_3.parquet 4020 NULL
 parquet/multi_page/multi_page_4.parquet 6636 NULL
 parquet/tuple.parquet 431 NULL
+parquet/variant.parquet 334 NULL
 
 query 
 select name, size, creator from list_stage(location => '@data/parquet/', pattern => 'complex[.]*')
