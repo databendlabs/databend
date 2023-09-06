@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-export TESTS_DATA_DIR=$CURDIR/data
+export TESTS_DATA_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/data
 
 export AWS_ACCESS_KEY_ID=minioadmin
 export AWS_SECRET_ACCESS_KEY=minioadmin
