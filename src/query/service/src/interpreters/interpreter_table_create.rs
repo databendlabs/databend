@@ -29,6 +29,7 @@ use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::Ownership;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
@@ -216,12 +217,16 @@ impl CreateTableInterpreter {
                 });
             }
         }
-        let req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
+        let mut req = if let Some(storage_prefix) = self.plan.options.get(OPT_KEY_STORAGE_PREFIX) {
             self.build_attach_request(storage_prefix).await
         } else {
             self.build_request(stat)
         }?;
-        catalog.create_table(req).await?;
+        // current role who created the table/database would be
+        if let Some(current_role) = self.ctx.get_current_role() {
+            req.table_meta.owner = Some(Ownership::new(current_role.name));
+        }
+        catalog.create_table(req.clone()).await?;
 
         Ok(PipelineBuildResult::create())
     }
