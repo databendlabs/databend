@@ -80,8 +80,8 @@ DESC default.users;
 Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 username      |VARCHAR|NO  |''                   |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Add a column to the beginning of the table
@@ -94,8 +94,8 @@ Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Add a column after the column 'username'
@@ -109,8 +109,8 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Rename a column
@@ -124,8 +124,8 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
-new_age       |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+new_age       |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Remove a column
@@ -139,7 +139,7 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 ```
 

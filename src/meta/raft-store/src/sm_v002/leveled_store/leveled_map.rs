@@ -22,6 +22,7 @@ use stream_more::KMerge;
 use stream_more::StreamMore;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 
 /// A map-like data structure that constructs its final state from multiple levels.
@@ -44,12 +45,12 @@ where K: Ord + Send + Sync + 'static
 }
 
 #[async_trait::async_trait]
-impl<L, K> MapApi<K> for L
+impl<L, K> MapApiRO<K> for L
 where
     K: Ord + fmt::Debug + Send + Sync + 'static,
     L: MultiLevelMap<K> + Send + Sync,
 {
-    type V = <<L as MultiLevelMap<K>>::API as MapApi<K>>::V;
+    type V = <<L as MultiLevelMap<K>>::API as MapApiRO<K>>::V;
 
     async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
     where
@@ -65,27 +66,6 @@ where
             }
         }
         got
-    }
-
-    async fn set(
-        &mut self,
-        key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>)
-    where
-        K: Ord,
-    {
-        // Get from this level or the base level.
-        let prev = self.get(&key).await.clone();
-
-        // No such entry at all, no need to create a tombstone for delete
-        if prev.is_not_found() && value.is_none() {
-            return (prev, Marked::new_tomb_stone(0));
-        }
-
-        // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.data_mut().set(key, value).await;
-        (prev, inserted)
     }
 
     async fn range<'a, T: ?Sized, R>(
@@ -131,5 +111,33 @@ where
         });
 
         Box::pin(m)
+    }
+}
+
+#[async_trait::async_trait]
+impl<L, K> MapApi<K> for L
+where
+    K: Ord + fmt::Debug + Send + Sync + 'static,
+    L: MultiLevelMap<K> + Send + Sync,
+{
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(Self::V, Option<KVMeta>)>,
+    ) -> (Marked<Self::V>, Marked<Self::V>)
+    where
+        K: Ord,
+    {
+        // Get from this level or the base level.
+        let prev = self.get(&key).await.clone();
+
+        // No such entry at all, no need to create a tombstone for delete
+        if prev.is_not_found() && value.is_none() {
+            return (prev, Marked::new_tomb_stone(0));
+        }
+
+        // The data is a single level map and the returned `_prev` is only from that level.
+        let (_prev, inserted) = self.data_mut().set(key, value).await;
+        (prev, inserted)
     }
 }
