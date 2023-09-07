@@ -55,6 +55,7 @@ pub struct MergeInto {
     pub matched_evaluators: Vec<MatchedEvaluator>,
     pub unmatched_evaluators: Vec<UnmatchedEvaluator>,
     pub target_table_idx: usize,
+    pub field_index_map: HashMap<FieldIndex, String>,
 }
 
 impl std::fmt::Debug for MergeInto {

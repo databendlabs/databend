@@ -262,6 +262,7 @@ impl Processor for MutationSource {
                                     }
                                 }
                             }
+
                             MutationAction::Update => {
                                 data_block.add_column(BlockEntry::new(
                                     DataType::Boolean,
