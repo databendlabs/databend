@@ -66,10 +66,11 @@ pub fn add_building_env_vars() {
 
 pub fn set_env_config() {
     EmitBuilder::builder()
-        .all_build()
-        .all_cargo()
-        .all_git()
-        .all_rustc()
+        .fail_on_error()
+        .build_timestamp()
+        .cargo_features()
+        .rustc_semver()
+        .git_sha(true)
         .emit()
         .expect("Unable to generate build envs");
 }

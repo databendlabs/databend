@@ -62,9 +62,9 @@ Databend nodes can be deployed either on-premises servers or in the cloud. Datab
 
 | Hardware Specification  	| Standalone Mode  	| Cluster Mode (Meta Node) 	| Cluster Mode (Query Node) 	|
 |-------------------------	|------------------	|--------------------------	|---------------------------	|
-| CPU                     	| 16-core or above 	| 16-core or above         	| 16-core or above          	|
-| Memory                  	| 32 GB or above   	| 32 GB or above           	| 32 GB or above            	|
-| Hard Disk (SSD)         	| 200-600 GB       	| 200-600 GB               	| 100-200 GB                	|
+| CPU                     	| 16-cores or above	| 4-cores or above         	| 16-cores or above          	|
+| Memory                  	| 32 GB or above   	| 16 GB or above           	| 32 GB or above            	|
+| Hard Disk (SSD)         	| 200-600 GB       	| 100-200 GB               	| 100-200 GB                	|
 | Network Interface Card  	| 10 Gbps or above 	| 10 Gbps or above         	| 10 Gbps or above          	|
 
 ### Supported Object Storage

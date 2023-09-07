@@ -32,6 +32,14 @@ pub enum Event {
     Finished,
 }
 
+pub enum EventCause {
+    Other,
+    // Which input of the processor triggers the event
+    Input(usize),
+    // Which output of the processor triggers the event
+    Output(usize),
+}
+
 // The design is inspired by ClickHouse processors
 #[async_trait::async_trait]
 pub trait Processor: Send {
@@ -40,7 +48,16 @@ pub trait Processor: Send {
     /// Reference used for downcast.
     fn as_any(&mut self) -> &mut dyn Any;
 
-    fn event(&mut self) -> Result<Event>;
+    fn event(&mut self) -> Result<Event> {
+        Err(ErrorCode::Unimplemented(format!(
+            "event is unimplemented in {}",
+            self.name()
+        )))
+    }
+
+    fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
+        self.event()
+    }
 
     // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
     fn interrupt(&self) {}
@@ -96,8 +113,8 @@ impl ProcessorPtr {
     }
 
     /// # Safety
-    pub unsafe fn event(&self) -> Result<Event> {
-        (*self.inner.get()).event()
+    pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
+        (*self.inner.get()).event_with_cause(cause)
     }
 
     /// # Safety
@@ -128,6 +145,10 @@ impl<T: Processor + ?Sized> Processor for Box<T> {
 
     fn event(&mut self) -> Result<Event> {
         (**self).event()
+    }
+
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        (**self).event_with_cause(cause)
     }
 
     fn interrupt(&self) {

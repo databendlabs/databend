@@ -44,7 +44,7 @@ RowFetch
     ├── estimated rows: 0.00
     └── Filter
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-        ├── filters: [t_lazy.a (#0) > 1]
+        ├── filters: [is_true(t_lazy.a (#0) > 1)]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_lazy
@@ -53,7 +53,7 @@ RowFetch
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+            ├── push downs: [filters: [is_true(t_lazy.a (#0) > 1)], limit: NONE]
             └── estimated rows: 0.00
 
 query T
@@ -97,7 +97,7 @@ RowFetch
         ├── estimated rows: 0.00
         └── Filter
             ├── output columns: [t_11831.uid (#0), t_11831.time (#3), t_11831._row_id (#4)]
-            ├── filters: [t1.uid (#0) = 11, t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000]
+            ├── filters: [is_true(t1.uid (#0) = 11), is_true(t_11831.time (#3) >= 1686672000000), is_true(t_11831.time (#3) <= 1686758399000)]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.default.t_11831
@@ -106,7 +106,7 @@ RowFetch
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL)) AS Boolean NULL), CAST(t1.uid (#0) = 11 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) >= 1686672000000 AS Boolean NULL)) AS Boolean NULL), CAST(t_11831.time (#3) <= 1686758399000 AS Boolean NULL))], limit: NONE]
+                ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(t_11831.time (#3) >= 1686672000000, t_11831.time (#3) <= 1686758399000) AS Boolean NULL), t1.uid (#0) = 11) AS Boolean NULL), t_11831.time (#3) >= 1686672000000) AS Boolean NULL), t_11831.time (#3) <= 1686758399000)], limit: NONE]
                 └── estimated rows: 0.00
 
 statement ok
@@ -147,7 +147,7 @@ Limit
 ├── estimated rows: 0.00
 └── Filter
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-    ├── filters: [t_lazy.a (#0) > 1]
+    ├── filters: [is_true(t_lazy.a (#0) > 1)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t_lazy
@@ -156,7 +156,7 @@ Limit
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+        ├── push downs: [filters: [is_true(t_lazy.a (#0) > 1)], limit: NONE]
         └── estimated rows: 0.00
 
 query T

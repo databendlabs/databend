@@ -761,28 +761,10 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     assert!(!actual.is_empty(), "{}", fuzz_info);
 
     let expect = DataBlock::concat(&expect)?;
-    let expect = DataBlock::sort(
-        &expect,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let expect = DataBlock::sort(&expect, &get_sort_col_descs(expect.num_columns()), None)?;
 
     let actual = DataBlock::concat(&actual)?;
-    let actual = DataBlock::sort(
-        &actual,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let actual = DataBlock::sort(&actual, &get_sort_col_descs(actual.num_columns()), None)?;
 
     let formated_expect = pretty_format_blocks(&[expect])?;
     let formated_actual = pretty_format_blocks(&[actual])?;
@@ -797,6 +779,19 @@ async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     drop_index(ctx, "index").await?;
 
     Ok(())
+}
+
+fn get_sort_col_descs(num_cols: usize) -> Vec<SortColumnDescription> {
+    let mut sorts = Vec::with_capacity(num_cols);
+    for i in 0..num_cols {
+        sorts.push(SortColumnDescription {
+            offset: i,
+            nulls_first: false,
+            asc: true,
+            is_nullable: false,
+        });
+    }
+    sorts
 }
 
 #[derive(Default)]
