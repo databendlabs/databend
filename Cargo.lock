@@ -2171,6 +2171,7 @@ dependencies = [
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
+ "tokio",
 ]
 
 [[package]]

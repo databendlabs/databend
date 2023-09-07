@@ -38,6 +38,7 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 [dev-dependencies]
 common-arrow = { path = "../../common/arrow" }
+tokio = { workspace = true }
 
 pretty_assertions = "1.3.0"
 
