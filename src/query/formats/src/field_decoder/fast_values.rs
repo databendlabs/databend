@@ -437,15 +437,36 @@ impl FastFieldDecoderValues {
     }
 }
 
-struct FastRowDecoder<'a, R: AsRef<[u8]>> {
+struct FastValuesDecoder<'a, R: AsRef<[u8]>> {
     reader: &'a mut Cursor<R>,
     columns: &'a mut [ColumnBuilder],
     positions: &'a mut VecDeque<usize>,
     field_decoder: &'a FastFieldDecoderValues,
+    estimated_rows: usize,
 }
 
-impl<'a, R: AsRef<[u8]>> FastRowDecoder<'a, R> {
-    pub fn parse_next_row(&mut self) -> Result<()> {
+impl<'a, R: AsRef<[u8]>> FastValuesDecoder<'a, R> {
+    async fn parse(&mut self) -> Result<()> {
+        for row in 0.. {
+            let _ = self.reader.ignore_white_spaces();
+            if self.reader.eof() {
+                break;
+            }
+
+            // Not the first row
+            if row != 0 {
+                if self.reader.ignore_byte(b';') {
+                    break;
+                }
+                self.reader.must_ignore_byte(b',')?;
+            }
+
+            self.parse_next_row().await?;
+        }
+        Ok(())
+    }
+
+    async fn parse_next_row(&mut self) -> Result<()> {
         let _ = self.reader.ignore_white_spaces();
         let col_size = self.columns.len();
         let start_pos_of_row = self.reader.checkpoint();
@@ -500,7 +521,7 @@ impl<'a, R: AsRef<[u8]>> FastRowDecoder<'a, R> {
                 let buf = &self.reader.remaining_slice()[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
-                let values = self.parse_fallback(sql)?;
+                let values = self.parse_fallback(sql).await?;
 
                 for (col, scalar) in self.columns.iter_mut().zip(values) {
                     col.push(scalar.as_ref());
@@ -513,7 +534,7 @@ impl<'a, R: AsRef<[u8]>> FastRowDecoder<'a, R> {
         Ok(())
     }
 
-    fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
+    async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
         todo!();
     }
 }
