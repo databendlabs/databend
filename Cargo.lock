@@ -2149,6 +2149,7 @@ dependencies = [
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
  "bstr 1.6.2",
  "chrono-tz",
  "common-arrow",
@@ -2162,6 +2163,7 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num",
+ "once_cell",
  "ordered-float 3.7.0",
  "pretty_assertions",
  "roaring",

@@ -19,6 +19,7 @@ use std::io::BufRead;
 use std::io::Cursor;
 use std::ops::Not;
 
+use aho_corasick::AhoCorasick;
 use bstr::ByteSlice;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
@@ -55,6 +56,7 @@ use common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use once_cell::sync::Lazy;
 
 use crate::CommonSettings;
 use crate::FieldDecoder;
@@ -437,22 +439,35 @@ impl FastFieldDecoderValues {
     }
 }
 
-struct FastValuesDecoder<'a, R: AsRef<[u8]>> {
-    reader: &'a mut Cursor<R>,
+struct FastValuesDecoder<'a> {
     columns: &'a mut [ColumnBuilder],
-    positions: &'a mut VecDeque<usize>,
     field_decoder: &'a FastFieldDecoderValues,
+    reader: Cursor<&'a [u8]>,
     estimated_rows: usize,
+    positions: VecDeque<usize>,
 }
 
-impl<'a, R: AsRef<[u8]>> FastValuesDecoder<'a, R> {
+// Pre-generate the positions of `(`, `'` and `\`
+static PATTERNS: &[&str] = &["(", "'", "\\"];
+
+static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
+
+impl<'a> FastValuesDecoder<'a> {
     pub fn new(
-        reader: &'a mut Cursor<R>,
+        data: &'a str,
         columns: &'a mut [ColumnBuilder],
-        positions: &'a mut VecDeque<usize>,
         field_decoder: &'a FastFieldDecoderValues,
-        estimated_rows: usize,
     ) -> Self {
+        let mut estimated_rows = 0;
+        let mut positions = VecDeque::new();
+        for mat in INSERT_TOKEN_FINDER.find_iter(&data) {
+            if mat.pattern() == 0.into() {
+                estimated_rows += 1;
+                continue;
+            }
+            positions.push_back(mat.start());
+        }
+        let reader = Cursor::new(data.as_bytes());
         FastValuesDecoder {
             reader,
             columns,
@@ -521,7 +536,7 @@ impl<'a, R: AsRef<[u8]>> FastValuesDecoder<'a, R> {
 
             let (need_fallback, pop_count) = self
                 .field_decoder
-                .read_field(col, self.reader, self.positions)
+                .read_field(col, &mut self.reader, &mut self.positions)
                 .map(|_| {
                     let _ = self.reader.ignore_white_spaces();
                     let need_fallback = self.reader.ignore_byte(col_end).not();
@@ -536,7 +551,7 @@ impl<'a, R: AsRef<[u8]>> FastValuesDecoder<'a, R> {
                 }
                 // rollback to start position of the row
                 self.reader.rollback(start_pos_of_row + 1);
-                skip_to_next_row(self.reader, 1)?;
+                skip_to_next_row(&mut self.reader, 1)?;
                 let end_pos_of_row = self.reader.position();
 
                 // Parse from expression and append all columns.

@@ -29,6 +29,8 @@ common-io = { path = "../../common/io" }
 common-meta-app = { path = "../../meta/app" }
 common-settings = { path = "../settings" }
 jsonb = { workspace = true }
+once_cell = "1.15.0"
+aho-corasick = { version = "1.0.1" }
 
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
