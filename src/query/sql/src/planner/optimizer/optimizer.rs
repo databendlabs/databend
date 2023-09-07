@@ -30,6 +30,7 @@ use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::optimizer::RESIDUAL_RULES;
@@ -152,7 +153,7 @@ pub fn optimize_query(
     let mut result = heuristic.pre_optimize(s_expr)?;
     result = heuristic.optimize_expression(&result, &DEFAULT_REWRITE_RULES)?;
     let mut dphyp_optimized = false;
-    if ctx.get_settings().get_enable_dphyp()? {
+    if ctx.get_settings().get_enable_dphyp()? && !ctx.get_settings().get_disable_join_reorder()? {
         let (dp_res, optimized) =
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result.clone()))?;
         if optimized {
@@ -176,8 +177,10 @@ pub fn optimize_query(
     if enable_distributed_query {
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
-    result = heuristic.optimize_expression(&result, &RESIDUAL_RULES)?;
-    Ok(result)
+    if ctx.get_settings().get_disable_join_reorder()? {
+        return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
+    }
+    heuristic.optimize_expression(&result, &RESIDUAL_RULES)
 }
 
 // TODO(leiysky): reuse the optimization logic with `optimize_query`

@@ -153,29 +153,75 @@ pub struct FunctionRegistry {
 }
 
 impl Function {
-    pub fn wrap_nullable(self) -> Self {
-        let (_, eval) = self.eval.into_scalar().unwrap();
-        Self {
-            signature: FunctionSignature {
-                name: self.signature.name.clone(),
-                args_type: self
-                    .signature
-                    .args_type
-                    .iter()
-                    .map(|ty| ty.wrap_nullable())
-                    .collect(),
-                return_type: self.signature.return_type.wrap_nullable(),
-            },
+    pub fn passthrough_nullable(self) -> Self {
+        debug_assert!(
+            !self
+                .signature
+                .args_type
+                .iter()
+                .any(|ty| ty.is_nullable_or_null())
+        );
+
+        let (calc_domain, eval) = self.eval.into_scalar().unwrap();
+
+        let signature = FunctionSignature {
+            name: self.signature.name.clone(),
+            args_type: self
+                .signature
+                .args_type
+                .iter()
+                .map(|ty| ty.wrap_nullable())
+                .collect(),
+            return_type: self.signature.return_type.wrap_nullable(),
+        };
+
+        let new_calc_domain = Box::new(move |ctx: &FunctionContext, domains: &[Domain]| {
+            let mut args_has_null = false;
+            let mut args_domain = Vec::with_capacity(domains.len());
+            for domain in domains {
+                match domain {
+                    Domain::Nullable(NullableDomain {
+                        has_null,
+                        value: Some(value),
+                    }) => {
+                        args_has_null = args_has_null || *has_null;
+                        args_domain.push(value.as_ref().clone());
+                    }
+                    Domain::Nullable(NullableDomain { value: None, .. }) => {
+                        return FunctionDomain::Domain(Domain::Nullable(NullableDomain {
+                            has_null: true,
+                            value: None,
+                        }));
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            calc_domain(ctx, &args_domain).map(|result_domain| {
+                let (result_has_null, result_domain) = match result_domain {
+                    Domain::Nullable(NullableDomain { has_null, value }) => (has_null, value),
+                    domain => (false, Some(Box::new(domain))),
+                };
+                Domain::Nullable(NullableDomain {
+                    has_null: args_has_null || result_has_null,
+                    value: result_domain,
+                })
+            })
+        });
+
+        Function {
+            signature,
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(wrap_nullable(eval)),
+                calc_domain: new_calc_domain,
+                eval: Box::new(passthrough_nullable(eval)),
             },
         }
     }
 
     pub fn error_to_null(self) -> Self {
+        debug_assert!(!self.signature.return_type.is_nullable_or_null());
+
         let mut signature = self.signature;
-        debug_assert!(!signature.return_type.is_nullable_or_null());
         signature.return_type = signature.return_type.wrap_nullable();
 
         let (calc_domain, eval) = self.eval.into_scalar().unwrap();
@@ -190,7 +236,6 @@ impl Function {
                     };
                     FunctionDomain::Domain(NullableType::<AnyType>::upcast_domain(new_domain))
                 }
-                // Here we convert MayThrow to full, this may lose some internal information since it's runtime adpator
                 FunctionDomain::Full | FunctionDomain::MayThrow => FunctionDomain::Full,
             }
         });
@@ -553,7 +598,9 @@ impl<'a> EvalContext<'a> {
     }
 }
 
-pub fn wrap_nullable<F>(f: F) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
+pub fn passthrough_nullable<F>(
+    f: F,
+) -> impl Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType>
 where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
     move |args, ctx| {
         type T = NullableType<AnyType>;

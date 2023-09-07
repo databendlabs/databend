@@ -19,19 +19,19 @@ use databend_sqlsmith::Runner;
 #[clap(about, author)]
 pub struct Args {
     /// The database host.
-    #[clap(short, long, default_value = "localhost")]
+    #[clap(long, default_value = "localhost")]
     host: String,
 
     /// The database http port.
-    #[clap(short, long, default_value = "8000")]
+    #[clap(long, default_value = "8000")]
     port: u16,
 
     /// The test database.
-    #[clap(short, long, default_value = "default")]
+    #[clap(long, default_value = "default")]
     db: String,
 
     /// The username.
-    #[clap(short, long, default_value = "root")]
+    #[clap(long, default_value = "root")]
     user: String,
 
     /// The password.
@@ -39,7 +39,7 @@ pub struct Args {
     pass: String,
 
     /// The number of test cases to generate.
-    #[clap(short, long, default_value = "100")]
+    #[clap(long, default_value = "100")]
     count: usize,
 }
 
