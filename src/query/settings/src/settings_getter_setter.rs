@@ -397,7 +397,7 @@ impl Settings {
     }
 
     pub fn set_enable_distributed_replace(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_repalce_into", u64::from(val))
+        self.try_set_u64("enable_distributed_replace_into", u64::from(val))
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
