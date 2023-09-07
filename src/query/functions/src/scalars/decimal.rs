@@ -20,12 +20,10 @@ use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::*;
-use common_expression::types::nullable::NullableDomain;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringDomain;
 use common_expression::types::*;
 use common_expression::with_integer_mapped_type;
-use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
@@ -257,77 +255,37 @@ macro_rules! register_decimal_compare_op {
             }
 
             // Comparison between different decimal types must be same siganature types
-            Some(Arc::new(if has_nullable {
-                // Cannot use `function.wrap_nullable` because this method will erase `calc_domain`.
-                Function {
-                    signature: FunctionSignature {
-                        name: $name.to_string(),
-                        args_type: vec![common_type.wrap_nullable(), common_type.wrap_nullable()],
-                        return_type: DataType::Nullable(Box::new(DataType::Boolean)),
-                    },
-                    eval: FunctionEval::Scalar {
-                        calc_domain: Box::new(|_, d| match (&d[0], &d[1]) {
-                            (Domain::Nullable(d1), Domain::Nullable(d2))
-                                if d1.value.is_some() && d2.value.is_some() =>
-                            {
-                                let new_domain = match (
-                                    d1.value.as_ref().unwrap().as_ref(),
-                                    d2.value.as_ref().unwrap().as_ref(),
-                                ) {
-                                    (
-                                        Domain::Decimal(DecimalDomain::Decimal128(d1, _)),
-                                        Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
-                                    ) => d1.$domain_op(d2),
-                                    (
-                                        Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
-                                        Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
-                                    ) => d1.$domain_op(d2),
-                                    _ => {
-                                        unreachable!("Expect two same decimal domains, got {:?}", d)
-                                    }
-                                };
-                                new_domain.map(|d| {
-                                    Domain::Nullable(NullableDomain {
-                                        has_null: d1.has_null || d2.has_null,
-                                        value: Some(Box::new(Domain::Boolean(d))),
-                                    })
-                                })
-                            }
-                            (_, _) => FunctionDomain::Full,
-                        }),
-                        eval: Box::new(wrap_nullable(move |args, _ctx| {
-                            op_decimal!(&args[0], &args[1], common_type.as_decimal().unwrap(), $op)
-                        })),
-                    },
-                }
+            let function = Function {
+                signature: FunctionSignature {
+                    name: $name.to_string(),
+                    args_type: vec![common_type.clone(), common_type.clone()],
+                    return_type: DataType::Boolean,
+                },
+                eval: FunctionEval::Scalar {
+                    calc_domain: Box::new(|_, d| {
+                        let new_domain = match (&d[0], &d[1]) {
+                            (
+                                Domain::Decimal(DecimalDomain::Decimal128(d1, _)),
+                                Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
+                            ) => d1.$domain_op(d2),
+                            (
+                                Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
+                                Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
+                            ) => d1.$domain_op(d2),
+                            _ => unreachable!("Expect two same decimal domains, got {:?}", d),
+                        };
+                        new_domain.map(|d| Domain::Boolean(d))
+                    }),
+                    eval: Box::new(move |args, _ctx| {
+                        op_decimal!(&args[0], &args[1], common_type.as_decimal().unwrap(), $op)
+                    }),
+                },
+            };
+            if has_nullable {
+                Some(Arc::new(function.passthrough_nullable()))
             } else {
-                Function {
-                    signature: FunctionSignature {
-                        name: $name.to_string(),
-                        args_type: vec![common_type.clone(), common_type.clone()],
-                        return_type: DataType::Boolean,
-                    },
-                    eval: FunctionEval::Scalar {
-                        calc_domain: Box::new(|_, d| {
-                            let new_domain = match (&d[0], &d[1]) {
-                                (
-                                    Domain::Decimal(DecimalDomain::Decimal128(d1, _)),
-                                    Domain::Decimal(DecimalDomain::Decimal128(d2, _)),
-                                ) => d1.$domain_op(d2),
-                                (
-                                    Domain::Decimal(DecimalDomain::Decimal256(d1, _)),
-                                    Domain::Decimal(DecimalDomain::Decimal256(d2, _)),
-                                ) => d1.$domain_op(d2),
-                                _ => unreachable!("Expect two same decimal domains, got {:?}", d),
-                            };
-                            new_domain.map(|d| Domain::Boolean(d))
-                        }),
-                        eval: Box::new(move |args, _ctx| {
-                            op_decimal!(&args[0], &args[1], common_type.as_decimal().unwrap(), $op)
-                        }),
-                    },
-                }
-            }))
+                Some(Arc::new(function))
+            }
         });
     };
 }
