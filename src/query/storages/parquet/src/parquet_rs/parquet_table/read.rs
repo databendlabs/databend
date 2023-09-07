@@ -51,7 +51,7 @@ impl ParquetRSTable {
             table_schema,
             &self.schema_descr,
             plan,
-            self.read_options.with_prune_pages(false), /* TODO(parquet): there is a bug in arrow-rs when reading page indexes. */
+            self.read_options,
             need_pruner,
         )?);
 
