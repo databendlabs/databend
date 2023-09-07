@@ -1,0 +1,53 @@
+
+statement ok
+drop table if exists v
+
+statement ok
+create table v (a variant)
+
+query 
+select $1 from @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson') order by $1:b
+----
+{"a":true,"b":1,"c":1.1,"d":"ab","e":"2020-01-01","f":"2020-01-01 00:00:00","g":[1,2,3],"h":{"0":0,"1":"a"},"i":{"k":"v"}}
+{"a":true,"b":2,"c":2.2,"d":"cd","e":"2021-01-01","f":"2021-01-01 00:00:00","g":[4,5,6],"h":{"0":1,"1":"b"},"i":123}
+{"a":false,"b":3,"c":3.3,"d":"ef","e":"2022-01-01","f":"2022-01-01 00:00:00","g":[7,8,9],"h":{"0":2,"1":"c"},"i":"xyz"}
+{"a":false,"b":4,"c":4.4,"d":"gh","e":"2023-01-01","f":"2023-01-01 00:00:00","g":[10,11],"h":{"0":3,"1":"d"},"i":[1,2]}
+
+query 
+select $1:a as a from @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson') order by a
+----
+false
+false
+true
+true
+
+
+# test JOIN
+statement ok
+insert into v values (1.1)
+
+query 
+select t2.$1:a, a from  @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson') as t2, v order by t2.$1:a
+----
+false 1.1
+false 1.1
+true 1.1
+true 1.1
+
+query 
+copy into v from (select $1:b from @data/ndjson/ t2) files=('json_sample.ndjson') file_format = (type = ndjson)
+----
+ndjson/json_sample.ndjson 4 0 NULL NULL
+
+query 
+select $1 from v order by $1
+----
+1
+1.1
+2
+3
+4
+
+# ndjson only supports $1
+query error column position 2 doesn't exist
+select $2 from @data/ndjson/ (files=>('json_sample.ndjson'), file_format=>'ndjson')

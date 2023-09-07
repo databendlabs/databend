@@ -153,8 +153,8 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
 
         let decompressor = BasicDecompressor::new(page_reader, vec![]);
         let column_type = self.column_descriptor.descriptor.primitive_type.clone();
-        let filed_name = self.column_descriptor.path_in_schema[0].to_owned();
-        let field = ArrowField::new(filed_name, DataType::Binary, false);
+        let field_name = self.column_descriptor.path_in_schema[0].to_owned();
+        let field = ArrowField::new(field_name, DataType::Binary, false);
         let mut array_iter =
             column_iter_to_arrays(vec![decompressor], vec![&column_type], field, None, 1)?;
         if let Some(array) = array_iter.next() {

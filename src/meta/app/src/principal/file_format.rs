@@ -28,7 +28,7 @@ use serde::Serialize;
 use crate::principal::StageFileCompression;
 use crate::principal::StageFileFormatType;
 
-const OPT_FILED_DELIMITER: &str = "field_delimiter";
+const OPT_FIELD_DELIMITER: &str = "field_delimiter";
 const OPT_RECORDE_DELIMITER: &str = "record_delimiter";
 const OPT_SKIP_HEADER: &str = "skip_header";
 const OPT_NAN_DISPLAY: &str = "nan_display";
@@ -168,7 +168,7 @@ impl FileFormatParams {
                 let default = CsvFileFormatParams::default();
                 let compression = ast.take_compression()?;
                 let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FILED_DELIMITER, default.field_delimiter);
+                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
                     ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
                 let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
@@ -190,7 +190,7 @@ impl FileFormatParams {
                 let default = TsvFileFormatParams::default();
                 let compression = ast.take_compression()?;
                 let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FILED_DELIMITER, default.field_delimiter);
+                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
                     ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
                 let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);

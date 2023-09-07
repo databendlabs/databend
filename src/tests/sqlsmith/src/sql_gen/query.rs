@@ -20,9 +20,12 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
+use common_expression::types::DataType;
 use rand::Rng;
 
+use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
+use crate::sql_gen::Table;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
@@ -87,9 +90,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_select(&mut self) -> SelectStmt {
+        let from = self.gen_from();
         let select_list = self.gen_select_list();
         let selection = self.gen_selection();
-        let from = self.gen_from();
         SelectStmt {
             span: None,
             // TODO
@@ -114,7 +117,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         for _ in 0..select_num {
             let target = match self.rng.gen_range(0..=9) {
                 0..=9 => {
-                    let expr = self.gen_expr();
+                    let ty = self.gen_data_type();
+                    let expr = self.gen_expr(&ty);
                     SelectTarget::AliasedExpr {
                         expr: Box::new(expr),
                         // TODO
@@ -132,8 +136,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_from(&mut self) -> Vec<TableReference> {
         match self.rng.gen_range(0..=9) {
             0..=9 => {
-                let table = &self.tables[0];
-                let table_name = Identifier::from_name(table.name.clone());
+                let i = self.rng.gen_range(0..self.tables.len());
+                self.bound_table(self.tables[i].clone());
+
+                let table_name = Identifier::from_name(self.tables[i].name.clone());
 
                 let table_ref = TableReference::Table {
                     span: None,
@@ -160,8 +166,25 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn gen_selection(&mut self) -> Option<Expr> {
         match self.rng.gen_range(0..=9) {
-            0..=6 => Some(self.gen_expr()),
+            0..=5 => Some(self.gen_expr(&DataType::Boolean)),
+            6 => {
+                let ty = self.gen_simple_data_type();
+                Some(self.gen_expr(&ty))
+            }
             _ => None,
         }
+    }
+
+    fn bound_table(&mut self, table: Table) {
+        for (i, field) in table.schema.fields().iter().enumerate() {
+            let column = Column {
+                table_name: table.name.clone(),
+                name: field.name.clone(),
+                index: i + 1,
+                data_type: DataType::from(&field.data_type),
+            };
+            self.bound_columns.push(column);
+        }
+        self.bound_tables.push(table);
     }
 }

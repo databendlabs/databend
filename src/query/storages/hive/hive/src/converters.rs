@@ -124,7 +124,7 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
         let name = field.name.unwrap_or_default();
         let type_name = field.type_.unwrap_or_default();
 
-        let table_type = try_from_filed_type_name(type_name)?;
+        let table_type = try_from_field_type_name(type_name)?;
         let table_type = table_type.wrap_nullable();
         let field = TableField::new(&name, table_type);
         fields.push(field);
@@ -132,7 +132,7 @@ fn try_into_schema(hive_fields: Vec<hms::FieldSchema>) -> Result<TableSchema> {
     Ok(TableSchema::new(fields))
 }
 
-fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType> {
+fn try_from_field_type_name(type_name: impl AsRef<str>) -> Result<TableDataType> {
     let name = type_name.as_ref().to_uppercase();
     // TODO more mappings goes here
     // https://cwiki.apache.org/confluence/display/Hive/LanguageManual+Types
@@ -141,7 +141,7 @@ fn try_from_filed_type_name(type_name: impl AsRef<str>) -> Result<TableDataType>
         Ok(TableDataType::String)
     } else if name.starts_with("ARRAY<") {
         let sub_type = &name["ARRAY<".len()..name.len() - 1];
-        let sub_type = try_from_filed_type_name(sub_type)?;
+        let sub_type = try_from_field_type_name(sub_type)?;
         Ok(TableDataType::Array(Box::new(sub_type.wrap_nullable())))
     } else {
         match name.as_str() {

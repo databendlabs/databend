@@ -16,6 +16,8 @@ mod dml;
 mod expr;
 mod query;
 mod sql_generator;
+mod types;
 
+pub(crate) use sql_generator::Column;
 pub(crate) use sql_generator::SqlGenerator;
 pub(crate) use sql_generator::Table;
