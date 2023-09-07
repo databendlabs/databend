@@ -150,7 +150,6 @@ impl PlanFragment {
                 actions.add_fragment_actions(fragment_actions)?;
             }
             FragmentType::Compact => {
-                // Redistribute partitions
                 let mut fragment_actions = self.redistribute_compact(ctx)?;
                 if let Some(ref exchange) = self.exchange {
                     fragment_actions.set_exchange(exchange.clone());
@@ -346,7 +345,6 @@ impl PlanFragment {
         for (executor, parts) in partition_reshuffle.iter() {
             let mut plan = self.plan.clone();
 
-            // Replace `ReadDataSourcePlan` with rewritten one and generate new fragment for it.
             let mut replace_compact_partial = ReplaceCompactBlock {
                 partitions: parts.clone(),
             };

@@ -24,10 +24,11 @@ use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::CompactFinal;
+use common_sql::executor::CommitSink;
 use common_sql::executor::CompactPartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
@@ -88,7 +89,7 @@ impl OptimizeTableInterpreter {
         catalog_info: CatalogInfo,
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
-        let is_lazy = parts.is_lazy;
+        let merge_meta = parts.is_lazy;
         let mut root = PhysicalPlan::CompactPartial(CompactPartial {
             parts,
             table_info: table_info.clone(),
@@ -106,12 +107,13 @@ impl OptimizeTableInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::CompactFinal(CompactFinal {
+        Ok(PhysicalPlan::CommitSink(CommitSink {
             input: Box::new(root),
             table_info,
             catalog_info,
             snapshot,
-            is_lazy,
+            mutation_kind: MutationKind::Compact,
+            merge_meta,
         }))
     }
 

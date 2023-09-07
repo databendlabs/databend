@@ -24,11 +24,12 @@ use common_exception::Result;
 use common_expression::ColumnId;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use common_sql::executor::MutationKind;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactLazyPartInfo;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
@@ -117,6 +118,7 @@ impl FuseTable {
         let is_lazy = parts.is_lazy;
         let thresholds = self.get_block_thresholds();
         let cluster_key_id = self.cluster_key_id();
+        let mut max_threads = ctx.get_settings().get_max_threads()? as usize;
         if is_lazy {
             let query_ctx = ctx.clone();
 
@@ -152,13 +154,13 @@ impl FuseTable {
                 Ok(())
             });
         } else {
+            max_threads = max_threads.min(parts.len()).max(1);
             ctx.set_partitions(parts)?;
         }
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -192,17 +194,12 @@ impl FuseTable {
             pipeline.try_resize(1)?;
 
             pipeline.add_transform(|input, output| {
-                let compact_aggregator = CompactAggregator::new(
-                    ctx.clone(),
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    thresholds,
-                    cluster_key_id,
-                );
+                let mutation_aggregator =
+                    TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact);
                 Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                     input,
                     output,
-                    compact_aggregator,
+                    mutation_aggregator,
                 )))
             })?;
         }

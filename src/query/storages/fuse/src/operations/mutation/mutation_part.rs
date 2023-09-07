@@ -23,14 +23,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::mutation::SegmentIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum Mutation {
-    MutationDeletedSegment(DeletedSegment),
+    MutationDeletedSegment(DeletedSegmentInfo),
     MutationPartInfo(MutationPartInfo),
 }
 
@@ -67,18 +66,17 @@ impl Mutation {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct DeletedSegment {
+pub struct DeletedSegmentInfo {
     /// segment index.
     pub index: SegmentIndex,
-    /// segment location and summary.
-    /// location can be used for hash
-    pub segment_info: (Location, Statistics),
+    /// segment statistics.
+    pub summary: Statistics,
 }
 
-impl DeletedSegment {
+impl DeletedSegmentInfo {
     fn hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
-        self.segment_info.0.hash(&mut s);
+        self.index.hash(&mut s);
         s.finish()
     }
 }
@@ -92,20 +90,6 @@ pub struct MutationPartInfo {
 }
 
 impl MutationPartInfo {
-    pub fn create(
-        index: BlockMetaIndex,
-        cluster_stats: Option<ClusterStatistics>,
-        inner_part: PartInfoPtr,
-        whole_block_mutation: bool,
-    ) -> Self {
-        MutationPartInfo {
-            index,
-            cluster_stats,
-            inner_part,
-            whole_block_mutation,
-        }
-    }
-
     fn hash(&self) -> u64 {
         self.inner_part.hash()
     }

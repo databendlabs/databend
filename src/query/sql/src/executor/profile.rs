@@ -505,16 +505,14 @@ fn flatten_plan_node_profile(
         }
         PhysicalPlan::MaterializedCte(_) => todo!(),
         PhysicalPlan::DeletePartial(_)
-        | PhysicalPlan::MutationAggregate(_)
+        | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::MergeInto(_)
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::FinalCommit(_)
-        | PhysicalPlan::CompactPartial(_)
-        | PhysicalPlan::CompactFinal(_) => unreachable!(),
+        | PhysicalPlan::CompactPartial(_) => unreachable!(),
     }
 
     Ok(())

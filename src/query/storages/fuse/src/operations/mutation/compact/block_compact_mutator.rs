@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -40,6 +39,7 @@ use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::compact_part::CompactExtraInfo;
 use crate::operations::mutation::compact::compact_part::CompactLazyPartInfo;
 use crate::operations::mutation::compact::compact_part::CompactPartInfo;
+use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::CompactTaskInfo;
 use crate::operations::mutation::MAX_BLOCK_COUNT;
 use crate::operations::CompactOptions;
@@ -431,13 +431,13 @@ impl CompactTaskBuilder {
     fn build_task(
         &self,
         tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
-        unchanged_blocks: &mut BTreeMap<usize, Arc<BlockMeta>>,
-        block_idx: usize,
+        unchanged_blocks: &mut Vec<(BlockIndex, Arc<BlockMeta>)>,
+        block_idx: BlockIndex,
         blocks: Vec<Arc<BlockMeta>>,
     ) -> bool {
         let mut flag = false;
         if blocks.len() == 1 && !self.check_compact(&blocks[0]) {
-            unchanged_blocks.insert(block_idx, blocks[0].clone());
+            unchanged_blocks.push((block_idx, blocks[0].clone()));
             flag = true;
         } else {
             tasks.push_back((block_idx, blocks));
@@ -472,7 +472,7 @@ impl CompactTaskBuilder {
         let mut block_idx = 0;
         // Used to identify whether the latest block is unchanged or needs to be compacted.
         let mut latest_flag = true;
-        let mut unchanged_blocks: BTreeMap<usize, Arc<BlockMeta>> = BTreeMap::new();
+        let mut unchanged_blocks = Vec::new();
         let mut removed_segment_summary = Statistics::default();
 
         let mut iter = compact_segments.into_iter().rev();
@@ -537,7 +537,7 @@ impl CompactTaskBuilder {
             } else {
                 let (index, mut blocks) = if latest_flag {
                     unchanged_blocks
-                        .pop_last()
+                        .pop()
                         .map_or((0, vec![]), |(k, v)| (k, vec![v]))
                 } else {
                     tasks.pop_back().unwrap_or((0, vec![]))

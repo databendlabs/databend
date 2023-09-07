@@ -351,7 +351,7 @@ impl Processor for MutationSource {
                 match Mutation::from_part(&part)? {
                     Mutation::MutationDeletedSegment(deleted_segment) => {
                         let progress_values = ProgressValues {
-                            rows: deleted_segment.segment_info.1.row_count as usize,
+                            rows: deleted_segment.summary.row_count as usize,
                             bytes: 0,
                         };
                         self.ctx.get_write_progress().incr(&progress_values);

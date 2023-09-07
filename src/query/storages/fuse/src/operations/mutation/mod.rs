@@ -20,7 +20,6 @@ mod recluster_aggregator;
 mod recluster_mutator;
 
 pub use compact::BlockCompactMutator;
-pub use compact::CompactAggregator;
 pub use compact::CompactExtraInfo;
 pub use compact::CompactLazyPartInfo;
 pub use compact::CompactSource;
@@ -30,7 +29,7 @@ pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
 pub use mutation_meta::ClusterStatsGenType;
 pub use mutation_meta::SerializeDataMeta;
-pub use mutation_part::DeletedSegment;
+pub use mutation_part::DeletedSegmentInfo;
 pub use mutation_part::Mutation;
 pub use mutation_part::MutationPartInfo;
 pub use mutation_source::MutationAction;
