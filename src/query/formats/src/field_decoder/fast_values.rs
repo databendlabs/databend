@@ -446,7 +446,23 @@ struct FastValuesDecoder<'a, R: AsRef<[u8]>> {
 }
 
 impl<'a, R: AsRef<[u8]>> FastValuesDecoder<'a, R> {
-    async fn parse<H, F>(&mut self, fallback_fn: &H) -> Result<()>
+    pub fn new(
+        reader: &'a mut Cursor<R>,
+        columns: &'a mut [ColumnBuilder],
+        positions: &'a mut VecDeque<usize>,
+        field_decoder: &'a FastFieldDecoderValues,
+        estimated_rows: usize,
+    ) -> Self {
+        FastValuesDecoder {
+            reader,
+            columns,
+            estimated_rows,
+            positions,
+            field_decoder,
+        }
+    }
+
+    pub async fn parse<H, F>(&mut self, fallback_fn: &H) -> Result<()>
     where
         H: Fn(&str) -> F,
         F: std::future::Future<Output = Result<Vec<Scalar>>> + Send,
