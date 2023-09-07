@@ -439,8 +439,7 @@ impl FastFieldDecoderValues {
     }
 }
 
-struct FastValuesDecoder<'a> {
-    columns: &'a mut [ColumnBuilder],
+pub struct FastValuesDecoder<'a> {
     field_decoder: &'a FastFieldDecoderValues,
     reader: Cursor<&'a [u8]>,
     estimated_rows: usize,
@@ -453,11 +452,7 @@ static PATTERNS: &[&str] = &["(", "'", "\\"];
 static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 impl<'a> FastValuesDecoder<'a> {
-    pub fn new(
-        data: &'a str,
-        columns: &'a mut [ColumnBuilder],
-        field_decoder: &'a FastFieldDecoderValues,
-    ) -> Self {
+    pub fn new(data: &'a str, field_decoder: &'a FastFieldDecoderValues) -> Self {
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
         for mat in INSERT_TOKEN_FINDER.find_iter(&data) {
@@ -470,14 +465,21 @@ impl<'a> FastValuesDecoder<'a> {
         let reader = Cursor::new(data.as_bytes());
         FastValuesDecoder {
             reader,
-            columns,
             estimated_rows,
             positions,
             field_decoder,
         }
     }
 
-    pub async fn parse<H, F>(&mut self, fallback_fn: &H) -> Result<()>
+    pub fn estimated_rows(&self) -> usize {
+        self.estimated_rows
+    }
+
+    pub async fn parse<H, F>(
+        &mut self,
+        columns: &mut [ColumnBuilder],
+        fallback_fn: &H,
+    ) -> Result<()>
     where
         H: Fn(&str) -> F,
         F: std::future::Future<Output = Result<Vec<Scalar>>> + Send,
@@ -496,18 +498,22 @@ impl<'a> FastValuesDecoder<'a> {
                 self.reader.must_ignore_byte(b',')?;
             }
 
-            self.parse_next_row(fallback_fn).await?;
+            self.parse_next_row(columns, fallback_fn).await?;
         }
         Ok(())
     }
 
-    async fn parse_next_row<H, F>(&mut self, fallback_fn: &H) -> Result<()>
+    async fn parse_next_row<H, F>(
+        &mut self,
+        columns: &mut [ColumnBuilder],
+        fallback_fn: &H,
+    ) -> Result<()>
     where
         H: Fn(&str) -> F,
         F: std::future::Future<Output = Result<Vec<Scalar>>> + Send,
     {
         let _ = self.reader.ignore_white_spaces();
-        let col_size = self.columns.len();
+        let col_size = columns.len();
         let start_pos_of_row = self.reader.checkpoint();
 
         // Start of the row --- '('
@@ -529,8 +535,7 @@ impl<'a> FastValuesDecoder<'a> {
             let _ = self.reader.ignore_white_spaces();
             let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
 
-            let col = self
-                .columns
+            let col = columns
                 .get_mut(col_idx)
                 .ok_or_else(|| ErrorCode::Internal("ColumnBuilder is None"))?;
 
@@ -546,7 +551,7 @@ impl<'a> FastValuesDecoder<'a> {
 
             // ColumnBuilder and expr-parser both will eat the end ')' of the row.
             if need_fallback {
-                for col in self.columns.iter_mut().take(pop_count) {
+                for col in columns.iter_mut().take(pop_count) {
                     col.pop();
                 }
                 // rollback to start position of the row
@@ -562,7 +567,7 @@ impl<'a> FastValuesDecoder<'a> {
                 let sql = std::str::from_utf8(buf).unwrap();
                 let values = fallback_fn(sql).await?;
 
-                for (col, scalar) in self.columns.iter_mut().zip(values) {
+                for (col, scalar) in columns.iter_mut().zip(values) {
                     col.push(scalar.as_ref());
                 }
                 self.reader.set_position(end_pos_of_row);

@@ -42,8 +42,10 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
+use common_expression::Scalar;
 use common_expression::SortColumnDescription;
 use common_formats::FastFieldDecoderValues;
+use common_formats::FastValuesDecoder;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -2137,21 +2139,27 @@ impl AsyncSource for ValueSource {
             return Ok(None);
         }
 
-        // Use the number of '(' to estimate the number of rows
-        let mut estimated_rows = 0;
-        let mut positions = VecDeque::new();
-        for mat in INSERT_TOKEN_FINDER.find_iter(&self.data) {
-            if mat.pattern() == 0.into() {
-                estimated_rows += 1;
-                continue;
-            }
-            positions.push_back(mat.start());
-        }
+        let format = self.ctx.get_format_settings()?;
+        let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
-        let mut reader = Cursor::new(self.data.as_bytes());
-        let block = self
-            .read(estimated_rows, &mut reader, &mut positions)
-            .await?;
+        let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
+        let mut estimated_rows = values_decoder.estimated_rows();
+
+        let mut columns = self
+            .schema
+            .fields()
+            .iter()
+            .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
+            .collect::<Vec<_>>();
+
+        let fallback_fn = async |sql: &str| self.parse_fallback(sql).await;
+        values_decoder.parse(&mut columns, &fallback_fn).await?;
+
+        let columns = columns
+            .into_iter()
+            .map(|col| col.build())
+            .collect::<Vec<_>>();
+        let block = DataBlock::new_from_columns(columns);
         self.is_finished = true;
         Ok(Some(block))
     }
@@ -2176,6 +2184,26 @@ impl ValueSource {
             metadata,
             is_finished: false,
         }
+    }
+
+    #[async_backtrace::framed]
+    pub async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(sql)?;
+        let bind_context = self.bind_context.clone();
+        let metadata = self.metadata.clone();
+
+        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+        let values = bind_context
+            .exprs_to_scalar(
+                exprs,
+                &self.schema,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                metadata,
+            )
+            .await?;
     }
 
     #[async_backtrace::framed]
