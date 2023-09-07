@@ -53,20 +53,14 @@ pub fn get_commit_authors(repo: &Repository) -> Result<String> {
         .all()?
         .filter_map(Result::ok);
     for oid in revwalk {
-        let obj = oid.try_object()?;
-        match obj {
-            None => continue,
-            Some(object) => {
-                let cm = object.try_into_commit()?;
-                let author = cm.author()?;
-                let email = author.email.to_string();
-                if authors.contains_key(&email) {
-                    continue;
-                }
-                let name = author.name.to_string();
-                authors.insert(email, name);
-            }
+        let cm = oid.object()?;
+        let author = cm.author()?;
+        let email = author.email.to_string();
+        if authors.contains_key(&email) {
+            continue;
         }
+        let name = author.name.to_string();
+        authors.insert(email, name);
     }
 
     let result = authors

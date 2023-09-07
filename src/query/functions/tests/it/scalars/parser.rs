@@ -327,14 +327,14 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                     transform_expr(*expr, columns),
                     transform_expr(*key, columns),
                 ]),
-                MapAccessor::Period { key } | MapAccessor::Colon { key } => (vec![], vec![
+                MapAccessor::Dot { key } | MapAccessor::Colon { key } => (vec![], vec![
                     transform_expr(*expr, columns),
                     RawExpr::Constant {
                         span,
                         scalar: Scalar::String(key.name.into_bytes()),
                     },
                 ]),
-                MapAccessor::PeriodNumber { key } => {
+                MapAccessor::DotNumber { key } => {
                     (vec![key as usize], vec![transform_expr(*expr, columns)])
                 }
             };

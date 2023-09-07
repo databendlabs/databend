@@ -25,6 +25,7 @@ message StorageConfig {
     WebhdfsStorageConfig webhdfs = 5;
     ObsStorageConfig obs = 6;
     CosStorageConfig cos = 7;
+    HdfsStorageConfig hdfs = 8;
   }
 }
 
@@ -107,4 +108,12 @@ message CosStorageConfig {
   string root = 3;
   string secret_id = 4;
   string secret_key = 5;
+}
+
+message HdfsStorageConfig {
+  uint64 version = 100;
+  uint64 min_reader_ver = 101;
+
+  string root = 1;
+  string name_node = 2;
 }

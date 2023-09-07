@@ -25,7 +25,7 @@ EvalScalar
 └── Filter
     ├── filters: [3 (#3)]
     └── HashJoin: RIGHT MARK
-        ├── equi conditions: [eq(t1.a (#0), CAST(subquery_1 (#1) AS Int32))]
+        ├── equi conditions: [eq(t1.a (#0), CAST(subquery_1 (#1) AS Int32 NULL))]
         ├── non-equi conditions: []
         ├── LogicalGet
         │   ├── table: default.default.t1

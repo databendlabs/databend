@@ -154,6 +154,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("disable_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable join reorder optimization.",
+                    possible_values: None,
+                    display_in_show_settings: false,
+                }),
                 ("enable_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables runtime filter optimization for JOIN.",
@@ -344,7 +350,6 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-
                 ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables re-clustering after write(copy/replace-into).",
@@ -390,6 +395,12 @@ impl DefaultSettings {
                 ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Refresh aggregating index after new data written",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("ddl_column_type_nullable", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "If columns are default nullable when create or alter table",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),

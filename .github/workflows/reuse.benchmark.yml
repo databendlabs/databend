@@ -51,9 +51,9 @@ jobs:
       fail-fast: true
       max-parallel: 1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.source == 'release'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
@@ -104,9 +104,9 @@ jobs:
       fail-fast: true
       max-parallel: 1
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.source == 'release'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.source == 'pr'
         with:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
@@ -131,7 +131,7 @@ jobs:
     if: inputs.source == 'pr'
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
           sudo apt update -y
@@ -194,7 +194,7 @@ jobs:
           - "tpch"
           - "hits"
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
           sudo apt update -y

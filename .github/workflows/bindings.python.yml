@@ -1,0 +1,77 @@
+name: Bindings Python
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "docker/**"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to release
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  RUNNER_PROVIDER: github
+
+jobs:
+  build_linux:
+    name: build-${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/build_bindings_python
+        with:
+          target: ${{ matrix.target }}
+          version: ${{ inputs.tag }}
+
+  build_macos:
+    name: build-${{ matrix.target }}
+    if: github.event_name != 'pull_request'
+    runs-on: macos-11
+    strategy:
+      matrix:
+        target:
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/build_bindings_python
+        with:
+          target: ${{ matrix.target }}
+          version: ${{ inputs.tag }}
+
+  release:
+    # publish release only the version endsWith 0
+    # if: endsWith(inputs.tag, '0')
+    if: inputs.tag
+    name: Publish to PyPI
+    needs: [build_linux, build_macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.pypi_password }}
+          skip-existing: true

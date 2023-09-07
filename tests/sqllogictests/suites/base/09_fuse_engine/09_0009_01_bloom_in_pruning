@@ -8,7 +8,7 @@ statement ok
 USE db_09_0009_01
 
 statement ok
-create table t(a UInt64, b Int64)
+create table t(a UInt64 not null, b Int64 not null)
 
 statement ok
 insert into t values (1,2), (3,4)
@@ -29,7 +29,7 @@ statement ok
 DROP TABLE t
 
 statement ok
-create table t1(a UInt64, b Int64)
+create table t1(a UInt64 not null, b Int64 not null)
 
 statement ok
 insert into t1 values (1,2), (3,4)
@@ -38,7 +38,7 @@ statement ok
 alter table t1 drop column a;
 
 statement ok
-alter table t1 add column a int;
+alter table t1 add column a int not null;
 
 query II
 select * from t1 where a = 0 order by b;
@@ -55,7 +55,7 @@ select * from t1 where a = 6 order by b;
 5 6
 
 statement ok
-CREATE TABLE t2(a int, b int, c int) bloom_index_columns='a,b,c'
+CREATE TABLE t2(a int not null, b int not null, c int not null) bloom_index_columns='a,b,c'
 
 statement ok
 INSERT INTO TABLE t2 values(1,2,3),(4,5,6)
