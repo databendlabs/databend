@@ -2154,7 +2154,7 @@ impl AsyncSource for ValueSource {
 
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for ValueSource {
-    async fn parse(&self, sql: &str) -> Result<Vec<Scalar>> {
+    async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
         let tokens = tokenize_sql(sql)?;

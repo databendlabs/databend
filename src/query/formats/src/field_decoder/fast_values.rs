@@ -448,7 +448,7 @@ pub struct FastValuesDecoder<'a> {
 
 #[async_trait::async_trait]
 pub trait FastValuesDecodeFallback {
-    async fn parse(&self, sql: &str) -> Result<Vec<Scalar>>;
+    async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>>;
 }
 
 // Pre-generate the positions of `(`, `'` and `\`
@@ -562,7 +562,7 @@ impl<'a> FastValuesDecoder<'a> {
                 let buf = &self.reader.remaining_slice()[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
-                let values = fallback.parse(sql).await?;
+                let values = fallback.parse_fallback(sql).await?;
 
                 for (col, scalar) in columns.iter_mut().zip(values) {
                     col.push(scalar.as_ref());

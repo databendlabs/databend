@@ -28,7 +28,7 @@ struct DummyFastValuesDecodeFallback {}
 
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for DummyFastValuesDecodeFallback {
-    async fn parse(&self, _data: &str) -> Result<Vec<Scalar>> {
+    async fn parse_fallback(&self, _data: &str) -> Result<Vec<Scalar>> {
         Err(ErrorCode::Unimplemented("fallback".to_string()))
     }
 }
