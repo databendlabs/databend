@@ -101,8 +101,7 @@ async fn test_int32_lt() {
     test(Scenario::Int32, "i < 1", vec![0, 1, 2]).await;
     // result of sql "SELECT * FROM t where i < 1" is same as
     // "SELECT * FROM t where -i > -1"
-    // TODO(parquet): uncomment until [ISSUE](https://github.com/datafuselabs/databend/issues/12489) fixed.
-    // test(Scenario::Int32, " -i > -1", vec![0, 1, 2]).await
+    test(Scenario::Int32, " -i > -1", vec![0, 1, 2]).await
 }
 
 #[tokio::test]
