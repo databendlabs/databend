@@ -103,8 +103,8 @@ impl Binder {
         let table_id = table.get_id();
         let table_schema = table.schema();
         // Todo: (JackTan25) support computed expr
-        for filed in table.schema().fields() {
-            if filed.computed_expr().is_some() {
+        for field in table.schema().fields() {
+            if field.computed_expr().is_some() {
                 return Err(ErrorCode::Unimplemented(
                     "merge into doesn't support computed expr for now",
                 ));
@@ -200,9 +200,17 @@ impl Binder {
             .union(&scalar_binder.bind(join_expr).await?.0.used_columns())
             .cloned()
             .collect();
-
         let column_entries = self.metadata.read().columns_by_table_index(table_index);
-
+        let mut field_index_map = HashMap::<usize, String>::new();
+        // if true, read all columns of target table
+        let has_update = self.has_update(&matched_clauses);
+        if has_update {
+            for (idx, field) in table_schema.fields().iter().enumerate() {
+                let used_idx = self.find_column_index(&column_entries, &field.name())?;
+                columns_set.insert(used_idx);
+                field_index_map.insert(idx, used_idx.to_string());
+            }
+        }
         // bind clause column
         for clause in &matched_clauses {
             matched_evaluators.push(
@@ -211,7 +219,6 @@ impl Binder {
                     clause,
                     &mut columns_set,
                     table_schema.clone(),
-                    &column_entries,
                 )
                 .await?,
             );
@@ -230,6 +237,7 @@ impl Binder {
             );
         }
 
+        // at last, add update table field index
         Ok(Plan::MergeInto(Box::new(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
@@ -242,6 +250,7 @@ impl Binder {
             matched_evaluators,
             unmatched_evaluators,
             target_table_idx: table_index,
+            field_index_map,
         })))
     }
 
@@ -251,7 +260,6 @@ impl Binder {
         clause: &MatchedClause,
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
-        column_entries: &Vec<ColumnEntry>,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
@@ -269,9 +277,6 @@ impl Binder {
                 let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
                 let col_name =
                     normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
-
-                columns.insert(self.find_column_index(column_entries, &col_name)?);
-
                 let index = schema.index_of(&col_name)?;
 
                 if update_columns.contains_key(&index) {
@@ -295,10 +300,6 @@ impl Binder {
                     ));
                 }
                 update_columns.insert(index, scalar_expr.clone());
-
-                for idx in scalar_expr.used_columns() {
-                    columns.insert(idx);
-                }
             }
 
             Ok(MatchedEvaluator {
@@ -387,5 +388,14 @@ impl Binder {
             "not found col name: {}",
             col_name
         )))
+    }
+
+    fn has_update(&self, matched_clauses: &Vec<MatchedClause>) -> bool {
+        for clause in matched_clauses {
+            if let MatchOperation::Update { update_list: _ } = clause.operation {
+                return true;
+            }
+        }
+        false
     }
 }

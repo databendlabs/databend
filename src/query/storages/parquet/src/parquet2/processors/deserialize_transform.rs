@@ -400,7 +400,9 @@ impl Processor for Parquet2DeserializeTransform {
                 }
                 (ParquetPart::ParquetFiles(p), Parquet2PartData::SmallFiles(buffers)) => {
                     let blocks = self.process_small_files(p, buffers)?;
-                    self.add_block(DataBlock::concat(&blocks)?)?;
+                    if !blocks.is_empty() {
+                        self.add_block(DataBlock::concat(&blocks)?)?;
+                    }
                 }
                 _ => {
                     unreachable!("wrong type ParquetPartData for ParquetPart")

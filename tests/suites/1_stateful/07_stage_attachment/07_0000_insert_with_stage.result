@@ -21,9 +21,9 @@ null
 Succeeded
 77
 null
-1	'Beijing'	2	China
-2	'Shanghai'	2	China
-3	'Guangzhou'	2	China
-4	'Shenzhen'	2	China
-5	'Shenzhen'	2	China
-6	'Beijing'	2	China
+1	'beijing'	2	China
+2	'shanghai'	2	China
+3	'guangzhou'	2	China
+4	'shenzhen'	2	China
+5	'shenzhen'	2	China
+6	'beijing'	2	China

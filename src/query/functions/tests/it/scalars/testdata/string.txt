@@ -1649,16 +1649,16 @@ raw expr       : concat(a::String NULL, '3')
 checked expr   : concat<String NULL, String NULL>(a, CAST("3" AS String NULL))
 optimized expr : concat<String NULL, String NULL>(a, "3")
 evaluation:
-+--------+----------------------+-----------------+
-|        | a                    | Output          |
-+--------+----------------------+-----------------+
-| Type   | String NULL          | String NULL     |
-| Domain | {"a"..="d"} ∪ {NULL} | {""..} ∪ {NULL} |
-| Row 0  | 'a'                  | 'a3'            |
-| Row 1  | 'b'                  | 'b3'            |
-| Row 2  | NULL                 | NULL            |
-| Row 3  | 'd'                  | 'd3'            |
-+--------+----------------------+-----------------+
++--------+----------------------+------------------+
+|        | a                    | Output           |
++--------+----------------------+------------------+
+| Type   | String NULL          | String NULL      |
+| Domain | {"a"..="d"} ∪ {NULL} | {"a"..} ∪ {NULL} |
+| Row 0  | 'a'                  | 'a3'             |
+| Row 1  | 'b'                  | 'b3'             |
+| Row 2  | NULL                 | NULL             |
+| Row 3  | 'd'                  | 'd3'             |
++--------+----------------------+------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                   |

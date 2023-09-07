@@ -216,6 +216,45 @@ impl Pipeline {
         }
     }
 
+    /// resize_partial will merge pipe_item into one reference to each range of ranges
+    /// WARN!!!: you must make sure the order. for example:
+    /// if there are 5 pipe_ports, given pipe_port0,pipe_port1,pipe_port2,pipe_port3,pipe_port4
+    /// you can give ranges and last as [0,1],[2,3],[4]
+    /// but you can't give [0,3],[1,4],[2]
+    /// that says the number is successive.
+    pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>) -> Result<()> {
+        match self.pipes.last() {
+            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_length == 0 => {
+                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+            }
+            Some(_) => {
+                let mut input_len = 0;
+                let mut output_len = 0;
+                let mut pipe_items = Vec::new();
+                for range in ranges {
+                    if range.is_empty() {
+                        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+                    }
+                    output_len += 1;
+                    input_len += range.len();
+
+                    let processor = ResizeProcessor::create(range.len(), 1);
+                    let inputs_port = processor.get_inputs().to_vec();
+                    let outputs_port = processor.get_outputs().to_vec();
+                    pipe_items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        inputs_port,
+                        outputs_port,
+                    ));
+                }
+                self.pipes
+                    .push(Pipe::create(input_len, output_len, pipe_items));
+                Ok(())
+            }
+        }
+    }
+
     /// Duplite a pipe input to two outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.

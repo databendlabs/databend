@@ -22,9 +22,9 @@ use common_expression::BlockMetaInfoPtr;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct BlockMetaIndex {
-    // {segment|block}_id is used in `InternalColumnMeta` to generate internal column data,
-    // where older data has smaller id, but {segment|block}_idx is opposite,
-    // so {segment|block}_id = {segment|block}_count - {segment|block}_idx - 1
+    /// {segment|block}_id is used in `InternalColumnMeta` to generate internal column data,
+    /// where older data has smaller id, but {segment|block}_idx is opposite,
+    /// so {segment|block}_id = {segment|block}_count - {segment|block}_idx - 1
     pub segment_idx: usize,
     pub block_idx: usize,
     pub range: Option<Range<usize>>,
