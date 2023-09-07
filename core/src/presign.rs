@@ -37,10 +37,12 @@ pub async fn presign_upload_to_stage(
 ) -> Result<()> {
     let client = HttpClient::new();
     let mut builder = client.put(presigned.url);
+    if !presigned.headers.contains_key("content-length") {
+        builder = builder.header("Content-Length", size.to_string());
+    }
     for (k, v) in presigned.headers {
         builder = builder.header(k, v);
     }
-    builder = builder.header("Content-Length", size.to_string());
     let stream = Body::wrap_stream(ReaderStream::new(data));
     let resp = builder.body(stream).send().await?;
     let status = resp.status();
@@ -57,7 +59,7 @@ pub async fn presign_upload_to_stage(
 pub async fn presign_download_from_stage(
     presigned: PresignedResponse,
     local_path: &Path,
-) -> Result<()> {
+) -> Result<u64> {
     if let Some(p) = local_path.parent() {
         tokio::fs::create_dir_all(p).await?;
     }
@@ -77,7 +79,8 @@ pub async fn presign_download_from_stage(
                 file.write_all(&chunk?).await?;
             }
             file.flush().await?;
-            Ok(())
+            let metadata = file.metadata().await?;
+            Ok(metadata.len())
         }
         _ => Err(Error::IO(format!(
             "Download with presigned url failed: {}",

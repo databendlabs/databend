@@ -84,7 +84,15 @@ impl<'a> FormatDisplay<'a> {
     async fn display_progress(&mut self, pg: &QueryProgress) {
         if self.settings.show_progress {
             let pgo = self.progress.take();
-            self.progress = Some(display_read_progress(pgo, pg));
+            match self.kind {
+                QueryKind::Get | QueryKind::Query => {
+                    self.progress = Some(display_progress(pgo, pg, "read"));
+                }
+                QueryKind::Put | QueryKind::Update => {
+                    self.progress = Some(display_progress(pgo, pg, "write"));
+                }
+                _ => {}
+            }
         }
     }
 
@@ -213,22 +221,51 @@ impl<'a> FormatDisplay<'a> {
         if let Some(ref mut stats) = self.stats {
             stats.normalize();
 
-            let (rows, kind) = if matches!(self.kind, QueryKind::Update) {
-                (stats.write_rows, "written")
-            } else {
-                (self.rows, "result")
+            let (rows, mut rows_str, kind, total_rows, total_bytes) = match self.kind {
+                QueryKind::Explain => (self.rows, "rows", "explain", 0, 0),
+                QueryKind::Get => (
+                    stats.read_rows,
+                    "files",
+                    "downloaded",
+                    stats.read_rows,
+                    stats.read_bytes,
+                ),
+                QueryKind::Put => (
+                    stats.write_rows,
+                    "files",
+                    "uploaded",
+                    stats.write_rows,
+                    stats.write_bytes,
+                ),
+                QueryKind::Query => (
+                    stats.read_rows,
+                    "rows",
+                    "read",
+                    stats.read_rows,
+                    stats.read_bytes,
+                ),
+                QueryKind::Update => (
+                    stats.write_rows,
+                    "rows",
+                    "written",
+                    stats.write_rows,
+                    stats.write_bytes,
+                ),
             };
-
-            let rows_str = if rows > 1 { "rows" } else { "row" };
+            if self.rows <= 1 {
+                rows_str = rows_str.trim_end_matches('s');
+            }
             eprintln!(
-                "{} {} {kind} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
+                "{} {} {kind} in {:.3} sec. Processed {} {}, {} ({} {}/s, {}/s)",
                 rows,
                 rows_str,
                 self.start.elapsed().as_secs_f64(),
-                humanize_count(stats.total_rows as f64),
-                HumanBytes(stats.total_rows as u64),
-                humanize_count(stats.total_rows as f64 / self.start.elapsed().as_secs_f64()),
-                HumanBytes((stats.total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
+                humanize_count(total_rows as f64),
+                rows_str,
+                HumanBytes(total_bytes as u64),
+                humanize_count(total_rows as f64 / self.start.elapsed().as_secs_f64()),
+                rows_str,
+                HumanBytes((total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
             );
             eprintln!();
         }
@@ -283,7 +320,7 @@ pub fn format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
     )
 }
 
-fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> ProgressBar {
+fn display_progress(pb: Option<ProgressBar>, current: &QueryProgress, kind: &str) -> ProgressBar {
     let pb = pb.unwrap_or_else(|| {
         let pbn = ProgressBar::new(current.total_bytes as u64);
         let progress_color = "green";
@@ -300,7 +337,11 @@ fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> Pr
     });
 
     pb.set_position(current.read_bytes as u64);
-    pb.set_message(format_read_progress(current, pb.elapsed().as_secs_f64()));
+    match kind {
+        "read" => pb.set_message(format_read_progress(current, pb.elapsed().as_secs_f64())),
+        "write" => pb.set_message(format_write_progress(current, pb.elapsed().as_secs_f64())),
+        _ => {}
+    }
     pb
 }
 
