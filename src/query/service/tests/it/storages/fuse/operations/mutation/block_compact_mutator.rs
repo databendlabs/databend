@@ -23,7 +23,7 @@ use common_expression::BlockThresholds;
 use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::operations::BlockCompactMutator;
 use common_storages_fuse::operations::CompactOptions;
-use common_storages_fuse::operations::CompactPartInfo;
+use common_storages_fuse::operations::CompactTaskInfo;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::FuseTable;
 use databend_query::pipelines::executor::ExecutorSettings;
@@ -230,7 +230,7 @@ async fn test_safety() -> Result<()> {
 
         let mut block_ids_after_compaction = HashSet::new();
         for part in selections.partitions.into_iter() {
-            let part = CompactPartInfo::from_part(&part)?;
+            let part = CompactTaskInfo::from_part(&part)?;
             blocks_number += part.blocks.len();
             for b in &part.blocks {
                 block_ids_after_compaction.insert(b.location.clone());

@@ -62,6 +62,8 @@ use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
 use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
+use common_pipeline_transforms::processors::transforms::AccumulatingTransformer;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
@@ -71,6 +73,8 @@ use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CompactFinal;
+use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
@@ -111,6 +115,7 @@ use common_sql::NameResolutionContext;
 use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
+use common_storages_fuse::operations::common::TransformMergeCommitMeta;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
@@ -118,6 +123,7 @@ use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
+use common_storages_fuse::operations::CompactAggregator;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
@@ -255,6 +261,10 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
+            PhysicalPlan::CompactPartial(compact_partial) => {
+                self.build_compact_partial(compact_partial)
+            }
+            PhysicalPlan::CompactFinal(compact_final) => self.build_compact_final(compact_final),
             PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -740,6 +750,67 @@ impl PipelineBuilder {
             to_table,
         )?;
         Ok(())
+    }
+
+    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+        let table = self.ctx.build_table_by_table_info(
+            &compact_block.catalog_info,
+            &compact_block.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.build_compact_partial(
+            self.ctx.clone(),
+            compact_block.parts.clone(),
+            compact_block.column_ids.clone(),
+            &mut self.main_pipeline,
+        )
+    }
+
+    fn build_compact_final(&mut self, compact_final: &CompactFinal) -> Result<()> {
+        self.build_pipeline(&compact_final.input)?;
+        let tbl = self.ctx.build_table_by_table_info(
+            &compact_final.catalog_info,
+            &compact_final.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+        let cluster_key_id = table.cluster_key_id();
+
+        self.main_pipeline.try_resize(1)?;
+        if compact_final.is_lazy {
+            self.main_pipeline.add_transform(|input, output| {
+                let merger = TransformMergeCommitMeta::create(cluster_key_id);
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                    input, output, merger,
+                )))
+            })?;
+        } else {
+            let thresholds = table.get_block_thresholds();
+            let operator = table.get_operator();
+            let location_gen = table.meta_location_generator();
+            self.main_pipeline.add_transform(|input, output| {
+                let compact_aggregator = CompactAggregator::new(
+                    self.ctx.clone(),
+                    operator.clone(),
+                    location_gen.clone(),
+                    thresholds,
+                    cluster_key_id,
+                );
+                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                    input,
+                    output,
+                    compact_aggregator,
+                )))
+            })?;
+        }
+
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        table.chain_commit_sink(
+            &ctx,
+            &mut self.main_pipeline,
+            compact_final.snapshot.clone(),
+        )
     }
 
     /// The flow of Pipeline is as follows:

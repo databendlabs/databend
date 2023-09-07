@@ -511,8 +511,10 @@ fn flatten_plan_node_profile(
         | PhysicalPlan::MergeInto(_)
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)
-        | PhysicalPlan::ReplaceInto(_) => unreachable!(),
-        PhysicalPlan::FinalCommit(_) => unreachable!(),
+        | PhysicalPlan::ReplaceInto(_)
+        | PhysicalPlan::FinalCommit(_)
+        | PhysicalPlan::CompactPartial(_)
+        | PhysicalPlan::CompactFinal(_) => unreachable!(),
     }
 
     Ok(())

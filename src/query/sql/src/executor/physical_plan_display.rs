@@ -18,35 +18,37 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::AggregateExpand;
-use super::AsyncSourcerPlan;
-use super::CopyIntoTable;
-use super::Deduplicate;
-use super::DeletePartial;
-use super::DistributedInsertSelect;
-use super::FinalCommit;
-use super::MergeInto;
-use super::MergeIntoSource;
-use super::MutationAggregate;
-use super::ProjectSet;
-use super::ReplaceInto;
-use super::RowFetch;
+use crate::executor::AggregateExpand;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::AsyncSourcerPlan;
+use crate::executor::CompactFinal;
+use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
+use crate::executor::CopyIntoTable;
 use crate::executor::CteScan;
+use crate::executor::Deduplicate;
+use crate::executor::DeletePartial;
+use crate::executor::DistributedInsertSelect;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::Filter;
+use crate::executor::FinalCommit;
 use crate::executor::HashJoin;
 use crate::executor::Lambda;
 use crate::executor::Limit;
 use crate::executor::MaterializedCte;
+use crate::executor::MergeInto;
+use crate::executor::MergeIntoSource;
+use crate::executor::MutationAggregate;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::ProjectSet;
 use crate::executor::RangeJoin;
+use crate::executor::ReplaceInto;
+use crate::executor::RowFetch;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
@@ -87,6 +89,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
+            PhysicalPlan::CompactPartial(compact_partial) => write!(f, "{}", compact_partial)?,
+            PhysicalPlan::CompactFinal(compact_final) => write!(f, "{}", compact_final)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::MutationAggregate(mutation) => write!(f, "{}", mutation)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
@@ -397,6 +401,18 @@ impl Display for UnionAll {
 impl Display for DistributedInsertSelect {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DistributedInsertSelect")
+    }
+}
+
+impl Display for CompactPartial {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CompactPartial")
+    }
+}
+
+impl Display for CompactFinal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CompactFinal")
     }
 }
 

@@ -193,14 +193,14 @@ impl SegmentInfo {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
     pub encoding: MetaEncoding,
     pub compression: MetaCompression,
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,

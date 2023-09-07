@@ -14,8 +14,10 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
@@ -972,6 +974,23 @@ pub struct FinalCommit {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CompactPartial {
+    pub parts: Partitions,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    pub column_ids: HashSet<ColumnId>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CompactFinal {
+    pub input: Box<PhysicalPlan>,
+    pub catalog_info: CatalogInfo,
+    pub table_info: TableInfo,
+    pub snapshot: Arc<TableSnapshot>,
+    pub is_lazy: bool,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RefreshIndex {
     pub input: Box<PhysicalPlan>,
     pub index_id: u64,
@@ -1038,6 +1057,10 @@ pub enum PhysicalPlan {
     // MergeInto
     MergeIntoSource(MergeIntoSource),
     MergeInto(MergeInto),
+
+    /// Compact
+    CompactPartial(CompactPartial),
+    CompactFinal(CompactFinal),
 }
 
 impl PhysicalPlan {
@@ -1084,7 +1107,9 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::FinalCommit(_) => {
+            | PhysicalPlan::FinalCommit(_)
+            | PhysicalPlan::CompactPartial(_)
+            | PhysicalPlan::CompactFinal(_) => {
                 unreachable!()
             }
         }
@@ -1124,7 +1149,9 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::FinalCommit(_)
-            | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::CompactPartial(_)
+            | PhysicalPlan::CompactFinal(_) => Ok(DataSchemaRef::default()),
         }
     }
 
@@ -1150,6 +1177,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::CompactPartial(_) => "CompactBlock".to_string(),
+            PhysicalPlan::CompactFinal(_) => "CompactFinal".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
             PhysicalPlan::MutationAggregate(_) => "MutationAggregate".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
@@ -1194,6 +1223,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::CompactPartial(_) => Box::new(std::iter::empty()),
+            PhysicalPlan::CompactFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
             PhysicalPlan::MutationAggregate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -1242,6 +1273,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
+            | PhysicalPlan::CompactPartial(_)
+            | PhysicalPlan::CompactFinal(_)
             | PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::MutationAggregate(_)
             | PhysicalPlan::CopyIntoTable(_)

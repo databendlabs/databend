@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -27,7 +28,6 @@ use common_expression::TableSchemaRefExt;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
@@ -40,8 +40,7 @@ use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::SnapshotMerged;
-use crate::operations::mutation::BlockCompactMutator;
+use crate::operations::common::SnapshotChanges;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -52,36 +51,35 @@ pub struct CompactAggregator {
     thresholds: BlockThresholds,
     default_cluster_key_id: Option<u32>,
 
-    // locations all the merged segments.
-    merged_segments: BTreeMap<usize, Location>,
-    // summarised statistics of all the merged segments
-    merged_statistics: Statistics,
     // locations all the merged blocks.
     merge_blocks: HashMap<usize, BTreeMap<usize, Arc<BlockMeta>>>,
     abort_operation: AbortOperation,
 
+    removed_segment_indexes: Vec<usize>,
+    removed_statistics: Statistics,
+
     start_time: Instant,
-    total_tasks: usize,
 }
 
 impl CompactAggregator {
     pub fn new(
+        ctx: Arc<dyn TableContext>,
         dal: Operator,
         location_gen: TableMetaLocationGenerator,
-        mutator: BlockCompactMutator,
+        thresholds: BlockThresholds,
+        default_cluster_key_id: Option<u32>,
     ) -> Self {
         Self {
-            ctx: mutator.ctx.clone(),
+            ctx,
             dal,
             location_gen,
-            default_cluster_key_id: mutator.cluster_key_id,
-            merged_segments: mutator.unchanged_segments_map,
-            merged_statistics: mutator.unchanged_segment_statistics,
-            merge_blocks: mutator.unchanged_blocks_map,
-            thresholds: mutator.thresholds,
+            default_cluster_key_id,
+            merge_blocks: HashMap::new(),
+            thresholds,
             abort_operation: AbortOperation::default(),
+            removed_segment_indexes: vec![],
+            removed_statistics: Statistics::default(),
             start_time: Instant::now(),
-            total_tasks: mutator.compact_tasks.len(),
         }
     }
 }
@@ -108,13 +106,29 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                         // Refresh status
                         {
                             let status = format!(
-                                "compact: run compact tasks:{}/{}, cost:{} sec",
+                                "compact: run compact tasks:{}, cost:{} sec",
                                 self.abort_operation.blocks.len(),
-                                self.total_tasks,
                                 self.start_time.elapsed().as_secs()
                             );
                             self.ctx.set_status_info(&status);
                         }
+                    }
+                    MutationLogEntry::CompactExtras { extras } => {
+                        match self.merge_blocks.entry(extras.segment_index) {
+                            Entry::Occupied(mut v) => {
+                                v.get_mut().extend(extras.unchanged_blocks.into_iter());
+                            }
+                            Entry::Vacant(v) => {
+                                v.insert(extras.unchanged_blocks);
+                            }
+                        }
+                        self.removed_segment_indexes
+                            .extend(extras.removed_segment_indexes);
+                        merge_statistics_mut(
+                            &mut self.removed_statistics,
+                            &extras.removed_segment_summary,
+                            self.default_cluster_key_id,
+                        );
                     }
                     _ => return Err(ErrorCode::Internal("It's a bug.")),
                 }
@@ -127,21 +141,22 @@ impl AsyncAccumulatingTransform for CompactAggregator {
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
         let mut serialized_segments = Vec::with_capacity(self.merge_blocks.len());
+        let mut merged_statistics = Statistics::default();
+        let mut replaced_segments = HashMap::with_capacity(self.merge_blocks.len());
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {
             // generate the new segment.
             let blocks: Vec<_> = block_map.into_values().collect();
             let new_summary =
                 reduce_block_metas(&blocks, self.thresholds, self.default_cluster_key_id);
             merge_statistics_mut(
-                &mut self.merged_statistics,
+                &mut merged_statistics,
                 &new_summary,
                 self.default_cluster_key_id,
             );
             let new_segment = SegmentInfo::new(blocks, new_summary);
             let location = self.location_gen.gen_segment_info_location();
             self.abort_operation.add_segment(location.clone());
-            self.merged_segments
-                .insert(segment_idx, (location.clone(), SegmentInfo::VERSION));
+            replaced_segments.insert(segment_idx, (location.clone(), SegmentInfo::VERSION));
             serialized_segments.push(SerializedSegment {
                 path: location,
                 segment: Arc::new(new_segment),
@@ -170,13 +185,12 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             "compact: end to write new segments, cost:{} sec",
             start.elapsed().as_secs()
         ));
-        // gather the all segments.
-        let merged_segments = std::mem::take(&mut self.merged_segments)
-            .into_values()
-            .collect();
-        let ctx = ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
-            merged_segments,
-            merged_statistics: std::mem::take(&mut self.merged_statistics),
+        let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+            appended_segments: vec![],
+            replaced_segments,
+            removed_segment_indexes: self.removed_segment_indexes.clone(),
+            merged_statistics,
+            removed_statistics: std::mem::take(&mut self.removed_statistics),
         });
         let meta = CommitMeta::new(ctx, std::mem::take(&mut self.abort_operation));
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))

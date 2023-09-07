@@ -36,6 +36,7 @@ use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 use storages_common_table_meta::meta::SnapshotId;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -300,16 +301,28 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
-    // return false if the table does not need to be compacted.
     #[async_backtrace::framed]
-    async fn compact(
+    async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        target: CompactTarget,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, target, limit, pipeline);
+        let (_, _) = (ctx, limit);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support compact segments",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        limit: Option<usize>,
+    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        let (_, _) = (ctx, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact",

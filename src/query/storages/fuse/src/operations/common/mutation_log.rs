@@ -27,7 +27,8 @@ use storages_common_table_meta::meta::Statistics;
 use super::ConflictResolveContext;
 use super::SnapshotChanges;
 use crate::operations::common::AbortOperation;
-use crate::operations::mutation::MutationDeletedSegment;
+use crate::operations::mutation::CompactExtraInfo;
+use crate::operations::mutation::DeletedSegment;
 use crate::statistics::merge_statistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
@@ -47,11 +48,14 @@ pub enum MutationLogEntry {
         index: BlockMetaIndex,
     },
     DeletedSegment {
-        deleted_segment: MutationDeletedSegment,
+        deleted_segment: DeletedSegment,
     },
     ReplacedBlock {
         index: BlockMetaIndex,
         block_meta: Arc<BlockMeta>,
+    },
+    CompactExtras {
+        extras: CompactExtraInfo,
     },
     DoNothing,
 }

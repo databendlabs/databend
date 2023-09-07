@@ -13,6 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
+use std::collections::BTreeMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_catalog::plan::PartInfo;
@@ -20,16 +24,56 @@ use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::operations::common::BlockMetaIndex;
+use crate::operations::mutation::SegmentIndex;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-pub struct CompactPartInfo {
-    pub blocks: Vec<Arc<BlockMeta>>,
-    pub index: BlockMetaIndex,
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
+pub struct CompactLazyPartInfo {
+    pub segment_indices: Vec<usize>,
+    pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
 }
 
-#[typetag::serde(name = "compact")]
+#[typetag::serde(name = "compact_lazy")]
+impl PartInfo for CompactLazyPartInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        info.as_any()
+            .downcast_ref::<CompactLazyPartInfo>()
+            .is_some_and(|other| self == other)
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_indices.hash(&mut s);
+        s.finish()
+    }
+}
+
+impl CompactLazyPartInfo {
+    pub fn create(
+        segment_indices: Vec<SegmentIndex>,
+        compact_segments: Vec<Arc<CompactSegmentInfo>>,
+    ) -> PartInfoPtr {
+        Arc::new(Box::new(CompactLazyPartInfo {
+            segment_indices,
+            compact_segments,
+        }))
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub enum CompactPartInfo {
+    CompactExtraInfo(CompactExtraInfo),
+    CompactTaskInfo(CompactTaskInfo),
+}
+
+#[typetag::serde(name = "compact_part_info")]
 impl PartInfo for CompactPartInfo {
     fn as_any(&self) -> &dyn Any {
         self
@@ -42,20 +86,68 @@ impl PartInfo for CompactPartInfo {
     }
 
     fn hash(&self) -> u64 {
-        0
+        match self {
+            Self::CompactExtraInfo(extra) => extra.hash(),
+            Self::CompactTaskInfo(task) => task.hash(),
+        }
     }
 }
 
 impl CompactPartInfo {
-    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> PartInfoPtr {
-        Arc::new(Box::new(CompactPartInfo { blocks, index }))
-    }
-
     pub fn from_part(info: &PartInfoPtr) -> Result<&CompactPartInfo> {
         info.as_any()
             .downcast_ref::<CompactPartInfo>()
             .ok_or(ErrorCode::Internal(
                 "Cannot downcast from PartInfo to CompactPartInfo.",
             ))
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct CompactExtraInfo {
+    pub segment_index: SegmentIndex,
+    pub unchanged_blocks: BTreeMap<SegmentIndex, Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_summary: Statistics,
+}
+
+impl CompactExtraInfo {
+    pub fn create(
+        segment_index: SegmentIndex,
+        unchanged_blocks: BTreeMap<SegmentIndex, Arc<BlockMeta>>,
+        removed_segment_indexes: Vec<usize>,
+        removed_segment_summary: Statistics,
+    ) -> Self {
+        CompactExtraInfo {
+            segment_index,
+            unchanged_blocks,
+            removed_segment_indexes,
+            removed_segment_summary,
+        }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_index.hash(&mut s);
+        s.finish()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct CompactTaskInfo {
+    pub blocks: Vec<Arc<BlockMeta>>,
+    pub index: BlockMetaIndex,
+}
+
+impl CompactTaskInfo {
+    pub fn create(blocks: Vec<Arc<BlockMeta>>, index: BlockMetaIndex) -> Self {
+        CompactTaskInfo { blocks, index }
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.index.segment_idx.hash(&mut s);
+        self.index.block_idx.hash(&mut s);
+        s.finish()
     }
 }

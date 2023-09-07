@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -45,10 +42,9 @@ use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
+use crate::operations::DeletedSegment;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
@@ -173,30 +169,13 @@ impl PruningContext {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct DeletedSegmentInfo {
-    // segment index.
-    pub index: usize,
-    // deleted segment location and summary.
-    // location is used for hash
-    pub segment_info: (Location, Statistics),
-}
-
-impl DeletedSegmentInfo {
-    pub fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.segment_info.0.hash(&mut s);
-        s.finish()
-    }
-}
-
 pub struct FusePruner {
     max_concurrency: usize,
     pub table_schema: TableSchemaRef,
     pub pruning_ctx: Arc<PruningContext>,
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
-    pub deleted_segments: Vec<DeletedSegmentInfo>,
+    pub deleted_segments: Vec<DeletedSegment>,
 }
 
 impl FusePruner {
@@ -332,7 +311,7 @@ impl FusePruner {
                                     if !range_index
                                         .should_keep(&compact_segment_info.summary.col_stats, None)
                                     {
-                                        deleted_segments.push(DeletedSegmentInfo {
+                                        deleted_segments.push(DeletedSegment {
                                             index: segment_location.segment_idx,
                                             segment_info: (
                                                 segment_location.location.clone(),

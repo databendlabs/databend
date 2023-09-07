@@ -14,23 +14,17 @@
 
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
-use crate::operations::mutation::MutationDeletedSegment;
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum ClusterStatsGenType {
-    Generally,
-    WithOrigin(Option<ClusterStatistics>),
-}
+use crate::operations::mutation::compact::CompactExtraInfo;
+use crate::operations::mutation::DeletedSegment;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub struct SerializeDataMeta {
-    pub index: BlockMetaIndex,
-    pub stats_type: ClusterStatsGenType,
-    pub deleted_segment: Option<MutationDeletedSegment>,
+pub enum SerializeDataMeta {
+    SerializeBlock(SerializeBlock),
+    DeletedSegment(DeletedSegment),
+    CompactExtras(CompactExtraInfo),
 }
 
 #[typetag::serde(name = "serialize_data_meta")]
@@ -44,22 +38,20 @@ impl BlockMetaInfo for SerializeDataMeta {
     }
 }
 
-impl SerializeDataMeta {
-    pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> BlockMetaInfoPtr {
-        Box::new(SerializeDataMeta {
-            index,
-            stats_type,
-            deleted_segment: None,
-        })
-    }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ClusterStatsGenType {
+    Generally,
+    WithOrigin(Option<ClusterStatistics>),
+}
 
-    pub fn create_with_deleted_segment(
-        deleted_segment: MutationDeletedSegment,
-    ) -> BlockMetaInfoPtr {
-        Box::new(SerializeDataMeta {
-            index: BlockMetaIndex::default(),           // default value
-            stats_type: ClusterStatsGenType::Generally, // default value
-            deleted_segment: Some(deleted_segment),
-        })
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+pub struct SerializeBlock {
+    pub index: BlockMetaIndex,
+    pub stats_type: ClusterStatsGenType,
+}
+
+impl SerializeBlock {
+    pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> Self {
+        SerializeBlock { index, stats_type }
     }
 }

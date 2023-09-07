@@ -47,7 +47,7 @@ use crate::operations::common::MutationLogs;
 use crate::operations::common::SnapshotChanges;
 use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
-use crate::operations::mutation::MutationDeletedSegment;
+use crate::operations::mutation::DeletedSegment;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
@@ -64,7 +64,7 @@ pub struct TableMutationAggregator {
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
-    deleted_segments: Vec<MutationDeletedSegment>,
+    deleted_segments: Vec<DeletedSegment>,
     appended_statistics: Statistics,
     abort_operation: AbortOperation,
 
@@ -177,6 +177,9 @@ impl TableMutationAggregator {
                 self.appended_segments
                     .push((segment_location, format_version))
             }
+            MutationLogEntry::CompactExtras { .. } => {
+                unreachable!("CompactExtras is used in compact")
+            }
         }
     }
 
@@ -198,10 +201,10 @@ impl TableMutationAggregator {
                 let mut removed_segment_indexes = vec![];
                 let mut removed_statistics = Statistics::default();
                 for s in &self.deleted_segments {
-                    removed_segment_indexes.push(s.deleted_segment.index);
+                    removed_segment_indexes.push(s.index);
                     merge_statistics_mut(
                         &mut removed_statistics,
-                        &s.deleted_segment.segment_info.1,
+                        &s.segment_info.1,
                         self.default_cluster_key_id,
                     );
                 }
