@@ -5,6 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 
 # Should be <root>/tests/data/
+TMP="/tmp/00_0005"
 
 for force in 'false'  'true'
 do
@@ -20,12 +21,13 @@ do
 done
 
 gen_files() {
-  rm -rf /tmp/00_0005
-  cp -r "$CURDIR"/../../../data/00_0005 /tmp
+  rm -rf $TMP
+  mkdir $TMP
+  cp  "$TESTS_DATA_DIR"/parquet/ii/* $TMP
 }
 
 echo "drop stage if exists s5;" | $MYSQL_CLIENT_CONNECT
-echo "create stage s5 url = 'fs:///tmp/00_0005/data/' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
+echo "create stage s5 url = 'fs://$TMP/' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
 
 
 for force in 'false'  'true'
@@ -40,7 +42,7 @@ do
 			table="test_max_files_force_${force}_purge_${purge}"
 			echo "copy into ${table} from (select * from @s5 t) max_files=2 force=${force} purge=${purge}" | $MYSQL_CLIENT_CONNECT
 			echo "select count(*) from ${table}" | $MYSQL_CLIENT_CONNECT
-		  remain=$(ls -1 /tmp/00_0005/data/ | wc -l |  sed 's/ //g')
+		  remain=$(ls -1 $TMP | wc -l |  sed 's/ //g')
 			echo "remain ${remain} files"
 		done
 	done
