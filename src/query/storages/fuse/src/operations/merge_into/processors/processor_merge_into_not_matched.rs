@@ -29,7 +29,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
-use common_storage::common_metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;

@@ -777,6 +777,8 @@ pub struct MergeInto {
     // the first option stands for the condition
     // the second option stands for update/delete
     pub matched: MatchExpr,
+    // used to record the index of target table's field in merge_source_schema
+    pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     pub row_id_idx: usize,
     pub segments: Vec<(usize, Location)>,
 }

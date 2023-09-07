@@ -21,10 +21,10 @@ common-io = { path = "../../common/io" }
 # GitHub dependencies
 
 # Crates.io dependencies
-arrow-array = "45.0.0"
-arrow-flight = "45.0.0"
-arrow-schema = "45.0.0"
-arrow-select = "45.0.0"
+arrow-array = "46.0.0"
+arrow-flight = "46.0.0"
+arrow-schema = "46.0.0"
+arrow-select = "46.0.0"
 async-backtrace = { workspace = true }
 base64 = "0.21.0"
 chrono = { workspace = true }

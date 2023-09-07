@@ -116,6 +116,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::common::TransformSerializeSegment;
+use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
@@ -433,6 +434,7 @@ impl PipelineBuilder {
             catalog_info,
             unmatched,
             matched,
+            field_index_of_input_schema,
             row_id_idx,
             segments,
         } = merge_into;
@@ -444,6 +446,14 @@ impl PipelineBuilder {
             unmatched.clone(),
             input.output_schema()?,
             self.ctx.get_function_context()?,
+        )?;
+
+        let matched_split_processor = MatchedSplitProcessor::create(
+            self.ctx.clone(),
+            *row_id_idx,
+            matched.clone(),
+            field_index_of_input_schema.clone(),
+            input.output_schema()?,
         )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
@@ -469,48 +479,54 @@ impl PipelineBuilder {
             table,
             block_thresholds,
         );
-
+        let get_output_len = |pipe_items: &Vec<PipeItem>| -> usize {
+            let mut output_len = 0;
+            for item in pipe_items.iter() {
+                output_len += item.outputs_port.len();
+            }
+            output_len
+        };
         let pipe_items = vec![
-            create_dummy_item(),
+            matched_split_processor.into_pipe_item(),
             merge_into_not_matched_processor.into_pipe_item(),
         ];
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
-            self.main_pipeline.output_len(),
+            get_output_len(&pipe_items),
             pipe_items,
         ));
 
+        self.main_pipeline
+            .resize_partial_one(vec![vec![0], vec![1, 2]])?;
+
+        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+
         let pipe_items = vec![
-            create_dummy_item(),
+            table.matched_mutator(
+                self.ctx.clone(),
+                block_builder,
+                io_request_semaphore,
+                segments.clone(),
+            )?,
             serialize_block_transform.into_pipe_item(),
         ];
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
-            self.main_pipeline.output_len(),
+            get_output_len(&pipe_items),
             pipe_items,
         ));
 
-        let mut pipe_items = Vec::with_capacity(2);
-
-        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
-        // for matched update and delete
-        pipe_items.push(table.matched_mutator(
-            self.ctx.clone(),
-            block_builder,
-            io_request_semaphore,
-            *row_id_idx,
-            matched.clone(),
-            input.output_schema()?,
-            segments.clone(),
-        )?);
-        pipe_items.push(serialize_segment_transform.into_pipe_item());
+        let pipe_items = vec![
+            create_dummy_item(),
+            serialize_segment_transform.into_pipe_item(),
+        ];
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
-            self.main_pipeline.output_len(),
+            get_output_len(&pipe_items),
             pipe_items,
         ));
 
