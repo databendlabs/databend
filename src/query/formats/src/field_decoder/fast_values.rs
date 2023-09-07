@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::io::BufRead;
 use std::io::Cursor;
+use std::ops::Not;
 
 use bstr::ByteSlice;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -38,6 +39,7 @@ use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_io::constants::FALSE_BYTES_LOWER;
 use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
@@ -433,4 +435,143 @@ impl FastFieldDecoderValues {
         }
         Ok(())
     }
+}
+
+struct FastRowDecoder<'a, R: AsRef<[u8]>> {
+    reader: &'a mut Cursor<R>,
+    columns: &'a mut [ColumnBuilder],
+    positions: &'a mut VecDeque<usize>,
+    field_decoder: &'a FastFieldDecoderValues,
+}
+
+impl<'a, R: AsRef<[u8]>> FastRowDecoder<'a, R> {
+    pub fn parse_next_row(&mut self) -> Result<()> {
+        let _ = self.reader.ignore_white_spaces();
+        let col_size = self.columns.len();
+        let start_pos_of_row = self.reader.checkpoint();
+
+        // Start of the row --- '('
+        if !self.reader.ignore_byte(b'(') {
+            return Err(ErrorCode::BadDataValueType(
+                "Must start with parentheses".to_string(),
+            ));
+        }
+        // Ignore the positions in the previous row.
+        while let Some(pos) = self.positions.front() {
+            if *pos < start_pos_of_row as usize {
+                self.positions.pop_front();
+            } else {
+                break;
+            }
+        }
+
+        for col_idx in 0..col_size {
+            let _ = self.reader.ignore_white_spaces();
+            let col_end = if col_idx + 1 == col_size { b')' } else { b',' };
+
+            let col = self
+                .columns
+                .get_mut(col_idx)
+                .ok_or_else(|| ErrorCode::Internal("ColumnBuilder is None"))?;
+
+            let (need_fallback, pop_count) = self
+                .field_decoder
+                .read_field(col, self.reader, self.positions)
+                .map(|_| {
+                    let _ = self.reader.ignore_white_spaces();
+                    let need_fallback = self.reader.ignore_byte(col_end).not();
+                    (need_fallback, col_idx + 1)
+                })
+                .unwrap_or((true, col_idx));
+
+            // ColumnBuilder and expr-parser both will eat the end ')' of the row.
+            if need_fallback {
+                for col in self.columns.iter_mut().take(pop_count) {
+                    col.pop();
+                }
+                // rollback to start position of the row
+                self.reader.rollback(start_pos_of_row + 1);
+                skip_to_next_row(self.reader, 1)?;
+                let end_pos_of_row = self.reader.position();
+
+                // Parse from expression and append all columns.
+                self.reader.set_position(start_pos_of_row);
+                let row_len = end_pos_of_row - start_pos_of_row;
+                let buf = &self.reader.remaining_slice()[..row_len as usize];
+
+                let sql = std::str::from_utf8(buf).unwrap();
+                let values = self.parse_fallback(sql)?;
+
+                for (col, scalar) in self.columns.iter_mut().zip(values) {
+                    col.push(scalar.as_ref());
+                }
+                self.reader.set_position(end_pos_of_row);
+                return Ok(());
+            }
+        }
+
+        Ok(())
+    }
+
+    fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
+        todo!();
+    }
+}
+
+// Values |(xxx), (yyy), (zzz)
+pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32) -> Result<()> {
+    let _ = reader.ignore_white_spaces();
+
+    let mut quoted = false;
+    let mut escaped = false;
+
+    while balance > 0 {
+        let buffer = reader.remaining_slice();
+        if buffer.is_empty() {
+            break;
+        }
+
+        let size = buffer.len();
+
+        let it = buffer
+            .iter()
+            .position(|&c| c == b'(' || c == b')' || c == b'\\' || c == b'\'');
+
+        if let Some(it) = it {
+            let c = buffer[it];
+            reader.consume(it + 1);
+
+            if it == 0 && escaped {
+                escaped = false;
+                continue;
+            }
+            escaped = false;
+
+            match c {
+                b'\\' => {
+                    escaped = true;
+                    continue;
+                }
+                b'\'' => {
+                    quoted ^= true;
+                    continue;
+                }
+                b')' => {
+                    if !quoted {
+                        balance -= 1;
+                    }
+                }
+                b'(' => {
+                    if !quoted {
+                        balance += 1;
+                    }
+                }
+                _ => {}
+            }
+        } else {
+            escaped = false;
+            reader.consume(size);
+        }
+    }
+    Ok(())
 }
