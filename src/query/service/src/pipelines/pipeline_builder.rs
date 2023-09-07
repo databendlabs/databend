@@ -13,11 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::VecDeque;
 use std::convert::TryFrom;
-use std::io::BufRead;
-use std::io::Cursor;
-use std::ops::Not;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -49,8 +45,6 @@ use common_formats::FastValuesDecoder;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_io::cursor_ext::ReadBytesExt;
-use common_io::cursor_ext::ReadCheckPointExt;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
