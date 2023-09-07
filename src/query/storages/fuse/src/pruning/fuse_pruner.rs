@@ -44,7 +44,7 @@ use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
-use crate::operations::DeletedSegment;
+use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
@@ -175,7 +175,7 @@ pub struct FusePruner {
     pub pruning_ctx: Arc<PruningContext>,
     pub push_down: Option<PushDownInfo>,
     pub inverse_range_index: Option<RangeIndex>,
-    pub deleted_segments: Vec<DeletedSegment>,
+    pub deleted_segments: Vec<DeletedSegmentInfo>,
 }
 
 impl FusePruner {
@@ -311,12 +311,9 @@ impl FusePruner {
                                     if !range_index
                                         .should_keep(&compact_segment_info.summary.col_stats, None)
                                     {
-                                        deleted_segments.push(DeletedSegment {
+                                        deleted_segments.push(DeletedSegmentInfo {
                                             index: segment_location.segment_idx,
-                                            segment_info: (
-                                                segment_location.location.clone(),
-                                                compact_segment_info.summary.clone(),
-                                            ),
+                                            summary: compact_segment_info.summary.clone(),
                                         })
                                     } else {
                                         res.extend(

@@ -18,12 +18,12 @@ use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::CompactExtraInfo;
-use crate::operations::mutation::DeletedSegment;
+use crate::operations::mutation::DeletedSegmentInfo;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub enum SerializeDataMeta {
     SerializeBlock(SerializeBlock),
-    DeletedSegment(DeletedSegment),
+    DeletedSegment(DeletedSegmentInfo),
     CompactExtras(CompactExtraInfo),
 }
 

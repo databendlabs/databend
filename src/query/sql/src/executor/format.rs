@@ -25,7 +25,7 @@ use crate::executor::AggregateExpand;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregateFunctionDesc;
 use crate::executor::AggregatePartial;
-use crate::executor::CompactFinal;
+use crate::executor::CommitSink;
 use crate::executor::ConstantTableScan;
 use crate::executor::CopyIntoTable;
 use crate::executor::CteScan;
@@ -41,7 +41,6 @@ use crate::executor::HashJoin;
 use crate::executor::Lambda;
 use crate::executor::Limit;
 use crate::executor::MaterializedCte;
-use crate::executor::MutationAggregate;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
 use crate::executor::ProjectSet;
@@ -200,10 +199,7 @@ fn to_format_tree(
             delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
         }
         PhysicalPlan::CompactPartial(_) => Ok(FormatTreeNode::new("CompactPartial".to_string())),
-        PhysicalPlan::CompactFinal(plan) => compact_final_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::MutationAggregate(plan) => {
-            delete_final_to_format_tree(plan.as_ref(), metadata, profs)
-        }
+        PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
         PhysicalPlan::RuntimeFilterSource(plan) => {
@@ -221,7 +217,6 @@ fn to_format_tree(
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
-        PhysicalPlan::FinalCommit(_) => Ok(FormatTreeNode::new("FinalCommit".to_string())),
     }
 }
 
@@ -1069,26 +1064,14 @@ fn delete_partial_to_format_tree(
     Ok(FormatTreeNode::new("DeletePartial".to_string()))
 }
 
-fn delete_final_to_format_tree(
-    plan: &MutationAggregate,
+fn commit_sink_to_format_tree(
+    plan: &CommitSink,
     metadata: &Metadata,
     prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
     Ok(FormatTreeNode::with_children(
-        "DeleteFinal".to_string(),
-        children,
-    ))
-}
-
-fn compact_final_to_format_tree(
-    plan: &CompactFinal,
-    metadata: &Metadata,
-    prof_span_set: &SharedProcessorProfiles,
-) -> Result<FormatTreeNode<String>> {
-    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
-    Ok(FormatTreeNode::with_children(
-        "CompactFinal".to_string(),
+        "CommitSink".to_string(),
         children,
     ))
 }

@@ -21,9 +21,9 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CommitSink;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::Exchange;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
@@ -238,15 +238,14 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
-        root = Box::new(PhysicalPlan::MutationAggregate(Box::new(
-            MutationAggregate {
-                input: root,
-                snapshot: (*base_snapshot).clone(),
-                table_info: table_info.clone(),
-                catalog_info: catalog.info(),
-                mutation_kind: MutationKind::Replace,
-            },
-        )));
+        root = Box::new(PhysicalPlan::CommitSink(CommitSink {
+            input: root,
+            snapshot: base_snapshot,
+            table_info: table_info.clone(),
+            catalog_info: catalog.info(),
+            mutation_kind: MutationKind::Replace,
+            merge_meta: false,
+        }));
         Ok((root, purge_info))
     }
 

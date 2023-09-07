@@ -22,7 +22,7 @@ use crate::executor::AggregateExpand;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
 use crate::executor::AsyncSourcerPlan;
-use crate::executor::CompactFinal;
+use crate::executor::CommitSink;
 use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
 use crate::executor::CopyIntoTable;
@@ -35,14 +35,12 @@ use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::Filter;
-use crate::executor::FinalCommit;
 use crate::executor::HashJoin;
 use crate::executor::Lambda;
 use crate::executor::Limit;
 use crate::executor::MaterializedCte;
 use crate::executor::MergeInto;
 use crate::executor::MergeIntoSource;
-use crate::executor::MutationAggregate;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
 use crate::executor::ProjectSet;
@@ -90,9 +88,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::CompactPartial(compact_partial) => write!(f, "{}", compact_partial)?,
-            PhysicalPlan::CompactFinal(compact_final) => write!(f, "{}", compact_final)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::MutationAggregate(mutation) => write!(f, "{}", mutation)?,
+            PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
@@ -106,7 +103,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
-            PhysicalPlan::FinalCommit(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -410,21 +406,15 @@ impl Display for CompactPartial {
     }
 }
 
-impl Display for CompactFinal {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CompactFinal")
-    }
-}
-
 impl Display for DeletePartial {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DeletePartial")
     }
 }
 
-impl Display for MutationAggregate {
+impl Display for CommitSink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MutationAggregate")
+        write!(f, "CommitSink")
     }
 }
 impl Display for CopyIntoTable {
@@ -482,12 +472,6 @@ impl Display for MergeInto {
 impl Display for MergeIntoSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeIntoSource")
-    }
-}
-
-impl Display for FinalCommit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FinalCommit")
     }
 }
 
