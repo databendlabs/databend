@@ -3937,7 +3937,6 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "aggregating-index",
- "aho-corasick",
  "arrow-array 45.0.0",
  "arrow-cast 45.0.0",
  "arrow-flight",
