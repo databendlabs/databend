@@ -27,8 +27,9 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::metrics::*;
+use crate::operations::mutation::compact::compact_part::CompactPartInfo;
 use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
-use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::mutation_meta::SerializeBlock;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::operations::BlockMetaIndex;
 use crate::pipelines::processors::port::OutputPort;
@@ -126,7 +127,10 @@ impl Processor for CompactSource {
                     DataBlock::concat(&blocks)?
                 };
 
-                let meta = SerializeDataMeta::create(index, ClusterStatsGenType::Generally);
+                let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
+                    index,
+                    ClusterStatsGenType::Generally,
+                )));
                 let new_block = block.add_meta(Some(meta))?;
 
                 let progress_values = ProgressValues {
@@ -152,33 +156,42 @@ impl Processor for CompactSource {
                 // block read tasks.
                 let mut task_futures = Vec::new();
                 let part = CompactPartInfo::from_part(&part)?;
-                let mut stats = Vec::with_capacity(part.blocks.len());
-                for block in &part.blocks {
-                    stats.push(block.col_stats.clone());
+                match part {
+                    CompactPartInfo::CompactExtraInfo(extra) => {
+                        let meta = Box::new(SerializeDataMeta::CompactExtras(extra.clone()));
+                        println!("meta compact extra info: {:?}", meta);
+                        let block = DataBlock::empty_with_meta(meta);
+                        self.state = State::Output(self.ctx.get_partition(), block);
+                    }
+                    CompactPartInfo::CompactTaskInfo(task) => {
+                        for block in &task.blocks {
+                            let settings = ReadSettings::from_ctx(&self.ctx)?;
+                            // read block in parallel.
+                            task_futures.push(async move {
+                                // Perf
+                                {
+                                    metrics_inc_compact_block_read_nums(1);
+                                    metrics_inc_compact_block_read_bytes(block.block_size);
+                                }
 
-                    let settings = ReadSettings::from_ctx(&self.ctx)?;
-                    // read block in parallel.
-                    task_futures.push(async move {
-                        // Perf
-                        {
-                            metrics_inc_compact_block_read_nums(1);
-                            metrics_inc_compact_block_read_bytes(block.block_size);
+                                block_reader
+                                    .read_by_meta(&settings, block.as_ref(), &storage_format)
+                                    .await
+                            });
                         }
 
-                        block_reader
-                            .read_by_meta(&settings, block.as_ref(), &storage_format)
-                            .await
-                    });
-                }
+                        let start = Instant::now();
 
-                let start = Instant::now();
-
-                let blocks = futures::future::try_join_all(task_futures).await?;
-                // Perf.
-                {
-                    metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
+                        let blocks = futures::future::try_join_all(task_futures).await?;
+                        // Perf.
+                        {
+                            metrics_inc_compact_block_read_milliseconds(
+                                start.elapsed().as_millis() as u64,
+                            );
+                        }
+                        self.state = State::Concat(blocks, task.index.clone());
+                    }
                 }
-                self.state = State::Concat(blocks, part.index.clone());
                 Ok(())
             }
             _ => Err(ErrorCode::Internal("It's a bug.")),

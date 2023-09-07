@@ -16,20 +16,30 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
+use common_sql::executor::CompactFinal;
+use common_sql::executor::CompactPartial;
+use common_sql::executor::Exchange;
+use common_sql::executor::FragmentKind;
+use common_sql::executor::PhysicalPlan;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -71,6 +81,40 @@ impl Interpreter for OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
+    fn build_physical_plan(
+        parts: Partitions,
+        table_info: TableInfo,
+        snapshot: Arc<TableSnapshot>,
+        catalog_info: CatalogInfo,
+        is_distributed: bool,
+    ) -> Result<PhysicalPlan> {
+        let is_lazy = parts.is_lazy;
+        let mut root = PhysicalPlan::CompactPartial(CompactPartial {
+            parts,
+            table_info: table_info.clone(),
+            catalog_info: catalog_info.clone(),
+            column_ids: snapshot.schema.to_leaf_column_id_set(),
+        });
+
+        if is_distributed {
+            root = PhysicalPlan::Exchange(Exchange {
+                plan_id: 0,
+                input: Box::new(root),
+                kind: FragmentKind::Merge,
+                keys: vec![],
+                ignore_exchange: false,
+            });
+        }
+
+        Ok(PhysicalPlan::CompactFinal(CompactFinal {
+            input: Box::new(root),
+            table_info,
+            catalog_info,
+            snapshot,
+            is_lazy,
+        }))
+    }
+
     async fn build_pipeline(
         &self,
         target: CompactTarget,
@@ -80,13 +124,12 @@ impl OptimizeTableInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty()
-            && matches!(target, CompactTarget::Blocks);
 
+        let table_info = table.get_table_info().clone();
         // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let reply = catalog
-            .list_table_lock_revs(table.get_table_info().ident.table_id)
+            .list_table_lock_revs(table_info.ident.table_id)
             .await?;
         if !reply.is_empty() {
             return Err(ErrorCode::TableAlreadyLocked(format!(
@@ -95,19 +138,40 @@ impl OptimizeTableInterpreter {
             )));
         }
 
-        let mut compact_pipeline = Pipeline::create();
-        table
-            .compact(
-                self.ctx.clone(),
-                target,
-                self.plan.limit,
-                &mut compact_pipeline,
-            )
+        if matches!(target, CompactTarget::Segments) {
+            table
+                .compact_segments(self.ctx.clone(), self.plan.limit)
+                .await?;
+            return Ok(PipelineBuildResult::create());
+        }
+
+        let res = table
+            .compact_blocks(self.ctx.clone(), self.plan.limit)
             .await?;
+
+        let is_distributed = !self.ctx.get_cluster().is_empty();
+        let catalog_info = catalog.info();
+        let mut compact_pipeline = if let Some((parts, snapshot)) = res {
+            let physical_plan = Self::build_physical_plan(
+                parts,
+                table_info,
+                snapshot,
+                catalog_info,
+                is_distributed,
+            )?;
+
+            let build_res =
+                build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                    .await?;
+            build_res.main_pipeline
+        } else {
+            Pipeline::create()
+        };
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
         let mut reclustered_block_count = 0;
+        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         if need_recluster {
             if !compact_pipeline.is_empty() {
                 compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);

@@ -20,39 +20,40 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
 
-use super::AggregateExpand;
-use super::AggregateFinal;
-use super::AggregateFunctionDesc;
-use super::AggregatePartial;
-use super::CopyIntoTable;
-use super::DeletePartial;
-use super::EvalScalar;
-use super::Exchange;
-use super::Filter;
-use super::HashJoin;
-use super::Lambda;
-use super::Limit;
-use super::MutationAggregate;
-use super::PhysicalPlan;
-use super::Project;
-use super::ProjectSet;
-use super::RowFetch;
-use super::Sort;
-use super::TableScan;
-use super::UnionAll;
-use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::AggregateExpand;
+use crate::executor::AggregateFinal;
+use crate::executor::AggregateFunctionDesc;
+use crate::executor::AggregatePartial;
+use crate::executor::CompactFinal;
 use crate::executor::ConstantTableScan;
+use crate::executor::CopyIntoTable;
 use crate::executor::CteScan;
+use crate::executor::DeletePartial;
 use crate::executor::DistributedInsertSelect;
+use crate::executor::EvalScalar;
+use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
+use crate::executor::Filter;
 use crate::executor::FragmentKind;
+use crate::executor::HashJoin;
+use crate::executor::Lambda;
+use crate::executor::Limit;
 use crate::executor::MaterializedCte;
+use crate::executor::MutationAggregate;
+use crate::executor::PhysicalPlan;
+use crate::executor::Project;
+use crate::executor::ProjectSet;
 use crate::executor::RangeJoin;
 use crate::executor::RangeJoinType;
+use crate::executor::RowFetch;
 use crate::executor::RuntimeFilterSource;
+use crate::executor::Sort;
+use crate::executor::TableScan;
+use crate::executor::UnionAll;
 use crate::executor::Window;
+use crate::executor::WindowFunction;
 use crate::planner::Metadata;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
@@ -198,6 +199,8 @@ fn to_format_tree(
         PhysicalPlan::DeletePartial(plan) => {
             delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
         }
+        PhysicalPlan::CompactPartial(_) => Ok(FormatTreeNode::new("CompactPartial".to_string())),
+        PhysicalPlan::CompactFinal(plan) => compact_final_to_format_tree(plan, metadata, profs),
         PhysicalPlan::MutationAggregate(plan) => {
             delete_final_to_format_tree(plan.as_ref(), metadata, profs)
         }
@@ -1074,6 +1077,18 @@ fn delete_final_to_format_tree(
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
     Ok(FormatTreeNode::with_children(
         "DeleteFinal".to_string(),
+        children,
+    ))
+}
+
+fn compact_final_to_format_tree(
+    plan: &CompactFinal,
+    metadata: &Metadata,
+    prof_span_set: &SharedProcessorProfiles,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    Ok(FormatTreeNode::with_children(
+        "CompactFinal".to_string(),
         children,
     ))
 }

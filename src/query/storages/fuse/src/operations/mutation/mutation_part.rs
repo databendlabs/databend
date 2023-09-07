@@ -13,6 +13,9 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
@@ -20,12 +23,14 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Statistics;
 
-use crate::pruning::DeletedSegmentInfo;
+use crate::operations::mutation::SegmentIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub enum Mutation {
-    MutationDeletedSegment(MutationDeletedSegment),
+    MutationDeletedSegment(DeletedSegment),
     MutationPartInfo(MutationPartInfo),
 }
 
@@ -36,12 +41,9 @@ impl PartInfo for Mutation {
     }
 
     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match self {
-            Self::MutationDeletedSegment(mutation_deleted_segment) => {
-                mutation_deleted_segment.equals(info)
-            }
-            Self::MutationPartInfo(mutation_part_info) => mutation_part_info.equals(info),
-        }
+        info.as_any()
+            .downcast_ref::<Mutation>()
+            .is_some_and(|other| self == other)
     }
 
     fn hash(&self) -> u64 {
@@ -65,30 +67,19 @@ impl Mutation {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct MutationDeletedSegment {
-    pub deleted_segment: DeletedSegmentInfo,
+pub struct DeletedSegment {
+    /// segment index.
+    pub index: SegmentIndex,
+    /// segment location and summary.
+    /// location can be used for hash
+    pub segment_info: (Location, Statistics),
 }
 
-#[typetag::serde(name = "mutation_delete_segment")]
-impl PartInfo for MutationDeletedSegment {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<MutationDeletedSegment>()
-            .is_some_and(|other| self == other)
-    }
-
+impl DeletedSegment {
     fn hash(&self) -> u64 {
-        self.deleted_segment.hash()
-    }
-}
-
-impl MutationDeletedSegment {
-    pub fn create(deleted_segment: DeletedSegmentInfo) -> Self {
-        MutationDeletedSegment { deleted_segment }
+        let mut s = DefaultHasher::new();
+        self.segment_info.0.hash(&mut s);
+        s.finish()
     }
 }
 
@@ -98,23 +89,6 @@ pub struct MutationPartInfo {
     pub cluster_stats: Option<ClusterStatistics>,
     pub inner_part: PartInfoPtr,
     pub whole_block_mutation: bool,
-}
-
-#[typetag::serde(name = "mutation")]
-impl PartInfo for MutationPartInfo {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        info.as_any()
-            .downcast_ref::<MutationPartInfo>()
-            .is_some_and(|other| self == other)
-    }
-
-    fn hash(&self) -> u64 {
-        self.inner_part.hash()
-    }
 }
 
 impl MutationPartInfo {
@@ -130,5 +104,9 @@ impl MutationPartInfo {
             inner_part,
             whole_block_mutation,
         }
+    }
+
+    fn hash(&self) -> u64 {
+        self.inner_part.hash()
     }
 }

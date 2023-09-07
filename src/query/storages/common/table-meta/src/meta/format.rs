@@ -33,7 +33,7 @@ use zstd::Decoder as ZstdDecoder;
 use zstd::Encoder as ZstdEncoder;
 
 #[repr(u8)]
-#[derive(Default, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub enum MetaCompression {
     None = 0,
     #[default]
@@ -101,7 +101,7 @@ pub fn decompress(compression: &MetaCompression, data: Vec<u8>) -> Result<Vec<u8
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaEncoding {
     Bincode = 1,
     MessagePack = 2,
