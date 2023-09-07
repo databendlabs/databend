@@ -134,7 +134,17 @@ We may improve the expression in the future which could parse the literal `1` in
 
 ## NULL Values and NOT NULL Constraint
 
-NULL values are employed to represent data that is either nonexistent or unknown. In Databend, every column is inherently capable of containing NULL values, which implies that a column can accommodate NULLs alongside regular data. If you need a column that does not allow NULL values, use the NOT NULL constraint.
+NULL values are employed to represent data that is either nonexistent or unknown. In Databend, every column is inherently capable of containing NULL values, which implies that a column can accommodate NULLs alongside regular data. 
+
+If you need a column that does not allow NULL values, use the NOT NULL constraint. If a column is configured to disallow NULL values in Databend, and you do not explicitly provide a value for that column when inserting data, the default value associated with the column's data type will be automatically applied. 
+
+| Data Type                | Default Value           |
+|--------------------------|-------------------------|
+| Integer Data Types       | 0                       |
+| Floating-Point Data Types| 0.0                     |
+| Character and String     | Empty string ('')       |
+| Date and Time Data Types | '1970-01-01' for DATE, '1970-01-01 00:00:00' for TIMESTAMP |
+| Boolean Data Type        | False                   |
 
 For example, if you create a table as follows:
 
@@ -145,7 +155,7 @@ CREATE TABLE test(
     age Int32
 );
 
-DESC TEST;
+DESC test;
 
 Field|Type   |Null|Default|Extra|
 -----+-------+----+-------+-----+
@@ -172,7 +182,7 @@ The following INSERT statement inserts a row into the "test" table with values f
 INSERT INTO test (id, name) VALUES (1, 'John');
 ```
 
-The following INSERT statement attempts to insert a row without a value for the "name" column. This will result in an error because the "name" column has a NOT NULL constraint.
+The following INSERT statement attempts to insert a row without a value for the "name" column. The default value of the column type will be applied.
 
 ```sql
 INSERT INTO test (id, age) VALUES (3, 45);
