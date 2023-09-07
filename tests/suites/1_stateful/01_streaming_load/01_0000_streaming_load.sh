@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "drop table if exists ontime_streaming_load;" | $MYSQL_CLIENT_CONNECT
 ## create ontime table
-cat $TESTS_DATA_DIR/data/ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_streaming_load/g' | $MYSQL_CLIENT_CONNECT
 
 # load csv
 echo "--csv"
@@ -61,7 +61,7 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_less;" | $MYSQL_CL
 
 # load parquet with mismatch schema, will auto cast
 echo "--parquet runtime cast schema"
-cat $TESTS_DATA_DIR/data/ddl/ontime.sql | sed 's/ontime/ontime_test_schema_mismatch/g' | sed 's/DATE/TIMESTAMP/g' | $MYSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_test_schema_mismatch/g' | sed 's/DATE/TIMESTAMP/g' | $MYSQL_CLIENT_CONNECT
 curl -s -H "insert_sql:insert into ontime_test_schema_mismatch file_format = (type = Parquet)" -F "upload=@/${TESTS_DATA_DIR}/ontime_200.parquet" -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load"  > /dev/null 2>&1
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime_test_schema_mismatch;" | $MYSQL_CLIENT_CONNECT
 

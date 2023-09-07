@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "drop table if exists hits;" | $MYSQL_CLIENT_CONNECT
 ## Create table
-cat $TESTS_DATA_DIR/data/ddl/hits.sql | $MYSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/hits.sql | $MYSQL_CLIENT_CONNECT
 
 hits_statements=(
   ## load data
