@@ -178,7 +178,7 @@ pub fn optimize_query(
         result = optimize_distributed_query(ctx.clone(), &result)?;
     }
     if ctx.get_settings().get_disable_join_reorder()? {
-        return heuristic.optimize_expression(&result, &vec![RuleID::EliminateEvalScalar]);
+        return heuristic.optimize_expression(&result, &[RuleID::EliminateEvalScalar]);
     }
     heuristic.optimize_expression(&result, &RESIDUAL_RULES)
 }
