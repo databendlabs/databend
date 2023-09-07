@@ -23,7 +23,6 @@ use common_formats::FastFieldDecoderValues;
 use common_formats::FastValuesDecodeFallback;
 use common_formats::FastValuesDecoder;
 use common_io::prelude::FormatSettings;
-use tokio;
 
 struct DummyFastValuesDecodeFallback {}
 
@@ -111,7 +110,7 @@ async fn test_fast_values_decoder_multi() -> Result<()> {
 
     for tt in tests {
         let field_decoder = FastFieldDecoderValues::create_for_insert(FormatSettings::default());
-        let mut values_decoder = FastValuesDecoder::new(&tt.data, &field_decoder);
+        let mut values_decoder = FastValuesDecoder::new(tt.data, &field_decoder);
         let fallback = DummyFastValuesDecodeFallback {};
         let mut columns = tt
             .column_types
