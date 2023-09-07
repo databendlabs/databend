@@ -18,7 +18,7 @@ common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
 
 anyhow = { workspace = true }
-arrow-schema = "45.0.0"
+arrow-schema = "46.0.0"
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 bytes = "1"
@@ -30,7 +30,7 @@ log = { workspace = true }
 metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parquet = "45.0.0"
+parquet = "46.0.0"
 regex = "1.8.1"
 reqwest = { workspace = true }
 serde = { workspace = true }
