@@ -232,6 +232,14 @@ impl Settings {
         self.try_set_u64("enable_cbo", u64::from(val))
     }
 
+    pub fn get_disable_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_join_reorder")? != 0)
+    }
+
+    pub fn set_disable_join_reorder(&self, val: bool) -> Result<()> {
+        self.try_set_u64("disable_join_reorder", u64::from(val))
+    }
+
     pub fn get_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }

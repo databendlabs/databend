@@ -28,6 +28,7 @@ use pretty_assertions::assert_eq;
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
 use crate::sm_v002::SnapshotViewV002;
@@ -56,7 +57,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapApi::<String>::range::<String, _>(d, ..)
+    let got = MapApiRO::<String>::range::<String, _>(d, ..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -67,7 +68,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         (&s("e"), &Marked::new_normal(6, b("e1"), None)),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..)
+    let got = MapApiRO::<ExpireKey>::range(d, ..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -88,7 +89,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = top_level.data_ref();
 
-    let got = MapApi::<String>::range::<String, _>(d, ..)
+    let got = MapApiRO::<String>::range::<String, _>(d, ..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -120,7 +121,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..)
+    let got = MapApiRO::<ExpireKey>::range(d, ..)
         .await
         .collect::<Vec<_>>()
         .await;
