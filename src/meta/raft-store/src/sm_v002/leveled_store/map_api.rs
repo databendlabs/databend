@@ -20,10 +20,9 @@ use futures_util::stream::BoxStream;
 
 use crate::sm_v002::marked::Marked;
 
-/// Provide a key-value map API set, which is used to access state machine data.
-
+/// Provide a readonly key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApi<K>: Send + Sync
+pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     type V: Clone + Send + Sync + 'static;
@@ -33,13 +32,6 @@ where K: Ord + Send + Sync + 'static
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized;
-
-    /// Set an entry and returns the old value and the new value.
-    async fn set(
-        &mut self,
-        key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>);
 
     /// Iterate over a range of entries by keys.
     ///
@@ -52,6 +44,19 @@ where K: Ord + Send + Sync + 'static
         K: Clone + Borrow<T> + 'a,
         T: Ord,
         R: RangeBounds<T> + Send + Sync + Clone;
+}
+
+/// Provide a read-write key-value map API set, used to access state machine data.
+#[async_trait::async_trait]
+pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K> + Send + Sync
+where K: Ord + Send + Sync + 'static
+{
+    /// Set an entry and returns the old value and the new value.
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(Self::V, Option<KVMeta>)>,
+    ) -> (Marked<Self::V>, Marked<Self::V>);
 
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
