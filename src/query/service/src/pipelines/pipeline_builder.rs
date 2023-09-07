@@ -22,7 +22,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 
-use aho_corasick::AhoCorasick;
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
@@ -45,6 +44,7 @@ use common_expression::HashMethodKind;
 use common_expression::Scalar;
 use common_expression::SortColumnDescription;
 use common_formats::FastFieldDecoderValues;
+use common_formats::FastValuesDecodeFallback;
 use common_formats::FastValuesDecoder;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::AggregateFunctionRef;
@@ -127,7 +127,6 @@ use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
-use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
@@ -2112,11 +2111,6 @@ impl PipelineBuilder {
     }
 }
 
-// Pre-generate the positions of `(`, `'` and `\`
-static PATTERNS: &[&str] = &["(", "'", "\\"];
-
-static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
-
 pub struct ValueSource {
     data: String,
     ctx: Arc<dyn TableContext>,
@@ -2143,7 +2137,7 @@ impl AsyncSource for ValueSource {
         let field_decoder = FastFieldDecoderValues::create_for_insert(format);
 
         let mut values_decoder = FastValuesDecoder::new(&self.data, &field_decoder);
-        let mut estimated_rows = values_decoder.estimated_rows();
+        let estimated_rows = values_decoder.estimated_rows();
 
         let mut columns = self
             .schema
@@ -2152,8 +2146,7 @@ impl AsyncSource for ValueSource {
             .map(|f| ColumnBuilder::with_capacity(f.data_type(), estimated_rows))
             .collect::<Vec<_>>();
 
-        let fallback_fn = async |sql: &str| self.parse_fallback(sql).await;
-        values_decoder.parse(&mut columns, &fallback_fn).await?;
+        values_decoder.parse(&mut columns, self).await?;
 
         let columns = columns
             .into_iter()
@@ -2162,6 +2155,29 @@ impl AsyncSource for ValueSource {
         let block = DataBlock::new_from_columns(columns);
         self.is_finished = true;
         Ok(Some(block))
+    }
+}
+
+#[async_trait::async_trait]
+impl FastValuesDecodeFallback for ValueSource {
+    async fn parse(&self, sql: &str) -> Result<Vec<Scalar>> {
+        let settings = self.ctx.get_settings();
+        let sql_dialect = settings.get_sql_dialect()?;
+        let tokens = tokenize_sql(sql)?;
+        let mut bind_context = self.bind_context.clone();
+        let metadata = self.metadata.clone();
+
+        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+        let values = bind_context
+            .exprs_to_scalar(
+                exprs,
+                &self.schema,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                metadata,
+            )
+            .await?;
+        Ok(values)
     }
 }
 
@@ -2184,26 +2200,6 @@ impl ValueSource {
             metadata,
             is_finished: false,
         }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(sql)?;
-        let bind_context = self.bind_context.clone();
-        let metadata = self.metadata.clone();
-
-        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
-        let values = bind_context
-            .exprs_to_scalar(
-                exprs,
-                &self.schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
-            .await?;
     }
 
     #[async_backtrace::framed]

@@ -2150,6 +2150,7 @@ name = "common-formats"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
+ "async-trait",
  "bstr 1.6.2",
  "chrono-tz",
  "common-arrow",

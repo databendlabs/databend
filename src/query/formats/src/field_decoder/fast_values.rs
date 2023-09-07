@@ -446,6 +446,11 @@ pub struct FastValuesDecoder<'a> {
     positions: VecDeque<usize>,
 }
 
+#[async_trait::async_trait]
+pub trait FastValuesDecodeFallback {
+    async fn parse(&self, sql: &str) -> Result<Vec<Scalar>>;
+}
+
 // Pre-generate the positions of `(`, `'` and `\`
 static PATTERNS: &[&str] = &["(", "'", "\\"];
 
@@ -455,7 +460,7 @@ impl<'a> FastValuesDecoder<'a> {
     pub fn new(data: &'a str, field_decoder: &'a FastFieldDecoderValues) -> Self {
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
-        for mat in INSERT_TOKEN_FINDER.find_iter(&data) {
+        for mat in INSERT_TOKEN_FINDER.find_iter(data) {
             if mat.pattern() == 0.into() {
                 estimated_rows += 1;
                 continue;
@@ -475,15 +480,11 @@ impl<'a> FastValuesDecoder<'a> {
         self.estimated_rows
     }
 
-    pub async fn parse<H, F>(
+    pub async fn parse(
         &mut self,
         columns: &mut [ColumnBuilder],
-        fallback_fn: &H,
-    ) -> Result<()>
-    where
-        H: Fn(&str) -> F,
-        F: std::future::Future<Output = Result<Vec<Scalar>>> + Send,
-    {
+        fallback_fn: &impl FastValuesDecodeFallback,
+    ) -> Result<()> {
         for row in 0.. {
             let _ = self.reader.ignore_white_spaces();
             if self.reader.eof() {
@@ -503,15 +504,11 @@ impl<'a> FastValuesDecoder<'a> {
         Ok(())
     }
 
-    async fn parse_next_row<H, F>(
+    async fn parse_next_row(
         &mut self,
         columns: &mut [ColumnBuilder],
-        fallback_fn: &H,
-    ) -> Result<()>
-    where
-        H: Fn(&str) -> F,
-        F: std::future::Future<Output = Result<Vec<Scalar>>> + Send,
-    {
+        fallback: &impl FastValuesDecodeFallback,
+    ) -> Result<()> {
         let _ = self.reader.ignore_white_spaces();
         let col_size = columns.len();
         let start_pos_of_row = self.reader.checkpoint();
@@ -565,7 +562,7 @@ impl<'a> FastValuesDecoder<'a> {
                 let buf = &self.reader.remaining_slice()[..row_len as usize];
 
                 let sql = std::str::from_utf8(buf).unwrap();
-                let values = fallback_fn(sql).await?;
+                let values = fallback.parse(sql).await?;
 
                 for (col, scalar) in columns.iter_mut().zip(values) {
                     col.push(scalar.as_ref());
