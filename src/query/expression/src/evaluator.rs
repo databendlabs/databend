@@ -254,7 +254,7 @@ impl<'a> Evaluator<'a> {
             .collect::<Result<Vec<_>>>()?;
 
         let input_batch = DataBlock::new(block_entries, num_rows)
-            .to_record_batch(&data_schema)
+            .to_record_batch_keep_schema(&data_schema)
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
         let func_name = func_name.to_string();

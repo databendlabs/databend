@@ -17,4 +17,5 @@ mod from_table_schema;
 mod to_data_schema;
 mod to_table_schema;
 
+pub use from_data_schema::data_schema_to_arrow_schema;
 use from_table_schema::set_nullable;

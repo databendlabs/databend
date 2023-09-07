@@ -67,7 +67,6 @@ class ScalarFunction(UserDefinedFunction):
             else None
         )
 
-        # TODO(ccl): whether to check this or not?
         if skip_null and not self._result_schema.field(0).nullable:
             raise ValueError(
                 f"Return type of function {self._name} must be nullable when skip_null is True"
@@ -340,7 +339,19 @@ def _type_str_to_arrow_field(type_str: str) -> pa.Field:
     """
     Convert a SQL data type to `pyarrow.Field`.
     """
-    type_str = type_str.upper()
+    type_str = type_str.strip().upper()
+    nullable = True
+    if type_str.endswith("NULL"):
+        type_str = type_str[:-4].strip()
+        if type_str.endswith("NOT"):
+            type_str = type_str[:-3].strip()
+            nullable = False
+
+    return _type_str_to_arrow_field_inner(type_str).with_nullable(nullable)
+
+
+def _type_str_to_arrow_field_inner(type_str: str) -> pa.Field:
+    type_str = type_str.strip().upper()
     if type_str in ("BOOLEAN", "BOOL"):
         return pa.field("", pa.bool_(), False)
     elif type_str in ("TINYINT", "INT8"):
@@ -363,7 +374,7 @@ def _type_str_to_arrow_field(type_str: str) -> pa.Field:
         return pa.field("", pa.float32(), False)
     elif type_str in ("FLOAT64", "DOUBLE"):
         return pa.field("", pa.float64(), False)
-    elif type_str in ("DATE"):
+    elif type_str == "DATE":
         return pa.field("", pa.date32(), False)
     elif type_str in ("DATETIME", "TIMESTAMP"):
         return pa.field("", pa.timestamp(TIMESTAMP_UINT), False)
@@ -379,7 +390,10 @@ def _type_str_to_arrow_field(type_str: str) -> pa.Field:
         )
     elif type_str.startswith("NULLABLE"):
         type_str = type_str[8:].strip("()").strip()
-        return _type_str_to_arrow_field(type_str).with_nullable(True)
+        return _type_str_to_arrow_field_inner(type_str).with_nullable(True)
+    elif type_str.endswith("NULL"):
+        type_str = type_str[:-4].strip()
+        return _type_str_to_arrow_field_inner(type_str).with_nullable(True)
     elif type_str.startswith("DECIMAL"):
         # DECIMAL(precision, scale)
         str_list = type_str[7:].strip("()").split(",")
@@ -401,12 +415,12 @@ def _type_str_to_arrow_field(type_str: str) -> pa.Field:
     elif type_str.startswith("ARRAY"):
         # ARRAY(INT)
         type_str = type_str[5:].strip("()").strip()
-        return pa.field("", pa.list_(_type_str_to_arrow_field(type_str)), False)
+        return pa.field("", pa.list_(_type_str_to_arrow_field_inner(type_str)), False)
     elif type_str.startswith("MAP"):
         # MAP(STRING, INT)
         str_list = type_str[3:].strip("()").split(",")
-        key_field = _type_str_to_arrow_field(str_list[0].strip())
-        val_field = _type_str_to_arrow_field(str_list[1].strip())
+        key_field = _type_str_to_arrow_field_inner(str_list[0].strip())
+        val_field = _type_str_to_arrow_field_inner(str_list[1].strip())
         return pa.field("", pa.map_(key_field, val_field), False)
     elif type_str.startswith("TUPLE"):
         # TUPLE(STRING, INT, INT)
@@ -414,7 +428,7 @@ def _type_str_to_arrow_field(type_str: str) -> pa.Field:
         fields = []
         for type_str in str_list:
             type_str = type_str.strip()
-            fields.append(_type_str_to_arrow_field(type_str))
+            fields.append(_type_str_to_arrow_field_inner(type_str))
         return pa.field("", pa.struct(fields), False)
     else:
         raise ValueError(f"Unsupported type: {type_str}")
@@ -425,7 +439,13 @@ def _arrow_field_to_string(field: pa.Field) -> str:
     Convert a `pyarrow.Field` to a SQL data type string.
     """
     type_str = _data_type_to_string(field.type)
-    return f"NULLABLE({type_str})" if field.nullable else type_str
+    return f"{type_str} NOT NULL" if not field.nullable else type_str
+
+
+def _inner_field_to_string(field: pa.Field) -> str:
+    ## inner field default is NOT NULL in databend
+    type_str = _data_type_to_string(field.type)
+    return f"{type_str} NULL" if field.nullable else type_str
 
 
 def _data_type_to_string(t: pa.DataType) -> str:
@@ -465,11 +485,11 @@ def _data_type_to_string(t: pa.DataType) -> str:
     elif pa.types.is_large_binary(t):
         return "VARIANT"
     elif pa.types.is_list(t):
-        return f"ARRAY({_arrow_field_to_string(t.value_field)})"
+        return f"ARRAY({_inner_field_to_string(t.value_field)})"
     elif pa.types.is_map(t):
-        return f"MAP({_arrow_field_to_string(t.key_field)}, {_arrow_field_to_string(t.item_field)})"
+        return f"MAP({_inner_field_to_string(t.key_field)}, {_inner_field_to_string(t.item_field)})"
     elif pa.types.is_struct(t):
-        args_str = ", ".join(_arrow_field_to_string(field) for field in t)
+        args_str = ", ".join(_inner_field_to_string(field) for field in t)
         return f"TUPLE({args_str})"
     else:
         raise ValueError(f"Unsupported type: {t}")

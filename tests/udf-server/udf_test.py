@@ -26,8 +26,8 @@ def bool_select(condition, a, b):
 
 @udf(
     name="gcd",
-    input_types=["NULLABLE(INT)", "NULLABLE(INT)"],
-    result_type="NULLABLE(INT)",
+    input_types=["INT", "INT"],
+    result_type="INT",
     skip_null=True,
 )
 def gcd(x: int, y: int) -> int:
@@ -70,7 +70,7 @@ def add_hours_py(dt: datetime.datetime, hours: int):
     return dt + datetime.timedelta(hours=hours)
 
 
-@udf(input_types=["ARRAY(VARCHAR)", "INT"], result_type="NULLABLE(VARCHAR)")
+@udf(input_types=["ARRAY(VARCHAR)", "INT"], result_type="VARCHAR")
 def array_access(array: List[str], idx: int) -> Optional[str]:
     if idx == 0 or idx > len(array):
         return None
@@ -78,8 +78,8 @@ def array_access(array: List[str], idx: int) -> Optional[str]:
 
 
 @udf(
-    input_types=["NULLABLE(ARRAY(NULLABLE(INT64)))", "NULLABLE(INT64)"],
-    result_type="INT",
+    input_types=["ARRAY(INT64 NULL)", "INT64"],
+    result_type="INT NOT NULL",
     skip_null=False,
 )
 def array_index_of(array: List[int], item: int):
@@ -92,7 +92,7 @@ def array_index_of(array: List[int], item: int):
         return 0
 
 
-@udf(input_types=["MAP(VARCHAR,VARCHAR)", "VARCHAR"], result_type="NULLABLE(VARCHAR)")
+@udf(input_types=["MAP(VARCHAR,VARCHAR)", "VARCHAR"], result_type="VARCHAR")
 def map_access(map: Dict[str, str], key: str) -> str:
     return map[key] if key in map else None
 
@@ -108,8 +108,8 @@ def json_concat(list: List[Any]) -> Any:
 
 
 @udf(
-    input_types=["TUPLE(ARRAY(NULLABLE(VARIANT)), INT, VARCHAR)", "INT", "INT"],
-    result_type="TUPLE(NULLABLE(VARIANT), NULLABLE(VARIANT))",
+    input_types=["TUPLE(ARRAY(VARIANT NULL), INT, VARCHAR)", "INT", "INT"],
+    result_type="TUPLE(VARIANT NULL, VARIANT NULL)",
 )
 def tuple_access(
     tup: Tuple[List[Any], int, str], idx1: int, idx2: int
@@ -126,7 +126,7 @@ ALL_SCALAR_TYPES = "BOOLEAN,TINYINT,SMALLINT,INT,BIGINT,UINT8,UINT16,UINT32,UINT
 
 @udf(
     input_types=ALL_SCALAR_TYPES,
-    result_type=f"TUPLE({','.join(ALL_SCALAR_TYPES)})",
+    result_type=f"TUPLE({','.join(f'{t} NULL' for t in ALL_SCALAR_TYPES)})",
 )
 def return_all(
     bool,
@@ -205,10 +205,10 @@ def return_all_arrays(
 
 
 @udf(
-    input_types=[f"NULLABLE({t})" for t in ALL_SCALAR_TYPES],
-    result_type=f"TUPLE({','.join(f'NULLABLE({t})' for t in ALL_SCALAR_TYPES)})",
+    input_types=[f"{t} NOT NULL" for t in ALL_SCALAR_TYPES],
+    result_type=f"TUPLE({','.join(f'{t}' for t in ALL_SCALAR_TYPES)})",
 )
-def return_all_nullable(
+def return_all_non_nullable(
     bool,
     i8,
     i16,
@@ -276,7 +276,7 @@ if __name__ == "__main__":
     udf_server.add_function(tuple_access)
     udf_server.add_function(return_all)
     udf_server.add_function(return_all_arrays)
-    udf_server.add_function(return_all_nullable)
+    udf_server.add_function(return_all_non_nullable)
     udf_server.add_function(wait)
     udf_server.add_function(wait_concurrent)
     udf_server.serve()

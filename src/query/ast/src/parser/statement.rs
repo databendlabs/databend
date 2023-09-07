@@ -2689,6 +2689,22 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     })(i)
 }
 
+pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+    let nullable = alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ));
+    map(
+        rule! {
+            #type_name ~ #nullable?
+        },
+        |(type_name, nullable)| match nullable {
+            Some(false) => type_name,
+            _ => type_name.wrap_nullable(),
+        },
+    )(i)
+}
+
 pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
     let lambda_udf = map(
         rule! {
@@ -2703,8 +2719,8 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
     let udf_server = map(
         rule! {
-            "(" ~ #comma_separated_list0(type_name) ~ ")"
-            ~ RETURNS ~ #type_name
+            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
+            ~ RETURNS ~ #udf_arg_type
             ~ LANGUAGE ~ #ident
             ~ HANDLER ~ ^"=" ~ ^#literal_string
             ~ ADDRESS ~ ^"=" ~ ^#literal_string

@@ -29,8 +29,8 @@ def split_and_join(s: str, split_s: str, join_s: str) -> str:
 
 # Define a function that accpets nullable values, and set skip_null to True to enable it returns NULL if any argument is NULL.
 @udf(
-    input_types=["NULLABLE(INT)", "NULLABLE(INT)"],
-    result_type="NULLABLE(INT)",
+    input_types=["INT", "INT"],
+    result_type="INT",
     skip_null=True,
 )
 def gcd(x: int, y: int) -> int:
@@ -39,7 +39,11 @@ def gcd(x: int, y: int) -> int:
     return x
 
 # Define a function that accpets nullable values, and set skip_null to False to enable it handles NULL values inside the function.
-@udf(input_types=["NULLABLE(ARRAY(NULLABLE(INT64)))", "NULLABLE(INT64)"], result_type="INT", skip_null=False)
+@udf(
+    input_types=["ARRAY(INT64 NULL)", "INT64"],
+    result_type="INT NOT NULL",
+    skip_null=False,
+)
 def array_index_of(array: List[int], item: int):
     if array is None:
         return 0
@@ -109,24 +113,25 @@ mysql> select split_and_join('3,5,7', ',', ':');
 ### Data Types
 The data types supported by the Python UDF API and their corresponding python types are as follows :
 
-| SQL Type            | Python Type       | Notes                      |
-| ------------------- | ----------------- | -------------------------- |
-| BOOLEAN             | bool              |                            |
-| TINYINT (UNSIGNED)  | int               |                            |
-| SMALLINT (UNSIGNED) | int               |                            |
-| INT (UNSIGNED)      | int               |                            |
-| BIGINT (UNSIGNED)   | int               |                            |
-| FLOAT               | float             |                            |
-| DOUBLE              | float             |                            |
-| DECIMAL             | decimal.Decimal   |                            |
-| DATE                | datetime.date     |                            |
-| TIMESTAMP           | datetime.datetime |                            |
-| VARCHAR             | str               |                            |
-| VARIANT             | any               |                            |
-| MAP(K,V)            | dict              |                            |
-| ARRAY(T)            | list[T]           |                            |
-| TUPLE(T...)         | tuple(T...)       |                            |
-| NULLABLE(T)         | T                 | NULL is converted to None. |
+| SQL Type            | Python Type       |
+| ------------------- | ----------------- |
+| BOOLEAN             | bool              |
+| TINYINT (UNSIGNED)  | int               |
+| SMALLINT (UNSIGNED) | int               |
+| INT (UNSIGNED)      | int               |
+| BIGINT (UNSIGNED)   | int               |
+| FLOAT               | float             |
+| DOUBLE              | float             |
+| DECIMAL             | decimal.Decimal   |
+| DATE                | datetime.date     |
+| TIMESTAMP           | datetime.datetime |
+| VARCHAR             | str               |
+| VARIANT             | any               |
+| MAP(K,V)            | dict              |
+| ARRAY(T)            | list[T]           |
+| TUPLE(T...)         | tuple(T...)       |
+
+The NULL in sql is represented by None in Python.
 
 ### Acknowledgement
 Databend Python UDF Server API is inspired by [RisingWave Python API](https://pypi.org/project/risingwave/).
