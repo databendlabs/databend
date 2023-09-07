@@ -32,6 +32,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MatchExpr;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
@@ -254,6 +255,7 @@ impl Processor for MatchedSplitProcessor {
             }
 
             if !current_block.is_empty() {
+                metrics_inc_merge_into_append_blocks_counter(1);
                 self.output_data_updated_data = Some(current_block);
             }
         }

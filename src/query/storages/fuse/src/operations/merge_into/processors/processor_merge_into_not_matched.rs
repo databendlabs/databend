@@ -171,9 +171,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
             }
             // todo:(JackTan25) fill format data block
             if output_block.is_some() {
-                metrics_inc_merge_into_append_blocks_counter(
-                    output_block.as_ref().unwrap().num_rows() as u32,
-                );
+                metrics_inc_merge_into_append_blocks_counter(1);
                 self.output_data = output_block
             }
         }
