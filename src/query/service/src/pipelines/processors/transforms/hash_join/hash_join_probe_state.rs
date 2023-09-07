@@ -63,7 +63,7 @@ pub struct HashJoinProbeState {
     pub(crate) probe_workers: Mutex<usize>,
     /// Record spill workers
     pub(crate) spill_workers: Mutex<usize>,
-    /// Record final scan workers
+    /// Record final probe workers
     pub(crate) final_probe_workers: Mutex<usize>,
     /// After `probe_workers` is 0, it will be set as true.
     pub(crate) probe_done: Mutex<bool>,
@@ -252,7 +252,7 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    pub fn finish_final_scan(&self) {
+    pub fn finish_final_probe(&self) {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {

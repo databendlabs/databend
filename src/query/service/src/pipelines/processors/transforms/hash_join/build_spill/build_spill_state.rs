@@ -25,6 +25,7 @@ use common_expression::Evaluator;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -218,7 +219,10 @@ impl BuildSpillState {
     pub(crate) fn check_need_spill(&self) -> Result<bool> {
         let settings = self.build_state.ctx.get_settings();
         let spill_threshold = settings.get_join_spilling_threshold()?;
-        let enable_spill = settings.get_enable_join_spill()? && spill_threshold != 0;
+        // If `spill_threshold` is 0, we won't limit memory.
+        let enable_spill = settings.get_enable_join_spill()?
+            && spill_threshold != 0
+            && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
         if !enable_spill || self.spiller.is_all_spilled() {
             return Ok(false);
         }

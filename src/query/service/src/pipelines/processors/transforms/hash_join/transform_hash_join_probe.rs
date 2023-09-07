@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -165,11 +166,19 @@ impl TransformHashJoinProbe {
                     .read()
                     .is_empty()
                 {
-                    self.join_probe_state.finish_final_scan();
+                    self.join_probe_state.finish_final_probe();
                     self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
                 }
-                self.join_probe_state.finish_final_scan();
+                if self
+                    .join_probe_state
+                    .ctx
+                    .get_settings()
+                    .get_enable_join_spill()?
+                {
+                    // Todo: find a better way to notify build finish.
+                    self.join_probe_state.finish_final_probe();
+                }
                 self.output_port.finish();
                 Ok(Event::Finished)
             };
@@ -252,11 +261,18 @@ impl Processor for TransformHashJoinProbe {
                             .read()
                             .is_empty()
                         {
-                            self.join_probe_state.finish_final_scan();
+                            self.join_probe_state.finish_final_probe();
                             self.step = HashJoinProbeStep::WaitBuild;
                             return Ok(Event::Async);
                         }
-                        self.join_probe_state.finish_final_scan();
+                        if self
+                            .join_probe_state
+                            .ctx
+                            .get_settings()
+                            .get_enable_join_spill()?
+                        {
+                            self.join_probe_state.finish_final_probe();
+                        }
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }

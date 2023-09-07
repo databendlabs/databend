@@ -928,20 +928,17 @@ impl PipelineBuilder {
             build_res.main_pipeline.output_len(),
         )?;
         let create_sink_processor = |input| {
-            let spill_state = Box::new(BuildSpillState::create(
-                self.ctx.clone(),
-                spill_coordinator.clone(),
-                build_state.clone(),
-            ));
-            let transform = TransformHashJoinBuild::try_create(
-                input,
-                build_state.clone(),
-                if self.ctx.get_settings().get_enable_join_spill()? {
-                    Some(spill_state)
-                } else {
-                    None
-                },
-            )?;
+            let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+                Some(Box::new(BuildSpillState::create(
+                    self.ctx.clone(),
+                    spill_coordinator.clone(),
+                    build_state.clone(),
+                )))
+            } else {
+                None
+            };
+            let transform =
+                TransformHashJoinBuild::try_create(input, build_state.clone(), spill_state)?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
