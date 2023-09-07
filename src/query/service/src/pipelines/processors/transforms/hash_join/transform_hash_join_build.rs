@@ -156,14 +156,14 @@ impl Processor for TransformHashJoinBuild {
                 true => {
                     // If join spill is enabled, we should wait probe to spill.
                     // Then restore data from disk and build hash table, util all spilled data are processed.
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spill_coordinator.spill_tasks.read().is_empty() {
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.partition_location.is_empty() {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         // The method should be called only once.
-                        if !spill_state.send_partition_set.load(Ordering::SeqCst) {
+                        if !spill_state.spill_coordinator.send_partition_set.load(Ordering::SeqCst) {
                             self.build_state
                                 .hash_join_state
                                 .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
-                            spill_state.send_partition_set.store(true, Ordering::SeqCst);
+                            spill_state.spill_coordinator.send_partition_set.store(true, Ordering::SeqCst);
                         }
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
@@ -270,7 +270,7 @@ impl Processor for TransformHashJoinBuild {
                 if !*self.build_state.hash_join_state.probe_spill_done.lock() {
                     self.build_state.hash_join_state.wait_probe_spill().await;
                 } else {
-                    self.build_state.hash_join_state.wait_final_scan().await;
+                    self.build_state.hash_join_state.wait_final_probe().await;
                 }
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -44,8 +43,6 @@ pub struct BuildSpillState {
     pub spill_coordinator: Arc<BuildSpillCoordinator>,
     /// Spiller, responsible for specific spill work
     pub spiller: Spiller,
-    /// If send partition set to probe
-    pub send_partition_set: AtomicBool,
 }
 
 impl BuildSpillState {
@@ -61,7 +58,6 @@ impl BuildSpillState {
             build_state,
             spill_coordinator,
             spiller,
-            send_partition_set: AtomicBool::new(false),
         }
     }
 

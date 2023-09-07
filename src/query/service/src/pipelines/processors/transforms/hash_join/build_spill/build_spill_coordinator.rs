@@ -37,6 +37,8 @@ pub struct BuildSpillCoordinator {
     pub(crate) notify_spill: Arc<Notify>,
     /// Spill tasks, the size is the same as the total processor count.
     pub(crate) spill_tasks: RwLock<VecDeque<Vec<(u8, DataBlock)>>>,
+    /// If send partition set to probe
+    pub send_partition_set: AtomicBool,
 }
 
 impl BuildSpillCoordinator {
@@ -47,6 +49,7 @@ impl BuildSpillCoordinator {
             total_builder_count: RwLock::new(0),
             notify_spill: Arc::new(Default::default()),
             spill_tasks: Default::default(),
+            send_partition_set: Default::default(),
         })
     }
 

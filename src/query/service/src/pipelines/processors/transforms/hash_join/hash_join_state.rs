@@ -217,7 +217,7 @@ impl HashJoinState {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn wait_final_scan(&self) {
+    pub(crate) async fn wait_final_probe(&self) {
         if *self.final_probe_done.lock() {
             return;
         }
