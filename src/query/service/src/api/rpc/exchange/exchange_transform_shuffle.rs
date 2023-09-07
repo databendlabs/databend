@@ -173,6 +173,7 @@ impl Processor for ExchangeShuffleTransform {
                     output.port.push_data(Ok(data_block));
 
                     self.wakeup_inputs();
+                    self.wakeup_outputs();
                 } else if output.status != PortStatus::NeedData {
                     output.status = PortStatus::NeedData;
                     self.waiting_outputs.push(*output_index);
@@ -208,6 +209,7 @@ impl Processor for ExchangeShuffleTransform {
                     self.take_input_data_into_buffer(*input_index);
 
                     self.wakeup_outputs();
+                    self.wakeup_inputs();
                 } else if input.status != PortStatus::HasData {
                     input.status = PortStatus::HasData;
                     self.waiting_inputs.push_back(*input_index);
