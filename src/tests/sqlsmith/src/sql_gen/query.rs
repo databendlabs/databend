@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
+use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
 use common_ast::ast::Query;
@@ -93,6 +95,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let from = self.gen_from();
         let select_list = self.gen_select_list();
         let selection = self.gen_selection();
+        let group_by = self.gen_group_by(&select_list);
         SelectStmt {
             span: None,
             // TODO
@@ -102,12 +105,75 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             select_list,
             from,
             selection,
-            // TODO
-            group_by: None,
+            group_by,
             // TODO
             having: None,
             // TODO
             window_list: None,
+        }
+    }
+
+    fn gen_group_by(&mut self, select_list: &Vec<SelectTarget>) -> Option<GroupBy> {
+        let mode = self.rng.gen_range(0..=5);
+        let mut groupby_items = Vec::with_capacity(select_list.len() + 1);
+        let mut select_cols_name = Vec::new();
+        let tables: Vec<_> = self
+            .bound_tables
+            .iter()
+            .map(|table| table.name.clone())
+            .collect();
+
+        for target in select_list {
+            match target {
+                SelectTarget::AliasedExpr { expr, .. } => {
+                    if let Expr::ColumnRef { column, table, .. } = expr.as_ref() {
+                        match column {
+                            ColumnID::Name(id) => select_cols_name.push(id.name.clone()),
+                            ColumnID::Position(pos) => {
+                                let index = pos.pos;
+                                let table = table.clone().unwrap().name;
+                                let table_id = tables.iter().position(|name| *name == table);
+                                if let Some(table_id) = table_id {
+                                    let column =
+                                        &self.bound_tables[table_id].schema.fields()[index];
+                                    select_cols_name.push(column.name.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+                SelectTarget::QualifiedName { .. } => {}
+            }
+        }
+
+        for _ in 0..select_list.len() {
+            let ty = self.gen_data_type();
+            let groupby_item = self.gen_expr(&ty);
+            groupby_items.push(groupby_item);
+        }
+
+        if !select_cols_name.is_empty() {
+            // if select list has column-x, column-x needs to appear in the GROUP BY clause
+            for name in select_cols_name {
+                let column_id = ColumnID::Name(Identifier::from_name(name));
+                let column_ref = Expr::ColumnRef {
+                    span: None,
+                    database: None,
+                    table: None,
+                    column: column_id,
+                };
+                groupby_items.push(column_ref);
+            }
+        }
+
+        match mode {
+            0 => None,
+            1 => Some(GroupBy::Normal(groupby_items)),
+            2 => Some(GroupBy::All),
+            3 => Some(GroupBy::GroupingSets(vec![groupby_items])),
+            4 => Some(GroupBy::Cube(groupby_items)),
+            5 => Some(GroupBy::Rollup(groupby_items)),
+            _ => unreachable!(),
         }
     }
 
