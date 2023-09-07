@@ -51,9 +51,12 @@ impl CascadesOptimizer {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         metadata: MetadataRef,
-        optimized: bool,
+        mut optimized: bool,
     ) -> Result<Self> {
         let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
+            if ctx.get_settings().get_disable_join_reorder()? {
+                optimized = true;
+            }
             get_explore_rule_set(optimized)
         } else {
             RuleSet::create()
