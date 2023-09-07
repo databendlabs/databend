@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_expression::passthrough_nullable;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::NumberScalar;
@@ -24,7 +25,6 @@ use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::string::StringDomain;
 use common_expression::types::NumberColumn;
 use common_expression::types::*;
-use common_expression::wrap_nullable;
 use common_expression::Column;
 use common_expression::Domain;
 use common_expression::EvalContext;
@@ -63,7 +63,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -82,7 +82,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(wrap_nullable(concat_fn)),
+                eval: Box::new(passthrough_nullable(concat_fn)),
             },
         }))
     });
@@ -265,7 +265,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -289,7 +289,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(wrap_nullable(char_fn)),
+                eval: Box::new(passthrough_nullable(char_fn)),
             },
         }))
     });
@@ -341,7 +341,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         };
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -369,7 +369,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -418,7 +418,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -463,7 +463,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
