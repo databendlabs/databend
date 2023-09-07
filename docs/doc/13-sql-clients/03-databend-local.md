@@ -22,16 +22,16 @@ databend-local runs a temporary databend-query process. Data storage is in a tem
 macdeMacBook-Pro:rsdoc eric$ export PATH=/Users/eric/Downloads/data:$PATH
 ```
 
-3. Create an alias called "bend-local" for the "databend-query local" command:
+3. Create an alias called "databend-local" for the "databend-query local" command:
 
 ```bash
-macdeMacBook-Pro:rsdoc eric$ alias bend-local="databend-query local"
+macdeMacBook-Pro:rsdoc eric$ alias databend-local="databend-query local"
 ```
 
 4. Run databend-local:
 
 ```bash
-macdeMacBook-Pro:rsdoc eric$ bend-local
+macdeMacBook-Pro:rsdoc eric$ databend-local
 Welcome to Databend, version v1.2.100-nightly-29d6bf3217(rust-1.72.0-nightly-2023-09-05T16:14:14.152454000Z).
 
 databend-local:) 
@@ -48,7 +48,7 @@ macdeMacBook-Pro:rsdoc eric$
 To view available arguments for databend-local:
 
 ```bash
-macdeMacBook-Pro:rsdoc eric$ bend-local --help
+macdeMacBook-Pro:rsdoc eric$ databend-local --help
 Usage: databend-query local [OPTIONS]
 
 Options:
@@ -70,7 +70,7 @@ The following examples shed light on how to use databend-local.
 #### Example 1: Querying from Command-Line
 
 ```bash
-macdeMacBook-Pro:rsdoc eric$ bend-local
+macdeMacBook-Pro:rsdoc eric$ databend-local
 Welcome to Databend, version v1.2.100-nightly-29d6bf3217(rust-1.72.0-nightly-2023-09-05T16:14:14.152454000Z).
 
 databend-local:) select max(a) from range(1,1000) t(a);
@@ -88,7 +88,7 @@ databend-local:) select max(a) from range(1,1000) t(a);
 This example demonstrates how to create a Parquet file in a single command.
 
 ```bash
-bend-local --query "select number, number + 1 as b from numbers(10)" --output-format parquet > /tmp/a.parquet
+databend-local --query "select number, number + 1 as b from numbers(10)" --output-format parquet > /tmp/a.parquet
 ```
 
 #### Example 3: Analyzing Data using Shell Pipe Mode
@@ -96,7 +96,7 @@ bend-local --query "select number, number + 1 as b from numbers(10)" --output-fo
 This example demonstrates the use of shell pipe mode to analyze data. The $STDIN macro interprets stdin as a temporary stage table.
 
 ```bash
-echo '3,4' | bend-local -q "select \$1 a, \$2 b  from \$STDIN  (file_format => 'csv') " --output-format table
+echo '3,4' | databend-local -q "select \$1 a, \$2 b  from \$STDIN  (file_format => 'csv') " --output-format table
 
 SELECT $1 AS a, $2 AS b FROM 'fs:///dev/fd/0' (FILE_FORMAT => 'csv')
 
@@ -113,7 +113,7 @@ SELECT $1 AS a, $2 AS b FROM 'fs:///dev/fd/0' (FILE_FORMAT => 'csv')
 This example demonstrates how to read data from staged files.
 
 ```bash
-bend-local --query "select count() from 'fs:///tmp/a.parquet'  (file_format => 'parquet')"
+databend-local --query "select count() from 'fs:///tmp/a.parquet'  (file_format => 'parquet')"
 
 10
 ```
@@ -123,7 +123,7 @@ bend-local --query "select count() from 'fs:///tmp/a.parquet'  (file_format => '
 This example is about analyzing system processes to find memory usage per user.
 
 ```bash
-ps aux | tail -n +2 | awk '{ printf("%s\t%s\n", $1, $4) }' | bend-local -q "select  \$1 as user,  sum(\$2::double) as memory  from \$STDIN  (file_format => 'tsv')  group by user  "
+ps aux | tail -n +2 | awk '{ printf("%s\t%s\n", $1, $4) }' | databend-local -q "select  \$1 as user,  sum(\$2::double) as memory  from \$STDIN  (file_format => 'tsv')  group by user  "
 
 _fpsd   0.0
 _hidd   0.0
@@ -141,7 +141,7 @@ _biome  0.1
 This example demonstrates data transformation from one format to another, supporting formats CSV, TSV, Parquet, and NDJSON.
 
 ```bash
-bend-local -q 'select rand() as a, rand() as b from numbers(100)' > /tmp/a.tsv
+databend-local -q 'select rand() as a, rand() as b from numbers(100)' > /tmp/a.tsv
 
-cat /tmp/a.tsv | bend-local -q "select \$1 a, \$2 b  from \$STDIN  (file_format => 'tsv') " --output-format parquet > /tmp/a.parquet
+cat /tmp/a.tsv | databend-local -q "select \$1 a, \$2 b  from \$STDIN  (file_format => 'tsv') " --output-format parquet > /tmp/a.parquet
 ```
