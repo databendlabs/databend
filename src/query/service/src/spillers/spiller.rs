@@ -24,7 +24,7 @@ use opendal::Operator;
 
 /// Spiller type, currently only supports HashJoin
 pub enum SpillerType {
-    HashJoin, /* Todo: Add more spiller type
+    HashJoin, /* Todo: Add more spillers type
                * OrderBy
                * Aggregation */
 }
@@ -51,6 +51,7 @@ pub struct Spiller {
     config: SpillerConfig,
     _spiller_type: SpillerType,
     /// Partition set, which records there are how many partitions.
+    /// Currently it's fixed, in the future we can make it configurable.
     pub partition_set: Vec<u8>,
     /// Spilled partition set, after one partition is spilled, it will be added to this set.
     pub spilled_partition_set: HashSet<u8>,
@@ -62,14 +63,13 @@ pub struct Spiller {
 }
 
 impl Spiller {
-    /// Create a new spiller
+    /// Create a new spillers
     pub fn create(operator: Operator, config: SpillerConfig, spiller_type: SpillerType) -> Self {
         Self {
             operator,
             config,
             _spiller_type: spiller_type,
-            // Todo: init partition set elegantly
-            partition_set: vec![0, 1, 2, 3, 4, 5, 6, 7],
+            partition_set: vec![0, 1, 2, 3],
             spilled_partition_set: Default::default(),
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -125,7 +125,7 @@ impl Spiller {
         let files = self.partition_location.get(p_id).unwrap();
         let columns_layout = self.columns_layout.get(p_id).unwrap();
         let mut spilled_data = Vec::with_capacity(files.len());
-        // Make it parallel
+        // Todo: make it parallel
         for file in files.iter() {
             let data = self.operator.read(file).await?;
             let mut begin = 0;

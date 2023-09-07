@@ -925,6 +925,7 @@ impl PipelineBuilder {
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
+            build_res.main_pipeline.output_len(),
         )?;
         let create_sink_processor = |input| {
             let spill_state = Box::new(BuildSpillState::create(

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod build_spill;
 mod build_spill_coordinator;
+mod build_spill_state;
 
-pub use build_spill::BuildSpillState;
 pub use build_spill_coordinator::BuildSpillCoordinator;
+pub use build_spill_state::BuildSpillState;

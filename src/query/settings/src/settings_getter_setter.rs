@@ -239,7 +239,7 @@ impl Settings {
     pub fn set_disable_join_reorder(&self, val: bool) -> Result<()> {
         self.try_set_u64("disable_join_reorder", u64::from(val))
     }
-    
+
     pub fn get_enable_join_spill(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_join_spill")? != 0)
     }

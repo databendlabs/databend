@@ -66,7 +66,7 @@ fn parse_time_part(buf: &[u8], size: usize) -> Result<u32> {
 //     let offset = (current_tz_sec - val_tz_sec) * 1000 * 1000;
 //     let mut ts = dt.timestamp_micros();
 //     ts += offset;
-//     // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/mod.rs
+//     // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/spillers
 //     // use like tz.timestamp_nanos()
 //     let (mut secs, mut micros) = (ts / 1_000_000, ts % 1_000_000);
 //     if ts < 0 {
@@ -183,7 +183,7 @@ where T: AsRef<[u8]>
                 let offset = (current_tz_sec - val_tz_sec) * 1000 * 1000;
                 let mut ts = dt.timestamp_micros();
                 ts += offset;
-                // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/mod.rs
+                // TODO: need support timestamp_micros in chrono-0.4.22/src/offset/spillers
                 // use like tz.timestamp_nanos()
                 let (mut secs, mut micros) = (ts / 1_000_000, ts % 1_000_000);
                 if ts < 0 {

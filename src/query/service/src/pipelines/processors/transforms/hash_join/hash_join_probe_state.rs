@@ -64,7 +64,7 @@ pub struct HashJoinProbeState {
     /// Record spill workers
     pub(crate) spill_workers: Mutex<usize>,
     /// Record final scan workers
-    pub(crate) final_scan_workers: Mutex<usize>,
+    pub(crate) final_probe_workers: Mutex<usize>,
     /// After `probe_workers` is 0, it will be set as true.
     pub(crate) probe_done: Mutex<bool>,
     /// Notify processors `probe hash table` is done. They can go to next phase.
@@ -103,7 +103,7 @@ impl HashJoinProbeState {
             processor_count,
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
-            final_scan_workers: Default::default(),
+            final_probe_workers: Default::default(),
             probe_done: Mutex::new(false),
             probe_done_notify: Arc::new(Notify::new()),
             probe_schema,
@@ -247,13 +247,13 @@ impl HashJoinProbeState {
         *count += 1;
         let mut count = self.spill_workers.lock();
         *count += 1;
-        let mut count = self.final_scan_workers.lock();
+        let mut count = self.final_probe_workers.lock();
         *count += 1;
         Ok(())
     }
 
     pub fn finish_final_scan(&self) {
-        let mut count = self.final_scan_workers.lock();
+        let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
             drop(count);
@@ -267,23 +267,23 @@ impl HashJoinProbeState {
             let mut probe_done = self.probe_done.lock();
             *probe_done = false;
             // Rest final scan workers
-            let mut final_scan_workers = self.final_scan_workers.lock();
-            *final_scan_workers = self.processor_count;
+            let mut final_probe_workers = self.final_probe_workers.lock();
+            *final_probe_workers = self.processor_count;
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partition = self.hash_join_state.spill_partition.write();
-            dbg!(&*spill_partition);
             if let Some(id) = spill_partition.iter().next().cloned() {
                 spill_partition.remove(&id);
                 *partition_id = id as i8;
             } else {
                 *partition_id = -1;
             }
-            let mut final_scan_done = self.hash_join_state.final_scan_done.lock();
-            *final_scan_done = true;
-            self.hash_join_state.final_scan_done_notify.notify_waiters();
-            dbg!("final scan done");
+            let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
+            *final_probe_done = true;
+            self.hash_join_state
+                .final_probe_done_notify
+                .notify_waiters();
         }
     }
 
@@ -292,6 +292,7 @@ impl HashJoinProbeState {
         *count -= 1;
         if *count == 0 {
             // Reset build done to false
+            // For probe processor, it's possible that next phase is `WaitProbe`.
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = false;
             // Divide the final scan phase into multiple tasks.
@@ -314,9 +315,7 @@ impl HashJoinProbeState {
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partition = self.hash_join_state.spill_partition.write();
-            dbg!(&*spill_partition);
             if let Some(id) = spill_partition.iter().next().cloned() {
-                dbg!(id);
                 spill_partition.remove(&id);
                 *partition_id = id as i8;
             } else {

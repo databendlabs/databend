@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use log::debug;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -56,7 +55,6 @@ pub struct TransformHashJoinBuild {
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
     finalize_finished: bool,
-    processor_id: usize,
 }
 
 impl TransformHashJoinBuild {
@@ -65,11 +63,11 @@ impl TransformHashJoinBuild {
         build_state: Arc<HashJoinBuildState>,
         spill_state: Option<Box<BuildSpillState>>,
     ) -> Result<Box<dyn Processor>> {
+        build_state.build_attach();
         if let Some(ss) = &spill_state {
             let mut count = ss.spill_coordinator.total_builder_count.write();
             *count += 1;
         }
-        let processor_id = build_state.build_attach()?;
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
@@ -78,7 +76,6 @@ impl TransformHashJoinBuild {
             spill_state,
             spill_data: None,
             finalize_finished: false,
-            processor_id,
         }))
     }
 
@@ -87,7 +84,6 @@ impl TransformHashJoinBuild {
         let wait = spill_state.spill_coordinator.wait_spill()?;
         self.input_data = Some(data_block);
         if wait {
-            debug!("Processor {} needs to wait spill", self.processor_id);
             self.step = HashJoinBuildStep::WaitSpill;
         } else {
             // Make `need_spill` to false for `SpillCoordinator`
@@ -104,12 +100,20 @@ impl TransformHashJoinBuild {
         Ok(())
     }
 
+    // Called after processor read spilled data
+    // It means next round build will start, need to reset some variables.
     fn reset(&mut self) -> Result<()> {
-        self.build_state.build_attach()?;
-        self.step = HashJoinBuildStep::Running;
+        let mut count = self.build_state.row_space_builders.lock();
+        *count += 1;
+        let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
         self.finalize_finished = false;
-        let mut row_space_build_done = self.build_state.row_space_build_done.lock();
-        *row_space_build_done = false;
+        *count += 1;
+        // Only need to reset the following variables once
+        if *count == 1 {
+            let mut row_space_build_done = self.build_state.row_space_build_done.lock();
+            *row_space_build_done = false;
+        }
+        self.step = HashJoinBuildStep::Running;
         Ok(())
     }
 }
@@ -190,8 +194,7 @@ impl Processor for TransformHashJoinBuild {
                         if need_spill {
                             spill_state.spill_coordinator.need_spill()?;
                             self.wait_spill(data_block)?;
-                        } else {
-                            if spill_state.spill_coordinator.get_need_spill() {
+                        } else if spill_state.spill_coordinator.get_need_spill() {
                                 // even if input can fit into memory, but there exists one processor need to spill,
                                 // then it needs to wait spill.
                                 self.wait_spill(data_block)?;
@@ -201,12 +204,11 @@ impl Processor for TransformHashJoinBuild {
                                     self.step = HashJoinBuildStep::FollowSpill;
                                     self.spill_data = Some(data_block);
                                 } else {
-                                    self.build_state.build(data_block.clone())?;
+                                    self.build_state.build(data_block)?;
                                 }
                             }
-                        }
                     } else {
-                        self.build_state.build(data_block.clone())?;
+                        self.build_state.build(data_block)?;
                     }
                 }
                 Ok(())
@@ -274,6 +276,8 @@ impl Processor for TransformHashJoinBuild {
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
                 let partition_id = *self.build_state.hash_join_state.partition_id.read();
+                // If there is no partition to restore, probe will send `-1` to build
+                // Which means it's time to finish.
                 if partition_id == -1 {
                     self.step = HashJoinBuildStep::Finished;
                     return Ok(());
@@ -285,7 +289,6 @@ impl Processor for TransformHashJoinBuild {
                     .spiller
                     .read_spilled_data(&(partition_id as u8))
                     .await?;
-                dbg!("finish read", partition_id);
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 self.reset()?;
             }

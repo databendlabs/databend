@@ -110,10 +110,10 @@ pub struct HashJoinState {
     /// After all probe processors finish spill or probe processors finish a round run, notify build processors.
     pub(crate) probe_spill_done_notify: Arc<Notify>,
     pub(crate) probe_spill_done: Mutex<bool>,
-    /// After `final_scan_workers` is 0, it will be set as true
-    pub(crate) final_scan_done: Mutex<bool>,
+    /// After `final_probe_workers` is 0, it will be set as true
+    pub(crate) final_probe_done: Mutex<bool>,
     /// Notify build workers `final scan` is done. They can go to next phase.
-    pub(crate) final_scan_done_notify: Arc<Notify>,
+    pub(crate) final_probe_done_notify: Arc<Notify>,
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
@@ -157,8 +157,8 @@ impl HashJoinState {
             spill_partition: Default::default(),
             probe_spill_done_notify: Arc::new(Default::default()),
             probe_spill_done: Default::default(),
-            final_scan_done: Default::default(),
-            final_scan_done_notify: Arc::new(Default::default()),
+            final_probe_done: Default::default(),
+            final_probe_done_notify: Arc::new(Default::default()),
             partition_id: Arc::new(Default::default()),
         }))
     }
@@ -218,9 +218,9 @@ impl HashJoinState {
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_final_scan(&self) {
-        if *self.final_scan_done.lock() {
+        if *self.final_probe_done.lock() {
             return;
         }
-        self.final_scan_done_notify.notified().await;
+        self.final_probe_done_notify.notified().await;
     }
 }

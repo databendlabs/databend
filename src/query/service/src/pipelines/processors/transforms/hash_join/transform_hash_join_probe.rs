@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -194,7 +193,6 @@ impl Processor for TransformHashJoinProbe {
         match self.step {
             HashJoinProbeStep::WaitBuild => Ok(Event::Async),
             HashJoinProbeStep::Spill => {
-                dbg!("probe spill");
                 if !self.input_data.is_empty() {
                     return Ok(Event::Async);
                 }
@@ -302,7 +300,6 @@ impl Processor for TransformHashJoinProbe {
                     .hash_join_state
                     .wait_build_hash_table_finish()
                     .await?;
-                dbg!("finish wait build");
                 let join_type = self
                     .join_probe_state
                     .hash_join_state

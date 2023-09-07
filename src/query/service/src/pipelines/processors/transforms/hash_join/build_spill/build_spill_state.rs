@@ -26,23 +26,19 @@ use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
-use log::debug;
 
-use crate::pipelines::processors::transforms::group_by::KeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::sessions::QueryContext;
-use crate::spiller::Spiller;
-use crate::spiller::SpillerConfig;
-use crate::spiller::SpillerType;
+use crate::spillers::Spiller;
+use crate::spillers::SpillerConfig;
+use crate::spillers::SpillerType;
 
 /// Define some states for hash join build spilling
 pub struct BuildSpillState {
     /// Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
-    /// Spilling memory threshold
-    pub spill_memory_threshold: usize,
     /// Hash join build spilling coordinator
     pub spill_coordinator: Arc<BuildSpillCoordinator>,
     /// Spiller, responsible for specific spill work
@@ -62,7 +58,6 @@ impl BuildSpillState {
         let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoin);
         Self {
             build_state,
-            spill_memory_threshold: 1024,
             spill_coordinator,
             spiller,
             send_partition_set: AtomicBool::new(false),
@@ -167,7 +162,7 @@ impl BuildSpillState {
 
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
-        blocks.extend(chunks.drain(..));
+        blocks.append(chunks);
         Ok(blocks)
     }
 
@@ -183,7 +178,7 @@ impl BuildSpillState {
             let mut hashes = Vec::with_capacity(block.num_rows());
             self.get_hashes(block, &mut hashes)?;
             for (row_idx, hash) in hashes.iter().enumerate() {
-                let partition_id = *hash as u8 & 0b0000_0111;
+                let partition_id = *hash as u8 & 0b0000_0011;
                 partition_map
                     .entry(partition_id)
                     .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
@@ -192,7 +187,7 @@ impl BuildSpillState {
             for (partition_id, row_indexes) in partition_map.iter() {
                 let block_row_indexes = row_indexes
                     .iter()
-                    .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+                    .map(|idx| (0_u32, *idx as u32, 1_usize))
                     .collect::<Vec<_>>();
                 let block =
                     DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
@@ -233,7 +228,7 @@ impl BuildSpillState {
         let mut total_bytes = 0;
 
         {
-            let _ = self
+            let _lock = self
                 .build_state
                 .hash_join_state
                 .row_space
@@ -280,7 +275,7 @@ impl BuildSpillState {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0111;
+            let partition_id = *hash as u8 & 0b0000_0011;
             if self.spiller.spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
@@ -294,7 +289,7 @@ impl BuildSpillState {
         for (p_id, row_indexes) in partition_rows.iter() {
             let block_row_indexes = row_indexes
                 .iter()
-                .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+                .map(|idx| (0_u32, *idx as u32, 1_usize))
                 .collect::<Vec<_>>();
             let block = DataBlock::take_blocks(
                 &[data_block.clone()],
@@ -307,7 +302,7 @@ impl BuildSpillState {
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index
             .iter()
-            .map(|idx| (0 as u32, *idx as u32, 1 as usize))
+            .map(|idx| (0_u32, *idx as u32, 1_usize))
             .collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(
             &[data_block.clone()],
@@ -352,7 +347,7 @@ impl BuildSpillState {
             for partition_id in partition_tasks.keys() {
                 task.push((
                     *partition_id,
-                    partition_tasks.get(partition_id).unwrap()[task_id as usize].clone(),
+                    partition_tasks.get(partition_id).unwrap()[task_id].clone(),
                 ))
             }
             spill_tasks.push_back(task);
