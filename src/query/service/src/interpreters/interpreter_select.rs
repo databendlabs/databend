@@ -236,7 +236,7 @@ impl Interpreter for SelectInterpreter {
         let query_plan = physical_plan
             .format(self.metadata.clone(), SharedProcessorProfiles::default())?
             .format_pretty()?;
-        warn!("Query plan: \n{}", query_plan);
+        warn!("Query id: {}, query plan: \n{}", self.ctx.get_id(), query_plan);
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
