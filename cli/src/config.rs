@@ -39,6 +39,9 @@ pub struct SettingsConfig {
     pub show_stats: Option<bool>,
     pub expand: Option<String>,
     pub replace_newline: Option<bool>,
+    pub max_display_rows: Option<usize>,
+    pub max_col_width: Option<usize>,
+    pub max_width: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -104,27 +107,21 @@ pub enum OutputFormat {
 
 impl Settings {
     pub fn merge_config(&mut self, cfg: SettingsConfig) {
-        if let Some(display_pretty_sql) = cfg.display_pretty_sql {
-            self.display_pretty_sql = display_pretty_sql;
-        }
-        if let Some(prompt) = cfg.prompt {
-            self.prompt = prompt;
-        }
-        if let Some(progress_color) = cfg.progress_color {
-            self.progress_color = progress_color;
-        }
-        if let Some(show_progress) = cfg.show_progress {
-            self.show_progress = show_progress;
-        }
-        if let Some(show_stats) = cfg.show_stats {
-            self.show_stats = show_stats;
-        }
-        if let Some(expand) = cfg.expand {
-            self.expand = expand.as_str().into();
-        }
-        if let Some(replace_newline) = cfg.replace_newline {
-            self.replace_newline = replace_newline;
-        }
+        self.display_pretty_sql = cfg.display_pretty_sql.unwrap_or(self.display_pretty_sql);
+        self.prompt = cfg.prompt.unwrap_or_else(|| self.prompt.clone());
+        self.progress_color = cfg
+            .progress_color
+            .unwrap_or_else(|| self.progress_color.clone());
+        self.show_progress = cfg.show_progress.unwrap_or(self.show_progress);
+        self.show_stats = cfg.show_stats.unwrap_or(self.show_stats);
+        self.expand = cfg
+            .expand
+            .map(|expand| expand.as_str().into())
+            .unwrap_or_else(|| self.expand.clone());
+        self.replace_newline = cfg.replace_newline.unwrap_or(self.replace_newline);
+        self.max_width = cfg.max_width.unwrap_or(self.max_width);
+        self.max_col_width = cfg.max_col_width.unwrap_or(self.max_col_width);
+        self.max_display_rows = cfg.max_display_rows.unwrap_or(self.max_display_rows);
     }
 
     pub fn inject_ctrl_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> Result<()> {
