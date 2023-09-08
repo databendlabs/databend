@@ -139,7 +139,9 @@ pub fn register(registry: &mut FunctionRegistry) {
             |s, pad_len, pad, output, _| {
                 let pad_len = pad_len as usize;
                 if pad_len <= s.len() {
-                    output.put_slice(&s[..pad_len])
+                    output.put_slice(&s[..pad_len]);
+                } else if pad.len() == 0 {
+                    output.put_slice(s);
                 } else {
                     let mut remain_pad_len = pad_len - s.len();
                     while remain_pad_len > 0 {
@@ -187,6 +189,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             let pad_len = pad_len as usize;
             if pad_len <= s.len() {
                 output.put_slice(&s[..pad_len])
+            } else if pad.len() == 0 {
+                output.put_slice(s)
             } else {
                 output.put_slice(s);
                 let mut remain_pad_len = pad_len - s.len();

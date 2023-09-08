@@ -37,6 +37,21 @@ statement ok
 SELECT LPAD('', 0, '')
 
 query T
+SELECT LPAD('', 10, '')
+----
+(empty)
+
+query T
+SELECT LPAD('123', 10, '')
+----
+123
+
+query T
+SELECT LPAD('', 10, 'abcde')
+----
+abcdeabcde
+
+query T
 SELECT LPAD('', 10, 'abcde')
 ----
 abcdeabcde
@@ -167,6 +182,16 @@ NULL
 
 statement ok
 SELECT RPAD('', 0, '')
+
+query T
+SELECT LPAD('', 10, '')
+----
+(empty)
+
+query T
+SELECT LPAD('123', 10, '')
+----
+123
 
 query T
 SELECT RPAD('', 10, 'abcde')

@@ -2198,6 +2198,33 @@ output domain  : {"h"..="h"}
 output         : 'h'
 
 
+ast            : lpad('', 1, '')
+raw expr       : lpad('', 1, '')
+checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "")
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : lpad('hi', 1, '')
+raw expr       : lpad('hi', 1, '')
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : lpad('', 1, '?')
+raw expr       : lpad('', 1, '?')
+checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
 error: 
   --> SQL:1:1
   |
@@ -2214,24 +2241,25 @@ ast            : lpad(a, b, c)
 raw expr       : lpad(a::String, b::UInt8, c::String)
 checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
 evaluation:
-+--------+-----------------+---------+-------------+---------+
-|        | a               | b       | c           | Output  |
-+--------+-----------------+---------+-------------+---------+
-| Type   | String          | UInt8   | String      | String  |
-| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
-| Row 0  | 'hi'            | 0       | '?'         | ''      |
-| Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
-| Row 2  | 'cc'            | 5       | 'bb'        | 'bbbcc' |
-+--------+-----------------+---------+-------------+---------+
++--------+---------------+---------+------------+---------+
+|        | a             | b       | c          | Output  |
++--------+---------------+---------+------------+---------+
+| Type   | String        | UInt8   | String     | String  |
+| Domain | {""..="test"} | {0..=7} | {""..="x"} | {""..}  |
+| Row 0  | 'hi'          | 0       | '?'        | ''      |
+| Row 1  | 'test'        | 3       | 'x'        | 'tes'   |
+| Row 2  | 'cc'          | 5       | 'bb'       | 'bbbcc' |
+| Row 3  | ''            | 7       | ''         | ''      |
++--------+---------------+---------+------------+---------+
 evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
-| b      | UInt8([0, 3, 5])                                                 |
-| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
-| Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8] } |
-+--------+------------------------------------------------------------------+
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8, 8] } |
+| b      | UInt8([0, 3, 5, 7])                                                 |
+| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4, 4] }         |
+| Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8, 8] } |
++--------+---------------------------------------------------------------------+
 
 
 ast            : rpad('hi', 2, '?')
@@ -2270,6 +2298,33 @@ output domain  : {"h"..="h"}
 output         : 'h'
 
 
+ast            : rpad('', 1, '')
+raw expr       : rpad('', 1, '')
+checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "")
+optimized expr : ""
+output type    : String
+output domain  : {""..=""}
+output         : ''
+
+
+ast            : rpad('hi', 1, '')
+raw expr       : rpad('hi', 1, '')
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : rpad('', 1, '?')
+raw expr       : rpad('', 1, '?')
+checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
 error: 
   --> SQL:1:1
   |
@@ -2286,24 +2341,25 @@ ast            : rpad(a, b, c)
 raw expr       : rpad(a::String, b::UInt8, c::String)
 checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
 evaluation:
-+--------+-----------------+---------+-------------+---------+
-|        | a               | b       | c           | Output  |
-+--------+-----------------+---------+-------------+---------+
-| Type   | String          | UInt8   | String      | String  |
-| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
-| Row 0  | 'hi'            | 0       | '?'         | ''      |
-| Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
-| Row 2  | 'cc'            | 5       | 'bb'        | 'ccbbb' |
-+--------+-----------------+---------+-------------+---------+
++--------+---------------+---------+------------+---------+
+|        | a             | b       | c          | Output  |
++--------+---------------+---------+------------+---------+
+| Type   | String        | UInt8   | String     | String  |
+| Domain | {""..="test"} | {0..=7} | {""..="x"} | {""..}  |
+| Row 0  | 'hi'          | 0       | '?'        | ''      |
+| Row 1  | 'test'        | 3       | 'x'        | 'tes'   |
+| Row 2  | 'cc'          | 5       | 'bb'       | 'ccbbb' |
+| Row 3  | ''            | 7       | ''         | ''      |
++--------+---------------+---------+------------+---------+
 evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
-| b      | UInt8([0, 3, 5])                                                 |
-| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
-| Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8] } |
-+--------+------------------------------------------------------------------+
++--------+---------------------------------------------------------------------+
+| Column | Data                                                                |
++--------+---------------------------------------------------------------------+
+| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8, 8] } |
+| b      | UInt8([0, 3, 5, 7])                                                 |
+| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4, 4] }         |
+| Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8, 8] } |
++--------+---------------------------------------------------------------------+
 
 
 ast            : replace('hi', '', '?')
