@@ -12,14 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::error::Error;
+use std::{env, error::Error};
 use vergen::EmitBuilder;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let _ = EmitBuilder::builder()
-        .fail_on_error()
-        .build_timestamp()
-        .git_sha(true)
-        .emit();
+    match env::var("BENDSQL_BUILD_INFO") {
+        Ok(info) => {
+            println!("cargo:rustc-env=BENDSQL_BUILD_INFO={}", info);
+        }
+        Err(_) => {
+            EmitBuilder::builder()
+                .fail_on_error()
+                .build_timestamp()
+                .git_sha(true)
+                .emit()?;
+        }
+    }
     Ok(())
 }
