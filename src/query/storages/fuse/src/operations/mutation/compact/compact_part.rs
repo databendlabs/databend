@@ -32,7 +32,7 @@ use crate::operations::mutation::SegmentIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactLazyPartInfo {
-    pub segment_indices: Vec<usize>,
+    pub segment_indices: Vec<SegmentIndex>,
     pub compact_segments: Vec<Arc<CompactSegmentInfo>>,
 }
 
@@ -107,7 +107,7 @@ impl CompactPartInfo {
 pub struct CompactExtraInfo {
     pub segment_index: SegmentIndex,
     pub unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
-    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_indexes: Vec<SegmentIndex>,
     pub removed_segment_summary: Statistics,
 }
 
@@ -115,7 +115,7 @@ impl CompactExtraInfo {
     pub fn create(
         segment_index: SegmentIndex,
         unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
-        removed_segment_indexes: Vec<usize>,
+        removed_segment_indexes: Vec<SegmentIndex>,
         removed_segment_summary: Statistics,
     ) -> Self {
         CompactExtraInfo {
