@@ -199,8 +199,12 @@ impl AsyncSource for InferSchemaSource {
                         read_parquet_schema_async(&operator, &first_file.path).await?;
                     TableSchema::from(&arrow_schema)
                 } else {
-                    let arrow_schema =
-                        read_parquet_schema_async_rs(&operator, &first_file.path).await?;
+                    let arrow_schema = read_parquet_schema_async_rs(
+                        &operator,
+                        &first_file.path,
+                        Some(first_file.size),
+                    )
+                    .await?;
                     TableSchema::try_from(&arrow_schema).map_err(|e| {
                         ErrorCode::BadBytes(format!(
                             "Failed to infer schema from Parquet file {}: {}",

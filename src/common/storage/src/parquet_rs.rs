@@ -25,23 +25,23 @@ use parquet::file::footer::decode_footer;
 use parquet::file::footer::decode_metadata;
 use parquet::file::metadata::ParquetMetaData;
 
-pub const FOOTER_SIZE: u64 = 8;
+const FOOTER_SIZE: u64 = 8;
+/// The number of bytes read at the end of the parquet file on first read
+const DEFAULT_FOOTER_READ_SIZE: u64 = 64 * 1024;
 
 #[async_backtrace::framed]
-pub async fn read_parquet_schema_async_rs(operator: &Operator, path: &str) -> Result<ArrowSchema> {
-    let meta = read_metadata_async(path, operator, None)
-        .await
-        .map_err(|e| {
-            ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-        })?;
-
+pub async fn read_parquet_schema_async_rs(
+    operator: &Operator,
+    path: &str,
+    file_size: Option<u64>,
+) -> Result<ArrowSchema> {
+    let meta = read_metadata_async(path, operator, file_size).await?;
     infer_schema_with_extension(&meta)
 }
 
 pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema> {
     let meta = meta.file_metadata();
-    let arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())
-        .map_err(ErrorCode::from_std_error)?;
+    let arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
     // todo: Convert data types to extension types using meta information.
     // Mainly used for types such as Variant and Bitmap,
     // as they have the same physical type as String.
@@ -124,15 +124,39 @@ pub async fn read_metadata_async(
         Some(n) => n,
     };
     check_footer_size(file_size)?;
-    let footer = operator
-        .range_read(path, (file_size - FOOTER_SIZE)..file_size)
+
+    // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
+    let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
+    let buffer = operator
+        .range_read(path, (file_size - default_end_len)..file_size)
         .await?;
-    let metadata_len = decode_footer(&footer[0..8].try_into().unwrap())? as u64;
+
+    let metadata_len = decode_footer(
+        &buffer[(file_size as usize - 8)..file_size as usize]
+            .try_into()
+            .unwrap(),
+    )? as u64;
     check_meta_size(file_size, metadata_len)?;
-    let metadata = operator
-        .range_read(path, (file_size - FOOTER_SIZE - metadata_len)..file_size)
-        .await?;
-    Ok(decode_metadata(&metadata)?)
+
+    let footer_len = FOOTER_SIZE + metadata_len;
+    if (footer_len as usize) < buffer.len() {
+        // The whole metadata is in the bytes we already read
+        let offset = buffer.len() - footer_len as usize;
+        Ok(decode_metadata(&buffer[offset..])?)
+    } else {
+        // The end of file read by default is not long enough, read again including the metadata.
+        // TBD: which one is better?
+        // 1. Read the whole footer data again. (file_size - footer_len)..file_size
+        // 2. Read the remain data only and concat with the previous read data. (file_size - footer_len)..(file_size - buffer.len()
+        let mut metadata = operator
+            .range_read(
+                path,
+                (file_size - footer_len)..(file_size - buffer.len() as u64),
+            )
+            .await?;
+        metadata.extend(buffer);
+        Ok(decode_metadata(&metadata)?)
+    }
 }
 
 #[allow(dead_code)]
