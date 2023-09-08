@@ -244,15 +244,8 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.top, key).await.clone();
+        let got = MapApiRO::<String>::get(&self.top, key).await;
         Into::<Option<SeqV>>::into(got)
-    }
-
-    /// Get a value by key and return a reference to the internal entry.
-    ///
-    /// It is an internal API and does not examine the expiration time.
-    pub(crate) async fn get_kv_ref(&self, key: &str) -> &dyn SeqValue {
-        MapApiRO::<String>::get(&self.top, key).await
     }
 
     // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
@@ -311,12 +304,15 @@ impl SMV002 {
     }
 
     /// List expiration index by expiration time.
-    pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (&ExpireKey, &String)> {
+    pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (ExpireKey, String)> + '_ {
         self.top
             .range::<ExpireKey, _>(&self.expire_cursor..)
             .await
             // Return only non-deleted records
-            .filter_map(|(k, v)| async move { v.unpack().map(|(v, _)| (k, v)) })
+            .filter_map(|(k, v)| async move {
+                //
+                v.unpack().map(|(v, _v_meta)| (k, v))
+            })
     }
 
     pub fn curr_seq(&self) -> u64 {

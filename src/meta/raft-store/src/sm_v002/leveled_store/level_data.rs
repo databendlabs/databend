@@ -30,9 +30,6 @@ use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
-static KV_EMPTY: Marked<Vec<u8>> = Marked::empty();
-static EXPIRE_EMPTY: Marked<String> = Marked::empty();
-
 /// A single level of state machine data.
 ///
 /// State machine data is composed of multiple levels.
@@ -47,9 +44,6 @@ pub struct LevelData {
     /// All of the nodes in this cluster, including the voters and learners.
     nodes: BTreeMap<NodeId, Node>,
 
-    // ---
-    // ---
-    // ---
     /// The sequence number for every [`SeqV`] value that is stored in this state machine.
     ///
     /// A seq is globally unique and monotonically increasing.
@@ -141,22 +135,22 @@ impl LevelData {
 impl MapApiRO<String> for LevelData {
     type V = Vec<u8>;
 
-    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.kv.get(key).unwrap_or(&KV_EMPTY)
+        self.kv.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'a, T, R>(&'a self, range: R) -> BoxStream<'a, (&'a String, &'a Marked)>
+    async fn range<'a, T, R>(&'a self, range: R) -> BoxStream<'a, (String, Marked)>
     where
         String: 'a,
         String: Borrow<T>,
         T: Ord + ?Sized,
         R: RangeBounds<T> + Send,
     {
-        futures::stream::iter(self.kv.range(range)).boxed()
+        futures::stream::iter(self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()))).boxed()
     }
 }
 
@@ -181,7 +175,7 @@ impl MapApi<String> for LevelData {
             Marked::new_tomb_stone(seq)
         };
 
-        let prev = MapApiRO::<String>::get(self, key.as_str()).await.clone();
+        let prev = MapApiRO::<String>::get(self, key.as_str()).await;
         self.kv.insert(key, marked.clone());
         (prev, marked)
     }
@@ -191,25 +185,30 @@ impl MapApi<String> for LevelData {
 impl MapApiRO<ExpireKey> for LevelData {
     type V = String;
 
-    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.expire.get(key).unwrap_or(&EXPIRE_EMPTY)
+        self.expire.get(key).cloned().unwrap_or(Marked::empty())
     }
 
     async fn range<'a, T: ?Sized, R>(
         &'a self,
         range: R,
-    ) -> BoxStream<'a, (&'a ExpireKey, &'a Marked<String>)>
+    ) -> BoxStream<'a, (ExpireKey, Marked<String>)>
     where
         ExpireKey: 'a,
         ExpireKey: Borrow<T>,
         T: Ord,
         R: RangeBounds<T> + Send,
     {
-        futures::stream::iter(self.expire.range(range)).boxed()
+        let it = self
+            .expire
+            .range(range)
+            .map(|(k, v)| (k.clone(), v.clone()));
+
+        futures::stream::iter(it).boxed()
     }
 }
 
@@ -230,7 +229,7 @@ impl MapApi<ExpireKey> for LevelData {
             Marked::TombStone { internal_seq: seq }
         };
 
-        let prev = MapApiRO::<ExpireKey>::get(self, &key).await.clone();
+        let prev = MapApiRO::<ExpireKey>::get(self, &key).await;
         self.expire.insert(key, marked.clone());
         (prev, marked)
     }
