@@ -41,6 +41,23 @@ pub struct SettingsConfig {
 }
 
 #[derive(Clone, Debug)]
+pub enum ExpandMode {
+    On,
+    Off,
+    Auto,
+}
+
+impl From<&str> for ExpandMode {
+    fn from(s: &str) -> Self {
+        match s.to_ascii_lowercase().as_str() {
+            "on" => ExpandMode::On,
+            "off" => ExpandMode::Off,
+            _ => ExpandMode::Auto,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub display_pretty_sql: bool,
     pub prompt: String,
@@ -61,6 +78,9 @@ pub struct Settings {
     pub max_width: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
+    /// Expand table format display, default is auto, could be on/off/auto.
+    /// only works with output format `table`.
+    pub expand: ExpandMode,
 
     /// Show time elapsed when executing queries.
     /// only works with output format `null`.
@@ -118,6 +138,7 @@ impl Settings {
                     _ => return Err(anyhow!("Unknown output format: {}", cmd_value)),
                 }
             }
+            "expand" => self.expand = cmd_value.into(),
             "time" => self.time = cmd_value.parse()?,
             "multi_line" => self.multi_line = cmd_value.parse()?,
             "max_display_rows" => self.max_display_rows = cmd_value.parse()?,
@@ -169,6 +190,7 @@ impl Default for Settings {
             progress_color: "cyan".to_string(),
             prompt: "{user}@{warehouse}/{database}> ".to_string(),
             output_format: OutputFormat::Table,
+            expand: ExpandMode::Auto,
             show_progress: false,
             max_display_rows: 40,
             max_col_width: 1024 * 1024,

@@ -29,7 +29,7 @@ use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
 
 use crate::{
     ast::format_query,
-    config::{OutputFormat, Settings},
+    config::{ExpandMode, OutputFormat, Settings},
     helper::CliHelper,
     session::QueryKind,
 };
@@ -123,24 +123,54 @@ impl<'a> FormatDisplay<'a> {
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
-
-        if !rows.is_empty() {
-            println!(
-                "{}",
-                create_table(
-                    self.schema.clone(),
-                    &rows,
-                    self.replace_newline,
-                    self.settings.max_display_rows,
-                    self.settings.max_width,
-                    self.settings.max_col_width
-                )?
-            );
-        }
-
         if let Some(err) = error {
             eprintln!("error happens after fetched {} rows: {}", rows.len(), err);
         }
+        if rows.is_empty() {
+            return Ok(());
+        }
+
+        if self.kind == QueryKind::Explain {
+            print_explain(&rows)?;
+            return Ok(());
+        }
+
+        match self.settings.expand {
+            ExpandMode::On => {
+                print_expanded(self.schema.clone(), &rows)?;
+            }
+            ExpandMode::Off => {
+                println!(
+                    "{}",
+                    create_table(
+                        self.schema.clone(),
+                        &rows,
+                        self.replace_newline,
+                        self.settings.max_display_rows,
+                        self.settings.max_width,
+                        self.settings.max_col_width
+                    )?
+                );
+            }
+            ExpandMode::Auto => {
+                if rows.len() > 1 {
+                    println!(
+                        "{}",
+                        create_table(
+                            self.schema.clone(),
+                            &rows,
+                            self.replace_newline,
+                            self.settings.max_display_rows,
+                            self.settings.max_width,
+                            self.settings.max_col_width
+                        )?
+                    );
+                } else {
+                    print_expanded(self.schema.clone(), &rows)?;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -223,6 +253,14 @@ impl<'a> FormatDisplay<'a> {
 
             let (rows, mut rows_str, kind, total_rows, total_bytes) = match self.kind {
                 QueryKind::Explain => (self.rows, "rows", "explain", 0, 0),
+                QueryKind::Query => (self.rows, "rows", "read", stats.read_rows, stats.read_bytes),
+                QueryKind::Update => (
+                    stats.write_rows,
+                    "rows",
+                    "written",
+                    stats.write_rows,
+                    stats.write_bytes,
+                ),
                 QueryKind::Get => (
                     stats.read_rows,
                     "files",
@@ -237,28 +275,15 @@ impl<'a> FormatDisplay<'a> {
                     stats.write_rows,
                     stats.write_bytes,
                 ),
-                QueryKind::Query => (
-                    stats.read_rows,
-                    "rows",
-                    "read",
-                    stats.read_rows,
-                    stats.read_bytes,
-                ),
-                QueryKind::Update => (
-                    stats.write_rows,
-                    "rows",
-                    "written",
-                    stats.write_rows,
-                    stats.write_bytes,
-                ),
             };
-            if self.rows <= 1 {
+            if rows <= 1 {
                 rows_str = rows_str.trim_end_matches('s');
             }
             eprintln!(
-                "{} {} {kind} in {:.3} sec. Processed {} {}, {} ({} {}/s, {}/s)",
+                "{} {} {} in {:.3} sec. Processed {} {}, {} ({} {}/s, {}/s)",
                 rows,
                 rows_str,
+                kind,
                 self.start.elapsed().as_secs_f64(),
                 humanize_count(total_rows as f64),
                 rows_str,
@@ -702,6 +727,32 @@ fn render_head(
             }
         }
     }
+}
+
+fn print_expanded(schema: SchemaRef, results: &[Row]) -> Result<()> {
+    let mut head_width = 0;
+    for field in schema.fields() {
+        if field.name.len() > head_width {
+            head_width = field.name.len();
+        }
+    }
+    for (row, result) in results.iter().enumerate() {
+        println!("-[ RECORD {} ]-----------------------------------", row + 1);
+        for (idx, field) in schema.fields().iter().enumerate() {
+            println!("{: >head_width$}: {}", field.name, result.values()[idx]);
+        }
+    }
+    println!();
+    Ok(())
+}
+
+fn print_explain(results: &[Row]) -> Result<()> {
+    println!("-[ EXPLAIN ]-----------------------------------");
+    for result in results {
+        println!("{}", result.values()[0]);
+    }
+    println!();
+    Ok(())
 }
 
 pub fn humanize_count(num: f64) -> String {
