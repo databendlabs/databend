@@ -678,14 +678,14 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|_, d| match d[0].as_decimal().unwrap() {
                     DecimalDomain::Decimal128(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float32(SimpleDomain {
-                            min: OrderedFloat(d.min.to_float64(size.scale) as f32),
-                            max: OrderedFloat(d.max.to_float64(size.scale) as f32),
+                            min: OrderedFloat(d.min.to_float32(size.scale)),
+                            max: OrderedFloat(d.max.to_float32(size.scale)),
                         }),
                     )),
                     DecimalDomain::Decimal256(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float32(SimpleDomain {
-                            min: OrderedFloat(d.min.to_float64(size.scale) as f32),
-                            max: OrderedFloat(d.max.to_float64(size.scale) as f32),
+                            min: OrderedFloat(d.min.to_float32(size.scale)),
+                            max: OrderedFloat(d.max.to_float32(size.scale)),
                         }),
                     )),
                 }),

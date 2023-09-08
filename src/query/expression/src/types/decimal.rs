@@ -282,6 +282,7 @@ pub trait Decimal:
     fn from_i64(value: i64) -> Self;
     fn de_binary(bytes: &mut &[u8]) -> Self;
 
+    fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
 
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
@@ -401,6 +402,11 @@ impl Decimal for i128 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i128::from_le_bytes(bs)
+    }
+
+    fn to_float32(self, scale: u8) -> f32 {
+        let div = 10_f32.powi(scale as i32);
+        self as f32 / div
     }
 
     fn to_float64(self, scale: u8) -> f64 {
@@ -545,6 +551,11 @@ impl Decimal for i256 {
         *bytes = &bytes[std::mem::size_of::<Self>()..];
 
         i256::from_le_bytes(bs)
+    }
+
+    fn to_float32(self, scale: u8) -> f32 {
+        let div = 10_f32.powi(scale as i32);
+        self.as_f32() / div
     }
 
     fn to_float64(self, scale: u8) -> f64 {
