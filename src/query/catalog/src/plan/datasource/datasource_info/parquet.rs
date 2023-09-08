@@ -145,16 +145,16 @@ mod tests {
         let list = Type::group_type_builder("records")
             .with_repetition(Repetition::REPEATED)
             .with_converted_type(ConvertedType::LIST)
-            .with_fields(&mut vec![Arc::new(item1), Arc::new(item2), Arc::new(item3)])
+            .with_fields(vec![Arc::new(item1), Arc::new(item2), Arc::new(item3)])
             .build()?;
         let bag = Type::group_type_builder("bag")
             .with_repetition(Repetition::OPTIONAL)
-            .with_fields(&mut vec![Arc::new(list)])
+            .with_fields(vec![Arc::new(list)])
             .build()?;
         fields.push(Arc::new(bag));
 
         let schema = Type::group_type_builder("schema")
-            .with_fields(&mut fields)
+            .with_fields(fields)
             .build()?;
         Ok(Arc::new(SchemaDescriptor::new(Arc::new(schema))))
     }

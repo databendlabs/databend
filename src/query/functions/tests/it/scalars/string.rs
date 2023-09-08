@@ -208,10 +208,14 @@ fn test_trim_leading(file: &mut impl Write) {
     run_ast(file, "trim_leading('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_leading(NULL, 'a')", &[]);
     run_ast(file, "trim_leading('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_leading('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_leading(a, 'a')", &table);
@@ -226,10 +230,14 @@ fn test_trim_trailing(file: &mut impl Write) {
     run_ast(file, "trim_trailing('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_trailing(NULL, 'a')", &[]);
     run_ast(file, "trim_trailing('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_trailing('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_trailing(a, 'b')", &table);
@@ -244,10 +252,14 @@ fn test_trim_both(file: &mut impl Write) {
     run_ast(file, "trim_both('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_both(NULL, 'a')", &[]);
     run_ast(file, "trim_both('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_both('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_both(a, 'a')", &table);

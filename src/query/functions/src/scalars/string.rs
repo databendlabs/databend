@@ -437,6 +437,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
                     output.put_slice(&val.as_bytes()[idx * chunk_size..]);
@@ -453,6 +459,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
                     output.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
@@ -469,6 +481,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 // Trim all
