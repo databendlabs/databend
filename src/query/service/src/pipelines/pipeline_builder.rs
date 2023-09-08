@@ -457,6 +457,8 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
 
+        // add filling_
+
         // append data for unmatched data
         let serialize_block_transform = TransformSerializeBlock::try_create(
             self.ctx.clone(),

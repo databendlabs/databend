@@ -15,21 +15,21 @@
 mod aggregator;
 pub mod group_by;
 pub(crate) mod hash_join;
-mod transform_cast_schema;
-mod transform_create_sets;
-mod transform_limit;
-mod window;
-
 mod metrics;
 pub(crate) mod range_join;
 mod runtime_filter;
 mod transform_add_computed_columns;
 mod transform_add_const_columns;
+mod transform_cast_schema;
+mod transform_create_sets;
+mod transform_limit;
 mod transform_materialized_cte;
 mod transform_merge_block;
 mod transform_resort_addon;
+mod transform_resort_addon_without_source_schema;
 mod transform_runtime_cast_schema;
 mod transform_runtime_filter;
+mod window;
 
 pub use aggregator::build_partition_bucket;
 pub use aggregator::AggregateInjector;
