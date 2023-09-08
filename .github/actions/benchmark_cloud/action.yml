@@ -49,7 +49,7 @@ runs:
         BENCHMARK_SIZE: ${{ inputs.size }}
         BENCHMARK_VERSION: ${{ inputs.version }}
         BENCHMARK_DATABASE: clickbench
-        BENCHMARK_CACHE_SIZE: 50
+        BENCHMARK_CACHE_SIZE: 0
         CLOUD_USER: ${{ inputs.cloud_user }}
         CLOUD_PASSWORD: ${{ inputs.cloud_password }}
         CLOUD_GATEWAY: ${{ inputs.cloud_gateway }}
