@@ -36,10 +36,13 @@ fn snapshot_timestamp_monotonic_increase() {
     let prev = default_snapshot();
     let schema = TableSchema::empty();
     let uuid = Uuid::new_v4();
+    let prev_snapshot_id = prev
+        .prev_snapshot_id
+        .map(|(_, snapshot_id, format)| (snapshot_id, format));
     let current = TableSnapshot::new(
         uuid,
         &prev.timestamp,
-        prev.prev_snapshot_id,
+        prev_snapshot_id,
         schema,
         Default::default(),
         vec![],
@@ -59,11 +62,14 @@ fn snapshot_timestamp_time_skew_tolerance() {
 
     // simulating a stalled clock
     prev.timestamp = Some(prev.timestamp.unwrap().add(chrono::Duration::days(1)));
+    let prev_snapshot_id = prev
+        .prev_snapshot_id
+        .map(|(_, snapshot_id, format)| (snapshot_id, format));
 
     let current = TableSnapshot::new(
         uuid,
         &prev.timestamp,
-        prev.prev_snapshot_id,
+        prev_snapshot_id,
         schema,
         Default::default(),
         vec![],

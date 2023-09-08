@@ -110,7 +110,11 @@ impl FuseTable {
             // 2. the table option `snapshot_location`
             let loc = self
                 .meta_location_generator
-                .snapshot_location_from_uuid(&snapshot.snapshot_id, format_version)?;
+                .snapshot_location_from_uuid_and_timestamp(
+                    &snapshot.timestamp,
+                    &snapshot.snapshot_id,
+                    format_version,
+                )?;
             table_info
                 .meta
                 .options
@@ -205,10 +209,10 @@ impl FuseTable {
         // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
         let prev = snapshot.prev_snapshot_id;
         match prev {
-            Some((id, v)) => {
+            Some((prev_snapshot_time, id, v)) => {
                 let new_loc = self
                     .meta_location_generator()
-                    .snapshot_location_from_uuid(&id, v)?;
+                    .snapshot_location_from_uuid_and_timestamp(&prev_snapshot_time, &id, v)?;
                 Ok((new_loc, files))
             }
             None => Err(ErrorCode::TableHistoricalDataNotFound(

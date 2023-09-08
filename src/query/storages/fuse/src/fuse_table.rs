@@ -19,6 +19,7 @@ use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -152,8 +153,27 @@ impl FuseTable {
 
         let part_prefix = table_info.meta.part_prefix.clone();
 
-        let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+        let prev_snapshot_timestamp = match table_info.db_type {
+            DatabaseType::ShareDB(_) => "".to_string(),
+            DatabaseType::NormalDB => {
+                let options = table_info.options();
+                let snapshot_loc = options
+                    .get(OPT_KEY_SNAPSHOT_LOCATION)
+                    // for backward compatibility, we check the legacy table option
+                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                    .cloned();
+                match snapshot_loc {
+                    Some(snapshot_loc) => {
+                        TableMetaLocationGenerator::location_timestamp(&snapshot_loc)
+                    }
+                    None => Utc::now().timestamp_millis().to_string(),
+                }
+            }
+        };
+
+        let meta_location_generator = TableMetaLocationGenerator::with_prefix(storage_prefix)
+            .with_prev_snapshot_timestamp(prev_snapshot_timestamp)
+            .with_part_prefix(part_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,

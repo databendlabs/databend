@@ -131,7 +131,7 @@ impl FuseTable {
             let table_statistics = TableSnapshotStatistics::new(ndv_map);
             let table_statistics_location = self
                 .meta_location_generator
-                .snapshot_statistics_location_from_uuid(
+                .snapshot_statistics_location_from_uuid_and_timestamp(
                     &table_statistics.snapshot_id,
                     table_statistics.format_version(),
                 )?;

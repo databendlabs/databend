@@ -60,8 +60,11 @@ pub async fn generate_snapshot_with_segments(
     let location_gen = fuse_table.meta_location_generator();
     let mut new_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
     new_snapshot.segments = segment_locations;
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
+    let new_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
+        &new_snapshot.timestamp,
+        &new_snapshot.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     if let Some(ts) = time_stamp {
         new_snapshot.timestamp = Some(ts)
     }
@@ -180,8 +183,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     );
     snapshot_0.timestamp = Some(now - Duration::hours(13));
 
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_0.snapshot_id, TableSnapshotV2::VERSION)?;
+    let new_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
+        &snapshot_0.timestamp,
+        &snapshot_0.snapshot_id,
+        TableSnapshotV2::VERSION,
+    )?;
     write_v2_to_storage(&operator, &new_snapshot_location, &snapshot_0).await?;
 
     // generate 2 segments, 4 blocks.
@@ -203,8 +209,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
     snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary, None);
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
+    let new_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
+        &snapshot_1.timestamp,
+        &snapshot_1.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     snapshot_1
         .write_meta(&operator, &new_snapshot_location)
         .await?;
@@ -219,8 +228,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);
-    let new_snapshot_location = location_gen
-        .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
+    let new_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
+        &snapshot_2.timestamp,
+        &snapshot_2.snapshot_id,
+        TableSnapshot::VERSION,
+    )?;
     snapshot_2
         .write_meta(&operator, &new_snapshot_location)
         .await?;

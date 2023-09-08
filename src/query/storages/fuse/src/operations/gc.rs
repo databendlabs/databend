@@ -121,9 +121,11 @@ impl FuseTable {
                     continue;
                 }
 
-                if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
-                {
+                if let Ok(loc) = location_gen.snapshot_location_from_uuid_and_timestamp(
+                    &s.timestamp,
+                    &s.snapshot_id,
+                    s.format_version,
+                ) {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }
@@ -194,9 +196,11 @@ impl FuseTable {
             let mut segments_to_be_purged = HashSet::new();
             let mut ts_to_be_purged = HashSet::new();
             for s in remain_snapshots {
-                if let Ok(loc) =
-                    location_gen.snapshot_location_from_uuid(&s.snapshot_id, s.format_version)
-                {
+                if let Ok(loc) = location_gen.snapshot_location_from_uuid_and_timestamp(
+                    &s.timestamp,
+                    &s.snapshot_id,
+                    s.format_version,
+                ) {
                     if purged_snapshot_count >= purged_snapshot_limit {
                         break;
                     }

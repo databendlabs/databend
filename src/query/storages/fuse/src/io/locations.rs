@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::format;
 use std::marker::PhantomData;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_exception::Result;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::Location;
@@ -38,6 +41,8 @@ static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
 static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
+static SNAPSHOT_V5: SnapshotVersion = SnapshotVersion::V5(PhantomData);
+static SNAPSHOT_V6: SnapshotVersion = SnapshotVersion::V6(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
@@ -46,6 +51,7 @@ static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
 pub struct TableMetaLocationGenerator {
     prefix: String,
     part_prefix: String,
+    prev_snapshot_timestamp: String,
 }
 
 impl TableMetaLocationGenerator {
@@ -53,7 +59,17 @@ impl TableMetaLocationGenerator {
         Self {
             prefix,
             part_prefix: "".to_string(),
+            prev_snapshot_timestamp: "".to_string(),
         }
+    }
+
+    pub fn with_prev_snapshot_timestamp(mut self, prev_snapshot_timestamp: String) -> Self {
+        self.prev_snapshot_timestamp = if prev_snapshot_timestamp.is_empty() {
+            prev_snapshot_timestamp
+        } else {
+            format!("{}_", prev_snapshot_timestamp)
+        };
+        self
     }
 
     pub fn with_part_prefix(mut self, part_prefix: String) -> Self {
@@ -72,9 +88,10 @@ impl TableMetaLocationGenerator {
     pub fn gen_block_location(&self) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
+            "{}/{}/{}{}{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
+            self.prev_snapshot_timestamp,
             &self.part_prefix,
             part_uuid.as_simple(),
             DataBlock::VERSION,
@@ -86,9 +103,10 @@ impl TableMetaLocationGenerator {
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
         (
             format!(
-                "{}/{}/{}_v{}.parquet",
+                "{}/{}/{}{}_v{}.parquet",
                 &self.prefix,
                 FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
+                self.prev_snapshot_timestamp,
                 block_id.as_simple(),
                 BlockFilter::VERSION,
             ),
@@ -99,21 +117,35 @@ impl TableMetaLocationGenerator {
     pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
-            "{}/{}/{}_v{}.mpk",
+            "{}/{}/{}{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
+            self.prev_snapshot_timestamp,
             segment_uuid,
             SegmentInfo::VERSION,
         )
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
+    pub fn snapshot_location_from_uuid_and_timestamp(
+        &self,
+        snapshot_timestamp_opt: &Option<DateTime<Utc>>,
+        id: &Uuid,
+        version: u64,
+    ) -> Result<String> {
+        let snapshot_timestamp = match snapshot_timestamp_opt {
+            Some(snapshot_timestamp) => snapshot_timestamp.timestamp_millis().to_string(),
+            None => "".to_string(),
+        };
         let snapshot_version = SnapshotVersion::try_from(version)?;
-        Ok(snapshot_version.create(id, &self.prefix))
+        Ok(snapshot_version.create(id, &snapshot_timestamp, &self.prefix))
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
+        if location.as_ref().ends_with(SNAPSHOT_V6.suffix().as_str()) {
+            SNAPSHOT_V6.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V5.suffix().as_str()) {
+            SNAPSHOT_V5.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
             SNAPSHOT_V4.version()
         } else if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
             SNAPSHOT_V3.version()
@@ -126,13 +158,23 @@ impl TableMetaLocationGenerator {
         }
     }
 
-    pub fn snapshot_statistics_location_from_uuid(
+    pub fn location_timestamp(location: &str) -> String {
+        let v: Vec<&str> = location.split('/').collect();
+        let v: Vec<&str> = v[v.len() - 1].split('_').collect();
+        if v.len() > 1 {
+            v[0].to_string()
+        } else {
+            Utc::now().timestamp_millis().to_string()
+        }
+    }
+
+    pub fn snapshot_statistics_location_from_uuid_and_timestamp(
         &self,
         id: &Uuid,
         version: u64,
     ) -> Result<String> {
         let statistics_version = TableSnapshotStatisticsVersion::try_from(version)?;
-        Ok(statistics_version.create(id, &self.prefix))
+        Ok(statistics_version.create(id, &self.prev_snapshot_timestamp, &self.prefix))
     }
 
     pub fn snapshot_statistics_version(_location: impl AsRef<str>) -> u64 {
@@ -157,19 +199,30 @@ impl TableMetaLocationGenerator {
 }
 
 trait SnapshotLocationCreator {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn create(&self, id: &Uuid, snapshot_timestamp: &str, prefix: impl AsRef<str>) -> String;
     fn suffix(&self) -> String;
 }
 
 impl SnapshotLocationCreator for SnapshotVersion {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        format!(
-            "{}/{}/{}{}",
-            prefix.as_ref(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-            id.simple(),
-            self.suffix(),
-        )
+    fn create(&self, id: &Uuid, snapshot_timestamp: &str, prefix: impl AsRef<str>) -> String {
+        if snapshot_timestamp.is_empty() {
+            format!(
+                "{}/{}/{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_PREFIX,
+                id.simple(),
+                self.suffix(),
+            )
+        } else {
+            format!(
+                "{}/{}/{}_{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_PREFIX,
+                snapshot_timestamp,
+                id.simple(),
+                self.suffix(),
+            )
+        }
     }
 
     fn suffix(&self) -> String {
@@ -180,16 +233,18 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V3(_) => "_v3.bincode".to_string(),
             SnapshotVersion::V4(_) => "_v4.mpk".to_string(),
             SnapshotVersion::V5(_) => "_v5.mpk".to_string(),
+            SnapshotVersion::V6(_) => "_v6.mpk".to_string(),
         }
     }
 }
 
 impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
+    fn create(&self, id: &Uuid, snapshot_timestamp: &str, prefix: impl AsRef<str>) -> String {
         format!(
-            "{}/{}/{}{}",
+            "{}/{}/{}{}{}",
             prefix.as_ref(),
             FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
+            snapshot_timestamp,
             id.simple(),
             self.suffix(),
         )
@@ -198,6 +253,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
     fn suffix(&self) -> String {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
+            TableSnapshotStatisticsVersion::V1(_) => "_ts_v1.json".to_string(),
         }
     }
 }

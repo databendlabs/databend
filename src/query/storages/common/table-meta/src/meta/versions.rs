@@ -23,6 +23,7 @@ use crate::meta::v1;
 use crate::meta::v3;
 use crate::meta::v4;
 use crate::meta::v5;
+use crate::meta::v6;
 
 // Here versions of meta are tagged with numeric values
 //
@@ -49,6 +50,7 @@ impl Versioned<2> for v2::SegmentInfo {}
 impl Versioned<3> for v3::SegmentInfo {}
 impl Versioned<4> for v4::SegmentInfo {}
 impl Versioned<5> for v5::SegmentInfo {}
+impl Versioned<6> for v6::SegmentInfo {}
 
 pub enum SegmentInfoVersion {
     V0(PhantomData<v0::SegmentInfo>),
@@ -56,7 +58,9 @@ pub enum SegmentInfoVersion {
     V2(PhantomData<v2::SegmentInfo>),
     V3(PhantomData<v3::SegmentInfo>),
     V4(PhantomData<v4::SegmentInfo>),
+    // V5:introduce snapshot timestamp into file name
     V5(PhantomData<v5::SegmentInfo>),
+    V6(PhantomData<v6::SegmentInfo>),
 }
 
 impl SegmentInfoVersion {
@@ -68,6 +72,7 @@ impl SegmentInfoVersion {
             SegmentInfoVersion::V3(a) => Self::ver(a),
             SegmentInfoVersion::V4(a) => Self::ver(a),
             SegmentInfoVersion::V5(a) => Self::ver(a),
+            SegmentInfoVersion::V6(a) => Self::ver(a),
         }
     }
 
@@ -82,6 +87,7 @@ impl Versioned<2> for v2::TableSnapshot {}
 impl Versioned<3> for v3::TableSnapshot {}
 impl Versioned<4> for v4::TableSnapshot {}
 impl Versioned<5> for v5::TableSnapshot {}
+impl Versioned<6> for v6::TableSnapshot {}
 
 pub enum SnapshotVersion {
     V0(PhantomData<v0::TableSnapshot>),
@@ -89,7 +95,9 @@ pub enum SnapshotVersion {
     V2(PhantomData<v2::TableSnapshot>),
     V3(PhantomData<v3::TableSnapshot>),
     V4(PhantomData<v4::TableSnapshot>),
+    // V5:introduce snapshot timestamp into file name
     V5(PhantomData<v5::TableSnapshot>),
+    V6(PhantomData<v6::TableSnapshot>),
 }
 
 impl SnapshotVersion {
@@ -101,6 +109,7 @@ impl SnapshotVersion {
             SnapshotVersion::V3(a) => Self::ver(a),
             SnapshotVersion::V4(a) => Self::ver(a),
             SnapshotVersion::V5(a) => Self::ver(a),
+            SnapshotVersion::V6(a) => Self::ver(a),
         }
     }
 
@@ -110,17 +119,21 @@ impl SnapshotVersion {
 }
 
 impl Versioned<0> for v1::TableSnapshotStatistics {}
+impl Versioned<1> for v5::TableSnapshotStatistics {}
 
 impl Versioned<2> for DataBlock {}
 
 pub enum TableSnapshotStatisticsVersion {
     V0(PhantomData<v1::TableSnapshotStatistics>),
+    // V1:introduce prev snapshot timestamp into file name
+    V1(PhantomData<v5::TableSnapshotStatistics>),
 }
 
 impl TableSnapshotStatisticsVersion {
     pub fn version(&self) -> u64 {
         match self {
             TableSnapshotStatisticsVersion::V0(a) => Self::ver(a),
+            TableSnapshotStatisticsVersion::V1(a) => Self::ver(a),
         }
     }
 
@@ -153,8 +166,9 @@ mod converters {
                 2 => Ok(SegmentInfoVersion::V2(testify_version::<_, 2>(PhantomData))),
                 3 => Ok(SegmentInfoVersion::V3(testify_version::<_, 3>(PhantomData))),
                 4 => Ok(SegmentInfoVersion::V4(testify_version::<_, 4>(PhantomData))),
+                5 => Ok(SegmentInfoVersion::V5(testify_version::<_, 5>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown segment version {value}, versions supported: 0, 1, 2, 3, 4"
+                    "unknown segment version {value}, versions supported: 0, 1, 2, 3, 4, 5"
                 ))),
             }
         }
@@ -169,8 +183,9 @@ mod converters {
                 2 => Ok(SnapshotVersion::V2(testify_version::<_, 2>(PhantomData))),
                 3 => Ok(SnapshotVersion::V3(testify_version::<_, 3>(PhantomData))),
                 4 => Ok(SnapshotVersion::V4(testify_version::<_, 4>(PhantomData))),
+                5 => Ok(SnapshotVersion::V5(testify_version::<_, 5>(PhantomData))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2, 3, 4"
+                    "unknown snapshot segment version {value}, versions supported: 0, 1, 2, 3, 4, 5"
                 ))),
             }
         }
@@ -183,8 +198,11 @@ mod converters {
                 0 => Ok(TableSnapshotStatisticsVersion::V0(testify_version::<_, 0>(
                     PhantomData,
                 ))),
+                1 => Ok(TableSnapshotStatisticsVersion::V1(testify_version::<_, 1>(
+                    PhantomData,
+                ))),
                 _ => Err(ErrorCode::Internal(format!(
-                    "unknown table snapshot statistics version {value}, versions supported: 0"
+                    "unknown table snapshot statistics version {value}, versions supported: 0, 1"
                 ))),
             }
         }

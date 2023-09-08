@@ -14,13 +14,10 @@
 
 mod segment;
 mod snapshot;
-mod statistics;
+mod table_snapshot_statistics;
 
 pub use segment::CompactSegmentInfo;
-pub use segment::InternalSegmentInfo;
-pub use segment::LeafSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
-pub use statistics::ClusterStatistics;
-pub use statistics::ColumnStatistics;
-pub use statistics::Statistics;
+pub use snapshot::TableSnapshotLite;
+pub use table_snapshot_statistics::TableSnapshotStatistics;
