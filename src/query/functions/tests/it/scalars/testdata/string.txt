@@ -2272,11 +2272,35 @@ has tried possible overloads:
 
 
 
+ast            : lpad(a, b, c)
+raw expr       : lpad(a::String, b::UInt8, c::String)
+checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
+evaluation:
++--------+-----------------+---------+-------------+---------+
+|        | a               | b       | c           | Output  |
++--------+-----------------+---------+-------------+---------+
+| Type   | String          | UInt8   | String      | String  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
+| Row 0  | 'hi'            | 0       | '?'         | ''      |
+| Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
+| Row 2  | 'cc'            | 5       | 'bb'        | 'bbbcc' |
++--------+-----------------+---------+-------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
+| b      | UInt8([0, 3, 5])                                                 |
+| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
+| Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8] } |
++--------+------------------------------------------------------------------+
+
+
 error: 
   --> SQL:1:1
   |
 1 | lpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the '' length to '7' with an empty pad string while evaluating function `lpad('', 7, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')`
 
 
 
@@ -2354,11 +2378,35 @@ has tried possible overloads:
 
 
 
+ast            : rpad(a, b, c)
+raw expr       : rpad(a::String, b::UInt8, c::String)
+checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
+evaluation:
++--------+-----------------+---------+-------------+---------+
+|        | a               | b       | c           | Output  |
++--------+-----------------+---------+-------------+---------+
+| Type   | String          | UInt8   | String      | String  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
+| Row 0  | 'hi'            | 0       | '?'         | ''      |
+| Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
+| Row 2  | 'cc'            | 5       | 'bb'        | 'ccbbb' |
++--------+-----------------+---------+-------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------+
+| Column | Data                                                             |
++--------+------------------------------------------------------------------+
+| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8] } |
+| b      | UInt8([0, 3, 5])                                                 |
+| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
+| Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8] } |
++--------+------------------------------------------------------------------+
+
+
 error: 
   --> SQL:1:1
   |
 1 | rpad(a, b, c)
-  | ^^^^^^^^^^^^^ can't fill the '' length to '7' with an empty pad string while evaluating function `rpad('', 7, '')`
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')`
 
 
 
