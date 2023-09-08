@@ -16,12 +16,12 @@ use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
+use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
-use common_ast::ast::TypeName;
 use common_expression::types::DataType;
 use rand::Rng;
 
@@ -34,13 +34,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
+        let order_by = self.gen_order_by();
         Query {
             span: None,
             // TODO
             with: None,
             body,
             // TODO
-            order_by: vec![],
+            order_by,
             limit,
             offset,
             ignore_result: false,
@@ -60,6 +61,32 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn flip_coin(&mut self) -> bool {
         self.rng.gen_bool(0.5)
+    }
+
+    fn gen_order_by(&mut self) -> Vec<OrderByExpr> {
+        let order_nums = self.rng.gen_range(1..5);
+        let mut orders = Vec::with_capacity(order_nums);
+        if self.flip_coin() {
+            for _ in 0..order_nums {
+                let ty = self.gen_data_type();
+                let expr = self.gen_expr(&ty);
+                let order_by_expr = if self.rng.gen_bool(0.2) {
+                    OrderByExpr {
+                        expr,
+                        asc: None,
+                        nulls_first: None,
+                    }
+                } else {
+                    OrderByExpr {
+                        expr,
+                        asc: Some(self.flip_coin()),
+                        nulls_first: Some(self.flip_coin()),
+                    }
+                };
+                orders.push(order_by_expr);
+            }
+        }
+        orders
     }
 
     fn gen_limit(&mut self) -> Vec<Expr> {
@@ -114,124 +141,70 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_group_by(&mut self) -> Option<GroupBy> {
-        let mode = self.rng.gen_range(0..=5);
+        let mode = self.rng.gen_range(0..=25);
         let group_cap = self.rng.gen_range(1..=5);
         let mut groupby_items = Vec::with_capacity(group_cap);
 
         for _ in 0..group_cap {
             let ty = self.gen_data_type();
-            let expr = self.gen_expr(&ty);
-            let groupby_item = match expr {
-                Expr::Literal {
-                    lit: Literal::UInt64(_),
-                    ..
-                } => Expr::Cast {
-                    span: None,
-                    expr: Box::new(expr),
-                    target_type: TypeName::UInt64,
-                    pg_style: false,
-                },
-                Expr::Literal {
-                    lit:
-                        Literal::Decimal256 {
-                            scale, precision, ..
-                        },
-                    ..
-                } => {
-                    if scale == 0 {
-                        Expr::Cast {
-                            span: None,
-                            expr: Box::new(expr),
-                            target_type: TypeName::Decimal { precision, scale },
-                            pg_style: false,
-                        }
-                    } else {
-                        expr
-                    }
-                }
-                _ => expr,
-            };
+            let groupby_item = self.gen_expr(&ty);
             groupby_items.push(groupby_item);
         }
 
         match mode {
-            0 => None,
-            1 => Some(GroupBy::Normal(groupby_items)),
-            2 => Some(GroupBy::All),
-            3 => Some(GroupBy::GroupingSets(vec![groupby_items])),
-            4 => Some(GroupBy::Cube(groupby_items)),
-            5 => Some(GroupBy::Rollup(groupby_items)),
+            0..=20 => None,
+            21 => Some(GroupBy::Normal(groupby_items)),
+            22 => Some(GroupBy::All),
+            23 => Some(GroupBy::GroupingSets(vec![groupby_items])),
+            24 => Some(GroupBy::Cube(groupby_items)),
+            25 => Some(GroupBy::Rollup(groupby_items)),
             _ => unreachable!(),
         }
     }
 
     fn gen_select_list(&mut self, group_by: &Option<GroupBy>) -> Vec<SelectTarget> {
-        let mut targets = vec![];
-        if let Some(group_by) = group_by {
-            match group_by {
-                GroupBy::Normal(group_by) => {
-                    targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
-                        expr: Box::new(expr.clone()),
-                        alias: None,
-                    }));
-                }
-                GroupBy::All => {
-                    let select_num = self.rng.gen_range(1..=5);
-                    for _ in 0..select_num {
-                        let target = match self.rng.gen_range(0..=9) {
-                            0..=9 => {
-                                let ty = self.gen_data_type();
-                                let expr = self.gen_expr(&ty);
-                                SelectTarget::AliasedExpr {
-                                    expr: Box::new(expr),
-                                    // TODO
-                                    alias: None,
-                                }
-                            }
-                            // TODO
-                            _ => unreachable!(),
-                        };
-                        targets.push(target)
-                    }
-                }
-                GroupBy::GroupingSets(group_by) => {
-                    targets.extend(group_by[0].iter().map(|expr| SelectTarget::AliasedExpr {
-                        expr: Box::new(expr.clone()),
-                        alias: None,
-                    }));
-                }
-                GroupBy::Cube(group_by) => {
-                    targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
-                        expr: Box::new(expr.clone()),
-                        alias: None,
-                    }));
-                }
-                GroupBy::Rollup(group_by) => {
-                    targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
-                        expr: Box::new(expr.clone()),
-                        alias: None,
-                    }));
+        let mut targets = Vec::with_capacity(5);
+
+        let generate_target = |expr: Expr| SelectTarget::AliasedExpr {
+            expr: Box::new(expr),
+            alias: None,
+        };
+
+        match group_by {
+            Some(GroupBy::Normal(group_by))
+            | Some(GroupBy::Cube(group_by))
+            | Some(GroupBy::Rollup(group_by)) => {
+                targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
+                    expr: Box::new(expr.clone()),
+                    alias: None,
+                }));
+            }
+            Some(GroupBy::All) => {
+                let select_num = self.rng.gen_range(1..=5);
+                for _ in 0..select_num {
+                    let ty = self.gen_data_type();
+                    let expr = self.gen_expr(&ty);
+                    let target = generate_target(expr);
+                    targets.push(target);
                 }
             }
-        } else {
-            let select_num = self.rng.gen_range(1..=5);
-            for _ in 0..select_num {
-                let target = match self.rng.gen_range(0..=9) {
-                    0..=9 => {
-                        let ty = self.gen_data_type();
-                        let expr = self.gen_expr(&ty);
-                        SelectTarget::AliasedExpr {
-                            expr: Box::new(expr),
-                            // TODO
-                            alias: None,
-                        }
-                    }
-                    // TODO
-                    _ => unreachable!(),
-                };
-                targets.push(target)
+            Some(GroupBy::GroupingSets(group_by)) => {
+                targets.extend(group_by[0].iter().map(|expr| SelectTarget::AliasedExpr {
+                    expr: Box::new(expr.clone()),
+                    alias: None,
+                }));
+            }
+            None => {
+                let select_num = self.rng.gen_range(1..=5);
+                for _ in 0..select_num {
+                    let ty = self.gen_data_type();
+                    let expr = self.gen_expr(&ty);
+                    let target = generate_target(expr);
+                    targets.push(target);
+                }
             }
         }
+
         targets
     }
 
