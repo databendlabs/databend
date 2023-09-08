@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use arrow_schema::Schema as ArrowSchema;
 use common_base::runtime::execute_futures_in_parallel;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
+use common_expression::EXTENSION_KEY;
 use opendal::BlockingOperator;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
@@ -41,10 +45,37 @@ pub async fn read_parquet_schema_async_rs(
 
 pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema> {
     let meta = meta.file_metadata();
-    let arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
-    // todo: Convert data types to extension types using meta information.
+    let mut arrow_schema = parquet_to_arrow_schema(meta.schema_descr(), meta.key_value_metadata())?;
+    // Convert data types to extension types using meta information.
     // Mainly used for types such as Variant and Bitmap,
     // as they have the same physical type as String.
+    if let Some(metas) = meta.key_value_metadata() {
+        let mut new_fields = Vec::with_capacity(arrow_schema.fields.len());
+        for field in arrow_schema.fields.iter() {
+            let mut new_field = field.clone();
+            for meta in metas {
+                match &meta.value {
+                    Some(ty) if field.name() == &meta.key => {
+                        let f = arrow_schema::Field::new(
+                            field.name(),
+                            field.data_type().clone(),
+                            field.is_nullable(),
+                        )
+                        .with_metadata(HashMap::from([(
+                            EXTENSION_KEY.to_string(),
+                            ty.to_string(),
+                        )]));
+                        new_field = Arc::new(f);
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+            new_fields.push(new_field);
+        }
+        arrow_schema = ArrowSchema::new_with_metadata(new_fields, arrow_schema.metadata);
+    }
+
     Ok(arrow_schema)
 }
 
