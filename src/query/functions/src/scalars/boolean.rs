@@ -361,11 +361,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                             .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                                 "try_to_boolean",
                                 |_, domain| {
-                                FunctionDomain::Domain(NullableDomain {
-                                    has_null: false,
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: false,
                                         value: Some(Box::new(BooleanDomain {
-                                            has_false: domain.min <= OrderedFloat(0.0) && domain.max >= OrderedFloat(0.0),
-                                            has_true: !(domain.min == OrderedFloat(0.0) && domain.max == OrderedFloat(0.0)),
+                                            has_false: domain.min <= OrderedFloat(0.0)
+                                                && domain.max >= OrderedFloat(0.0),
+                                            has_true: !(domain.min == OrderedFloat(0.0)
+                                                && domain.max == OrderedFloat(0.0)),
                                         })),
                                     })
                                 },
@@ -376,7 +378,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     output.builder.push(val != OrderedFloat(0.0));
                                     output.validity.push(true);
                                 }),
-                        );
+                            );
 
                         let name = format!("to_{src_type}").to_lowercase();
                         registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
@@ -406,14 +408,22 @@ pub fn register(registry: &mut FunctionRegistry) {
 
                         let name = format!("try_to_{src_type}").to_lowercase();
                         registry
-                                .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                                    &name,
-                                    |_, domain| {
-                                        FunctionDomain::Domain(NullableDomain {
-                                            has_null: false,
-                                            value: Some(Box::new(SimpleDomain {
-                                            min: if domain.has_false { OrderedFloat(0.0) } else { OrderedFloat(1.0) },
-                                            max: if domain.has_true { OrderedFloat(1.0) } else { OrderedFloat(0.0) },
+                            .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                                &name,
+                                |_, domain| {
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: false,
+                                        value: Some(Box::new(SimpleDomain {
+                                            min: if domain.has_false {
+                                                OrderedFloat(0.0)
+                                            } else {
+                                                OrderedFloat(1.0)
+                                            },
+                                            max: if domain.has_true {
+                                                OrderedFloat(1.0)
+                                            } else {
+                                                OrderedFloat(0.0)
+                                            },
                                         })),
                                     })
                                 },
@@ -421,7 +431,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     BooleanType,
                                     NullableType<NumberType<NUM_TYPE>>,
                                 >(|val, output, _| {
-                                    output.push(if val { NUM_TYPE::from(OrderedFloat(1.0)) } else { NUM_TYPE::from(OrderedFloat(0.0)) });
+                                    if val {
+                                        output.push(NUM_TYPE::from(OrderedFloat(1.0)))
+                                    } else {
+                                        output.push(NUM_TYPE::from(OrderedFloat(0.0)))
+                                    }
                                 }),
                             );
                     }

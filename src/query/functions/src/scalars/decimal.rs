@@ -549,7 +549,7 @@ pub(crate) fn register_decimal_to_boolean(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| decimal_to_boolean(args, arg_type.clone(), tx)),
+                eval: Box::new(move |args, _| decimal_to_boolean(&args[0], arg_type.clone())),
             },
         };
 
@@ -568,7 +568,7 @@ fn convert_to_decimal(
     dest_type: DataType,
 ) -> Value<AnyType> {
     match from_type {
-        DataType::Boolean => boolean_to_decimal(arg, ctx, dest_type),
+        DataType::Boolean => boolean_to_decimal(arg, dest_type),
         DataType::Number(ty) => {
             if ty.is_float() {
                 float_to_decimal(arg, ctx, from_type, dest_type)
@@ -583,7 +583,6 @@ fn convert_to_decimal(
 }
 
 fn boolean_to_decimal_column<T: Decimal>(
-    _ctx: &mut EvalContext,
     boolean_column: &Bitmap,
     size: DecimalSize,
 ) -> DecimalColumn {
@@ -598,11 +597,7 @@ fn boolean_to_decimal_column<T: Decimal>(
     T::to_column(values, size)
 }
 
-fn boolean_to_decimal_scalar<T: Decimal>(
-    _ctx: &mut EvalContext,
-    val: bool,
-    size: DecimalSize,
-) -> DecimalScalar {
+fn boolean_to_decimal_scalar<T: Decimal>(val: bool, size: DecimalSize) -> DecimalScalar {
     if val {
         T::to_scalar(T::e(size.scale as u32), size)
     } else {
@@ -610,11 +605,7 @@ fn boolean_to_decimal_scalar<T: Decimal>(
     }
 }
 
-fn boolean_to_decimal(
-    arg: &ValueRef<AnyType>,
-    ctx: &mut EvalContext,
-    dest_type: DataType,
-) -> Value<AnyType> {
+fn boolean_to_decimal(arg: &ValueRef<AnyType>, dest_type: DataType) -> Value<AnyType> {
     let dest_type = dest_type.as_decimal().unwrap();
 
     match arg {
@@ -622,10 +613,10 @@ fn boolean_to_decimal(
             let boolean_column = BooleanType::try_downcast_column(column).unwrap();
             let column = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    boolean_to_decimal_column::<i128>(ctx, &boolean_column, *size)
+                    boolean_to_decimal_column::<i128>(&boolean_column, *size)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    boolean_to_decimal_column::<i256>(ctx, &boolean_column, *size)
+                    boolean_to_decimal_column::<i256>(&boolean_column, *size)
                 }
             };
             Value::Column(Column::Decimal(column))
@@ -633,12 +624,8 @@ fn boolean_to_decimal(
         ValueRef::Scalar(scalar) => {
             let val = BooleanType::try_downcast_scalar(scalar).unwrap();
             let scalar = match dest_type {
-                DecimalDataType::Decimal128(size) => {
-                    boolean_to_decimal_scalar::<i128>(ctx, val, *size)
-                }
-                DecimalDataType::Decimal256(size) => {
-                    boolean_to_decimal_scalar::<i128>(ctx, val, *size)
-                }
+                DecimalDataType::Decimal128(size) => boolean_to_decimal_scalar::<i128>(val, *size),
+                DecimalDataType::Decimal256(size) => boolean_to_decimal_scalar::<i256>(val, *size),
             };
             Value::Scalar(Scalar::Decimal(scalar))
         }
@@ -1126,13 +1113,7 @@ fn decimal_to_float32(
     }
 }
 
-fn decimal_to_boolean(
-    args: &[ValueRef<AnyType>],
-    from_type: DataType,
-    _ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    let arg = &args[0];
-
+fn decimal_to_boolean(arg: &ValueRef<AnyType>, from_type: DataType) -> Value<AnyType> {
     let mut is_scalar = false;
     let column = match arg {
         ValueRef::Column(column) => column.clone(),
