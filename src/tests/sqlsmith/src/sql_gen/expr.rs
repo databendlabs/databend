@@ -48,15 +48,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 } else {
                     ColumnID::Position(ColumnPosition::create(bound_column.index, None))
                 };
-                let table = if self.rng.gen_bool(0.8) {
-                    match column {
-                        ColumnID::Name(_) => None,
-                        ColumnID::Position(_) => {
-                            Some(Identifier::from_name(bound_column.table_name.clone()))
-                        }
-                    }
-                } else {
+                let table = if self.is_join || self.rng.gen_bool(0.2) {
                     Some(Identifier::from_name(bound_column.table_name.clone()))
+                } else {
+                    None
                 };
                 return Expr::ColumnRef {
                     span: None,
