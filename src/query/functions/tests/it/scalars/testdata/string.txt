@@ -2234,13 +2234,12 @@ output domain  : {"h"..="h"}
 output         : 'h'
 
 
-ast            : lpad('', 1, '')
-raw expr       : lpad('', 1, '')
-checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "")
-optimized expr : ""
-output type    : String
-output domain  : {""..=""}
-output         : ''
+error: 
+  --> SQL:1:1
+  |
+1 | lpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')`
+
 
 
 ast            : lpad('hi', 1, '')
@@ -2273,29 +2272,12 @@ has tried possible overloads:
 
 
 
-ast            : lpad(a, b, c)
-raw expr       : lpad(a::String, b::UInt8, c::String)
-checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
-evaluation:
-+--------+---------------+---------+------------+---------+
-|        | a             | b       | c          | Output  |
-+--------+---------------+---------+------------+---------+
-| Type   | String        | UInt8   | String     | String  |
-| Domain | {""..="test"} | {0..=7} | {""..="x"} | {""..}  |
-| Row 0  | 'hi'          | 0       | '?'        | ''      |
-| Row 1  | 'test'        | 3       | 'x'        | 'tes'   |
-| Row 2  | 'cc'          | 5       | 'bb'       | 'bbbcc' |
-| Row 3  | ''            | 7       | ''         | ''      |
-+--------+---------------+---------+------------+---------+
-evaluation (internal):
-+--------+---------------------------------------------------------------------+
-| Column | Data                                                                |
-+--------+---------------------------------------------------------------------+
-| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8, 8] } |
-| b      | UInt8([0, 3, 5, 7])                                                 |
-| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4, 4] }         |
-| Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8, 8] } |
-+--------+---------------------------------------------------------------------+
+error: 
+  --> SQL:1:1
+  |
+1 | lpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the '' length to '7' with an empty pad string while evaluating function `lpad('', 7, '')`
+
 
 
 ast            : rpad('hi', 2, '?')
@@ -2334,13 +2316,12 @@ output domain  : {"h"..="h"}
 output         : 'h'
 
 
-ast            : rpad('', 1, '')
-raw expr       : rpad('', 1, '')
-checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "")
-optimized expr : ""
-output type    : String
-output domain  : {""..=""}
-output         : ''
+error: 
+  --> SQL:1:1
+  |
+1 | rpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')`
+
 
 
 ast            : rpad('hi', 1, '')
@@ -2373,29 +2354,12 @@ has tried possible overloads:
 
 
 
-ast            : rpad(a, b, c)
-raw expr       : rpad(a::String, b::UInt8, c::String)
-checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
-evaluation:
-+--------+---------------+---------+------------+---------+
-|        | a             | b       | c          | Output  |
-+--------+---------------+---------+------------+---------+
-| Type   | String        | UInt8   | String     | String  |
-| Domain | {""..="test"} | {0..=7} | {""..="x"} | {""..}  |
-| Row 0  | 'hi'          | 0       | '?'        | ''      |
-| Row 1  | 'test'        | 3       | 'x'        | 'tes'   |
-| Row 2  | 'cc'          | 5       | 'bb'       | 'ccbbb' |
-| Row 3  | ''            | 7       | ''         | ''      |
-+--------+---------------+---------+------------+---------+
-evaluation (internal):
-+--------+---------------------------------------------------------------------+
-| Column | Data                                                                |
-+--------+---------------------------------------------------------------------+
-| a      | StringColumn { data: 0x6869746573746363, offsets: [0, 2, 6, 8, 8] } |
-| b      | UInt8([0, 3, 5, 7])                                                 |
-| c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4, 4] }         |
-| Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8, 8] } |
-+--------+---------------------------------------------------------------------+
+error: 
+  --> SQL:1:1
+  |
+1 | rpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the '' length to '7' with an empty pad string while evaluating function `rpad('', 7, '')`
+
 
 
 ast            : replace('hi', '', '?')
