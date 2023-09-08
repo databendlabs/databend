@@ -618,24 +618,6 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-macro_rules! single_decimal128_to_float {
-    ($from: expr, $size: expr, $to_type: ty) => {{
-        let base: $to_type = 10.0;
-        let div: $to_type = base.powi($size.scale as i32);
-        let v: OrderedFloat<$to_type> = ($from as $to_type / div).into();
-        v
-    }};
-}
-
-macro_rules! single_decimal256_to_float {
-    ($from: expr, $size: expr, $to_type: ty) => {{
-        let base: $to_type = 10.0;
-        let div: $to_type = base.powi($size.scale as i32);
-        let v: OrderedFloat<$to_type> = (<$to_type>::from($from) / div).into();
-        v
-    }};
-}
-
 pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
     registry.register_function_factory("to_float64", |_params, args_type| {
         if args_type.len() != 1 {
@@ -658,14 +640,14 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|_, d| match d[0].as_decimal().unwrap() {
                     DecimalDomain::Decimal128(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float64(SimpleDomain {
-                            min: single_decimal128_to_float! {d.min, size, f64},
-                            max: single_decimal128_to_float! {d.max, size, f64},
+                            min: OrderedFloat(d.min.to_float64(size.scale)),
+                            max: OrderedFloat(d.max.to_float64(size.scale)),
                         }),
                     )),
                     DecimalDomain::Decimal256(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float64(SimpleDomain {
-                            min: single_decimal256_to_float! {d.min, size, f64},
-                            max: single_decimal256_to_float! {d.max, size, f64},
+                            min: OrderedFloat(d.min.to_float64(size.scale)),
+                            max: OrderedFloat(d.max.to_float64(size.scale)),
                         }),
                     )),
                 }),
@@ -696,14 +678,14 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(|_, d| match d[0].as_decimal().unwrap() {
                     DecimalDomain::Decimal128(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float32(SimpleDomain {
-                            min: single_decimal128_to_float! {d.min, size, f32},
-                            max: single_decimal128_to_float! {d.max, size, f32},
+                            min: OrderedFloat(d.min.to_float64(size.scale) as f32),
+                            max: OrderedFloat(d.max.to_float64(size.scale) as f32),
                         }),
                     )),
                     DecimalDomain::Decimal256(d, size) => FunctionDomain::Domain(Domain::Number(
                         NumberDomain::Float32(SimpleDomain {
-                            min: single_decimal256_to_float! {d.min, size, f32},
-                            max: single_decimal256_to_float! {d.max, size, f32},
+                            min: OrderedFloat(d.min.to_float64(size.scale) as f32),
+                            max: OrderedFloat(d.max.to_float64(size.scale) as f32),
                         }),
                     )),
                 }),
