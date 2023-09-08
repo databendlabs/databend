@@ -61,7 +61,7 @@ pub async fn generate_snapshot_with_segments(
     let mut new_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
-        &new_snapshot.timestamp,
+        &time_stamp,
         &new_snapshot.snapshot_id,
         TableSnapshot::VERSION,
     )?;

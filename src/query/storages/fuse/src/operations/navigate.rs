@@ -233,11 +233,10 @@ impl FuseTable {
             self.meta_location_generator().prefix(),
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
-        let prefix_loc = format!("{}{}", prefix, snapshot_id);
 
         let files = self
-            .list_files(prefix, |loc, modified| {
-                if loc.starts_with(&prefix_loc) {
+            .list_files(prefix.clone(), |loc, modified| {
+                if loc.starts_with(&prefix) && loc.find(snapshot_id).is_some() {
                     location = Some(loc);
                 }
                 modified <= retention_point
