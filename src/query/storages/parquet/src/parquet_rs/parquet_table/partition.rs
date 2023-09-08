@@ -30,7 +30,6 @@ use common_storage::CopyStatus;
 use common_storage::FileStatus;
 use opendal::Operator;
 use parquet::arrow::arrow_reader::RowSelector;
-use parquet::arrow::async_reader::AsyncFileReader;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
@@ -306,20 +305,20 @@ fn check_parquet_schema(
 
 /// Load parquet meta and check if the schema is matched.
 async fn load_and_check_parquet_meta(
-    loc: &str,
+    file: &str,
+    size: u64,
     op: Operator,
     expect: &SchemaDescriptor,
     schema_from: &str,
 ) -> Result<Arc<ParquetMetaData>> {
-    let mut reader = op.reader(loc).await?;
-    let metadata = reader.get_metadata().await?;
+    let metadata = common_storage::parquet_rs::read_metadata_async(file, &op, Some(size)).await?;
     check_parquet_schema(
         expect,
         metadata.file_metadata().schema_descr(),
-        loc,
+        file,
         schema_from,
     )?;
-    Ok(metadata)
+    Ok(Arc::new(metadata))
 }
 
 async fn read_parquet_metas_batch(
@@ -331,8 +330,9 @@ async fn read_parquet_metas_batch(
     copy_status: Option<Arc<CopyStatus>>,
 ) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
     let mut metas = Vec::with_capacity(file_infos.len());
-    for (path, _size) in file_infos {
-        let meta = load_and_check_parquet_meta(&path, op.clone(), &expect, &schema_from).await?;
+    for (path, size) in file_infos {
+        let meta =
+            load_and_check_parquet_meta(&path, size, op.clone(), &expect, &schema_from).await?;
         if let Some(copy_status) = &copy_status {
             copy_status.add_chunk(&path, FileStatus {
                 num_rows_loaded: meta.file_metadata().num_rows() as usize,
