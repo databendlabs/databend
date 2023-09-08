@@ -82,7 +82,7 @@ impl Interpreter for OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
-    fn build_physical_plan(
+    pub fn build_physical_plan(
         parts: Partitions,
         table_info: TableInfo,
         snapshot: Arc<TableSnapshot>,
