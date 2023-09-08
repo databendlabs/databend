@@ -5,7 +5,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
 ## Create table
-cat $CURDIR/../ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CONNECT
+cat $TESTS_DATA_DIR/ddl/ontime.sql | sed 's/ontime/ontime_mini/g' | $MYSQL_CLIENT_CONNECT
 
 ontime_statements=(
   ## Load data

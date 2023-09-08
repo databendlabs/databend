@@ -1202,6 +1202,9 @@ fn format_output_columns(
         .iter()
         .map(|field| match field.name().parse::<usize>() {
             Ok(column_index) => {
+                if column_index == usize::MAX {
+                    return String::from("dummy value");
+                }
                 let column_entry = metadata.column(column_index);
                 match column_entry.table_index() {
                     Some(table_index) if format_table => match metadata

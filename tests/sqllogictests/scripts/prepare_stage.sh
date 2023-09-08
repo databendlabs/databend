@@ -20,8 +20,7 @@ else
 fi
 
 echo "drop table if exists ontime" | $MYSQL_CLIENT_CONNECT
-# todo: move ontime.sql to upper dir
-cat tests/suites/1_stateful/ddl/ontime.sql | $MYSQL_CLIENT_CONNECT
+cat tests/data/ddl/ontime.sql | $MYSQL_CLIENT_CONNECT
 
 if [ "$TEST_STAGE_PARQUET_LIB" == "parquet_rs" ]
 then 

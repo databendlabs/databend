@@ -102,11 +102,10 @@ virtual-column = { path = "../ee-features/virtual-column" }
 # GitHub dependencies
 
 # Crates.io dependencies
-aho-corasick = { version = "1.0.1" }
-arrow-array = { version = "45.0.0" }
-arrow-flight = { version = "45.0.0", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "45.0.0" }
-arrow-schema = { version = "45.0.0" }
+arrow-array = { version = "46.0.0" }
+arrow-flight = { version = "46.0.0", features = ["flight-sql-experimental", "tls"] }
+arrow-ipc = { version = "46.0.0" }
+arrow-schema = { version = "46.0.0" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
@@ -168,7 +167,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [dev-dependencies]
-arrow-cast = { version = "45.0.0", features = ["prettyprint"] }
+arrow-cast = { version = "46.0.0", features = ["prettyprint"] }
 ordered-float = { workspace = true }
 
 base64 = "0.21.0"
