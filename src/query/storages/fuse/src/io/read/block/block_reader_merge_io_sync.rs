@@ -102,8 +102,10 @@ impl BlockReader {
     ) -> Result<MergeIOReadResult> {
         let part = FusePartInfo::from_part(part)?;
         let column_array_cache = CacheManager::instance().get_table_data_array_cache();
+        let column_data_cache = CacheManager::instance().get_table_data_cache();
 
         let mut ranges = vec![];
+        let mut cached_column_data = vec![];
         let mut cached_column_array = vec![];
         for (_index, (column_id, ..)) in self.project_indices.iter() {
             if let Some(ignore_column_ids) = ignore_column_ids {
@@ -118,6 +120,13 @@ impl BlockReader {
                 cached_column_array.push((*column_id, cache_array));
                 continue;
             }
+
+            // and then, check column data cache
+            if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                cached_column_data.push((*column_id, cached_column_raw_data));
+                continue;
+            }
+
             if let Some(column_meta) = part.columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
                 ranges.push((*column_id, offset..(offset + len)));
@@ -126,6 +135,7 @@ impl BlockReader {
 
         let mut merge_io_result =
             Self::sync_merge_io_read(settings, self.operator.clone(), &part.location, ranges)?;
+        merge_io_result.cached_column_data = cached_column_data;
         merge_io_result.cached_column_array = cached_column_array;
         Ok(merge_io_result)
     }
