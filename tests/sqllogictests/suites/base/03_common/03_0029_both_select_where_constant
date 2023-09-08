@@ -27,6 +27,17 @@ select 1 from t_issue_7949 where 0
 ----
 
 query I
+select 1 from t_issue_7949 where 1.1
+----
+1
+1
+1
+
+query I
+select 1 from t_issue_7949 where 0.0
+----
+
+query I
 select 1 from t_issue_7949 where true
 ----
 1

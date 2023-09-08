@@ -22,9 +22,10 @@ use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_data_type(&mut self) -> DataType {
-        match self.rng.gen_bool(0.8) {
-            true => self.gen_simple_data_type(),
-            false => self.gen_nested_data_type(),
+        if self.rng.gen_bool(0.8) {
+            self.gen_simple_data_type()
+        } else {
+            self.gen_nested_data_type()
         }
     }
 

@@ -19,6 +19,7 @@ use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_settings::Settings;
 
+mod field_decoder;
 mod field_encoder;
 mod output_format_json_each_row;
 mod output_format_tcsv;

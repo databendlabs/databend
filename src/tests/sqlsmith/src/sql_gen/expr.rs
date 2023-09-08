@@ -42,16 +42,21 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_column(&mut self, ty: &DataType) -> Expr {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
-                let column = match self.rng.gen_bool(0.8) {
-                    true => {
-                        let name = Identifier::from_name(bound_column.name.clone());
-                        ColumnID::Name(name)
-                    }
-                    false => ColumnID::Position(ColumnPosition::create(bound_column.index, None)),
+                let column = if self.rng.gen_bool(0.8) {
+                    let name = Identifier::from_name(bound_column.name.clone());
+                    ColumnID::Name(name)
+                } else {
+                    ColumnID::Position(ColumnPosition::create(bound_column.index, None))
                 };
-                let table = match self.rng.gen_bool(0.8) {
-                    true => None,
-                    false => Some(Identifier::from_name(bound_column.table_name.clone())),
+                let table = if self.rng.gen_bool(0.8) {
+                    match column {
+                        ColumnID::Name(_) => None,
+                        ColumnID::Position(_) => {
+                            Some(Identifier::from_name(bound_column.table_name.clone()))
+                        }
+                    }
+                } else {
+                    Some(Identifier::from_name(bound_column.table_name.clone()))
                 };
                 return Expr::ColumnRef {
                     span: None,
@@ -186,13 +191,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     lambda: None,
                 }
             }
-            DataType::Nullable(box inner_ty) => match self.rng.gen_bool(0.5) {
-                true => Expr::Literal {
-                    span: None,
-                    lit: Literal::Null,
-                },
-                false => self.gen_scalar_value(inner_ty),
-            },
+            DataType::Nullable(box inner_ty) => {
+                if self.rng.gen_bool(0.5) {
+                    Expr::Literal {
+                        span: None,
+                        lit: Literal::Null,
+                    }
+                } else {
+                    self.gen_scalar_value(inner_ty)
+                }
+            }
             DataType::Array(box inner_ty) => {
                 let len = self.rng.gen_range(1..=3);
                 let mut exprs = Vec::with_capacity(len);
