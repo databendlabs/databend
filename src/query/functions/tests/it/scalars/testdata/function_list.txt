@@ -3153,26 +3153,24 @@ Functions overloads:
 3 to_boolean(String NULL) :: Boolean NULL
 4 to_boolean(UInt8) :: Boolean
 5 to_boolean(UInt8 NULL) :: Boolean NULL
-6 to_boolean(Int8) :: Boolean
-7 to_boolean(Int8 NULL) :: Boolean NULL
-8 to_boolean(UInt16) :: Boolean
-9 to_boolean(UInt16 NULL) :: Boolean NULL
-10 to_boolean(Int16) :: Boolean
-11 to_boolean(Int16 NULL) :: Boolean NULL
-12 to_boolean(UInt32) :: Boolean
-13 to_boolean(UInt32 NULL) :: Boolean NULL
-14 to_boolean(Int32) :: Boolean
-15 to_boolean(Int32 NULL) :: Boolean NULL
-16 to_boolean(UInt64) :: Boolean
-17 to_boolean(UInt64 NULL) :: Boolean NULL
+6 to_boolean(UInt16) :: Boolean
+7 to_boolean(UInt16 NULL) :: Boolean NULL
+8 to_boolean(UInt32) :: Boolean
+9 to_boolean(UInt32 NULL) :: Boolean NULL
+10 to_boolean(UInt64) :: Boolean
+11 to_boolean(UInt64 NULL) :: Boolean NULL
+12 to_boolean(Int8) :: Boolean
+13 to_boolean(Int8 NULL) :: Boolean NULL
+14 to_boolean(Int16) :: Boolean
+15 to_boolean(Int16 NULL) :: Boolean NULL
+16 to_boolean(Int32) :: Boolean
+17 to_boolean(Int32 NULL) :: Boolean NULL
 18 to_boolean(Int64) :: Boolean
 19 to_boolean(Int64 NULL) :: Boolean NULL
-20 to_boolean FACTORY
-21 to_boolean FACTORY
-22 to_boolean(Float32) :: Boolean
-23 to_boolean(Float32 NULL) :: Boolean NULL
-24 to_boolean(Float64) :: Boolean
-25 to_boolean(Float64 NULL) :: Boolean NULL
+20 to_boolean(Float32) :: Boolean
+21 to_boolean(Float32 NULL) :: Boolean NULL
+22 to_boolean(Float64) :: Boolean
+23 to_boolean(Float64 NULL) :: Boolean NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
@@ -3628,18 +3626,18 @@ Functions overloads:
 3 try_to_boolean(String NULL) :: Boolean NULL
 4 try_to_boolean(UInt8) :: Boolean NULL
 5 try_to_boolean(UInt8 NULL) :: Boolean NULL
-6 try_to_boolean(Int8) :: Boolean NULL
-7 try_to_boolean(Int8 NULL) :: Boolean NULL
-8 try_to_boolean(UInt16) :: Boolean NULL
-9 try_to_boolean(UInt16 NULL) :: Boolean NULL
-10 try_to_boolean(Int16) :: Boolean NULL
-11 try_to_boolean(Int16 NULL) :: Boolean NULL
-12 try_to_boolean(UInt32) :: Boolean NULL
-13 try_to_boolean(UInt32 NULL) :: Boolean NULL
-14 try_to_boolean(Int32) :: Boolean NULL
-15 try_to_boolean(Int32 NULL) :: Boolean NULL
-16 try_to_boolean(UInt64) :: Boolean NULL
-17 try_to_boolean(UInt64 NULL) :: Boolean NULL
+6 try_to_boolean(UInt16) :: Boolean NULL
+7 try_to_boolean(UInt16 NULL) :: Boolean NULL
+8 try_to_boolean(UInt32) :: Boolean NULL
+9 try_to_boolean(UInt32 NULL) :: Boolean NULL
+10 try_to_boolean(UInt64) :: Boolean NULL
+11 try_to_boolean(UInt64 NULL) :: Boolean NULL
+12 try_to_boolean(Int8) :: Boolean NULL
+13 try_to_boolean(Int8 NULL) :: Boolean NULL
+14 try_to_boolean(Int16) :: Boolean NULL
+15 try_to_boolean(Int16 NULL) :: Boolean NULL
+16 try_to_boolean(Int32) :: Boolean NULL
+17 try_to_boolean(Int32 NULL) :: Boolean NULL
 18 try_to_boolean(Int64) :: Boolean NULL
 19 try_to_boolean(Int64 NULL) :: Boolean NULL
 20 try_to_boolean(Float32) :: Boolean NULL

@@ -24,11 +24,12 @@ use common_expression::types::nullable::NullableDomain;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::NullableType;
-use common_expression::types::NumberClass;
+use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::SimpleDomain;
 use common_expression::types::StringType;
-use common_expression::types::ALL_NUMBER_CLASSES;
+use common_expression::types::ALL_FLOAT_TYPES;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::vectorize_2_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_float_mapped_type;
@@ -42,8 +43,6 @@ use common_expression::FunctionSignature;
 use common_expression::Value;
 use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
-
-use crate::scalars::decimal::register_decimal_to_boolean;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("and_filters", |_, args_type| {
@@ -273,9 +272,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    for src_type in ALL_NUMBER_CLASSES {
+    for src_type in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|NUM_TYPE| match src_type {
-            NumberClass::NUM_TYPE => {
+            NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "to_boolean",
                     |_, domain| {
@@ -341,50 +340,83 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }),
                     );
             }
-            NumberClass::Float32 | NumberClass::Float64 => {
-                with_float_mapped_type!(|NUM_TYPE| match src_type {
-                    NumberClass::NUM_TYPE => {
-                        registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                            "to_boolean",
-                            |_, domain| {
-                                FunctionDomain::Domain(BooleanDomain {
+            _ => unreachable!(),
+        })
+    }
+
+    for src_type in ALL_FLOAT_TYPES {
+        with_float_mapped_type!(|NUM_TYPE| match src_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                    "to_boolean",
+                    |_, domain| {
+                        FunctionDomain::Domain(BooleanDomain {
+                            has_false: domain.min <= OrderedFloat(0.0)
+                                && domain.max >= OrderedFloat(0.0),
+                            has_true: !(domain.min == OrderedFloat(0.0)
+                                && domain.max == OrderedFloat(0.0)),
+                        })
+                    },
+                    |val, _| val != OrderedFloat(0.0),
+                );
+
+                registry
+                    .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
+                        "try_to_boolean",
+                        |_, domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(BooleanDomain {
                                     has_false: domain.min <= OrderedFloat(0.0)
                                         && domain.max >= OrderedFloat(0.0),
                                     has_true: !(domain.min == OrderedFloat(0.0)
                                         && domain.max == OrderedFloat(0.0)),
-                                })
+                                })),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<
+                            NumberType<NUM_TYPE>,
+                            NullableType<BooleanType>,
+                        >(|val, output, _| {
+                            output.builder.push(val != OrderedFloat(0.0));
+                            output.validity.push(true);
+                        }),
+                    );
+
+                let name = format!("to_{src_type}").to_lowercase();
+                registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                    &name,
+                    |_, domain| {
+                        FunctionDomain::Domain(SimpleDomain {
+                            min: if domain.has_false {
+                                OrderedFloat(0.0)
+                            } else {
+                                OrderedFloat(1.0)
                             },
-                            |val, _| val != OrderedFloat(0.0),
-                        );
+                            max: if domain.has_true {
+                                OrderedFloat(1.0)
+                            } else {
+                                OrderedFloat(0.0)
+                            },
+                        })
+                    },
+                    |val, _| {
+                        if val {
+                            NUM_TYPE::from(OrderedFloat(1.0))
+                        } else {
+                            NUM_TYPE::from(OrderedFloat(0.0))
+                        }
+                    },
+                );
 
-                        registry
-                            .register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
-                                "try_to_boolean",
-                                |_, domain| {
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: false,
-                                        value: Some(Box::new(BooleanDomain {
-                                            has_false: domain.min <= OrderedFloat(0.0)
-                                                && domain.max >= OrderedFloat(0.0),
-                                            has_true: !(domain.min == OrderedFloat(0.0)
-                                                && domain.max == OrderedFloat(0.0)),
-                                        })),
-                                    })
-                                },
-                                vectorize_with_builder_1_arg::<
-                                    NumberType<NUM_TYPE>,
-                                    NullableType<BooleanType>,
-                                >(|val, output, _| {
-                                    output.builder.push(val != OrderedFloat(0.0));
-                                    output.validity.push(true);
-                                }),
-                            );
-
-                        let name = format!("to_{src_type}").to_lowercase();
-                        registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                            &name,
-                            |_, domain| {
-                                FunctionDomain::Domain(SimpleDomain {
+                let name = format!("try_to_{src_type}").to_lowercase();
+                registry
+                    .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
+                        &name,
+                        |_, domain| {
+                            FunctionDomain::Domain(NullableDomain {
+                                has_null: false,
+                                value: Some(Box::new(SimpleDomain {
                                     min: if domain.has_false {
                                         OrderedFloat(0.0)
                                     } else {
@@ -395,56 +427,22 @@ pub fn register(registry: &mut FunctionRegistry) {
                                     } else {
                                         OrderedFloat(0.0)
                                     },
-                                })
-                            },
-                            |val, _| {
-                                if val {
-                                    NUM_TYPE::from(OrderedFloat(1.0))
-                                } else {
-                                    NUM_TYPE::from(OrderedFloat(0.0))
-                                }
-                            },
-                        );
-
-                        let name = format!("try_to_{src_type}").to_lowercase();
-                        registry
-                            .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
-                                &name,
-                                |_, domain| {
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: false,
-                                        value: Some(Box::new(SimpleDomain {
-                                            min: if domain.has_false {
-                                                OrderedFloat(0.0)
-                                            } else {
-                                                OrderedFloat(1.0)
-                                            },
-                                            max: if domain.has_true {
-                                                OrderedFloat(1.0)
-                                            } else {
-                                                OrderedFloat(0.0)
-                                            },
-                                        })),
-                                    })
-                                },
-                                vectorize_with_builder_1_arg::<
-                                    BooleanType,
-                                    NullableType<NumberType<NUM_TYPE>>,
-                                >(|val, output, _| {
-                                    if val {
-                                        output.push(NUM_TYPE::from(OrderedFloat(1.0)))
-                                    } else {
-                                        output.push(NUM_TYPE::from(OrderedFloat(0.0)))
-                                    }
-                                }),
-                            );
-                    }
-                    _ => unreachable!(),
-                });
+                                })),
+                            })
+                        },
+                        vectorize_with_builder_1_arg::<
+                            BooleanType,
+                            NullableType<NumberType<NUM_TYPE>>,
+                        >(|val, output, _| {
+                            if val {
+                                output.push(NUM_TYPE::from(OrderedFloat(1.0)))
+                            } else {
+                                output.push(NUM_TYPE::from(OrderedFloat(0.0)))
+                            }
+                        }),
+                    );
             }
-            NumberClass::Decimal128 | NumberClass::Decimal256 => {
-                register_decimal_to_boolean(registry);
-            }
+            _ => unreachable!(),
         })
     }
 }
