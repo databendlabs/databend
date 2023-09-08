@@ -1982,6 +1982,8 @@ dependencies = [
 name = "common-formats"
 version = "0.1.0"
 dependencies = [
+ "aho-corasick",
+ "async-trait",
  "bstr 1.6.2",
  "chrono-tz",
  "common-arrow",
@@ -1995,12 +1997,14 @@ dependencies = [
  "match-template",
  "micromarshal",
  "num",
+ "once_cell",
  "ordered-float 3.7.0",
  "pretty_assertions",
  "roaring",
  "serde_json",
  "storages-common-blocks",
  "storages-common-table-meta",
+ "tokio",
 ]
 
 [[package]]
@@ -3773,7 +3777,6 @@ name = "databend-query"
 version = "0.1.0"
 dependencies = [
  "aggregating-index",
- "aho-corasick",
  "arrow-array",
  "arrow-cast",
  "arrow-flight",
