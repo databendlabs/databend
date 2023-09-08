@@ -161,18 +161,18 @@ pub async fn read_metadata_async(
     let buffer = operator
         .range_read(path, (file_size - default_end_len)..file_size)
         .await?;
-
+    let buffer_len = buffer.len();
     let metadata_len = decode_footer(
-        &buffer[(file_size as usize - 8)..file_size as usize]
+        &buffer[(buffer_len - FOOTER_SIZE as usize)..]
             .try_into()
             .unwrap(),
     )? as u64;
     check_meta_size(file_size, metadata_len)?;
 
     let footer_len = FOOTER_SIZE + metadata_len;
-    if (footer_len as usize) < buffer.len() {
+    if (footer_len as usize) <= buffer_len {
         // The whole metadata is in the bytes we already read
-        let offset = buffer.len() - footer_len as usize;
+        let offset = buffer_len - footer_len as usize;
         Ok(decode_metadata(&buffer[offset..])?)
     } else {
         // The end of file read by default is not long enough, read again including the metadata.
@@ -182,7 +182,7 @@ pub async fn read_metadata_async(
         let mut metadata = operator
             .range_read(
                 path,
-                (file_size - footer_len)..(file_size - buffer.len() as u64),
+                (file_size - footer_len)..(file_size - buffer_len as u64),
             )
             .await?;
         metadata.extend(buffer);
