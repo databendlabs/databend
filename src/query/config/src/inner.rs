@@ -591,7 +591,7 @@ impl Default for CacheConfig {
             data_cache_storage: Default::default(),
             table_data_cache_population_queue_size: 65536,
             disk_cache_config: Default::default(),
-            table_data_deserialized_data_bytes: 5368709120,
+            table_data_deserialized_data_bytes: 1073741824,
         }
     }
 }

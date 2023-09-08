@@ -2305,7 +2305,7 @@ pub struct CacheConfig {
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(
         long = "cache-table-data-deserialized-data-bytes",
-        default_value = "5368709120"
+        default_value = "1073741824"
     )]
     pub table_data_deserialized_data_bytes: u64,
 
