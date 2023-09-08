@@ -159,7 +159,6 @@ impl Processor for CompactSource {
                 match part {
                     CompactPartInfo::CompactExtraInfo(extra) => {
                         let meta = Box::new(SerializeDataMeta::CompactExtras(extra.clone()));
-                        println!("meta compact extra info: {:?}", meta);
                         let block = DataBlock::empty_with_meta(meta);
                         self.state = State::Output(self.ctx.get_partition(), block);
                     }

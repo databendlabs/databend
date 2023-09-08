@@ -66,7 +66,7 @@ pub struct TableMutationAggregator {
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
     appended_statistics: Statistics,
-    removed_segment_indexes: Vec<usize>,
+    removed_segment_indexes: Vec<SegmentIndex>,
     removed_statistics: Statistics,
     abort_operation: AbortOperation,
 

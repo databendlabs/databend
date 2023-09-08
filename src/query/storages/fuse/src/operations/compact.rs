@@ -176,7 +176,6 @@ impl FuseTable {
 
         // sort
         let cluster_stats_gen = self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds)?;
-
         pipeline.add_transform(
             |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(
@@ -192,7 +191,6 @@ impl FuseTable {
 
         if is_lazy {
             pipeline.try_resize(1)?;
-
             pipeline.add_transform(|input, output| {
                 let mutation_aggregator =
                     TableMutationAggregator::new(self, ctx.clone(), vec![], MutationKind::Compact);
