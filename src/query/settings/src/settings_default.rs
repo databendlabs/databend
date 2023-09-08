@@ -154,6 +154,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("disable_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable join reorder optimization.",
+                    possible_values: None,
+                    display_in_show_settings: false,
+                }),
                 ("enable_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables runtime filter optimization for JOIN.",

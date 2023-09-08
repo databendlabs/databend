@@ -17,6 +17,7 @@ use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 
 #[tokio::test]
@@ -36,7 +37,7 @@ async fn test_new_level() -> anyhow::Result<()> {
     assert_eq!(result, Marked::new_normal(2, b("b1"), None));
 
     // Listing entries from all levels see the latest
-    let got = MapApi::<String>::range(&l, s("")..)
+    let got = MapApiRO::<String>::range(&l, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -48,7 +49,7 @@ async fn test_new_level() -> anyhow::Result<()> {
     // Listing from the base level sees the old value.
     let base = l.get_base().unwrap();
 
-    let got = MapApi::<String>::range(base.as_ref(), s("")..)
+    let got = MapApiRO::<String>::range(base.as_ref(), s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -97,7 +98,7 @@ async fn test_single_level() -> anyhow::Result<()> {
     );
 
     // Range
-    let it = MapApi::<String>::range(&l, s("")..).await;
+    let it = MapApiRO::<String>::range(&l, s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
@@ -109,10 +110,10 @@ async fn test_single_level() -> anyhow::Result<()> {
     ]);
 
     // Get
-    let got = MapApi::<String>::get(&l, "a2").await;
+    let got = MapApiRO::<String>::get(&l, "a2").await;
     assert_eq!(got, &Marked::new_normal(2, b("b2"), None));
 
-    let got = MapApi::<String>::get(&l, "a3").await;
+    let got = MapApiRO::<String>::get(&l, "a3").await;
     assert_eq!(got, &Marked::new_tomb_stone(6));
     Ok(())
 }
@@ -128,7 +129,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     MapApi::<String>::set(&mut l, s("x1"), Some((b("y1"), None))).await;
     MapApi::<String>::set(&mut l, s("x2"), Some((b("y2"), None))).await;
 
-    let it = MapApi::<String>::range(&l, s("")..).await;
+    let it = MapApiRO::<String>::range(&l, s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
@@ -163,7 +164,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
     assert_eq!(result, Marked::new_normal(7, b("b5"), None));
 
     // Range
-    let it = MapApi::<String>::range(&l, s("")..).await;
+    let it = MapApiRO::<String>::range(&l, s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
@@ -175,20 +176,20 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Get
 
-    let got = MapApi::<String>::get(&l, "a1").await;
+    let got = MapApiRO::<String>::get(&l, "a1").await;
     assert_eq!(got, &Marked::new_normal(7, b("b5"), None));
 
-    let got = MapApi::<String>::get(&l, "a2").await;
+    let got = MapApiRO::<String>::get(&l, "a2").await;
     assert_eq!(got, &Marked::new_normal(6, b("b4"), None));
 
-    let got = MapApi::<String>::get(&l, "w1").await;
+    let got = MapApiRO::<String>::get(&l, "w1").await;
     assert_eq!(got, &Marked::new_tomb_stone(0));
 
     // Check base level
 
     let base = l.get_base().unwrap();
 
-    let it = MapApi::<String>::range(base.as_ref(), s("")..).await;
+    let it = MapApiRO::<String>::range(base.as_ref(), s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
@@ -232,25 +233,25 @@ async fn build_3_levels() -> Level {
 async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let l = build_3_levels().await;
 
-    let got = MapApi::<String>::get(&l, "a").await;
+    let got = MapApiRO::<String>::get(&l, "a").await;
     assert_eq!(got, &Marked::new_normal(1, b("a0"), None));
 
-    let got = MapApi::<String>::get(&l, "b").await;
+    let got = MapApiRO::<String>::get(&l, "b").await;
     assert_eq!(got, &Marked::new_tomb_stone(4));
 
-    let got = MapApi::<String>::get(&l, "c").await;
+    let got = MapApiRO::<String>::get(&l, "c").await;
     assert_eq!(got, &Marked::new_tomb_stone(6));
 
-    let got = MapApi::<String>::get(&l, "d").await;
+    let got = MapApiRO::<String>::get(&l, "d").await;
     assert_eq!(got, &Marked::new_normal(7, b("d2"), None));
 
-    let got = MapApi::<String>::get(&l, "e").await;
+    let got = MapApiRO::<String>::get(&l, "e").await;
     assert_eq!(got, &Marked::new_normal(6, b("e1"), None));
 
-    let got = MapApi::<String>::get(&l, "f").await;
+    let got = MapApiRO::<String>::get(&l, "f").await;
     assert_eq!(got, &Marked::new_tomb_stone(0));
 
-    let got = MapApi::<String>::range(&l, s("")..)
+    let got = MapApiRO::<String>::range(&l, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -294,7 +295,7 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
     assert_eq!(prev, Marked::new_tomb_stone(0));
     assert_eq!(result, Marked::new_normal(13, b("w"), None));
 
-    let got = MapApi::<String>::range(&l, s("")..)
+    let got = MapApiRO::<String>::range(&l, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -339,7 +340,7 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
     assert_eq!(prev, Marked::new_tomb_stone(0));
     assert_eq!(result, Marked::new_tomb_stone(0));
 
-    let got = MapApi::<String>::range(&l, s("")..)
+    let got = MapApiRO::<String>::range(&l, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -410,7 +411,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
             Marked::new_normal(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
         );
 
-        let got = MapApi::<String>::get(&l, "a").await;
+        let got = MapApiRO::<String>::get(&l, "a").await;
         assert_eq!(
             got,
             &Marked::new_normal(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
@@ -443,7 +444,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
             )
         );
 
-        let got = MapApi::<String>::get(&l, "b").await;
+        let got = MapApiRO::<String>::get(&l, "b").await;
         assert_eq!(
             got,
             &Marked::new_normal(
@@ -464,7 +465,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         assert_eq!(prev, Marked::new_tomb_stone(0));
         assert_eq!(result, Marked::new_normal(6, b("d1"), None));
 
-        let got = MapApi::<String>::get(&l, "d").await;
+        let got = MapApiRO::<String>::get(&l, "d").await;
         assert_eq!(got, &Marked::new_normal(6, b("d1"), None));
     }
 
@@ -489,7 +490,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             Marked::new_normal(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
         );
 
-        let got = MapApi::<String>::get(&l, "a").await;
+        let got = MapApiRO::<String>::get(&l, "a").await;
         assert_eq!(
             got,
             &Marked::new_normal(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
@@ -513,7 +514,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         );
         assert_eq!(result, Marked::new_normal(6, b("b1"), None));
 
-        let got = MapApi::<String>::get(&l, "b").await;
+        let got = MapApiRO::<String>::get(&l, "b").await;
         assert_eq!(got, &Marked::new_normal(6, b("b1"), None));
     }
 
@@ -541,7 +542,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
             )
         );
 
-        let got = MapApi::<String>::get(&l, "c").await;
+        let got = MapApiRO::<String>::get(&l, "c").await;
         assert_eq!(
             got,
             &Marked::new_normal(
@@ -564,7 +565,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         assert_eq!(prev, Marked::new_tomb_stone(0));
         assert_eq!(result, Marked::new_tomb_stone(0));
 
-        let got = MapApi::<String>::get(&l, "d").await;
+        let got = MapApiRO::<String>::get(&l, "d").await;
         assert_eq!(got, &Marked::new_tomb_stone(0));
     }
 
