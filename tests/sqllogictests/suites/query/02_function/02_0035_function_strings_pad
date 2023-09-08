@@ -184,12 +184,12 @@ statement ok
 SELECT RPAD('', 0, '')
 
 query T
-SELECT LPAD('', 10, '')
+SELECT RPAD('', 10, '')
 ----
 (empty)
 
 query T
-SELECT LPAD('123', 10, '')
+SELECT RPAD('123', 10, '')
 ----
 123
 
