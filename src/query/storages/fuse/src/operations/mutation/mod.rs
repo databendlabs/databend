@@ -22,6 +22,7 @@ mod recluster_mutator;
 pub use compact::BlockCompactMutator;
 pub use compact::CompactExtraInfo;
 pub use compact::CompactLazyPartInfo;
+pub use compact::CompactPartInfo;
 pub use compact::CompactSource;
 pub use compact::CompactTaskInfo;
 pub use compact::SegmentCompactMutator;
