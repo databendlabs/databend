@@ -20,6 +20,7 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
+use common_expression::types::boolean::BooleanDomain;
 use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringDomain;
@@ -726,6 +727,7 @@ fn convert_to_decimal_domain(domain: &Domain, ty: DecimalDataType) -> Option<Dec
                 NumberDomain::Float64(d) => float_to_decimal_domain(d, &ty),
             })
         }
+        Domain::Boolean(d) => boolean_to_decimal_domain(d, &ty),
         Domain::Decimal(d) => decimal_to_decimal_domain(d, &ty),
         Domain::String(d) => string_to_decimal_domain(d, &ty),
         _ => None,
@@ -755,18 +757,16 @@ fn boolean_to_decimal_scalar<T: Decimal>(val: bool, size: DecimalSize) -> Decima
     }
 }
 
-fn boolean_to_decimal(arg: &ValueRef<AnyType>, dest_type: DataType) -> Value<AnyType> {
-    let dest_type = dest_type.as_decimal().unwrap();
-
+fn boolean_to_decimal(arg: &ValueRef<AnyType>, dest_type: DecimalDataType) -> Value<AnyType> {
     match arg {
         ValueRef::Column(column) => {
             let boolean_column = BooleanType::try_downcast_column(column).unwrap();
             let column = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    boolean_to_decimal_column::<i128>(&boolean_column, *size)
+                    boolean_to_decimal_column::<i128>(&boolean_column, size)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    boolean_to_decimal_column::<i256>(&boolean_column, *size)
+                    boolean_to_decimal_column::<i256>(&boolean_column, size)
                 }
             };
             Value::Column(Column::Decimal(column))
@@ -774,8 +774,8 @@ fn boolean_to_decimal(arg: &ValueRef<AnyType>, dest_type: DataType) -> Value<Any
         ValueRef::Scalar(scalar) => {
             let val = BooleanType::try_downcast_scalar(scalar).unwrap();
             let scalar = match dest_type {
-                DecimalDataType::Decimal128(size) => boolean_to_decimal_scalar::<i128>(val, *size),
-                DecimalDataType::Decimal256(size) => boolean_to_decimal_scalar::<i256>(val, *size),
+                DecimalDataType::Decimal128(size) => boolean_to_decimal_scalar::<i128>(val, size),
+                DecimalDataType::Decimal256(size) => boolean_to_decimal_scalar::<i256>(val, size),
             };
             Value::Scalar(Scalar::Decimal(scalar))
         }
@@ -987,6 +987,38 @@ fn integer_to_decimal_domain<T: Number + AsPrimitive<i128>>(
             },
             *size,
         ),
+    })
+}
+
+fn boolean_to_decimal_domain(
+    from: &BooleanDomain,
+    dest_type: &DecimalDataType,
+) -> Option<DecimalDomain> {
+    Some(match dest_type {
+        DecimalDataType::Decimal128(size) => {
+            let max = from.has_true as i128;
+            let min = !from.has_false as i128;
+            assert!(min <= max);
+            DecimalDomain::Decimal128(
+                SimpleDomain {
+                    min: i128::e(size.scale as u32) * min,
+                    max: i128::e(size.scale as u32) * max,
+                },
+                *size,
+            )
+        }
+        DecimalDataType::Decimal256(size) => {
+            let max = i256::from(from.has_true);
+            let min = i256::from(!from.has_false);
+            assert!(min <= max);
+            DecimalDomain::Decimal256(
+                SimpleDomain {
+                    min: i128::e(size.scale as u32) * min,
+                    max: i128::e(size.scale as u32) * max,
+                },
+                *size,
+            )
+        }
     })
 }
 
