@@ -37,6 +37,7 @@ pub struct SettingsConfig {
     pub progress_color: Option<String>,
     pub show_progress: Option<bool>,
     pub show_stats: Option<bool>,
+    pub expand: Option<String>,
     pub replace_newline: Option<bool>,
 }
 
@@ -52,7 +53,8 @@ impl From<&str> for ExpandMode {
         match s.to_ascii_lowercase().as_str() {
             "on" => ExpandMode::On,
             "off" => ExpandMode::Off,
-            _ => ExpandMode::Auto,
+            "auto" => ExpandMode::Auto,
+            _ => ExpandMode::Off,
         }
     }
 }
@@ -78,7 +80,7 @@ pub struct Settings {
     pub max_width: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
-    /// Expand table format display, default is auto, could be on/off/auto.
+    /// Expand table format display, default off, could be on/off/auto.
     /// only works with output format `table`.
     pub expand: ExpandMode,
 
@@ -116,6 +118,9 @@ impl Settings {
         }
         if let Some(show_stats) = cfg.show_stats {
             self.show_stats = show_stats;
+        }
+        if let Some(expand) = cfg.expand {
+            self.expand = expand.as_str().into();
         }
         if let Some(replace_newline) = cfg.replace_newline {
             self.replace_newline = replace_newline;
@@ -190,7 +195,7 @@ impl Default for Settings {
             progress_color: "cyan".to_string(),
             prompt: "{user}@{warehouse}/{database}> ".to_string(),
             output_format: OutputFormat::Table,
-            expand: ExpandMode::Auto,
+            expand: ExpandMode::Off,
             show_progress: false,
             max_display_rows: 40,
             max_col_width: 1024 * 1024,

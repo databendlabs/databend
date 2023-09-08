@@ -84,6 +84,7 @@ connect_timeout = "30s"
 [settings]
 display_pretty_sql = true
 progress_color = "green"
+expand = "auto"
 prompt = ":) "
 
 ```
@@ -113,6 +114,7 @@ prompt = ":) "
 | `max_width` | Limit display render box max width, 0 means default to the size of the terminal. |
 | `max_col_width` | Limit display render each column max width, smaller than 3 means disable the limit. |
 | `output_format` | The output format to use. |
+| `expand` | Expand table format display, default off, could be on/off/auto. |
 | `time` | Whether to show the time elapsed when executing queries. |
 | `multi_line` | Whether to allow multi-line input. |
 | `replace_newline` | whether replace '\n' with '\\\n'. |
@@ -126,6 +128,7 @@ We can use `.CMD_NAME VAL` to update the `Settings` above in runtime, example:
 
 :) .display_pretty_sql false
 :) .max_display_rows 10
+:) .expand auto
 ```
 
 ## DSN
