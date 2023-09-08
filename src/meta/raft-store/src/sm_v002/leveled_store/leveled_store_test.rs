@@ -43,7 +43,7 @@ async fn test_new_level() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(2, b("b1"), None)),
+        (s("a1"), Marked::new_normal(2, b("b1"), None)),
     ]);
 
     // Listing from the base level sees the old value.
@@ -55,7 +55,7 @@ async fn test_new_level() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(1, b("b0"), None)),
+        (s("a1"), Marked::new_normal(1, b("b0"), None)),
     ]);
 
     Ok(())
@@ -102,19 +102,19 @@ async fn test_single_level() -> anyhow::Result<()> {
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(6, b("b1"), None)),
-        (&s("a2"), &Marked::new_normal(2, b("b2"), None)),
-        (&s("a3"), &Marked::new_tomb_stone(6)),
-        (&s("x1"), &Marked::new_normal(4, b("y1"), None)),
-        (&s("x2"), &Marked::new_normal(5, b("y2"), None)),
+        (s("a1"), Marked::new_normal(6, b("b1"), None)),
+        (s("a2"), Marked::new_normal(2, b("b2"), None)),
+        (s("a3"), Marked::new_tomb_stone(6)),
+        (s("x1"), Marked::new_normal(4, b("y1"), None)),
+        (s("x2"), Marked::new_normal(5, b("y2"), None)),
     ]);
 
     // Get
     let got = MapApiRO::<String>::get(&l, "a2").await;
-    assert_eq!(got, &Marked::new_normal(2, b("b2"), None));
+    assert_eq!(got, Marked::new_normal(2, b("b2"), None));
 
     let got = MapApiRO::<String>::get(&l, "a3").await;
-    assert_eq!(got, &Marked::new_tomb_stone(6));
+    assert_eq!(got, Marked::new_tomb_stone(6));
     Ok(())
 }
 
@@ -133,10 +133,10 @@ async fn test_two_levels() -> anyhow::Result<()> {
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(1, b("b1"), None)),
-        (&s("a2"), &Marked::new_normal(2, b("b2"), None)),
-        (&s("x1"), &Marked::new_normal(3, b("y1"), None)),
-        (&s("x2"), &Marked::new_normal(4, b("y2"), None)),
+        (s("a1"), Marked::new_normal(1, b("b1"), None)),
+        (s("a2"), Marked::new_normal(2, b("b2"), None)),
+        (s("x1"), Marked::new_normal(3, b("y1"), None)),
+        (s("x2"), Marked::new_normal(4, b("y2"), None)),
     ]);
 
     // Create a new level
@@ -168,22 +168,22 @@ async fn test_two_levels() -> anyhow::Result<()> {
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(7, b("b5"), None)),
-        (&s("a2"), &Marked::new_normal(6, b("b4"), None)),
-        (&s("x1"), &Marked::new_normal(3, b("y1"), None)),
-        (&s("x2"), &Marked::new_normal(4, b("y2"), None)),
+        (s("a1"), Marked::new_normal(7, b("b5"), None)),
+        (s("a2"), Marked::new_normal(6, b("b4"), None)),
+        (s("x1"), Marked::new_normal(3, b("y1"), None)),
+        (s("x2"), Marked::new_normal(4, b("y2"), None)),
     ]);
 
     // Get
 
     let got = MapApiRO::<String>::get(&l, "a1").await;
-    assert_eq!(got, &Marked::new_normal(7, b("b5"), None));
+    assert_eq!(got, Marked::new_normal(7, b("b5"), None));
 
     let got = MapApiRO::<String>::get(&l, "a2").await;
-    assert_eq!(got, &Marked::new_normal(6, b("b4"), None));
+    assert_eq!(got, Marked::new_normal(6, b("b4"), None));
 
     let got = MapApiRO::<String>::get(&l, "w1").await;
-    assert_eq!(got, &Marked::new_tomb_stone(0));
+    assert_eq!(got, Marked::new_tomb_stone(0));
 
     // Check base level
 
@@ -193,10 +193,10 @@ async fn test_two_levels() -> anyhow::Result<()> {
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
-        (&s("a1"), &Marked::new_normal(1, b("b1"), None)),
-        (&s("a2"), &Marked::new_normal(2, b("b2"), None)),
-        (&s("x1"), &Marked::new_normal(3, b("y1"), None)),
-        (&s("x2"), &Marked::new_normal(4, b("y2"), None)),
+        (s("a1"), Marked::new_normal(1, b("b1"), None)),
+        (s("a2"), Marked::new_normal(2, b("b2"), None)),
+        (s("x1"), Marked::new_normal(3, b("y1"), None)),
+        (s("x2"), Marked::new_normal(4, b("y2"), None)),
     ]);
 
     Ok(())
@@ -234,22 +234,22 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
     let l = build_3_levels().await;
 
     let got = MapApiRO::<String>::get(&l, "a").await;
-    assert_eq!(got, &Marked::new_normal(1, b("a0"), None));
+    assert_eq!(got, Marked::new_normal(1, b("a0"), None));
 
     let got = MapApiRO::<String>::get(&l, "b").await;
-    assert_eq!(got, &Marked::new_tomb_stone(4));
+    assert_eq!(got, Marked::new_tomb_stone(4));
 
     let got = MapApiRO::<String>::get(&l, "c").await;
-    assert_eq!(got, &Marked::new_tomb_stone(6));
+    assert_eq!(got, Marked::new_tomb_stone(6));
 
     let got = MapApiRO::<String>::get(&l, "d").await;
-    assert_eq!(got, &Marked::new_normal(7, b("d2"), None));
+    assert_eq!(got, Marked::new_normal(7, b("d2"), None));
 
     let got = MapApiRO::<String>::get(&l, "e").await;
-    assert_eq!(got, &Marked::new_normal(6, b("e1"), None));
+    assert_eq!(got, Marked::new_normal(6, b("e1"), None));
 
     let got = MapApiRO::<String>::get(&l, "f").await;
-    assert_eq!(got, &Marked::new_tomb_stone(0));
+    assert_eq!(got, Marked::new_tomb_stone(0));
 
     let got = MapApiRO::<String>::range(&l, s("")..)
         .await
@@ -257,11 +257,11 @@ async fn test_three_levels_get_range() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a"), &Marked::new_normal(1, b("a0"), None)),
-        (&s("b"), &Marked::new_tomb_stone(4)),
-        (&s("c"), &Marked::new_tomb_stone(6)),
-        (&s("d"), &Marked::new_normal(7, b("d2"), None)),
-        (&s("e"), &Marked::new_normal(6, b("e1"), None)),
+        (s("a"), Marked::new_normal(1, b("a0"), None)),
+        (s("b"), Marked::new_tomb_stone(4)),
+        (s("c"), Marked::new_tomb_stone(6)),
+        (s("d"), Marked::new_normal(7, b("d2"), None)),
+        (s("e"), Marked::new_normal(6, b("e1"), None)),
     ]);
 
     Ok(())
@@ -301,12 +301,12 @@ async fn test_three_levels_override() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a"), &Marked::new_normal(8, b("x"), None)),
-        (&s("b"), &Marked::new_normal(9, b("y"), None)),
-        (&s("c"), &Marked::new_normal(10, b("z"), None)),
-        (&s("d"), &Marked::new_normal(11, b("u"), None)),
-        (&s("e"), &Marked::new_normal(12, b("v"), None)),
-        (&s("f"), &Marked::new_normal(13, b("w"), None)),
+        (s("a"), Marked::new_normal(8, b("x"), None)),
+        (s("b"), Marked::new_normal(9, b("y"), None)),
+        (s("c"), Marked::new_normal(10, b("z"), None)),
+        (s("d"), Marked::new_normal(11, b("u"), None)),
+        (s("e"), Marked::new_normal(12, b("v"), None)),
+        (s("f"), Marked::new_normal(13, b("w"), None)),
     ]);
 
     Ok(())
@@ -346,11 +346,11 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a"), &Marked::new_tomb_stone(7)),
-        (&s("b"), &Marked::new_tomb_stone(7)),
-        (&s("c"), &Marked::new_tomb_stone(7)),
-        (&s("d"), &Marked::new_tomb_stone(7)),
-        (&s("e"), &Marked::new_tomb_stone(7)),
+        (s("a"), Marked::new_tomb_stone(7)),
+        (s("b"), Marked::new_tomb_stone(7)),
+        (s("c"), Marked::new_tomb_stone(7)),
+        (s("d"), Marked::new_tomb_stone(7)),
+        (s("e"), Marked::new_tomb_stone(7)),
     ]);
 
     Ok(())
@@ -414,7 +414,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let got = MapApiRO::<String>::get(&l, "a").await;
         assert_eq!(
             got,
-            &Marked::new_normal(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
+            Marked::new_normal(6, b("a1"), Some(KVMeta { expire_at: Some(1) }))
         );
     }
 
@@ -447,7 +447,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         let got = MapApiRO::<String>::get(&l, "b").await;
         assert_eq!(
             got,
-            &Marked::new_normal(
+            Marked::new_normal(
                 6,
                 b("x1"),
                 Some(KVMeta {
@@ -466,7 +466,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
         assert_eq!(result, Marked::new_normal(6, b("d1"), None));
 
         let got = MapApiRO::<String>::get(&l, "d").await;
-        assert_eq!(got, &Marked::new_normal(6, b("d1"), None));
+        assert_eq!(got, Marked::new_normal(6, b("d1"), None));
     }
 
     Ok(())
@@ -493,7 +493,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let got = MapApiRO::<String>::get(&l, "a").await;
         assert_eq!(
             got,
-            &Marked::new_normal(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
+            Marked::new_normal(6, b("a0"), Some(KVMeta { expire_at: Some(2) }))
         );
     }
 
@@ -515,7 +515,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         assert_eq!(result, Marked::new_normal(6, b("b1"), None));
 
         let got = MapApiRO::<String>::get(&l, "b").await;
-        assert_eq!(got, &Marked::new_normal(6, b("b1"), None));
+        assert_eq!(got, Marked::new_normal(6, b("b1"), None));
     }
 
     // Update meta for c.
@@ -545,7 +545,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let got = MapApiRO::<String>::get(&l, "c").await;
         assert_eq!(
             got,
-            &Marked::new_normal(
+            Marked::new_normal(
                 6,
                 b("c1"),
                 Some(KVMeta {
@@ -566,7 +566,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         assert_eq!(result, Marked::new_tomb_stone(0));
 
         let got = MapApiRO::<String>::get(&l, "d").await;
-        assert_eq!(got, &Marked::new_tomb_stone(0));
+        assert_eq!(got, Marked::new_tomb_stone(0));
     }
 
     Ok(())

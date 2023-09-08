@@ -47,12 +47,12 @@ where K: Ord + Send + Sync + 'static
 #[async_trait::async_trait]
 impl<L, K> MapApiRO<K> for L
 where
-    K: Ord + fmt::Debug + Send + Sync + 'static,
+    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
     L: MultiLevelMap<K> + Send + Sync,
 {
     type V = <<L as MultiLevelMap<K>>::API as MapApiRO<K>>::V;
 
-    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -68,30 +68,26 @@ where
         got
     }
 
-    async fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> BoxStream<'a, (&'a K, &'a Marked<Self::V>)>
+    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
     where
         K: 'a,
         K: Borrow<T> + Clone,
+        Self::V: Unpin,
         T: Ord,
         R: RangeBounds<T> + Clone + Send + Sync,
     {
         let a = self.data().range(range.clone()).await;
 
-        let km = KMerge::by(
-            |a: &(&'a K, &'a Marked<Self::V>), b: &(&'a K, &'a Marked<Self::V>)| {
-                let (k1, v1) = a;
-                let (k2, v2) = b;
+        let km = KMerge::by(|a: &(K, Marked<Self::V>), b: &(K, Marked<Self::V>)| {
+            let (k1, v1) = a;
+            let (k2, v2) = b;
 
-                assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
+            assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
 
-                // Put entries with the same key together, smaller internal-seq first
-                // Tombstone is always greater.
-                (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
-            },
-        )
+            // Put entries with the same key together, smaller internal-seq first
+            // Tombstone is always greater.
+            (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
+        })
         .merge(a);
 
         let km = if let Some(base) = self.base() {
@@ -117,7 +113,7 @@ where
 #[async_trait::async_trait]
 impl<L, K> MapApi<K> for L
 where
-    K: Ord + fmt::Debug + Send + Sync + 'static,
+    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
     L: MultiLevelMap<K> + Send + Sync,
 {
     async fn set(

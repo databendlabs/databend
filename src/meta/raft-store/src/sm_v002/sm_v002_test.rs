@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_types::SeqV;
+use common_meta_types::SeqValue;
 use common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use pretty_assertions::assert_eq;
@@ -46,12 +47,12 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
 
     // get_kv_ref()
 
-    let got = sm.get_kv_ref("a").await;
+    let got = sm.get_kv("a").await;
     assert_eq!(got.seq(), 3);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), Some(&b("a00")));
 
-    let got = sm.get_kv_ref("x").await;
+    let got = sm.get_kv("x").await;
     assert_eq!(got.seq(), 0);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
@@ -85,16 +86,16 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // get_kv_ref()
 
-    let got = sm.get_kv_ref("a").await;
+    let got = sm.get_kv("a").await;
     assert_eq!((got.seq(), got.value()), (1u64, Some(&b("a0"))));
 
-    let got = sm.get_kv_ref("b").await;
+    let got = sm.get_kv("b").await;
     assert_eq!((got.seq(), got.value()), (0, None));
 
-    let got = sm.get_kv_ref("c").await;
+    let got = sm.get_kv("c").await;
     assert_eq!((got.seq(), got.value()), (4, Some(&b("c1"))));
 
-    let got = sm.get_kv_ref("d").await;
+    let got = sm.get_kv("d").await;
     assert_eq!((got.seq(), got.value()), (5, Some(&b("d1"))));
 
     // get_kv()
@@ -180,17 +181,17 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         (
-            &ExpireKey::new(5_000, 2),
-            &Marked::new_normal(2, s("b"), None)
+            ExpireKey::new(5_000, 2),
+            Marked::new_normal(2, s("b"), None)
         ),
-        (&ExpireKey::new(10_000, 1), &Marked::new_tomb_stone(4)),
+        (ExpireKey::new(10_000, 1), Marked::new_tomb_stone(4)),
         (
-            &ExpireKey::new(15_000, 4),
-            &Marked::new_normal(4, s("a"), None)
+            ExpireKey::new(15_000, 4),
+            Marked::new_normal(4, s("a"), None)
         ),
         (
-            &ExpireKey::new(20_000, 3),
-            &Marked::new_normal(3, s("c"), None)
+            ExpireKey::new(20_000, 3),
+            Marked::new_normal(3, s("c"), None)
         ),
     ]);
 
@@ -203,17 +204,17 @@ async fn test_list_expire_index() -> anyhow::Result<()> {
 
     let got = sm.list_expire_index().await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
-        (&ExpireKey::new(5000, 2), &s("b")),
-        (&ExpireKey::new(15000, 4), &s("a")),
-        (&ExpireKey::new(20000, 3), &s("c")),
+        (ExpireKey::new(5000, 2), s("b")),
+        (ExpireKey::new(15000, 4), s("a")),
+        (ExpireKey::new(20000, 3), s("c")),
     ]);
 
     sm.update_expire_cursor(15000);
 
     let got = sm.list_expire_index().await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
-        (&ExpireKey::new(15000, 4), &s("a")),
-        (&ExpireKey::new(20000, 3), &s("c")),
+        (ExpireKey::new(15000, 4), s("a")),
+        (ExpireKey::new(20000, 3), s("c")),
     ]);
     Ok(())
 }
@@ -233,7 +234,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     let got = sm.list_expire_index().await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
-        (&ExpireKey::new(20_000, 3), &s("c")),
+        (ExpireKey::new(20_000, 3), s("c")),
     ]);
 
     // Check expire store
@@ -246,14 +247,14 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (
-            &ExpireKey::new(5_000, 2),
-            &Marked::new_normal(2, s("b"), None)
+            ExpireKey::new(5_000, 2),
+            Marked::new_normal(2, s("b"), None)
         ),
-        (&ExpireKey::new(10_000, 1), &Marked::new_tomb_stone(4)),
-        (&ExpireKey::new(15_000, 4), &Marked::new_tomb_stone(5),),
+        (ExpireKey::new(10_000, 1), Marked::new_tomb_stone(4)),
+        (ExpireKey::new(15_000, 4), Marked::new_tomb_stone(5),),
         (
-            &ExpireKey::new(20_000, 3),
-            &Marked::new_normal(3, s("c"), None)
+            ExpireKey::new(20_000, 3),
+            Marked::new_normal(3, s("c"), None)
         ),
     ]);
 
