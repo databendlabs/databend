@@ -136,10 +136,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "lpad",
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-            |s, pad_len, pad, output, _| {
+            |s, pad_len, pad, output, ctx| {
                 let pad_len = pad_len as usize;
                 if pad_len <= s.len() {
-                    output.put_slice(&s[..pad_len])
+                    output.put_slice(&s[..pad_len]);
+                } else if pad.is_empty() {
+                    ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
                 } else {
                     let mut remain_pad_len = pad_len - s.len();
                     while remain_pad_len > 0 {
@@ -183,10 +185,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rpad",
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-        |s: &[u8], pad_len: u64, pad: &[u8], output, _| {
+        |s: &[u8], pad_len: u64, pad: &[u8], output, ctx| {
             let pad_len = pad_len as usize;
             if pad_len <= s.len() {
                 output.put_slice(&s[..pad_len])
+            } else if pad.is_empty() {
+                ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
             } else {
                 output.put_slice(s);
                 let mut remain_pad_len = pad_len - s.len();
