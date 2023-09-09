@@ -43,10 +43,6 @@ impl Level {
         Self { data, base }
     }
 
-    pub(crate) fn data(&self) -> &LevelData {
-        &self.data
-    }
-
     pub(crate) fn base(&self) -> Option<&Self> {
         self.base.as_ref().map(|x| x.as_ref())
     }
@@ -96,7 +92,7 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let api = self.data();
+        let api = self.data_ref();
         let got = api.get(key).await;
 
         if got.is_not_found() {
@@ -115,7 +111,7 @@ where
         T: Ord,
         R: RangeBounds<T> + Clone + Send + Sync,
     {
-        let a = self.data().range(range.clone()).await;
+        let a = self.data_ref().range(range.clone()).await;
 
         let km = KMerge::by(|a: &(K, Marked<Self::V>), b: &(K, Marked<Self::V>)| {
             let (k1, v1) = a;
