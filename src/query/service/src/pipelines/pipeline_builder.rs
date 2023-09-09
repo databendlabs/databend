@@ -919,7 +919,7 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        let spill_coordinator = BuildSpillCoordinator::create();
+        let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,

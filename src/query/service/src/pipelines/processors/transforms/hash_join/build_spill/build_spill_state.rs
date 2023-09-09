@@ -254,11 +254,6 @@ impl BuildSpillState {
                 return Ok(true);
             }
         }
-
-        if total_bytes > spill_threshold {
-            return Ok(true);
-        }
-
         Ok(false)
     }
 
@@ -314,7 +309,8 @@ impl BuildSpillState {
     // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
     pub(crate) fn split_spill_tasks(&self) -> Result<()> {
-        let processors_num = self.spill_coordinator.total_builder_count.read();
+        let active_processors_num = self.spill_coordinator.total_builder_count
+            - *self.spill_coordinator.non_spill_processors.read();
         let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
         let blocks = self.collect_rows()?;
         let partition_blocks = self.partition_input_blocks(&blocks)?;
@@ -323,13 +319,13 @@ impl BuildSpillState {
         for (partition_id, blocks) in partition_blocks.iter() {
             let merged_block = DataBlock::concat(blocks)?;
             let total_rows = merged_block.num_rows();
-            // Equally split blocks to `processors_num` parts
+            // Equally split blocks to `active_processors_num` parts
             let mut start_row;
             let mut end_row = 0;
-            for i in 0..*processors_num {
+            for i in 0..active_processors_num {
                 start_row = end_row;
-                end_row = start_row + total_rows / *processors_num;
-                if i == *processors_num - 1 {
+                end_row = start_row + total_rows / active_processors_num;
+                if i == active_processors_num - 1 {
                     end_row = total_rows;
                 }
                 let sub_block = merged_block.slice(start_row..end_row);
@@ -342,7 +338,7 @@ impl BuildSpillState {
 
         // Todo: we don't need to spill all partitions.
         let mut task_id: usize = 0;
-        while task_id < *processors_num {
+        while task_id < active_processors_num {
             let mut task = Vec::with_capacity(partition_tasks.len());
             for partition_id in partition_tasks.keys() {
                 task.push((

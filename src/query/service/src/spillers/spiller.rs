@@ -59,7 +59,7 @@ pub struct Spiller {
     /// 1 partition -> N partition files
     pub partition_location: HashMap<u8, Vec<String>>,
     /// Record columns layout for spilled data, will be used when read data from disk
-    pub columns_layout: HashMap<u8, Vec<usize>>,
+    pub columns_layout: HashMap<String, Vec<usize>>,
 }
 
 impl Spiller {
@@ -104,7 +104,7 @@ impl Spiller {
             let column = column.value.as_column().unwrap();
             let column_data = serialize_column(column);
             self.columns_layout
-                .entry(*p_id)
+                .entry(location.clone())
                 .and_modify(|layouts| {
                     layouts.push(column_data.len());
                 })
@@ -123,13 +123,13 @@ impl Spiller {
     pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
         let files = self.partition_location.get(p_id).unwrap();
-        let columns_layout = self.columns_layout.get(p_id).unwrap();
         let mut spilled_data = Vec::with_capacity(files.len());
         // Todo: make it parallel
         for file in files.iter() {
             let data = self.operator.read(file).await?;
             let mut begin = 0;
             let mut columns = Vec::with_capacity(self.columns_layout.len());
+            let columns_layout = self.columns_layout.get(file).unwrap();
             for column_layout in columns_layout.iter() {
                 columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
                 begin += column_layout;

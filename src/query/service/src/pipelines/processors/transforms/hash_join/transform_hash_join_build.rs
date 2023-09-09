@@ -55,6 +55,8 @@ pub struct TransformHashJoinBuild {
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
     finalize_finished: bool,
+    // The flag indicates whether data is from spilled data.
+    from_spill: bool,
 }
 
 impl TransformHashJoinBuild {
@@ -64,10 +66,6 @@ impl TransformHashJoinBuild {
         spill_state: Option<Box<BuildSpillState>>,
     ) -> Result<Box<dyn Processor>> {
         build_state.build_attach();
-        if let Some(ss) = &spill_state {
-            let mut count = ss.spill_coordinator.total_builder_count.write();
-            *count += 1;
-        }
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
@@ -76,6 +74,7 @@ impl TransformHashJoinBuild {
             spill_state,
             spill_data: None,
             finalize_finished: false,
+            from_spill: false,
         }))
     }
 
@@ -136,6 +135,20 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
+                    if let Some(spill_state) = &self.spill_state && !self.from_spill {
+                        // The processor won't be triggered spill, because there won't be data from input port
+                        // Add the processor to `non_spill_processors`
+                        let mut non_spill_processors = spill_state.spill_coordinator.non_spill_processors.write();
+                        let mut waiting_spill_count = spill_state.spill_coordinator.waiting_spill_count.write();
+                        *non_spill_processors += 1;
+                        if *waiting_spill_count != 0 && *non_spill_processors + *waiting_spill_count == spill_state.spill_coordinator.total_builder_count {
+                            drop(non_spill_processors);
+                            spill_state.spill_coordinator.no_need_spill();
+                            spill_state.split_spill_tasks()?;
+                            spill_state.spill_coordinator.notify_spill();
+                            *waiting_spill_count = 0;
+                        }
+                    }
                     self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
                 }
@@ -188,7 +201,7 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled(){
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() {
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
                         if need_spill {
@@ -208,6 +221,13 @@ impl Processor for TransformHashJoinBuild {
                                 }
                             }
                     } else {
+                        if let Some(spill_state) = &mut self.spill_state {
+                            if spill_state.spiller.is_all_spilled() {
+                                self.step = HashJoinBuildStep::FollowSpill;
+                                self.spill_data = Some(data_block);
+                                return Ok(());
+                            }
+                        }
                         self.build_state.build(data_block)?;
                     }
                 }
@@ -290,6 +310,7 @@ impl Processor for TransformHashJoinBuild {
                     .read_spilled_data(&(partition_id as u8))
                     .await?;
                 self.input_data = Some(DataBlock::concat(&spilled_data)?);
+                self.from_spill = true;
                 self.reset()?;
             }
             _ => unreachable!(),

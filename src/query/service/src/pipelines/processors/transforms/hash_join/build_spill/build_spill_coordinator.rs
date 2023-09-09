@@ -32,24 +32,27 @@ pub struct BuildSpillCoordinator {
     /// Current waiting spilling processor count.
     pub(crate) waiting_spill_count: RwLock<usize>,
     /// Total processor count.
-    pub(crate) total_builder_count: RwLock<usize>,
+    pub(crate) total_builder_count: usize,
     /// Notify all waiting spilling processors to start spill.
     pub(crate) notify_spill: Arc<Notify>,
-    /// Spill tasks, the size is the same as the total processor count.
+    /// Spill tasks, the size is the same as the total active processor count.
     pub(crate) spill_tasks: RwLock<VecDeque<Vec<(u8, DataBlock)>>>,
     /// If send partition set to probe
     pub send_partition_set: AtomicBool,
+    /// When a build processor won't trigger spill, the field will plus one
+    pub non_spill_processors: RwLock<usize>,
 }
 
 impl BuildSpillCoordinator {
-    pub fn create() -> Arc<Self> {
+    pub fn create(total_builder_count: usize) -> Arc<Self> {
         Arc::new(Self {
             need_spill: AtomicBool::new(false),
             waiting_spill_count: RwLock::new(0),
-            total_builder_count: RwLock::new(0),
+            total_builder_count,
             notify_spill: Arc::new(Default::default()),
             spill_tasks: Default::default(),
             send_partition_set: Default::default(),
+            non_spill_processors: Default::default(),
         })
     }
 
@@ -61,15 +64,15 @@ impl BuildSpillCoordinator {
     // Called by hash join build processor, if current processor need to spill, then set `need_spill` to true.
     pub fn need_spill(&self) -> Result<()> {
         self.need_spill.store(true, Ordering::SeqCst);
-        self.wait_spill()?;
         Ok(())
     }
 
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
+        let non_spill_processors = self.non_spill_processors.read();
         let mut waiting_spill_count = self.waiting_spill_count.write();
         *waiting_spill_count += 1;
-        if *waiting_spill_count == *self.total_builder_count.read() {
+        if *waiting_spill_count == (self.total_builder_count - *non_spill_processors) {
             // Reset waiting_spill_count
             *waiting_spill_count = 0;
             // No need to wait spill, the processor is the last one
