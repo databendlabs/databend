@@ -29,6 +29,7 @@ pub use transforms::TransformCreateSets;
 pub use transforms::TransformExpandGroupingSets;
 pub use transforms::TransformLimit;
 pub use transforms::TransformResortAddOn;
+pub use transforms::TransformResortAddOnWithoutSourceSchema;
 pub use transforms::TransformRuntimeFilter;
 pub use transforms::TransformSortPartial;
 pub use transforms::TransformWindow;

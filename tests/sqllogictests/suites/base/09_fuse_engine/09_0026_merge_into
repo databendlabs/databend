@@ -160,4 +160,14 @@ select * from t1 order by a,b,c;
 5 b_9 c_9
 
 statement ok
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b);
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+4 b_8 NULL
+5 b_9 c_9
+
+statement ok
 set enable_experimental_merge_into = 0;

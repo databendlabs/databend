@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
@@ -116,11 +117,12 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
     const NAME: &'static str = "AddOnWithoutSourceSchemaTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        todo!();
-        // block = self
-        //     .build_expression_transform(input_schema)?
-        //     .transform(block)?;
-        // let columns = block.columns()[self.input_schema..].to_owned();
-        // Ok(DataBlock::new(columns, block.num_rows()))
+        let input_schema =
+            DataSchemaRef::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
+        block = self
+            .build_expression_transform(input_schema.clone())?
+            .transform(block)?;
+        let columns = block.columns()[input_schema.num_fields()..].to_owned();
+        Ok(DataBlock::new(columns, block.num_rows()))
     }
 }

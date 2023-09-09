@@ -127,6 +127,7 @@ use parking_lot::RwLock;
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
+use super::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
@@ -449,6 +450,7 @@ impl PipelineBuilder {
             matched.clone(),
             field_index_of_input_schema.clone(),
             input.output_schema()?,
+            Arc::new(DataSchema::from(tbl.schema())),
         )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
@@ -456,8 +458,6 @@ impl PipelineBuilder {
 
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
-
-        // add filling_
 
         // append data for unmatched data
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -496,6 +496,21 @@ impl PipelineBuilder {
 
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
+        // fill default columns
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                TransformResortAddOnWithoutSourceSchema::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    Arc::new(DataSchema::from(tbl.schema())),
+                    tbl.clone(),
+                )
+            },
+            1,
+        )?;
+        builder.add_items(vec![create_dummy_item()]);
+        self.main_pipeline.add_pipe(builder.finalize());
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
@@ -527,10 +542,6 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        // todo:(JackTan25): process filling default columns
-        // because the datablock we receive here may have different
-        // schema, so we can't just add build_filling_default_columns
-        // to solve it simply. we will add new processor in the later pr.
         Ok(())
     }
 

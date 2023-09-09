@@ -74,6 +74,7 @@ pub use transform_materialized_cte::MaterializedCteSource;
 pub use transform_materialized_cte::MaterializedCteState;
 pub use transform_merge_block::TransformMergeBlock;
 pub use transform_resort_addon::TransformResortAddOn;
+pub use transform_resort_addon_without_source_schema::TransformResortAddOnWithoutSourceSchema;
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;
 pub use transform_runtime_filter::SinkRuntimeFilterSource;
 pub use transform_runtime_filter::TransformRuntimeFilter;
