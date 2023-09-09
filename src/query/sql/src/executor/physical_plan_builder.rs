@@ -1893,8 +1893,10 @@ impl PhysicalPlanBuilder {
                     let predicates = predicates
                         .iter()
                         .map(|p| {
-                            Ok(p.as_expr()?
-                                .project_column_ref(|col| col.column_name.clone()))
+                            let expr = p
+                                .as_expr()?
+                                .project_column_ref(|col| col.column_name.clone());
+                            cast_expr_to_non_null_boolean(expr)
                         })
                         .collect::<Result<Vec<_>>>()?;
 
@@ -1912,7 +1914,6 @@ impl PhysicalPlanBuilder {
                         })
                         .unwrap();
 
-                    let expr = cast_expr_to_non_null_boolean(expr)?;
                     let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
                     is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);

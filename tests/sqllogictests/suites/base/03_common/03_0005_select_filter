@@ -88,4 +88,15 @@ select * from t2 where b
 0.0 2.10
 
 statement ok
+create table t3(a int, b bool)
+
+statement ok
+insert into t3 values (0, true),(1, true),(2, false)
+
+query IT
+select * from t3 where a and b
+----
+1 1
+
+statement ok
 DROP DATABASE IF EXISTS databend6
