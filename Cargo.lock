@@ -8346,8 +8346,9 @@ dependencies = [
 
 [[package]]
 name = "opensrv-mysql"
-version = "0.4.0"
-source = "git+https://github.com/datafuselabs/opensrv?rev=bcfcf8e#bcfcf8e956a033f19c3a99fd7a88eebea385e550"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c66063eb6aca9e6b5354f91db29f7244a8e7f9c01219b3ce76a5340a78d9f6f"
 dependencies = [
  "async-trait",
  "byteorder",
