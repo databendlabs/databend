@@ -13,10 +13,14 @@
 //  limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::vec;
 
+use chrono::Utc;
 use common_base::base::tokio;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -31,6 +35,7 @@ use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -92,6 +97,7 @@ use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
+use common_meta_app::storage::StorageParams;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
@@ -100,7 +106,9 @@ use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;
 use common_storage::StageFileInfo;
+use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
@@ -206,6 +214,101 @@ async fn test_last_snapshot_hint() -> Result<()> {
     let content = operator.read(location.as_str()).await?;
 
     assert_eq!(content.as_slice(), expected.as_bytes());
+
+    Ok(())
+}
+
+fn get_storage_file_name() -> BTreeMap<String, Vec<String>> {
+    let mut ret: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let data_path = match &GlobalConfig::instance().storage.params {
+        StorageParams::Fs(v) => v.root.clone(),
+        _ => panic!("storage type is not fs"),
+    };
+    let root = data_path.as_str();
+    let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            // trim the leading prefix, e.g. "/db_id/table_id/"
+            let paths = entry_path.split('/').skip(3).collect::<Vec<_>>();
+            let path_len = paths.len();
+            let path = paths[0];
+
+            if !path.starts_with(prefix_last_snapshot_hint) {
+                ret.entry(path.to_string())
+                    .and_modify(|values| values.push(paths[path_len - 1].to_string()))
+                    .or_insert(vec![paths[path_len - 1].to_string()]);
+            }
+        }
+    }
+
+    ret
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_check_file_name_with_timestamp() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    fixture.create_default_table().await?;
+
+    let table = fixture.latest_default_table().await?;
+
+    let num_blocks = 1;
+    let rows_per_block = 1;
+    let value_start_from = 1;
+    let stream =
+        TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, false, true)
+        .await?;
+
+    // get file names
+    let prev_file_names = get_storage_file_name();
+    let now = Utc::now().timestamp_millis();
+    for file_names in prev_file_names.values() {
+        for file_name in file_names {
+            let timestamp =
+                TableMetaLocationGenerator::location_timestamp(file_name).parse::<i64>()?;
+            assert!(now > timestamp);
+        }
+    }
+
+    // get now snapshot timestamp
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot = fuse_table.read_table_snapshot().await?;
+    let prev_snapshot_timestamp = snapshot
+        .unwrap()
+        .timestamp
+        .unwrap()
+        .timestamp_millis()
+        .to_string();
+
+    // insert some values
+    let stream =
+        TestFixture::gen_sample_blocks_stream_ex(num_blocks, rows_per_block, value_start_from);
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, false, true)
+        .await?;
+
+    // check storage file name time stamp
+    let now_file_names = get_storage_file_name();
+    let ss = FUSE_TBL_SNAPSHOT_PREFIX.to_string();
+    let now = Utc::now().timestamp_millis();
+    for (key, now_files) in now_file_names.iter() {
+        let prev_files: BTreeSet<&String> = prev_file_names.get(key).unwrap().iter().collect();
+        for file_name in now_files {
+            let timestamp = TableMetaLocationGenerator::location_timestamp(file_name);
+            if !prev_files.contains(file_name) && key != &ss {
+                assert_eq!(prev_snapshot_timestamp, timestamp);
+            }
+            assert!(now > timestamp.parse::<i64>()?);
+        }
+    }
 
     Ok(())
 }

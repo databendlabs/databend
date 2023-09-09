@@ -236,7 +236,7 @@ impl FuseTable {
 
         let files = self
             .list_files(prefix.clone(), |loc, modified| {
-                if loc.starts_with(&prefix) && loc.find(snapshot_id).is_some() {
+                if loc.starts_with(&prefix) && loc.contains(snapshot_id) {
                     location = Some(loc);
                 }
                 modified <= retention_point
