@@ -22,8 +22,8 @@ done
 
 ## Select table
 echo "select * from table_external_location order by a;" | $MYSQL_CLIENT_CONNECT
-## select block_location and get part_prefix, block_location like this: 1/1209/_b/lulu_ca5ebf54bf894f4bb1ee232c1a0461a2_v0.parquet
-#echo "select block_location from fuse_block('default','table_external_location_with_location_prefix');" | $MYSQL_CLIENT_CONNECT |  cut -d "/" -f  4 | cut -d "_" -f 1
+## select block_location and get part_prefix, block_location like this: 1/1209/_b/1694259076711_lulu_ca5ebf54bf894f4bb1ee232c1a0461a2_v0.parquet
+echo "select block_location from fuse_block('default','table_external_location_with_location_prefix');" | $MYSQL_CLIENT_CONNECT |  cut -d "/" -f  4 | cut -d "_" -f 2 
 
 ## Drop table
 echo "drop table if exists table_external_location;" | $MYSQL_CLIENT_CONNECT
