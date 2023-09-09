@@ -104,7 +104,18 @@ impl<T> Marked<T> {
         }
     }
 
-    pub fn unpack(&self) -> Option<(&T, Option<&KVMeta>)> {
+    pub fn unpack(self) -> Option<(T, Option<KVMeta>)> {
+        match self {
+            Marked::TombStone { internal_seq: _ } => None,
+            Marked::Normal {
+                internal_seq: _,
+                value,
+                meta,
+            } => Some((value, meta)),
+        }
+    }
+
+    pub fn unpack_ref(&self) -> Option<(&T, Option<&KVMeta>)> {
         match self {
             Marked::TombStone { internal_seq: _ } => None,
             Marked::Normal {
@@ -116,7 +127,16 @@ impl<T> Marked<T> {
     }
 
     /// Return the one with the larger sequence number.
-    pub fn max<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
+    pub fn max(a: Self, b: Self) -> Self {
+        if a.internal_seq() > b.internal_seq() {
+            a
+        } else {
+            b
+        }
+    }
+
+    /// Return the one with the larger sequence number.
+    pub fn max_ref<'l>(a: &'l Self, b: &'l Self) -> &'l Self {
         if a.internal_seq() > b.internal_seq() {
             a
         } else {

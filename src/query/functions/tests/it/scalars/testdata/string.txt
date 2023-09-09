@@ -815,6 +815,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : trim_leading('aaaaaaaa', '')
+raw expr       : trim_leading('aaaaaaaa', '')
+checked expr   : trim_leading<String, String>("aaaaaaaa", "")
+optimized expr : "aaaaaaaa"
+output type    : String
+output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output         : 'aaaaaaaa'
+
+
 ast            : trim_leading(a, 'a')
 raw expr       : trim_leading(a::String, 'a')
 checked expr   : trim_leading<String, String>(a, "a")
@@ -827,59 +836,62 @@ evaluation:
 | Row 0  | 'aabbaa'              | 'bbaa'   |
 | Row 1  | 'bbccbb'              | 'bbccbb' |
 | Row 2  | 'ccddcc'              | 'ccddcc' |
+| Row 3  | 'aabbaa'              | 'bbaa'   |
 +--------+-----------------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| Output | StringColumn { data: 0x62626161626263636262636364646363, offsets: [0, 4, 10, 16] }     |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| Output | StringColumn { data: 0x6262616162626363626263636464636362626161, offsets: [0, 4, 10, 16, 20] }         |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_leading(a, b)
 raw expr       : trim_leading(a::String, b::String)
 checked expr   : trim_leading<String, String>(a, b)
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | 'aabbaa'              | 'a'         | 'bbaa' |
-| Row 1  | 'bbccbb'              | 'b'         | 'ccbb' |
-| Row 2  | 'ccddcc'              | 'c'         | 'ddcc' |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+------------+----------+
+|        | a                     | b          | Output   |
++--------+-----------------------+------------+----------+
+| Type   | String                | String     | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {""..="c"} | {""..}   |
+| Row 0  | 'aabbaa'              | 'a'        | 'bbaa'   |
+| Row 1  | 'bbccbb'              | 'b'        | 'ccbb'   |
+| Row 2  | 'ccddcc'              | 'c'        | 'ddcc'   |
+| Row 3  | 'aabbaa'              | ''         | 'aabbaa' |
++--------+-----------------------+------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                 |
-| Output | StringColumn { data: 0x626261616363626264646363, offsets: [0, 4, 8, 12] }              |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                                              |
+| Output | StringColumn { data: 0x626261616363626264646363616162626161, offsets: [0, 4, 8, 12, 18] }              |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_leading('aba', b)
 raw expr       : trim_leading('aba', b::String)
 checked expr   : trim_leading<String, String>("aba", b)
 evaluation:
-+--------+-------------+--------+
-|        | b           | Output |
-+--------+-------------+--------+
-| Type   | String      | String |
-| Domain | {"a"..="c"} | {""..} |
-| Row 0  | 'a'         | 'ba'   |
-| Row 1  | 'b'         | 'aba'  |
-| Row 2  | 'c'         | 'aba'  |
-+--------+-------------+--------+
++--------+------------+--------+
+|        | b          | Output |
++--------+------------+--------+
+| Type   | String     | String |
+| Domain | {""..="c"} | {""..} |
+| Row 0  | 'a'        | 'ba'   |
+| Row 1  | 'b'        | 'aba'  |
+| Row 2  | 'c'        | 'aba'  |
+| Row 3  | ''         | 'aba'  |
++--------+------------+--------+
 evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }           |
-| Output | StringColumn { data: 0x6261616261616261, offsets: [0, 2, 5, 8] } |
-+--------+------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                  |
+| Output | StringColumn { data: 0x6261616261616261616261, offsets: [0, 2, 5, 8, 11] } |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : trim_trailing('aaabbaaa', 'a')
@@ -936,6 +948,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : trim_trailing('aaaaaaaa', '')
+raw expr       : trim_trailing('aaaaaaaa', '')
+checked expr   : trim_trailing<String, String>("aaaaaaaa", "")
+optimized expr : "aaaaaaaa"
+output type    : String
+output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output         : 'aaaaaaaa'
+
+
 ast            : trim_trailing(a, 'b')
 raw expr       : trim_trailing(a::String, 'b')
 checked expr   : trim_trailing<String, String>(a, "b")
@@ -948,59 +969,62 @@ evaluation:
 | Row 0  | 'aabbaa'              | 'aabbaa' |
 | Row 1  | 'bbccbb'              | 'bbcc'   |
 | Row 2  | 'ccddcc'              | 'ccddcc' |
+| Row 3  | 'aabbaa'              | 'aabbaa' |
 +--------+-----------------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| Output | StringColumn { data: 0x61616262616162626363636364646363, offsets: [0, 6, 10, 16] }     |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| Output | StringColumn { data: 0x61616262616162626363636364646363616162626161, offsets: [0, 6, 10, 16, 22] }     |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_trailing(a, b)
 raw expr       : trim_trailing(a::String, b::String)
 checked expr   : trim_trailing<String, String>(a, b)
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | 'aabbaa'              | 'a'         | 'aabb' |
-| Row 1  | 'bbccbb'              | 'b'         | 'bbcc' |
-| Row 2  | 'ccddcc'              | 'c'         | 'ccdd' |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+------------+----------+
+|        | a                     | b          | Output   |
++--------+-----------------------+------------+----------+
+| Type   | String                | String     | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {""..="c"} | {""..}   |
+| Row 0  | 'aabbaa'              | 'a'        | 'aabb'   |
+| Row 1  | 'bbccbb'              | 'b'        | 'bbcc'   |
+| Row 2  | 'ccddcc'              | 'c'        | 'ccdd'   |
+| Row 3  | 'aabbaa'              | ''         | 'aabbaa' |
++--------+-----------------------+------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                 |
-| Output | StringColumn { data: 0x616162626262636363636464, offsets: [0, 4, 8, 12] }              |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                                              |
+| Output | StringColumn { data: 0x616162626262636363636464616162626161, offsets: [0, 4, 8, 12, 18] }              |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_trailing('aba', b)
 raw expr       : trim_trailing('aba', b::String)
 checked expr   : trim_trailing<String, String>("aba", b)
 evaluation:
-+--------+-------------+--------+
-|        | b           | Output |
-+--------+-------------+--------+
-| Type   | String      | String |
-| Domain | {"a"..="c"} | {""..} |
-| Row 0  | 'a'         | 'ab'   |
-| Row 1  | 'b'         | 'aba'  |
-| Row 2  | 'c'         | 'aba'  |
-+--------+-------------+--------+
++--------+------------+--------+
+|        | b          | Output |
++--------+------------+--------+
+| Type   | String     | String |
+| Domain | {""..="c"} | {""..} |
+| Row 0  | 'a'        | 'ab'   |
+| Row 1  | 'b'        | 'aba'  |
+| Row 2  | 'c'        | 'aba'  |
+| Row 3  | ''         | 'aba'  |
++--------+------------+--------+
 evaluation (internal):
-+--------+------------------------------------------------------------------+
-| Column | Data                                                             |
-+--------+------------------------------------------------------------------+
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }           |
-| Output | StringColumn { data: 0x6162616261616261, offsets: [0, 2, 5, 8] } |
-+--------+------------------------------------------------------------------+
++--------+----------------------------------------------------------------------------+
+| Column | Data                                                                       |
++--------+----------------------------------------------------------------------------+
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                  |
+| Output | StringColumn { data: 0x6162616261616261616261, offsets: [0, 2, 5, 8, 11] } |
++--------+----------------------------------------------------------------------------+
 
 
 ast            : trim_both('aaabbaaa', 'a')
@@ -1057,6 +1081,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : trim_both('aaaaaaaa', '')
+raw expr       : trim_both('aaaaaaaa', '')
+checked expr   : trim_both<String, String>("aaaaaaaa", "")
+optimized expr : "aaaaaaaa"
+output type    : String
+output domain  : {"aaaaaaaa"..="aaaaaaaa"}
+output         : 'aaaaaaaa'
+
+
 ast            : trim_both(a, 'a')
 raw expr       : trim_both(a::String, 'a')
 checked expr   : trim_both<String, String>(a, "a")
@@ -1069,59 +1102,62 @@ evaluation:
 | Row 0  | 'aabbaa'              | 'bb'     |
 | Row 1  | 'bbccbb'              | 'bbccbb' |
 | Row 2  | 'ccddcc'              | 'ccddcc' |
+| Row 3  | 'aabbaa'              | 'bb'     |
 +--------+-----------------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| Output | StringColumn { data: 0x6262626263636262636364646363, offsets: [0, 2, 8, 14] }          |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| Output | StringColumn { data: 0x62626262636362626363646463636262, offsets: [0, 2, 8, 14, 16] }                  |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_both(a, b)
 raw expr       : trim_both(a::String, b::String)
 checked expr   : trim_both<String, String>(a, b)
 evaluation:
-+--------+-----------------------+-------------+--------+
-|        | a                     | b           | Output |
-+--------+-----------------------+-------------+--------+
-| Type   | String                | String      | String |
-| Domain | {"aabbaa"..="ccddcc"} | {"a"..="c"} | {""..} |
-| Row 0  | 'aabbaa'              | 'a'         | 'bb'   |
-| Row 1  | 'bbccbb'              | 'b'         | 'cc'   |
-| Row 2  | 'ccddcc'              | 'c'         | 'dd'   |
-+--------+-----------------------+-------------+--------+
++--------+-----------------------+------------+----------+
+|        | a                     | b          | Output   |
++--------+-----------------------+------------+----------+
+| Type   | String                | String     | String   |
+| Domain | {"aabbaa"..="ccddcc"} | {""..="c"} | {""..}   |
+| Row 0  | 'aabbaa'              | 'a'        | 'bb'     |
+| Row 1  | 'bbccbb'              | 'b'        | 'cc'     |
+| Row 2  | 'ccddcc'              | 'c'        | 'dd'     |
+| Row 3  | 'aabbaa'              | ''         | 'aabbaa' |
++--------+-----------------------+------------+----------+
 evaluation (internal):
-+--------+----------------------------------------------------------------------------------------+
-| Column | Data                                                                                   |
-+--------+----------------------------------------------------------------------------------------+
-| a      | StringColumn { data: 0x616162626161626263636262636364646363, offsets: [0, 6, 12, 18] } |
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }                                 |
-| Output | StringColumn { data: 0x626263636464, offsets: [0, 2, 4, 6] }                           |
-+--------+----------------------------------------------------------------------------------------+
++--------+--------------------------------------------------------------------------------------------------------+
+| Column | Data                                                                                                   |
++--------+--------------------------------------------------------------------------------------------------------+
+| a      | StringColumn { data: 0x616162626161626263636262636364646363616162626161, offsets: [0, 6, 12, 18, 24] } |
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                                              |
+| Output | StringColumn { data: 0x626263636464616162626161, offsets: [0, 2, 4, 6, 12] }                           |
++--------+--------------------------------------------------------------------------------------------------------+
 
 
 ast            : trim_both('aba', b)
 raw expr       : trim_both('aba', b::String)
 checked expr   : trim_both<String, String>("aba", b)
 evaluation:
-+--------+-------------+--------+
-|        | b           | Output |
-+--------+-------------+--------+
-| Type   | String      | String |
-| Domain | {"a"..="c"} | {""..} |
-| Row 0  | 'a'         | 'b'    |
-| Row 1  | 'b'         | 'aba'  |
-| Row 2  | 'c'         | 'aba'  |
-+--------+-------------+--------+
++--------+------------+--------+
+|        | b          | Output |
++--------+------------+--------+
+| Type   | String     | String |
+| Domain | {""..="c"} | {""..} |
+| Row 0  | 'a'        | 'b'    |
+| Row 1  | 'b'        | 'aba'  |
+| Row 2  | 'c'        | 'aba'  |
+| Row 3  | ''         | 'aba'  |
++--------+------------+--------+
 evaluation (internal):
-+--------+----------------------------------------------------------------+
-| Column | Data                                                           |
-+--------+----------------------------------------------------------------+
-| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3] }         |
-| Output | StringColumn { data: 0x62616261616261, offsets: [0, 1, 4, 7] } |
-+--------+----------------------------------------------------------------+
++--------+--------------------------------------------------------------------------+
+| Column | Data                                                                     |
++--------+--------------------------------------------------------------------------+
+| b      | StringColumn { data: 0x616263, offsets: [0, 1, 2, 3, 3] }                |
+| Output | StringColumn { data: 0x62616261616261616261, offsets: [0, 1, 4, 7, 10] } |
++--------+--------------------------------------------------------------------------+
 
 
 ast            : trim('   abc   ')
@@ -2201,6 +2237,32 @@ output         : 'h'
 error: 
   --> SQL:1:1
   |
+1 | lpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')`
+
+
+
+ast            : lpad('hi', 1, '')
+raw expr       : lpad('hi', 1, '')
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : lpad('', 1, '?')
+raw expr       : lpad('', 1, '?')
+checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | lpad('hi', -1, '?')
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
 
@@ -2232,6 +2294,14 @@ evaluation (internal):
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | lpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')`
+
 
 
 ast            : rpad('hi', 2, '?')
@@ -2273,6 +2343,32 @@ output         : 'h'
 error: 
   --> SQL:1:1
   |
+1 | rpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')`
+
+
+
+ast            : rpad('hi', 1, '')
+raw expr       : rpad('hi', 1, '')
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : rpad('', 1, '?')
+raw expr       : rpad('', 1, '?')
+checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | rpad('hi', -1, '?')
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
 
@@ -2304,6 +2400,14 @@ evaluation (internal):
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | rpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')`
+
 
 
 ast            : replace('hi', '', '?')
