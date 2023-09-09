@@ -24,6 +24,7 @@ use common_expression::Evaluator;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_hashtable::hash2bucket;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 
@@ -47,11 +48,12 @@ pub struct BuildSpillState {
 
 impl BuildSpillState {
     pub fn create(
-        _ctx: Arc<QueryContext>,
+        ctx: Arc<QueryContext>,
         spill_coordinator: Arc<BuildSpillCoordinator>,
         build_state: Arc<HashJoinBuildState>,
     ) -> Self {
-        let spill_config = SpillerConfig::create("_hash_join_build_spill".to_string());
+        let tenant = ctx.get_tenant();
+        let spill_config = SpillerConfig::create(format!("{}/_hash_join_build_spill", tenant));
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoin);
         Self {
@@ -170,28 +172,19 @@ impl BuildSpillState {
         input_blocks: &[DataBlock],
     ) -> Result<HashMap<u8, Vec<DataBlock>>> {
         let mut partition_blocks = HashMap::new();
-        let mut partition_map = HashMap::with_capacity(8);
         for block in input_blocks.iter() {
             let mut hashes = Vec::with_capacity(block.num_rows());
             self.get_hashes(block, &mut hashes)?;
-            for (row_idx, hash) in hashes.iter().enumerate() {
-                let partition_id = *hash as u8 & 0b0000_0011;
-                partition_map
-                    .entry(partition_id)
-                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                    .or_insert(vec![row_idx]);
+            let mut indices = Vec::with_capacity(hashes.len());
+            for hash in hashes {
+                indices.push(hash2bucket::<2, true>(hash as usize) as u8);
             }
-            for (partition_id, row_indexes) in partition_map.iter() {
-                let block_row_indexes = row_indexes
-                    .iter()
-                    .map(|idx| (0_u32, *idx as u32, 1_usize))
-                    .collect::<Vec<_>>();
-                let block =
-                    DataBlock::take_blocks(&[block.clone()], &block_row_indexes, row_indexes.len());
+            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 2)?;
+            for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {
                 partition_blocks
-                    .entry(*partition_id)
-                    .and_modify(|v: &mut Vec<DataBlock>| v.push(block.clone()))
-                    .or_insert(vec![block]);
+                    .entry(p_id as u8)
+                    .and_modify(|v: &mut Vec<DataBlock>| v.push(p_block.clone()))
+                    .or_insert(vec![p_block]);
             }
         }
         Ok(partition_blocks)
