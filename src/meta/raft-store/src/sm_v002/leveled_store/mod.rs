@@ -14,7 +14,6 @@
 
 pub mod level;
 pub mod level_data;
-pub mod leveled_map;
 pub mod map_api;
 
 #[cfg(test)]
