@@ -138,9 +138,10 @@ impl TransformPipeBuilder {
             .push(PipeItem::create(proc, vec![input], vec![output]));
     }
 
-    pub fn add_items(&mut self, items: Vec<PipeItem>) {
-        for item in items {
-            self.items.push(item)
+    pub fn add_items_prepend(&mut self, mut items: Vec<PipeItem>) {
+        for item in self.items.drain(..) {
+            items.push(item)
         }
+        self.items = items
     }
 }

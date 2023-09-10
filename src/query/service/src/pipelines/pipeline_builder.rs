@@ -509,7 +509,7 @@ impl PipelineBuilder {
             },
             1,
         )?;
-        builder.add_items(vec![create_dummy_item()]);
+        builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
