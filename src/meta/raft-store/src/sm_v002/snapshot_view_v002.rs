@@ -93,8 +93,7 @@ impl SnapshotViewV002 {
             .filter(|(_k, v)| {
                 let x = !v.is_tomb_stone();
                 async move { x }
-            })
-            .map(|(k, v)| (k.clone(), v.clone()));
+            });
 
         let btreemap = strm.collect().await;
 
@@ -106,8 +105,7 @@ impl SnapshotViewV002 {
             .filter(|(_k, v)| {
                 let x = !v.is_tomb_stone();
                 async move { x }
-            })
-            .map(|(k, v)| (k.clone(), v.clone()));
+            });
 
         let btreemap = strm.collect().await;
 
@@ -178,7 +176,7 @@ impl SnapshotViewV002 {
                     meta,
                 } = v
                 {
-                    let seqv = SeqV::with_meta(*internal_seq, meta.clone(), value.clone());
+                    let seqv = SeqV::with_meta(internal_seq, meta, value);
                     Some(RaftStoreEntry::GenericKV {
                         key: k.clone(),
                         value: seqv,
@@ -199,7 +197,7 @@ impl SnapshotViewV002 {
                     meta: _,
                 } = v
                 {
-                    let ev = ExpireValue::new(value, *internal_seq);
+                    let ev = ExpireValue::new(value, internal_seq);
 
                     Some(RaftStoreEntry::Expire {
                         key: k.clone(),

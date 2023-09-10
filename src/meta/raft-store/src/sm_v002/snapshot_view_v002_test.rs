@@ -63,9 +63,9 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (&s("a"), &Marked::new_normal(1, b("a0"), None)),
-        (&s("d"), &Marked::new_normal(7, b("d2"), None)),
-        (&s("e"), &Marked::new_normal(6, b("e1"), None)),
+        (s("a"), Marked::new_normal(1, b("a0"), None)),
+        (s("d"), Marked::new_normal(7, b("d2"), None)),
+        (s("e"), Marked::new_normal(6, b("e1"), None)),
     ]);
 
     let got = MapApiRO::<ExpireKey>::range(d, ..)
@@ -96,8 +96,8 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (
-            &s("a"),
-            &Marked::new_normal(
+            s("a"),
+            Marked::new_normal(
                 4,
                 b("a1"),
                 Some(KVMeta {
@@ -106,12 +106,12 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
             )
         ),
         (
-            &s("b"),
-            &Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            s("b"),
+            Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
         ),
         (
-            &s("c"),
-            &Marked::new_normal(
+            s("c"),
+            Marked::new_normal(
                 3,
                 b("c0"),
                 Some(KVMeta {
@@ -128,16 +128,16 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
     assert_eq!(got, vec![
         //
         (
-            &ExpireKey::new(5_000, 2),
-            &Marked::new_normal(2, s("b"), None)
+            ExpireKey::new(5_000, 2),
+            Marked::new_normal(2, s("b"), None)
         ),
         (
-            &ExpireKey::new(15_000, 4),
-            &Marked::new_normal(4, s("a"), None)
+            ExpireKey::new(15_000, 4),
+            Marked::new_normal(4, s("a"), None)
         ),
         (
-            &ExpireKey::new(20_000, 3),
-            &Marked::new_normal(3, s("c"), None)
+            ExpireKey::new(20_000, 3),
+            Marked::new_normal(3, s("c"), None)
         ),
     ]);
 

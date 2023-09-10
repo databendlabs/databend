@@ -28,7 +28,7 @@ where K: Ord + Send + Sync + 'static
     type V: Clone + Send + Sync + 'static;
 
     /// Get an entry by key.
-    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized;
@@ -36,12 +36,10 @@ where K: Ord + Send + Sync + 'static
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> BoxStream<'a, (&'a K, &'a Marked<Self::V>)>
+    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
     where
         K: Clone + Borrow<T> + 'a,
+        Self::V: Unpin,
         T: Ord,
         R: RangeBounds<T> + Send + Sync + Clone;
 }
@@ -72,7 +70,7 @@ where K: Ord + Send + Sync + 'static
         }
 
         // Safe unwrap(), got is Normal
-        let (v, _) = got.unpack().unwrap();
+        let (v, _) = got.unpack_ref().unwrap();
 
         self.set(key, Some((v.clone(), meta))).await
     }
@@ -82,7 +80,7 @@ where K: Ord + Send + Sync + 'static
     async fn upsert_value(&mut self, key: K, value: Self::V) -> (Marked<Self::V>, Marked<Self::V>) {
         let got = self.get(&key).await;
 
-        let meta = if let Some((_, meta)) = got.unpack() {
+        let meta = if let Some((_, meta)) = got.unpack_ref() {
             meta
         } else {
             None

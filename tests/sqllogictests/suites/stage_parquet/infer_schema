@@ -40,7 +40,7 @@ yy__us_core_ethnicity VARCHAR 1 29
 yy__us_core_birthsex TUPLE(VALUECODE STRING,) 1 30
 
 query 
-select  /*+ SET_VAR(use_parquet2=1) */  * from infer_schema(location => '@data/parquet/variant.parquet')
+select * from infer_schema(location => '@data/parquet/variant.parquet')
 ----
 a INT 0 0
 b VARIANT 0 1
