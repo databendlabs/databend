@@ -47,9 +47,9 @@ async fn test_freeze() -> anyhow::Result<()> {
     ]);
 
     // Listing from the base level sees the old value.
-    let base = l.frozen_ref();
+    let frozen = l.frozen_ref();
 
-    let got = MapApiRO::<String>::range(base, s("")..)
+    let got = MapApiRO::<String>::range(frozen, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -187,9 +187,9 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Check base level
 
-    let base = l.frozen_ref();
+    let frozen = l.frozen_ref();
 
-    let it = MapApiRO::<String>::range(base, s("")..).await;
+    let it = MapApiRO::<String>::range(frozen, s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //

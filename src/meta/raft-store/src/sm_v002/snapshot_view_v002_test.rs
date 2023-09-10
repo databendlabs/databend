@@ -40,9 +40,9 @@ use crate::state_machine::ExpireKey;
 async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
     let mut l = build_3_levels().await;
 
-    l.freeze_writable();
+    let frozen = l.freeze_writable().clone();
 
-    let mut snapshot = SnapshotViewV002::new(l.frozen_ref().clone());
+    let mut snapshot = SnapshotViewV002::new(frozen);
 
     snapshot.compact().await;
 
@@ -152,9 +152,9 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 async fn test_export_3_level() -> anyhow::Result<()> {
     let mut l = build_3_levels().await;
 
-    l.freeze_writable();
+    let frozen = l.freeze_writable().clone();
 
-    let snapshot = SnapshotViewV002::new(l.frozen_ref().clone());
+    let snapshot = SnapshotViewV002::new(frozen);
     let got = snapshot
         .export()
         .await
@@ -301,7 +301,7 @@ async fn build_sm_with_expire() -> SMV002 {
     sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await;
 
-    sm.top.freeze_writable();
+    sm.levels.freeze_writable();
 
     sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await;

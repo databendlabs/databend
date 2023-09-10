@@ -39,30 +39,30 @@ pub struct LeveledMap {
 
     /// The base immutable levels from the oldest to the newest.
     /// levels[0] is the bottom oldest level.
-    frozen_levels: StaticLeveledMap,
+    frozen: StaticLeveledMap,
 }
 
 impl LeveledMap {
     pub(crate) fn new(writable: LevelData) -> Self {
         Self {
             writable,
-            frozen_levels: Default::default(),
+            frozen: Default::default(),
         }
     }
 
     /// Return an iterator of all levels in reverse order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
-        [&self.writable]
-            .into_iter()
-            .chain(self.frozen_levels.levels())
+        [&self.writable].into_iter().chain(self.frozen.levels())
     }
 
     /// Freeze the current writable level and create a new writable level.
-    pub fn freeze_writable(&mut self) {
-        let new_level = self.writable.new_level();
+    pub fn freeze_writable(&mut self) -> &StaticLeveledMap {
+        let new_writable = self.writable.new_level();
 
-        let base = std::mem::replace(&mut self.writable, new_level);
-        self.frozen_levels.push(Arc::new(base));
+        let frozen = std::mem::replace(&mut self.writable, new_writable);
+        self.frozen.push(Arc::new(frozen));
+
+        &self.frozen
     }
 
     pub fn writable_ref(&self) -> &LevelData {
@@ -74,11 +74,11 @@ impl LeveledMap {
     }
 
     pub fn frozen_ref(&self) -> &StaticLeveledMap {
-        &self.frozen_levels
+        &self.frozen
     }
 
     pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
-        self.frozen_levels = b;
+        self.frozen = b;
     }
 }
 

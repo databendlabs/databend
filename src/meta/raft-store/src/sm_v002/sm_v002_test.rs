@@ -77,7 +77,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     sm.upsert_kv(UpsertKV::update("a/b", b"b0")).await;
     sm.upsert_kv(UpsertKV::update("c", b"c0")).await;
 
-    sm.top.freeze_writable();
+    sm.levels.freeze_writable();
 
     // internal_seq = 3
     sm.upsert_kv(UpsertKV::delete("a/b")).await;
@@ -154,7 +154,7 @@ async fn build_sm_with_expire() -> SMV002 {
     sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await;
 
-    sm.top.freeze_writable();
+    sm.levels.freeze_writable();
 
     sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await;
@@ -174,7 +174,7 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
 
     // Check internal expire index
     let got = sm
-        .top
+        .levels
         .range::<ExpireKey, _>(..)
         .await
         .collect::<Vec<_>>()
@@ -239,7 +239,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
 
     // Check expire store
     let got = sm
-        .top
+        .levels
         .range::<ExpireKey, _>(..)
         .await
         .collect::<Vec<_>>()
