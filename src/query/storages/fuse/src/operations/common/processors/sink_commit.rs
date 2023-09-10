@@ -307,13 +307,11 @@ where F: SnapshotGenerator + Send + 'static
                 snapshot,
                 table_info,
             } => {
-                let location = self
-                    .location_gen
-                    .snapshot_location_from_uuid_and_timestamp(
-                        &snapshot.timestamp,
-                        &snapshot.snapshot_id,
-                        TableSnapshot::VERSION,
-                    )?;
+                let location = self.location_gen.gen_snapshot_location(
+                    &snapshot.timestamp,
+                    &snapshot.snapshot_id,
+                    TableSnapshot::VERSION,
+                )?;
 
                 self.dal.write(&location, data).await?;
 

@@ -87,7 +87,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
-        let orphan_snapshot_location = location_gen.snapshot_location_from_uuid_and_timestamp(
+        let orphan_snapshot_location = location_gen.gen_snapshot_location(
             &Some(Utc::now()),
             &orphan_snapshot_id,
             TableSnapshot::VERSION,

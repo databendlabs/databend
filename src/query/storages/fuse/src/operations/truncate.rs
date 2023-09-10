@@ -49,7 +49,7 @@ impl FuseTable {
 
             // 2. write down new snapshot
             let loc = self.meta_location_generator();
-            let new_snapshot_loc = loc.snapshot_location_from_uuid_and_timestamp(
+            let new_snapshot_loc = loc.gen_snapshot_location(
                 &new_snapshot.timestamp,
                 &new_snapshot.snapshot_id,
                 TableSnapshot::VERSION,

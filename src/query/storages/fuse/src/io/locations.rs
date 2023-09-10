@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::Result;
 use common_expression::DataBlock;
+use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -126,15 +127,19 @@ impl TableMetaLocationGenerator {
         )
     }
 
-    pub fn snapshot_location_from_uuid_and_timestamp(
+    pub fn gen_snapshot_location(
         &self,
         snapshot_timestamp_opt: &Option<DateTime<Utc>>,
         id: &Uuid,
-        version: u64,
+        version: FormatVersion,
     ) -> Result<String> {
-        let snapshot_timestamp = match snapshot_timestamp_opt {
-            Some(snapshot_timestamp) => snapshot_timestamp.timestamp_millis().to_string(),
-            None => "".to_string(),
+        let snapshot_timestamp = if version <= 4 {
+            "".to_string()
+        } else {
+            match snapshot_timestamp_opt {
+                Some(snapshot_timestamp) => snapshot_timestamp.timestamp_millis().to_string(),
+                None => "".to_string(),
+            }
         };
         let snapshot_version = SnapshotVersion::try_from(version)?;
         Ok(snapshot_version.create(id, &snapshot_timestamp, &self.prefix))

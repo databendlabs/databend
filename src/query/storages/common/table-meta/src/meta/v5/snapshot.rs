@@ -102,8 +102,16 @@ impl TableSnapshot {
         // trim timestamp to micro seconds
         let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
-        let prev_snapshot_id = prev_id
-            .map(|prev_snapshot_id| (*prev_timestamp, prev_snapshot_id.0, prev_snapshot_id.1));
+        let prev_snapshot_id = match prev_id {
+            Some((prev_snapshot_id, prev_format)) => {
+                if prev_format <= 4 {
+                    Some((None, prev_snapshot_id, prev_format))
+                } else {
+                    Some((*prev_timestamp, prev_snapshot_id, prev_format))
+                }
+            }
+            None => None,
+        };
 
         Self {
             format_version: TableSnapshot::VERSION,
@@ -212,10 +220,10 @@ where T: Into<v4::TableSnapshot>
 {
     fn from(s: T) -> Self {
         let s: v4::TableSnapshot = s.into();
-        let prev_snapshot_id = match s.prev_snapshot_id {
-            Some(prev_snapshot_id) => Some((s.timestamp, prev_snapshot_id.0, prev_snapshot_id.1)),
-            None => None,
-        };
+        let prev_snapshot_id = s
+            .prev_snapshot_id
+            // v4 snapshot file name has no timestamp, so prev timestamp is None
+            .map(|prev_snapshot_id| (None, prev_snapshot_id.0, prev_snapshot_id.1));
         Self {
             // NOTE: it is important to let the format_version return from here
             // carries the format_version of snapshot being converted.

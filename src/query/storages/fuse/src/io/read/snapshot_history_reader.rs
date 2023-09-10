@@ -39,6 +39,8 @@ pub trait SnapshotHistoryReader {
         location_gen: TableMetaLocationGenerator,
     ) -> TableSnapshotStream;
 }
+
+// a snapshot history stream reader which reading snapshot history by snapshot.prev_snapshot_id
 impl SnapshotHistoryReader for TableSnapshotReader {
     fn snapshot_history(
         self,
@@ -51,7 +53,7 @@ impl SnapshotHistoryReader for TableSnapshotReader {
             |(reader, gen, next)| async move {
                 if let Some((loc, ver)) = next {
                     let load_params = LoadParams {
-                        location: loc,
+                        location: loc.clone(),
                         len_hint: None,
                         ver,
                         put_cache: true,
@@ -73,7 +75,7 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                                 snapshot.prev_snapshot_id
                             {
                                 let new_ver = prev_version;
-                                let new_loc = gen.snapshot_location_from_uuid_and_timestamp(
+                                let new_loc = gen.gen_snapshot_location(
                                     &prev_snapshot_time,
                                     &prev_id,
                                     prev_version,

@@ -126,7 +126,7 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
-        let snapshot_location = location_generator.snapshot_location_from_uuid_and_timestamp(
+        let snapshot_location = location_generator.gen_snapshot_location(
             &snapshot.timestamp,
             &snapshot.snapshot_id,
             TableSnapshot::VERSION,

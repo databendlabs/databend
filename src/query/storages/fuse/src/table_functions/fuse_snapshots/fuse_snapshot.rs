@@ -110,11 +110,7 @@ impl<'a> FuseSnapshot<'a> {
             snapshot_ids.push(s.snapshot_id.simple().to_string().into_bytes());
             snapshot_locations.push(
                 location_generator
-                    .snapshot_location_from_uuid_and_timestamp(
-                        &s.timestamp,
-                        &s.snapshot_id,
-                        current_snapshot_version,
-                    )?
+                    .gen_snapshot_location(&s.timestamp, &s.snapshot_id, current_snapshot_version)?
                     .into_bytes(),
             );
             let (id, ver) = s
