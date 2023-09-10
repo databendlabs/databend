@@ -133,6 +133,8 @@ use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
 use crate::pipelines::builders::build_fill_missing_columns_pipeline;
 use crate::pipelines::processors::transforms::build_partition_bucket;
+use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
+use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
@@ -925,14 +927,26 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
+        let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
+            build_res.main_pipeline.output_len(),
         )?;
         let create_sink_processor = |input| {
-            let transform = TransformHashJoinBuild::try_create(input, build_state.clone())?;
+            let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+                Some(Box::new(BuildSpillState::create(
+                    self.ctx.clone(),
+                    spill_coordinator.clone(),
+                    build_state.clone(),
+                )))
+            } else {
+                None
+            };
+            let transform =
+                TransformHashJoinBuild::try_create(input, build_state.clone(), spill_state)?;
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
@@ -1834,6 +1848,7 @@ impl PipelineBuilder {
             &join.probe_projections,
             join.probe.output_schema()?,
             &join.join_type,
+            self.main_pipeline.output_len(),
         ));
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformHashJoinProbe::create(
@@ -2042,6 +2057,7 @@ impl PipelineBuilder {
                 ProcessorPtr::create(TransformHashJoinBuild::try_create(
                     input.clone(),
                     self.join_state.as_ref().unwrap().clone(),
+                    None,
                 )?),
                 vec![input],
                 vec![],
