@@ -146,8 +146,7 @@ impl CompactTaskInfo {
 
     fn hash(&self) -> u64 {
         let mut s = DefaultHasher::new();
-        self.index.segment_idx.hash(&mut s);
-        self.index.block_idx.hash(&mut s);
+        self.blocks[0].location.0.hash(&mut s);
         s.finish()
     }
 }

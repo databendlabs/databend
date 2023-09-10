@@ -263,8 +263,7 @@ impl PlanFragment {
             };
             plan = replace_delete_partial.replace(&plan)?;
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
         Ok(fragment_actions)
@@ -282,30 +281,29 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let local_id = &ctx.get_cluster().local_id;
+        let local_id = ctx.get_cluster().local_id.clone();
         match ctx.get_settings().get_replace_into_shuffle_strategy()? {
             ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
                 let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
-                for (executor, parts) in partition_reshuffle.iter() {
+                for (executor, parts) in partition_reshuffle.into_iter() {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
 
                     let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: parts.clone(),
+                        partitions: parts,
                         slot: None,
                         need_insert,
                     };
                     plan = replace_replace_into.replace(&plan)?;
 
-                    fragment_actions
-                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                    fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
             ReplaceIntoShuffleStrategy::BlockLevelShuffling => {
                 let num_slots = executors.len();
                 // assign all the segment locations to each one of the executors,
                 // but for each segment, one executor only need to take part of the blocks
-                for (executor_idx, executor) in executors.iter().enumerate() {
+                for (executor_idx, executor) in executors.into_iter().enumerate() {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
                     let mut replace_replace_into = ReplaceReplaceInto {
@@ -318,8 +316,7 @@ impl PlanFragment {
                     };
                     plan = replace_replace_into.replace(&plan)?;
 
-                    fragment_actions
-                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                    fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
         }
@@ -342,16 +339,13 @@ impl PlanFragment {
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
-        for (executor, parts) in partition_reshuffle.iter() {
+        for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_compact_partial = ReplaceCompactBlock {
-                partitions: parts.clone(),
-            };
+            let mut replace_compact_partial = ReplaceCompactBlock { partitions: parts };
             plan = replace_compact_partial.replace(&plan)?;
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
         Ok(fragment_actions)

@@ -1,53 +1,122 @@
 statement ok
-drop table if exists t_compact
+drop table if exists t_compact_0
 
 statement ok
-create table t_compact (a int not null) row_per_block=5 block_per_segment=5
+create table t_compact_0 (a int not null) row_per_block=5 block_per_segment=5
 
 statement ok
-insert into t_compact select 50 - number from numbers(100)
+insert into t_compact_0 select 50 - number from numbers(100)
 
 statement ok
-insert into t_compact select 50 - number from numbers(100)
+insert into t_compact_0 select 50 - number from numbers(100)
+
+statement ok
+insert into t_compact_0 select 50 - number from numbers(100)
 
 query II
-select count(),sum(a) from t_compact
+select count(),sum(a) from t_compact_0
 ----
-200 100
+300 150
 
 statement ok
-alter table t_compact set options(row_per_block=10,block_per_segment=10)
+alter table t_compact_0 set options(row_per_block=10,block_per_segment=10)
 
 # lazy compact
+# The number of compact segments task is greater than the number of cluster nodes, 
+# so will build compact blocks task during pipeline init. 
+# The explain pipeline optimize contain bug (ISSUE-12597), so comment.
+# query T
+# explain pipeline optimize table t_compact_0 compact
+# ----
+# CommitSink × 1 processor
+#   TransformMergeCommitMeta × 1 processor
+#     TransformExchangeDeserializer × 1 processor
+#       Merge (DummyTransform × 3 processors) to (TransformExchangeDeserializer × 1)
+#         Merge (MutationAggregator × 1 processor) to (Resize × 3)
+#           MutationAggregator × 1 processor
+#             Merge (TransformSerializeBlock × 6 processors) to (MutationAggregator × 1)
+#               TransformSerializeBlock × 6 processors
+#                 CompactSource × 6 processors
+
 statement ok
-optimize table t_compact compact
+optimize table t_compact_0 compact
 
 query I
-select count() from fuse_snapshot('default', 't_compact')
+select count() from fuse_snapshot('default', 't_compact_0')
 ----
-3
-
-statement ok
-alter table t_compact cluster by(abs(a))
-
-# nolazy compact
-statement ok
-optimize table t_compact compact
-
-query I
-select count() from fuse_snapshot('default', 't_compact')
-----
-6
+4
 
 query II
-select count(),sum(a) from t_compact
+select count(),sum(a) from t_compact_0
 ----
-200 100
-
-query I
-select row_count from fuse_snapshot('default', 't_compact') limit 1
-----
-200
+300 150
 
 statement ok
-drop table if exists t_compact
+alter table t_compact_0 cluster by(abs(a))
+
+# test compact and recluster 
+statement ok
+optimize table t_compact_0 compact
+
+query I
+select count() from fuse_snapshot('default', 't_compact_0')
+----
+7
+
+query II
+select count(),sum(a) from t_compact_0
+----
+300 150
+
+query I
+select row_count from fuse_snapshot('default', 't_compact_0') limit 1
+----
+300
+
+statement ok
+create table t_compact_1 (a int not null) row_per_block=5 block_per_segment=5
+
+statement ok
+insert into t_compact_1 select 100 - number from numbers(150)
+
+query II
+select count(),sum(a) from t_compact_1
+----
+150 3825
+
+statement ok
+alter table t_compact_1 set options(row_per_block=10,block_per_segment=15)
+
+# nolazy compact
+# The number of compact segments task is less than the number of cluster nodes, 
+# so will build compact blocks task before execute pipeline
+# query T
+# explain pipeline optimize table t_compact_1 compact
+# ----
+# CommitSink × 1 processor
+#   MutationAggregator × 1 processor
+#     Merge (TransformExchangeDeserializer × 2 processors) to (MutationAggregator × 1)
+#       TransformExchangeDeserializer × 6 processors
+#         Merge (DummyTransform × 8 processors) to (TransformExchangeDeserializer × 6)
+#           Merge (TransformSerializeBlock × 6 processors) to (Resize × 8)
+#             TransformSerializeBlock × 6 processors
+#               CompactSource × 6 processors
+
+statement ok
+optimize table t_compact_1 compact
+
+query I
+select count() from fuse_snapshot('default', 't_compact_1')
+----
+2
+
+query II
+select count(),sum(a) from t_compact_1
+----
+150 3825
+
+statement ok
+drop table if exists t_compact_0
+
+statement ok
+drop table if exists t_compact_1
