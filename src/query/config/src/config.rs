@@ -2286,10 +2286,7 @@ pub struct CacheConfig {
     /// - please monitor the 'population_overflow_count' metric
     ///   if it keeps increasing, and disk cache hits rate is not as expected. please consider
     ///   increase this value.
-    #[clap(
-        long = "cache-data-cache-population-queue-size",
-        default_value = "65536"
-    )]
+    #[clap(long = "cache-data-cache-population-queue-size", default_value = "65")]
     pub table_data_cache_population_queue_size: u32,
 
     /// Storage that hold the data caches
