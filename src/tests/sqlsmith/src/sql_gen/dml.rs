@@ -26,7 +26,7 @@ use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
-    pub(crate) fn generate_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
+    pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
         let table_name = Identifier::from_name(table.name.clone());
         let data_types = table
             .schema
