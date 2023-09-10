@@ -50,10 +50,11 @@ use tokio::sync::RwLock;
 
 use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
 use crate::sm_v002::Importer;
@@ -127,7 +128,7 @@ impl<'a> SMV002KVApi<'a> {
 
 #[derive(Debug, Default)]
 pub struct SMV002 {
-    pub(in crate::sm_v002) top: Level,
+    pub(in crate::sm_v002) top: LeveledMap,
 
     blocking_config: BlockingConfig,
 
@@ -191,7 +192,7 @@ impl SMV002 {
                 return Ok(());
             }
 
-            sm.replace(Level::new(level_data, None));
+            sm.replace(LeveledMap::new(level_data));
         }
 
         info!(
@@ -316,31 +317,31 @@ impl SMV002 {
     }
 
     pub fn curr_seq(&self) -> u64 {
-        self.top.data_ref().curr_seq()
+        self.top.writable_ref().curr_seq()
     }
 
     pub fn last_applied_ref(&self) -> &Option<LogId> {
-        self.top.data_ref().last_applied_ref()
+        self.top.writable_ref().last_applied_ref()
     }
 
     pub fn last_membership_ref(&self) -> &StoredMembership {
-        self.top.data_ref().last_membership_ref()
+        self.top.writable_ref().last_membership_ref()
     }
 
     pub fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        self.top.data_ref().nodes_ref()
+        self.top.writable_ref().nodes_ref()
     }
 
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.top.data_mut().last_applied_mut()
+        self.top.writable_mut().last_applied_mut()
     }
 
     pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.top.data_mut().last_membership_mut()
+        self.top.writable_mut().last_membership_mut()
     }
 
     pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.top.data_mut().nodes_mut()
+        self.top.writable_mut().nodes_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
@@ -353,19 +354,18 @@ impl SMV002 {
     ///
     /// This operation is fast because it does not copy any data.
     pub fn full_snapshot_view(&mut self) -> SnapshotViewV002 {
-        self.top.new_level();
+        self.top.freeze_writable();
 
-        // Safe unwrap: just created new level and it must have a base level.
-        let base = self.top.get_base().unwrap();
+        let static_levels = self.top.frozen_ref();
 
-        SnapshotViewV002::new(base)
+        SnapshotViewV002::new(static_levels.clone())
     }
 
     /// Replace all of the state machine data with the given one.
     /// The input is a multi-level data.
-    pub fn replace(&mut self, level: Level) {
-        let applied = self.top.data_ref().last_applied_ref();
-        let new_applied = level.data_ref().last_applied_ref();
+    pub fn replace(&mut self, level: LeveledMap) {
+        let applied = self.top.writable_ref().last_applied_ref();
+        let new_applied = level.writable_ref().last_applied_ref();
 
         assert!(
             new_applied >= applied,
@@ -384,11 +384,14 @@ impl SMV002 {
     /// Keep the top(writable) level, replace the base level and all levels below it.
     pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
-            Arc::ptr_eq(&self.top.get_base().unwrap(), &snapshot.original()),
+            Arc::ptr_eq(
+                self.top.frozen_ref().newest().unwrap(),
+                snapshot.original_ref().newest().unwrap()
+            ),
             "the base must not be changed"
         );
 
-        self.top.replace_base(Some(snapshot.top()));
+        self.top.replace_frozen_levels(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.

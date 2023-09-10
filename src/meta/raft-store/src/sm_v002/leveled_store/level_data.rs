@@ -27,6 +27,7 @@ use log::debug;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
@@ -83,10 +84,6 @@ impl LevelData {
         self.expire = expire;
     }
 
-    pub(crate) fn curr_seq(&self) -> u64 {
-        self.sequence
-    }
-
     pub(crate) fn update_seq(&mut self, seq: u64) {
         self.sequence = seq;
     }
@@ -98,21 +95,6 @@ impl LevelData {
         // dbg!("next_seq", self.sequence);
 
         self.sequence
-    }
-
-    // Cloned data is accessed directly
-    pub fn last_applied_ref(&self) -> &Option<LogId> {
-        &self.last_applied
-    }
-
-    // Cloned data is accessed directly
-    pub fn last_membership_ref(&self) -> &StoredMembership {
-        &self.last_membership
-    }
-
-    // Cloned data is accessed directly
-    pub(crate) fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        &self.nodes
     }
 
     // Cloned data is accessed directly
@@ -232,5 +214,23 @@ impl MapApi<ExpireKey> for LevelData {
         let prev = MapApiRO::<ExpireKey>::get(self, &key).await;
         self.expire.insert(key, marked.clone());
         (prev, marked)
+    }
+}
+
+impl MetaApiRO for LevelData {
+    fn curr_seq(&self) -> u64 {
+        self.sequence
+    }
+
+    fn last_applied_ref(&self) -> &Option<LogId> {
+        &self.last_applied
+    }
+
+    fn last_membership_ref(&self) -> &StoredMembership {
+        &self.last_membership
+    }
+
+    fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
+        &self.nodes
     }
 }

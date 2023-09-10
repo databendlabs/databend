@@ -77,7 +77,7 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
     sm.upsert_kv(UpsertKV::update("a/b", b"b0")).await;
     sm.upsert_kv(UpsertKV::update("c", b"c0")).await;
 
-    sm.top.new_level();
+    sm.top.freeze_writable();
 
     // internal_seq = 3
     sm.upsert_kv(UpsertKV::delete("a/b")).await;
@@ -154,7 +154,7 @@ async fn build_sm_with_expire() -> SMV002 {
     sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await;
 
-    sm.top.new_level();
+    sm.top.freeze_writable();
 
     sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await;
