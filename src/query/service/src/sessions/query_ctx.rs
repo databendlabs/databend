@@ -59,7 +59,7 @@ use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_sql::IndexType;
-use common_storage::common_metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
+use common_storage::metrics::copy::metrics_inc_filter_out_copied_files_request_milliseconds;
 use common_storage::CopyStatus;
 use common_storage::DataOperator;
 use common_storage::FileStatus;

@@ -24,7 +24,7 @@ use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
@@ -88,26 +88,24 @@ impl SnapshotViewV002 {
         let mut data = self.top.data_ref().new_level();
 
         // `range()` will compact tombstone internally
-        let strm = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
+        let strm = MapApiRO::<String>::range::<String, _>(self.top.as_ref(), ..)
             .await
             .filter(|(_k, v)| {
                 let x = !v.is_tomb_stone();
                 async move { x }
-            })
-            .map(|(k, v)| (k.clone(), v.clone()));
+            });
 
         let btreemap = strm.collect().await;
 
         data.replace_kv(btreemap);
 
         // `range()` will compact tombstone internally
-        let strm = MapApi::<ExpireKey>::range(self.top.as_ref(), ..)
+        let strm = MapApiRO::<ExpireKey>::range(self.top.as_ref(), ..)
             .await
             .filter(|(_k, v)| {
                 let x = !v.is_tomb_stone();
                 async move { x }
-            })
-            .map(|(k, v)| (k.clone(), v.clone()));
+            });
 
         let btreemap = strm.collect().await;
 
@@ -169,7 +167,7 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let kv_iter = MapApi::<String>::range::<String, _>(self.top.as_ref(), ..)
+        let kv_iter = MapApiRO::<String>::range::<String, _>(self.top.as_ref(), ..)
             .await
             .filter_map(|(k, v)| async move {
                 if let Marked::Normal {
@@ -178,7 +176,7 @@ impl SnapshotViewV002 {
                     meta,
                 } = v
                 {
-                    let seqv = SeqV::with_meta(*internal_seq, meta.clone(), value.clone());
+                    let seqv = SeqV::with_meta(internal_seq, meta, value);
                     Some(RaftStoreEntry::GenericKV {
                         key: k.clone(),
                         value: seqv,
@@ -190,7 +188,7 @@ impl SnapshotViewV002 {
 
         // expire index
 
-        let expire_iter = MapApi::<ExpireKey>::range(self.top.as_ref(), ..)
+        let expire_iter = MapApiRO::<ExpireKey>::range(self.top.as_ref(), ..)
             .await
             .filter_map(|(k, v)| async move {
                 if let Marked::Normal {
@@ -199,7 +197,7 @@ impl SnapshotViewV002 {
                     meta: _,
                 } = v
                 {
-                    let ev = ExpireValue::new(value, *internal_seq);
+                    let ev = ExpireValue::new(value, internal_seq);
 
                     Some(RaftStoreEntry::Expire {
                         key: k.clone(),

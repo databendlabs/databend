@@ -29,6 +29,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::EventCause;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
@@ -80,197 +81,268 @@ impl BlockMetaInfo for ExchangeShuffleMeta {
     }
 }
 
-struct OutputBuffer {
-    blocks: VecDeque<DataBlock>,
-}
-
-impl OutputBuffer {
-    pub fn create(capacity: usize) -> OutputBuffer {
-        OutputBuffer {
-            blocks: VecDeque::with_capacity(capacity),
-        }
-    }
-}
-
 struct OutputsBuffer {
-    capacity: usize,
-    inner: Vec<OutputBuffer>,
+    inner: Vec<VecDeque<DataBlock>>,
 }
 
 impl OutputsBuffer {
     pub fn create(capacity: usize, outputs: usize) -> OutputsBuffer {
-        let mut inner = Vec::with_capacity(outputs);
-
-        for _index in 0..outputs {
-            inner.push(OutputBuffer::create(capacity))
+        OutputsBuffer {
+            inner: vec![capacity; outputs]
+                .into_iter()
+                .map(VecDeque::with_capacity)
+                .collect::<Vec<_>>(),
         }
-
-        OutputsBuffer { inner, capacity }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.inner.iter().all(|x| x.blocks.is_empty())
+    pub fn is_all_empty(&self) -> bool {
+        self.inner.iter().all(|x| x.is_empty())
     }
 
-    pub fn is_fill(&self, index: usize) -> bool {
-        self.inner[index].blocks.len() == self.capacity
+    pub fn is_empty(&self, index: usize) -> bool {
+        self.inner[index].is_empty()
+    }
+
+    pub fn is_full(&self) -> bool {
+        self.inner.iter().any(|x| x.len() == x.capacity())
+    }
+
+    pub fn clear(&mut self, index: usize) {
+        self.inner[index].clear();
     }
 
     pub fn pop(&mut self, index: usize) -> Option<DataBlock> {
-        self.inner[index].blocks.pop_front()
+        self.inner[index].pop_front()
     }
 
-    pub fn push_back(&mut self, index: usize, block: DataBlock) {
-        self.inner[index].blocks.push_back(block)
+    pub fn push_back(&mut self, index: usize, block: DataBlock) -> usize {
+        self.inner[index].push_back(block);
+        self.inner[index].len()
     }
 }
 
-pub struct ExchangeShuffleTransform {
-    inputs: Vec<Arc<InputPort>>,
-    outputs: Vec<Arc<OutputPort>>,
+#[derive(PartialEq)]
+enum PortStatus {
+    Idle,
+    HasData,
+    NeedData,
+    Finished,
+}
+
+struct PortWithStatus<Port> {
+    pub status: PortStatus,
+    pub port: Arc<Port>,
+}
+
+struct ExchangeShuffleTransform {
+    initialized: bool,
+
+    finished_inputs: usize,
+    finished_outputs: usize,
+
+    waiting_outputs: Vec<usize>,
+    waiting_inputs: VecDeque<usize>,
 
     buffer: OutputsBuffer,
-    all_inputs_finished: bool,
-    all_outputs_finished: bool,
-}
-
-impl ExchangeShuffleTransform {
-    pub fn create(inputs: usize, outputs: usize) -> ExchangeShuffleTransform {
-        let mut inputs_port = Vec::with_capacity(inputs);
-        let mut outputs_port = Vec::with_capacity(outputs);
-
-        for _index in 0..inputs {
-            inputs_port.push(InputPort::create());
-        }
-
-        for _index in 0..outputs {
-            outputs_port.push(OutputPort::create());
-        }
-
-        ExchangeShuffleTransform {
-            inputs: inputs_port,
-            outputs: outputs_port,
-            buffer: OutputsBuffer::create(10, outputs),
-            all_inputs_finished: false,
-            all_outputs_finished: false,
-        }
-    }
-
-    pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
-        self.inputs.to_vec()
-    }
-
-    pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
-        self.outputs.to_vec()
-    }
+    inputs: Vec<PortWithStatus<InputPort>>,
+    outputs: Vec<PortWithStatus<OutputPort>>,
 }
 
 impl Processor for ExchangeShuffleTransform {
     fn name(&self) -> String {
-        String::from("ExchangeShuffleProcessor")
+        String::from("ExchangeShuffleTransform")
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
         self
     }
 
-    fn event(&mut self) -> Result<Event> {
-        loop {
-            if !self.try_push_outputs() {
-                for input in &self.inputs {
-                    input.set_need_data();
-                }
+    fn event_with_cause(&mut self, cause: EventCause) -> Result<Event> {
+        if let EventCause::Output(output_index) = &cause {
+            let output = &mut self.outputs[*output_index];
 
-                return Ok(Event::NeedConsume);
+            if output.port.is_finished() {
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+            } else if output.port.can_push() {
+                if !self.buffer.is_empty(*output_index) {
+                    let data_block = self.buffer.pop(*output_index).unwrap();
+                    output.status = PortStatus::Idle;
+                    output.port.push_data(Ok(data_block));
+
+                    self.wakeup_inputs();
+                    self.wakeup_outputs();
+                } else if output.status != PortStatus::NeedData {
+                    output.status = PortStatus::NeedData;
+                    self.waiting_outputs.push(*output_index);
+                }
+            }
+        }
+
+        if !self.initialized && !self.waiting_outputs.is_empty() {
+            self.initialized = true;
+            for input in &self.inputs {
+                input.port.set_need_data();
+            }
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            for input in &self.inputs {
+                input.port.finish();
             }
 
-            if self.all_outputs_finished {
-                for input in &self.inputs {
-                    input.finish();
-                }
+            return Ok(Event::Finished);
+        }
 
-                return Ok(Event::Finished);
+        if let EventCause::Input(input_index) = &cause {
+            let input = &mut self.inputs[*input_index];
+
+            if input.port.is_finished() {
+                if input.status != PortStatus::Finished {
+                    self.finished_inputs += 1;
+                    input.status = PortStatus::Finished;
+                }
+            } else if input.port.has_data() {
+                if !self.buffer.is_full() {
+                    self.take_input_data_into_buffer(*input_index);
+
+                    self.wakeup_outputs();
+                    self.wakeup_inputs();
+                } else if input.status != PortStatus::HasData {
+                    input.status = PortStatus::HasData;
+                    self.waiting_inputs.push_back(*input_index);
+                }
+            }
+        }
+
+        if self.finished_outputs == self.outputs.len() {
+            for input in &self.inputs {
+                input.port.finish();
             }
 
-            if let Some(mut data_block) = self.try_pull_inputs()? {
-                if let Some(block_meta) = data_block.take_meta() {
-                    if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
-                        for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
-                            if !block.is_empty() || block.get_meta().is_some() {
-                                self.buffer.push_back(index, block);
-                            }
-                        }
+            return Ok(Event::Finished);
+        }
 
-                        // Try push again.
-                        continue;
-                    }
-                }
-
-                return Err(ErrorCode::Internal(
-                    "ExchangeShuffleTransform only recv ExchangeShuffleMeta.",
-                ));
+        if self.finished_inputs == self.inputs.len() && self.buffer.is_all_empty() {
+            for output in &self.outputs {
+                output.port.finish();
             }
 
-            if self.all_inputs_finished && self.buffer.is_empty() {
-                for output in &self.outputs {
-                    output.finish();
-                }
+            return Ok(Event::Finished);
+        }
 
-                return Ok(Event::Finished);
-            }
-
-            return Ok(Event::NeedData);
+        match self.waiting_outputs.is_empty() {
+            true => Ok(Event::NeedConsume),
+            false => Ok(Event::NeedData),
         }
     }
 }
 
 impl ExchangeShuffleTransform {
-    fn try_push_outputs(&mut self) -> bool {
-        self.all_outputs_finished = true;
-        let mut pushed_all_outputs = true;
+    fn wakeup_inputs(&mut self) {
+        while !self.waiting_inputs.is_empty() && !self.buffer.is_full() {
+            let input_index = self.waiting_inputs.pop_front().unwrap();
 
-        for (index, output) in self.outputs.iter().enumerate() {
-            if output.is_finished() {
-                continue;
-            }
-
-            self.all_outputs_finished = false;
-
-            if output.can_push() {
-                if let Some(data_block) = self.buffer.pop(index) {
-                    output.push_data(Ok(data_block));
-                }
-
-                continue;
-            }
-
-            if !output.can_push() && self.buffer.is_fill(index) {
-                pushed_all_outputs = false;
-            }
+            self.take_input_data_into_buffer(input_index);
         }
-
-        pushed_all_outputs
     }
 
-    fn try_pull_inputs(&mut self) -> Result<Option<DataBlock>> {
-        let mut data_block = None;
-        self.all_inputs_finished = true;
+    fn wakeup_outputs(&mut self) {
+        let mut new_waiting_output = Vec::with_capacity(self.waiting_outputs.len());
 
-        for input_port in &self.inputs {
-            if input_port.is_finished() {
+        for waiting_output in &self.waiting_outputs {
+            let output = &mut self.outputs[*waiting_output];
+
+            if output.port.is_finished() {
+                self.finished_outputs += 1;
+                self.buffer.clear(*waiting_output);
+                output.status = PortStatus::Finished;
                 continue;
             }
 
-            input_port.set_need_data();
-            self.all_inputs_finished = false;
-            if !input_port.has_data() || data_block.is_some() {
+            if self.buffer.is_empty(*waiting_output) {
+                new_waiting_output.push(*waiting_output);
                 continue;
             }
 
-            data_block = input_port.pull_data().transpose()?;
+            let data_block = self.buffer.pop(*waiting_output).unwrap();
+            output.status = PortStatus::Idle;
+            output.port.push_data(Ok(data_block));
         }
 
-        Ok(data_block)
+        self.waiting_outputs = new_waiting_output;
+    }
+
+    fn take_input_data_into_buffer(&mut self, input_index: usize) {
+        let input = &mut self.inputs[input_index];
+
+        input.status = PortStatus::Idle;
+        let mut data_block = input.port.pull_data().unwrap().unwrap();
+
+        if let Some(block_meta) = data_block.take_meta() {
+            if let Some(shuffle_meta) = ExchangeShuffleMeta::downcast_from(block_meta) {
+                for (index, block) in shuffle_meta.blocks.into_iter().enumerate() {
+                    if (!block.is_empty() || block.get_meta().is_some())
+                        && self.outputs[index].status != PortStatus::Finished
+                    {
+                        self.buffer.push_back(index, block);
+                    }
+                }
+            }
+        }
+
+        if input.port.is_finished() {
+            if input.status != PortStatus::Finished {
+                self.finished_inputs += 1;
+                input.status = PortStatus::Finished;
+            }
+
+            return;
+        }
+
+        input.port.set_need_data();
+    }
+}
+
+impl ExchangeShuffleTransform {
+    pub fn create(inputs: usize, outputs: usize, buffer: usize) -> ExchangeShuffleTransform {
+        let mut inputs_port = Vec::with_capacity(inputs);
+        let mut outputs_port = Vec::with_capacity(outputs);
+
+        for _index in 0..inputs {
+            inputs_port.push(PortWithStatus {
+                status: PortStatus::Idle,
+                port: InputPort::create(),
+            });
+        }
+
+        for _index in 0..outputs {
+            outputs_port.push(PortWithStatus {
+                status: PortStatus::Idle,
+                port: OutputPort::create(),
+            });
+        }
+
+        ExchangeShuffleTransform {
+            initialized: false,
+            finished_inputs: 0,
+            finished_outputs: 0,
+            inputs: inputs_port,
+            outputs: outputs_port,
+            buffer: OutputsBuffer::create(buffer, outputs),
+            waiting_inputs: VecDeque::with_capacity(inputs),
+            waiting_outputs: Vec::with_capacity(outputs),
+        }
+    }
+
+    pub fn get_inputs(&self) -> Vec<Arc<InputPort>> {
+        self.inputs.iter().map(|x| x.port.clone()).collect()
+    }
+
+    pub fn get_outputs(&self) -> Vec<Arc<OutputPort>> {
+        self.outputs.iter().map(|x| x.port.clone()).collect()
     }
 }
 
@@ -288,8 +360,8 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
     let exchange_injector = &params.exchange_injector;
     exchange_injector.apply_shuffle_serializer(params, pipeline)?;
 
+    let output_len = pipeline.output_len();
     if let Some(exchange_sorting) = &exchange_injector.exchange_sorting() {
-        let output_len = pipeline.output_len();
         let sorting = ShuffleExchangeSorting::create(exchange_sorting.clone());
         let transform = TransformExchangeSorting::create(output_len, sorting);
 
@@ -302,13 +374,13 @@ pub fn exchange_shuffle(params: &ShuffleExchangeParams, pipeline: &mut Pipeline)
         )]));
     }
 
-    let output_len = pipeline.output_len();
-    let new_output_len = params.destination_ids.len();
-    let transform = ExchangeShuffleTransform::create(output_len, new_output_len);
+    let inputs_size = pipeline.output_len();
+    let outputs_size = params.destination_ids.len();
+    let transform = ExchangeShuffleTransform::create(inputs_size, outputs_size, output_len);
 
     let inputs = transform.get_inputs();
     let outputs = transform.get_outputs();
-    pipeline.add_pipe(Pipe::create(output_len, new_output_len, vec![
+    pipeline.add_pipe(Pipe::create(inputs_size, outputs_size, vec![
         PipeItem::create(ProcessorPtr::create(Box::new(transform)), inputs, outputs),
     ]));
 

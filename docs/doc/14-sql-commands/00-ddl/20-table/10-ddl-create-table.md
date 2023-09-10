@@ -136,44 +136,7 @@ CONNECTION = (
 
 ## Column Nullable
 
-By default, **all columns are not nullable(NOT NULL)**, if you want to specify a column default to `NULL`, please use:
-```sql
-CREATE TABLE [IF NOT EXISTS] [db.]table_name
-(
-    <column_name> <data_type> NULL,
-     ...
-)
-```
-
-Let check it out how difference the column is `NULL` or `NOT NULL`.
-
-Create a table `t_not_null` which column with `NOT NULL`(Databend Column is `NOT NULL` by default):
-```sql
-CREATE TABLE t_not_null(a INT);
-```
-
-```sql
-DESC t_not_null;
-+-------+-------+------+---------+
-| Field | Type  | Null | Default |
-+-------+-------+------+---------+
-| a     | Int32 | NO   | 0       |
-+-------+-------+------+---------+
-```
-
-Create another table `t_null` column with `NULL`:
-```sql
-CREATE TABLE t_null(a INT NULL);
-```
-
-```sql
-DESC t_null;
-+-------+-------+------+---------+
-| Field | Type  | Null | Default |
-+-------+-------+------+---------+
-| a     | Int32 | YES  | NULL    |
-+-------+-------+------+---------+
-```
+By default, **all columns are nullable(NULL)** in Databend. If you need a column that does not allow NULL values, use the NOT NULL constraint. For more information, see [NULL Values and NOT NULL Constraint](../../../13-sql-reference/10-data-types/index.md).
 
 ## Default Values
 
@@ -183,27 +146,30 @@ DEFAULT <expr>
 Specify a default value inserted in the column if a value is not specified via an `INSERT` or `CREATE TABLE AS SELECT` statement.
 
 For example:
+
 ```sql
 CREATE TABLE t_default_value(a TINYINT UNSIGNED, b VARCHAR DEFAULT 'b');
 ```
 
 Desc the `t_default_value` table:
+
 ```sql
 DESC t_default_value;
-+-------+------------------+------+---------+-------+
-| Field | Type             | Null | Default | Extra |
-+-------+------------------+------+---------+-------+
-| a     | TINYINT UNSIGNED | NO   | 0       |       |
-| b     | VARCHAR          | NO   | b       |       |
-+-------+------------------+------+---------+-------+
+
+Field|Type            |Null|Default|Extra|
+-----+----------------+----+-------+-----+
+a    |TINYINT UNSIGNED|YES |NULL   |     |
+b    |VARCHAR         |YES |'b'    |     |
 ```
 
 Insert a value:
+
 ```sql
 INSERT INTO T_default_value(a) VALUES(1);
 ```
 
 Check the table values:
+
 ```sql
 SELECT * FROM t_default_value;
 +------+------+
@@ -294,9 +260,9 @@ DESC books;
 +-------+-----------------+------+---------+-------+
 | Field | Type            | Null | Default | Extra |
 +-------+-----------------+------+---------+-------+
-| id    | BIGINT UNSIGNED | NO   | 0       |       |
-| title | VARCHAR         | NO   | ""      |       |
-| genre | VARCHAR         | NO   | 'General'|       |
+| id    | BIGINT UNSIGNED | YES  | 0       |       |
+| title | VARCHAR         | YES  | ""      |       |
+| genre | VARCHAR         | YES  | 'General'|       |
 +-------+-----------------+------+---------+-------+
 ```
 
@@ -332,9 +298,9 @@ DESC books_copy;
 +-------+-----------------+------+---------+-------+
 | Field | Type            | Null | Default | Extra |
 +-------+-----------------+------+---------+-------+
-| id    | BIGINT UNSIGNED | NO   | 0       |       |
-| title | VARCHAR         | NO   | ""      |       |
-| genre | VARCHAR         | NO   | 'General'|       |
+| id    | BIGINT UNSIGNED | YES  | 0       |       |
+| title | VARCHAR         | YES  | ""      |       |
+| genre | VARCHAR         | YES  | 'General'|       |
 +-------+-----------------+------+---------+-------+
 ```
 
