@@ -48,7 +48,7 @@ pub struct MergeIntoNotMatchedProcessor {
     output_port: Arc<OutputPort>,
     ops: Vec<InsertDataBlockMutation>,
     input_data: Option<DataBlock>,
-    output_datas: Vec<DataBlock>,
+    output_data: Vec<DataBlock>,
     func_ctx: FunctionContext,
     // data_schemas[i] means the i-th op's result block's schema.
     data_schemas: HashMap<usize, DataSchemaRef>,
@@ -87,7 +87,7 @@ impl MergeIntoNotMatchedProcessor {
             output_port: OutputPort::create(),
             ops,
             input_data: None,
-            output_datas: Vec::new(),
+            output_data: Vec::new(),
             func_ctx,
             data_schemas,
         })
@@ -112,7 +112,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
     }
 
     fn event(&mut self) -> Result<Event> {
-        let finished = self.input_port.is_finished() && self.output_datas.is_empty();
+        let finished = self.input_port.is_finished() && self.output_data.is_empty();
         if finished {
             self.output_port.finish();
             return Ok(Event::Finished);
@@ -120,9 +120,9 @@ impl Processor for MergeIntoNotMatchedProcessor {
 
         let mut pushed_something = false;
 
-        if self.output_port.can_push() && !self.output_datas.is_empty() {
+        if self.output_port.can_push() && !self.output_data.is_empty() {
             self.output_port
-                .push_data(Ok(self.output_datas.pop().unwrap()));
+                .push_data(Ok(self.output_data.pop().unwrap()));
             pushed_something = true
         }
 
@@ -131,7 +131,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
         }
 
         if self.input_port.has_data() {
-            if self.output_datas.is_empty() {
+            if self.output_data.is_empty() {
                 self.input_data = Some(self.input_port.pull_data().unwrap()?);
                 Ok(Event::Sync)
             } else {
@@ -157,7 +157,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     .add_meta(Some(Box::new(self.data_schemas.get(&idx).unwrap().clone())))?;
                 if !satisfied_block.is_empty() {
                     metrics_inc_merge_into_append_blocks_counter(1);
-                    self.output_datas
+                    self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)
                 }
 
