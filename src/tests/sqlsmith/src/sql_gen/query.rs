@@ -15,6 +15,9 @@
 use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
+use common_ast::ast::Join;
+use common_ast::ast::JoinCondition;
+use common_ast::ast::JoinOperator;
 use common_ast::ast::Literal;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::Query;
@@ -31,6 +34,10 @@ use crate::sql_gen::Table;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
+        self.bound_columns.clear();
+        self.bound_tables.clear();
+        self.is_join = false;
+
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
@@ -40,7 +47,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             // TODO
             with: None,
             body,
-            // TODO
             order_by,
             limit,
             offset,
@@ -210,33 +216,124 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
     fn gen_from(&mut self) -> Vec<TableReference> {
         match self.rng.gen_range(0..=9) {
-            0..=9 => {
+            0..=7 => {
                 let i = self.rng.gen_range(0..self.tables.len());
-                self.bound_table(self.tables[i].clone());
-
-                let table_name = Identifier::from_name(self.tables[i].name.clone());
-
-                let table_ref = TableReference::Table {
-                    span: None,
-                    // TODO
-                    catalog: None,
-                    // TODO
-                    database: None,
-                    table: table_name,
-                    // TODO
-                    alias: None,
-                    // TODO
-                    travel_point: None,
-                    // TODO
-                    pivot: None,
-                    // TODO
-                    unpivot: None,
-                };
+                let table_ref = self.gen_table_ref(self.tables[i].clone());
                 vec![table_ref]
+            }
+            // join
+            8..=9 => {
+                self.is_join = true;
+                let join = self.gen_join_table_ref();
+                vec![join]
             }
             // TODO
             _ => unreachable!(),
         }
+    }
+
+    fn gen_table_ref(&mut self, table: Table) -> TableReference {
+        let table_name = Identifier::from_name(table.name.clone());
+
+        self.bound_table(table);
+
+        TableReference::Table {
+            span: None,
+            // TODO
+            catalog: None,
+            // TODO
+            database: None,
+            table: table_name,
+            // TODO
+            alias: None,
+            // TODO
+            travel_point: None,
+            // TODO
+            pivot: None,
+            // TODO
+            unpivot: None,
+        }
+    }
+
+    fn gen_join_table_ref(&mut self) -> TableReference {
+        let i = self.rng.gen_range(0..self.tables.len());
+        let j = if i == self.tables.len() - 1 { 0 } else { i + 1 };
+        let left_table = self.gen_table_ref(self.tables[i].clone());
+        let right_table = self.gen_table_ref(self.tables[j].clone());
+
+        let op = match self.rng.gen_range(0..=8) {
+            0 => JoinOperator::Inner,
+            1 => JoinOperator::LeftOuter,
+            2 => JoinOperator::RightOuter,
+            3 => JoinOperator::FullOuter,
+            4 => JoinOperator::LeftSemi,
+            5 => JoinOperator::LeftAnti,
+            6 => JoinOperator::RightSemi,
+            7 => JoinOperator::RightAnti,
+            8 => JoinOperator::CrossJoin,
+            _ => unreachable!(),
+        };
+
+        let condition = match self.rng.gen_range(0..=2) {
+            0 => {
+                let ty = self.gen_data_type();
+                let expr = self.gen_expr(&ty);
+                JoinCondition::On(Box::new(expr))
+            }
+            1 => {
+                let left_fields = self.tables[i].schema.fields();
+                let right_fields = self.tables[j].schema.fields();
+
+                let mut names = Vec::new();
+                for left_field in left_fields {
+                    for right_field in right_fields {
+                        if left_field.name == right_field.name {
+                            names.push(left_field.name.clone());
+                        }
+                    }
+                }
+                if names.is_empty() {
+                    JoinCondition::Natural
+                } else {
+                    let mut num = self.rng.gen_range(1..=3);
+                    if num > names.len() {
+                        num = names.len();
+                    }
+                    let mut idents = Vec::with_capacity(num);
+                    for _ in 0..num {
+                        let idx = self.rng.gen_range(0..names.len());
+                        idents.push(Identifier::from_name(names[idx].clone()));
+                    }
+                    JoinCondition::Using(idents)
+                }
+            }
+            2 => JoinCondition::Natural,
+            _ => unreachable!(),
+        };
+
+        let condition = match op {
+            // Outer joins can not work with `JoinCondition::None`
+            JoinOperator::LeftOuter | JoinOperator::RightOuter | JoinOperator::FullOuter => {
+                condition
+            }
+            // CrossJoin can only work with `JoinCondition::None`
+            JoinOperator::CrossJoin => JoinCondition::None,
+            _ => {
+                if self.rng.gen_bool(0.2) {
+                    JoinCondition::None
+                } else {
+                    condition
+                }
+            }
+        };
+
+        let join = Join {
+            op,
+            condition,
+            left: Box::new(left_table),
+            right: Box::new(right_table),
+        };
+        TableReference::Join { span: None, join }
     }
 
     fn gen_selection(&mut self) -> Option<Expr> {
