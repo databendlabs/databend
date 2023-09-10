@@ -2303,10 +2303,7 @@ pub struct CacheConfig {
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
-    #[clap(
-        long = "cache-table-data-deserialized-data-bytes",
-        default_value = "5368709120"
-    )]
+    #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
     pub table_data_deserialized_data_bytes: u64,
 
     // ----- the following options/args are all deprecated               ----
