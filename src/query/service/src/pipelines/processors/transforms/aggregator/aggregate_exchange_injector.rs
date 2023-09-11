@@ -25,6 +25,7 @@ use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableEntryRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::query_spill_prefix;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
 use strength_reduce::StrengthReducedU64;
@@ -242,7 +243,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let params = self.aggregator_params.clone();
 
         let operator = DataOperator::instance().operator();
-        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+        let location_prefix = query_spill_prefix(&self.tenant);
 
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(
@@ -287,7 +288,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
         let method = &self.method;
         let params = self.aggregator_params.clone();
         let operator = DataOperator::instance().operator();
-        let location_prefix = format!("_aggregate_spill/{}", self.tenant);
+        let location_prefix = query_spill_prefix(&self.tenant);
 
         let schema = shuffle_params.schema.clone();
         let local_id = &shuffle_params.executor_id;
