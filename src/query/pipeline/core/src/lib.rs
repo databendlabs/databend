@@ -24,4 +24,5 @@ pub use input_error::InputError;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
+pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;

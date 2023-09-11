@@ -1666,11 +1666,17 @@ impl Column {
                 })
             }
             DataType::Decimal(t) => match t {
-                DecimalDataType::Decimal128(x) => {
-                    Column::Decimal(DecimalColumn::Decimal128(vec![0i128; len].into(), *x))
+                DecimalDataType::Decimal128(size) => {
+                    let values = (0..len)
+                        .map(|_| i128::from(SmallRng::from_entropy().gen::<i16>()))
+                        .collect::<Vec<i128>>();
+                    Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
                 }
-                DecimalDataType::Decimal256(x) => {
-                    Column::Decimal(DecimalColumn::Decimal256(vec![i256::ZERO; len].into(), *x))
+                DecimalDataType::Decimal256(size) => {
+                    let values = (0..len)
+                        .map(|_| i256::from(SmallRng::from_entropy().gen::<i16>()))
+                        .collect::<Vec<i256>>();
+                    Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
                 }
             },
             DataType::Timestamp => TimestampType::from_data(

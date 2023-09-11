@@ -78,45 +78,65 @@ SELECT CAST(CAST('0' AS bigint) AS BOOLEAN)
 ----
 0
 
-# TODO decimal type issue: https://github.com/datafuselabs/databend/issues/2931
-# query I
-# SELECT CAST(CAST('1' AS decimal) AS BOOLEAN)
+query I
+SELECT CAST(CAST('1' AS decimal(2,1)) AS BOOLEAN)
+----
+1
 
-# query I
-# SELECT CAST(CAST('0' AS decimal) AS BOOLEAN)
+query I
+SELECT CAST(CAST('0' AS decimal(2,1)) AS BOOLEAN)
+----
+0
 
-# query I
-# SELECT CAST(CAST('1' AS decimal(1,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('1' AS decimal(1,0)) AS BOOLEAN)
+----
+1
 
-# query I
-# SELECT CAST(CAST('0' AS decimal(1,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('0' AS decimal(1,0)) AS BOOLEAN)
+----
+0
 
-# query I
-# SELECT CAST(CAST('1' AS decimal(9,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('1' AS decimal(9,0)) AS BOOLEAN)
+----
+1
 
-# query I
-# SELECT CAST(CAST('0' AS decimal(9,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('0' AS decimal(9,0)) AS BOOLEAN)
+----
+0
 
-# query I
-# SELECT CAST(CAST('1' AS decimal(38,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('1' AS decimal(38,0)) AS BOOLEAN)
+----
+1
 
-# query I
-# SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN)
+query I
+SELECT CAST(CAST('0' AS decimal(38,0)) AS BOOLEAN)
+----
+0
 
-statement error 1001
+query I
 SELECT CAST(CAST('1' AS float) AS BOOLEAN)
+----
+1
 
-
-statement error 1001
+query I
 SELECT CAST(CAST('0' AS float) AS BOOLEAN)
- 
+----
+0
 
-statement error 1001
+query I
 SELECT CAST(CAST('1' AS double) AS BOOLEAN)
- 
+----
+1
 
-statement error 1001
+query I
 SELECT CAST(CAST('0' AS double) AS BOOLEAN)
+----
+0
 
 query I
 SELECT CAST(CAST('1' AS BIGINT) AS BOOLEAN)

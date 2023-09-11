@@ -52,6 +52,7 @@ use crate::types::string::StringDomain;
 use crate::types::timestamp::timestamp_to_string;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::types::NumberClass;
 use crate::types::ValueType;
 use crate::values::Scalar;
 use crate::values::ScalarRef;
@@ -560,6 +561,25 @@ impl Display for DecimalDataType {
             DecimalDataType::Decimal256(size) => {
                 write!(f, "Decimal({}, {})", size.precision, size.scale)
             }
+        }
+    }
+}
+
+impl Display for NumberClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match &self {
+            NumberClass::UInt8 => write!(f, "UInt8"),
+            NumberClass::UInt16 => write!(f, "UInt16"),
+            NumberClass::UInt32 => write!(f, "UInt32"),
+            NumberClass::UInt64 => write!(f, "UInt64"),
+            NumberClass::Int8 => write!(f, "Int8"),
+            NumberClass::Int16 => write!(f, "Int16"),
+            NumberClass::Int32 => write!(f, "Int32"),
+            NumberClass::Int64 => write!(f, "Int64"),
+            NumberClass::Decimal128 => write!(f, "Decimal128"),
+            NumberClass::Decimal256 => write!(f, "Decimal256"),
+            NumberClass::Float32 => write!(f, "Float32"),
+            NumberClass::Float64 => write!(f, "Float64"),
         }
     }
 }
