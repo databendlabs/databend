@@ -19,9 +19,9 @@ use common_metrics::Histogram;
 use lazy_static::lazy_static;
 
 lazy_static! {
-    static ref COMPACT_HOOK_EXECUTION_MS: Family<Vec<(String, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_execution_ms");
+    static ref COMPACT_HOOK_EXECUTION_MS: Family<Vec<(&'static str, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_execution_ms");
 
-    static ref COMPACT_HOOK_COMPACTION_MS: Family<Vec<(String, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_compaction_ms");
+    static ref COMPACT_HOOK_COMPACTION_MS: Family<Vec<(&'static str, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_compaction_ms");
 }
 
 // the time used in executing the main operation  (replace-into, copy-into, etc)
