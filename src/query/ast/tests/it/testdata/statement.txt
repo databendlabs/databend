@@ -551,7 +551,7 @@ Some(
 ---------- Input ----------
 create table a (c decimal(38, 0))
 ---------- Output ---------
-CREATE TABLE a (c Decimal(38, 0) NOT NULL)
+CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -582,6 +582,7 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -599,7 +600,7 @@ CreateTable(
 ---------- Input ----------
 create table a (c decimal(38))
 ---------- Output ---------
-CREATE TABLE a (c Decimal(38, 0) NOT NULL)
+CREATE TABLE a (c Decimal(38, 0))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -630,6 +631,7 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -647,7 +649,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c integer not null default 1, b varchar);
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -694,6 +696,9 @@ CreateTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: Some(
+                            NotNull,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -706,6 +711,7 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -723,7 +729,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING NOT NULL) AS SELECT * FROM t
+CREATE TABLE IF NOT EXISTS a.b (c Int32 NOT NULL DEFAULT 1, b STRING) AS SELECT * FROM t
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -770,6 +776,9 @@ CreateTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: Some(
+                            NotNull,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -782,6 +791,7 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -855,7 +865,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING) NOT NULL, d TUPLE(Int32, STRING) NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (c TUPLE(m Int32, n STRING), d TUPLE(Int32, STRING))
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -902,6 +912,7 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -920,6 +931,7 @@ CreateTable(
                         },
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -937,7 +949,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a STRING NOT NULL, b STRING NOT NULL, c STRING NOT NULL AS (concat(a, ' ', b)) STORED)
+CREATE TABLE IF NOT EXISTS a.b (a STRING, b STRING, c STRING AS (concat(a, ' ', b)) STORED)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -973,6 +985,7 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -985,6 +998,7 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1058,6 +1072,7 @@ CreateTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1075,7 +1090,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int, b int, c int generated always as (a + b) virtual );
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
+CREATE TABLE IF NOT EXISTS a.b (a Int32, b Int32, c Int32 AS ((a + b)) VIRTUAL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1111,6 +1126,7 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1123,6 +1139,7 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1176,6 +1193,7 @@ CreateTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1291,7 +1309,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (a Int32)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1327,6 +1345,7 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1361,7 +1380,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL)
+CREATE TABLE IF NOT EXISTS a.b (a Int32)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1397,6 +1416,7 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -1728,7 +1748,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP NOT NULL)
+CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1758,6 +1778,7 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -1770,6 +1791,7 @@ CreateTable(
                         data_type: Timestamp,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2448,6 +2470,7 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2462,6 +2485,7 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2476,6 +2500,7 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2521,6 +2546,9 @@ CreateTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: Some(
+                            NotNull,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2533,6 +2561,9 @@ CreateTable(
                         data_type: Int64,
                         expr: None,
                         comment: None,
+                        nullable_constraint: Some(
+                            NotNull,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2545,6 +2576,9 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: Some(
+                            NotNull,
+                        ),
                     },
                 ],
             ),
@@ -2562,7 +2596,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 varbinary);
 ---------- Output ---------
-CREATE TABLE t (c1 STRING NOT NULL)
+CREATE TABLE t (c1 STRING)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2590,6 +2624,7 @@ CreateTable(
                         data_type: String,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -2607,7 +2642,7 @@ CreateTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int default 1);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NOT NULL DEFAULT 1)
+CREATE TABLE t (c1 Int32 DEFAULT 1)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2646,6 +2681,7 @@ CreateTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -6656,6 +6692,47 @@ Insert(
 
 
 ---------- Input ----------
+insert into t (c1, c2) values (1, 2);   
+---------- Output ---------
+INSERT INTO t (c1, c2) VALUES (1, 2);   
+---------- AST ------------
+Insert(
+    InsertStmt {
+        hints: None,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                12..13,
+            ),
+        },
+        columns: [
+            Identifier {
+                name: "c1",
+                quote: None,
+                span: Some(
+                    15..17,
+                ),
+            },
+            Identifier {
+                name: "c2",
+                quote: None,
+                span: Some(
+                    19..21,
+                ),
+            },
+        ],
+        source: Values {
+            rest_str: "(1, 2);   ",
+        },
+        overwrite: false,
+    },
+)
+
+
+---------- Input ----------
 insert into table t format json;
 ---------- Output ---------
 INSERT INTO t FORMAT json ;
@@ -7415,6 +7492,7 @@ AlterTable(
                 ),
                 expr: None,
                 comment: None,
+                nullable_constraint: None,
             },
             option: End,
         },
@@ -7425,7 +7503,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t ADD COLUMN a float default 1.1 COMMENT 'hello' FIRST;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN a Float32 NOT NULL DEFAULT 1.1 COMMENT 'hello' FIRST
+ALTER TABLE t ADD COLUMN a Float32 DEFAULT 1.1 COMMENT 'hello' FIRST
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7475,6 +7553,7 @@ AlterTable(
                 comment: Some(
                     "hello",
                 ),
+                nullable_constraint: None,
             },
             option: First,
         },
@@ -7485,7 +7564,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t ADD COLUMN b string default 'b' AFTER a;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN b STRING NOT NULL DEFAULT 'b' AFTER a
+ALTER TABLE t ADD COLUMN b STRING DEFAULT 'b' AFTER a
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7531,6 +7610,7 @@ AlterTable(
                     ),
                 ),
                 comment: None,
+                nullable_constraint: None,
             },
             option: After(
                 Identifier {
@@ -7765,6 +7845,7 @@ AlterTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7777,6 +7858,7 @@ AlterTable(
                         data_type: Float32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -7838,6 +7920,7 @@ AlterTable(
                             ),
                         ),
                         comment: None,
+                        nullable_constraint: None,
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -7851,6 +7934,9 @@ AlterTable(
                         expr: None,
                         comment: Some(
                             "column b",
+                        ),
+                        nullable_constraint: Some(
+                            NotNull,
                         ),
                     },
                 ],
@@ -7900,6 +7986,7 @@ AlterTable(
                         data_type: Int32,
                         expr: None,
                         comment: None,
+                        nullable_constraint: None,
                     },
                 ],
             ),
@@ -8271,7 +8358,7 @@ VacuumDropTable(
 ---------- Input ----------
 CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';
 ---------- Output ---------
-CREATE TABLE t (a Int32 NOT NULL COMMENT 'col comment')comment='table comment'
+CREATE TABLE t (a Int32 COMMENT 'col comment')comment='table comment'
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -8301,6 +8388,7 @@ CreateTable(
                         comment: Some(
                             "col comment",
                         ),
+                        nullable_constraint: None,
                     },
                 ],
             ),

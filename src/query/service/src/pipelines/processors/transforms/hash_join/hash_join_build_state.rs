@@ -65,6 +65,8 @@ pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
+    /// Processors count
+    pub(crate) _processor_count: usize,
     /// When build side input data is coming, we will put it into `RowSpace`'s chunks.
     /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
@@ -100,6 +102,7 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
+        processor_count: usize,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -109,6 +112,7 @@ impl HashJoinBuildState {
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             hash_join_state,
+            _processor_count: processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
             row_space_builders: Default::default(),
             row_space_build_done: Default::default(),
@@ -191,13 +195,12 @@ impl HashJoinBuildState {
     }
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
-    pub fn build_attach(&self) -> Result<()> {
+    pub fn build_attach(&self) {
         let mut count = self.row_space_builders.lock();
         *count += 1;
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count += 1;
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        Ok(())
     }
 
     /// Detach to state: `row_space_builders`,
@@ -206,6 +209,13 @@ impl HashJoinBuildState {
         let mut count = self.row_space_builders.lock();
         *count -= 1;
         if *count == 0 {
+            // Need to reset `final_probe_done` before processor into `WaitProbe`
+            {
+                let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
+                if *final_probe_done {
+                    *final_probe_done = false;
+                }
+            }
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {

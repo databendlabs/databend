@@ -151,7 +151,7 @@ async fn test_output_formats() -> PoemResult<()> {
         ("TSVWithNames", "a\tb\n0\ta\n1\tb\n"),
         (
             "TSVWithNamesAndTypes",
-            "a\tb\nInt32\tString NULL\n0\ta\n1\tb\n",
+            "a\tb\nInt32 NULL\tString NULL\n0\ta\n1\tb\n",
         ),
     ];
 
@@ -249,21 +249,18 @@ async fn test_insert_format_ndjson() -> PoemResult<()> {
             .await;
         assert_ok!(status, body);
     }
-
     {
         let (status, body) = server.get(r#"select * from t1 order by a"#).await;
         assert_ok!(status, body);
         assert_eq!(&body, "0\ta\n1\tb\n2\t\\N\n");
     }
-
     {
         let jsons = vec![r#"{"b": 0}"#];
         let body = jsons.join("\n");
-        let (status, body) = server
+        let (status, _) = server
             .post("insert into table t1 format JSONEachRow", &body)
             .await;
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
-        assert_error!(body, "column=a");
     }
     Ok(())
 }

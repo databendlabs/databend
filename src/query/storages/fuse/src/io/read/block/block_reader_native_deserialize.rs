@@ -260,7 +260,7 @@ impl BlockReader {
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
-                // currently, caching of compound filed columns is not support
+                // currently, caching of compound field columns is not support
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached

@@ -25,6 +25,7 @@ common-functions = { path = "../../functions" }
 common-io = { path = "../../../common/io" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
+common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
@@ -51,6 +52,7 @@ futures = "0.3.24"
 futures-util = { workspace = true }
 indexmap = "2.0.0"
 itertools = "0.10.5"
+lazy_static = { workspace = true }
 log = { workspace = true }
 metrics = "0.20.1"
 minitrace = { workspace = true }

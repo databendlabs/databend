@@ -20,17 +20,17 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_t.c1 (#0) = 5]
+    ├── filters: [is_true(bloom_test_t.c1 (#0) = 5)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_t
         ├── output columns: [c1 (#0)]
         ├── read rows: 3
-        ├── read bytes: 43
+        ├── read bytes: 45
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]
-        ├── push downs: [filters: [bloom_test_t.c1 (#0) = 5], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_t.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
 query T
@@ -106,17 +106,17 @@ EvalScalar
 ├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_t.c2 (#1) = 0]
+    ├── filters: [is_true(bloom_test_t.c2 (#1) = 0)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.bloom_test_t
         ├── output columns: [c2 (#1)]
-        ├── read rows: 6
+        ├── read rows: 0
         ├── read bytes: 0
         ├── partitions total: 3
-        ├── partitions scanned: 2
-        ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 2>]
-        ├── push downs: [filters: [bloom_test_t.c2 (#1) = 0], limit: NONE]
+        ├── partitions scanned: 0
+        ├── pruning stats: [segments: <range pruning: 3 to 2>, blocks: <range pruning: 2 to 0, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 0)], limit: NONE]
         └── estimated rows: 8.00
 
 query T
@@ -128,7 +128,7 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_t.c2 (#1) = 3]
+    ├── filters: [is_true(bloom_test_t.c2 (#1) = 3)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_t
@@ -138,7 +138,7 @@ EvalScalar
         ├── partitions total: 3
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
-        ├── push downs: [filters: [bloom_test_t.c2 (#1) = 3], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_t.c2 (#1) = 3)], limit: NONE]
         └── estimated rows: 8.00
 
 query T
@@ -150,7 +150,7 @@ EvalScalar
 ├── estimated rows: 0.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_t.c3 (#2) = 12345]
+    ├── filters: [is_true(bloom_test_t.c3 (#2) = 12345)]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.bloom_test_t
@@ -160,7 +160,7 @@ EvalScalar
         ├── partitions total: 3
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 1, bloom pruning: 1 to 0>]
-        ├── push downs: [filters: [bloom_test_t.c3 (#2) = 12345], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_t.c3 (#2) = 12345)], limit: NONE]
         └── estimated rows: 8.00
 
 statement ok
@@ -192,17 +192,17 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_alter_t1.c1 (#0) = 5]
+    ├── filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_alter_t1
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 86
+        ├── read bytes: 90
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [bloom_test_alter_t1.c1 (#0) = 5], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_alter_t1.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
 statement ok
@@ -226,17 +226,17 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_alter_t2.c1 (#0) = 5]
+    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 86
+        ├── read bytes: 90
         ├── partitions total: 2
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [bloom_test_alter_t2.c1 (#0) = 5], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 6.00
 
 # alter bloom_index_columns
@@ -257,17 +257,17 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_alter_t2.c1 (#0) = 5]
+    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 6
-        ├── read bytes: 86
+        ├── read bytes: 90
         ├── partitions total: 3
         ├── partitions scanned: 2
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 3 to 2>]
-        ├── push downs: [filters: [bloom_test_alter_t2.c1 (#0) = 5], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 5)], limit: NONE]
         └── estimated rows: 9.00
 
 # drop bloom_index_columns
@@ -283,17 +283,17 @@ EvalScalar
 ├── estimated rows: 1.00
 └── Filter
     ├── output columns: []
-    ├── filters: [bloom_test_alter_t2.c1 (#0) = 7]
+    ├── filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)]
     ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.default.bloom_test_alter_t2
         ├── output columns: [c1 (#0)]
         ├── read rows: 9
-        ├── read bytes: 129
+        ├── read bytes: 135
         ├── partitions total: 3
         ├── partitions scanned: 3
         ├── pruning stats: [segments: <range pruning: 3 to 3>, blocks: <range pruning: 3 to 3, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [bloom_test_alter_t2.c1 (#0) = 7], limit: NONE]
+        ├── push downs: [filters: [is_true(bloom_test_alter_t2.c1 (#0) = 7)], limit: NONE]
         └── estimated rows: 9.00
 
 statement ok

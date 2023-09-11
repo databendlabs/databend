@@ -16,6 +16,8 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::Ownership;
 use common_meta_app::share::ShareGrantObjectPrivilege;
 use common_meta_app::share::ShareNameIdent;
 use common_meta_types::MatchSeq;
@@ -115,7 +117,12 @@ impl Interpreter for CreateDatabaseInterpreter {
             self.check_create_database_from_share(&tenant, share_name)
                 .await?;
         }
-        catalog.create_database(self.plan.clone().into()).await?;
+
+        let mut create_db_req: CreateDatabaseReq = self.plan.clone().into();
+        if let Some(role) = self.ctx.get_current_role() {
+            create_db_req.meta.owner = Some(Ownership::new(role.name))
+        }
+        catalog.create_database(create_db_req).await?;
 
         Ok(PipelineBuildResult::create())
     }

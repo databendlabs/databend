@@ -181,6 +181,7 @@ async-backtrace = "0.2.2"
 logcall = "0.1.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
 minitrace = "0.5.1"
+prometheus-client = "0.21.2"
 
 # test
 mysql_async = { version = "0.32", default-features = false, features = ["rustls-tls"] }
@@ -234,17 +235,17 @@ arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e113
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
 opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }
-icelake = { git = "https://github.com/icelake-io/icelake/", rev = "4ea7bf9" }
+icelake = { git = "https://github.com/icelake-io/icelake", rev = "eb3251f" }
 # Crates from arrow-rs
-arrow = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-schema = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-array = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-ord = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-flight = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-ipc = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-data = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-arrow-buffer = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
-parquet = { git = "https://github.com/apache/arrow-rs", rev = "c618438" }
+arrow = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-schema = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-array = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-ord = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-flight = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-ipc = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-cast = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-data = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+arrow-buffer = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
+parquet = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
 mysql_async = { git = "https://github.com/datafuse-extras/mysql_async", rev = "1adbbcf" }

@@ -24,8 +24,6 @@ use common_meta_api::SchemaApi;
 use common_meta_api::TXN_MAX_RETRY_TIMES;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserPrivilegeSet;
-use common_meta_app::principal::UserPrivilegeType;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::GetDatabaseReq;
@@ -47,8 +45,6 @@ use common_meta_types::TxnRequest;
 use crate::role::role_api::RoleApi;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
-// TODO(Zhihanz) unify built in role in management crate
-pub const BUILTIN_ROLE_ACCOUNT_ADMIN: &str = "account_admin";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
@@ -105,7 +101,7 @@ impl RoleMgr {
         &self,
         from: &String,
         to: &String,
-        catalog: &str,
+        _catalog: &str,
         db_name: &String,
     ) -> common_exception::Result<()> {
         let mut retry = 0;
@@ -123,59 +119,28 @@ impl RoleMgr {
                 })
                 .await?;
             let mut db_meta = db_info.meta.clone();
-            // if current owner is not none and not from, return error
-            if db_meta.owner.is_some()
-                && from.clone() != *BUILTIN_ROLE_ACCOUNT_ADMIN
-                && db_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
-            {
-                return Err(ErrorCode::IllegalGrant(format!(
-                    "{} is not owner of {}",
-                    from, db_name
-                )));
-            }
 
             let db_meta_seq = db_info.ident.seq;
             let db_id_key = DatabaseId {
                 db_id: db_info.ident.db_id,
             };
-            let from_role_key = self.make_role_key(from);
-            let to_role_key = self.make_role_key(to);
-            let from_role = self.get_role(from, MatchSeq::GE(0)).await?;
-            let mut from_role_data = from_role.data;
-            let to_role = self.get_role(to, MatchSeq::GE(0)).await?;
-            let mut to_role_data = to_role.data;
             db_meta.owner = Some(Ownership {
                 owner_role_name: to.clone(),
                 updated_on: Utc::now(),
             });
+            let condition = vec![txn_cond_seq(&db_id_key, Eq, db_meta_seq)];
 
-            from_role_data.grants.revoke_privileges(
-                &GrantObject::Database(catalog.to_string(), db_name.clone()),
-                UserPrivilegeSet::from(UserPrivilegeType::Ownership),
-            );
-            to_role_data.grants.grant_privileges(
-                &GrantObject::Database(catalog.to_string(), db_name.clone()),
-                UserPrivilegeSet::from(UserPrivilegeType::Ownership),
-            );
-            let from_data = serde_json::to_vec(&from_role_data)?;
-            let to_data = serde_json::to_vec(&to_role_data)?;
+            let if_then = vec![txn_op_put(
+                &db_id_key,
+                serialize_struct(&db_meta).map_err_to_code(
+                    ErrorCode::IllegalGrant,
+                    || "failed to serialize database meta",
+                )?,
+            )];
+
             let txn_req = TxnRequest {
-                condition: vec![
-                    txn_cond_seq(&db_id_key, Eq, db_meta_seq),
-                    txn_cond_seq(&from_role_key, Eq, from_role.seq),
-                    txn_cond_seq(&to_role_key, Eq, to_role.seq),
-                ],
-                if_then: vec![
-                    txn_op_put(
-                        &db_id_key,
-                        serialize_struct(&db_meta).map_err_to_code(
-                            ErrorCode::IllegalGrant,
-                            || "failed to serialize database meta",
-                        )?,
-                    ),
-                    txn_op_put(&from_role_key, from_data),
-                    txn_op_put(&to_role_key, to_data),
-                ],
+                condition,
+                if_then,
                 else_then: vec![],
             };
             let reply = self.kv_api.clone().transaction(txn_req).await?;
@@ -185,7 +150,7 @@ impl RoleMgr {
             }
         }
         Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update database ownership {} from: {} to: {}",
+            "failed to update database ownership {} from: {:?} to: {:?}",
             db_name, from, to
         )))
     }
@@ -194,7 +159,7 @@ impl RoleMgr {
         &self,
         from: &String,
         to: &String,
-        catalog: &str,
+        _catalog: &str,
         db_name: &String,
         table_name: &String,
     ) -> common_exception::Result<()> {
@@ -213,59 +178,28 @@ impl RoleMgr {
                 })
                 .await?;
             let mut table_meta = table_info.meta.clone();
-            // if current owner is not none and not from, return error
-            if table_meta.owner.is_some()
-                && table_meta.owner.as_ref().unwrap().owner_role_name != from.clone()
-            {
-                return Err(ErrorCode::IllegalGrant(format!(
-                    "{} is not owner of {}.{}",
-                    from, db_name, table_name
-                )));
-            }
 
             let tb_meta_seq = table_info.ident.seq;
             let tb_id_key = TableId {
                 table_id: table_info.ident.table_id,
             };
 
-            let from_role_key = self.make_role_key(from);
-            let to_role_key = self.make_role_key(to);
-            let from_role = self.get_role(from, MatchSeq::GE(0)).await?;
-            let mut from_role_data = from_role.data;
-            let to_role = self.get_role(to, MatchSeq::GE(0)).await?;
-            let mut to_role_data = to_role.data;
             table_meta.owner = Some(Ownership {
                 owner_role_name: to.clone(),
                 updated_on: Utc::now(),
             });
+            let condition = vec![txn_cond_seq(&tb_id_key, Eq, tb_meta_seq)];
 
-            from_role_data.grants.revoke_privileges(
-                &GrantObject::Table(catalog.to_string(), db_name.clone(), table_name.clone()),
-                UserPrivilegeSet::from(UserPrivilegeType::Ownership),
-            );
-            to_role_data.grants.grant_privileges(
-                &GrantObject::Table(catalog.to_string(), db_name.clone(), table_name.clone()),
-                UserPrivilegeSet::from(UserPrivilegeType::Ownership),
-            );
-            let from_data = serde_json::to_vec(&from_role_data)?;
-            let to_data = serde_json::to_vec(&to_role_data)?;
+            let if_then = vec![txn_op_put(
+                &tb_id_key,
+                serialize_struct(&table_meta).map_err_to_code(
+                    ErrorCode::IllegalGrant,
+                    || "failed to serialize table meta",
+                )?,
+            )];
             let txn_req = TxnRequest {
-                condition: vec![
-                    txn_cond_seq(&tb_id_key, Eq, tb_meta_seq),
-                    txn_cond_seq(&from_role_key, Eq, from_role.seq),
-                    txn_cond_seq(&to_role_key, Eq, to_role.seq),
-                ],
-                if_then: vec![
-                    txn_op_put(
-                        &tb_id_key,
-                        serialize_struct(&table_meta).map_err_to_code(
-                            ErrorCode::IllegalGrant,
-                            || "failed to serialize table meta",
-                        )?,
-                    ),
-                    txn_op_put(&from_role_key, from_data),
-                    txn_op_put(&to_role_key, to_data),
-                ],
+                condition,
+                if_then,
                 else_then: vec![],
             };
             let reply = self.kv_api.clone().transaction(txn_req).await?;
@@ -275,7 +209,7 @@ impl RoleMgr {
             }
         }
         Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update table ownership {}.{} from: {} to: {}",
+            "failed to update table ownership {}.{} from: {:?} to: {:?}",
             db_name, table_name, from, to
         )))
     }

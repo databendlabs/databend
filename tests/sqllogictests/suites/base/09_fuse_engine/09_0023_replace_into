@@ -15,7 +15,7 @@ USE db_09_0023
 ############################
 
 statement ok
-CREATE TABLE test(a int);
+CREATE TABLE test(a int not null);
 
 statement ok
 REPLACE INTO test ON CONFLICT(a) values(1), (2), (3)
@@ -32,7 +32,7 @@ DROP TABLE test;
 
 # on multiple column
 statement ok
-CREATE TABLE test(a int, b int, c int);
+CREATE TABLE test(a int not null, b int not null, c int not null);
 
 statement ok
 REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (2, 1, 2), (3, 1, 3)
@@ -52,7 +52,7 @@ DROP TABLE test;
 ###################
 
 statement ok
-CREATE TABLE test(a int);
+CREATE TABLE test(a int not null);
 
 # note that "CONFLICT" is optional
 statement error 4000
@@ -62,7 +62,7 @@ statement ok
 DROP TABLE test;
 
 statement ok
-CREATE TABLE test(a int);
+CREATE TABLE test(a int not null);
 
 # note that "CONFLICT" is optional
 statement error 4000
@@ -73,7 +73,7 @@ DROP TABLE test;
 
 # on multiple column
 statement ok
-CREATE TABLE test(a int, b int, c int);
+CREATE TABLE test(a int not null, b int not null, c int not null);
 
 statement error 400
 REPLACE INTO test ON CONFLICT(a,b) values(1, 1, 1), (1, 1, 2), (3, 1, 3)
@@ -86,7 +86,7 @@ DROP TABLE test;
 ###################
 
 statement ok
-CREATE TABLE test(a int);
+CREATE TABLE test(a int not null);
 
 statement ok
 INSERT INTO test        values (1), (2), (3)
@@ -108,7 +108,7 @@ DROP TABLE test;
 
 # on multiple column
 statement ok
-CREATE TABLE test(a int, b int, c int);
+CREATE TABLE test(a int not null, b int not null, c int not null);
 
 statement ok
 INSERT INTO test        values (1, 1, 1), (2, 1, 2), (3, 1, 3)
@@ -133,7 +133,7 @@ DROP TABLE test;
 ############################
 
 statement ok
-CREATE TABLE test(c1 string, c2 int);
+CREATE TABLE test(c1 string not null, c2 int not null);
 
 statement ok
 INSERT INTO test values('a', 1), ('b', 2), ('c', 3)
@@ -156,7 +156,7 @@ DROP TABLE test;
 
 # on multiple column (picking of non consecutive columns, the following case uses columns b and d )
 statement ok
-CREATE TABLE test(a int, b int, c int, d int);
+CREATE TABLE test(a int not null, b int not null, c int not null, d int not null);
 
 statement ok
 INSERT INTO test        values (1, 1, 1, 1), (1, 2, 2, 1), (1, 3, 3, 1)
@@ -182,7 +182,7 @@ DROP TABLE test;
 #############
 
 statement ok
-CREATE TABLE test(c1 int, c2 int);
+CREATE TABLE test(c1 int not null, c2 int not null);
 
 statement ok
 REPLACE INTO test ON(c1) select number, number from numbers(101);
@@ -209,7 +209,7 @@ DROP TABLE test;
 ###################
 
 statement ok
-CREATE TABLE test(c1 int, c2 int, a int);
+CREATE TABLE test(c1 int not null, c2 int not null, a int not null);
 
 statement ok
 replace into test(c1, a) on(c1) values(1, 1), (2, 2);
@@ -247,7 +247,7 @@ DROP TABLE test;
 ##########################
 
 statement ok
-CREATE TABLE test(c1 int, c2 int);
+CREATE TABLE test(c1 int not null, c2 int not null);
 
 # duplicated on column c1
 statement ok
@@ -270,7 +270,7 @@ DROP TABLE test;
 ##############
 
 statement ok
-CREATE TABLE tmp(id INTEGER, name VARCHAR, age INT)
+CREATE TABLE tmp(id INTEGER not null, name VARCHAR not null, age INT not null)
 
 statement ok
 insert into tmp(id,name,age) values (1,'2',3), (4, '5', 6);
@@ -279,7 +279,7 @@ statement ok
 CREATE STAGE IF NOT EXISTS test_stage;
 
 statement ok
-CREATE TABLE test(id INTEGER, name VARCHAR, age INT);
+CREATE TABLE test(id INTEGER not null, name VARCHAR not null, age INT not null);
 
 statement ok
 copy into @test_stage from tmp FILE_FORMAT = (type = parquet);
@@ -321,7 +321,7 @@ drop stage test_stage
 # ERROR HY000 (1105): Code: 1068, Text = Cannot join handle from context's runtime
 
 statement ok
-CREATE TABLE test(a int);
+CREATE TABLE test(a int not null);
 
 statement ok
 insert into test values(1);
@@ -352,7 +352,7 @@ drop table test
 #####################
 
 statement ok
-CREATE TABLE test(a int, b int) cluster by(a+1, b)
+CREATE TABLE test(a int not null, b int not null) cluster by(a+1, b)
 
 statement ok
 insert into test values(1, 1)
@@ -395,7 +395,7 @@ statement ok
 drop table if exists t;
 
 statement ok
-create table t (id int, c1 int, c2 int, c3 int, c4 int) row_per_block=3;
+create table t (id int not null, c1 int not null, c2 int not null, c3 int not null, c4 int not null) row_per_block=3;
 
 statement ok
 insert into t select number, number * 3, number * 5, number * 7, number * 9 from numbers(100);

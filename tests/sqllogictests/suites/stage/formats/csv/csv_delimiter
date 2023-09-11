@@ -2,7 +2,7 @@ statement ok
 drop table if exists tit
 
 statement ok
-create table tit(a string, b int, c string)
+create table tit(a string not null, b int not null, c string not null)
 
 query TIITI
 copy into tit from @data/csv/x01_field_x02_record.csv file_format = (type = CSV skip_header = 0 field_delimiter = '\x01' record_delimiter = '\x02')
@@ -46,7 +46,7 @@ statement ok
 drop table if exists it
 
 statement ok
-create table it(a int, b string)
+create table it(a int not null, b string not null)
 
 query IT
 copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_header=1)
@@ -55,13 +55,13 @@ copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_heade
 query TIITI
 copy into it from @data/csv/whitespace_number.csv file_format = (type = CSV) on_error=continue
 ----
-csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): number is not exist, [column_data]=[" 123"] 1
+csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): invalid text for number, [column_data]=[" 123"] 1
 
 statement ok
 drop table if exists tt
 
 statement ok
-create table tt(a string, b string)
+create table tt(a string not null, b string not null)
 
 query TIITI
 copy into tt from @data/csv/whitespace_quote.csv file_format = (type = CSV) on_error=continue
