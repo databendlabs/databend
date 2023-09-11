@@ -65,7 +65,6 @@ common-license = { path = "../../common/license" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-metrics = { path = "../../common/metrics" }
 common-openai = { path = "../../common/openai" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
@@ -166,7 +165,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-lazy-static = { workspace = true }
+lazy_static = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { version = "46.0.0", features = ["prettyprint"] }
