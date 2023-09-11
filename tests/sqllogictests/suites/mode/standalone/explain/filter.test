@@ -24,7 +24,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
+    ├── push downs: [filters: [and_filters(is_true(t1.a (#0) = 1), is_true(t1.b (#1) > 2 OR t1.b (#1) < 100))], limit: NONE]
     └── estimated rows: 0.00
 
 query T
