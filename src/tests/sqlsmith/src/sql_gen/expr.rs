@@ -342,6 +342,30 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    fn gen_literal(&mut self) -> Literal {
+        let n = self.rng.gen_range(1..7);
+        match n {
+            1 => Literal::Null,
+            2 => Literal::String(
+                rand::thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(7)
+                    .map(char::from)
+                    .collect::<String>(),
+            ),
+            3 => Literal::Boolean(self.rng.gen_bool(0.5)),
+            4 => Literal::Decimal256 {
+                value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
+                precision: 39,
+                scale: self.rng.gen_range(0..39),
+            },
+            5 => Literal::UInt64(self.rng.gen_range(0..=9223372036854775807)),
+            6 => Literal::CurrentTimestamp,
+            7 => Literal::Float64(self.rng.gen_range(-1.7e10..=1.7e10)),
+            _ => unreachable!(),
+        }
+    }
+
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
         let idx = self.rng.gen_range(0..self.agg_func_names.len() - 1);
         let name = self.agg_func_names.get(idx).unwrap().clone();
@@ -349,12 +373,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let arg = self.gen_expr(ty);
         args.push(arg);
         // can ignore ErrorCode::BadDataValueType
+        let mut params = vec![];
+        for _ in 0..self.rng.gen_range(1..4) {
+            let param = self.gen_literal();
+            params.push(param);
+        }
         Expr::FunctionCall {
             span: None,
             distinct: self.rng.gen_bool(0.2),
             name: Identifier::from_name(name),
             args,
-            params: vec![],
+            params,
             window: None,
             lambda: None,
         }
