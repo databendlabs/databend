@@ -5,17 +5,114 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced or updated: v1.2.87"/>
 
-The configuration file `databend-query.toml` contains settings for configuring the Databend query server. Additionally, you can configure more settings for the query server with the script `databend-query`. To find out the available settings with the script, refer to the script's help information:
+This page describes the Query node configurations available in the [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml) configuration file.
 
-```bash
-./databend-query -h
-```
+- Some parameters listed in the table below may not be present in [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml). If you require these parameters, you can manually add them to the file.
 
-This topic explains the settings you can find in the configuration file `databend-query.toml`.
+- You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
 
-:::tip
-You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
-:::
+## [query] Section
+
+The following is a list of the parameters available within the [query] section:
+
+| Parameter                    | Description                                       |
+|------------------------------|---------------------------------------------------|
+| max_active_sessions          | Maximum number of active sessions.               |
+| wait_timeout_mills           | Timeout in milliseconds for waiting.             |
+| flight_api_address           | IP address and port for listening to Databend-Query cluster shuffle data. |
+| admin_api_address            | Address for the Admin REST API.                  |
+| metric_api_address           | Address for the Metrics REST API.                |
+| mysql_handler_host           | Hostname for the MySQL query handler.            |
+| mysql_handler_port           | Port for the MySQL query handler.                |
+| clickhouse_http_handler_host | Hostname for the ClickHouse HTTP query handler.  |
+| clickhouse_http_handler_port | Port for the ClickHouse HTTP query handler.      |
+| http_handler_host            | Hostname for the HTTP API query handler.         |
+| http_handler_port            | Port for the HTTP API query handler.             |
+| flight_sql_handler_host      | Hostname for the Experimental Arrow Flight SQL API query handler. |
+| flight_sql_handler_port      | Port for the Experimental Arrow Flight SQL API query handler. |
+| tenant_id                    | Default tenant ID.                               |
+| cluster_id                   | Default cluster ID.                              |
+| table_engine_memory_enabled  | Flag to enable the Memory table engine.          |
+
+## [[query.users]] Section
+
+The following is a list of the parameters available within the [[query.users]] section. For more information about configuring admin users, see [Configuring Admin Users](../../13-sql-clients/00-admin-users.md).
+
+| Parameter      | Description                              |
+|----------------|------------------------------------------|
+| name           | User name.                               |
+| auth_type      | Authentication type (e.g., no_password, double_sha1_password, sha256_password). |
+| auth_string    | Authentication string (e.g., SHA-1 or SHA-256 hash of the password). |
+
+## [log] Section
+
+The following is a list of the parameters available within the [log] section:
+
+| Parameter           | Description                                                                                         |
+|---------------------|-----------------------------------------------------------------------------------------------------|
+| [log.file] on       | Enables or disables file logging. Defaults to true.                                                 |
+| [log.file] dir      | Path to store log files.                                                                            |
+| [log.file] level    | Log level: DEBUG, INFO, or ERROR. Defaults to INFO.                                                |
+| [log.file] format   | Log format: json or text. Defaults to json.                                                         |
+| [log.stderr] on     | Enables or disables stderr logging. Defaults to false.                                               |
+| [log.stderr] level  | Log level: DEBUG, INFO, or ERROR. Defaults to DEBUG.                                               |
+| [log.stderr] format | Log format: json or text. Defaults to text.                                                          |
+| [log.query] on      | Enables logging query execution details to the query-details folder in the log directory. Defaults to on. Consider disabling when storage space is limited. |
+
+## [meta] Section
+
+The following is a list of the parameters available within the [meta] section:
+
+| Parameter                    | Description                                                                                           |
+|------------------------------|-------------------------------------------------------------------------------------------------------|
+| username                     | The username used to connect to the Meta service. Default: "root".                                  |
+| password                     | The password used to connect to the Meta service. Databend recommends using the environment variable META_PASSWORD to provide the password. Default: "root". |
+| endpoints                    | Sets one or more meta server endpoints that this query server can connect to. For robust connection to Meta, include multiple meta servers within the cluster as backups if possible. Example: ["192.168.0.1:9191", "192.168.0.2:9191"]. Default: ["0.0.0.0:9191"]. |
+| client_timeout_in_second     | Sets the wait time (in seconds) before terminating the attempt to connect to a meta server. Default: 60. |
+| auto_sync_interval           | Sets how often (in seconds) this query server should automatically sync up endpoints from the meta servers within the cluster. When enabled, Databend-query contacts a Databend-meta server periodically to obtain a list of grpc_api_advertise_host:grpc-api-port. To disable the sync up, set it to 0. Default: 60. |
+| unhealth_endpoint_evict_time | Internal time (in seconds) for not querying an unhealthy meta node endpoint. Default: 120.           |
+
+## [storage] Section
+
+The following is a list of the parameters available within the [storage] section:
+
+| Parameter | Description                                                                                     |
+|-----------|-------------------------------------------------------------------------------------------------|
+| type      | The type of storage used. It can be one of the following: fs, s3, azblob, gcs, oss, cos, hdfs, webhdfs. |
+
+
+### [storage.fs] Section
+
+The following is a list of the parameters available within the [storage.fs] section:
+
+| Parameter   | Description                            |
+|-------------|----------------------------------------|
+| data_path   | The path to the data storage location. |
+
+### [storage.s3] Section
+
+The following is a list of the parameters available within the [storage.s3] section:
+
+| Parameter               | Description                                                                      |
+|-------------------------|----------------------------------------------------------------------------------|
+| bucket                  | The name of your Amazon S3-like storage bucket.                                |
+| endpoint_url            | The URL endpoint for the S3-like storage service. Defaults to "https://s3.amazonaws.com". |
+| access_key_id           | The access key ID for authenticating with the storage service.                  |
+| secret_access_key       | The secret access key for authenticating with the storage service.              |
+| enable_virtual_host_style | A boolean flag indicating whether to enable virtual host-style addressing.    |
+
+### [storage.azblob] Section
+
+The following is a list of the parameters available within the [storage.azblob] section:
+
+| Parameter       | Description                                                                   |
+|-----------------|-------------------------------------------------------------------------------|
+| endpoint_url    | The URL endpoint for Azure Blob Storage (e.g., `https://<your-storage-account-name>.blob.core.windows.net`). |
+| container       | The name of your Azure storage container.                                    |
+| account_name    | The name of your Azure storage account.                                       |
+| account_key     | The account key for authenticating with Azure Blob Storage.                   |
+
+
 
 ## 1. Logging Config
 

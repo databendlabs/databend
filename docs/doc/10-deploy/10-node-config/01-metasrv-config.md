@@ -2,7 +2,7 @@
 title: Meta Configurations
 ---
 
-This page describes the Meta configurations available in the [databend-meta.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-meta.toml) configuration file.
+This page describes the Meta node configurations available in the [databend-meta.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-meta.toml) configuration file.
 
 ```toml title='databend-meta.toml'
 # Usage:
