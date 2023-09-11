@@ -219,3 +219,220 @@ Filter
     ├── partitions scanned: 0
     ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
     └── estimated rows: 0.00
+
+
+# false
+query T
+explain select * from t1 where a != 1 and a = 1;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [false]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [false], limit: NONE]
+    └── estimated rows: 0.00
+
+# a = 2
+query T
+explain select * from t1 where a != 1 and a = 2;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) = 2]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [t1.a (#0) = 2], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1
+query T
+explain select * from t1 where a != 1 and a != 1
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [t1.a (#0) <> 1], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a != 2
+query T
+explain select * from t1 where a != 1 and a != 2;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) <> 2]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <> 2 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a < 1
+query T
+explain select * from t1 where a != 1 and a < 1; 
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) < 1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [t1.a (#0) < 1], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a < 2
+query T
+explain select * from t1 where a != 1 and a < 2;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) < 2]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) < 2 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a <= 1
+query T
+explain select * from t1 where a != 1 and a <= 1;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) <= 1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <= 1 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a <= 2
+query T
+explain select * from t1 where a != 1 and a <= 2;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) <= 2]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <= 2 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a > 1;
+query T
+explain select * from t1 where a != 1 and a > 1;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) > 1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [t1.a (#0) > 1], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a > 0
+query T
+explain select * from t1 where a != 1 and a > 0;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) > 0]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) > 0 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a >= 1
+query T
+explain select * from t1 where a != 1 and a >= 1;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) >= 1]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) >= 1 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
+
+# a != 1 and a >= 0
+query T
+explain select * from t1 where a != 1 and a >= 0;
+----
+Filter
+├── output columns: [t1.a (#0), t1.b (#1)]
+├── filters: [t1.a (#0) <> 1, t1.a (#0) >= 0]
+├── estimated rows: 0.00
+└── TableScan
+    ├── table: default.default.t1
+    ├── output columns: [a (#0), b (#1)]
+    ├── read rows: 0
+    ├── read bytes: 0
+    ├── partitions total: 0
+    ├── partitions scanned: 0
+    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) >= 0 AS Boolean NULL))], limit: NONE]
+    └── estimated rows: 0.00
