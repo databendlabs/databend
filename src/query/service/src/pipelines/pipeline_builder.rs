@@ -1403,7 +1403,7 @@ impl PipelineBuilder {
         // If cluster mode, spill write will be completed in exchange serialize, because we need scatter the block data first
         if self.ctx.get_cluster().is_empty() {
             let operator = DataOperator::instance().operator();
-            let location_prefix = query_spill_prefix(self.ctx.get_tenant());
+            let location_prefix = query_spill_prefix(&self.ctx.get_tenant());
             self.main_pipeline.add_transform(|input, output| {
                 let transform = match params.aggregate_functions.is_empty() {
                     true => with_mappedhash_method!(|T| match method.clone() {
