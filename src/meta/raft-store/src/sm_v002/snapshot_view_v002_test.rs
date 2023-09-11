@@ -44,7 +44,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let mut snapshot = SnapshotViewV002::new(frozen);
 
-    snapshot.compact().await;
+    snapshot.compact_mem_levels().await;
 
     let top_level = snapshot.compacted();
 
@@ -87,7 +87,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let mut snapshot = sm.full_snapshot_view();
 
-    snapshot.compact().await;
+    snapshot.compact_mem_levels().await;
 
     let compacted = snapshot.compacted();
 

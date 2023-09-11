@@ -84,7 +84,7 @@ impl SnapshotViewV002 {
     }
 
     /// Compact into one level and remove all tombstone record.
-    pub async fn compact(&mut self) {
+    pub async fn compact_mem_levels(&mut self) {
         if self.compacted.len() <= 1 {
             return;
         }
@@ -100,9 +100,9 @@ impl SnapshotViewV002 {
                 async move { x }
             });
 
-        let btreemap = strm.collect().await;
+        let bt = strm.collect().await;
 
-        data.replace_kv(btreemap);
+        data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
         let strm = MapApiRO::<ExpireKey>::range(&self.compacted, ..)
@@ -112,9 +112,9 @@ impl SnapshotViewV002 {
                 async move { x }
             });
 
-        let btreemap = strm.collect().await;
+        let bt = strm.collect().await;
 
-        data.replace_expire(btreemap);
+        data.replace_expire(bt);
 
         self.compacted = StaticLeveledMap::new([Arc::new(data)]);
     }
