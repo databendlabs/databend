@@ -167,7 +167,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<NumberType<u64>, NumberType<u64>, ArrayType<NumberType<u64>>, _, _>(
         "range",
         |_, _, _| FunctionDomain::Full,
-        |start, end, _| (start..end).collect(),
+        |start, end, ctx| {
+            // if end > (isize::MAX / 8) as u64 {
+            //     ctx.set_error(0, format!("end is too big=======max:{}", isize::MAX));
+            //     return vec![0u64].into();
+            // }
+            (start..end).collect()
+        },
     );
 
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(

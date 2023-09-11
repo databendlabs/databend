@@ -264,6 +264,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
+        if substr.is_empty() {
+            // the same behavior as MySQL and Postgres
+            return if pos == 0 { 1_u64 } else { pos };
+        }
+
         let pos = pos as usize;
         if pos == 0 {
             return 0_u64;
