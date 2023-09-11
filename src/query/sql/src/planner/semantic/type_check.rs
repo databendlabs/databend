@@ -2609,6 +2609,12 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !self.ctx.get_settings().get_enable_udf_server()? {
+            return Err(ErrorCode::Unimplemented(
+                "UDF server is not allowed, you can use 'set enable_udf_server = 1' to enable it",
+            ));
+        }
+
         let mut args = Vec::with_capacity(arguments.len());
         for argument in arguments {
             let box (arg, _) = self.resolve(argument).await?;
