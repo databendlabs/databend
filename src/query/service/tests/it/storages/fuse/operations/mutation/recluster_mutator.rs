@@ -320,6 +320,39 @@ async fn test_safety_for_recluster() -> Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_check_point() {
+    // [1,2] [2,3], check point 2
+    let start = vec![1];
+    let end = vec![0];
+    assert!(ReclusterMutator::check_point(&start, &end));
+
+    // [1,2] [2,2], check point 2
+    let start = vec![1];
+    let end = vec![0, 1];
+    assert!(ReclusterMutator::check_point(&start, &end));
+
+    // [1,1] [1,2], check point 1
+    let start = vec![0, 1];
+    let end = vec![0];
+    assert!(ReclusterMutator::check_point(&start, &end));
+
+    // [1,2] [1,3], check point 1
+    let start = vec![0, 1];
+    let end = vec![];
+    assert!(!ReclusterMutator::check_point(&start, &end));
+
+    // [1,3] [2,3], check point 3
+    let start = vec![];
+    let end = vec![0, 1];
+    assert!(!ReclusterMutator::check_point(&start, &end));
+
+    // [1,3] [3,3] [3,4], check point 3
+    let start = vec![1, 2];
+    let end = vec![0, 1];
+    assert!(!ReclusterMutator::check_point(&start, &end));
+}
+
 async fn generage_segments(
     ctx: Arc<dyn TableContext>,
     blocks: Vec<Arc<BlockMeta>>,
