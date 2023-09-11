@@ -1000,7 +1000,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(is_true(t4.a (#0) = 1), is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx'))], limit: NONE]
+├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok

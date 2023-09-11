@@ -35,7 +35,7 @@ EvalScalar
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                ├── push downs: [filters: [and_filters(is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB'))], limit: NONE]
+                ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
                 └── estimated rows: 3.00
 
 query T
@@ -66,7 +66,7 @@ EvalScalar
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-            ├── push downs: [filters: [and_filters(is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB'))], limit: NONE]
+            ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
             └── estimated rows: 3.00
 
 query T
