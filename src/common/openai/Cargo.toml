@@ -15,12 +15,15 @@ test = false
 [dependencies]
 # Workspace dependencies
 common-exception = { path = "../exception" }
+common-metrics = { path = "../metrics" }
 
 # GitHub dependencies
 
 # Crates.io dependencies
 log = { workspace = true }
 metrics = "0.20.1"
+prometheus-client = { workspace = true }
+lazy_static = { workspace = true }
 openai_api_rust = { git = "https://github.com/datafuse-extras/openai-api", rev = "819a0ed" }
 
 [dev-dependencies]
