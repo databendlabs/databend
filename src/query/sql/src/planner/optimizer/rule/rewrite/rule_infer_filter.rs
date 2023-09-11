@@ -366,8 +366,7 @@ pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr
         }
         DataType::Number(NumberDataType::Float32)
         | DataType::Nullable(box DataType::Number(NumberDataType::Float32)) => {
-            let (ok, v) =
-                check_float_range(f32::MIN as f64, f32::MAX as f64, &scalar);
+            let (ok, v) = check_float_range(f32::MIN as f64, f32::MAX as f64, &scalar);
             if ok {
                 return (true, ConstantExpr {
                     span: None,
