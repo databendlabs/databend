@@ -501,15 +501,10 @@ where State: SumState
             let window_size: u64 = check_number(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Expr::<usize>::Constant {
                     span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: params[0].clone(),
-                        data_type: params[0].as_ref().infer_data_type(),
-                    }),
-                    dest_type: DataType::Number(NumberDataType::UInt64),
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
                 },
                 &BUILTIN_FUNCTIONS,
             )?;
@@ -697,15 +692,10 @@ where State: SumState
             let window_size: u64 = check_number(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Expr::<usize>::Constant {
                     span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: params[0].clone(),
-                        data_type: params[0].as_ref().infer_data_type(),
-                    }),
-                    dest_type: DataType::Number(NumberDataType::UInt64),
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
                 },
                 &BUILTIN_FUNCTIONS,
             )?;

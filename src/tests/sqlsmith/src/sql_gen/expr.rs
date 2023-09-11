@@ -346,7 +346,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let idx = self.rng.gen_range(0..self.agg_func_names.len() - 1);
         let name = self.agg_func_names.get(idx).unwrap().clone();
         let mut args = Vec::with_capacity(1);
-        let arg = self.gen_expr(ty).clone();
+        let arg = self.gen_expr(ty);
         args.push(arg);
         // can ignore ErrorCode::BadDataValueType
         Expr::FunctionCall {
