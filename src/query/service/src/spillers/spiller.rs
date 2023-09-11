@@ -24,9 +24,10 @@ use opendal::Operator;
 
 /// Spiller type, currently only supports HashJoin
 pub enum SpillerType {
-    HashJoin, /* Todo: Add more spillers type
-               * OrderBy
-               * Aggregation */
+    HashJoinBuild,
+    HashJoinProbe, /* Todo: Add more spillers type
+                    * OrderBy
+                    * Aggregation */
 }
 
 /// Spiller configuration
@@ -137,6 +138,55 @@ impl Spiller {
             spilled_data.push(DataBlock::new_from_columns(columns));
         }
         Ok(spilled_data)
+    }
+
+    #[async_backtrace::framed]
+    // Directly spill input data without buffering.
+    // Return unspilled data.
+    pub(crate) async fn spill_input(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        // Save the row index which is not spilled.
+        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
+        // Compute the hash value for each row.
+        let mut hashes = Vec::with_capacity(data_block.num_rows());
+        self.get_hashes(&data_block, &mut hashes)?;
+        // Key is partition, value is row indexes
+        let mut partition_rows = HashMap::new();
+        // Classify rows to spill or not spill.
+        for (row_idx, hash) in hashes.iter().enumerate() {
+            let partition_id = *hash as u8 & 0b0000_0011;
+            if self.spilled_partition_set.contains(&partition_id) {
+                // the row can be directly spilled to corresponding partition
+                partition_rows
+                    .entry(partition_id)
+                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
+                    .or_insert(vec![row_idx]);
+            } else {
+                unspilled_row_index.push(row_idx);
+            }
+        }
+        for (p_id, row_indexes) in partition_rows.iter() {
+            let block_row_indexes = row_indexes
+                .iter()
+                .map(|idx| (0_u32, *idx as u32, 1_usize))
+                .collect::<Vec<_>>();
+            let block = DataBlock::take_blocks(
+                &[data_block.clone()],
+                &block_row_indexes,
+                row_indexes.len(),
+            );
+            // Spill block with partition id
+            self.spill_with_partition(p_id, &block).await?;
+        }
+        // Return unspilled data
+        let unspilled_block_row_indexes = unspilled_row_index
+            .iter()
+            .map(|idx| (0_u32, *idx as u32, 1_usize))
+            .collect::<Vec<_>>();
+        Ok(DataBlock::take_blocks(
+            &[data_block.clone()],
+            &unspilled_block_row_indexes,
+            unspilled_row_index.len(),
+        ))
     }
 
     /// Check if all partitions have been spilled

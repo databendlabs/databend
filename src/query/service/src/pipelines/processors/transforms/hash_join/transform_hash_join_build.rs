@@ -278,8 +278,13 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::FollowSpill => {
                 if let Some(data) = self.spill_data.take() {
-                    let unspilled_data =
-                        self.spill_state.as_mut().unwrap().spill_input(data).await?;
+                    let unspilled_data = self
+                        .spill_state
+                        .as_mut()
+                        .unwrap()
+                        .spiller
+                        .spill_input(data)
+                        .await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;
                     }

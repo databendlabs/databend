@@ -31,6 +31,8 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
+use common_expression::HashMethodKind;
+use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -78,8 +80,8 @@ pub struct HashJoinProbeState {
     /// Final scan tasks
     pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
-    /// Probe side data partition set, initialized as empty.
-    pub(crate) probe_partition_set: Arc<RwLock<HashSet<u8>>>,
+    /// Hash method
+    pub(crate) hash_method: HashMethodKind,
 }
 
 impl HashJoinProbeState {
@@ -87,17 +89,23 @@ impl HashJoinProbeState {
         ctx: Arc<QueryContext>,
         hash_join_state: Arc<HashJoinState>,
         probe_projections: &ColumnSet,
+        probe_keys: &[RemoteExpr],
         mut probe_schema: DataSchemaRef,
         join_type: &JoinType,
         processor_count: usize,
-    ) -> Self {
+    ) -> Result<Self> {
         if matches!(join_type, &JoinType::Right | &JoinType::RightSingle) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
         if join_type == &JoinType::Full {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
         }
-        HashJoinProbeState {
+        let hash_key_types = probe_keys
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
+            .collect::<Vec<_>>();
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
+        Ok(HashJoinProbeState {
             ctx,
             hash_join_state,
             processor_count,
@@ -110,8 +118,8 @@ impl HashJoinProbeState {
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
             mark_scan_map_lock: Mutex::new(false),
-            probe_partition_set: Arc::new(Default::default()),
-        }
+            hash_method: method,
+        })
     }
 
     /// Probe the hash table and retrieve matched rows as DataBlocks.
