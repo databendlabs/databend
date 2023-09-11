@@ -18,7 +18,7 @@ Make sure you have installed Databend, if not please see:
 
 Connect to Databend server with MySQL client:
 ```shell
-mysql -h127.0.0.1 -uroot -P3307 
+mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
@@ -40,7 +40,7 @@ See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-u
 ### 2.3 Load Data Into OnTime Table
 
 ```shell title='t_ontime.csv.zip'
-wget --no-check-certificate https://repo.databend.rs/t_ontime/t_ontime.csv.zip
+wget https://datasets.databend.rs/t_ontime/t_ontime.csv.zip
 ```
 
 ```shell title='Unzip'

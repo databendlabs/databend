@@ -18,7 +18,7 @@ Make sure you have installed Databend, if not please see:
 
 Connect to Databend server with MySQL client:
 ```shell
-mysql -h127.0.0.1 -uroot -P3307 
+mysql -h127.0.0.1 -uroot -P3307
 ```
 
 Create a user:
@@ -34,7 +34,7 @@ GRANT ALL ON *.* TO user1;
 See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
 
 ### 2.2 Create hits Table
- 
+
 [Create SQL](https://github.com/datafuselabs/databend/blob/main/tests/suites/1_stateful/ddl/hits.sql)
 
 ### 2.3 Load Data Into hits Table
@@ -45,7 +45,7 @@ mysql -h127.0.0.1 -P3307 -uroot
 
 `COPY` data into `hits` table:
 ```shell title='Load CSV files into Databend'
-COPY INTO hits FROM 'https://repo.databend.rs/hits/hits_1m.tsv.gz' FILE_FORMAT=(type=TSV compression=AUTO);
+COPY INTO hits FROM 'https://datasets.databend.rs/hits_1m.tsv.gz' FILE_FORMAT=(type=TSV compression=AUTO);
 ```
 
 ## Step 3. Queries
