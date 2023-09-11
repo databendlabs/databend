@@ -397,3 +397,7 @@ impl Drop for Pipeline {
         }
     }
 }
+
+pub fn query_spill_prefix(tenant: &str) -> String {
+    format!("_query_spill/{}", tenant)
+}

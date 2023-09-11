@@ -25,6 +25,7 @@ use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::hash2bucket;
+use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 
@@ -53,7 +54,7 @@ impl BuildSpillState {
         build_state: Arc<HashJoinBuildState>,
     ) -> Self {
         let tenant = ctx.get_tenant();
-        let spill_config = SpillerConfig::create(format!("{}/_hash_join_build_spill", tenant));
+        let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
         let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoin);
         Self {
