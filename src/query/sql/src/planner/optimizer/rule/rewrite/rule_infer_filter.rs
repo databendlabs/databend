@@ -38,9 +38,10 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
-// The rule tries to apply the inverse OR distributive law to the predicate.
-// ((A AND B) OR (A AND C))  =>  (A AND (B OR C))
-// It'll find all OR expressions and extract the common terms.
+// The rule tries to infer new predicates from existing predicates, for example:
+// [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
+// TODO(Dousir9): [A = 10 and A = B] => [B = 10]
+// TODO(Dousir9): [A = B and A = C] => [B = C]
 pub struct RuleInferFilter {
     id: RuleID,
     patterns: Vec<SExpr>,
