@@ -40,7 +40,7 @@ impl StaticLeveledMap {
     }
 
     /// Return an iterator of all levels from newest to oldest.
-    pub(in crate::sm_v002) fn levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
         self.levels.iter().map(|x| x.as_ref()).rev()
     }
 
@@ -66,7 +66,7 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        for level_data in self.levels() {
+        for level_data in self.iter_levels() {
             let got = level_data.get(key).await;
             if !got.is_not_found() {
                 return got;
@@ -85,7 +85,7 @@ where
     {
         let mut km = KMerge::by(util::by_key_seq::<K, Self::V>);
 
-        for api in self.levels() {
+        for api in self.iter_levels() {
             let a = api.range(range.clone()).await;
             km = km.merge(a);
         }

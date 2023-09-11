@@ -55,7 +55,9 @@ impl LeveledMap {
 
     /// Return an iterator of all levels in reverse order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
-        [&self.writable].into_iter().chain(self.frozen.levels())
+        [&self.writable]
+            .into_iter()
+            .chain(self.frozen.iter_levels())
     }
 
     /// Freeze the current writable level and create a new writable level.

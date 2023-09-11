@@ -50,7 +50,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
 
     let d = top_level.newest().unwrap().as_ref();
 
-    assert_eq!(top_level.levels().count(), 1);
+    assert_eq!(top_level.iter_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
