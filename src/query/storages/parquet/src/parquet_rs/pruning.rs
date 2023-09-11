@@ -100,28 +100,21 @@ impl ParquetRSPruner {
             None => Ok((0..meta.num_row_groups()).collect()),
             Some(pruner) => {
                 // Only if the file has row groups level statistics, we can use them to prune.
-                if meta
-                    .row_groups()
-                    .iter()
-                    .any(|rg| rg.columns().iter().any(|c| c.statistics().is_none()))
-                {
-                    return Ok((0..meta.num_row_groups()).collect());
-                }
                 let leaf_fields = self.schema.leaf_fields();
-                let row_group_stats = collect_row_group_stats(
-                    meta.row_groups(),
-                    &leaf_fields,
-                    &self.predicate_columns,
-                )?;
-                let mut selection = Vec::with_capacity(meta.num_row_groups());
+                if let Some(row_group_stats) =
+                    collect_row_group_stats(meta.row_groups(), &leaf_fields)
+                {
+                    let mut selection = Vec::with_capacity(meta.num_row_groups());
 
-                for (i, row_group) in row_group_stats.iter().enumerate() {
-                    if pruner.should_keep(row_group, None) {
-                        selection.push(i);
+                    for (i, row_group) in row_group_stats.iter().enumerate() {
+                        if pruner.should_keep(row_group, None) {
+                            selection.push(i);
+                        }
                     }
+                    Ok(selection)
+                } else {
+                    Ok((0..meta.num_row_groups()).collect())
                 }
-
-                Ok(selection)
             }
         }
     }

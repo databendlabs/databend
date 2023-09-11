@@ -617,6 +617,7 @@ impl Binder {
                     .await?
                 } else {
                     ParquetRSTable::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,

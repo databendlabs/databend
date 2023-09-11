@@ -35,6 +35,7 @@ use thrift::protocol::TSerializable;
 use thrift::protocol::TType;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
+use crate::table::ParquetTableColumnStatisticsProvider;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ParquetTableInfo {
@@ -50,6 +51,8 @@ pub struct ParquetTableInfo {
     pub files_to_read: Option<Vec<StageFileInfo>>,
     pub schema_from: String,
     pub compression_ratio: f64,
+
+    pub stats_provider: ParquetTableColumnStatisticsProvider,
 }
 
 impl ParquetTableInfo {

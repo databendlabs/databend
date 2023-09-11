@@ -55,14 +55,13 @@ impl ParquetRSTable {
                 .iter()
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
-            None => if self.operator.info().can_blocking() {
-                self.files_info.blocking_list(&self.operator, false, None)
-            } else {
-                self.files_info.list(&self.operator, false, None).await
-            }?
-            .into_iter()
-            .map(|f| (f.path, f.size))
-            .collect::<Vec<_>>(),
+            None => self
+                .files_info
+                .list(&self.operator, false, None)
+                .await?
+                .into_iter()
+                .map(|f| (f.path, f.size))
+                .collect::<Vec<_>>(),
         };
 
         let settings = ctx.get_settings();

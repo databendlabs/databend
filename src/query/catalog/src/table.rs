@@ -483,3 +483,30 @@ impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
         self.column_stats.get(&column_id).cloned().flatten()
     }
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ParquetTableColumnStatisticsProvider {
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    num_rows: u64,
+}
+
+impl ParquetTableColumnStatisticsProvider {
+    pub fn new(
+        column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+        num_rows: u64,
+    ) -> Self {
+        Self {
+            column_stats,
+            num_rows,
+        }
+    }
+    pub fn num_rows(&self) -> u64 {
+        self.num_rows
+    }
+}
+
+impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
+        self.column_stats.get(&column_id).cloned().flatten()
+    }
+}
