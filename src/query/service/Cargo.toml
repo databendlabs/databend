@@ -89,6 +89,7 @@ common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
+common-metrics = { path = "../../common/metrics" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee-features/data-mask" }
 storages-common-blocks = { path = "../storages/common/blocks" }
@@ -165,6 +166,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+lazy-static = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { version = "46.0.0", features = ["prettyprint"] }
