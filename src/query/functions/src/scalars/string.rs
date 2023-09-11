@@ -265,7 +265,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
         if substr.is_empty() {
-            // the same behavior as MySQL and Postgres
+            // the same behavior as MySQL, Postgres and Clickhouse
             return if pos == 0 { 1_u64 } else { pos };
         }
 
