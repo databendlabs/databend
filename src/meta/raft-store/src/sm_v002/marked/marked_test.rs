@@ -77,13 +77,16 @@ fn test_internal_seq() -> anyhow::Result<()> {
 #[test]
 fn test_unpack() -> anyhow::Result<()> {
     let m = Marked::new_normal(1, 2, None);
-    assert_eq!(m.unpack(), Some((&2, None)));
+    assert_eq!(m.unpack_ref(), Some((&2, None)));
 
     let m = Marked::new_normal(1, 2, Some(KVMeta { expire_at: Some(3) }));
-    assert_eq!(m.unpack(), Some((&2, Some(&KVMeta { expire_at: Some(3) }))));
+    assert_eq!(
+        m.unpack_ref(),
+        Some((&2, Some(&KVMeta { expire_at: Some(3) })))
+    );
 
     let m: Marked<u64> = Marked::new_tomb_stone(1);
-    assert_eq!(m.unpack(), None);
+    assert_eq!(m.unpack_ref(), None);
 
     Ok(())
 }
@@ -95,13 +98,13 @@ fn test_max() -> anyhow::Result<()> {
     let m2 = Marked::new_normal(3, 2, None);
     let m3: Marked<u64> = Marked::new_tomb_stone(2);
 
-    assert_eq!(Marked::max(&m1, &m2), &m2);
-    assert_eq!(Marked::max(&m1, &m3), &m3);
-    assert_eq!(Marked::max(&m2, &m3), &m2);
+    assert_eq!(Marked::max_ref(&m1, &m2), &m2);
+    assert_eq!(Marked::max_ref(&m1, &m3), &m3);
+    assert_eq!(Marked::max_ref(&m2, &m3), &m2);
 
-    assert_eq!(Marked::max(&m1, &m1), &m1);
-    assert_eq!(Marked::max(&m2, &m2), &m2);
-    assert_eq!(Marked::max(&m3, &m3), &m3);
+    assert_eq!(Marked::max_ref(&m1, &m1), &m1);
+    assert_eq!(Marked::max_ref(&m2, &m2), &m2);
+    assert_eq!(Marked::max_ref(&m3, &m3), &m3);
 
     Ok(())
 }

@@ -31,3 +31,6 @@ do
 	echo "truncate table test_xml" | $MYSQL_CLIENT_CONNECT
 done
 
+echo "drop table if exists test_xml" | $MYSQL_CLIENT_CONNECT
+
+

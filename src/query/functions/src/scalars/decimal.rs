@@ -16,6 +16,7 @@ use std::cmp::Ord;
 use std::ops::*;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
@@ -271,7 +272,7 @@ macro_rules! register_decimal_compare_op {
                 },
             };
             if has_nullable {
-                Some(Arc::new(function.wrap_nullable()))
+                Some(Arc::new(function.passthrough_nullable()))
             } else {
                 Some(Arc::new(function))
             }
@@ -378,7 +379,7 @@ macro_rules! register_decimal_binary_op {
                 },
             };
             if has_nullable {
-                Some(Arc::new(function.wrap_nullable()))
+                Some(Arc::new(function.passthrough_nullable()))
             } else {
                 Some(Arc::new(function))
             }
@@ -414,7 +415,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         if !matches!(
             args_type[0].remove_nullable(),
-            DataType::Number(_) | DataType::Decimal(_) | DataType::String
+            DataType::Boolean | DataType::Number(_) | DataType::Decimal(_) | DataType::String
         ) {
             return None;
         }
@@ -446,7 +447,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
     registry.register_function_factory("to_decimal", move |params, args_type| {
         let f = factory(params, args_type)?;
-        Some(Arc::new(f.wrap_nullable()))
+        Some(Arc::new(f.passthrough_nullable()))
     });
     registry.register_function_factory("try_to_decimal", move |params, args_type| {
         let mut f = factory(params, args_type)?;
@@ -456,7 +457,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_function_factory("try_to_decimal", move |params, args_type| {
         let mut f = factory(params, args_type)?;
         f.signature.name = "try_to_decimal".to_string();
-        Some(Arc::new(f.error_to_null().wrap_nullable()))
+        Some(Arc::new(f.error_to_null().passthrough_nullable()))
     });
 }
 
@@ -486,7 +487,7 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -519,7 +520,7 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
         };
 
         if has_null {
-            Some(Arc::new(f.wrap_nullable()))
+            Some(Arc::new(f.passthrough_nullable()))
         } else {
             Some(Arc::new(f))
         }
@@ -533,6 +534,7 @@ fn convert_to_decimal(
     dest_type: DataType,
 ) -> Value<AnyType> {
     match from_type {
+        DataType::Boolean => boolean_to_decimal(arg, dest_type),
         DataType::Number(ty) => {
             if ty.is_float() {
                 float_to_decimal(arg, ctx, from_type, dest_type)
@@ -543,6 +545,56 @@ fn convert_to_decimal(
         DataType::Decimal(_) => decimal_to_decimal(arg, ctx, from_type, dest_type),
         DataType::String => string_to_decimal(arg, ctx, dest_type),
         _ => unreachable!("to_decimal not support this DataType"),
+    }
+}
+
+fn boolean_to_decimal_column<T: Decimal>(
+    boolean_column: &Bitmap,
+    size: DecimalSize,
+) -> DecimalColumn {
+    let mut values = Vec::<T>::with_capacity(boolean_column.len());
+    for val in boolean_column.iter() {
+        if val {
+            values.push(T::e(size.scale as u32));
+        } else {
+            values.push(T::zero());
+        }
+    }
+    T::to_column(values, size)
+}
+
+fn boolean_to_decimal_scalar<T: Decimal>(val: bool, size: DecimalSize) -> DecimalScalar {
+    if val {
+        T::to_scalar(T::e(size.scale as u32), size)
+    } else {
+        T::to_scalar(T::zero(), size)
+    }
+}
+
+fn boolean_to_decimal(arg: &ValueRef<AnyType>, dest_type: DataType) -> Value<AnyType> {
+    let dest_type = dest_type.as_decimal().unwrap();
+
+    match arg {
+        ValueRef::Column(column) => {
+            let boolean_column = BooleanType::try_downcast_column(column).unwrap();
+            let column = match dest_type {
+                DecimalDataType::Decimal128(size) => {
+                    boolean_to_decimal_column::<i128>(&boolean_column, *size)
+                }
+                DecimalDataType::Decimal256(size) => {
+                    boolean_to_decimal_column::<i256>(&boolean_column, *size)
+                }
+            };
+            Value::Column(Column::Decimal(column))
+        }
+        ValueRef::Scalar(scalar) => {
+            let val = BooleanType::try_downcast_scalar(scalar).unwrap();
+            let scalar = match dest_type {
+                DecimalDataType::Decimal128(size) => boolean_to_decimal_scalar::<i128>(val, *size),
+                DecimalDataType::Decimal256(size) => boolean_to_decimal_scalar::<i256>(val, *size),
+            };
+            Value::Scalar(Scalar::Decimal(scalar))
+        }
     }
 }
 

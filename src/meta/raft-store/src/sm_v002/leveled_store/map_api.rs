@@ -20,38 +20,41 @@ use futures_util::stream::BoxStream;
 
 use crate::sm_v002::marked::Marked;
 
-/// Provide a key-value map API set, which is used to access state machine data.
-
+/// Provide a readonly key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApi<K>: Send + Sync
+pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     type V: Clone + Send + Sync + 'static;
 
     /// Get an entry by key.
-    async fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized;
 
+    /// Iterate over a range of entries by keys.
+    ///
+    /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
+    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    where
+        K: Clone + Borrow<T> + 'a,
+        Self::V: Unpin,
+        T: Ord,
+        R: RangeBounds<T> + Send + Sync + Clone;
+}
+
+/// Provide a read-write key-value map API set, used to access state machine data.
+#[async_trait::async_trait]
+pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K> + Send + Sync
+where K: Ord + Send + Sync + 'static
+{
     /// Set an entry and returns the old value and the new value.
     async fn set(
         &mut self,
         key: K,
         value: Option<(Self::V, Option<KVMeta>)>,
     ) -> (Marked<Self::V>, Marked<Self::V>);
-
-    /// Iterate over a range of entries by keys.
-    ///
-    /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> BoxStream<'a, (&'a K, &'a Marked<Self::V>)>
-    where
-        K: Clone + Borrow<T> + 'a,
-        T: Ord,
-        R: RangeBounds<T> + Send + Sync + Clone;
 
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
@@ -67,7 +70,7 @@ where K: Ord + Send + Sync + 'static
         }
 
         // Safe unwrap(), got is Normal
-        let (v, _) = got.unpack().unwrap();
+        let (v, _) = got.unpack_ref().unwrap();
 
         self.set(key, Some((v.clone(), meta))).await
     }
@@ -77,7 +80,7 @@ where K: Ord + Send + Sync + 'static
     async fn upsert_value(&mut self, key: K, value: Self::V) -> (Marked<Self::V>, Marked<Self::V>) {
         let got = self.get(&key).await;
 
-        let meta = if let Some((_, meta)) = got.unpack() {
+        let meta = if let Some((_, meta)) = got.unpack_ref() {
             meta
         } else {
             None

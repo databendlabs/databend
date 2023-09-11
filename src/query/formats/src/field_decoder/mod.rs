@@ -24,6 +24,8 @@ use std::any::Any;
 
 pub use csv::FieldDecoderCSV;
 pub use fast_values::FastFieldDecoderValues;
+pub use fast_values::FastValuesDecodeFallback;
+pub use fast_values::FastValuesDecoder;
 pub use json_ast::FieldJsonAstDecoder;
 pub use row_based::FieldDecoderRowBased;
 pub use tsv::FieldDecoderTSV;

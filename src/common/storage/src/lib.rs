@@ -39,9 +39,9 @@ mod operator;
 pub use operator::init_operator;
 pub use operator::DataOperator;
 
-pub mod common_metrics;
-pub use common_metrics::StorageMetrics;
-pub use common_metrics::StorageMetricsLayer;
+pub mod metrics;
+pub use crate::metrics::StorageMetrics;
+pub use crate::metrics::StorageMetricsLayer;
 
 mod runtime_layer;
 

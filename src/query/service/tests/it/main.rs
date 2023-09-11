@@ -31,6 +31,7 @@ mod metrics;
 mod pipelines;
 mod servers;
 mod sessions;
+mod spillers;
 mod sql;
 mod storages;
 mod table_functions;

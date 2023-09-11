@@ -34,7 +34,7 @@ use common_expression::types::NumberColumn;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_storage::common_metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;

@@ -1,0 +1,21 @@
+---- testing @s1;
+SUCCESS
+sample.csv
+-- testing copy;
+sample.csv	5	0	NULL	NULL
+5
+-- testing copy with purge;
+sample.csv	5	0	NULL	NULL
+5
+---- testing @~;
+SUCCESS
+sample.csv
+-- testing copy;
+sample.csv	5	0	NULL	NULL
+5
+-- testing copy with purge;
+sample.csv	5	0	NULL	NULL
+5
+---- check files are purged;
+0
+0

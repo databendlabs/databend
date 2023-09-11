@@ -118,11 +118,7 @@ impl ParquetRSTable {
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
         let size = operator.stat(path).await?.content_length();
-        let first_meta = read_metadata_async(path, &operator, Some(size))
-            .await
-            .map_err(|e| {
-                ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
-            })?;
+        let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
         let arrow_schema = infer_schema_with_extension(&first_meta)?;
         let compression_ratio = get_compression_ratio(&first_meta);
         let schema_descr = first_meta.file_metadata().schema_descr_ptr();
