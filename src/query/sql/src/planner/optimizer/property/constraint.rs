@@ -290,19 +290,27 @@ fn parse_int_literal(lit: &Scalar) -> Option<i64> {
     )
 }
 
-fn check_trivial_uint_cast(max: u64, value: &Scalar) -> (bool, u64) {
+pub fn check_uint_range(max: u64, value: &Scalar) -> (bool, u64) {
     let value = match *value {
         Scalar::Number(NumberScalar::UInt8(value)) => value as u64,
         Scalar::Number(NumberScalar::UInt16(value)) => value as u64,
         Scalar::Number(NumberScalar::UInt32(value)) => value as u64,
         Scalar::Number(NumberScalar::UInt64(value)) => value,
+        Scalar::Number(NumberScalar::Int8(value)) if value >= 0 => value as u64,
+        Scalar::Number(NumberScalar::Int16(value)) if value >= 0 => value as u64,
+        Scalar::Number(NumberScalar::Int32(value)) if value >= 0 => value as u64,
+        Scalar::Number(NumberScalar::Int64(value)) if value >= 0 => value as u64,
         _ => return (false, 0),
     };
     (value <= max, value)
 }
 
-fn check_trivial_int_cast(min: i64, max: i64, value: &Scalar) -> (bool, i64) {
+pub fn check_int_range(min: i64, max: i64, value: &Scalar) -> (bool, i64) {
     let value = match *value {
+        Scalar::Number(NumberScalar::UInt8(value)) => value as i64,
+        Scalar::Number(NumberScalar::UInt16(value)) => value as i64,
+        Scalar::Number(NumberScalar::UInt32(value)) => value as i64,
+        Scalar::Number(NumberScalar::UInt64(value)) if value <= i64::MAX as u64 => value as i64,
         Scalar::Number(NumberScalar::Int8(value)) => value as i64,
         Scalar::Number(NumberScalar::Int16(value)) => value as i64,
         Scalar::Number(NumberScalar::Int32(value)) => value as i64,
@@ -312,7 +320,7 @@ fn check_trivial_int_cast(min: i64, max: i64, value: &Scalar) -> (bool, i64) {
     (value >= min && value <= max, value)
 }
 
-fn check_trivial_float_cast(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
+pub fn check_float_range(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
     let value = match *value {
         Scalar::Number(NumberScalar::Float32(value)) => value.into_inner() as f64,
         Scalar::Number(NumberScalar::Float64(value)) => value.into_inner(),
@@ -321,7 +329,7 @@ fn check_trivial_float_cast(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
     (value >= min && value <= max, value)
 }
 
-fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr, ScalarExpr) {
+pub fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr, ScalarExpr) {
     match (&left, &right) {
         (
             ScalarExpr::CastExpr(CastExpr { argument, .. }),
@@ -335,7 +343,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                 match *column.data_type {
                     DataType::Number(NumberDataType::UInt8)
                     | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
-                        let (is_trivial, v) = check_trivial_uint_cast(u8::MAX as u64, value);
+                        let (is_trivial, v) = check_uint_range(u8::MAX as u64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -348,7 +356,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     }
                     DataType::Number(NumberDataType::UInt16)
                     | DataType::Nullable(box DataType::Number(NumberDataType::UInt16)) => {
-                        let (is_trivial, v) = check_trivial_uint_cast(u16::MAX as u64, value);
+                        let (is_trivial, v) = check_uint_range(u16::MAX as u64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -361,7 +369,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     }
                     DataType::Number(NumberDataType::UInt32)
                     | DataType::Nullable(box DataType::Number(NumberDataType::UInt32)) => {
-                        let (is_trivial, v) = check_trivial_uint_cast(u32::MAX as u64, value);
+                        let (is_trivial, v) = check_uint_range(u32::MAX as u64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -374,7 +382,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     }
                     DataType::Number(NumberDataType::UInt64)
                     | DataType::Nullable(box DataType::Number(NumberDataType::UInt64)) => {
-                        let (is_trivial, v) = check_trivial_uint_cast(u64::MAX, value);
+                        let (is_trivial, v) = check_uint_range(u64::MAX, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -388,7 +396,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     DataType::Number(NumberDataType::Int8)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Int8)) => {
                         let (is_trivial, v) =
-                            check_trivial_int_cast(i8::MIN as i64, i8::MAX as i64, value);
+                            check_int_range(i8::MIN as i64, i8::MAX as i64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -402,7 +410,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     DataType::Number(NumberDataType::Int16)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Int16)) => {
                         let (is_trivial, v) =
-                            check_trivial_int_cast(i16::MIN as i64, i16::MAX as i64, value);
+                            check_int_range(i16::MIN as i64, i16::MAX as i64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -416,7 +424,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     DataType::Number(NumberDataType::Int32)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Int32)) => {
                         let (is_trivial, v) =
-                            check_trivial_int_cast(i32::MIN as i64, i32::MAX as i64, value);
+                            check_int_range(i32::MIN as i64, i32::MAX as i64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -429,7 +437,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     }
                     DataType::Number(NumberDataType::Int64)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Int64)) => {
-                        let (is_trivial, v) = check_trivial_int_cast(i64::MIN, i64::MAX, value);
+                        let (is_trivial, v) = check_int_range(i64::MIN, i64::MAX, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -443,7 +451,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     DataType::Number(NumberDataType::Float32)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Float32)) => {
                         let (is_trivial, v) =
-                            check_trivial_float_cast(f32::MIN as f64, f32::MAX as f64, value);
+                            check_float_range(f32::MIN as f64, f32::MAX as f64, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
@@ -458,7 +466,7 @@ fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr,
                     }
                     DataType::Number(NumberDataType::Float64)
                     | DataType::Nullable(box DataType::Number(NumberDataType::Float64)) => {
-                        let (is_trivial, v) = check_trivial_float_cast(f64::MIN, f64::MAX, value);
+                        let (is_trivial, v) = check_float_range(f64::MIN, f64::MAX, value);
                         if is_trivial {
                             return (
                                 (**argument).clone(),
