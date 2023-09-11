@@ -180,6 +180,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             Some(GroupBy::Normal(group_by))
             | Some(GroupBy::Cube(group_by))
             | Some(GroupBy::Rollup(group_by)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
                 targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
                     expr: Box::new(expr.clone()),
                     alias: None,
@@ -189,12 +195,22 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let select_num = self.rng.gen_range(1..=5);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();
-                    let expr = self.gen_expr(&ty);
+                    let expr = if self.rng.gen_bool(0.8) {
+                        self.gen_agg_func(&ty)
+                    } else {
+                        self.gen_expr(&ty)
+                    };
                     let target = generate_target(expr);
                     targets.push(target);
                 }
             }
             Some(GroupBy::GroupingSets(group_by)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
                 targets.extend(group_by[0].iter().map(|expr| SelectTarget::AliasedExpr {
                     expr: Box::new(expr.clone()),
                     alias: None,
@@ -204,7 +220,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let select_num = self.rng.gen_range(1..=5);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();
-                    let expr = self.gen_expr(&ty);
+                    let expr = if self.rng.gen_bool(0.8) {
+                        self.gen_agg_func(&ty)
+                    } else {
+                        self.gen_expr(&ty)
+                    };
                     let target = generate_target(expr);
                     targets.push(target);
                 }

@@ -15,6 +15,7 @@
 use common_expression::types::DataType;
 use common_expression::FunctionSignature;
 use common_expression::TableSchemaRef;
+use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use rand::Rng;
 
@@ -44,6 +45,7 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) bound_columns: Vec<Column>,
     pub(crate) is_join: bool,
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
+    pub(crate) agg_func_names: Vec<String>,
     pub(crate) rng: &'a mut R,
 }
 
@@ -55,12 +57,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 scalar_func_sigs.push(scalar_func.signature.clone());
             }
         }
+        let agg_func_names = AggregateFunctionFactory::instance().registered_names();
         SqlGenerator {
             tables: vec![],
             bound_tables: vec![],
             bound_columns: vec![],
             is_join: false,
             scalar_func_sigs,
+            agg_func_names,
             rng,
         }
     }

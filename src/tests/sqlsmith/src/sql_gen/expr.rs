@@ -327,11 +327,32 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             .iter()
             .map(|ty| self.gen_expr(ty))
             .collect::<Vec<_>>();
-
+        let mut params = vec![];
+        for _ in 0..self.rng.gen_range(1..4) {
+            params.push(Literal::UInt64(self.rng.gen_range(0..=9223372036854775807)));
+        }
         Expr::FunctionCall {
             span: None,
             distinct: false,
             name,
+            args,
+            params,
+            window: None,
+            lambda: None,
+        }
+    }
+
+    pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
+        let idx = self.rng.gen_range(0..self.agg_func_names.len() - 1);
+        let name = self.agg_func_names.get(idx).unwrap().clone();
+        let mut args = Vec::with_capacity(1);
+        let arg = self.gen_expr(ty).clone();
+        args.push(arg);
+        // can ignore ErrorCode::BadDataValueType
+        Expr::FunctionCall {
+            span: None,
+            distinct: self.rng.gen_bool(0.2),
+            name: Identifier::from_name(name),
             args,
             params: vec![],
             window: None,
