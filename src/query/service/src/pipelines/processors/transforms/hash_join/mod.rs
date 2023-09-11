@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod build_spill;
 mod common;
 mod desc;
 mod hash_join_build_state;
@@ -25,6 +26,8 @@ mod transform_hash_join_build;
 mod transform_hash_join_probe;
 mod util;
 
+pub use build_spill::BuildSpillCoordinator;
+pub use build_spill::BuildSpillState;
 pub use desc::HashJoinDesc;
 pub use hash_join_build_state::HashJoinBuildState;
 pub use hash_join_probe_state::HashJoinProbeState;

@@ -240,6 +240,22 @@ impl Settings {
         self.try_set_u64("disable_join_reorder", u64::from(val))
     }
 
+    pub fn get_enable_join_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_join_spill")? != 0)
+    }
+
+    pub fn set_enable_join_spill(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_join_spill", u64::from(val))
+    }
+
+    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    }
+
+    pub fn set_join_spilling_threshold(&self, value: usize) -> Result<()> {
+        self.try_set_u64("join_spilling_threshold", value as u64)
+    }
+
     pub fn get_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }
