@@ -36,14 +36,9 @@ use common_meta_app::background::GetBackgroundJobReq;
 use common_meta_app::background::ManualTriggerParams;
 use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserIdentity;
-use common_meta_app::principal::UserInfo;
-use common_meta_app::principal::UserPrivilegeType;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
-use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::table_functions::SuggestedBackgroundTasksSource;
@@ -51,12 +46,12 @@ use log::info;
 use log::warn;
 
 use crate::background_service::session::create_session;
+use crate::background_service::session::get_background_service_user;
 use crate::background_service::CompactionJob;
 use crate::background_service::JobScheduler;
 
 pub struct RealBackgroundService {
     conf: InnerConfig,
-    session: Arc<Session>,
     scheduler: Arc<JobScheduler>,
     pub meta_api: Arc<MetaStore>,
 }
@@ -65,7 +60,8 @@ pub struct RealBackgroundService {
 impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
     async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
-        let ctx = self.session.create_query_context().await?;
+        let session = create_session(&self.conf).await?;
+        let ctx = session.create_query_context().await?;
         SuggestedBackgroundTasksSource::do_execute_sql(ctx, sql).await
     }
 
@@ -128,18 +124,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Option<Self>> {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let mut user = UserInfo::new_no_auth(
-            format!(
-                "{}-{}-background-svc",
-                conf.query.tenant_id.clone(),
-                conf.query.cluster_id.clone()
-            )
-            .as_str(),
-            "0.0.0.0",
-        );
-        user.grants
-            .grant_privileges(&GrantObject::Global, UserPrivilegeType::Select.into());
-
+        let user = get_background_service_user(conf);
         if !conf.background.enable {
             // register default jobs if not exists
             Self::create_compactor_job(
@@ -151,11 +136,6 @@ impl RealBackgroundService {
             .await?;
             return Ok(None);
         }
-
-        let session = create_session().await?;
-        session
-            .set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()))
-            .await?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let mut scheduler = JobScheduler::new();
         if conf.background.compaction.enable {
@@ -163,7 +143,6 @@ impl RealBackgroundService {
                 meta_api.clone(),
                 conf,
                 &user.identity(),
-                session.clone(),
                 scheduler.finish_tx.clone(),
             )
             .await?;
@@ -172,7 +151,6 @@ impl RealBackgroundService {
 
         let rm = RealBackgroundService {
             conf: conf.clone(),
-            session: session.clone(),
             scheduler: Arc::new(scheduler),
             meta_api,
         };
@@ -207,7 +185,6 @@ impl RealBackgroundService {
         meta: Arc<MetaStore>,
         conf: &InnerConfig,
         creator: &UserIdentity,
-        session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Result<CompactionJob> {
         let id = RealBackgroundService::create_compactor_job(
@@ -220,7 +197,7 @@ impl RealBackgroundService {
         Self::update_compaction_job_params(meta.clone(), &id, conf).await?;
         Self::suspend_job(meta.clone(), &id, false).await?;
 
-        let job = CompactionJob::create(conf, id.name, session, finish_tx).await;
+        let job = CompactionJob::create(conf, id.name, finish_tx).await;
         Ok(job)
     }
 
