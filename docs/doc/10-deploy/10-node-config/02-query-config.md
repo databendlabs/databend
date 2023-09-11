@@ -111,56 +111,68 @@ The following is a list of the parameters available within the [storage.fs] sect
 
 The following is a list of the parameters available within the [storage.s3] section:
 
-| Parameter               | Description                                                                      |
-|-------------------------|----------------------------------------------------------------------------------|
-| bucket                  | The name of your Amazon S3-like storage bucket.                                |
-| endpoint_url            | The URL endpoint for the S3-like storage service. Defaults to "https://s3.amazonaws.com". |
-| access_key_id           | The access key ID for authenticating with the storage service.                  |
-| secret_access_key       | The secret access key for authenticating with the storage service.              |
-| enable_virtual_host_style | A boolean flag indicating whether to enable virtual host-style addressing.    |
+| Parameter                 | Description                                                                               |
+|---------------------------|-------------------------------------------------------------------------------------------|
+| bucket                    | The name of your Amazon S3-like storage bucket.                                           |
+| endpoint_url              | The URL endpoint for the S3-like storage service. Defaults to "https://s3.amazonaws.com". |
+| access_key_id             | The access key ID for authenticating with the storage service.                            |
+| secret_access_key         | The secret access key for authenticating with the storage service.                        |
+| enable_virtual_host_style | A boolean flag indicating whether to enable virtual host-style addressing.                |
+| allow_anonymous           | A boolean flag indicating whether anonymous access is allowed (true or false).            |
+| external_id               | External ID for authentication.                                                           |
+| master_key                | Master key for authentication.                                                            |
+| region                    | The region for the S3-like storage service.                                               |
+| role_arn                  | ARN (Amazon Resource Name) for authentication.                                            |
+| root                      | The root directory for HDFS.                                                              |
+| security_token            | Security token for authentication.                                                        |
 
 ### [storage.azblob] Section
 
 The following is a list of the parameters available within the [storage.azblob] section:
 
-| Parameter       | Description                                                                   |
-|-----------------|-------------------------------------------------------------------------------|
-| endpoint_url    | The URL endpoint for Azure Blob Storage (e.g., `https://<your-storage-account-name>.blob.core.windows.net`). |
-| container       | The name of your Azure storage container.                                    |
-| account_name    | The name of your Azure storage account.                                       |
-| account_key     | The account key for authenticating with Azure Blob Storage.                   |
+| Parameter    | Description                                                                                                |
+|--------------|------------------------------------------------------------------------------------------------------------|
+| endpoint_url | The URL endpoint for Azure Blob Storage (e.g., `https://<your-storage-account-name>.blob.core.windows.net)`. |
+| container    | The name of your Azure storage container.                                                                  |
+| account_name | The name of your Azure storage account.                                                                    |
+| account_key  | The account key for authenticating with Azure Blob Storage.                                                |
+| root         | The root directory for Azure Blob Storage.                                                                 |
 
 ### [storage.gcs] Section
 
 The following is a list of the parameters available within the [storage.gcs] section:
 
-| Parameter     | Description                                                    |
-|---------------|----------------------------------------------------------------|
-| bucket        | The name of your Google Cloud Storage bucket.                   |
-| endpoint_url  | The URL endpoint for Google Cloud Storage.           |
-| credential    | The credentials for authenticating with Google Cloud Storage.   |
+| Parameter    | Description                                                   |
+|--------------|---------------------------------------------------------------|
+| bucket       | The name of your Google Cloud Storage bucket.                 |
+| endpoint_url | The URL endpoint for Google Cloud Storage.                    |
+| credential   | The credentials for authenticating with Google Cloud Storage. |
+| root         | The root directory for Google Cloud Storage.                  |
 
 ### [storage.oss] Section
 
 The following is a list of the parameters available within the [storage.oss] section:
 
-| Parameter          | Description                                                  |
-|--------------------|--------------------------------------------------------------|
-| bucket             | The name of your Alibaba Cloud OSS bucket.                    |
-| endpoint_url       | The URL endpoint for Alibaba Cloud OSS.           |
-| access_key_id      | The access key ID for authenticating with Alibaba Cloud OSS. |
-| access_key_secret  | The access key secret for authenticating with Alibaba Cloud OSS. |
+| Parameter            | Description                                                       |
+|----------------------|-------------------------------------------------------------------|
+| bucket               | The name of your Alibaba Cloud OSS bucket.                        |
+| endpoint_url         | The URL endpoint for Alibaba Cloud OSS.                           |
+| access_key_id        | The access key ID for authenticating with Alibaba Cloud OSS.      |
+| access_key_secret    | The access key secret for authenticating with Alibaba Cloud OSS.  |
+| presign_endpoint_url | The URL endpoint for presigned operations with Alibaba Cloud OSS. |
+| root                 | The root directory for Alibaba Cloud OSS.                         |
 
 ### [storage.cos] Section
 
 The following is a list of the parameters available within the [storage.cos] section:
 
-| Parameter      | Description                                                    |
-|----------------|----------------------------------------------------------------|
-| bucket         | The name of your Tencent Cloud Object Storage (COS) bucket.     |
-| endpoint_url   | The URL endpoint for Tencent COS (optional).                    |
-| secret_id      | The secret ID for authenticating with Tencent COS.              |
-| secret_key     | The secret key for authenticating with Tencent COS.             |
+| Parameter    | Description                                                 |
+|--------------|-------------------------------------------------------------|
+| bucket       | The name of your Tencent Cloud Object Storage (COS) bucket. |
+| endpoint_url | The URL endpoint for Tencent COS (optional).                |
+| secret_id    | The secret ID for authenticating with Tencent COS.          |
+| secret_key   | The secret key for authenticating with Tencent COS.         |
+| root         | The root directory for Tencent Cloud Object Storage.        |
 
 ### [storage.hdfs] Section
 
@@ -169,15 +181,18 @@ The following is a list of the parameters available within the [storage.hdfs] se
 | Parameter      | Description                                       |
 |----------------|---------------------------------------------------|
 | name_node      | The name node address for Hadoop Distributed File System (HDFS). |
+| root         | The root directory for HDFS.                                   |
 
 
 ### [storage.webhdfs] Section
 
 The following is a list of the parameters available within the [storage.webhdfs] section:
 
-| Parameter      | Description                                                    |
-|----------------|----------------------------------------------------------------|
-| endpoint_url   | The URL endpoint for WebHDFS (Hadoop Distributed File System). |
+| Parameter    | Description                                                    |
+|--------------|----------------------------------------------------------------|
+| endpoint_url | The URL endpoint for WebHDFS (Hadoop Distributed File System). |
+| root         | The root directory for HDFS.                                   |
+| delegation   | Delegation token for authentication and authorization.         |
 
 ## [cache] Section
 
