@@ -59,7 +59,7 @@ impl Importer {
                 unreachable!("client last resp is not supported")
             }
             RaftStoreEntry::Nodes { key, value } => {
-                d.nodes_mut().insert(key, value);
+                d.sys_data_mut().nodes_mut().insert(key, value);
             }
             RaftStoreEntry::StateMachineMeta { key, value } => {
                 match key {
@@ -71,7 +71,7 @@ impl Importer {
                             )))
                         })?;
 
-                        *d.last_applied_mut() = Some(lid);
+                        *d.sys_data_mut().last_applied_mut() = Some(lid);
                     }
                     StateMachineMetaKey::Initialized => {
                         // This field is no longer used by in-memory state machine
@@ -84,7 +84,7 @@ impl Importer {
                                     e
                                 )))
                             })?;
-                        *d.last_membership_mut() = membership;
+                        *d.sys_data_mut().last_membership_mut() = membership;
                     }
                 }
             }
@@ -103,7 +103,7 @@ impl Importer {
                 self.greatest_seq = std::cmp::max(self.greatest_seq, value.seq);
                 self.kv.insert(key, Marked::from(value));
             }
-            RaftStoreEntry::Sequences { key: _, value } => d.update_seq(value.0),
+            RaftStoreEntry::Sequences { key: _, value } => d.sys_data_mut().update_seq(value.0),
         }
 
         Ok(())

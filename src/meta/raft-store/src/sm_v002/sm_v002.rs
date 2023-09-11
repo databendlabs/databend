@@ -333,15 +333,18 @@ impl SMV002 {
     }
 
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.levels.writable_mut().last_applied_mut()
+        self.levels.writable_mut().sys_data_mut().last_applied_mut()
     }
 
     pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.levels.writable_mut().last_membership_mut()
+        self.levels
+            .writable_mut()
+            .sys_data_mut()
+            .last_membership_mut()
     }
 
     pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.levels.writable_mut().nodes_mut()
+        self.levels.writable_mut().sys_data_mut().nodes_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
