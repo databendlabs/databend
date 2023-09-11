@@ -2237,6 +2237,32 @@ output         : 'h'
 error: 
   --> SQL:1:1
   |
+1 | lpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `lpad('', 1, '')`
+
+
+
+ast            : lpad('hi', 1, '')
+raw expr       : lpad('hi', 1, '')
+checked expr   : lpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : lpad('', 1, '?')
+raw expr       : lpad('', 1, '?')
+checked expr   : lpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | lpad('hi', -1, '?')
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `lpad(String, Int16, String)`
 
@@ -2268,6 +2294,14 @@ evaluation (internal):
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736262626363, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | lpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `lpad('hi', 5, '')`
+
 
 
 ast            : rpad('hi', 2, '?')
@@ -2309,6 +2343,32 @@ output         : 'h'
 error: 
   --> SQL:1:1
   |
+1 | rpad('', 1, '')
+  | ^^^^^^^^^^^^^^^ can't fill the '' length to '1' with an empty pad string while evaluating function `rpad('', 1, '')`
+
+
+
+ast            : rpad('hi', 1, '')
+raw expr       : rpad('hi', 1, '')
+checked expr   : rpad<String, UInt64, String>("hi", to_uint64<UInt8>(1_u8), "")
+optimized expr : "h"
+output type    : String
+output domain  : {"h"..="h"}
+output         : 'h'
+
+
+ast            : rpad('', 1, '?')
+raw expr       : rpad('', 1, '?')
+checked expr   : rpad<String, UInt64, String>("", to_uint64<UInt8>(1_u8), "?")
+optimized expr : "?"
+output type    : String
+output domain  : {"?"..="?"}
+output         : '?'
+
+
+error: 
+  --> SQL:1:1
+  |
 1 | rpad('hi', -1, '?')
   | ^^^^^^^^^^^^^^^^^^^ no overload satisfies `rpad(String, Int16, String)`
 
@@ -2340,6 +2400,14 @@ evaluation (internal):
 | c      | StringColumn { data: 0x3f786262, offsets: [0, 1, 2, 4] }         |
 | Output | StringColumn { data: 0x7465736363626262, offsets: [0, 0, 3, 8] } |
 +--------+------------------------------------------------------------------+
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | rpad(a, b, c)
+  | ^^^^^^^^^^^^^ can't fill the 'hi' length to '5' with an empty pad string while evaluating function `rpad('hi', 5, '')`
+
 
 
 ast            : replace('hi', '', '?')

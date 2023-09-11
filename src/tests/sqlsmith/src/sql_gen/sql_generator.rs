@@ -42,12 +42,13 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) tables: Vec<Table>,
     pub(crate) bound_tables: Vec<Table>,
     pub(crate) bound_columns: Vec<Column>,
+    pub(crate) is_join: bool,
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) rng: &'a mut R,
 }
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
-    pub(crate) fn new(rng: &'a mut R, tables: Vec<Table>) -> Self {
+    pub(crate) fn new(rng: &'a mut R) -> Self {
         let mut scalar_func_sigs = Vec::new();
         for (_, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
             for (scalar_func, _) in func_list {
@@ -55,9 +56,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         }
         SqlGenerator {
-            tables,
+            tables: vec![],
             bound_tables: vec![],
             bound_columns: vec![],
+            is_join: false,
             scalar_func_sigs,
             rng,
         }

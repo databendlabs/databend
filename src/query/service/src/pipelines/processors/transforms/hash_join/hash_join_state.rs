@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -104,6 +105,19 @@ pub struct HashJoinState {
     pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    /// Spill partition set
+    pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
+    /// After all probe processors finish spill or probe processors finish a round run, notify build processors.
+    pub(crate) probe_spill_done_notify: Arc<Notify>,
+    pub(crate) probe_spill_done: Mutex<bool>,
+    /// After `final_probe_workers` is 0, it will be set as true
+    pub(crate) final_probe_done: Mutex<bool>,
+    /// Notify build workers `final scan` is done. They can go to next phase.
+    pub(crate) final_probe_done_notify: Arc<Notify>,
+    /// After all build processors finish spill, will pick a partition
+    /// tell build processors to restore data in the partition
+    /// If partition_id is -1, it means all partitions are spilled.
+    pub(crate) partition_id: Arc<RwLock<i8>>,
 }
 
 impl HashJoinState {
@@ -140,6 +154,12 @@ impl HashJoinState {
             is_build_projected: Arc::new(AtomicBool::new(true)),
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            spill_partition: Default::default(),
+            probe_spill_done_notify: Arc::new(Default::default()),
+            probe_spill_done: Default::default(),
+            final_probe_done: Default::default(),
+            final_probe_done_notify: Arc::new(Default::default()),
+            partition_id: Arc::new(Default::default()),
         }))
     }
 
@@ -181,5 +201,26 @@ impl HashJoinState {
 
     pub fn need_mark_scan(&self) -> bool {
         matches!(self.hash_join_desc.join_type, JoinType::LeftMark)
+    }
+
+    pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
+        let mut spill_partition = self.spill_partition.write();
+        *spill_partition = partitions.clone();
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn wait_probe_spill(&self) {
+        if *self.probe_spill_done.lock() {
+            return;
+        }
+        self.probe_spill_done_notify.notified().await;
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn wait_final_probe(&self) {
+        if *self.final_probe_done.lock() {
+            return;
+        }
+        self.final_probe_done_notify.notified().await;
     }
 }

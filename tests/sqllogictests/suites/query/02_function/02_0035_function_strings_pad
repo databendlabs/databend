@@ -36,6 +36,12 @@ NULL
 statement ok
 SELECT LPAD('', 0, '')
 
+statement error
+SELECT LPAD('', 10, '')
+
+statement error
+SELECT LPAD('123', 10, '')
+
 query T
 SELECT LPAD('', 10, 'abcde')
 ----
@@ -167,6 +173,12 @@ NULL
 
 statement ok
 SELECT RPAD('', 0, '')
+
+statement error
+SELECT RPAD('', 10, '')
+
+statement error
+SELECT RPAD('123', 10, '')
 
 query T
 SELECT RPAD('', 10, 'abcde')
