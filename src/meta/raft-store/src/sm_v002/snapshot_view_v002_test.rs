@@ -248,12 +248,12 @@ async fn test_import() -> anyhow::Result<()> {
 /// l0 | a  b    c    d
 async fn build_3_levels() -> LeveledMap {
     let mut l = LeveledMap::default();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.writable_mut().sys_data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ()));
-    *l.writable_mut().sys_data_mut().last_applied_mut() = Some(log_id(1, 1, 1));
-    *l.writable_mut().sys_data_mut().nodes_mut() =
-        btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    *sd.last_applied_mut() = Some(log_id(1, 1, 1));
+    *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
     MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
@@ -262,12 +262,12 @@ async fn build_3_levels() -> LeveledMap {
     MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
 
     l.freeze_writable();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.writable_mut().sys_data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ()));
-    *l.writable_mut().sys_data_mut().last_applied_mut() = Some(log_id(2, 2, 2));
-    *l.writable_mut().sys_data_mut().nodes_mut() =
-        btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    *sd.last_applied_mut() = Some(log_id(2, 2, 2));
+    *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
     MapApi::<String>::set(&mut l, s("b"), None).await;
@@ -275,12 +275,12 @@ async fn build_3_levels() -> LeveledMap {
     MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
 
     l.freeze_writable();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.writable_mut().sys_data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()));
-    *l.writable_mut().sys_data_mut().last_applied_mut() = Some(log_id(3, 3, 3));
-    *l.writable_mut().sys_data_mut().nodes_mut() =
-        btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    *sd.last_applied_mut() = Some(log_id(3, 3, 3));
+    *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
     MapApi::<String>::set(&mut l, s("c"), None).await;
