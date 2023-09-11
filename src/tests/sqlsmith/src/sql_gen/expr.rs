@@ -327,18 +327,40 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             .iter()
             .map(|ty| self.gen_expr(ty))
             .collect::<Vec<_>>();
-        let mut params = vec![];
-        for _ in 0..self.rng.gen_range(1..4) {
-            params.push(Literal::UInt64(self.rng.gen_range(0..=9223372036854775807)));
-        }
+
         Expr::FunctionCall {
             span: None,
             distinct: false,
             name,
             args,
-            params,
+            params: vec![],
             window: None,
             lambda: None,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn gen_literal(&mut self) -> Literal {
+        let n = self.rng.gen_range(1..7);
+        match n {
+            1 => Literal::Null,
+            2 => Literal::String(
+                rand::thread_rng()
+                    .sample_iter(&Alphanumeric)
+                    .take(7)
+                    .map(char::from)
+                    .collect::<String>(),
+            ),
+            3 => Literal::Boolean(self.rng.gen_bool(0.5)),
+            4 => Literal::Decimal256 {
+                value: I256::from(self.rng.gen_range(-2147483648..=2147483647)),
+                precision: 39,
+                scale: self.rng.gen_range(0..39),
+            },
+            5 => Literal::UInt64(self.rng.gen_range(0..=9223372036854775807)),
+            6 => Literal::CurrentTimestamp,
+            7 => Literal::Float64(self.rng.gen_range(-1.7e10..=1.7e10)),
+            _ => unreachable!(),
         }
     }
 
@@ -351,7 +373,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         // can ignore ErrorCode::BadDataValueType
         Expr::FunctionCall {
             span: None,
-            distinct: self.rng.gen_bool(0.2),
+            distinct: name.to_uppercase() == "COUNT" && self.rng.gen_bool(0.5),
             name: Identifier::from_name(name),
             args,
             params: vec![],

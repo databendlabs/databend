@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::GroupBy;
 use common_expression::types::DataType;
 use common_expression::FunctionSignature;
 use common_expression::TableSchemaRef;
@@ -47,6 +48,7 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) agg_func_names: Vec<String>,
     pub(crate) rng: &'a mut R,
+    pub(crate) group_by: Option<GroupBy>,
 }
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -66,6 +68,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             scalar_func_sigs,
             agg_func_names,
             rng,
+            group_by: None,
         }
     }
 }
