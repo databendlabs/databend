@@ -127,12 +127,22 @@ impl MatchedAggregator {
         let row_ids = get_row_id(&data_block, 0)?;
         for row_id in row_ids {
             let (prefix, offset) = split_row_id(row_id);
-            self.block_mutation_row_offset
-                .entry(prefix)
-                .and_modify(|v| {
-                    v.insert(offset as usize);
-                })
-                .or_insert(vec![offset as usize].into_iter().collect());
+            let row_id = row_id as usize;
+            match self.block_mutation_row_offset.entry(prefix) {
+                Entry::Occupied(mut entry) => {
+                    if entry.get().contains(&row_id) {
+                        return Err(ErrorCode::UnresolvableConflict(
+                            "multi rows from source match one and the same row in the target_table multi times",
+                        ));
+                    }
+                    entry.get_mut().insert(offset as usize);
+                }
+                Entry::Vacant(entry) => {
+                    let mut offsets = HashSet::new();
+                    offsets.insert(offset as usize);
+                    entry.insert(offsets);
+                }
+            };
         }
         Ok(())
     }
