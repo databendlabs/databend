@@ -2530,6 +2530,24 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : locate('', 'foobarbar')
+raw expr       : locate('', 'foobarbar')
+checked expr   : locate<String, String>("", "foobarbar")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : locate('', '')
+raw expr       : locate('', '')
+checked expr   : locate<String, String>("", "")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
 ast            : instr('foobarbar', 'bar')
 raw expr       : instr('foobarbar', 'bar')
 checked expr   : instr<String, String>("foobarbar", "bar")
@@ -2539,6 +2557,24 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : instr('foobarbar', '')
+raw expr       : instr('foobarbar', '')
+checked expr   : instr<String, String>("foobarbar", "")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : instr('', '')
+raw expr       : instr('', '')
+checked expr   : instr<String, String>("", "")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
 ast            : position('bar' IN 'foobarbar')
 raw expr       : position('bar', 'foobarbar')
 checked expr   : position<String, String>("bar", "foobarbar")
@@ -2546,6 +2582,24 @@ optimized expr : 4_u64
 output type    : UInt64
 output domain  : {4..=4}
 output         : 4
+
+
+ast            : position('' IN 'foobarbar')
+raw expr       : position('', 'foobarbar')
+checked expr   : position<String, String>("", "foobarbar")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : position('' IN '')
+raw expr       : position('', '')
+checked expr   : position<String, String>("", "")
+optimized expr : 1_u64
+output type    : UInt64
+output domain  : {1..=1}
+output         : 1
 
 
 ast            : position('foobarbar' IN 'bar')

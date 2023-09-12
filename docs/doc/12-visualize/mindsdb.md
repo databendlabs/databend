@@ -28,7 +28,6 @@ CREATE TABLE pollution_measurement(
   PM10 double,
   PM25 double
 );
- 
 COPY INTO pollution_measurement FROM 'https://datasets.databend.org/AirPolutionSeoul/Measurement_summary.csv' file_format=(type='CSV' skip_header=1);
 ```
 

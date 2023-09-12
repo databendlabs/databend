@@ -36,8 +36,7 @@ tables=(
 
 # Clear Data
 # shellcheck disable=SC2068
-for t in ${tables[@]}
-do
+for t in ${tables[@]}; do
     echo "DROP TABLE IF EXISTS ${db}.$t" | $MYSQL_CLIENT_CONNECT
 done
 
@@ -48,20 +47,19 @@ echo "CREATE DATABASE IF NOT EXISTS tpcds" | $MYSQL_CLIENT_CONNECT
 cat ${target_dir}/scripts/tpcds.sql | $MYSQL_CLIENT_CONNECT
 
 # download data
-mkdir -p  ${target_dir}/data/
-if [ ! -d ${target_dir}/data/tpcds.tar.gz ];then
-    curl -s -o ${target_dir}/data/tpcds.tar.gz  http://repo.databend.rs/dataset/stateful/tpcds.tar.gz
+mkdir -p ${target_dir}/data/
+if [ ! -d ${target_dir}/data/tpcds.tar.gz ]; then
+    curl -s -o ${target_dir}/data/tpcds.tar.gz https://ci.databend.org/dataset/stateful/tpcds.tar.gz
 fi
 
 tar -zxf ${target_dir}/data/tpcds.tar.gz -C ${target_dir}/data
 
 # insert data to tables
 # shellcheck disable=SC2068
-for t in ${tables[@]}
-do
+for t in ${tables[@]}; do
     echo $t
     insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${target_dir}'/data/data/'$t'.csv"' > /dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${target_dir}'/data/data/'$t'.csv"' >/dev/null 2>&1
     echo "analyze table $db.$t" | $MYSQL_CLIENT_CONNECT
 done
 
