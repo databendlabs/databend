@@ -53,6 +53,7 @@ use log::error;
 use log::info;
 
 use crate::background_service::job::Job;
+use crate::background_service::session::create_session;
 
 const BLOCK_COUNT: u64 = 500;
 const PER_SEGMENT_BLOCK: u64 = 500;
@@ -65,7 +66,6 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
-    session: Arc<Session>,
 
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
@@ -144,7 +144,6 @@ impl CompactionJob {
     pub async fn create(
         config: &InnerConfig,
         name: String,
-        session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Self {
         let tenant = config.query.tenant_id.clone();
@@ -154,12 +153,12 @@ impl CompactionJob {
             conf: config.clone(),
             meta_api,
             creator,
-            session,
             finish_tx,
         }
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
-        let ctx = self.session.create_query_context().await?;
+        let session = create_session(&self.conf).await?;
+        let ctx = session.create_query_context().await?;
         let job_info = self.get_info().await?;
 
         let (params, manual) = Self::sync_compact_params(&job_info).await;
@@ -195,7 +194,7 @@ impl CompactionJob {
                 let tb_id = tb_ids.value(i);
                 match self
                     .compact_table(
-                        self.session.clone(),
+                        session.clone(),
                         db_name.clone(),
                         tb_name.clone(),
                         db_id,

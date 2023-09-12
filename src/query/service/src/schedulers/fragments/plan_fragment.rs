@@ -368,22 +368,24 @@ impl PlanFragment {
         parts.sort_by(|a, b| a.0.cmp(&b.0));
         let partitions: Vec<_> = parts.into_iter().map(|x| x.1).collect();
 
+        // parts_per_executor = num_parts / num_executors
+        // remain = num_parts % num_executors
+        // part distribution:
+        //   executor number      | Part number of each executor
+        // ------------------------------------------------------
+        // num_executors - remain |   parts_per_executor
+        //     remain             |   parts_per_executor + 1
         let mut executor_part = HashMap::default();
-        // the first num_parts % num_executors get parts_per_node parts
-        // the remaining get parts_per_node - 1 parts
-        let parts_per_node = (num_parts + num_executors - 1) / num_executors;
-        for (idx, executor) in executors_sorted.iter().enumerate() {
-            let begin = parts_per_node * idx;
-            let end = num_parts.min(parts_per_node * (idx + 1));
-            let parts = partitions[begin..end].to_vec();
-            executor_part.insert(executor.clone(), parts);
-            if end == num_parts && idx < num_executors - 1 {
+        for (idx, executor) in executors_sorted.into_iter().enumerate() {
+            let begin = num_parts * idx / num_executors;
+            let end = num_parts * (idx + 1) / num_executors;
+            let parts = if begin == end {
                 // reach here only when num_executors > num_parts
-                executors_sorted[(idx + 1)..].iter().for_each(|executor| {
-                    executor_part.insert(executor.clone(), vec![]);
-                });
-                break;
-            }
+                vec![]
+            } else {
+                partitions[begin..end].to_vec()
+            };
+            executor_part.insert(executor, parts);
         }
 
         Ok(executor_part)
