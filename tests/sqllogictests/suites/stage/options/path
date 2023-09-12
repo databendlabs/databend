@@ -1,0 +1,11 @@
+statement ok
+drop table if exists i;
+
+statement ok
+create table i(a int);
+
+# test ')' right after <at_string>
+query 
+COPY INTO i FROM (SELECT $1 FROM @data/csv/select.csv) FILE_FORMAT = (TYPE = CSV);
+----
+csv/select.csv 3 0 NULL NULL
