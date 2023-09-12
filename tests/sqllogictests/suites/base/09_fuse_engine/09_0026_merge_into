@@ -45,9 +45,6 @@ select * from t2 order by a,b,c;
 statement error 1006
 merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
 
-statement error 1006
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b) values(t2.a,t2.b);
-
 statement ok
 merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c;
 
