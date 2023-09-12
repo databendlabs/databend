@@ -2,6 +2,6 @@
   "label": "Database",
   "link": {
     "type": "generated-index",
-    "slug": "/reference/sql/ddl/database"
+    "slug": "/sql-commands/ddl/database"
   }
 }
