@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod level;
 pub mod level_data;
+pub mod leveled_map;
 pub mod map_api;
+pub mod meta_api;
+pub mod static_leveled_map;
+pub mod util;
 
 #[cfg(test)]
-mod leveled_store_test;
+mod leveled_map_test;
