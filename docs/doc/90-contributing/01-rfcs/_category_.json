@@ -1,6 +1,7 @@
 {
   "label": "RFCs",
   "link": {
-    "type": "generated-index"
+    "type": "generated-index",
+    "slug": "/contributing/rfcs"
   }
 }

@@ -1,6 +1,7 @@
 {
   "label": "Semi-Structured Functions",
   "link": {
-    "type": "generated-index"
+    "type": "generated-index",
+    "slug": "/sql-functions/semi-structured-functions"
   }
 }

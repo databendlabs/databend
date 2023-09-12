@@ -1,6 +1,7 @@
 {
   "label": "System Functions",
   "link": {
-    "type": "generated-index"
+    "type": "generated-index",
+    "slug": "/sql-functions/system-functions"
   }
 }
