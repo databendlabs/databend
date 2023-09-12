@@ -148,4 +148,4 @@ SELECT user_id, pref:age::INT64 as age FROM user_pref;
 
 ## Functions
 
-See [Variant Functions](/doc/sql-functions/variant-functions).
+See [Variant Functions](/doc/sql-functions/semi-structured-functions).
