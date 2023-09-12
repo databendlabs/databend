@@ -40,7 +40,7 @@ See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-u
 ### 2.3 Load Data Into OnTime Table
 
 ```shell title='t_ontime.csv.zip'
-wget https://datasets.databend.rs/t_ontime/t_ontime.csv.zip
+wget https://datasets.databend.org/t_ontime/t_ontime.csv.zip
 ```
 
 ```shell title='Unzip'

@@ -45,7 +45,7 @@ mysql -h127.0.0.1 -P3307 -uroot
 
 `COPY` data into `hits` table:
 ```shell title='Load CSV files into Databend'
-COPY INTO hits FROM 'https://datasets.databend.rs/hits_1m.tsv.gz' FILE_FORMAT=(type=TSV compression=AUTO);
+COPY INTO hits FROM 'https://datasets.databend.org/hits_1m.tsv.gz' FILE_FORMAT=(type=TSV compression=AUTO);
 ```
 
 ## Step 3. Queries
