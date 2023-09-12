@@ -122,7 +122,7 @@ FROM   test_tz;
 
 ## Functions
 
-See [Date & Time Functions](/doc/reference/functions/datetime-functions).
+See [Date & Time Functions](/doc/sql-functions/datetime-functions).
 
 ### Formatting Date and Time
 

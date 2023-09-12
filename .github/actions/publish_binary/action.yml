@@ -1,17 +1,11 @@
 name: "Publish Binary"
 description: "Publish releases binaries"
 inputs:
-  github_token:
-    description: "GitHub token"
-    required: true
   version:
     description: "Release version"
     required: true
   target:
     description: "Release target"
-    required: true
-  repo_role_arn:
-    description: "Repo Role Arn"
     required: true
   category:
     description: "Release default / hdfs"
@@ -41,33 +35,18 @@ runs:
 
     - name: Update release to github
       shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github_token }}
       # Reference: https://cli.github.com/manual/gh_release_upload
       run: |
         gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}.*
 
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v2
-      with:
-        role-duration-seconds: 900
-        role-to-assume: ${{ inputs.repo_role_arn }}
-        aws-region: us-east-2
-
-    - name: Sync normal release to S3
+    - name: Sync normal release to R2
       shell: bash
       if: inputs.category == 'default'
       run: |
-        aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
-        curl --retry 3 -fsSLo tags.json \
-            --header 'content-type: application/json' \
-            --header 'authorization: Bearer ${{ inputs.github_token }}' \
-            https://api.github.com/repos/datafuselabs/databend/tags
+        aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
+        gh api /repos/datafuselabs/databend/tags > tags.json
         cat tags.json
-        aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json
-        curl --retry 3 -fsSLo releases.json \
-            --header 'content-type: application/json' \
-            --header 'authorization: Bearer ${{ inputs.github_token }}' \
-            https://api.github.com/repos/datafuselabs/databend/releases
+        aws s3 cp ./tags.json s3://repo/databend/tags.json
+        gh api /repos/datafuselabs/databend/releases > releases.json
         cat releases.json
-        aws s3 cp ./releases.json s3://repo.databend.rs/databend/releases.json
+        aws s3 cp ./releases.json s3://repo/databend/releases.json
