@@ -19,15 +19,156 @@ use std::sync::Arc;
 
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 
 use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::map_api::compacted_get;
+use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
-use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
+
+/// A readonly leveled map store that does not not own the data.
+#[derive(Debug)]
+pub struct LeveledRef<'d> {
+    /// The top level is the newest and writable.
+    writable: Option<&'d LevelData>,
+
+    /// The immutable levels.
+    frozen: &'d StaticLeveledMap,
+}
+
+impl<'d> LeveledRef<'d> {
+    pub(in crate::sm_v002) fn new(
+        writable: Option<&'d LevelData>,
+        frozen: &'d StaticLeveledMap,
+    ) -> LeveledRef<'d> {
+        Self { writable, frozen }
+    }
+
+    /// Return an iterator of all levels in reverse order.
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d LevelData> + 'd {
+        self.writable.into_iter().chain(self.frozen.iter_levels())
+    }
+}
+
+#[async_trait::async_trait]
+impl<'d, K> MapApiRO<K> for LeveledRef<'d>
+where
+    K: MapKey + fmt::Debug,
+    LevelData: MapApiRO<K>,
+{
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+    {
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
+    }
+
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    where
+        K: Borrow<Q>,
+        R: RangeBounds<Q> + Clone + Send + Sync,
+        Q: Ord + Send + Sync + ?Sized,
+    {
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
+    }
+}
+
+/// A writable leveled map store that does not not own the data.
+#[derive(Debug)]
+pub struct LeveledRefMut<'d> {
+    /// The top level is the newest and writable.
+    writable: &'d mut LevelData,
+
+    /// The immutable levels.
+    frozen: &'d StaticLeveledMap,
+}
+
+impl<'d> LeveledRefMut<'d> {
+    pub(in crate::sm_v002) fn new(
+        writable: &'d mut LevelData,
+        frozen: &'d StaticLeveledMap,
+    ) -> Self {
+        Self { writable, frozen }
+    }
+
+    #[allow(dead_code)]
+    pub(in crate::sm_v002) fn to_leveled_ref<'me>(&'me self) -> LeveledRef<'me> {
+        // LeveledRef::new(self.writable, self.frozen)
+        LeveledRef::<'me> {
+            writable: Some(&*self.writable),
+            frozen: self.frozen,
+        }
+    }
+
+    /// Return an iterator of all levels in new-to-old order.
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ LevelData> + '_ {
+        [&*self.writable]
+            .into_iter()
+            .chain(self.frozen.iter_levels())
+    }
+}
+
+// Because `LeveledRefMut` has a mut ref of lifetime 'd,
+// `self` must outlive 'd otherwise there will be two mut ref.
+#[async_trait::async_trait]
+impl<'d, K> MapApiRO<K> for LeveledRefMut<'d>
+where
+    K: MapKey,
+    LevelData: MapApiRO<K>,
+{
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+    {
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
+    }
+
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    where
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
+    {
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<'d, K> MapApi<K> for LeveledRefMut<'d>
+where
+    K: MapKey,
+    LevelData: MapApi<K>,
+{
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>)
+    where
+        K: Ord,
+    {
+        // Get from this level or the base level.
+        let prev = self.get(&key).await.clone();
+
+        // No such entry at all, no need to create a tombstone for delete
+        if prev.is_not_found() && value.is_none() {
+            return (prev, Marked::new_tomb_stone(0));
+        }
+
+        // The data is a single level map and the returned `_prev` is only from that level.
+        let (_prev, inserted) = self.writable.set(key, value).await;
+        (prev, inserted)
+    }
+}
 
 /// State machine data organized in multiple levels.
 ///
@@ -89,76 +230,59 @@ impl LeveledMap {
     pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
         self.frozen = b;
     }
+
+    pub(crate) fn leveled_ref_mut(&mut self) -> LeveledRefMut {
+        LeveledRefMut::new(&mut self.writable, &self.frozen)
+    }
+
+    pub(crate) fn leveled_ref(&self) -> LeveledRef {
+        LeveledRef::new(Some(&self.writable), &self.frozen)
+    }
 }
 
 #[async_trait::async_trait]
 impl<K> MapApiRO<K> for LeveledMap
 where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
+    K: MapKey + fmt::Debug,
     LevelData: MapApiRO<K>,
 {
-    type V = <LevelData as MapApiRO<K>>::V;
-
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        for level_data in self.iter_levels() {
-            let got = level_data.get(key).await;
-            if !got.is_not_found() {
-                return got;
-            }
-        }
-        return Marked::empty();
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
-        K: 'a,
-        K: Borrow<T> + Clone,
-        Self::V: Unpin,
-        T: Ord,
-        R: RangeBounds<T> + Clone + Send + Sync,
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let mut km = KMerge::by(util::by_key_seq);
-
-        for api in self.iter_levels() {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        Box::pin(m)
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
     }
 }
 
 #[async_trait::async_trait]
 impl<K> MapApi<K> for LeveledMap
 where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
+    K: MapKey,
     LevelData: MapApi<K>,
 {
     async fn set(
         &mut self,
         key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>)
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: Ord,
     {
-        // Get from this level or the base level.
-        let prev = self.get(&key).await.clone();
+        let mut l = self.leveled_ref_mut();
+        MapApi::set(&mut l, key, value).await
 
-        // No such entry at all, no need to create a tombstone for delete
-        if prev.is_not_found() && value.is_none() {
-            return (prev, Marked::new_tomb_stone(0));
-        }
-
-        // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.writable_mut().set(key, value).await;
-        (prev, inserted)
+        // (&mut l).set(key, value).await
     }
 }

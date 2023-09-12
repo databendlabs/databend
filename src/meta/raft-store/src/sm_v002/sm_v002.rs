@@ -53,6 +53,7 @@ use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
@@ -226,6 +227,11 @@ impl SMV002 {
         &self.blocking_config
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn new_applier(&mut self) -> Applier {
+        Applier::new(self)
+    }
+
     pub async fn apply_entries<'a>(
         &mut self,
         entries: impl IntoIterator<Item = &'a Entry>,
@@ -245,24 +251,10 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.levels, key).await;
+        let got = MapApiRO::<String>::get(&self.levels.leveled_ref(), key).await;
+        // let got = self.levels.leveled_ref().get(key).await;
+        // let got = MapApiRO::<String>::get(&self.levels, key).await;
         Into::<Option<SeqV>>::into(got)
-    }
-
-    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
-    /// Update or insert a kv entry.
-    ///
-    /// If the input entry has expired, it performs a delete operation.
-    pub(crate) async fn upsert_kv(&mut self, upsert_kv: UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
-        let (prev, result) = self.upsert_kv_primary_index(&upsert_kv).await;
-
-        self.update_expire_index(&upsert_kv.key, &prev, &result)
-            .await;
-
-        let prev = Into::<Option<SeqV>>::into(prev);
-        let result = Into::<Option<SeqV>>::into(result);
-
-        (prev, result)
     }
 
     /// List kv entries by prefix.
@@ -396,7 +388,7 @@ impl SMV002 {
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.
-    async fn upsert_kv_primary_index(
+    pub(crate) async fn upsert_kv_primary_index(
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> (Marked<Vec<u8>>, Marked<Vec<u8>>) {
@@ -419,9 +411,12 @@ impl SMV002 {
             }
             Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await,
             Operation::AsIs => {
-                self.levels
-                    .update_meta(upsert_kv.key.clone(), upsert_kv.value_meta.clone())
-                    .await
+                MapApiExt::update_meta(
+                    &mut self.levels,
+                    upsert_kv.key.clone(),
+                    upsert_kv.value_meta.clone(),
+                )
+                .await
             }
         };
 
@@ -447,7 +442,7 @@ impl SMV002 {
     /// Update the secondary index for speeding up expiration operation.
     ///
     /// Remove the expiration index for the removed record, and add a new one for the new record.
-    async fn update_expire_index(
+    pub(crate) async fn update_expire_index(
         &mut self,
         key: impl ToString,
         removed: &Marked<Vec<u8>>,
