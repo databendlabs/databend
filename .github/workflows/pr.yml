@@ -67,14 +67,14 @@ jobs:
         if: success()
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           identifier: 'pr-assistant-title'
           delete: true
       - name: Comment on PR
         if: failure()
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           identifier: 'pr-assistant-title'
           body: |
             This pull request's title is not fulfill the requirements. @${{ github.event.pull_request.user.login }} please update it 🙏.
@@ -117,14 +117,14 @@ jobs:
         if: success()
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           identifier: 'pr-assistant-cla'
           delete: true
       - name: Comment on PR
         if: failure()
         uses: everpcpc/comment-on-pr-action@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           identifier: 'pr-assistant-cla'
           body: |
             Pull request description must contain [CLA](https://databend.rs/doc/contributing/good-pr) like the following:
