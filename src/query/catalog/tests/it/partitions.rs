@@ -123,6 +123,26 @@ fn test_partition_reshuffle() {
 
     // Mod.
     {
+        let partitions = gen_parts(PartitionsShuffleKind::Mod, 10);
+        let shuffle = partitions.reshuffle(executors_3.clone()).unwrap();
+
+        writeln!(
+            file,
+            "PartitionsShuffleKind::Mod : 10 partitions of 3 executors"
+        )
+        .unwrap();
+        let e1_parts = shuffle.get(&executors_3[0]).unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
+
+        let e2_parts = shuffle.get(&executors_3[1]).unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
+
+        let e3_parts = shuffle.get(&executors_3[2]).unwrap();
+        writeln!(file, "{:?}", e3_parts).unwrap();
+    }
+
+    // Mod.
+    {
         let partitions = gen_parts(PartitionsShuffleKind::Mod, 11);
         let shuffle = partitions.reshuffle(executors_3.clone()).unwrap();
 
@@ -173,6 +193,23 @@ fn test_partition_reshuffle() {
 
         let e2_parts = shuffle.get(&executors_2[1]).unwrap();
         writeln!(file, "{:?}", e2_parts.len()).unwrap();
+    }
+
+    // Broadcast.
+    {
+        let partitions = gen_parts(PartitionsShuffleKind::Broadcast, 3);
+        let shuffle = partitions.reshuffle(executors_2.clone()).unwrap();
+
+        writeln!(
+            file,
+            "PartitionsShuffleKind::Broadcast: 3 partitions of 2 executors"
+        )
+        .unwrap();
+        let e1_parts = shuffle.get(&executors_2[0]).unwrap();
+        writeln!(file, "{:?}", e1_parts).unwrap();
+
+        let e2_parts = shuffle.get(&executors_2[1]).unwrap();
+        writeln!(file, "{:?}", e2_parts).unwrap();
     }
 }
 
