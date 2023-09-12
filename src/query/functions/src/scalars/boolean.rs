@@ -49,10 +49,11 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() < 2 {
             return None;
         }
-        for arg_type in args_type {
-            if arg_type.remove_nullable() != DataType::Boolean {
-                return None;
-            }
+        if args_type
+            .iter()
+            .any(|arg_type| arg_type.remove_nullable() != DataType::Boolean)
+        {
+            return None;
         }
 
         Some(Arc::new(Function {
