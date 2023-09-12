@@ -232,6 +232,30 @@ impl Settings {
         self.try_set_u64("enable_cbo", u64::from(val))
     }
 
+    pub fn get_disable_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_join_reorder")? != 0)
+    }
+
+    pub fn set_disable_join_reorder(&self, val: bool) -> Result<()> {
+        self.try_set_u64("disable_join_reorder", u64::from(val))
+    }
+
+    pub fn get_enable_join_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_join_spill")? != 0)
+    }
+
+    pub fn set_enable_join_spill(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_join_spill", u64::from(val))
+    }
+
+    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    }
+
+    pub fn set_join_spilling_threshold(&self, value: usize) -> Result<()> {
+        self.try_set_u64("join_spilling_threshold", value as u64)
+    }
+
     pub fn get_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }
@@ -397,7 +421,7 @@ impl Settings {
     }
 
     pub fn set_enable_distributed_replace(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_repalce_into", u64::from(val))
+        self.try_set_u64("enable_distributed_replace_into", u64::from(val))
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {

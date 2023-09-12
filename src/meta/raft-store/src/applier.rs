@@ -29,6 +29,7 @@ use common_meta_types::KVMeta;
 use common_meta_types::MatchSeq;
 use common_meta_types::Node;
 use common_meta_types::SeqV;
+use common_meta_types::SeqValue;
 use common_meta_types::StoredMembership;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnDeleteByPrefixRequest;
@@ -251,7 +252,7 @@ impl<'a> Applier<'a> {
         debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = &cond.key;
-        let seqv = self.sm.get_kv_ref(key).await;
+        let seqv = self.sm.get_kv(key).await;
 
         debug!(
             "txn_execute_one_condition: key: {} curr: seq:{} value:{:?}",

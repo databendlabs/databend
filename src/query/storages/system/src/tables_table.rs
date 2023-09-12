@@ -183,6 +183,7 @@ where TablesTable<T>: HistoryAware
         }
 
         let mut number_of_blocks: Vec<Option<u64>> = Vec::new();
+        let mut owner: Vec<Option<Vec<u8>>> = Vec::new();
         let mut number_of_segments: Vec<Option<u64>> = Vec::new();
         let mut num_rows: Vec<Option<u64>> = Vec::new();
         let mut data_size: Vec<Option<u64>> = Vec::new();
@@ -190,6 +191,13 @@ where TablesTable<T>: HistoryAware
         let mut index_size: Vec<Option<u64>> = Vec::new();
 
         for tbl in &database_tables {
+            owner.push(
+                tbl.get_table_info()
+                    .meta
+                    .owner
+                    .as_ref()
+                    .map(|v| v.owner_role_name.as_bytes().to_vec()),
+            );
             let stats = tbl.table_statistics()?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
             number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
@@ -281,6 +289,7 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(index_size),
             UInt64Type::from_opt_data(number_of_segments),
             UInt64Type::from_opt_data(number_of_blocks),
+            StringType::from_opt_data(owner),
         ]))
     }
 }
@@ -324,6 +333,10 @@ where TablesTable<T>: HistoryAware
             TableField::new(
                 "number_of_blocks",
                 TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+            ),
+            TableField::new(
+                "owner",
+                TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ])
     }

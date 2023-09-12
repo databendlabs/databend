@@ -8,6 +8,17 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Defines and establishes a new catalog in the Databend query engine. 
 
+:::note
+To read data from HDFS in Databend, you need to set the following environment variables before starting Databend. These environment variables ensure that Databend can access the necessary Java and Hadoop dependencies to interact with HDFS effectively. Make sure to replace "/path/to/java" and "/path/to/hadoop" with the actual paths to your Java and Hadoop installations, and adjust the CLASSPATH to include all the required Hadoop JAR files.
+
+```sql
+export JAVA_HOME=/path/to/java
+export LD_LIBRARY_PATH=${JAVA_HOME}/lib/server:${LD_LIBRARY_PATH}
+export HADOOP_HOME=/path/to/hadoop
+export CLASSPATH=/all/hadoop/jar/files
+```
+:::
+
 ## Syntax
 
 ```sql

@@ -5,7 +5,11 @@ description:
   Deploying Databend locally or with Docker
 ---
 
-To assess Databend and gain practical expertise, you have two deployment choices. You can opt for a local deployment and use the file system as storage if object storage is unavailable. Alternatively, you can deploy Databend along with [MinIO](https://min.io/) on Docker for a containerized setup.
+To quickly access Databend features and gain practical expertise, you have the following deployment options:
+
+- [Deploying Databend on Docker](#deploying-databend-on-docker): You can deploy Databend along with [MinIO](https://min.io/) on Docker for a containerized setup.
+
+- [Deploying a Local Databend](#deploying-a-local-databend): You can opt for a local deployment and use the file system as storage if object storage is unavailable.
 
 :::note non-production use only
 - Object storage is a requirement for production use of Databend. The file system should only be used for evaluation, testing, and non-production scenarios. 
@@ -15,7 +19,7 @@ To assess Databend and gain practical expertise, you have two deployment choices
 
 ## Deploying Databend on Docker
 
-To deploy Databend along with [MinIO](https://min.io/) on Docker, please follow the steps outlined below. Prior to starting, ensure that you have Docker installed on your system.
+Before you start, ensure that you have Docker installed on your system.
 
 ### Step 1. Deploying MinIO
 
@@ -131,7 +135,7 @@ The following steps will guide you through the process of locally deploying Data
 
 ### Step 1. Downloading Databend
 
-1. Go to https://databend.rs/download and download the installation package for your platform.
+1. Download the installation package suitable for your platform from the [Download](https://databend.rs/download) page.
 
 2. Extract the installation package to a local directory.
 

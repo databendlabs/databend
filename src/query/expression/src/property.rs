@@ -110,7 +110,7 @@ pub enum Domain {
 }
 
 impl<T: ValueType> FunctionDomain<T> {
-    pub fn map<U: ValueType>(self, f: impl FnOnce(T::Domain) -> U::Domain) -> FunctionDomain<U> {
+    pub fn map<U: ValueType>(self, f: impl Fn(T::Domain) -> U::Domain) -> FunctionDomain<U> {
         match self {
             FunctionDomain::MayThrow => FunctionDomain::MayThrow,
             FunctionDomain::Full => FunctionDomain::Full,

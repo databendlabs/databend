@@ -53,6 +53,7 @@ use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
 use crate::sm_v002::Importer;
@@ -243,15 +244,8 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApi::<String>::get(&self.top, key).await.clone();
+        let got = MapApiRO::<String>::get(&self.top, key).await;
         Into::<Option<SeqV>>::into(got)
-    }
-
-    /// Get a value by key and return a reference to the internal entry.
-    ///
-    /// It is an internal API and does not examine the expiration time.
-    pub(crate) async fn get_kv_ref(&self, key: &str) -> &dyn SeqValue {
-        MapApi::<String>::get(&self.top, key).await
     }
 
     // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
@@ -276,7 +270,7 @@ impl SMV002 {
     pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
         let p = prefix.to_string();
         let mut res = Vec::new();
-        let strm = MapApi::<String>::range(&self.top, p..).await;
+        let strm = MapApiRO::<String>::range(&self.top, p..).await;
 
         {
             let mut strm = std::pin::pin!(strm);
@@ -310,12 +304,15 @@ impl SMV002 {
     }
 
     /// List expiration index by expiration time.
-    pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (&ExpireKey, &String)> {
+    pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (ExpireKey, String)> + '_ {
         self.top
             .range::<ExpireKey, _>(&self.expire_cursor..)
             .await
             // Return only non-deleted records
-            .filter_map(|(k, v)| async move { v.unpack().map(|(v, _)| (k, v)) })
+            .filter_map(|(k, v)| async move {
+                //
+                v.unpack().map(|(v, _v_meta)| (k, v))
+            })
     }
 
     pub fn curr_seq(&self) -> u64 {
@@ -399,7 +396,7 @@ impl SMV002 {
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> (Marked<Vec<u8>>, Marked<Vec<u8>>) {
-        let prev = MapApi::<String>::get(&self.top, &upsert_kv.key)
+        let prev = MapApiRO::<String>::get(&self.top, &upsert_kv.key)
             .await
             .clone();
 
