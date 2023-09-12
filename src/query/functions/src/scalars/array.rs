@@ -167,7 +167,22 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<NumberType<u64>, NumberType<u64>, ArrayType<NumberType<u64>>, _, _>(
         "range",
         |_, _, _| FunctionDomain::Full,
-        |start, end, _| (start..end).collect(),
+        |start, end, ctx| {
+            const MAX: u64 = 500000000;
+            if end - start > MAX {
+                // the same behavior as Clickhouse
+                ctx.set_error(
+                    0,
+                    format!(
+                        "the allowed maximum values of range function is {}, but got {}",
+                        MAX,
+                        end - start
+                    ),
+                );
+                return vec![0u64].into();
+            }
+            (start..end).collect()
+        },
     );
 
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
