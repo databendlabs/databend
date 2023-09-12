@@ -1841,15 +1841,15 @@ impl PipelineBuilder {
             self.main_pipeline.output_len(),
         )?);
 
-        let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
-            Some(Box::new(ProbeSpillState::create(
-                self.ctx.clone(),
-                probe_state.clone(),
-            )))
-        } else {
-            None
-        };
         self.main_pipeline.add_transform(|input, output| {
+            let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+                Some(Box::new(ProbeSpillState::create(
+                    self.ctx.clone(),
+                    probe_state.clone(),
+                )))
+            } else {
+                None
+            };
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,

@@ -392,24 +392,27 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::Spill => {
                 if let Some(data) = self.input_data.pop_front() {
-                    let mut spiller = self.spill_state.as_ref().unwrap().spiller;
-                    if spiller.spilled_partition_set.is_empty() {
-                        spiller
+                    let spill_state = self.spill_state.as_mut().unwrap();
+                    if spill_state.spiller.spilled_partition_set.is_empty() {
+                        spill_state
+                            .spiller
                             .spilled_partition_set
                             .extend(&*self.join_probe_state.hash_join_state.spill_partition.read());
                     }
+                    let mut hashes = Vec::with_capacity(data.num_rows());
+                    spill_state.get_hashes(&data, &mut hashes)?;
                     // FIXME: we can directly discard `_non_matched_data`, because there is no matched data with build side.
-                    let _non_matched_data = spiller.spill_input(data).await?;
+                    let _non_matched_data = spill_state.spiller.spill_input(data, &hashes).await?;
                 }
             }
             HashJoinProbeStep::AsyncRunning => {
-                let p_id = self.join_probe_state.hash_join_state.partition_id.read();
+                let p_id = *self.join_probe_state.hash_join_state.partition_id.read();
                 let spilled_data = self
                     .spill_state
                     .as_ref()
                     .unwrap()
                     .spiller
-                    .read_spilled_data(&(*p_id as u8))
+                    .read_spilled_data(&(p_id as u8))
                     .await?;
                 if !spilled_data.is_empty() {
                     self.input_data.extend(spilled_data);
