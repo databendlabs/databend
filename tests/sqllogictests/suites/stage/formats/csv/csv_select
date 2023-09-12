@@ -1,7 +1,7 @@
 query I
 select $2 from @data/csv (files=>('select.csv'), file_format=>'csv') order by $1
 ----
-(empty)
+NULL
 b
 c
 
