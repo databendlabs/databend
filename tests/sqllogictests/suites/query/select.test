@@ -144,6 +144,6 @@ create table tt2 (a int, b string);
 statement ok
 insert into tt2 values (1, 'abc'), (2, 'def');
 
-Query T
+query T
 SELECT * FROM tt1 RIGHT ANTI JOIN tt2 ON is_not_null(char_length(tt1.b));
 ----
