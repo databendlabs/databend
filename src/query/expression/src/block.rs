@@ -592,7 +592,8 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
             match s {
                 Scalar::Tuple(ss) => {
                     // Check data_type is Tuple type.
-                    assert!(matches!(data_type, &DataType::Tuple(_)));
+                    let data_type = data_type.remove_nullable();
+                    assert!(matches!(data_type, DataType::Tuple(_)));
                     if let DataType::Tuple(dts) = data_type {
                         for (s, dt) in ss.iter().zip(dts.iter()) {
                             check_type(dt, &Value::Scalar(s.clone()));
