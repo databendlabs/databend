@@ -16,8 +16,12 @@ onlyif mysql
 query TIFS
 SELECT (SELECT COUNT() FROM system.temp_files) > 1;
 ----
-true
+1
 
 onlyif mysql
 statement ok
 unset max_threads;
+
+onlyif mysql
+statement ok
+unset spilling_bytes_threshold_per_proc;
