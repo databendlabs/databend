@@ -228,7 +228,7 @@ select number % 3 a, max(number) - 3,  number % 2 b, sum(number) + 4 from number
 2 992 1 83004
 
 query TTT
-SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
+SELECT (null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
 ----
 (NULL,18,'1970-01-01')
 (NULL,18,'1970-01-03')
