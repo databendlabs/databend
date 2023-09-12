@@ -1,6 +1,5 @@
 ---
 title: Loading Data with Tools
-slug: ./
 ---
 
 Databend offers a comprehensive selection of connectors and plugins that seamlessly integrate with popular data import tools. These connectors facilitate smooth data transfer and synchronization between Databend and various external platforms. The table below highlights the supported tools along with their corresponding Databend connectors and plugins:
