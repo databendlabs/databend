@@ -67,7 +67,12 @@ runs:
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
       run: |
-        cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }}
+        artifacts="meta,metactl,query,sqllogictests"
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+        done
+        cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts
@@ -78,8 +83,8 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
-          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
     - name: Build Release
       if: env.BUILD_PROFILE == 'release' && inputs.artifacts == 'all'
@@ -89,8 +94,8 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
-          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
     - name: Build Release for specific artifacts
       if: env.BUILD_PROFILE == 'release' && inputs.artifacts != 'all'
@@ -100,8 +105,8 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
-          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
 
     - shell: bash
       run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
