@@ -36,9 +36,9 @@ To better support complex SQL queries and improve user experience, Databend v0.8
 Databend has added JOIN and proper subquery support, driven by New Planner.
 
 ```sql
-select vip_info.Client_ID, vip_info.Region 
-    from vip_info right 
-    join purchase_records 
+select vip_info.Client_ID, vip_info.Region
+    from vip_info right
+    join purchase_records
     on vip_info.Client_ID = purchase_records.Client_ID;
 ```
 
@@ -83,26 +83,26 @@ COPY capabilities have been greatly enhanced, and Databend can now:
 - Copy data from any supported storage service (even https!)
 
 ```sql
-COPY 
-    INTO ontime200 
-    FROM 'https://repo.databend.rs/dataset/stateful/ontime_2006_[200-300].csv' 
+COPY
+    INTO ontime200
+    FROM 'https://ci.databend.org/dataset/stateful/ontime_2006_[200-300].csv'
     FILE_FORMAT = (TYPE = CSV)
 ```
 
 - Support for copying compressed files
 
 ```sql
-COPY 
-    INTO ontime200 
-    FROM 's3://bucket/dataset/stateful/ontime.csv.gz' 
+COPY
+    INTO ontime200
+    FROM 's3://bucket/dataset/stateful/ontime.csv.gz'
     FILE_FORMAT = (TYPE = CSV COMPRESSION=AUTO)
 ```
 
 - UNLOAD data to any supported storage service
 
 ```sql
-COPY 
-    INTO 'azblob://bucket/'  
+COPY
+    INTO 'azblob://bucket/'
     FROM ontime200
     FILE_FORMAT = (TYPE = PARQUET)
 ```
@@ -127,7 +127,7 @@ Starting from v0.8, this feature is now officially installed and we can now
 
 ```sql
 -- Travel to the time when the last row was inserted
-select * from demo at (TIMESTAMP => '2022-06-22 08:58:54.509008'::TIMESTAMP); 
+select * from demo at (TIMESTAMP => '2022-06-22 08:58:54.509008'::TIMESTAMP);
 +----------+
 | c        |
 +----------+
@@ -166,15 +166,15 @@ CTE (Common Table Expression) is a frequently used feature in OLAP business to d
 Databend v0.8 re-implements the CTE based on New Planner and now users can happily use WITH to declare the CTE.
 
 ```sql
-WITH customers_in_quebec 
-     AS (SELECT customername, 
-                city 
-         FROM   customers 
-         WHERE  province = 'Québec') 
-SELECT customername 
+WITH customers_in_quebec
+     AS (SELECT customername,
+                city
+         FROM   customers
+         WHERE  province = 'Québec')
+SELECT customername
 FROM   customers_in_quebec
-WHERE  city = 'Montréal' 
-ORDER  BY customername; 
+WHERE  city = 'Montréal'
+ORDER  BY customername;
 ```
 
 In addition to these features mentioned above, Databend v0.8 also supports UDFs, adds DELETE statements, further enhances support for semi-structured data types, not to mention the numerous SQL statement improvements and new methods added. Thanks to all the contributors to the Databend community, without you all the new features mentioned here would not have been possible!
