@@ -1,6 +1,5 @@
 ---
 title: Understanding Cluster Key
-slug: ./
 ---
 import IndexOverviewList from '@site/src/components/IndexOverviewList';
 
