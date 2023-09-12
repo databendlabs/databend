@@ -463,6 +463,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
+        env:
+          GH_TOKEn: ${{ github.token }}
       - name: Decode license
         id: license
         run: |
