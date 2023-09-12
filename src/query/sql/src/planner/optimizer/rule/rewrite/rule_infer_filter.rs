@@ -450,6 +450,8 @@ impl Rule for RuleInferFilter {
                                 } else {
                                     new_predicates.push(predicate);
                                 }
+                            } else {
+                                new_predicates.push(predicate);
                             }
                         }
                         (false, true) => {
@@ -466,6 +468,8 @@ impl Rule for RuleInferFilter {
                                 } else {
                                     new_predicates.push(predicate);
                                 }
+                            } else {
+                                new_predicates.push(predicate);
                             }
                         }
                         (false, false) => {
