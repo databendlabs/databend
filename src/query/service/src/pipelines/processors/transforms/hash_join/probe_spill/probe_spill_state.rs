@@ -16,11 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::query_spill_prefix;
 use common_storage::DataOperator;
 
