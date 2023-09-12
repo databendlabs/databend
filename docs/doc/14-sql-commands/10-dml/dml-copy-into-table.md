@@ -177,7 +177,7 @@ Specify a list of one or more files names (separated by commas) to be loaded.
 
 ### PATTERN = 'regex_pattern'
 
-A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html. 
+A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
 ### FILE_FORMAT
 
@@ -302,7 +302,7 @@ As shown in this example, data is loaded from three remote CSV files, but a file
 
 ```sql
 COPY INTO mytable
-FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
+FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
 FILE_FORMAT = (type = CSV)
 ON_ERROR = continue;
 ```

@@ -1,3 +1,11 @@
+query I
+select range(10, 20)
+----
+[10,11,12,13,14,15,16,17,18,19]
+
+statement error
+select range(10, 5000000011)
+
 statement ok
 DROP DATABASE IF EXISTS array_func_test
 
@@ -185,7 +193,7 @@ select array_sort(col1, 'asca', 'nulls first') from t;
 query T
 select array_transform([1, 2, NULL, 3], x -> x + 1)
 ----
-[2,3,NULL,4] 
+[2,3,NULL,4]
 
 query T
 select array_transform(['data', 'a', 'b'], data -> CONCAT(data, 'bend'))
