@@ -17,19 +17,12 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::hash2bucket;
 use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
