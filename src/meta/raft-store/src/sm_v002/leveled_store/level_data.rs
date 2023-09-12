@@ -27,7 +27,7 @@ use log::debug;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
@@ -219,7 +219,7 @@ impl MapApi<ExpireKey> for LevelData {
     }
 }
 
-impl MetaApiRO for LevelData {
+impl SysDataApiRO for LevelData {
     fn curr_seq(&self) -> u64 {
         self.sequence
     }

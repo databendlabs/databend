@@ -24,8 +24,8 @@ use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
@@ -85,6 +85,10 @@ impl SnapshotViewV002 {
 
     /// Compact into one level and remove all tombstone record.
     pub async fn compact(&mut self) {
+        if self.compacted.len() <= 1 {
+            return;
+        }
+
         // TODO: use a explicit method to return a compaction base
         let mut data = self.compacted.newest().unwrap().new_level();
 
