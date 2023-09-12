@@ -1,6 +1,7 @@
 {
   "label": "SQL Clients",
   "link": {
-    "type": "generated-index"
+    "type": "generated-index",
+    "slug": "/Clients"
   }
 }
