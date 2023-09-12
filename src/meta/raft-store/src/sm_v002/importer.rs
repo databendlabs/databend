@@ -21,6 +21,7 @@ use common_meta_types::StoredMembership;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::StateMachineMetaKey;

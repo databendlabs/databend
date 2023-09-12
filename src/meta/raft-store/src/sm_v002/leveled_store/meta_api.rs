@@ -12,12 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod level_data;
-pub mod leveled_map;
-pub mod map_api;
-pub mod meta_api;
-pub mod static_leveled_map;
-pub mod util;
+use std::collections::BTreeMap;
 
-#[cfg(test)]
-mod leveled_map_test;
+use common_meta_types::LogId;
+use common_meta_types::Node;
+use common_meta_types::NodeId;
+use common_meta_types::StoredMembership;
+
+/// APIs to access the non-user-data of the state machine(leveled map).
+pub(in crate::sm_v002) trait MetaApiRO {
+    fn curr_seq(&self) -> u64;
+
+    fn last_applied_ref(&self) -> &Option<LogId>;
+
+    fn last_membership_ref(&self) -> &StoredMembership;
+
+    fn nodes_ref(&self) -> &BTreeMap<NodeId, Node>;
+}
