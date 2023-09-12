@@ -51,6 +51,10 @@ impl StaticLeveledMap {
     pub(in crate::sm_v002) fn push(&mut self, level: Arc<LevelData>) {
         self.levels.push(level);
     }
+
+    pub(in crate::sm_v002) fn len(&self) -> usize {
+        self.levels.len()
+    }
 }
 
 #[async_trait::async_trait]
