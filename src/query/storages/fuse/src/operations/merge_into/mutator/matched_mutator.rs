@@ -127,10 +127,10 @@ impl MatchedAggregator {
         let row_ids = get_row_id(&data_block, 0)?;
         for row_id in row_ids {
             let (prefix, offset) = split_row_id(row_id);
-            let row_id = row_id as usize;
+            let offset = offset as usize;
             match self.block_mutation_row_offset.entry(prefix) {
                 Entry::Occupied(mut entry) => {
-                    if entry.get().contains(&row_id) {
+                    if entry.get().contains(&offset) {
                         return Err(ErrorCode::UnresolvableConflict(
                             "multi rows from source match one and the same row in the target_table multi times",
                         ));
@@ -139,7 +139,7 @@ impl MatchedAggregator {
                 }
                 Entry::Vacant(entry) => {
                     let mut offsets = HashSet::new();
-                    offsets.insert(offset as usize);
+                    offsets.insert(offset);
                     entry.insert(offsets);
                 }
             };
