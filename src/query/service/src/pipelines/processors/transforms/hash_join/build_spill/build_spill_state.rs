@@ -62,7 +62,7 @@ impl BuildSpillState {
     pub fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
         let func_ctx = self.build_state.ctx.get_function_context()?;
         let keys = &self.build_state.hash_join_state.hash_join_desc.build_keys;
-        get_hashes(&func_ctx, block, keys, &*self.build_state.method, hashes)
+        get_hashes(&func_ctx, block, keys, &self.build_state.method, hashes)
     }
 
     // Collect all buffered data in `RowSpace` and `Chunks`
