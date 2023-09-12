@@ -54,7 +54,7 @@ use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
 use crate::sm_v002::Importer;
@@ -333,15 +333,18 @@ impl SMV002 {
     }
 
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.levels.writable_mut().last_applied_mut()
+        self.levels.writable_mut().sys_data_mut().last_applied_mut()
     }
 
     pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.levels.writable_mut().last_membership_mut()
+        self.levels
+            .writable_mut()
+            .sys_data_mut()
+            .last_membership_mut()
     }
 
     pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.levels.writable_mut().nodes_mut()
+        self.levels.writable_mut().sys_data_mut().nodes_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
