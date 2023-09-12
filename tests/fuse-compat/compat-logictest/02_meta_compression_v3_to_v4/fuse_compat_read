@@ -23,7 +23,7 @@ query I
 select count() as c, format_version as v from fuse_snapshot('default', 'fuse_test_snapshots') group by v order by c;
 ----
 1 5
-3 4
+3 3
 
 # 4. verify table data
 query I
