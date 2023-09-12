@@ -420,7 +420,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
         env:
-          GH_TOKEn: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - name: Decode license
         id: license
         run: |
