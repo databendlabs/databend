@@ -157,12 +157,13 @@ select * from t1 order by a,b,c;
 5 b_9 c_9
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b);
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b) when not matched and t2.c = 'c_7' then insert (a,c) values(t2.a,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
 ----
 1 b1 c_5
+2 NULL c_7
 4 b_8 NULL
 5 b_9 c_9
 

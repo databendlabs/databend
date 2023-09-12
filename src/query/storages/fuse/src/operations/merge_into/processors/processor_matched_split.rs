@@ -206,6 +206,10 @@ impl Processor for MatchedSplitProcessor {
             if data_block.is_empty() {
                 return Ok(());
             }
+            // insert-only, we need to remove this pipeline according to strategy.
+            if self.ops.is_empty() {
+                return Ok(());
+            }
             let mut current_block = data_block;
             let mut row_id_blocks = Vec::new();
             for op in self.ops.iter() {
