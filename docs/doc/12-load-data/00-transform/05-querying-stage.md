@@ -18,12 +18,12 @@ This feature can be particularly useful for inspecting or viewing the contents o
 ```sql
 SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_position> ...] 
 FROM {@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]} 
-[ 
-  [<connection_parameters>]
-  [ PATTERN => '<regex_pattern>']
-  [ FILE_FORMAT => '<format_name>']
-  [ FILES => ( '<file_name>' [ , '<file_name>' ... ])]
-]
+[( 
+  [<connection_parameters>],
+  [ PATTERN => '<regex_pattern>'],
+  [ FILE_FORMAT => '<format_name>'],
+  [ FILES => ( '<file_name>' [ , '<file_name>' ... ])],
+)]
 ```
 
 ### FILE_FORMAT
