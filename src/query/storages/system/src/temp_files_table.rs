@@ -63,7 +63,7 @@ impl AsyncSystemTable for TempFilesTable {
         let tenant = ctx.get_tenant();
         let operator = DataOperator::instance().operator();
 
-        let mut temp_files_path = vec![];
+        let mut temp_files_name = vec![];
         let mut temp_files_content_length = vec![];
         let mut temp_files_last_modified = vec![];
 
@@ -72,23 +72,23 @@ impl AsyncSystemTable for TempFilesTable {
             let limit = push_downs.and_then(|x| x.limit).unwrap_or(usize::MAX);
 
             while let Some(page) = lister.next_page().await? {
-                if temp_files_path.len() >= limit {
+                if temp_files_name.len() >= limit {
                     break;
                 }
 
-                temp_files_path.reserve(page.len());
+                temp_files_name.reserve(page.len());
                 temp_files_last_modified.reserve(page.len());
                 temp_files_content_length.reserve(page.len());
 
                 for entry in page {
-                    if temp_files_path.len() >= limit {
+                    if temp_files_name.len() >= limit {
                         break;
                     }
 
                     let metadata = operator.metadata(&entry, Metakey::Complete).await?;
 
                     if metadata.is_file() {
-                        temp_files_path.push(entry.path().as_bytes().to_vec());
+                        temp_files_name.push(entry.name().as_bytes().to_vec());
 
                         temp_files_last_modified
                             .push(metadata.last_modified().map(|x| x.timestamp_micros()));
@@ -98,7 +98,7 @@ impl AsyncSystemTable for TempFilesTable {
             }
         }
 
-        let num_rows = temp_files_path.len();
+        let num_rows = temp_files_name.len();
         let data_block = DataBlock::new(
             vec![
                 BlockEntry::new(
@@ -107,7 +107,7 @@ impl AsyncSystemTable for TempFilesTable {
                 ),
                 BlockEntry::new(
                     DataType::String,
-                    Value::Column(StringType::from_data(temp_files_path)),
+                    Value::Column(StringType::from_data(temp_files_name)),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
@@ -129,7 +129,7 @@ impl TempFilesTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("file_type", TableDataType::String),
-            TableField::new("file_path", TableDataType::String),
+            TableField::new("file_name", TableDataType::String),
             TableField::new(
                 "file_content_length",
                 TableDataType::Number(NumberDataType::UInt64),
