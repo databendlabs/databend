@@ -59,7 +59,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
         env:
-          GH_TOKEn: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - name: Download artifact for pr
         if: inputs.source == 'pr'
         uses: ./.github/actions/artifact_download
@@ -114,7 +114,7 @@ jobs:
           ref: "refs/pull/${{ inputs.source_id }}/merge"
       - uses: ./.github/actions/setup_bendsql
         env:
-          GH_TOKEn: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
       - uses: ./.github/actions/benchmark_cloud
         timeout-minutes: 20
         id: benchmark
