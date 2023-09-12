@@ -627,7 +627,7 @@ fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
     let mut result = Vec::with_capacity(params.len());
     for param in &params {
         let data_type = param.as_ref().infer_data_type();
-        let val: N = check_number(
+        let val: N = check_number::<_, N>(
             None,
             &FunctionContext::default(),
             &Expr::<usize>::Constant {

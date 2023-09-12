@@ -1516,7 +1516,7 @@ impl<'a> TypeChecker<'a> {
             ));
         }
         let n_expr = args[0].as_expr()?;
-        let return_type = n_expr.data_type().wrap_nullable();
+        let return_type = DataType::Number(NumberDataType::UInt64);
         let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
         if n == 0 {
             return Err(ErrorCode::InvalidArgument(

@@ -277,10 +277,15 @@ where T: Number + AsPrimitive<f64>
                 let level: F64 = check_number(
                     None,
                     &FunctionContext::default(),
-                    &Expr::<usize>::Constant {
+                    &Expr::<usize>::Cast {
                         span: None,
-                        scalar: param.clone(),
-                        data_type: param.as_ref().infer_data_type(),
+                        is_try: false,
+                        expr: Box::new(Expr::Constant {
+                            span: None,
+                            scalar: param.clone(),
+                            data_type: param.as_ref().infer_data_type(),
+                        }),
+                        dest_type: DataType::Number(NumberDataType::Float64),
                     },
                     &BUILTIN_FUNCTIONS,
                 )?;

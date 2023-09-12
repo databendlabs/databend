@@ -356,7 +356,7 @@ where
         arguments: Vec<DataType>,
     ) -> Result<AggregateFunctionRef> {
         let event_size = arguments.len() - 1;
-        let window = check_number(
+        let window = check_number::<_, u64>(
             None,
             &FunctionContext::default(),
             &Expr::<usize>::Constant {

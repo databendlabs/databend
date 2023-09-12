@@ -220,7 +220,7 @@ struct RangeSource<const INCLUSIVE: bool> {
 }
 
 fn get_i64_number(scalar: &Scalar) -> Result<i64> {
-    check_number(
+    check_number::<_, i64>(
         None,
         &FunctionContext::default(),
         &Expr::<usize>::Constant {

@@ -498,7 +498,7 @@ where State: SumState
         scale_add: u8,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size: u64 = check_number(
+            let window_size = check_number::<_, u64>(
                 None,
                 &FunctionContext::default(),
                 &Expr::<usize>::Constant {
@@ -689,7 +689,7 @@ where State: SumState
         return_type: DataType,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size: u64 = check_number(
+            let window_size = check_number::<_, u64>(
                 None,
                 &FunctionContext::default(),
                 &Expr::<usize>::Constant {
