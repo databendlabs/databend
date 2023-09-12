@@ -29,7 +29,7 @@ jobs:
       - uses: ./.github/actions/check
         timeout-minutes: 30
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ github.token }}
 
   license:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -151,15 +151,13 @@ jobs:
       matrix:
         dirs:
           - "management"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
         timeout-minutes: 10
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
 
   sqllogic_standalone:
     name: sqllogic_standalone_${{ matrix.dirs }}
@@ -173,21 +171,19 @@ jobs:
           - "crdb"
           - "duckdb"
           - "tpch"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
           storage-format: all
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
+          name: test-sqllogic-standalone-${{ matrix.dirs }}
 
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
@@ -202,21 +198,19 @@ jobs:
         format:
           - "parquet"
           - "native"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
           storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
+          name: test-sqllogic-standalone-${{ matrix.dirs }}_${{ matrix.format }}
 
   sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
@@ -230,8 +224,6 @@ jobs:
         format:
           - "parquet"
           - "native"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - name: Decode license
@@ -244,13 +236,13 @@ jobs:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
           storage-format: ${{ matrix.format }}
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-ee-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
+          name: test-ee-sqllogic-standalone-${{ matrix.dirs }}_${{ matrix.format }}
 
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
@@ -265,20 +257,18 @@ jobs:
           - "crdb"
           - "duckdb"
           - "tpch"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
+          name: test-sqllogic-cluster-${{ matrix.dirs }}
 
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
@@ -289,64 +279,31 @@ jobs:
         dirs:
           - "ydb"
           - "tpcds"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
+          name: test-sqllogic-cluster-${{ matrix.dirs }}
 
   sqllogic_stage:
-    name: sqllogic_stage_${{ matrix.storage }}
+    name: sqllogic_${{ matrix.dirs }}_${{ matrix.storage }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
       matrix:
         dirs:
           - "stage"
-        handlers:
-          - "mysql,http,clickhouse"
-        storage:
-          - "s3"
-          - "fs"
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/test_sqllogic_stage
-        timeout-minutes: 15
-        with:
-          storage: ${{ matrix.storage }}
-          dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
-      - name: Upload failure
-        if: failure()
-        uses: ./.github/actions/artifact_failure
-        with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handlers }}-${{ matrix.dirs }}
-
-  sqllogic_stage_parquet:
-    name: sqllogic_stage_${{ matrix.parquetlib }}_${{ matrix.storage }}
-    runs-on: [ self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}" ]
-    needs: [ build, check ]
-    strategy:
-      matrix:
-        dirs:
           - "stage_parquet"
-        handlers:
-          - "mysql,http,clickhouse"
         storage:
           - "s3"
           - "fs"
-        parquetlib:
-          - "parquet2"
-          - "parquet_rs"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_stage
@@ -354,13 +311,12 @@ jobs:
         with:
           storage: ${{ matrix.storage }}
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
-          parquetlib: ${{ matrix.parquetlib }}
+          handlers: mysql,http,clickhouse
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.handlers }}-${{ matrix.dirs }}-${{ matrix.parquetlib }}
+          name: test-sqllogic-stage-${{ matrix.storage }}-${{ matrix.dirs }}
 
   test_stateless_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -463,6 +419,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup_bendsql
+        env:
+          GH_TOKEN: ${{ github.token }}
       - name: Decode license
         id: license
         run: |
