@@ -20,6 +20,12 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
+use common_formats::CommonSettings;
+use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::INF_BYTES_LOWER;
+use common_io::constants::NAN_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_UPPER;
+use common_io::constants::TRUE_BYTES_LOWER;
 use rand::Rng;
 
 use crate::sql_gen::SqlGenerator;
@@ -55,7 +61,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             0..=9 => {
                 let columns = self.gen_columns(data_types, row_count);
                 let mut buf = Vec::new();
-                let encoder = FieldEncoderValues::create_for_http_handler(Tz::UTC);
+                let encoder = FieldEncoderValues {
+                    common_settings: CommonSettings {
+                        true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+                        false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+                        null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
+                        nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+                        inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                        timezone: Tz::UTC,
+                        disable_variant_check: false,
+                    },
+                    quote_char: b'\'',
+                };
 
                 for i in 0..row_count {
                     if i > 0 {

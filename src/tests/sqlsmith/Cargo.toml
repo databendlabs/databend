@@ -20,6 +20,7 @@ tracing-subscriber = "0.3.17"
 common-ast = { path = "../../query/ast" }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../../query/expression" }
+common-io = { path = "../../common/io" }
 common-formats = { path = "../../query/formats" }
 common-functions = { path = "../../query/functions" }
 common-sql = { path = "../../query/sql" }

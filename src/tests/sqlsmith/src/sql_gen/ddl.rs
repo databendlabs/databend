@@ -50,8 +50,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 18] = [
     TypeName::Date,
     TypeName::Timestamp,
     TypeName::String,
-    // TypeName::Bitmap,
-    TypeName::String,
+    TypeName::Bitmap,
     TypeName::Variant,
 ];
 

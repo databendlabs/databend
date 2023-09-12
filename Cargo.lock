@@ -1992,6 +1992,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
+ "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "match-template",
@@ -2123,6 +2124,7 @@ dependencies = [
  "micromarshal",
  "ordered-float 3.7.0",
  "rand 0.8.5",
+ "roaring",
  "serde",
 ]
 
@@ -3965,6 +3967,7 @@ dependencies = [
  "common-expression",
  "common-formats",
  "common-functions",
+ "common-io",
  "common-sql",
  "databend-driver",
  "ethnum",
