@@ -30,19 +30,19 @@ echo 'Start Meta service HA cluster(3 nodes)...'
 mkdir -p ./.databend/
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-1.toml >./.databend/meta-1.out 2>&1 &
-python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 9191
 
 # wait for cluster formation to complete.
 sleep 1
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-2.toml >./.databend/meta-2.out 2>&1 &
-python3 scripts/ci/wait_tcp.py --timeout 10 --port 28202
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 28202
 
 # wait for cluster formation to complete.
 sleep 1
 
 nohup ./target/${BUILD_PROFILE}/databend-meta -c scripts/ci/deploy/config/databend-meta-node-3.toml >./.databend/meta-3.out 2>&1 &
-python3 scripts/ci/wait_tcp.py --timeout 10 --port 28302
+python3 scripts/ci/wait_tcp.py --timeout 30 --port 28302
 
 # wait for cluster formation to complete.
 sleep 1
