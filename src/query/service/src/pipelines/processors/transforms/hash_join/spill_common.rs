@@ -34,7 +34,7 @@ pub fn get_hashes(
     method: &HashMethodKind,
     hashes: &mut Vec<u64>,
 ) -> Result<()> {
-    let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
+    let evaluator = Evaluator::new(block, func_ctx, &BUILTIN_FUNCTIONS);
     let columns: Vec<(Column, DataType)> = keys
         .iter()
         .map(|expr| {
