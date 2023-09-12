@@ -3030,6 +3030,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-profile",
  "common-sql",
+ "common-storage",
  "common-storages-fuse",
  "common-storages-result-cache",
  "common-storages-view",
