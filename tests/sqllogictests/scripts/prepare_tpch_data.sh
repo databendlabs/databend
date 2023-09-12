@@ -107,21 +107,19 @@ echo "CREATE TABLE IF NOT EXISTS ${db}.lineitem
     l_comment      STRING not null
 ) CLUSTER BY(l_shipdate, l_orderkey)" | $MYSQL_CLIENT_CONNECT
 
-
 #download data
-mkdir -p  $data_dir
-if [ ! -d ${data_dir}/tpch.tar.gz ];then
-    curl -s -o ${data_dir}/tpch.tar.gz  http://repo.databend.rs/dataset/stateful/tpch.tar.gz
+mkdir -p $data_dir
+if [ ! -d ${data_dir}/tpch.tar.gz ]; then
+    curl -s -o ${data_dir}/tpch.tar.gz https://ci.databend.org/dataset/stateful/tpch.tar.gz
 fi
 
 tar -zxf ${data_dir}/tpch.tar.gz -C $data_dir
 
 # insert data to tables
-for t in customer lineitem nation orders partsupp part region supplier
-do
+for t in customer lineitem nation orders partsupp part region supplier; do
     echo "$t"
     insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' > /dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${data_dir}'/tests/suites/0_stateless/13_tpch/data/'$t'.tbl"' >/dev/null 2>&1
 done
 
 if [ -d "tests/sqllogictests/data" ]; then
