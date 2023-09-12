@@ -92,7 +92,6 @@ impl SegmentInfo {
 }
 
 // use the chain of converters, for versions before v3
-// use the chain of converters, for versions before v3
 impl<T> From<T> for SegmentInfo
 where T: Into<v2::SegmentInfo>
 {
