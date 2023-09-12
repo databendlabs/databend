@@ -41,9 +41,9 @@ CREATE STAGE my_stage FILE_FORMAT = (TYPE = CSV);
 In cases where you have staged a file in a format different from the specified stage format, you can explicitly specify the file format within the SELECT or COPY INTO statement. Here are examples:
 
 ```sql
-SELECT * FROM @my_stage (FILE_FORMAT=>'NDJSON');
+SELECT $1 FROM @my_stage (FILE_FORMAT=>'NDJSON');
 
-COPY INTO my_table FROM (SELECT * SELECT @my_stage t) FILE_FORMAT = (TYPE = NDJSON);
+COPY INTO my_table FROM (SELECT $1 SELECT @my_stage t) FILE_FORMAT = (TYPE = NDJSON);
 ```
 
 ### PATTERN
