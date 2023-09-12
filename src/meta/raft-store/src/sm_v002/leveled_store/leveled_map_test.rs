@@ -204,9 +204,11 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
 /// Create multi levels store:
 ///
+/// ```text
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d
+/// ```
 async fn build_3_levels() -> LeveledMap {
     let mut l = LeveledMap::default();
     // internal_seq: 0
@@ -356,8 +358,10 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// ```text
 /// |      b(m) c
 /// | a(m) b    c(m)
+/// ```
 async fn build_2_level_with_meta() -> LeveledMap {
     let mut l = LeveledMap::default();
 

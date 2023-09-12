@@ -191,11 +191,22 @@ impl<'a> Applier<'a> {
         Change::new(prev, result).into()
     }
 
+    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
+    /// Update or insert a kv entry.
+    ///
+    /// If the input entry has expired, it performs a delete operation.
     #[minitrace::trace]
-    async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
+    pub(crate) async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv(upsert_kv.clone()).await;
+        let (prev, result) = self.sm.upsert_kv_primary_index(&upsert_kv).await;
+
+        self.sm
+            .update_expire_index(&upsert_kv.key, &prev, &result)
+            .await;
+
+        let prev = Into::<Option<SeqV>>::into(prev);
+        let result = Into::<Option<SeqV>>::into(result);
 
         debug!(
             "applied UpsertKV: {:?}; prev: {:?}; result: {:?}",
@@ -209,7 +220,6 @@ impl<'a> Applier<'a> {
     }
 
     #[minitrace::trace]
-
     async fn apply_txn(&mut self, req: &TxnRequest) -> AppliedState {
         debug!(txn = as_display!(req); "apply txn cmd");
 
@@ -445,9 +455,7 @@ impl<'a> Applier<'a> {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);
 
-                self.sm.upsert_kv(UpsertKV::delete(key.clone())).await;
-                // dbg!("clean_expired", &key, &curr);
-                self.push_change(key, curr, None);
+                self.upsert_kv(&UpsertKV::delete(key.clone())).await;
             } else {
                 unreachable!(
                     "trying to remove un-cleanable: {}, {}, kv-entry: {:?}",

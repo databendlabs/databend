@@ -74,7 +74,7 @@ impl LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String> for LevelData {
+impl<'me, 's> MapApiRO<'me, 's, String> for LevelData {
     type V = Vec<u8>;
 
     async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
@@ -85,9 +85,8 @@ impl MapApiRO<String> for LevelData {
         self.kv.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'a, T, R>(&'a self, range: R) -> BoxStream<'a, (String, Marked)>
+    async fn range<T, R>(&'me self, range: R) -> BoxStream<'s, (String, Marked)>
     where
-        String: 'a,
         String: Borrow<T>,
         T: Ord + ?Sized,
         R: RangeBounds<T> + Send,
@@ -97,12 +96,15 @@ impl MapApiRO<String> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApi<String> for LevelData {
+impl<'me, 's> MapApi<'me, 's, String> for LevelData {
     async fn set(
         &mut self,
         key: String,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>) {
+        value: Option<(<Self as MapApiRO<'me, 's, String>>::V, Option<KVMeta>)>,
+    ) -> (
+        Marked<<Self as MapApiRO<'me, 's, String>>::V>,
+        Marked<<Self as MapApiRO<'me, 's, String>>::V>,
+    ) {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
 
@@ -124,7 +126,7 @@ impl MapApi<String> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for LevelData {
+impl<'me, 's> MapApiRO<'me, 's, ExpireKey> for LevelData {
     type V = String;
 
     async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
@@ -135,12 +137,8 @@ impl MapApiRO<ExpireKey> for LevelData {
         self.expire.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> BoxStream<'a, (ExpireKey, Marked<String>)>
+    async fn range<T: ?Sized, R>(&'me self, range: R) -> BoxStream<'s, (ExpireKey, Marked<String>)>
     where
-        ExpireKey: 'a,
         ExpireKey: Borrow<T>,
         T: Ord,
         R: RangeBounds<T> + Send,
@@ -155,12 +153,15 @@ impl MapApiRO<ExpireKey> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApi<ExpireKey> for LevelData {
+impl<'me, 's> MapApi<'me, 's, ExpireKey> for LevelData {
     async fn set(
         &mut self,
         key: ExpireKey,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>) {
+        value: Option<(<Self as MapApiRO<'me, 's, ExpireKey>>::V, Option<KVMeta>)>,
+    ) -> (
+        Marked<<Self as MapApiRO<'me, 's, ExpireKey>>::V>,
+        Marked<<Self as MapApiRO<'me, 's, ExpireKey>>::V>,
+    ) {
         // dbg!("set expire", &key, &value);
 
         let seq = self.curr_seq();

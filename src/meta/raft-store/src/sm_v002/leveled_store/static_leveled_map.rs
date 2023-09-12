@@ -55,15 +55,19 @@ impl StaticLeveledMap {
     pub(in crate::sm_v002) fn len(&self) -> usize {
         self.levels.len()
     }
+
+    pub(in crate::sm_v002) fn levels(&self) -> &[Arc<LevelData>] {
+        &self.levels
+    }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for StaticLeveledMap
+impl<'s, K> MapApiRO<'s, 's, K> for StaticLeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<K>,
+    LevelData: MapApiRO<'s, 's, K>,
 {
-    type V = <LevelData as MapApiRO<K>>::V;
+    type V = <LevelData as MapApiRO<'s, 's, K>>::V;
 
     async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
@@ -79,9 +83,8 @@ where
         return Marked::empty();
     }
 
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(&self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
     where
-        K: 'a,
         K: Borrow<T> + Clone,
         Self::V: Unpin,
         T: Ord,

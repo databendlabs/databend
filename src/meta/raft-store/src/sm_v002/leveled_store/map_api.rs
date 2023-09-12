@@ -22,7 +22,7 @@ use crate::sm_v002::marked::Marked;
 
 /// Provide a readonly key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
+pub(in crate::sm_v002) trait MapApiRO<'me, 's, K>: Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     type V: Clone + Send + Sync + 'static;
@@ -36,9 +36,9 @@ where K: Ord + Send + Sync + 'static
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(&'me self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
     where
-        K: Clone + Borrow<T> + 'a,
+        K: Clone + Borrow<T>,
         Self::V: Unpin,
         T: Ord,
         R: RangeBounds<T> + Send + Sync + Clone;
@@ -46,15 +46,19 @@ where K: Ord + Send + Sync + 'static
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K> + Send + Sync
+pub(in crate::sm_v002) trait MapApi<'me, 's, K>:
+    MapApiRO<'me, 's, K> + Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     /// Set an entry and returns the old value and the new value.
     async fn set(
         &mut self,
         key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>);
+        value: Option<(<Self as MapApiRO<'me, 's, K>>::V, Option<KVMeta>)>,
+    ) -> (
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+    );
 
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
@@ -62,7 +66,10 @@ where K: Ord + Send + Sync + 'static
         &mut self,
         key: K,
         meta: Option<KVMeta>,
-    ) -> (Marked<Self::V>, Marked<Self::V>) {
+    ) -> (
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+    ) {
         //
         let got = self.get(&key).await;
         if got.is_tomb_stone() {
@@ -77,7 +84,15 @@ where K: Ord + Send + Sync + 'static
 
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
-    async fn upsert_value(&mut self, key: K, value: Self::V) -> (Marked<Self::V>, Marked<Self::V>) {
+    async fn upsert_value(
+        &mut self,
+        key: K,
+        value: <Self as MapApiRO<'me, 's, K>>::V,
+        // TODO: use Self::V
+    ) -> (
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+    ) {
         let got = self.get(&key).await;
 
         let meta = if let Some((_, meta)) = got.unpack_ref() {
