@@ -67,7 +67,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                             *size,
                         )),
                     ),
-                    _ => unreachable!(),
+                    _ => (Scalar::Null, Scalar::Null),
                 }
             }
             Statistics::Int64(s) => {
@@ -88,7 +88,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(max), *size)),
                         Scalar::Decimal(DecimalScalar::Decimal256(I256::from_i64(min), *size)),
                     ),
-                    _ => unreachable!(),
+                    _ => (Scalar::Null, Scalar::Null),
                 }
             }
             Statistics::Int96(s) => (
@@ -112,7 +112,7 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                         decode_decimal256_from_bytes(max, *size),
                         decode_decimal256_from_bytes(min, *size),
                     ),
-                    _ => unreachable!(),
+                    _ => (Scalar::Null, Scalar::Null),
                 }
             }
         }

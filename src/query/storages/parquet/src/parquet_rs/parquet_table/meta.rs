@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::runtime::execute_futures_in_parallel;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::FullParquetMeta;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableField;
@@ -30,19 +29,17 @@ use crate::parquet_rs::statistics::collect_row_group_stats;
 
 #[async_backtrace::framed]
 pub async fn read_metas_in_parallel(
-    ctx: Arc<dyn TableContext>,
     op: &Operator,
     file_infos: &[(String, u64)],
     expected: (SchemaDescPtr, String),
     leaf_fields: Vec<TableField>,
+    num_threads: usize,
+    max_memory_usage: u64,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
     if file_infos.is_empty() {
         return Ok(vec![]);
     }
-    let settings = ctx.get_settings();
     let num_files = file_infos.len();
-    let num_threads = settings.get_max_threads()? as usize;
-    let max_memory_usage = settings.get_max_memory_usage()?;
     let leaf_fields = Arc::new(leaf_fields);
 
     let mut tasks = Vec::with_capacity(num_threads);

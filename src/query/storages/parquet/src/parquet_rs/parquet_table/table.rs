@@ -18,6 +18,7 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
+use common_base::base::tokio::sync::Mutex;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::FullParquetMeta;
@@ -27,7 +28,6 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::ParquetTableColumnStatisticsProvider;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -47,7 +47,6 @@ use parquet::schema::types::SchemaDescPtr;
 
 use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
-use crate::parquet_rs::statistics::collect_row_group_stats;
 use crate::utils::naive_parquet_table_info;
 
 pub struct ParquetRSTable {
@@ -64,8 +63,16 @@ pub struct ParquetRSTable {
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
 
-    pub(super) parquet_metas: Vec<Arc<FullParquetMeta>>,
-    pub(super) stats_provider: ParquetTableColumnStatisticsProvider,
+    /// Lazy read parquet file metas.
+    ///
+    /// After `column_statistics_provider` is called, the parquet metas will be store in memory.
+    /// This instance is only be stored on one query node (the coordinator node in cluster mode),
+    /// because it's only used to `column_statistics_provider` and `read_partitions`
+    /// and these methods are all called during planning.
+    pub(super) parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
+
+    pub(super) max_threads: usize,
+    pub(super) max_memory_usage: u64,
 }
 
 impl ParquetRSTable {
@@ -84,7 +91,8 @@ impl ParquetRSTable {
             schema_from: info.schema_from.clone(),
             compression_ratio: info.compression_ratio,
             parquet_metas: info.parquet_metas.clone(),
-            stats_provider: info.stats_provider.clone(),
+            max_threads: info.max_threads,
+            max_memory_usage: info.max_memory_usage,
         }))
     }
 
@@ -97,53 +105,19 @@ impl ParquetRSTable {
         files_to_read: Option<Vec<StageFileInfo>>,
     ) -> Result<Arc<dyn Table>> {
         let operator = init_stage_operator(&stage_info)?;
-        let file_locations = match &files_to_read {
-            Some(files) => files
-                .iter()
-                .map(|f| (f.path.clone(), f.size))
-                .collect::<Vec<_>>(),
-            None => files_info
-                .list(&operator, false, None)
-                .await?
-                .into_iter()
-                .map(|f| (f.path, f.size))
-                .collect::<Vec<_>>(),
+        let first_file = match &files_to_read {
+            Some(files) => files[0].path.clone(),
+            None => files_info.first_file(&operator).await?.path.clone(),
         };
 
-        if file_locations.is_empty() {
-            return Err(ErrorCode::BadArguments(format!(
-                "No parquet files to read in {}",
-                files_info.path
-            )));
-        }
+        let (arrow_schema, schema_descr, compression_ratio) =
+            Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        // We use the first file in the file list to infer all the necessray information of this stage table.
-        let (first_file, size) = file_locations[0].clone();
-        let first_meta = read_metadata_async(&first_file, &operator, Some(size)).await?;
-        let arrow_schema = infer_schema_with_extension(&first_meta)?;
-        let compression_ratio = get_compression_ratio(&first_meta);
-        let schema_descr = first_meta.file_metadata().schema_descr_ptr();
-        let mut table_info = create_parquet_table_info(&arrow_schema)?;
-        let leaf_fields = table_info.schema().leaf_fields();
-        let first_stats = collect_row_group_stats(first_meta.row_groups(), &leaf_fields, None);
-        let num_columns = leaf_fields.len();
+        let table_info = create_parquet_table_info(&arrow_schema)?;
 
-        let mut metas = read_metas_in_parallel(
-            ctx,
-            &operator,
-            &file_locations[1..], // The first file is already read.
-            (schema_descr.clone(), first_file.clone()),
-            leaf_fields,
-        )
-        .await?;
-        metas.push(Arc::new(FullParquetMeta {
-            location: first_file.clone(),
-            meta: Arc::new(first_meta),
-            row_group_level_stats: first_stats,
-        }));
-
-        let stats_provider = create_stats_provider(&metas, num_columns);
-        table_info.meta.statistics.number_of_rows = stats_provider.num_rows();
+        let settings = ctx.get_settings();
+        let max_threads = settings.get_max_threads()? as usize;
+        let max_memory_usage = settings.get_max_memory_usage()?;
 
         Ok(Arc::new(ParquetRSTable {
             table_info,
@@ -156,9 +130,26 @@ impl ParquetRSTable {
             files_to_read,
             compression_ratio,
             schema_from: first_file,
-            parquet_metas: metas,
-            stats_provider,
+            parquet_metas: Arc::new(Mutex::new(vec![])),
+            max_threads,
+            max_memory_usage,
         }))
+    }
+
+    #[async_backtrace::framed]
+    async fn prepare_metas(
+        path: &str,
+        operator: Operator,
+    ) -> Result<(ArrowSchema, SchemaDescPtr, f64)> {
+        // Infer schema from the first parquet file.
+        // Assume all parquet files have the same schema.
+        // If not, throw error during reading.
+        let size = operator.stat(path).await?.content_length();
+        let first_meta = read_metadata_async(path, &operator, Some(size)).await?;
+        let arrow_schema = infer_schema_with_extension(&first_meta)?;
+        let compression_ratio = get_compression_ratio(&first_meta);
+        let schema_descr = first_meta.file_metadata().schema_descr_ptr();
+        Ok((arrow_schema, schema_descr, compression_ratio))
     }
 }
 
@@ -200,7 +191,8 @@ impl Table for ParquetRSTable {
             schema_from: self.schema_from.clone(),
             compression_ratio: self.compression_ratio,
             parquet_metas: self.parquet_metas.clone(),
-            stats_provider: self.stats_provider.clone(),
+            max_threads: self.max_threads,
+            max_memory_usage: self.max_memory_usage,
         })
     }
 
@@ -229,9 +221,44 @@ impl Table for ParquetRSTable {
         true
     }
 
-    #[async_backtrace::framed]
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
-        Ok(Box::new(self.stats_provider.clone()))
+        // This method can only be called once.
+        let mut parquet_metas = self.parquet_metas.lock().await;
+        assert!(parquet_metas.is_empty());
+
+        // Lazy read parquet file metas.
+        let file_locations = match &self.files_to_read {
+            Some(files) => files
+                .iter()
+                .map(|f| (f.path.clone(), f.size))
+                .collect::<Vec<_>>(),
+            None => self
+                .files_info
+                .list(&self.operator, false, None)
+                .await?
+                .into_iter()
+                .map(|f| (f.path, f.size))
+                .collect::<Vec<_>>(),
+        };
+
+        let leaf_fields = self.schema().leaf_fields();
+        let num_columns = leaf_fields.len();
+
+        let metas = read_metas_in_parallel(
+            &self.operator,
+            &file_locations, // The first file is already read.
+            (self.schema_descr.clone(), self.schema_from.clone()),
+            leaf_fields,
+            self.max_threads,
+            self.max_memory_usage,
+        )
+        .await?;
+
+        let provider = create_stats_provider(&metas, num_columns);
+
+        *parquet_metas = metas;
+
+        Ok(Box::new(provider))
     }
 }
 

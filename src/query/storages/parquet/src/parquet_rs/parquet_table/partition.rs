@@ -46,7 +46,8 @@ impl ParquetRSTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let file_locations = if self.parquet_metas.is_empty() {
+        let parquet_metas = self.parquet_metas.lock().await;
+        let file_locations = if parquet_metas.is_empty() {
             match &self.files_to_read {
                 Some(files) => files
                     .iter()
@@ -62,7 +63,7 @@ impl ParquetRSTable {
             }
         } else {
             // Already fetched the parquet metas when creating column statistics provider.
-            self.parquet_metas
+            parquet_metas
                 .iter()
                 .map(|p| {
                     (
@@ -131,7 +132,7 @@ impl ParquetRSTable {
 
         let num_columns_to_read = columns_to_read.len();
 
-        let (mut stats, mut partitions) = if self.parquet_metas.is_empty() {
+        let (mut stats, mut partitions) = if parquet_metas.is_empty() {
             self.read_and_prune_metas_in_parallel(
                 ctx,
                 large_files,
@@ -257,7 +258,9 @@ impl ParquetRSTable {
         columns_to_read: Vec<usize>,
         copy_status: Option<Arc<CopyStatus>>,
     ) -> Result<(PartStatistics, Partitions)> {
-        assert!(!self.parquet_metas.is_empty());
+        let parquet_metas = self.parquet_metas.lock().await;
+
+        assert!(!parquet_metas.is_empty());
         let settings = ctx.get_settings();
         let num_files = files.len();
         let num_threads = settings.get_max_threads()? as usize;
@@ -274,7 +277,7 @@ impl ParquetRSTable {
             let files = &files[begin..end];
             let metas = files
                 .iter()
-                .map(|i| self.parquet_metas[*i].clone())
+                .map(|i| parquet_metas[*i].clone())
                 .collect::<Vec<_>>();
             let pruner = pruner.clone();
             let columns_to_read = columns_to_read.clone();

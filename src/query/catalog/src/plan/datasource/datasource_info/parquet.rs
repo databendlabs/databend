@@ -17,6 +17,7 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
+use common_base::base::tokio::sync::Mutex;
 use common_expression::ColumnId;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
@@ -39,7 +40,6 @@ use thrift::protocol::TSerializable;
 use thrift::protocol::TType;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
-use crate::table::ParquetTableColumnStatisticsProvider;
 
 #[derive(Clone, Debug)]
 pub struct FullParquetMeta {
@@ -73,9 +73,11 @@ pub struct ParquetTableInfo {
     // These two fields are only used in coordinator node of the cluster,
     // so we don't need to serialize them.
     #[serde(skip)]
-    pub parquet_metas: Vec<Arc<FullParquetMeta>>,
+    pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     #[serde(skip)]
-    pub stats_provider: ParquetTableColumnStatisticsProvider,
+    pub max_threads: usize,
+    #[serde(skip)]
+    pub max_memory_usage: u64,
 }
 
 impl ParquetTableInfo {
@@ -129,6 +131,7 @@ mod tests {
     use std::sync::Arc;
 
     use arrow_schema::Schema as ArrowSchema;
+    use common_base::base::tokio::sync::Mutex;
     use common_storage::StageFilesInfo;
     use parquet_rs::basic::ConvertedType;
     use parquet_rs::basic::Repetition;
@@ -139,7 +142,6 @@ mod tests {
     use parquet_rs::schema::types::Type;
 
     use super::ParquetTableInfo;
-    use crate::table::ParquetTableColumnStatisticsProvider;
 
     fn make_desc() -> Result<SchemaDescPtr, ParquetError> {
         let mut fields = vec![];
@@ -206,8 +208,9 @@ mod tests {
             files_to_read: None,
             schema_from: "".to_string(),
             compression_ratio: 0.0,
-            parquet_metas: vec![],
-            stats_provider: ParquetTableColumnStatisticsProvider::default(),
+            parquet_metas: Arc::new(Mutex::new(vec![])),
+            max_threads: 1,
+            max_memory_usage: 10000,
         };
         let s = serde_json::to_string(&info).unwrap();
         let info = serde_json::from_str::<ParquetTableInfo>(&s).unwrap();
