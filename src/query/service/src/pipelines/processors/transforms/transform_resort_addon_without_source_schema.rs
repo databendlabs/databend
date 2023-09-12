@@ -117,7 +117,6 @@ impl Transform for TransformResortAddOnWithoutSourceSchema {
     const NAME: &'static str = "AddOnWithoutSourceSchemaTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
-        println!("transform block:\n {:?}", block);
         let input_schema =
             DataSchemaRef::downcast_from(block.clone().get_owned_meta().unwrap()).unwrap();
         block = self
