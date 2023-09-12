@@ -124,3 +124,26 @@ wx49 0 0 0 2019-01-01 00:00:00
 
 statement ok
 drop table dc_user_in_log;
+
+# fix: https://github.com/datafuselabs/databend/issues/12795
+statement ok
+drop table if exists tt1;
+
+statement ok
+drop table if exists tt2;
+
+statement ok
+create table tt1 (a int, b string);
+
+statement ok
+insert into tt1 values (1, 'abc'), (2, 'def');
+
+statement ok
+create table tt2 (a int, b string);
+
+statement ok
+insert into tt2 values (1, 'abc'), (2, 'def');
+
+query T
+SELECT * FROM tt1 RIGHT ANTI JOIN tt2 ON is_not_null(char_length(tt1.b));
+----
