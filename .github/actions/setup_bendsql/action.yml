@@ -6,8 +6,15 @@ runs:
     - name: Download and Install
       shell: bash
       run: |
-        sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
-        sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
-        sudo apt update
-        sudo apt install -y bendsql
+
+        version=$(gh release view --repo datafuselabs/bendsql --json name | jq -r '.name')
+        deb_version=${version/v/}
+        wget -q https://github.com/datafuselabs/bendsql/releases/download/${version}/bendsql_${deb_version}_amd64.deb
+        sudo dpkg -i bendsql_${deb_version}_amd64.deb
         bendsql --version
+
+        # sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
+        # sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
+        # sudo apt update
+        # sudo apt install -y bendsql
+        # bendsql --version

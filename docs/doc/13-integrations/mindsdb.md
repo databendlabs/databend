@@ -28,8 +28,8 @@ CREATE TABLE pollution_measurement(
   PM10 double,
   PM25 double
 );
- 
-COPY INTO pollution_measurement FROM 'https://repo.databend.rs/AirPolutionSeoul/Measurement_summary.csv' file_format=(type='CSV' skip_header=1);
+
+COPY INTO pollution_measurement FROM 'https://datasets.databend.org/AirPolutionSeoul/Measurement_summary.csv' file_format=(type='CSV' skip_header=1);
 ```
 
 ## Step 2. Connect MindsDB to Databend
@@ -73,7 +73,7 @@ PREDICT so2;
 Now the predictor will begin training. You can check the status with the following query:
 
 ```sql
-SELECT * 
+SELECT *
 FROM mindsdb.models
 WHERE name='airq_predictor';
 ```
