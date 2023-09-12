@@ -27,6 +27,7 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::format::PageLocation;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::statistics::collect_row_group_stats;
 use crate::parquet_rs::statistics::convert_index_to_column_statistics;
@@ -92,20 +93,21 @@ impl ParquetRSPruner {
     /// Prune row groups of a parquet file.
     ///
     /// Return the selected row groups' indices in the meta.
-    pub fn prune_row_groups(&self, meta: &ParquetMetaData) -> Result<Vec<usize>> {
+    ///
+    /// If `stats` is not [None], we use this statistics to prune but not collect again.
+    pub fn prune_row_groups(
+        &self,
+        meta: &ParquetMetaData,
+        stats: Option<&[StatisticsOfColumns]>,
+    ) -> Result<Vec<usize>> {
         if !self.prune_row_groups {
             return Ok((0..meta.num_row_groups()).collect());
         }
         match &self.range_pruner {
             None => Ok((0..meta.num_row_groups()).collect()),
             Some(pruner) => {
-                // Only if the file has row groups level statistics, we can use them to prune.
-                let leaf_fields = self.schema.leaf_fields();
-                if let Some(row_group_stats) =
-                    collect_row_group_stats(meta.row_groups(), &leaf_fields)
-                {
-                    let mut selection = Vec::with_capacity(meta.num_row_groups());
-
+                let mut selection = Vec::with_capacity(meta.num_row_groups());
+                if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep(row_group, None) {
                             selection.push(i);
@@ -113,7 +115,21 @@ impl ParquetRSPruner {
                     }
                     Ok(selection)
                 } else {
-                    Ok((0..meta.num_row_groups()).collect())
+                    let leaf_fields = self.schema.leaf_fields();
+                    if let Some(row_group_stats) = collect_row_group_stats(
+                        meta.row_groups(),
+                        &leaf_fields,
+                        Some(&self.predicate_columns),
+                    ) {
+                        for (i, row_group) in row_group_stats.iter().enumerate() {
+                            if pruner.should_keep(row_group, None) {
+                                selection.push(i);
+                            }
+                        }
+                        Ok(selection)
+                    } else {
+                        Ok((0..meta.num_row_groups()).collect())
+                    }
                 }
             }
         }

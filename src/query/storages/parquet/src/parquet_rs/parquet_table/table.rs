@@ -20,6 +20,7 @@ use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::FullParquetMeta;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
@@ -45,7 +46,6 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::meta::read_metas_in_parallel;
-use super::meta::FullParquetMeta;
 use super::stats::create_stats_provider;
 use crate::parquet_rs::statistics::collect_row_group_stats;
 use crate::utils::naive_parquet_table_info;
@@ -64,7 +64,7 @@ pub struct ParquetRSTable {
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
 
-    pub(super) _parquet_metas: Vec<FullParquetMeta>, /* TODO(parquet): use this after implement ser/de for `FullParquetMeta`. */
+    pub(super) parquet_metas: Vec<Arc<FullParquetMeta>>,
     pub(super) stats_provider: ParquetTableColumnStatisticsProvider,
 }
 
@@ -83,7 +83,7 @@ impl ParquetRSTable {
             schema_descr: info.schema_descr.clone(),
             schema_from: info.schema_from.clone(),
             compression_ratio: info.compression_ratio,
-            _parquet_metas: vec![],
+            parquet_metas: info.parquet_metas.clone(),
             stats_provider: info.stats_provider.clone(),
         }))
     }
@@ -125,7 +125,7 @@ impl ParquetRSTable {
         let schema_descr = first_meta.file_metadata().schema_descr_ptr();
         let mut table_info = create_parquet_table_info(&arrow_schema)?;
         let leaf_fields = table_info.schema().leaf_fields();
-        let first_stats = collect_row_group_stats(first_meta.row_groups(), &leaf_fields);
+        let first_stats = collect_row_group_stats(first_meta.row_groups(), &leaf_fields, None);
         let num_columns = leaf_fields.len();
 
         let mut metas = read_metas_in_parallel(
@@ -136,11 +136,11 @@ impl ParquetRSTable {
             leaf_fields,
         )
         .await?;
-        metas.push(FullParquetMeta {
+        metas.push(Arc::new(FullParquetMeta {
             location: first_file.clone(),
             meta: Arc::new(first_meta),
             row_group_level_stats: first_stats,
-        });
+        }));
 
         let stats_provider = create_stats_provider(&metas, num_columns);
         table_info.meta.statistics.number_of_rows = stats_provider.num_rows();
@@ -156,7 +156,7 @@ impl ParquetRSTable {
             files_to_read,
             compression_ratio,
             schema_from: first_file,
-            _parquet_metas: metas,
+            parquet_metas: metas,
             stats_provider,
         }))
     }
@@ -199,6 +199,7 @@ impl Table for ParquetRSTable {
             files_to_read: self.files_to_read.clone(),
             schema_from: self.schema_from.clone(),
             compression_ratio: self.compression_ratio,
+            parquet_metas: self.parquet_metas.clone(),
             stats_provider: self.stats_provider.clone(),
         })
     }

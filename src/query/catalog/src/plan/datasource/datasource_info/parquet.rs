@@ -12,20 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::io::Cursor;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
+use common_expression::ColumnId;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
+use parquet_rs::file::metadata::ParquetMetaData;
 use parquet_rs::format::SchemaElement;
 use parquet_rs::schema::types;
 use parquet_rs::schema::types::SchemaDescPtr;
 use parquet_rs::schema::types::SchemaDescriptor;
 use serde::Deserialize;
+use storages_common_table_meta::meta::ColumnStatistics;
 use thrift::protocol::TCompactInputProtocol;
 use thrift::protocol::TCompactOutputProtocol;
 use thrift::protocol::TInputProtocol;
@@ -36,6 +40,20 @@ use thrift::protocol::TType;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
 use crate::table::ParquetTableColumnStatisticsProvider;
+
+#[derive(Clone, Debug)]
+pub struct FullParquetMeta {
+    pub location: String,
+
+    pub meta: Arc<ParquetMetaData>,
+    /// Row group level statistics.
+    ///
+    /// We collect the statistics here to avoid multiple computations of the same parquet meta.
+    ///
+    /// The container is organized as:
+    /// - row_group_level_stats[i][j] is the statistics of the j-th column in the i-th row group of current file.
+    pub row_group_level_stats: Option<Vec<HashMap<ColumnId, ColumnStatistics>>>,
+}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ParquetTableInfo {
@@ -52,6 +70,11 @@ pub struct ParquetTableInfo {
     pub schema_from: String,
     pub compression_ratio: f64,
 
+    // These two fields are only used in coordinator node of the cluster,
+    // so we don't need to serialize them.
+    #[serde(skip)]
+    pub parquet_metas: Vec<Arc<FullParquetMeta>>,
+    #[serde(skip)]
     pub stats_provider: ParquetTableColumnStatisticsProvider,
 }
 
@@ -116,6 +139,7 @@ mod tests {
     use parquet_rs::schema::types::Type;
 
     use super::ParquetTableInfo;
+    use crate::table::ParquetTableColumnStatisticsProvider;
 
     fn make_desc() -> Result<SchemaDescPtr, ParquetError> {
         let mut fields = vec![];
@@ -182,6 +206,8 @@ mod tests {
             files_to_read: None,
             schema_from: "".to_string(),
             compression_ratio: 0.0,
+            parquet_metas: vec![],
+            stats_provider: ParquetTableColumnStatisticsProvider::default(),
         };
         let s = serde_json::to_string(&info).unwrap();
         let info = serde_json::from_str::<ParquetTableInfo>(&s).unwrap();

@@ -13,14 +13,14 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_catalog::plan::FullParquetMeta;
 use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::ParquetTableColumnStatisticsProvider;
 
-use super::meta::FullParquetMeta;
-
 pub fn create_stats_provider(
-    metas: &[FullParquetMeta],
+    metas: &[Arc<FullParquetMeta>],
     num_columns: usize,
 ) -> ParquetTableColumnStatisticsProvider {
     let mut num_rows = 0;

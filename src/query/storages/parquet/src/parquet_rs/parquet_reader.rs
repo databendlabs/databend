@@ -196,7 +196,7 @@ impl ParquetRSReader {
         let file_meta = builder.metadata();
 
         if let Some(pruner) = &self.pruner {
-            let selected_row_groups = pruner.prune_row_groups(file_meta)?;
+            let selected_row_groups = pruner.prune_row_groups(file_meta, None)?;
             let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
 
             builder = builder.with_row_groups(selected_row_groups);
@@ -272,7 +272,7 @@ impl ParquetRSReader {
         let file_meta = builder.metadata();
 
         if let Some(pruner) = &self.pruner {
-            let selected_row_groups = pruner.prune_row_groups(file_meta)?;
+            let selected_row_groups = pruner.prune_row_groups(file_meta, None)?;
             let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
 
             builder = builder.with_row_groups(selected_row_groups);

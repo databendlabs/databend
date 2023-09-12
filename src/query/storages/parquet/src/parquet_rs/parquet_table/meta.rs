@@ -12,35 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
 use common_base::runtime::GLOBAL_MEM_STAT;
+use common_catalog::plan::FullParquetMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::ColumnId;
 use common_expression::TableField;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 use parquet::schema::types::SchemaDescriptor;
-use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::parquet_rs::statistics::collect_row_group_stats;
-
-pub struct FullParquetMeta {
-    pub location: String,
-    pub meta: Arc<ParquetMetaData>,
-    /// Row group level statistics.
-    ///
-    /// We collect the statistics here to avoid multiple computations of the same parquet meta.
-    ///
-    /// The container is organized as:
-    /// - row_group_level_stats[i][j] is the statistics of the j-th column in the i-th row group of current file.
-    pub row_group_level_stats: Option<Vec<HashMap<ColumnId, ColumnStatistics>>>,
-}
 
 #[async_backtrace::framed]
 pub async fn read_metas_in_parallel(
@@ -49,7 +35,10 @@ pub async fn read_metas_in_parallel(
     file_infos: &[(String, u64)],
     expected: (SchemaDescPtr, String),
     leaf_fields: Vec<TableField>,
-) -> Result<Vec<FullParquetMeta>> {
+) -> Result<Vec<Arc<FullParquetMeta>>> {
+    if file_infos.is_empty() {
+        return Ok(vec![]);
+    }
     let settings = ctx.get_settings();
     let num_files = file_infos.len();
     let num_threads = settings.get_max_threads()? as usize;
@@ -70,26 +59,14 @@ pub async fn read_metas_in_parallel(
         let (expected_schema, schema_from) = expected.clone();
         let leaf_fields = leaf_fields.clone();
 
-        tasks.push(async move {
-            let metas = read_parquet_metas_batch(
-                file_infos,
-                op,
-                expected_schema,
-                schema_from,
-                max_memory_usage,
-            )
-            .await?;
-            let mut full_infos = Vec::with_capacity(metas.len());
-            for (location, meta) in metas {
-                let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields);
-                full_infos.push(FullParquetMeta {
-                    location,
-                    meta,
-                    row_group_level_stats: stats,
-                })
-            }
-            Ok::<_, ErrorCode>(full_infos)
-        });
+        tasks.push(read_parquet_metas_batch(
+            file_infos,
+            op,
+            expected_schema,
+            leaf_fields,
+            schema_from,
+            max_memory_usage,
+        ));
     }
 
     let metas = execute_futures_in_parallel(
@@ -146,14 +123,20 @@ pub async fn read_parquet_metas_batch(
     file_infos: Vec<(String, u64)>,
     op: Operator,
     expect: SchemaDescPtr,
+    leaf_fields: Arc<Vec<TableField>>,
     schema_from: String,
     max_memory_usage: u64,
-) -> Result<Vec<(String, Arc<ParquetMetaData>)>> {
+) -> Result<Vec<Arc<FullParquetMeta>>> {
     let mut metas = Vec::with_capacity(file_infos.len());
-    for (path, size) in file_infos {
+    for (location, size) in file_infos {
         let meta =
-            load_and_check_parquet_meta(&path, size, op.clone(), &expect, &schema_from).await?;
-        metas.push((path, meta));
+            load_and_check_parquet_meta(&location, size, op.clone(), &expect, &schema_from).await?;
+        let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields, None);
+        metas.push(Arc::new(FullParquetMeta {
+            location,
+            meta,
+            row_group_level_stats: stats,
+        }));
     }
 
     // TODO(parquet): how to limit the memory when running this method is to be determined.
