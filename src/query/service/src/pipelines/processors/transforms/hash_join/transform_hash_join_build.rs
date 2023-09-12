@@ -278,13 +278,10 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::FollowSpill => {
                 if let Some(data) = self.spill_data.take() {
-                    let unspilled_data = self
-                        .spill_state
-                        .as_mut()
-                        .unwrap()
-                        .spiller
-                        .spill_input(data)
-                        .await?;
+                    let spill_state = self.spill_state.as_mut().unwrap();
+                    let mut hashes = Vec::with_capacity(data.num_rows());
+                    spill_state.get_hashes(&data, &mut hashes)?;
+                    let unspilled_data = spill_state.spiller.spill_input(data, &hashes).await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;
                     }

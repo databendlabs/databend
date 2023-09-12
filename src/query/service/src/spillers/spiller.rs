@@ -142,13 +142,15 @@ impl Spiller {
 
     #[async_backtrace::framed]
     // Directly spill input data without buffering.
+    // Need to compute hashes for data block advanced.
     // Return unspilled data.
-    pub(crate) async fn spill_input(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+    pub(crate) async fn spill_input(
+        &mut self,
+        data_block: DataBlock,
+        hashes: &[u64],
+    ) -> Result<DataBlock> {
         // Save the row index which is not spilled.
         let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
-        // Compute the hash value for each row.
-        let mut hashes = Vec::with_capacity(data_block.num_rows());
-        self.get_hashes(&data_block, &mut hashes)?;
         // Key is partition, value is row indexes
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.

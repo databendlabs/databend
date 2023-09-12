@@ -23,7 +23,6 @@ use common_expression::Evaluator;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::query_spill_prefix;
 use common_storage::DataOperator;
-use url::quirks::hash;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
@@ -54,7 +53,7 @@ impl ProbeSpillState {
     }
 
     // Get all hashes for probe input data.
-    fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
+    pub fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
         let func_ctx = self.probe_state.ctx.get_function_context()?;
         let keys = &self.probe_state.hash_join_state.hash_join_desc.probe_keys;
         get_hashes(
