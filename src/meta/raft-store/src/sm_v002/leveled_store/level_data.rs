@@ -27,6 +27,7 @@ use log::debug;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 
@@ -72,10 +73,12 @@ impl LevelData {
         }
     }
 
+    /// Replace the kv store with a new one.
     pub(in crate::sm_v002) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
         self.kv = kv;
     }
 
+    /// Replace the expire queue with a new one.
     pub(in crate::sm_v002) fn replace_expire(
         &mut self,
         expire: BTreeMap<ExpireKey, Marked<String>>,
@@ -83,36 +86,17 @@ impl LevelData {
         self.expire = expire;
     }
 
-    pub(crate) fn curr_seq(&self) -> u64 {
-        self.sequence
-    }
-
     pub(crate) fn update_seq(&mut self, seq: u64) {
         self.sequence = seq;
     }
 
-    // Cloned data is accessed directly
+    /// Increase the sequence number by 1 and return the new value
     pub(crate) fn next_seq(&mut self) -> u64 {
         self.sequence += 1;
         debug!("next_seq: {}", self.sequence);
         // dbg!("next_seq", self.sequence);
 
         self.sequence
-    }
-
-    // Cloned data is accessed directly
-    pub fn last_applied_ref(&self) -> &Option<LogId> {
-        &self.last_applied
-    }
-
-    // Cloned data is accessed directly
-    pub fn last_membership_ref(&self) -> &StoredMembership {
-        &self.last_membership
-    }
-
-    // Cloned data is accessed directly
-    pub(crate) fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        &self.nodes
     }
 
     // Cloned data is accessed directly
@@ -232,5 +216,23 @@ impl MapApi<ExpireKey> for LevelData {
         let prev = MapApiRO::<ExpireKey>::get(self, &key).await;
         self.expire.insert(key, marked.clone());
         (prev, marked)
+    }
+}
+
+impl MetaApiRO for LevelData {
+    fn curr_seq(&self) -> u64 {
+        self.sequence
+    }
+
+    fn last_applied_ref(&self) -> &Option<LogId> {
+        &self.last_applied
+    }
+
+    fn last_membership_ref(&self) -> &StoredMembership {
+        &self.last_membership
+    }
+
+    fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
+        &self.nodes
     }
 }

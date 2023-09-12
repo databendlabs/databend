@@ -2,6 +2,6 @@
   "label": "Cluster Deployments",
   "link": {
     "type": "generated-index",
-    "slug": "/operations/cluster"
+    "slug": "/deploy/cluster"
   }
 }
