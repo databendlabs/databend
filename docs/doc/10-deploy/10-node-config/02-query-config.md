@@ -5,248 +5,208 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced or updated: v1.2.87"/>
 
-The configuration file `databend-query.toml` contains settings for configuring the Databend query server. Additionally, you can configure more settings for the query server with the script `databend-query`. To find out the available settings with the script, refer to the script's help information:
+This page describes the Query node configurations available in the [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml) configuration file.
 
-```bash
-./databend-query -h
-```
+- Some parameters listed in the table below may not be present in [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml). If you require these parameters, you can manually add them to the file.
 
-This topic explains the settings you can find in the configuration file `databend-query.toml`.
+- You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
 
-:::tip
-You can find [sample configuration files](https://github.com/datafuselabs/databend/tree/main/scripts/ci/deploy/config) on GitHub that set up Databend for various deployment environments. These files were created for internal testing ONLY. Please do NOT modify them for your own purposes. But if you have a similar deployment, it is a good idea to reference them when editing your own configuration files.
-:::
+## [query] Section
 
-## 1. Logging Config
+The following is a list of the parameters available within the [query] section:
 
-### log.file
+| Parameter                    | Description                                       |
+|------------------------------|---------------------------------------------------|
+| max_active_sessions          | Maximum number of active sessions.               |
+| wait_timeout_mills           | Timeout in milliseconds for waiting.             |
+| flight_api_address           | IP address and port for listening to Databend-Query cluster shuffle data. |
+| admin_api_address            | Address for the Admin REST API.                  |
+| metric_api_address           | Address for the Metrics REST API.                |
+| mysql_handler_host           | Hostname for the MySQL query handler.            |
+| mysql_handler_port           | Port for the MySQL query handler.                |
+| clickhouse_http_handler_host | Hostname for the ClickHouse HTTP query handler.  |
+| clickhouse_http_handler_port | Port for the ClickHouse HTTP query handler.      |
+| http_handler_host            | Hostname for the HTTP API query handler.         |
+| http_handler_port            | Port for the HTTP API query handler.             |
+| flight_sql_handler_host      | Hostname for the Experimental Arrow Flight SQL API query handler. |
+| flight_sql_handler_port      | Port for the Experimental Arrow Flight SQL API query handler. |
+| tenant_id                    | Default tenant ID.                               |
+| cluster_id                   | Default cluster ID.                              |
+| table_engine_memory_enabled  | Flag to enable the Memory table engine.          |
 
-  * on: Enables or disables `file` logging. Defaults to `true`.
-  * dir: Path to store log files.
-  * level: Log level (DEBUG | INFO | ERROR). Defaults to `INFO`.
-  * format: Log format. Defaults to `json`.
-    - `json`: Databend outputs logs in JSON format.
-    - `text`: Databend outputs plain text logs.
+## [[query.users]] Section
 
-### log.stderr
+The following is a list of the parameters available within the [[query.users]] section. For more information about configuring admin users, see [Configuring Admin Users](../../13-sql-clients/00-admin-users.md).
 
-  * on: Enables or disables `stderr` logging. Defaults to `false`.
-  * level: Log level (DEBUG | INFO | ERROR). Defaults to `DEBUG`.
-  * format: Log format. Defaults to `text`.
-    - `text`: Databend outputs plain text logs.
-    - `json`: Databend outputs logs in JSON format.
+| Parameter      | Description                              |
+|----------------|------------------------------------------|
+| name           | User name.                               |
+| auth_type      | Authentication type (e.g., no_password, double_sha1_password, sha256_password). |
+| auth_string    | Authentication string (e.g., SHA-1 or SHA-256 hash of the password). |
 
-### log.query
+## [log] Section
 
-  * on: Enables logging query execution details to the **query-details** folder in the log directory. Defaults to `on`. Consider disabling when storage space is limited.
+This section can include three subsections: [log.file], [log.stderr], and [log.query].
 
-## 2. Meta Service Config
+### [log.file] Section
 
-### username
+The following is a list of the parameters available within the [log.file] section:
 
-* The username used to connect to the Meta service.
-* Default: `"root"`
-* Env variable: `META_USERNAME`
+| Parameter           | Description                                                                                         |
+|---------------------|-----------------------------------------------------------------------------------------------------|
+| on                  | Enables or disables file logging. Defaults to true.                                                 |
+| dir                 | Path to store log files.                                                                            |
+| level               | Log level: DEBUG, INFO, or ERROR. Defaults to INFO.                                                 |
+| format              | Log format: json or text. Defaults to json.                                                         |
 
-### password
+### [log.stderr] Section
 
-* The password used to connect to the Meta service. Databend recommends using the environment variable to provide the password.
-* Default: `"root"`
-* Env variable: `META_PASSWORD`
+The following is a list of the parameters available within the [log.stderr] section:
 
-### endpoints
+| Parameter           | Description                                                                                         |
+|---------------------|-----------------------------------------------------------------------------------------------------|
+| on                  | Enables or disables stderr logging. Defaults to false.                                              |
+| level               | Log level: DEBUG, INFO, or ERROR. Defaults to DEBUG.                                                |
+| format              | Log format: json or text. Defaults to text.                                                         |
 
-* Sets one or more meta server endpoints that this query server can connect to. For a robust connection to Meta, include multiple meta servers within the cluster as backups if possible, for example, `["192.168.0.1:9191", "192.168.0.2:9191"]`.
-* It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config. See [Databend-meta config: `grpc_api_advertise_host`](01-metasrv-config.md).
-* This setting only takes effect when Databend works in cluster mode. You don't need to configure it for standalone Databend.
-* Default: `["0.0.0.0:9191"]`
-* Env variable: `META_ENDPOINTS`
+### [log.query] Section
 
-### client_timeout_in_second
+The following is a list of the parameters available within the [log.query] section:
 
-* Sets the wait time (in seconds) before terminating the attempt to connect a meta server.
-* Default: 60
+| Parameter           | Description                                                                                         |
+|---------------------|-----------------------------------------------------------------------------------------------------|
+| on                  | Enables logging query execution details to the query-details folder in the log directory. Defaults to on. Consider disabling when storage space is limited. |
 
-### auto_sync_interval
+## [meta] Section
 
-* Sets how often (in seconds) this query server should automatically sync up `endpoints` from the meta servers within the cluster. When enabled, databend-query tries to contact one of the databend-meta server to get a list of `grpc_api_advertise_host:<grpc-api-port>` periodically.
-* If a databend-meta is **NOT** configured with `grpc_api_advertise_host`, it fills blank string `""` in the returned endpoint list. See [Databend-meta config: `grpc_api_advertise_host`](01-metasrv-config.md).
-* If the returned endpoints list contains more than half invalid addresses, e.g., 2/3 are `""`: `["127.0.0.1:9191", "",""]`, databend-query will not update the `endpoint`.
-* To disable the sync up, set it to 0.
-* This setting only takes effect when Databend-query works with remote meta service(`endpoints` is not empty). You don't need to configure it for standalone Databend.
-* Default: 60
+The following is a list of the parameters available within the [meta] section:
 
-### unhealth_endpoint_evict_time
+| Parameter                    | Description                                                                                           |
+|------------------------------|-------------------------------------------------------------------------------------------------------|
+| username                     | The username used to connect to the Meta service. Default: "root".                                  |
+| password                     | The password used to connect to the Meta service. Databend recommends using the environment variable META_PASSWORD to provide the password. Default: "root". |
+| endpoints                    | Sets one or more meta server endpoints that this query server can connect to. For robust connection to Meta, include multiple meta servers within the cluster as backups if possible. Example: ["192.168.0.1:9191", "192.168.0.2:9191"]. Default: ["0.0.0.0:9191"]. |
+| client_timeout_in_second     | Sets the wait time (in seconds) before terminating the attempt to connect to a meta server. Default: 60. |
+| auto_sync_interval           | Sets how often (in seconds) this query server should automatically sync up endpoints from the meta servers within the cluster. When enabled, Databend-query contacts a Databend-meta server periodically to obtain a list of grpc_api_advertise_host:grpc-api-port. To disable the sync up, set it to 0. Default: 60. |
+| unhealth_endpoint_evict_time | Internal time (in seconds) for not querying an unhealthy meta node endpoint. Default: 120.           |
 
-* Internal(in seconds) time that not querying an unhealth meta node endpoint.
-* Default: 120
+## [storage] Section
 
-## 3. Query config
+The following is a list of the parameters available within the [storage] section:
 
-### admin_api_address
+| Parameter | Description                                                                                     |
+|-----------|-------------------------------------------------------------------------------------------------|
+| type      | The type of storage used. It can be one of the following: fs, s3, azblob, gcs, oss, cos, hdfs, webhdfs. |
 
-* The IP address and port to listen on for admin the databend-query, e.g., `0.0.0.0::8080`.
-* Default: `"127.0.0.1:8080"`
-* Env variable: `QUERY_ADMIN_API_ADDRESS`
 
-### metric_api_address
+### [storage.fs] Section
 
-* The IP address and port to listen on that can be scraped by Prometheus, e.g., `0.0.0.0::7070`.
-* Default: `"127.0.0.1:7070"`
-* Env variable: `QUERY_METRIC_API_ADDRESS`
+The following is a list of the parameters available within the [storage.fs] section:
 
-### flight_api_address
+| Parameter   | Description                            |
+|-------------|----------------------------------------|
+| data_path   | The path to the data storage location. |
 
-* The IP address and port to listen on for databend-query cluster shuffle data, e.g., `0.0.0.0::9090`.
-* Default: `"127.0.0.1:9090"`
-* Env variable: `QUERY_FLIGHT_API_ADDRESS`
+### [storage.s3] Section
 
-### mysql_handler_host
+The following is a list of the parameters available within the [storage.s3] section:
 
-* The IP address to listen on for MySQL handler, e.g., `0.0.0.0`.
-* Default: `"127.0.0.1"`
-* Env variable: `QUERY_MYSQL_HANDLER_HOST`
+| Parameter                 | Description                                                                               |
+|---------------------------|-------------------------------------------------------------------------------------------|
+| bucket                    | The name of your Amazon S3-like storage bucket.                                           |
+| endpoint_url              | The URL endpoint for the S3-like storage service. Defaults to "https://s3.amazonaws.com". |
+| access_key_id             | The access key ID for authenticating with the storage service.                            |
+| secret_access_key         | The secret access key for authenticating with the storage service.                        |
+| enable_virtual_host_style | A boolean flag indicating whether to enable virtual host-style addressing.                |
+| allow_anonymous           | A boolean flag indicating whether anonymous access is allowed (true or false).            |
+| external_id               | External ID for authentication.                                                           |
+| master_key                | Master key for authentication.                                                            |
+| region                    | The region for the S3-like storage service.                                               |
+| role_arn                  | ARN (Amazon Resource Name) for authentication.                                            |
+| root                      | The root directory for HDFS.                                                              |
+| security_token            | Security token for authentication.                                                        |
 
-### mysql_handler_port
+### [storage.azblob] Section
 
-* The port to listen on for MySQL handler, e.g., `3307`.
-* Default: `3307`
-* Env variable: `QUERY_MYSQL_HANDLER_PORT`
+The following is a list of the parameters available within the [storage.azblob] section:
 
-### clickhouse_http_handler_host
+| Parameter    | Description                                                                                                |
+|--------------|------------------------------------------------------------------------------------------------------------|
+| endpoint_url | The URL endpoint for Azure Blob Storage (e.g., `https://<your-storage-account-name>.blob.core.windows.net)`. |
+| container    | The name of your Azure storage container.                                                                  |
+| account_name | The name of your Azure storage account.                                                                    |
+| account_key  | The account key for authenticating with Azure Blob Storage.                                                |
+| root         | The root directory for Azure Blob Storage.                                                                 |
 
-* The IP address to listen on for ClickHouse HTTP handler, e.g., `0.0.0.0`.
-* Default: `"127.0.0.1"`
-* Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_HOST`
+### [storage.gcs] Section
 
-### clickhouse_http_handler_port
+The following is a list of the parameters available within the [storage.gcs] section:
 
-* The port to listen on for ClickHouse HTTP handler, e.g., `8124`.
-* Default: `8124`
-* Env variable: `QUERY_CLICKHOUSE_HTTP_HANDLER_PORT`
+| Parameter    | Description                                                   |
+|--------------|---------------------------------------------------------------|
+| bucket       | The name of your Google Cloud Storage bucket.                 |
+| endpoint_url | The URL endpoint for Google Cloud Storage.                    |
+| credential   | The credentials for authenticating with Google Cloud Storage. |
+| root         | The root directory for Google Cloud Storage.                  |
 
-### tenant_id
+### [storage.oss] Section
 
-* Identifies the tenant and is used for storing the tenant's metadata.
-* Default: `"admin"`
-* Env variable: `QUERY_TENANT_ID`
+The following is a list of the parameters available within the [storage.oss] section:
 
-### cluster_id
+| Parameter            | Description                                                       |
+|----------------------|-------------------------------------------------------------------|
+| bucket               | The name of your Alibaba Cloud OSS bucket.                        |
+| endpoint_url         | The URL endpoint for Alibaba Cloud OSS.                           |
+| access_key_id        | The access key ID for authenticating with Alibaba Cloud OSS.      |
+| access_key_secret    | The access key secret for authenticating with Alibaba Cloud OSS.  |
+| presign_endpoint_url | The URL endpoint for presigned operations with Alibaba Cloud OSS. |
+| root                 | The root directory for Alibaba Cloud OSS.                         |
 
-* Identifies the cluster that the databend-query node belongs to.
-* Default: `""`
-* Env variable: `QUERY_CLUSTER_ID`
+### [storage.cos] Section
 
+The following is a list of the parameters available within the [storage.cos] section:
 
-## 4. Storage config
+| Parameter    | Description                                                 |
+|--------------|-------------------------------------------------------------|
+| bucket       | The name of your Tencent Cloud Object Storage (COS) bucket. |
+| endpoint_url | The URL endpoint for Tencent COS (optional).                |
+| secret_id    | The secret ID for authenticating with Tencent COS.          |
+| secret_key   | The secret key for authenticating with Tencent COS.         |
+| root         | The root directory for Tencent Cloud Object Storage.        |
 
-### type
+### [storage.hdfs] Section
 
-* Which storage type(Must one of `"fs"` | `"s3"` | `"azblob"` | `"obs"`) should use for the databend-query, e.g., `"s3"`.
-* Default: `""`
-* Env variable: `STORAGE_TYPE`
-* Required.
+The following is a list of the parameters available within the [storage.hdfs] section:
 
-### storage.s3
+| Parameter      | Description                                       |
+|----------------|---------------------------------------------------|
+| name_node      | The name node address for Hadoop Distributed File System (HDFS). |
+| root         | The root directory for HDFS.                                   |
 
-#### bucket
 
-* AWS S3 bucket name.
-* Default: `""`
-* Env variable: `STORAGE_S3_BUCKET`
-* Required.
+### [storage.webhdfs] Section
 
-#### endpoint_url
+The following is a list of the parameters available within the [storage.webhdfs] section:
 
-* AWS S3(or MinIO S3-like) endpoint URL, e.g., `"https://s3.amazonaws.com"`.
-* Default: `"https://s3.amazonaws.com"`
-* Env variable: `STORAGE_S3_ENDPOINT_URL`
+| Parameter    | Description                                                    |
+|--------------|----------------------------------------------------------------|
+| endpoint_url | The URL endpoint for WebHDFS (Hadoop Distributed File System). |
+| root         | The root directory for HDFS.                                   |
+| delegation   | Delegation token for authentication and authorization.         |
 
-#### access_key_id
+## [cache] Section
 
-* AWS S3 access_key_id.
-* Default: `""`
-* Env variable: `STORAGE_S3_ACCESS_KEY_ID`
-* Required.
+The following is a list of the parameters available within the [cache] section:
 
-#### secret_access_key
+| Parameter                | Description                                       |
+|--------------------------|---------------------------------------------------|
+| data_cache_storage       | The type of storage used for table data cache. Available options: "none" (disables table data cache), "disk" (enables disk cache). Defaults to "none".   |
 
-* AWS S3 secret_access_key.
-* Default: `""`
-* Env variable: `STORAGE_S3SECRET_ACCESS_KEY`
-* Required.
+### [cache.disk] Section
 
-### storage.azblob
+The following is a list of the parameters available within the [cache.disk] section:
 
-#### endpoint_url
-
-* Azure Blob Storage endpoint URL, e.g., `"https://<your-storage-account-name>.blob.core.windows.net"`.
-* Default: `""`
-* Env variable: `STORAGE_AZBLOB_ENDPOINT_URL`
-* Required.
-
-#### container
-
-* Azure Blob Storage container name.
-* Default: `""`
-* Env variable: `STORAGE_AZBLOB_CONTAINER`
-* Required.
-
-#### account_name
-
-* Azure Blob Storage account name.
-* Default: `""`
-* Env variable: `STORAGE_AZBLOB_ACCOUNT_NAME`
-* Required.
-
-#### account_key
-
-* Azure Blob Storage account key.
-* Default: `""`
-* Env variable: `STORAGE_AZBLOB_ACCOUNT_KEY`
-* Required.
-
-## 5. Cache
-
-This configuration determines whether to enable caching of **block data** to the local disk and how to configure the cache.
-
-:::note
-
-This need databend-query version >= v0.9.40-nightly.
-
-:::
-
-### data_cache_storage
-
-* Type of storage to keep the table data cache, set to `disk` to enable the disk cache.
-* Default: `"none"`, block data caching is not enabled.
-* Env variable: `DATA_CACHE_STORAGE`
- 
-### cache.disk
-
-#### path
-
-* Table disk cache root path.
-* Default: `"./.databend/_cache"`
-* Env variable: `CACHE-DISK-PATH`
-
-#### max_bytes
-
-* Max bytes of cached raw table data.
-* Default: `21474836480`
-* Env variable: `CACHE-DISK-MAX-BYTES`
-
-### Cache Config Example
-
-Enable disk cache:
-```shell
-
-...
-
-data_cache_storage = "disk"
-[cache.disk]
-# cache path
-path = "./databend/_cache"
-# max bytes of cached data 20G
-max_bytes = 21474836480
-```
+| Parameter                | Description                                       |
+|--------------------------|---------------------------------------------------|
+| path                     | The path where the cache is stored when using disk cache. |
+| max_bytes                | The maximum amount of cached data in bytes when using disk cache. Defaults to 21474836480 bytes (20 GB). |
