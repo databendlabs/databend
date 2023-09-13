@@ -1,0 +1,63 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use common_ast::ast::Identifier;
+use common_ast::ast::TableReference;
+use common_ast::walk_table_reference_mut;
+use common_ast::VisitorMut;
+
+#[derive(Debug, Clone, Default)]
+pub struct ViewRewriter {
+    pub current_database: String,
+}
+
+impl VisitorMut for ViewRewriter {
+    fn visit_table_reference(&mut self, table_ref: &mut TableReference) {
+        match table_ref {
+            TableReference::Table {
+                span,
+                catalog,
+                database,
+                table,
+                alias,
+                travel_point,
+                pivot,
+                unpivot,
+            } => {
+                if database.is_none() {
+                    let database = Some(Identifier::from_name(self.current_database.clone()));
+                    *table_ref = TableReference::Table {
+                        span: *span,
+                        catalog: catalog.clone(),
+                        database,
+                        table: table.clone(),
+                        alias: alias.clone(),
+                        travel_point: travel_point.clone(),
+                        pivot: pivot.clone(),
+                        unpivot: unpivot.clone(),
+                    }
+                }
+            }
+            TableReference::Subquery {
+                subquery, alias, ..
+            } => {
+                self.visit_query(subquery);
+                if let Some(alias) = alias {
+                    self.visit_identifier(&mut alias.name);
+                }
+            }
+            _ => walk_table_reference_mut(self, table_ref),
+        }
+    }
+}
