@@ -15,6 +15,7 @@ test = false
 enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
 
 [dependencies]
+bytes = { workspace = true }
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-cache = { path = "../../../common/cache" }

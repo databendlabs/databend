@@ -164,7 +164,9 @@ impl BlockReader {
             // populate array cache items
             for item in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                    let key = TableDataCacheKey::new(block_path, column_id);
+                    let meta = column_metas.get(&column_id).unwrap();
+                    let (offset, len) = meta.offset_length();
+                    let key = TableDataCacheKey::new(block_path, offset, len);
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }
@@ -245,7 +247,8 @@ impl BlockReader {
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
-                        DataItem::RawData(data) => {
+                        data @ DataItem::RawData(_) | data @ DataItem::Buffer(_) => {
+                            let data = data.as_bytes().unwrap();
                             let column_descriptor = if let Some(parquet_schema_descriptor) =
                                 deserialization_context.parquet_schema_descriptor
                             {
@@ -254,7 +257,7 @@ impl BlockReader {
                                 &self.parquet_schema_descriptor.columns()[*leaf_index]
                             };
                             field_column_metas.push(column_meta);
-                            field_column_data.push(*data);
+                            field_column_data.push(data);
                             field_column_descriptors.push(column_descriptor);
                             field_uncompressed_size += data.len();
                         }
