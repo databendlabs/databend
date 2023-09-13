@@ -6,13 +6,13 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.1.55"/>
 
-REPLACE INTO either inserts a new row into a table or updates an existing row if the row already exists with the following data:
+REPLACE INTO can either insert multiple new rows into a table or update existing rows if those rows already exist, using the following sources of data:
 
 - Direct values
 - Query results
 - Staged files
 
-When a row with the specified [conflict key](#what-is-conflict-key) already exists in the table, REPLACE INTO will replace that existing row with the new data provided. However, if the row does not exist, a new row will be inserted into the table with the specified data.
+REPLACE INTO updates existing rows when a specified [conflict key](#what-is-conflict-key) is found in the table and inserts new rows if the conflict key is not present.
 
 :::tip atomic operations
 Databend ensures data integrity with atomic operations. Inserts, updates, replaces, and deletes either succeed completely or fail entirely.
@@ -44,11 +44,10 @@ This example replaces data with direct values:
 
 ```sql
 CREATE TABLE employees(id INT, name VARCHAR, salary INT);
+
 REPLACE INTO employees (id, name, salary) ON (id)
 VALUES (1, 'John Doe', 50000);
-```
 
-```sql
 SELECT  * FROM Employees;
 +------+----------+--------+
 | id   | name     | salary |
