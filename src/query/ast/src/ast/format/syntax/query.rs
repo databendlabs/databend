@@ -416,7 +416,7 @@ pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
                     .append(RcDoc::text(")")),
                 _ => RcDoc::nil(),
             }),
-        TableReference::Stage {
+        TableReference::Location {
             span: _,
             location,
             options,

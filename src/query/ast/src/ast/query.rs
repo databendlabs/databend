@@ -263,7 +263,7 @@ pub enum TableReference {
         span: Span,
         join: Join,
     },
-    Stage {
+    Location {
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
@@ -522,7 +522,7 @@ impl Display for TableReference {
                     _ => {}
                 }
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,

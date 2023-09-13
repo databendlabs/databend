@@ -21,6 +21,8 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_ast::ast::Connection;
+use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
 use common_ast::ast::MergeSource;
@@ -30,6 +32,7 @@ use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
@@ -77,7 +80,7 @@ use common_users::UserApiProvider;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use crate::binder::copy::parse_file_location;
+use crate::binder::copy::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
@@ -546,14 +549,20 @@ impl Binder {
                 }
                 Ok((s_expr, res_bind_context))
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
-                let (mut stage_info, path) =
-                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
+                let location = match location {
+                    FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
+                        connection: Connection::new(options.connection.clone()),
+                        ..uri.clone()
+                    }),
+                    _ => location.clone(),
+                };
+                let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
                 if let Some(f) = &options.file_format {
                     stage_info.file_format_params = match StageFileFormatType::from_str(f) {
                         Ok(t) => FileFormatParams::default_by_type(t)?,
