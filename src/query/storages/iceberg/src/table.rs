@@ -162,11 +162,13 @@ impl IcebergTable {
             .map(|f| f.into())
             .collect::<Vec<arrow_schema::Field>>();
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let leaf_fields = Arc::new(table_schema.leaf_fields());
 
         let praquet_reader = Arc::new(ParquetRSReader::create(
             ctx.clone(),
             self.op.clone(),
             table_schema,
+            leaf_fields,
             &arrow_schema,
             plan,
             ParquetReadOptions::default(),

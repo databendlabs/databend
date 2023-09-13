@@ -81,6 +81,7 @@ impl<'a> Binder {
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
+        context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(
             &mut context,
             self.ctx.clone(),

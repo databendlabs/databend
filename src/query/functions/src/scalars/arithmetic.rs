@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumn;
+use common_expression::types::decimal::DecimalDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Number;
@@ -56,6 +57,7 @@ use common_expression::with_number_mapped_type_without_64;
 use common_expression::with_unsigned_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -681,22 +683,49 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
             return None;
         }
 
+        let is_nullable = args_type[0].is_nullable();
         let arg_type = args_type[0].remove_nullable();
         if !arg_type.is_decimal() {
             return None;
         }
 
-        Some(Arc::new(Function {
+        let function = Function {
             signature: FunctionSignature {
                 name: "minus".to_string(),
-                args_type: args_type.to_owned(),
+                args_type: vec![arg_type.clone()],
                 return_type: arg_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(|_, d| match &d[0] {
+                    Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i128::MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i256::MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    _ => unreachable!(),
+                }),
                 eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
             },
-        }))
+        };
+
+        if is_nullable {
+            Some(Arc::new(function.passthrough_nullable()))
+        } else {
+            Some(Arc::new(function))
+        }
     });
 }
 

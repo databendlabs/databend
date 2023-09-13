@@ -45,10 +45,12 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     .unwrap();
     let parquet_meta = metadata.metadata();
     let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
+    let leaf_fields = Arc::new(schema.leaf_fields());
 
     let pruner = ParquetRSPruner::try_create(
         FunctionContext::default(),
         Arc::new(schema),
+        leaf_fields,
         &plan.push_downs,
         ParquetReadOptions::new()
             .with_prune_row_groups(false)
