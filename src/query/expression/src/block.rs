@@ -588,21 +588,17 @@ fn check_type(data_type: &DataType, value: &Value<AnyType>) {
         Value::Scalar(Scalar::Null) => {
             assert!(data_type.is_nullable_or_null());
         }
-        Value::Scalar(s) => {
-            match s {
-                Scalar::Tuple(ss) => {
-                    // Check data_type is Tuple type.
-                    let data_type = data_type.remove_nullable();
-                    assert!(matches!(data_type, DataType::Tuple(_)));
-                    if let DataType::Tuple(dts) = data_type {
-                        for (s, dt) in ss.iter().zip(dts.iter()) {
-                            check_type(dt, &Value::Scalar(s.clone()));
-                        }
-                    }
+        Value::Scalar(Scalar::Tuple(fields)) => {
+            // Check if data_type is Tuple type.
+            let data_type = data_type.remove_nullable();
+            assert!(matches!(data_type, DataType::Tuple(_)));
+            if let DataType::Tuple(dts) = data_type {
+                for (s, dt) in fields.iter().zip(dts.iter()) {
+                    check_type(dt, &Value::Scalar(s.clone()));
                 }
-                _ => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
             }
         }
+        Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
         Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
 }
