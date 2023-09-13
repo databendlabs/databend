@@ -46,7 +46,7 @@ EvalScalar
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [and_filters(CAST(numbers.number (#0) = 1 AS Boolean NULL), CAST(numbers.number (#0) + 1 = 1 AS Boolean NULL))], limit: NONE]
+        ├── push downs: [filters: [and_filters(numbers.number (#0) = 1, numbers.number (#0) + 1 = 1)], limit: NONE]
         └── estimated rows: 1.00
 
 query T

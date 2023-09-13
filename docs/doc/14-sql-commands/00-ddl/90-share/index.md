@@ -1,6 +1,5 @@
 ---
 title: SHARE
-slug: ./
 ---
 
 ## What is a Share?

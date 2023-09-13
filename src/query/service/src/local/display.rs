@@ -137,14 +137,16 @@ impl<'a> FormatDisplay<'a> {
                 return None;
             }
 
+            let write_progress = ctx.get_write_progress_value();
+
             let pg = QueryProgress {
                 total_rows: total_scan_value.rows,
                 total_bytes: total_scan_value.bytes,
 
                 read_rows: progress.rows,
                 read_bytes: progress.bytes,
-                write_rows: 0,
-                write_bytes: 0,
+                write_rows: write_progress.rows,
+                write_bytes: write_progress.bytes,
             };
             FormatDisplay::display_progress(bar, &pg).await;
             Some(pg)

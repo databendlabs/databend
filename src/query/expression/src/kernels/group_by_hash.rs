@@ -623,9 +623,10 @@ fn build(
     Ok(())
 }
 
+/// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
 pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     match column {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => vec.push(0),
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
         }),

@@ -39,7 +39,6 @@ use crate::types::nullable::NullableDomain;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
-use crate::types::ValueType;
 use crate::udf_client::UDFFlightClient;
 use crate::utils::arrow::constant_bitmap;
 use crate::utils::variant_transform::contains_variant;
@@ -919,15 +918,22 @@ impl<'a> Evaluator<'a> {
 
         for arg in args {
             let cond = self.partial_run(arg, validity.clone())?;
-            match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
-                Value::Scalar(None | Some(false)) => {
+            match &cond {
+                Value::Scalar(Scalar::Null | Scalar::Boolean(false)) => {
                     return Ok(Value::Scalar(Scalar::Boolean(false)));
                 }
-                Value::Scalar(Some(true)) => {
+                Value::Scalar(Scalar::Boolean(true)) => {
                     continue;
                 }
-                Value::Column(cond) => {
-                    let flag = (&cond.column) & (&cond.validity);
+                Value::Column(column) => {
+                    let flag = match column {
+                        Column::Nullable(box nullable_column) => {
+                            let boolean_column = nullable_column.column.as_boolean().unwrap();
+                            boolean_column & (&nullable_column.validity)
+                        }
+                        Column::Boolean(boolean_column) => boolean_column.clone(),
+                        _ => unreachable!(),
+                    };
                     match &validity {
                         Some(v) => {
                             validity = Some(v & (&flag));
@@ -937,7 +943,8 @@ impl<'a> Evaluator<'a> {
                         }
                     }
                 }
-            };
+                _ => unreachable!(),
+            }
         }
 
         match validity {
@@ -1154,7 +1161,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     has_false: true,
                 });
 
-                type DomainType = NullableType<BooleanType>;
                 for arg in args {
                     let (expr, domain) = self.fold_once(arg);
                     // A temporary hack to make `and_filters` shortcut on false.
@@ -1176,17 +1182,21 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     args_expr.push(expr);
 
                     result_domain = result_domain.zip(domain).map(|(func_domain, domain)| {
-                        let domain = DomainType::try_downcast_domain(&domain).unwrap();
                         let (domain_has_true, domain_has_false) = match &domain {
-                            NullableDomain {
-                                has_null,
-                                value:
-                                    Some(box BooleanDomain {
-                                        has_true,
-                                        has_false,
-                                    }),
-                            } => (*has_true, *has_null || *has_false),
-                            NullableDomain { value: None, .. } => (false, true),
+                            Domain::Boolean(boolean_domain) => {
+                                (boolean_domain.has_true, boolean_domain.has_false)
+                            }
+                            Domain::Nullable(nullable_domain) => match &nullable_domain.value {
+                                Some(inner_domain) => {
+                                    let boolean_domain = inner_domain.as_boolean().unwrap();
+                                    (
+                                        boolean_domain.has_true,
+                                        nullable_domain.has_null || boolean_domain.has_false,
+                                    )
+                                }
+                                None => (false, true),
+                            },
+                            _ => unreachable!(),
                         };
                         BooleanDomain {
                             has_true: func_domain.has_true && domain_has_true,

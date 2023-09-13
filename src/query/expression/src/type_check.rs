@@ -258,7 +258,8 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     expr: &Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let (expr, _) = if expr.data_type() != &DataType::Number(T::data_type()) {
+    let origin_ty = expr.data_type();
+    let (expr, _) = if origin_ty != &DataType::Number(T::data_type()) {
         ConstantFolder::fold(
             &Expr::Cast {
                 span,
@@ -278,17 +279,13 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
             scalar: Scalar::Number(num),
             ..
         } => T::try_downcast_scalar(&num).ok_or_else(|| {
-            ErrorCode::InvalidArgument(format!(
-                "Expect {}, but got {}",
-                T::data_type(),
-                expr.data_type()
-            ))
-            .set_span(span)
+            ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
+                .set_span(span)
         }),
         _ => Err(ErrorCode::InvalidArgument(format!(
             "Expect {}, but got {}",
             T::data_type(),
-            expr.data_type()
+            origin_ty
         ))
         .set_span(span)),
     }
