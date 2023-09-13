@@ -45,3 +45,56 @@ jobs:
         run: pipenv run maturin develop
       - name: Test
         run: make -C tests test-bindings-python
+
+  build:
+    name: build-${{ matrix.os }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - { os: linux, arch: x86_64, target: x86_64-unknown-linux-gnu, runner: ubuntu-20.04 }
+          - { os: linux, arch: aarch64, target: aarch64-unknown-linux-gnu, runner: ubuntu-20.04 }
+          - { os: windows, arch: x86_64, target: x86_64-pc-windows-msvc, runner: windows-2019 }
+          - { os: macos, arch: x86_64, target: x86_64-apple-darwin, runner: macos-11 }
+          - { os: macos, arch: aarch64, target: aarch64-apple-darwin, runner: macos-11 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get opts
+        id: opts
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
+          else
+            echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
+          fi
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: bindings/python
+          target: ${{ matrix.target }}
+          manylinux: auto
+          sccache: 'true'
+          args: ${{ steps.opts.outputs.BUILD_ARGS }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist
+          path: bindings/python/dist/*.whl
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [build, integration]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/databend-driver
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v3
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
