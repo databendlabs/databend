@@ -18,6 +18,7 @@ use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_expression::types::DataType;
 use common_expression::Column;
+use common_expression::ScalarRef;
 use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_formats::CommonSettings;
@@ -26,7 +27,9 @@ use common_io::constants::INF_BYTES_LOWER;
 use common_io::constants::NAN_BYTES_LOWER;
 use common_io::constants::NULL_BYTES_UPPER;
 use common_io::constants::TRUE_BYTES_LOWER;
+use itertools::join;
 use rand::Rng;
+use roaring::RoaringTreemap;
 
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
@@ -83,7 +86,24 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         if j > 0 {
                             buf.extend_from_slice(b",");
                         }
-                        encoder.write_field(column, i, &mut buf, false);
+                        if column.data_type().remove_nullable() == DataType::Bitmap {
+                            match unsafe { column.index_unchecked(i) } {
+                                ScalarRef::Null => {
+                                    buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());
+                                }
+                                ScalarRef::Bitmap(v) => {
+                                    let rb = RoaringTreemap::deserialize_from(v).unwrap();
+                                    let vals = rb.into_iter().collect::<Vec<_>>();
+                                    let s = join(vals.iter(), ",");
+                                    buf.push(b'\'');
+                                    buf.extend_from_slice(s.as_bytes());
+                                    buf.push(b'\'');
+                                }
+                                _ => unreachable!(),
+                            }
+                        } else {
+                            encoder.write_field(column, i, &mut buf, false);
+                        }
                     }
                     buf.extend_from_slice(b")");
                 }

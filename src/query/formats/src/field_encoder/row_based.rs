@@ -23,12 +23,10 @@ use common_expression::types::string::StringColumn;
 use common_expression::types::timestamp::timestamp_to_string;
 use common_expression::types::ValueType;
 use common_expression::Column;
-use itertools::join;
 use lexical_core::ToLexical;
 use micromarshal::Marshal;
 use micromarshal::Unmarshal;
 use ordered_float::OrderedFloat;
-use roaring::RoaringTreemap;
 
 use crate::field_encoder::helpers::PrimitiveWithFormat;
 use crate::CommonSettings;
@@ -65,7 +63,7 @@ pub trait FieldEncoderRowBased {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
             Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
-            Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, raw),
+            Column::Bitmap(b) => self.write_string(b, row_index, out_buf, raw),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
@@ -164,20 +162,6 @@ pub trait FieldEncoderRowBased {
     ) {
         let v = unsafe { column.get_unchecked(row_index) };
         let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
-        self.write_string_inner(s.as_bytes(), out_buf, raw);
-    }
-
-    fn write_bitmap(
-        &self,
-        column: &StringColumn,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
-        let v = unsafe { column.index_unchecked(row_index) };
-        let rb = RoaringTreemap::deserialize_from(v).unwrap();
-        let vals = rb.into_iter().collect::<Vec<_>>();
-        let s = join(vals.iter(), ",");
         self.write_string_inner(s.as_bytes(), out_buf, raw);
     }
 
