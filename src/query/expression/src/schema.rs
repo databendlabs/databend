@@ -33,6 +33,8 @@ use crate::types::decimal::DecimalSize;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
+use crate::BlockMetaInfo;
+use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
 use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -1229,6 +1231,18 @@ impl TableDataType {
 
 pub type DataSchemaRef = Arc<DataSchema>;
 pub type TableSchemaRef = Arc<TableSchema>;
+
+#[typetag::serde(name = "data_schema_meta")]
+impl BlockMetaInfo for DataSchemaRef {
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        DataSchemaRef::downcast_ref_from(info).is_some_and(|other| other == self)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
 
 pub struct DataSchemaRefExt;
 
