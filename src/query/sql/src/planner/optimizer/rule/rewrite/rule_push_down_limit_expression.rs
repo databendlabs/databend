@@ -44,7 +44,7 @@ pub struct RulePushDownLimitExpression {
 impl RulePushDownLimitExpression {
     pub fn new() -> Self {
         Self {
-            id: RuleID::RulePushDownLimitExpression,
+            id: RuleID::PushDownLimitExpression,
             patterns: vec![SExpr::create_unary(
                 Arc::new(
                     PatternPlan {
