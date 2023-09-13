@@ -32,6 +32,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MatchExpr;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
@@ -60,6 +61,7 @@ pub struct MatchedSplitProcessor {
     input_data: Option<DataBlock>,
     output_data_row_id_data: Option<DataBlock>,
     output_data_updated_data: Option<DataBlock>,
+    target_table_schema: DataSchemaRef,
 }
 
 impl MatchedSplitProcessor {
@@ -69,6 +71,7 @@ impl MatchedSplitProcessor {
         matched: MatchExpr,
         field_index_of_input_schema: HashMap<FieldIndex, usize>,
         input_schema: DataSchemaRef,
+        target_table_schema: DataSchemaRef,
     ) -> Result<Self> {
         let mut ops = Vec::<MutationKind>::new();
         for item in matched.iter() {
@@ -118,6 +121,7 @@ impl MatchedSplitProcessor {
             ops,
             row_id_idx,
             update_projections,
+            target_table_schema,
         })
     }
 
@@ -202,6 +206,10 @@ impl Processor for MatchedSplitProcessor {
             if data_block.is_empty() {
                 return Ok(());
             }
+            // insert-only, we need to remove this pipeline according to strategy.
+            if self.ops.is_empty() {
+                return Ok(());
+            }
             let mut current_block = data_block;
             let mut row_id_blocks = Vec::new();
             for op in self.ops.iter() {
@@ -254,6 +262,9 @@ impl Processor for MatchedSplitProcessor {
             }
 
             if !current_block.is_empty() {
+                metrics_inc_merge_into_append_blocks_counter(1);
+                current_block =
+                    current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
                 self.output_data_updated_data = Some(current_block);
             }
         }
