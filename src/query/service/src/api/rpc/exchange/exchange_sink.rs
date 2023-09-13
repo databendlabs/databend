@@ -23,9 +23,8 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
+use crate::api::rpc::exchange::exchange_sink_writer::create_writer_item;
 use crate::api::rpc::exchange::exchange_sink_writer::create_writer_items;
-use crate::api::rpc::exchange::exchange_sink_writer::ExchangeWriterSink;
-use crate::api::rpc::exchange::exchange_sink_writer::IgnoreExchangeSink;
 use crate::api::rpc::exchange::exchange_sorting::ExchangeSorting;
 use crate::api::rpc::exchange::exchange_sorting::TransformExchangeSorting;
 use crate::api::rpc::exchange::exchange_transform_shuffle::exchange_shuffle;
@@ -77,16 +76,13 @@ impl ExchangeSink {
                     )]));
                 }
 
+                pipeline.try_resize(1)?;
                 assert_eq!(flight_senders.len(), 1);
-                let tx = flight_senders.remove(0);
-                pipeline.add_sink(|input| {
-                    Ok(match params.ignore_exchange {
-                        true => ProcessorPtr::create(IgnoreExchangeSink::create(input, tx.clone())),
-                        false => {
-                            ProcessorPtr::create(ExchangeWriterSink::create(input, tx.clone()))
-                        }
-                    })
-                })
+                pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
+                    flight_senders.remove(0),
+                    params.ignore_exchange,
+                )]));
+                Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
                 exchange_shuffle(params, pipeline)?;

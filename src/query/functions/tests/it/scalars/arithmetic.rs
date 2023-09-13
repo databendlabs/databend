@@ -66,6 +66,7 @@ fn test_arithmetic() {
     ];
     test_add(file, columns);
     test_minus(file, columns);
+    test_unary_minus(file, columns);
     test_mul(file, columns);
     test_div(file, columns);
     test_intdiv(file, columns);
@@ -105,13 +106,23 @@ fn test_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "c - 0.5", columns);
     run_ast(file, "c - b", columns);
     run_ast(file, "c - d", columns);
-    run_ast(file, "-c", columns);
-    run_ast(file, "-g", columns);
     run_ast(file, "c - e", columns);
     run_ast(file, "d - e", columns);
     run_ast(file, "d2 - e", columns);
     run_ast(file, "d2 - f", columns);
     run_ast(file, "e - f", columns);
+}
+
+fn test_unary_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
+    run_ast(file, "-a", columns);
+    run_ast(file, "-a2", columns);
+    run_ast(file, "-b", columns);
+    run_ast(file, "-c", columns);
+    run_ast(file, "-d", columns);
+    run_ast(file, "-d2", columns);
+    run_ast(file, "-e", columns);
+    run_ast(file, "-f", columns);
+    run_ast(file, "-g", columns);
 }
 
 fn test_mul(file: &mut impl Write, columns: &[(&str, Column)]) {
