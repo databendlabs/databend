@@ -43,6 +43,7 @@ pub enum RuleID {
     // Rewrite rules
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
+    InferFilter,
     PushDownFilterAggregate,
     PushDownFilterEvalScalar,
     PushDownFilterUnion,
@@ -52,7 +53,7 @@ pub enum RuleID {
     PushDownFilterProjectSet,
     PushDownLimitUnion,
     PushDownLimitOuterJoin,
-    RulePushDownLimitExpression,
+    PushDownLimitExpression,
     PushDownLimitSort,
     PushDownLimitAggregate,
     PushDownLimitScan,
@@ -84,7 +85,7 @@ impl Display for RuleID {
             RuleID::PushDownFilterProjectSet => write!(f, "PushDownFilterProjectSet"),
             RuleID::PushDownLimitUnion => write!(f, "PushDownLimitUnion"),
             RuleID::PushDownLimitOuterJoin => write!(f, "PushDownLimitOuterJoin"),
-            RuleID::RulePushDownLimitExpression => write!(f, "PushDownLimitExpression"),
+            RuleID::PushDownLimitExpression => write!(f, "PushDownLimitExpression"),
             RuleID::PushDownLimitSort => write!(f, "PushDownLimitSort"),
             RuleID::PushDownLimitAggregate => write!(f, "PushDownLimitAggregate"),
             RuleID::PushDownFilterAggregate => write!(f, "PushDownFilterAggregate"),
@@ -97,6 +98,7 @@ impl Display for RuleID {
             RuleID::NormalizeScalarFilter => write!(f, "NormalizeScalarFilter"),
             RuleID::SplitAggregate => write!(f, "SplitAggregate"),
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
+            RuleID::InferFilter => write!(f, "InferFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
 
