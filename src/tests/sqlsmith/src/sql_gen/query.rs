@@ -41,7 +41,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
-        let order_by = self.gen_order_by();
+
+        let order_by = self.gen_order_by(self.group_by.clone());
         Query {
             span: None,
             // TODO
@@ -69,7 +70,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         self.rng.gen_bool(0.5)
     }
 
-    fn gen_order_by(&mut self) -> Vec<OrderByExpr> {
+    fn gen_order_by(&mut self, group_by: Option<GroupBy>) -> Vec<OrderByExpr> {
         let order_nums = self.rng.gen_range(1..5);
         let mut orders = Vec::with_capacity(order_nums);
         if self.flip_coin() {
@@ -90,6 +91,27 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                 };
                 orders.push(order_by_expr);
+            }
+            if let Some(group_by) = group_by {
+                match group_by {
+                    GroupBy::GroupingSets(group_by) => {
+                        orders.extend(group_by[0].iter().map(|expr| OrderByExpr {
+                            expr: expr.clone(),
+                            asc: Some(self.flip_coin()),
+                            nulls_first: Some(self.flip_coin()),
+                        }))
+                    }
+                    GroupBy::Rollup(group_by)
+                    | GroupBy::Cube(group_by)
+                    | GroupBy::Normal(group_by) => {
+                        orders.extend(group_by.iter().map(|expr| OrderByExpr {
+                            expr: expr.clone(),
+                            asc: Some(self.flip_coin()),
+                            nulls_first: Some(self.flip_coin()),
+                        }))
+                    }
+                    _ => {}
+                }
             }
         }
         orders
@@ -127,6 +149,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     fn gen_select(&mut self) -> SelectStmt {
         let from = self.gen_from();
         let group_by = self.gen_group_by();
+        self.group_by = group_by.clone();
         let select_list = self.gen_select_list(&group_by);
         let selection = self.gen_selection();
         SelectStmt {
@@ -180,6 +203,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             Some(GroupBy::Normal(group_by))
             | Some(GroupBy::Cube(group_by))
             | Some(GroupBy::Rollup(group_by)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
                 targets.extend(group_by.iter().map(|expr| SelectTarget::AliasedExpr {
                     expr: Box::new(expr.clone()),
                     alias: None,
@@ -189,12 +218,22 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let select_num = self.rng.gen_range(1..=5);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();
-                    let expr = self.gen_expr(&ty);
+                    let expr = if self.rng.gen_bool(0.8) {
+                        self.gen_agg_func(&ty)
+                    } else {
+                        self.gen_expr(&ty)
+                    };
                     let target = generate_target(expr);
                     targets.push(target);
                 }
             }
             Some(GroupBy::GroupingSets(group_by)) => {
+                let ty = self.gen_data_type();
+                let agg_expr = self.gen_agg_func(&ty);
+                targets.push(SelectTarget::AliasedExpr {
+                    expr: Box::new(agg_expr),
+                    alias: None,
+                });
                 targets.extend(group_by[0].iter().map(|expr| SelectTarget::AliasedExpr {
                     expr: Box::new(expr.clone()),
                     alias: None,
