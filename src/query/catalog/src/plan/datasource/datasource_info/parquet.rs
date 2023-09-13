@@ -70,7 +70,7 @@ pub struct ParquetTableInfo {
     pub schema_from: String,
     pub compression_ratio: f64,
 
-    // These two fields are only used in coordinator node of the cluster,
+    // These fields are only used in coordinator node of the cluster,
     // so we don't need to serialize them.
     #[serde(skip)]
     pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
