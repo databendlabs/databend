@@ -16,7 +16,7 @@ mod builder;
 mod column_stat;
 
 #[cfg(feature = "z3-prove")]
-pub mod constraint;
+mod constraint;
 
 mod enforcer;
 mod histogram;
