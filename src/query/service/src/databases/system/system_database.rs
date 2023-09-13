@@ -50,6 +50,7 @@ use common_storages_system::StagesTable;
 use common_storages_system::TableFunctionsTable;
 use common_storages_system::TablesTableWithHistory;
 use common_storages_system::TablesTableWithoutHistory;
+use common_storages_system::TempFilesTable;
 use common_storages_system::TracingTable;
 use common_storages_system::UsersTable;
 
@@ -113,6 +114,7 @@ impl SystemDatabase {
             BackgroundTaskTable::create(sys_db_meta.next_table_id()),
             BackgroundJobTable::create(sys_db_meta.next_table_id()),
             BacktraceTable::create(sys_db_meta.next_table_id()),
+            TempFilesTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

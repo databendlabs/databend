@@ -299,7 +299,7 @@ impl AggregationContext {
         let data_accessor = self.data_accessor.clone();
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
 
-        metrics_inc_merge_into_replace_blocks_counter(new_block_meta.row_count as u32);
+        metrics_inc_merge_into_replace_blocks_counter(1);
         // generate log
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {

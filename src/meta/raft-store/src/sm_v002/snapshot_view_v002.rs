@@ -24,8 +24,8 @@ use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::meta_api::MetaApiRO;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
@@ -84,7 +84,11 @@ impl SnapshotViewV002 {
     }
 
     /// Compact into one level and remove all tombstone record.
-    pub async fn compact(&mut self) {
+    pub async fn compact_mem_levels(&mut self) {
+        if self.compacted.len() <= 1 {
+            return;
+        }
+
         // TODO: use a explicit method to return a compaction base
         let mut data = self.compacted.newest().unwrap().new_level();
 
@@ -96,9 +100,9 @@ impl SnapshotViewV002 {
                 async move { x }
             });
 
-        let btreemap = strm.collect().await;
+        let bt = strm.collect().await;
 
-        data.replace_kv(btreemap);
+        data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
         let strm = MapApiRO::<ExpireKey>::range(&self.compacted, ..)
@@ -108,9 +112,9 @@ impl SnapshotViewV002 {
                 async move { x }
             });
 
-        let btreemap = strm.collect().await;
+        let bt = strm.collect().await;
 
-        data.replace_expire(btreemap);
+        data.replace_expire(bt);
 
         self.compacted = StaticLeveledMap::new([Arc::new(data)]);
     }
