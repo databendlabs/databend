@@ -37,6 +37,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::ColumnSet;
+use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -332,6 +333,7 @@ impl HashJoinProbeState {
             } else {
                 *partition_id = -1;
             };
+            info!("next partition to read: {:?}", *partition_id);
             // Set spill done
             let mut spill_done = self.hash_join_state.probe_spill_done.lock();
             *spill_done = true;

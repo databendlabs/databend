@@ -14,12 +14,15 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_base::base::GlobalUniqName;
 use common_exception::Result;
 use common_expression::arrow::deserialize_column;
 use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
+use log::info;
 use opendal::Operator;
 
 /// Spiller type, currently only supports HashJoin
@@ -29,6 +32,15 @@ pub enum SpillerType {
     HashJoinProbe, /* Todo: Add more spillers type
                     * OrderBy
                     * Aggregation */
+}
+
+impl Display for SpillerType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SpillerType::HashJoinBuild => write!(f, "HashJoinBuild"),
+            SpillerType::HashJoinProbe => write!(f, "HashJoinProbe"),
+        }
+    }
 }
 
 /// Spiller configuration
@@ -65,7 +77,7 @@ pub struct Spiller {
 }
 
 impl Spiller {
-    /// Create a new spillers
+    /// Create a new spiller
     pub fn create(operator: Operator, config: SpillerConfig, spiller_type: SpillerType) -> Self {
         Self {
             operator,
@@ -82,7 +94,6 @@ impl Spiller {
     /// Spill partition set
     pub async fn spill(&mut self, partitions: &[(u8, DataBlock)]) -> Result<()> {
         for (partition_id, partition) in partitions.iter() {
-            self.spilled_partition_set.insert(*partition_id);
             self.spill_with_partition(partition_id, partition).await?;
         }
         Ok(())
@@ -91,8 +102,16 @@ impl Spiller {
     #[async_backtrace::framed]
     /// Spill data block with location
     pub async fn spill_with_partition(&mut self, p_id: &u8, data: &DataBlock) -> Result<()> {
+        self.spilled_partition_set.insert(*p_id);
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
+        info!(
+            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}",
+            self.spiller_type,
+            data.num_rows(),
+            location,
+            p_id
+        );
         self.partition_location
             .entry(*p_id)
             .and_modify(|locs| {
@@ -149,7 +168,15 @@ impl Spiller {
                 columns.push(deserialize_column(&data[begin..begin + column_layout]).unwrap());
                 begin += column_layout;
             }
-            spilled_data.push(DataBlock::new_from_columns(columns));
+            let block = DataBlock::new_from_columns(columns);
+            info!(
+                "{:?} read {:?} rows data from {:?}, partition id is {:?}",
+                self.spiller_type,
+                block.num_rows(),
+                file,
+                p_id
+            );
+            spilled_data.push(block);
         }
         Ok(spilled_data)
     }
@@ -200,6 +227,11 @@ impl Spiller {
             .iter()
             .map(|idx| (0_u32, *idx as u32, 1_usize))
             .collect::<Vec<_>>();
+        info!(
+            "{:?} unspilled {:?} rows data",
+            self.spiller_type,
+            unspilled_row_index.len()
+        );
         Ok(DataBlock::take_blocks(
             &[data_block.clone()],
             &unspilled_block_row_indexes,

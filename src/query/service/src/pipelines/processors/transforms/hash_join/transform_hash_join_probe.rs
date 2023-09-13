@@ -24,6 +24,7 @@ use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
+use log::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -233,14 +234,16 @@ impl Processor for TransformHashJoinProbe {
                         .spiller
                         .spilled_partition_set;
                     if !spilled_partition_set.is_empty() {
+                        info!("probe spilled partitions: {:?}", spilled_partition_set);
                         let mut spill_partitions = self.join_probe_state.spill_partitions.write();
                         spill_partitions.extend(spilled_partition_set);
                     }
+                    self.join_probe_state.finish_spill();
+
                     if self.first_round && !spilled_partition_set.is_empty() {
                         self.step = HashJoinProbeStep::AsyncRunning;
                         return Ok(Event::Async);
                     }
-                    self.join_probe_state.finish_spill();
                     if spilled_partition_set.is_empty() {
                         self.output_port.finish();
                         return Ok(Event::Finished);
@@ -382,6 +385,7 @@ impl Processor for TransformHashJoinProbe {
                         .probe_spill_done
                         .lock()
                     {
+                        info!("probe is spilling");
                         self.step = HashJoinProbeStep::Spill;
                     } else {
                         self.step = HashJoinProbeStep::AsyncRunning;
@@ -409,14 +413,29 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::AsyncRunning => {
                 let spill_state = self.spill_state.as_ref().unwrap();
-                if self.first_round {
-                    let partitions_diff: HashSet<u8> = spill_state.spiller.spilled_partition_set
-                        .difference(&*self.join_probe_state.hash_join_state.spill_partition.read()).cloned()
+                if self.first_round
+                    && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
+                        != &(0 as usize)
+                {
+                    let probe_spilled_partitions = &spill_state.spiller.spilled_partition_set;
+                    let build_spilled_partitions = self
+                        .join_probe_state
+                        .hash_join_state
+                        .spill_partition
+                        .read()
+                        .clone();
+                    let partitions_diff: HashSet<u8> = probe_spilled_partitions
+                        .difference(&build_spilled_partitions)
+                        .cloned()
                         .collect();
                     let spilled_data = spill_state
                         .spiller
                         .read_spilled_data_from_partitions(&partitions_diff)
                         .await?;
+                    info!(
+                        "The first round, probe spilled partitions: {:?}, build spilled partitions: {:?}, diff: {:?}",
+                        probe_spilled_partitions, build_spilled_partitions, partitions_diff
+                    );
                     self.input_data.extend(spilled_data);
                     self.first_round = false;
                     return Ok(());
