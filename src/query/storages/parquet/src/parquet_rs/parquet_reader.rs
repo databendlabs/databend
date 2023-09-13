@@ -29,6 +29,7 @@ use common_exception::Result;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -87,10 +88,12 @@ impl ParquetRSReader {
         self.op.clone()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         op: Operator,
         table_schema: TableSchemaRef,
+        leaf_fields: Arc<Vec<TableField>>,
         arrow_schema: &arrow_schema::Schema,
         plan: &DataSourcePlan,
         options: ParquetReadOptions,
@@ -101,6 +104,7 @@ impl ParquetRSReader {
             ctx,
             op,
             table_schema,
+            leaf_fields,
             &schema_desc,
             plan,
             options,
@@ -108,10 +112,12 @@ impl ParquetRSReader {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_with_parquet_schema(
         ctx: Arc<dyn TableContext>,
         op: Operator,
         table_schema: TableSchemaRef,
+        leaf_fields: Arc<Vec<TableField>>,
         schema_desc: &SchemaDescriptor,
         plan: &DataSourcePlan,
         options: ParquetReadOptions,
@@ -157,6 +163,7 @@ impl ParquetRSReader {
             Some(ParquetRSPruner::try_create(
                 ctx.get_function_context()?,
                 table_schema,
+                leaf_fields,
                 &plan.push_downs,
                 options,
             )?)

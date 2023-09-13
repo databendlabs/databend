@@ -49,6 +49,7 @@ impl ParquetRSTable {
             ctx.clone(),
             self.operator.clone(),
             table_schema,
+            self.leaf_fields.clone(),
             &self.schema_descr,
             plan,
             self.read_options,

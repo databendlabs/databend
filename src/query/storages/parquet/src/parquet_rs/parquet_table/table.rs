@@ -33,6 +33,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
@@ -63,6 +64,10 @@ pub struct ParquetRSTable {
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
     pub(super) schema_from: String,
     pub(super) compression_ratio: f64,
+    /// Leaf fields of the schema.
+    /// It's should be parallel with the parquet schema descriptor.
+    /// Computing leaf fields could be expensive, so we store it here.
+    pub(super) leaf_fields: Arc<Vec<TableField>>,
 
     /// Lazy read parquet file metas.
     ///
@@ -95,6 +100,7 @@ impl ParquetRSTable {
             files_to_read: info.files_to_read.clone(),
             schema_descr: info.schema_descr.clone(),
             schema_from: info.schema_from.clone(),
+            leaf_fields: info.leaf_fields.clone(),
             compression_ratio: info.compression_ratio,
             parquet_metas: info.parquet_metas.clone(),
             need_stats_provider: info.need_stats_provider,
@@ -121,6 +127,7 @@ impl ParquetRSTable {
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
         let table_info = create_parquet_table_info(&arrow_schema)?;
+        let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
@@ -135,6 +142,7 @@ impl ParquetRSTable {
             operator,
             read_options,
             schema_descr,
+            leaf_fields,
             stage_info,
             files_info,
             files_to_read,
@@ -197,6 +205,7 @@ impl Table for ParquetRSTable {
             read_options: self.read_options,
             stage_info: self.stage_info.clone(),
             schema_descr: self.schema_descr.clone(),
+            leaf_fields: self.leaf_fields.clone(),
             files_info: self.files_info.clone(),
             files_to_read: self.files_to_read.clone(),
             schema_from: self.schema_from.clone(),
@@ -257,14 +266,13 @@ impl Table for ParquetRSTable {
                 .collect::<Vec<_>>(),
         };
 
-        let leaf_fields = self.schema().leaf_fields();
-        let num_columns = leaf_fields.len();
+        let num_columns = self.leaf_fields.len();
 
         let metas = read_metas_in_parallel(
             &self.operator,
             &file_locations, // The first file is already read.
             (self.schema_descr.clone(), self.schema_from.clone()),
-            leaf_fields,
+            self.leaf_fields.clone(),
             self.max_threads,
             self.max_memory_usage,
         )

@@ -32,7 +32,7 @@ pub async fn read_metas_in_parallel(
     op: &Operator,
     file_infos: &[(String, u64)],
     expected: (SchemaDescPtr, String),
-    leaf_fields: Vec<TableField>,
+    leaf_fields: Arc<Vec<TableField>>,
     num_threads: usize,
     max_memory_usage: u64,
 ) -> Result<Vec<Arc<FullParquetMeta>>> {
@@ -40,7 +40,6 @@ pub async fn read_metas_in_parallel(
         return Ok(vec![]);
     }
     let num_files = file_infos.len();
-    let leaf_fields = Arc::new(leaf_fields);
 
     let mut tasks = Vec::with_capacity(num_threads);
     // Equally distribute the tasks

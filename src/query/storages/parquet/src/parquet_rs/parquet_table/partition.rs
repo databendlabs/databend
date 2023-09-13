@@ -96,6 +96,7 @@ impl ParquetRSTable {
         let pruner = Arc::new(ParquetRSPruner::try_create(
             ctx.get_function_context()?,
             self.schema(),
+            self.leaf_fields.clone(),
             &push_down,
             self.read_options,
         )?);
@@ -192,7 +193,6 @@ impl ParquetRSTable {
         let num_files = file_infos.len();
         let num_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
-        let leaf_fields = Arc::new(self.schema().leaf_fields());
 
         let mut tasks = Vec::with_capacity(num_threads);
 
@@ -210,7 +210,7 @@ impl ParquetRSTable {
             let expect = self.schema_descr.clone();
             let schema_from = self.schema_from.clone();
             let copy_status = copy_status.clone();
-            let leaf_fields = leaf_fields.clone();
+            let leaf_fields = self.leaf_fields.clone();
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use arrow_schema::Schema as ArrowSchema;
 use common_base::base::tokio::sync::Mutex;
 use common_expression::ColumnId;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
@@ -72,6 +73,8 @@ pub struct ParquetTableInfo {
 
     // These fields are only used in coordinator node of the cluster,
     // so we don't need to serialize them.
+    #[serde(skip)]
+    pub leaf_fields: Arc<Vec<TableField>>,
     #[serde(skip)]
     pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     #[serde(skip)]
@@ -203,6 +206,7 @@ mod tests {
                 pattern: None,
             },
             table_info: Default::default(),
+            leaf_fields: Arc::new(vec![]),
             arrow_schema: ArrowSchema {
                 fields: Default::default(),
                 metadata: Default::default(),
