@@ -12,8 +12,6 @@ REPLACE INTO can either insert multiple new rows into a table or update existing
 - Query results
 - Staged files
 
-REPLACE INTO updates existing rows when a specified [conflict key](#what-is-conflict-key) is found in the table and inserts new rows if the conflict key is not present.
-
 :::tip atomic operations
 Databend ensures data integrity with atomic operations. Inserts, updates, replaces, and deletes either succeed completely or fail entirely.
 :::
@@ -25,15 +23,23 @@ REPLACE INTO <table_name> [ ( <col_name> [ , ... ] ) ]
     ON (<CONFLICT KEY>) ...
 ```
 
-### What is Conflict Key?
-
-The conflict key is a column or combination of columns in a table that uniquely identifies a row and is used to determine whether to insert a new row or update an existing row in the table using the REPLACE INTO statement.
-
-For example, in a table called "employees" with a unique constraint on the "employee_email" column, you can use the "employee_email" column as the conflict key in the REPLACE INTO statement:
+REPLACE INTO updates existing rows when the specified conflict key is found in the table and inserts new rows if the conflict key is not present. The conflict key is a column or combination of columns in a table that uniquely identifies a row and is used to determine whether to insert a new row or update an existing row in the table using the REPLACE INTO statement. See an example below:
 
 ```sql
+CREATE TABLE employees (
+    employee_id INT,
+    employee_name VARCHAR(100),
+    employee_salary DECIMAL(10, 2),
+    employee_email VARCHAR(255)
+);
+
+-- This REPLACE INTO inserts a new row
 REPLACE INTO employees (employee_id, employee_name, employee_salary, employee_email) ON (employee_email)
 VALUES (123, 'John Doe', 50000, 'john.doe@example.com');
+
+-- This REPLACE INTO updates the inserted row
+REPLACE INTO employees (employee_id, employee_name, employee_salary, employee_email) ON (employee_email)
+VALUES (123, 'John Doe', 60000, 'john.doe@example.com');
 ```
 
 ## Examples
