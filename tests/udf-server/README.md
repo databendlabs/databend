@@ -86,7 +86,20 @@ Then we can Start the UDF Server by running:
 python3 udf_server.py
 ```
 
-#### 3. Add the functions to Databend
+#### 3. Update Databend query node config
+Now, udf server is disabled by default in databend. You can enable it by setting 'enable_udf_server = true' in query node config.
+
+In addition, for security reasons, only the address specified in the config can be accessed by databend. The list of allowed udf server addresses are specified through the `udf_server_allowlist` variable in the query node config. 
+
+Here is an example config:
+```
+[query]
+...
+enable_udf_server = true
+udf_server_allow_list = [ "http://0.0.0.0:8815", "http://example.com" ]
+```
+
+#### 4. Add the functions to Databend
 We can use the `CREATE FUNCTION` command to add the functions you defined to Databend:
 ```
 CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>
@@ -98,9 +111,11 @@ For example:
 CREATE FUNCTION split_and_join (VARCHAR, VARCHAR, VARCHAR) RETURNS VARCHAR LANGUAGE python HANDLER = 'split_and_join' ADDRESS = 'http://0.0.0.0:8815';
 ```
 
-> In the above step, when you starting the UDF server, the corresponding sql statement of each function will be printed out. You can use them directly.
+NOTE: The udf_server_address you specify must appear in `udf_server_allow_list` explained in the previous step.
 
-#### 4. Use the functions in Databend
+> In step 2, when you starting the UDF server, the corresponding sql statement of each function will be printed out. You can use them directly.
+
+#### 5. Use the functions in Databend
 ```
 mysql> select split_and_join('3,5,7', ',', ':');
 +-----------------------------------+
