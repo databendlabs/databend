@@ -142,8 +142,9 @@ impl ParquetRSTable {
             )
             .await?
         } else {
-            self.prune_metas_in_parallel(
+            prune_metas_in_parallel(
                 ctx,
+                &parquet_metas,
                 large_file_indices,
                 pruner,
                 columns_to_read,
@@ -247,69 +248,74 @@ impl ParquetRSTable {
 
         Ok(result)
     }
+}
 
-    /// Call this method only if already collected parquet metas and stats.
-    #[async_backtrace::framed]
-    async fn prune_metas_in_parallel(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        files: Vec<usize>,
-        pruner: Arc<ParquetRSPruner>,
-        columns_to_read: Vec<usize>,
-        copy_status: Option<Arc<CopyStatus>>,
-    ) -> Result<(PartStatistics, Partitions)> {
-        let parquet_metas = self.parquet_metas.lock().await;
-
-        assert!(!parquet_metas.is_empty());
-        let settings = ctx.get_settings();
-        let num_files = files.len();
-        let num_threads = settings.get_max_threads()? as usize;
-
-        let mut tasks = Vec::with_capacity(num_threads);
-
-        // Equally distribute the tasks
-        for i in 0..num_threads {
-            let begin = num_files * i / num_threads;
-            let end = num_files * (i + 1) / num_threads;
-            if begin == end {
-                continue;
-            }
-            let files = &files[begin..end];
-            let metas = files
-                .iter()
-                .map(|i| parquet_metas[*i].clone())
-                .collect::<Vec<_>>();
-            let pruner = pruner.clone();
-            let columns_to_read = columns_to_read.clone();
-            let copy_status = copy_status.clone();
-
-            tasks.push(async move {
-                prune_and_generate_partitions(&pruner, metas, columns_to_read, copy_status)
-            });
-        }
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            num_threads,
-            num_threads * 2,
-            "prune-parquet-metas-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .reduce(|(mut stats_acc, mut parts_acc), (stats, parts)| {
-            stats_acc.merge(&stats);
-            parts_acc.partitions.extend(parts.partitions);
-            (stats_acc, parts_acc)
-        })
-        .unwrap_or((
+/// Call this method only if already collected parquet metas and stats.
+#[async_backtrace::framed]
+async fn prune_metas_in_parallel(
+    ctx: Arc<dyn TableContext>,
+    parquet_metas: &[Arc<FullParquetMeta>],
+    files: Vec<usize>,
+    pruner: Arc<ParquetRSPruner>,
+    columns_to_read: Vec<usize>,
+    copy_status: Option<Arc<CopyStatus>>,
+) -> Result<(PartStatistics, Partitions)> {
+    if files.is_empty() {
+        return Ok((
             PartStatistics::default_exact(),
             Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
         ));
-
-        Ok(result)
     }
+
+    assert!(!parquet_metas.is_empty());
+    let settings = ctx.get_settings();
+    let num_files = files.len();
+    let num_threads = settings.get_max_threads()? as usize;
+
+    let mut tasks = Vec::with_capacity(num_threads);
+
+    // Equally distribute the tasks
+    for i in 0..num_threads {
+        let begin = num_files * i / num_threads;
+        let end = num_files * (i + 1) / num_threads;
+        if begin == end {
+            continue;
+        }
+        let files = &files[begin..end];
+        let metas = files
+            .iter()
+            .map(|i| parquet_metas[*i].clone())
+            .collect::<Vec<_>>();
+        let pruner = pruner.clone();
+        let columns_to_read = columns_to_read.clone();
+        let copy_status = copy_status.clone();
+
+        tasks.push(async move {
+            prune_and_generate_partitions(&pruner, metas, columns_to_read, copy_status)
+        });
+    }
+
+    let result = execute_futures_in_parallel(
+        tasks,
+        num_threads,
+        num_threads * 2,
+        "prune-parquet-metas-worker".to_owned(),
+    )
+    .await?
+    .into_iter()
+    .collect::<Result<Vec<_>>>()?
+    .into_iter()
+    .reduce(|(mut stats_acc, mut parts_acc), (stats, parts)| {
+        stats_acc.merge(&stats);
+        parts_acc.partitions.extend(parts.partitions);
+        (stats_acc, parts_acc)
+    })
+    .unwrap_or((
+        PartStatistics::default_exact(),
+        Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
+    ));
+
+    Ok(result)
 }
 
 fn prune_and_generate_partitions(

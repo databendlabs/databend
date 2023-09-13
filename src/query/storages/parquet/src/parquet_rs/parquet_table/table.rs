@@ -70,6 +70,11 @@ pub struct ParquetRSTable {
     /// This instance is only be stored on one query node (the coordinator node in cluster mode),
     /// because it's only used to `column_statistics_provider` and `read_partitions`
     /// and these methods are all called during planning.
+    ///
+    /// The reason why wrap the metas in [`Mutex`] is that [`ParquetRSTable`] should impl [`Sync`] and [`Send`],
+    /// and this field should have inner mutability (it will be initialized lazily in `column_statistics_provider`).
+    ///
+    /// As `paruqet_metas` will not be accessed by two threads simultaneously, use [`Mutex`] will not bring to much performance overhead.
     pub(super) parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     pub(super) need_stats_provider: bool,
     pub(super) max_threads: usize,
