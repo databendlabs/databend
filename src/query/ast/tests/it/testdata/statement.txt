@@ -9132,11 +9132,10 @@ COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',
 Copy(
     CopyStmt {
         hints: None,
-        src: StageLocation(
-            StageLocation {
-                name: "~",
-                path: "/mybucket/data.csv",
-            },
+        src: Location(
+            Stage(
+                "~/mybucket/data.csv",
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9190,17 +9189,19 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter 
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9254,17 +9255,19 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter 
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9320,19 +9323,21 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "endpoint_url": "http://127.0.0.1:9900",
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {
+                            "endpoint_url": "http://127.0.0.1:9900",
+                        },
                     },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9388,19 +9393,21 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "endpoint_url": "http://127.0.0.1:9900",
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {
+                            "endpoint_url": "http://127.0.0.1:9900",
+                        },
                     },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9445,17 +9452,19 @@ COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FO
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "https",
-                name: "127.0.0.1:9900",
-                path: "/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "https",
+                    name: "127.0.0.1:9900",
+                    path: "/",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9495,17 +9504,19 @@ COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE =
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "https",
-                name: "127.0.0.1",
-                path: "/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "https",
+                    name: "127.0.0.1",
+                    path: "/",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9547,17 +9558,16 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO mytable FROM @my_stage FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
         hints: None,
-        src: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/",
-            },
+        src: Location(
+            Stage(
+                "my_stage",
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9622,17 +9632,19 @@ Copy(
             },
             columns: None,
         },
-        dst: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        dst: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         files: None,
         pattern: None,
@@ -9667,7 +9679,7 @@ COPY INTO @my_stage
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO @my_stage FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
@@ -9685,11 +9697,10 @@ Copy(
             },
             columns: None,
         },
-        dst: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/",
-            },
+        dst: Location(
+            Stage(
+                "my_stage",
+            ),
         ),
         files: None,
         pattern: None,
@@ -9734,20 +9745,22 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='acces
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "s3",
-                name: "mybucket",
-                path: "/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "access_key",
-                        "aws_secret_key": "secret_key",
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "mybucket",
+                    path: "/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {
+                            "aws_key_id": "access_key",
+                            "aws_secret_key": "secret_key",
+                        },
                     },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9800,11 +9813,10 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 Copy(
     CopyStmt {
         hints: None,
-        src: StageLocation(
-            StageLocation {
-                name: "external_stage",
-                path: "/path/to/file.csv",
-            },
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.csv",
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9857,11 +9869,10 @@ COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimi
 Copy(
     CopyStmt {
         hints: None,
-        src: StageLocation(
-            StageLocation {
-                name: "external_stage",
-                path: "/path/to/dir/",
-            },
+        src: Location(
+            Stage(
+                "external_stage/path/to/dir/",
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9914,11 +9925,10 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 Copy(
     CopyStmt {
         hints: None,
-        src: StageLocation(
-            StageLocation {
-                name: "external_stage",
-                path: "/path/to/file.csv",
-            },
+        src: Location(
+            Stage(
+                "external_stage/path/to/file.csv",
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -9972,17 +9982,19 @@ COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter 
 Copy(
     CopyStmt {
         hints: None,
-        src: UriLocation(
-            UriLocation {
-                protocol: "fs",
-                name: "",
-                path: "/path/to/data.csv",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {},
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "fs",
+                    name: "",
+                    path: "/path/to/data.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {},
+                    },
                 },
-            },
+            ),
         ),
         dst: Table {
             catalog: None,
@@ -10063,16 +10075,13 @@ ShowSettings {
 ---------- Input ----------
 PRESIGN @my_stage
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/ EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/",
-            },
+            "my_stage",
         ),
         expire: 3600s,
         content_type: None,
@@ -10083,16 +10092,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/dir/
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/path/to/dir/ EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/path/to/dir/ EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/dir/",
-            },
+            "my_stage/path/to/dir/",
         ),
         expire: 3600s,
         content_type: None,
@@ -10103,16 +10109,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/file",
-            },
+            "my_stage/path/to/file",
         ),
         expire: 3600s,
         content_type: None,
@@ -10123,16 +10126,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/my\ file.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/my file.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/my file.csv",
-            },
+            "my_stage/my file.csv",
         ),
         expire: 3600s,
         content_type: None,
@@ -10143,16 +10143,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\"file\".csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/"file".csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/\"file\".csv",
-            },
+            "my_stage/\"file\".csv",
         ),
         expire: 3600s,
         content_type: None,
@@ -10163,16 +10160,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\'file\'.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/'file'.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/'file'.csv",
-            },
+            "my_stage/'file'.csv",
         ),
         expire: 3600s,
         content_type: None,
@@ -10183,16 +10177,13 @@ Presign(
 ---------- Input ----------
 PRESIGN @my_stage/\\file\\.csv
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/\file\.csv EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/\\file\\.csv",
-            },
+            "my_stage/\\file\\.csv",
         ),
         expire: 3600s,
         content_type: None,
@@ -10203,16 +10194,13 @@ Presign(
 ---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
-PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
+PRESIGN DOWNLOAD my_stage/path/to/file EXPIRE = 3600
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Download,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/file",
-            },
+            "my_stage/path/to/file",
         ),
         expire: 3600s,
         content_type: None,
@@ -10223,16 +10211,13 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200
 ---------- Output ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200
+PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Upload,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/file",
-            },
+            "my_stage/path/to/file",
         ),
         expire: 7200s,
         content_type: None,
@@ -10243,16 +10228,13 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'
 ---------- Output ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Upload,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/file",
-            },
+            "my_stage/path/to/file",
         ),
         expire: 7200s,
         content_type: Some(
@@ -10265,16 +10247,13 @@ Presign(
 ---------- Input ----------
 PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200
 ---------- Output ---------
-PRESIGN UPLOAD @my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
+PRESIGN UPLOAD my_stage/path/to/file EXPIRE = 7200 CONTENT_TYPE = 'application/octet-stream'
 ---------- AST ------------
 Presign(
     PresignStmt {
         action: Upload,
         location: StageLocation(
-            StageLocation {
-                name: "my_stage",
-                path: "/path/to/file",
-            },
+            "my_stage/path/to/file",
         ),
         expire: 7200s,
         content_type: Some(
@@ -10982,15 +10961,12 @@ Query(
                     },
                 ],
                 from: [
-                    Stage {
+                    Location {
                         span: Some(
                             17..100,
                         ),
                         location: Stage(
-                            StageLocation {
-                                name: "stage1",
-                                path: "/dir/file",
-                            },
+                            "stage1/dir/file",
                         ),
                         options: SelectStageOptions {
                             files: Some(
@@ -11117,15 +11093,12 @@ Query(
                         join: Join {
                             op: LeftOuter,
                             condition: None,
-                            left: Stage {
+                            left: Location {
                                 span: Some(
                                     45..125,
                                 ),
                                 location: Stage(
-                                    StageLocation {
-                                        name: "stage1",
-                                        path: "/dir/file",
-                                    },
+                                    "stage1/dir/file",
                                 ),
                                 options: SelectStageOptions {
                                     files: Some(
@@ -11228,12 +11201,21 @@ Query(
                     },
                 ],
                 from: [
-                    Stage {
+                    Location {
                         span: Some(
                             15..83,
                         ),
                         location: Uri(
-                            "s3://test/bucket",
+                            UriLocation {
+                                protocol: "s3",
+                                name: "test",
+                                path: "/bucket",
+                                part_prefix: "",
+                                connection: Connection {
+                                    visited_keys: {},
+                                    conns: {},
+                                },
+                            },
                         ),
                         options: SelectStageOptions {
                             files: None,
