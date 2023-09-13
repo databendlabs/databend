@@ -45,7 +45,7 @@ Stay connected with the latest news about Databend.
 
 ### Using BendSQL to Manage Files in Stage
 
-Databend recommends two file upload methods for stages: `PRESIGN` and `PUT/GET` commands. These methods enable direct data transfer between the client and your storage, eliminating intermediaries and resulting in cost savings by reducing traffic between Databend and your storage.
+Databend recommends uploading files to a stage with`PRESIGN` or `PUT / GET` command. These methods enable direct file transfer between the client and your storage, eliminating intermediaries and resulting in cost savings by reducing traffic between Databend and your storage.
 
 ![](https://databend.rs/assets/images/staging-file-ff259b7f65e99faec0ca69fcdf732512.png)
 
@@ -83,9 +83,9 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Using Databend Python Binding in Jupyter Notebook
 
-Databend provides Python Binding, allowing you to access Databend without deploying a instance. Its DataFrames can also be easily converted to Polars and Pandas formats, making it convenient for integration with data science tools.
+Databend provides Python Binding, allowing you to access Databend's features without deploying a Databend instance. Its DataFrames can also be easily converted to the Polars and Pandas formats, facilitating integrations with common data science tools.
 
-Just execute the following command to install:
+To use the Databend Python Binding, simply run the following command to install the library:
 
 ```bash
 pip install databend
@@ -94,13 +94,13 @@ pip install databend
 The code below demonstrates how to use Databend Python Binding in Jupyter Notebook and plot a bar chart using `matplotlib`.
 
 ```python
-# Create a table in DataBend
+# Create a table in Databend
 ctx.sql("CREATE TABLE IF NOT EXISTS user (created_at Date, count Int32)")
 
-# Create a table in DataBend
+# Create a table in Databend
 ctx.sql("CREATE TABLE IF NOT EXISTS user (created_at Date, count Int32)")
 
-# Insert multiple rows of data into the table
+# Insert multiple rows into the table
 ctx.sql("INSERT INTO user VALUES ('2022-04-01', 5), ('2022-04-01', 3), ('2022-04-03', 4), ('2022-04-03', 1), ('2022-04-04', 10)")
 
 # Execute a query
@@ -133,15 +133,15 @@ We have also made these improvements to Databend that we hope you will find help
 - Added initial support for ownership model.
 - Added support for Hash Join spill.
 - Columns in Databend are now nullable by default. Please refer to the documentation [Docs | NULL Values and NOT NULL Constraint](https://databend.rs/doc/sql-reference/data-types/#null-values-and-not-null-constraint) for more details.
-- Read the document [Docs | databend-local](https://databend.rs/doc/sql-clients/databend-local) to master Databend Local mode.
+- Read the document [Docs | databend-local](https://databend.rs/doc/sql-clients/databend-local) to learn the Databend Local mode.
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Creating UDFs with JavaScript
+### Creating UDFs in JavaScript
 
-[PR #12729 | feat: implement udf server in databend](https://github.com/datafuselabs/databend/pull/12729) is expected to be merged this week. This means that Databend will soon support creating user-defined functions with Python.
+[PR #12729 | feat: implement udf server in databend](https://github.com/datafuselabs/databend/pull/12729) is expected to be merged this week. This means that Databend will soon support creating user-defined functions in Python.
 
 ```SQL
 CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>
