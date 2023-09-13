@@ -135,9 +135,7 @@ impl MatchedAggregator {
                     if !self
                         .block_mutation_row_offset
                         .entry(prefix)
-                        .or_insert_with(|| {
-                            (vec![offset as usize].into_iter().collect(), HashSet::new())
-                        })
+                        .or_insert_with(|| (HashSet::new(), HashSet::new()))
                         .0
                         .insert(offset as usize)
                     {
@@ -153,9 +151,7 @@ impl MatchedAggregator {
                     // support idempotent delete
                     self.block_mutation_row_offset
                         .entry(prefix)
-                        .or_insert_with(|| {
-                            (HashSet::new(), vec![offset as usize].into_iter().collect())
-                        })
+                        .or_insert_with(|| (HashSet::new(), HashSet::new()))
                         .1
                         .insert(offset as usize);
                 }
