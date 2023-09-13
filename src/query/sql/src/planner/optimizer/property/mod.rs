@@ -28,10 +28,6 @@ pub use builder::RelExpr;
 pub use column_stat::ColumnStat;
 pub use column_stat::ColumnStatSet;
 pub use column_stat::NewStatistic;
-pub use constraint::check_float_range;
-pub use constraint::check_int_range;
-pub use constraint::check_uint_range;
-pub use constraint::remove_trivial_type_cast;
 #[cfg(feature = "z3-prove")]
 pub use constraint::ConstraintSet;
 pub use enforcer::require_property;

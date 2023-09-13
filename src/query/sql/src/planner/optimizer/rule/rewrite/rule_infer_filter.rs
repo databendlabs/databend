@@ -22,10 +22,10 @@ use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 use ordered_float::OrderedFloat;
 
-use crate::optimizer::check_float_range;
-use crate::optimizer::check_int_range;
-use crate::optimizer::check_uint_range;
-use crate::optimizer::remove_trivial_type_cast;
+use crate::optimizer::constraint::check_float_range;
+use crate::optimizer::constraint::check_int_range;
+use crate::optimizer::constraint::check_uint_range;
+use crate::optimizer::constraint::remove_trivial_type_cast;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
