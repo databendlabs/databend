@@ -13,7 +13,7 @@ In Databend, strings can be stored in the `VARCHAR` field, the storage size is v
 
 ## Functions
 
-See [String Functions](/doc/reference/functions/string-functions).
+See [String Functions](/doc/sql-functions/string-functions).
 
 
 ## Example

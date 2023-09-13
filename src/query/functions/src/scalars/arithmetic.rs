@@ -680,11 +680,11 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
-        if !args_type[0].is_decimal() {
+
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
             return None;
         }
-
-        let arg_type = args_type[0].clone();
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
@@ -874,7 +874,7 @@ fn register_decimal_to_string(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let arg_type = args_type[0].clone();
+        let arg_type = args_type[0].remove_nullable();
         if !arg_type.is_decimal() {
             return None;
         }

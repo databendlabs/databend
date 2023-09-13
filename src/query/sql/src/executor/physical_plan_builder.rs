@@ -1900,7 +1900,7 @@ impl PhysicalPlanBuilder {
 
                     let expr = predicates
                         .into_iter()
-                        .reduce(|lhs, rhs| {
+                        .try_reduce(|lhs, rhs| {
                             check_function(
                                 None,
                                 "and_filters",
@@ -1908,8 +1908,7 @@ impl PhysicalPlanBuilder {
                                 &[lhs, rhs],
                                 &BUILTIN_FUNCTIONS,
                             )
-                            .unwrap()
-                        })
+                        })?
                         .unwrap();
 
                     let expr = cast_expr_to_non_null_boolean(expr)?;

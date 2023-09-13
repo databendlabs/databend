@@ -1394,13 +1394,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let offset = if args.len() >= 2 {
-            let off = ScalarExpr::CastExpr(CastExpr {
-                span: args[1].span(),
-                is_try: false,
-                argument: Box::new(args[1].clone()),
-                target_type: Box::new(DataType::Number(NumberDataType::Int64)),
-            })
-            .as_expr()?;
+            let off = args[1].as_expr()?;
             Some(check_number::<_, i64>(
                 off.span(),
                 &self.func_ctx,
@@ -1489,13 +1483,7 @@ impl<'a> TypeChecker<'a> {
                     ));
                 }
                 let return_type = arg_types[0].wrap_nullable();
-                let n_expr = ScalarExpr::CastExpr(CastExpr {
-                    span: args[1].span(),
-                    is_try: false,
-                    argument: Box::new(args[1].clone()),
-                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                })
-                .as_expr()?;
+                let n_expr = args[1].as_expr()?;
                 let n = check_number::<_, u64>(
                     n_expr.span(),
                     &self.func_ctx,
@@ -1527,14 +1515,8 @@ impl<'a> TypeChecker<'a> {
                 "Argument number is invalid".to_string(),
             ));
         }
-        let n_expr = ScalarExpr::CastExpr(CastExpr {
-            span: args[0].span(),
-            is_try: false,
-            argument: Box::new(args[0].clone()),
-            target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-        })
-        .as_expr()?;
-        let return_type = n_expr.data_type().wrap_nullable();
+        let n_expr = args[0].as_expr()?;
+        let return_type = DataType::Number(NumberDataType::UInt64);
         let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
         if n == 0 {
             return Err(ErrorCode::InvalidArgument(

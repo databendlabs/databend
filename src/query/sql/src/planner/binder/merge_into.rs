@@ -346,12 +346,6 @@ impl Binder {
             table_schema.clone()
         };
 
-        if source_schema != table_schema {
-            return Err(ErrorCode::BadArguments(
-                "for now, we need to make sure the input schema same with table schema",
-            ));
-        }
-
         for (idx, expr) in clause.insert_operation.values.iter().enumerate() {
             let (mut scalar_expr, _) = scalar_binder.bind(expr).await?;
             // type cast
