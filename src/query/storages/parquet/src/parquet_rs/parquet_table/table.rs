@@ -27,6 +27,7 @@ use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -70,7 +71,7 @@ pub struct ParquetRSTable {
     /// because it's only used to `column_statistics_provider` and `read_partitions`
     /// and these methods are all called during planning.
     pub(super) parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
-
+    pub(super) need_stats_provider: bool,
     pub(super) max_threads: usize,
     pub(super) max_memory_usage: u64,
 }
@@ -91,6 +92,7 @@ impl ParquetRSTable {
             schema_from: info.schema_from.clone(),
             compression_ratio: info.compression_ratio,
             parquet_metas: info.parquet_metas.clone(),
+            need_stats_provider: info.need_stats_provider,
             max_threads: info.max_threads,
             max_memory_usage: info.max_memory_usage,
         }))
@@ -115,6 +117,9 @@ impl ParquetRSTable {
 
         let table_info = create_parquet_table_info(&arrow_schema)?;
 
+        // If the query is `COPY`, we don't need to collect column statistics.
+        // It's because the only transform could be contained in `COPY` command is projection.
+        let need_stats_provider = !ctx.get_query_kind().eq_ignore_ascii_case("copy");
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
@@ -131,6 +136,7 @@ impl ParquetRSTable {
             compression_ratio,
             schema_from: first_file,
             parquet_metas: Arc::new(Mutex::new(vec![])),
+            need_stats_provider,
             max_threads,
             max_memory_usage,
         }))
@@ -191,6 +197,7 @@ impl Table for ParquetRSTable {
             schema_from: self.schema_from.clone(),
             compression_ratio: self.compression_ratio,
             parquet_metas: self.parquet_metas.clone(),
+            need_stats_provider: self.need_stats_provider,
             max_threads: self.max_threads,
             max_memory_usage: self.max_memory_usage,
         })
@@ -222,6 +229,10 @@ impl Table for ParquetRSTable {
     }
 
     async fn column_statistics_provider(&self) -> Result<Box<dyn ColumnStatisticsProvider>> {
+        if !self.need_stats_provider {
+            return Ok(Box::new(DummyColumnStatisticsProvider));
+        }
+
         // This method can only be called once.
         let mut parquet_metas = self.parquet_metas.lock().await;
         assert!(parquet_metas.is_empty());

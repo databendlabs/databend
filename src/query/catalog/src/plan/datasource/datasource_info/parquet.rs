@@ -75,6 +75,8 @@ pub struct ParquetTableInfo {
     #[serde(skip)]
     pub parquet_metas: Arc<Mutex<Vec<Arc<FullParquetMeta>>>>,
     #[serde(skip)]
+    pub need_stats_provider: bool,
+    #[serde(skip)]
     pub max_threads: usize,
     #[serde(skip)]
     pub max_memory_usage: u64,
@@ -209,6 +211,7 @@ mod tests {
             schema_from: "".to_string(),
             compression_ratio: 0.0,
             parquet_metas: Arc::new(Mutex::new(vec![])),
+            need_stats_provider: false,
             max_threads: 1,
             max_memory_usage: 10000,
         };
