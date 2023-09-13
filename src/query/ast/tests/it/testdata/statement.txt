@@ -9117,6 +9117,50 @@ Revoke(
 
 ---------- Input ----------
 COPY INTO mytable
+                FROM '@~/mybucket/my data.csv'
+                size_limit=10;
+---------- Output ---------
+COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+Copy(
+    CopyStmt {
+        hints: None,
+        src: Location(
+            Stage(
+                "~/mybucket/my data.csv",
+            ),
+        ),
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Some(
+                    10..17,
+                ),
+            },
+            columns: None,
+        },
+        files: None,
+        pattern: None,
+        file_format: {},
+        validation_mode: "",
+        size_limit: 10,
+        max_files: 0,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+        disable_variant_check: false,
+        on_error: "abort",
+    },
+)
+
+
+---------- Input ----------
+COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
                     type = CSV
@@ -9654,6 +9698,50 @@ Copy(
             "skip_header": "1",
             "type": "CSV",
         },
+        validation_mode: "",
+        size_limit: 10,
+        max_files: 0,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+        disable_variant_check: false,
+        on_error: "abort",
+    },
+)
+
+
+---------- Input ----------
+COPY INTO '@my_stage/my data'
+                FROM mytable
+                size_limit=10;
+---------- Output ---------
+COPY INTO @my_stage/my data FROM mytable SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+Copy(
+    CopyStmt {
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "mytable",
+                quote: None,
+                span: Some(
+                    51..58,
+                ),
+            },
+            columns: None,
+        },
+        dst: Location(
+            Stage(
+                "my_stage/my data",
+            ),
+        ),
+        files: None,
+        pattern: None,
+        file_format: {},
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
@@ -10908,6 +10996,76 @@ UnSetVariable(
                 },
             ],
         },
+    },
+)
+
+
+---------- Input ----------
+select $1 FROM '@my_stage/my data/'
+---------- Output ---------
+SELECT $1 FROM @my_stage/my data/ ()
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..35,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..35,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: ColumnRef {
+                            span: Some(
+                                7..9,
+                            ),
+                            database: None,
+                            table: None,
+                            column: Position(
+                                ColumnPosition {
+                                    pos: 1,
+                                    name: "$1",
+                                    span: Some(
+                                        7..9,
+                                    ),
+                                },
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [
+                    Location {
+                        span: Some(
+                            15..35,
+                        ),
+                        location: Stage(
+                            "my_stage/my data/",
+                        ),
+                        options: SelectStageOptions {
+                            files: None,
+                            pattern: None,
+                            file_format: None,
+                            connection: {},
+                        },
+                        alias: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

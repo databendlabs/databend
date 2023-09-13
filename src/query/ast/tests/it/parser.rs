@@ -246,6 +246,9 @@ fn test_statement() {
         r#"SET ROLE ROLE1;"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
+                FROM '@~/mybucket/my data.csv'
+                size_limit=10;"#,
+        r#"COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
                     type = CSV
@@ -319,6 +322,9 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
+                size_limit=10;"#,
+        r#"COPY INTO '@my_stage/my data'
+                FROM mytable
                 size_limit=10;"#,
         r#"COPY INTO @my_stage
                 FROM mytable
@@ -426,6 +432,7 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"select $1 FROM '@my_stage/my data/'"#,
         r#"SELECT t.c1 FROM @stage1/dir/file
         ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
         r#"select table0.c1, table1.c2 from
