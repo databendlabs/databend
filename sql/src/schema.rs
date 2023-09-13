@@ -59,6 +59,7 @@ impl DecimalDataType {
 #[derive(Debug, Clone)]
 pub enum DataType {
     Null,
+    Nothing,
     EmptyArray,
     EmptyMap,
     Boolean,
@@ -90,6 +91,7 @@ impl std::fmt::Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             DataType::Null => write!(f, "Null"),
+            DataType::Nothing => write!(f, "Nothing"),
             DataType::EmptyArray => write!(f, "EmptyArray"),
             DataType::EmptyMap => write!(f, "EmptyMap"),
             DataType::Boolean => write!(f, "Boolean"),
@@ -156,6 +158,7 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
     fn try_from(desc: &TypeDesc) -> Result<Self> {
         let dt = match desc.name {
             "Null" | "NULL" => DataType::Null,
+            "Nothing" => DataType::Nothing,
             "Boolean" => DataType::Boolean,
             "String" => DataType::String,
             "Int8" => DataType::Number(NumberDataType::Int8),
