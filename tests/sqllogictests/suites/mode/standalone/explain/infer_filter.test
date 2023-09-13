@@ -290,7 +290,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <> 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <> 2)], limit: NONE]
     └── estimated rows: 0.00
 
 # a < 1
@@ -326,7 +326,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) < 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) < 2)], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a <= 1
@@ -344,7 +344,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <= 1 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 1)], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a <= 2
@@ -362,7 +362,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) <= 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) <= 2)], limit: NONE]
     └── estimated rows: 0.00
 
 # a > 1;
@@ -398,7 +398,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) > 0 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) > 0)], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a >= 1
@@ -416,7 +416,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) >= 1 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 1)], limit: NONE]
     └── estimated rows: 0.00
 
 # a != 1 and a >= 0
@@ -434,7 +434,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) <> 1 AS Boolean NULL), CAST(t1.a (#0) >= 0 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) <> 1, t1.a (#0) >= 0)], limit: NONE]
     └── estimated rows: 0.00
 
 # false
@@ -506,7 +506,7 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) < 5 AS Boolean NULL), CAST(t1.a (#0) <> 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) < 5, t1.a (#0) <> 2)], limit: NONE]
     └── estimated rows: 0.00
 
 # a < 5
@@ -560,5 +560,5 @@ Filter
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [and_filters(CAST(t1.a (#0) < 5 AS Boolean NULL), CAST(t1.a (#0) > 2 AS Boolean NULL))], limit: NONE]
+    ├── push downs: [filters: [and_filters(t1.a (#0) < 5, t1.a (#0) > 2)], limit: NONE]
     └── estimated rows: 0.00
