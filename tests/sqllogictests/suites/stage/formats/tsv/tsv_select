@@ -2,7 +2,7 @@ statement ok
 drop table if exists it
 
 statement ok
-create table it (a int not null, b string not null)
+create table it (a int null, b string null)
 
 query 
 select $2 from @data/csv/select.tsv (file_format => 'tsv') order by $1
@@ -15,7 +15,7 @@ select a.$1 from @data/csv/select.tsv (file_format => 'tsv') a order by $1
 query error select columns from csv file must in the form of
 select * from @data/tsv/select.tsv (file_format => 'tsv') a order by $1 
 
-query error can not select * 
+query error can not select *
 select *, $1 from @data/tsv/select.tsv (file_format => 'tsv')
 
 query 
@@ -26,6 +26,6 @@ tsv/select.tsv 3 0 NULL NULL
 query IT
 select * from it order by a
 ----
-1 (empty)
+1 NULL
 2 b
 3 c

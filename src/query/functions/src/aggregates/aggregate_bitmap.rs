@@ -573,7 +573,7 @@ pub fn try_create_aggregate_bitmap_intersect_count_function(
                 NumberDataType::NUM => {
                     AggregateBitmapIntersectCountFunction::<NumberType<NUM>>::try_create(
                         display_name,
-                        extract_number_params::<NUM>(num_type, params)?,
+                        extract_number_params::<NUM>(params)?,
                     )
                 }
             })
@@ -623,25 +623,17 @@ fn extract_params<T: ValueType>(
     Ok(filter_values)
 }
 
-fn extract_number_params<N: Number>(
-    num_type: NumberDataType,
-    params: Vec<Scalar>,
-) -> Result<Vec<N>> {
+fn extract_number_params<N: Number>(params: Vec<Scalar>) -> Result<Vec<N>> {
     let mut result = Vec::with_capacity(params.len());
     for param in &params {
         let data_type = param.as_ref().infer_data_type();
-        let val: N = check_number(
+        let val: N = check_number::<_, N>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Cast {
+            &Expr::<usize>::Constant {
                 span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: param.clone(),
-                    data_type,
-                }),
-                dest_type: DataType::Number(num_type),
+                scalar: param.clone(),
+                data_type,
             },
             &BUILTIN_FUNCTIONS,
         )?;

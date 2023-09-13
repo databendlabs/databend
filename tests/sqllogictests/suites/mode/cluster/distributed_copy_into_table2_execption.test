@@ -23,13 +23,13 @@ statement ok
 create stage s1 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create table products (id int not null, name string not null, description string not null);
+create table products (id int null, name string null, description string null);
 
 statement ok
-create table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
+create table table_random(a int null,b string null,c string null) ENGINE = Random;
 
 statement ok
-create table table_random2(a int not null,b string not null) ENGINE = Random;
+create table table_random2(a int null,b string null) ENGINE = Random;
 
 statement ok
 copy into @s1 from (select a,b,c from table_random limit 1000000);

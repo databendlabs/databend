@@ -120,4 +120,36 @@ statement ok
 DROP TABLE t4
 
 statement ok
+create table tt1(a int, b bool);
+
+statement ok
+insert into tt1 values(1, true), (2, null), (null, false);
+
+statement ok
+create table tt2(a int, b bool);
+
+statement ok
+insert into tt2 values(1, true), (2, null), (null, false);
+
+query II rowsort
+SELECT (1078286207, tt1.b) FROM tt1 CROSS JOIN tt2;
+----
+(1078286207,0)
+(1078286207,0)
+(1078286207,0)
+(1078286207,1)
+(1078286207,1)
+(1078286207,1)
+(1078286207,NULL)
+(1078286207,NULL)
+(1078286207,NULL)
+
+
+statement ok
+drop table tt1;
+
+statement ok
+drop table tt2;
+
+statement ok
 DROP DATABASE db_09_0021

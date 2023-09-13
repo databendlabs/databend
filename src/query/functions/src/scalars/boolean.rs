@@ -49,11 +49,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() < 2 {
             return None;
         }
+        if args_type
+            .iter()
+            .any(|arg_type| arg_type.remove_nullable() != DataType::Boolean)
+        {
+            return None;
+        }
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "and_filters".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Boolean)); args_type.len()],
+                args_type: args_type.to_vec(),
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {

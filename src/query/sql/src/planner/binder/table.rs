@@ -650,7 +650,10 @@ impl Binder {
 
                 let mut fields = vec![];
                 for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
                 }
 
                 let schema = Arc::new(TableSchema::new(fields));
