@@ -128,7 +128,7 @@ SELECT * FROM t_insert_default;
 
 ## Insert with Staged Files
 
-Databend allows you to use the INSERT INTO statement to add data into a table from staged files.
+Databend enables you to insert data into a table from staged files with the INSERT INTO statement. This is achieved through Databend's capacity to [Query Staged Files](../../12-load-data/00-transform/05-querying-stage.md) and subsequently incorporate the query result into the table.
 
 ### Syntax
 
