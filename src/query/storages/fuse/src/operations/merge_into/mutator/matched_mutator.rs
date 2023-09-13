@@ -127,7 +127,7 @@ impl MatchedAggregator {
         // data_block is from matched_split, so there is only one column.
         // that's row_id
         let row_ids = get_row_id(&data_block, 0)?;
-        let row_id_kind = RowIdKind::downcast_ref_from(&data_block.get_meta().unwrap()).unwrap();
+        let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {
                 for row_id in row_ids {
@@ -214,7 +214,7 @@ impl MatchedAggregator {
             let update_modified_offsets = &item.1.0;
             let delete_modified_offsets = &item.1.1;
             let modified_offsets: HashSet<usize> = update_modified_offsets
-                .union(&delete_modified_offsets)
+                .union(delete_modified_offsets)
                 .cloned()
                 .collect();
 

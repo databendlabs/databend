@@ -181,12 +181,10 @@ impl Processor for MatchedSplitProcessor {
         let mut pushed_something = false;
 
         // 2. process data stage here
-        if self.output_port_row_id.can_push() {
-            if !self.output_data_row_id_data.is_empty() {
-                self.output_port_row_id
-                    .push_data(Ok(self.output_data_row_id_data.pop().unwrap()));
-                pushed_something = true
-            }
+        if self.output_port_row_id.can_push() && !self.output_data_row_id_data.is_empty() {
+            self.output_port_row_id
+                .push_data(Ok(self.output_data_row_id_data.pop().unwrap()));
+            pushed_something = true
         }
 
         if self.output_port_updated.can_push() {
