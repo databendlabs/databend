@@ -87,6 +87,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             buf.extend_from_slice(b",");
                         }
                         if column.data_type().remove_nullable() == DataType::Bitmap {
+                            // convert binary bitmap to string
                             match unsafe { column.index_unchecked(i) } {
                                 ScalarRef::Null => {
                                     buf.extend_from_slice(NULL_BYTES_UPPER.as_bytes());

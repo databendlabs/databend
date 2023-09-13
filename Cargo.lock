@@ -1992,7 +1992,6 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "itertools 0.10.5",
  "jsonb",
  "lexical-core",
  "match-template",
