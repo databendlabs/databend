@@ -188,13 +188,11 @@ jobs:
   sqllogic_standalone_udf_server:
     name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
-    needs: build
+    needs: [build, check]
     strategy:
       matrix:
         dirs:
           - "udf_server"
-        handlers:
-          - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
       - name: Start UDF Server
@@ -206,13 +204,13 @@ jobs:
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
+          handlers: mysql,http,clickhouse
           storage-format: all
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
-          name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}
+          name: test-sqllogic-standalone-${{ matrix.dirs }}
 
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
