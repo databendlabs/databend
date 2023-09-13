@@ -304,6 +304,18 @@ impl Processor for TransformHashJoinBuild {
                     self.step = HashJoinBuildStep::Finished;
                     return Ok(());
                 }
+                if !self
+                    .build_state
+                    .hash_join_state
+                    .spill_partition
+                    .read()
+                    .contains(&(partition_id as u8))
+                {
+                    // Skip if the partition is not spilled in build side
+                    self.from_spill = true;
+                    self.reset()?;
+                    return Ok(());
+                }
                 let spilled_data = self
                     .spill_state
                     .as_ref()

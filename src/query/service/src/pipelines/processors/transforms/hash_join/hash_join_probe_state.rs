@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -81,6 +82,8 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<bool>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
+    /// Spilled partitions set
+    pub(crate) spill_partitions: Arc<RwLock<HashSet<u8>>>,
 }
 
 impl HashJoinProbeState {
@@ -118,6 +121,7 @@ impl HashJoinProbeState {
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
             mark_scan_map_lock: Mutex::new(false),
             hash_method: method,
+            spill_partitions: Arc::new(Default::default()),
         })
     }
 
@@ -279,9 +283,9 @@ impl HashJoinProbeState {
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
-            let mut spill_partition = self.hash_join_state.spill_partition.write();
-            if let Some(id) = spill_partition.iter().next().cloned() {
-                spill_partition.remove(&id);
+            let mut spill_partitions = self.spill_partitions.write();
+            if let Some(id) = spill_partitions.iter().next().cloned() {
+                spill_partitions.remove(&id);
                 *partition_id = id as i8;
             } else {
                 *partition_id = -1;
@@ -321,9 +325,9 @@ impl HashJoinProbeState {
             *build_done = false;
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
-            let mut spill_partition = self.hash_join_state.spill_partition.write();
-            if let Some(id) = spill_partition.iter().next().cloned() {
-                spill_partition.remove(&id);
+            let mut spill_partitions = self.spill_partitions.write();
+            if let Some(id) = spill_partitions.iter().next().cloned() {
+                spill_partitions.remove(&id);
                 *partition_id = id as i8;
             } else {
                 *partition_id = -1;

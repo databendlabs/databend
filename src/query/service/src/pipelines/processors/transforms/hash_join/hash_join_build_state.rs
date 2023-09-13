@@ -245,6 +245,7 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
+                && !self.ctx.get_settings().get_enable_join_spill()?
             {
                 {
                     let mut fast_return = self.hash_join_state.fast_return.write();

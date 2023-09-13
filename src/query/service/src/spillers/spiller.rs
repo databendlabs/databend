@@ -23,6 +23,7 @@ use common_expression::DataBlock;
 use opendal::Operator;
 
 /// Spiller type, currently only supports HashJoin
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SpillerType {
     HashJoinBuild,
     HashJoinProbe, /* Todo: Add more spillers type
@@ -50,7 +51,7 @@ impl SpillerConfig {
 pub struct Spiller {
     operator: Operator,
     config: SpillerConfig,
-    _spiller_type: SpillerType,
+    spiller_type: SpillerType,
     /// Partition set, which records there are how many partitions.
     /// Currently it's fixed, in the future we can make it configurable.
     pub partition_set: Vec<u8>,
@@ -69,7 +70,7 @@ impl Spiller {
         Self {
             operator,
             config,
-            _spiller_type: spiller_type,
+            spiller_type,
             partition_set: vec![0, 1, 2, 3],
             spilled_partition_set: Default::default(),
             partition_location: Default::default(),
@@ -156,7 +157,9 @@ impl Spiller {
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = *hash as u8 & 0b0000_0011;
-            if self.spilled_partition_set.contains(&partition_id) {
+            if self.spilled_partition_set.contains(&partition_id)
+                || self.spiller_type == SpillerType::HashJoinProbe
+            {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
                     .entry(partition_id)
