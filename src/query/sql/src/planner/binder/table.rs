@@ -617,6 +617,7 @@ impl Binder {
                     .await?
                 } else {
                     ParquetRSTable::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -958,7 +959,7 @@ impl Binder {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
-                            col_stats.insert(*column_index, col_stat);
+                            col_stats.insert(*column_index, col_stat.cloned());
                         }
                     }
                 }
