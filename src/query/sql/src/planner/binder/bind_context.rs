@@ -139,6 +139,7 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
+    pub allow_internal_columns: bool,
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
@@ -171,6 +172,7 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
+            allow_internal_columns: true,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -190,6 +192,7 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
+            allow_internal_columns: parent.allow_internal_columns,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -220,6 +223,10 @@ impl BindContext {
 
     pub fn add_column_binding(&mut self, column_binding: ColumnBinding) {
         self.columns.push(column_binding);
+    }
+
+    pub fn allow_internal_columns(&mut self, allow: bool) {
+        self.allow_internal_columns = allow;
     }
 
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
@@ -507,6 +514,13 @@ impl BindContext {
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
     ) -> Result<ColumnBinding> {
+        if !self.allow_internal_columns {
+            return Err(ErrorCode::SemanticError(format!(
+                "Internal column `{}` is not allowed in current statement",
+                column_binding.internal_column.column_name()
+            )));
+        }
+
         let column_id = column_binding.internal_column.column_id();
         let (table_index, column_index, new) = match self.bound_internal_columns.entry(column_id) {
             btree_map::Entry::Vacant(e) => {

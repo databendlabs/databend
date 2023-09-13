@@ -820,6 +820,7 @@ impl Binder {
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            allow_internal_columns: true,
             window_definitions: DashMap::new(),
         };
 
