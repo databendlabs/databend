@@ -234,7 +234,7 @@ impl MergeIntoInterpreter {
                         self.ctx.clone(),
                         fuse_table.schema().into(),
                         col_indices,
-                        false,
+                        Some(join_output_schema.num_fields()),
                     )?;
 
                 let update_list = update_list
@@ -245,7 +245,11 @@ impl MergeIntoInterpreter {
                             remote_expr
                                 .as_expr(&BUILTIN_FUNCTIONS)
                                 .project_column_ref(|name| {
-                                    join_output_schema.index_of(name).unwrap()
+                                    if name == &join_output_schema.num_fields().to_string() {
+                                        join_output_schema.num_fields()
+                                    } else {
+                                        join_output_schema.index_of(name).unwrap()
+                                    }
                                 })
                                 .as_remote_expr(),
                         )

@@ -198,8 +198,7 @@ impl MatchedAggregator {
 
         for item in &self.block_mutation_row_offset {
             let (segment_idx, block_idx) = split_prefix(*item.0);
-            // the row_id's segment_idx is reversed
-            let segment_idx = segment_infos.len() - segment_idx as usize - 1;
+            let segment_idx = segment_idx as usize;
             let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
             let aggregation_ctx = self.aggregation_ctx.clone();
             let segment_info = segment_infos.get(&segment_idx).unwrap();
