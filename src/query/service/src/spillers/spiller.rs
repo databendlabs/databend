@@ -121,6 +121,19 @@ impl Spiller {
     }
 
     #[async_backtrace::framed]
+    /// Read spilled data from multiple partitions
+    pub async fn read_spilled_data_from_partitions(
+        &self,
+        partitions: &HashSet<u8>,
+    ) -> Result<Vec<DataBlock>> {
+        let mut spilled_data = Vec::with_capacity(partitions.len());
+        for p_id in partitions.iter() {
+            spilled_data.append(&mut self.read_spilled_data(p_id).await?);
+        }
+        Ok(spilled_data)
+    }
+
+    #[async_backtrace::framed]
     /// Read spilled data with partition id
     pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
