@@ -147,7 +147,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>
 ```
 
-We expect to provide support for various language UDFs based on this PR, and JavaScript may be one of the options worth trying.
+We will provide support for UDFs created in various languages, with JavaScript being the next one in line.
 
 [Issue #12746 | Feature: support javascript udf ](https://github.com/datafuselabs/databend/issues/12746)
 
