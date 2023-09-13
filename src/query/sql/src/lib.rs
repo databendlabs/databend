@@ -14,6 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(box_patterns)]
+#![feature(iterator_try_reduce)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
 #![feature(extend_one)]

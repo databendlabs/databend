@@ -25,66 +25,74 @@ use stream_more::StreamMore;
 use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
-/// One level of state machine data.
+/// State machine data organized in multiple levels.
 ///
-/// State machine data is constructed from multiple levels of modifications, similar to leveldb.
+/// Similar to leveldb.
+///
+/// The top level is the newest and writable.
+/// Others are immutable.
 #[derive(Debug, Default)]
-pub struct Level {
-    data: LevelData,
+pub struct LeveledMap {
+    /// The top level is the newest and writable.
+    writable: LevelData,
 
-    /// This level is built with additional modifications `data` on top of the previous level.
-    base: Option<Arc<Level>>,
+    /// The immutable levels, from the oldest to the newest.
+    /// levels[0] is the bottom and oldest level.
+    frozen: StaticLeveledMap,
 }
 
-impl Level {
-    pub(crate) fn new(data: LevelData, base: Option<Arc<Self>>) -> Self {
-        Self { data, base }
+impl LeveledMap {
+    pub(crate) fn new(writable: LevelData) -> Self {
+        Self {
+            writable,
+            frozen: Default::default(),
+        }
     }
 
-    pub(crate) fn data(&self) -> &LevelData {
-        &self.data
+    /// Return an iterator of all levels in reverse order.
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+        [&self.writable]
+            .into_iter()
+            .chain(self.frozen.iter_levels())
     }
 
-    pub(crate) fn base(&self) -> Option<&Self> {
-        self.base.as_ref().map(|x| x.as_ref())
+    /// Freeze the current writable level and create a new writable level.
+    pub fn freeze_writable(&mut self) -> &StaticLeveledMap {
+        let new_writable = self.writable.new_level();
+
+        let frozen = std::mem::replace(&mut self.writable, new_writable);
+        self.frozen.push(Arc::new(frozen));
+
+        &self.frozen
     }
 
-    pub fn new_level(&mut self) {
-        let new = Level {
-            data: self.data.new_level(),
-            base: None,
-        };
-
-        let base = std::mem::replace(self, new);
-
-        self.base = Some(Arc::new(base));
+    /// Return an immutable reference to the top level i.e., the writable level.
+    pub fn writable_ref(&self) -> &LevelData {
+        &self.writable
     }
 
-    pub fn data_ref(&self) -> &LevelData {
-        &self.data
+    /// Return a mutable reference to the top level i.e., the writable level.
+    pub fn writable_mut(&mut self) -> &mut LevelData {
+        &mut self.writable
     }
 
-    pub fn data_mut(&mut self) -> &mut LevelData {
-        &mut self.data
+    /// Return a reference to the immutable levels.
+    pub fn frozen_ref(&self) -> &StaticLeveledMap {
+        &self.frozen
     }
 
-    pub fn get_base(&self) -> Option<Arc<Self>> {
-        self.base.clone()
-    }
-
-    pub(crate) fn replace_base(&mut self, b: Option<Arc<Level>>) {
-        self.base = b;
-    }
-
-    pub fn snapshot(&self) -> Option<Arc<Self>> {
-        self.base.clone()
+    /// Replace all immutable levels with the given one.
+    pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
+        self.frozen = b;
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for Level
+impl<K> MapApiRO<K> for LeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
     LevelData: MapApiRO<K>,
@@ -96,15 +104,13 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let api = self.data();
-        let got = api.get(key).await;
-
-        if got.is_not_found() {
-            if let Some(base) = self.base() {
-                return base.get(key).await;
+        for level_data in self.iter_levels() {
+            let got = level_data.get(key).await;
+            if !got.is_not_found() {
+                return got;
             }
         }
-        got
+        return Marked::empty();
     }
 
     async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
@@ -115,42 +121,22 @@ where
         T: Ord,
         R: RangeBounds<T> + Clone + Send + Sync,
     {
-        let a = self.data().range(range.clone()).await;
+        let mut km = KMerge::by(util::by_key_seq);
 
-        let km = KMerge::by(|a: &(K, Marked<Self::V>), b: &(K, Marked<Self::V>)| {
-            let (k1, v1) = a;
-            let (k2, v2) = b;
-
-            assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
-
-            // Put entries with the same key together, smaller internal-seq first
-            // Tombstone is always greater.
-            (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
-        })
-        .merge(a);
-
-        let km = if let Some(base) = self.base() {
-            let b = base.range(range).await;
-            km.merge(b)
-        } else {
-            km
-        };
+        for api in self.iter_levels() {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
+        }
 
         // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(|(k1, v1), (k2, v2)| {
-            if k1 == k2 {
-                Ok((k1, Marked::max(v1, v2)))
-            } else {
-                Err(((k1, v1), (k2, v2)))
-            }
-        });
+        let m = km.coalesce(util::choose_greater);
 
         Box::pin(m)
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApi<K> for Level
+impl<K> MapApi<K> for LeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
     LevelData: MapApi<K>,
@@ -172,7 +158,7 @@ where
         }
 
         // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.data_mut().set(key, value).await;
+        let (_prev, inserted) = self.writable_mut().set(key, value).await;
         (prev, inserted)
     }
 }

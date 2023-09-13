@@ -100,6 +100,23 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : range(10, 20)
+raw expr       : range(10, 20)
+checked expr   : range<UInt64, UInt64>(to_uint64<UInt8>(10_u8), to_uint64<UInt8>(20_u8))
+optimized expr : [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+output type    : Array(UInt64)
+output domain  : [{10..=19}]
+output         : [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | range(10, 500000011)
+  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)`
+
+
+
 error: 
   --> SQL:1:8
   |

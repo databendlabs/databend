@@ -24,11 +24,11 @@ This section provides several brief tutorials that offer practical guidance on h
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage with [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.org/employees.parquet) and then upload it to your user stage with [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
 
 ```sql
 -- Query remote sample file directly
-SELECT * FROM 'https://datasets.databend.rs/employees.parquet';
+SELECT * FROM 'https://datasets.databend.org/employees.parquet';
 
 -- Query staged sample file
 SELECT * FROM @~/employees.parquet;
@@ -59,7 +59,7 @@ CREATE TABLE employees_no_age (
 ```sql
 -- Load from remote file
 COPY INTO employees_no_age
-FROM (SELECT t.id, t.name, t.onboarded FROM 'https://datasets.databend.rs/employees.parquet' t)
+FROM (SELECT t.id, t.name, t.onboarded FROM 'https://datasets.databend.org/employees.parquet' t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 
 -- Load from staged file
@@ -99,7 +99,7 @@ CREATE TABLE employees_new_order (
 ```sql
 -- Load from remote file
 COPY INTO employees_new_order
-FROM (SELECT t.id, t.age, t.name, t.onboarded FROM 'https://datasets.databend.rs/employees.parquet' t)
+FROM (SELECT t.id, t.age, t.name, t.onboarded FROM 'https://datasets.databend.org/employees.parquet' t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 
 -- Load from staged file
@@ -140,7 +140,7 @@ CREATE TABLE employees_date (
 ```sql
 -- Load from remote file
 COPY INTO employees_date
-FROM (SELECT t.id, t.name, t.age, to_date(t.onboarded) FROM 'https://datasets.databend.rs/employees.parquet' t)
+FROM (SELECT t.id, t.name, t.age, to_date(t.onboarded) FROM 'https://datasets.databend.org/employees.parquet' t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 
 -- Load from staged file
@@ -181,7 +181,7 @@ CREATE TABLE employees_new_age (
 ```sql
 -- Load from remote file
 COPY INTO employees_new_age
-FROM (SELECT t.id, t.name, t.age+1, t.onboarded FROM 'https://datasets.databend.rs/employees.parquet' t)
+FROM (SELECT t.id, t.name, t.age+1, t.onboarded FROM 'https://datasets.databend.org/employees.parquet' t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 
 -- Load from staged file
@@ -206,7 +206,7 @@ id|name        |age|onboarded          |
 
 In this tutorial, you will a new table that includes additional columns compared to the sample file. You'll then extract data from the sample file, and finally populate the new table with the transformed data.
 
-1. Create a table containing more columns than the sample file: 
+1. Create a table containing more columns than the sample file:
 
 ```sql
 CREATE TABLE employees_plus (
@@ -223,7 +223,7 @@ CREATE TABLE employees_plus (
 ```sql
 -- Load from remote file
 COPY INTO employees_plus (id, name, age, onboarded)
-FROM (SELECT t.id, t.name, t.age, t.onboarded FROM 'https://datasets.databend.rs/employees.parquet' t)
+FROM (SELECT t.id, t.name, t.age, t.onboarded FROM 'https://datasets.databend.org/employees.parquet' t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 
 -- Load from staged file

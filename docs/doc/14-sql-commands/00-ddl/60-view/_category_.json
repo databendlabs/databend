@@ -2,6 +2,6 @@
   "label": "View",
   "link": {
     "type": "generated-index",
-    "slug": "/reference/sql/ddl/view"
+    "slug": "/sql-commands/ddl/view"
   }
 }
