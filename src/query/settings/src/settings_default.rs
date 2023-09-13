@@ -45,7 +45,7 @@ impl DefaultSettings {
 
             let default_settings = HashMap::from([
                 ("max_block_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(65536),
+                    value: UserSettingValue::UInt64(2048),
                     desc: "Sets the maximum byte size of a single data block that can be read.",
                     possible_values: None,
                     display_in_show_settings: true,
