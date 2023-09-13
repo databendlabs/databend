@@ -2,8 +2,6 @@
 #   python3 tests/udf-server/udf_test.py
 #
 
-statement ok
-set enable_udf_server = 1;
 
 statement ok
 CREATE FUNCTION add_signed (TINYINT, SMALLINT, INT, BIGINT) RETURNS BIGINT LANGUAGE python HANDLER = 'add_signed' ADDRESS = 'http://0.0.0.0:8815'
@@ -358,6 +356,3 @@ DROP FUNCTION wait;
 
 statement ok
 DROP FUNCTION wait_concurrent;
-
-statement ok
-set enable_udf_server = 0;

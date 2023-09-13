@@ -38,6 +38,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -2609,10 +2610,21 @@ impl<'a> TypeChecker<'a> {
         arguments: &[Expr],
         udf_definition: UDFServer,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
-        if !self.ctx.get_settings().get_enable_udf_server()? {
+        if !GlobalConfig::instance().query.enable_udf_server {
             return Err(ErrorCode::Unimplemented(
-                "UDF server is not allowed, you can use 'set enable_udf_server = 1' to enable it",
+                "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
             ));
+        }
+
+        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+        let address = &udf_definition.address;
+        if udf_server_allow_list
+            .iter()
+            .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+            )));
         }
 
         let mut args = Vec::with_capacity(arguments.len());

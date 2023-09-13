@@ -415,12 +415,6 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_udf_server", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable creating and calling UDF server",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

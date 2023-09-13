@@ -26,12 +26,13 @@ use futures::stream;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use tonic::transport::channel::Channel;
+use tonic::transport::Endpoint;
 use tonic::Request;
 
 use crate::types::DataType;
 use crate::DataSchema;
 
-const UDF_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
+const UDF_REQUEST_TIMEOUT_SEC: u64 = 180; // 180 seconds
 
 #[derive(Debug, Clone)]
 pub struct UDFFlightClient {
@@ -41,7 +42,12 @@ pub struct UDFFlightClient {
 impl UDFFlightClient {
     #[async_backtrace::framed]
     pub async fn connect(addr: &str) -> Result<UDFFlightClient> {
-        let inner = FlightServiceClient::connect(addr.to_string())
+        let endpoint = Endpoint::from_shared(addr.to_string())
+            .map_err(|err| {
+                ErrorCode::UDFServerConnectError(format!("Invalid UDF Server address: {err}"))
+            })?
+            .connect_timeout(Duration::from_secs(UDF_REQUEST_TIMEOUT_SEC));
+        let inner = FlightServiceClient::connect(endpoint)
             .await
             .map_err(|err| {
                 ErrorCode::UDFServerConnectError(format!(

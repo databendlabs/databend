@@ -1528,6 +1528,13 @@ pub struct QueryConfig {
     /// https://platform.openai.com/docs/guides/chat
     #[clap(long, default_value = "gpt-3.5-turbo")]
     pub openai_api_completion_model: String,
+
+    #[clap(long, default_value = "false")]
+    pub enable_udf_server: bool,
+
+    /// A list of allowed udf server addresses.
+    #[clap(long)]
+    pub udf_server_allow_list: Vec<String>,
 }
 
 impl Default for QueryConfig {
@@ -1601,6 +1608,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_completion_model: self.openai_api_completion_model,
             openai_api_embedding_model: self.openai_api_embedding_model,
             openai_api_version: self.openai_api_version,
+            enable_udf_server: self.enable_udf_server,
+            udf_server_allow_list: self.udf_server_allow_list,
         })
     }
 }
@@ -1685,6 +1694,8 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_version: inner.openai_api_version,
             openai_api_completion_model: inner.openai_api_completion_model,
             openai_api_embedding_model: inner.openai_api_embedding_model,
+            enable_udf_server: inner.enable_udf_server,
+            udf_server_allow_list: inner.udf_server_allow_list,
         }
     }
 }

@@ -16,6 +16,7 @@ use common_ast::ast::AlterUDFStmt;
 use common_ast::ast::CreateUDFStmt;
 use common_ast::ast::Identifier;
 use common_ast::ast::UDFDefinition;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -66,10 +67,20 @@ impl Binder {
                 handler,
                 language,
             } => {
-                if !self.ctx.get_settings().get_enable_udf_server()? {
+                if !GlobalConfig::instance().query.enable_udf_server {
                     return Err(ErrorCode::Unimplemented(
-                        "UDF server is not allowed, you can use 'set enable_udf_server = 1' to enable it",
+                        "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
                     ));
+                }
+
+                let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+                if udf_server_allow_list
+                    .iter()
+                    .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
+                {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+                    )));
                 }
 
                 let mut arg_datatypes = Vec::with_capacity(arg_types.len());
