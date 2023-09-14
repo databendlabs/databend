@@ -223,7 +223,7 @@ SELECT
 
 After deploying Databend, you might need to learn about the following topics:
 
-- [SQL Clients](/doc/clients): Learn to connect to Databend using SQL clients.
+- [SQL Clients](/doc/sql-clients): Learn to connect to Databend using SQL clients.
 - [Manage Settings](../13-sql-reference/42-manage-settings.md): Optimize Databend for your needs.
 - [Load & Unload Data](/doc/load-data): Manage data import/export in Databend.
 - [Visualize](/doc/visualize): Integrate Databend with visualization tools for insights.
