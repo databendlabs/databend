@@ -217,11 +217,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             let suffix = format!("(while in query {})", query);
             write_result = Err(cause.add_message_back(suffix));
         }
-
-        histogram!(
-            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-            instant.elapsed()
-        );
+        mysql_metrics::observe_mysql_process_request_duration(instant.elapsed());
 
         write_result
     }
@@ -397,10 +393,7 @@ impl InteractiveWorkerBase {
                 let ctx = context.clone();
                 async move {
                     let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                    histogram!(
-                        super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                        instant.elapsed()
-                    );
+                    mysql_metrics::observe_mysql_interpreter_used_time(instant.elapsed());
 
                     // Wrap the data stream, log finish event at the end of stream
                     let intercepted_stream = async_stream::stream! {
