@@ -166,7 +166,7 @@ impl BlockReader {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
                     let meta = column_metas.get(&column_id).unwrap();
                     let (offset, len) = meta.offset_length();
-                    let key = TableDataCacheKey::new(block_path, offset, len);
+                    let key = TableDataCacheKey::new(block_path, column_id, offset, len);
                     cache.put(key.into(), Arc::new((array, size)))
                 }
             }

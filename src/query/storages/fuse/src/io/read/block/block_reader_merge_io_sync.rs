@@ -116,7 +116,7 @@ impl BlockReader {
             if let Some(column_meta) = part.columns_meta.get(column_id) {
                 // first, check column array object cache
                 let (offset, len) = column_meta.offset_length();
-                let column_cache_key = TableDataCacheKey::new(block_path, offset, len);
+                let column_cache_key = TableDataCacheKey::new(block_path, *column_id, offset, len);
                 if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                     cached_column_array.push((*column_id, cache_array));
                     continue;

@@ -141,6 +141,7 @@ impl MergeIOReadResult {
             if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
                 let cache_key = TableDataCacheKey::new(
                     &self.block_path,
+                    column_id,
                     column_range.start,
                     column_range.end - column_range.start,
                 );

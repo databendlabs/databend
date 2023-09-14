@@ -153,7 +153,7 @@ impl BlockReader {
             if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
 
-                let column_cache_key = TableDataCacheKey::new(location, offset, len);
+                let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
 
                 let mut need_real_io_read = false;
                 // first, check column array object cache

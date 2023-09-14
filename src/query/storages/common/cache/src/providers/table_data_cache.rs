@@ -45,9 +45,9 @@ pub struct TableDataCacheKey {
 }
 
 impl TableDataCacheKey {
-    pub fn new(block_path: &str, offset: u64, len: u64) -> Self {
+    pub fn new(block_path: &str, column_id: u32, offset: u64, len: u64) -> Self {
         Self {
-            cache_key: format!("{block_path}-{offset}-{len}"),
+            cache_key: format!("{block_path}-{column_id}-{offset}-{len}"),
         }
     }
 }
