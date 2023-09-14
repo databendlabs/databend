@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::io::stdin;
 use std::io::BufRead;
 use std::path::Path;
 use std::sync::Arc;
@@ -84,14 +83,6 @@ impl Session {
             in_comment_block: false,
             keywords: Arc::new(keywords),
         })
-    }
-
-    pub async fn handle(&mut self) {
-        if self.is_repl {
-            self.handle_repl().await;
-        } else {
-            self.handle_reader(stdin().lock()).await;
-        }
     }
 
     async fn prompt(&self) -> String {
@@ -173,16 +164,13 @@ impl Session {
         let _ = rl.save_history(&get_history_path());
     }
 
-    pub async fn handle_reader<R: BufRead>(&mut self, r: R) {
+    pub async fn handle_reader<R: BufRead>(&mut self, r: R) -> Result<()> {
         let start = Instant::now();
         let mut lines = r.lines();
         while let Some(Ok(line)) = lines.next() {
             let queries = self.append_query(&line);
             for query in queries {
-                if let Err(e) = self.handle_query(false, &query).await {
-                    eprintln!("{}", e);
-                    return;
-                }
+                self.handle_query(false, &query).await?;
             }
         }
 
@@ -190,13 +178,12 @@ impl Session {
         let query = self.query.trim().to_owned();
         if !query.is_empty() {
             self.query.clear();
-            if let Err(e) = self.handle_query(false, &query).await {
-                eprintln!("{}", e);
-            }
+            self.handle_query(false, &query).await?;
         }
         if self.settings.time {
             println!("{:.3}", start.elapsed().as_secs_f64());
         }
+        Ok(())
     }
 
     pub fn append_query(&mut self, line: &str) -> Vec<String> {

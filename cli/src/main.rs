@@ -300,7 +300,7 @@ pub async fn main() -> Result<()> {
     let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
 
     if is_repl {
-        session.handle().await;
+        session.handle_repl().await;
         return Ok(());
     }
 
@@ -309,11 +309,11 @@ pub async fn main() -> Result<()> {
             if args.non_interactive {
                 return Err(anyhow!("no query specified"));
             }
-            session.handle_reader(stdin().lock()).await
+            session.handle_reader(stdin().lock()).await?;
         }
         Some(query) => match args.data {
             None => {
-                session.handle_reader(std::io::Cursor::new(query)).await;
+                session.handle_reader(std::io::Cursor::new(query)).await?;
             }
             Some(data) => {
                 let options = args.format.get_options(&args.format_opt);
