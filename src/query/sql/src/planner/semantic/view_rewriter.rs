@@ -35,6 +35,11 @@ impl VisitorMut for ViewRewriter {
                 pivot,
                 unpivot,
             } => {
+                // Must rewrite view query when table_ref::database is none. If not:
+                // e.g.
+                // create view default.v_t as select * from t;
+                // use db1; -- db1 does not contain table `t`
+                // select * from default.v_t; => select * from (select * from t); -- will return err that unknown table db1.t
                 if database.is_none() {
                     let database = Some(Identifier::from_name(self.current_database.clone()));
                     *table_ref = TableReference::Table {
@@ -47,14 +52,6 @@ impl VisitorMut for ViewRewriter {
                         pivot: pivot.clone(),
                         unpivot: unpivot.clone(),
                     }
-                }
-            }
-            TableReference::Subquery {
-                subquery, alias, ..
-            } => {
-                self.visit_query(subquery);
-                if let Some(alias) = alias {
-                    self.visit_identifier(&mut alias.name);
                 }
             }
             _ => walk_table_reference_mut(self, table_ref),

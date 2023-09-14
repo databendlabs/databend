@@ -128,41 +128,49 @@ show create table default.v_join;
 v_join CREATE VIEW `default`.`v_join` AS SELECT * FROM (SELECT c1 FROM default.t UNION ALL SELECT c1 FROM default.t1) AS res INNER JOIN default.t1 ON (t1.c1 = res.c1)
 
 query II
-select * from default.v_t;
+select * from default.v_t order by c1;
 ----
 1 10
 2 20
 3 30
 
-query II
-select * from default.v_union;
+query I
+select * from default.v_union order by c1;
 ----
 1
-2
-3
 1
 2
+2
+3
 3
 
-query II
-select * from default.v_subquery;
+query I
+select * from default.v_subquery order by c1;
 ----
 1
-2
-3
 1
 2
+2
+3
 3
 
-query II
-select * from default.v_join;
+query III
+select * from default.v_join order by c2;
 ----
 1 1 x
-2 2 y
-3 3 z
 1 1 x
 2 2 y
+2 2 y
 3 3 z
+3 3 z
+
+statement ok
+create view default.v_test as select * from t;
+
+query TT
+show create table default.v_test;
+----
+v_test CREATE VIEW `default`.`v_test` AS SELECT * FROM default.t
 
 statement ok
 drop view default.v_t;
