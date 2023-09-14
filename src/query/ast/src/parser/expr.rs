@@ -129,7 +129,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
 
                 // and replace `.<number>` map access to floating point literal.
                 if let ExprElement::MapAccess {
-                    accessor: MapAccessor::PeriodNumber { .. },
+                    accessor: MapAccessor::DotNumber { .. },
                 } = &expr_elements[curr as usize].elem
                 {
                     let span = expr_elements[curr as usize].span;
@@ -166,7 +166,7 @@ pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
     ))(i)
 }
 
-/// Parse one two three idents separated by a period, fulfilling from the right.
+/// Parse one two three idents separated by a dot, fulfilling from the right.
 ///
 /// Example: `db.table.column`
 #[allow(clippy::needless_lifetimes)]
@@ -1287,15 +1287,19 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { (FLOAT64 | DOUBLE)  ~ ( PRECISION )? },
     );
     let ty_decimal = map_res(
-        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ "," ~ #literal_u64 ~ ")" },
-        |(_, _, precision, _, scale, _)| {
+        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ #literal_u64 )? ~ ")" },
+        |(_, _, precision, opt_scale, _)| {
             Ok(TypeName::Decimal {
                 precision: precision
                     .try_into()
                     .map_err(|_| ErrorKind::Other("precision is too large"))?,
-                scale: scale
-                    .try_into()
-                    .map_err(|_| ErrorKind::Other("scale is too large"))?,
+                scale: if let Some((_, scale)) = opt_scale {
+                    scale
+                        .try_into()
+                        .map_err(|_| ErrorKind::Other("scale is too large"))?
+                } else {
+                    0
+                },
             })
         },
     );
@@ -1375,7 +1379,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         )),
         |(ty, opt_null)| {
             if opt_null.is_some() {
-                TypeName::Nullable(Box::new(ty))
+                ty.wrap_nullable()
             } else {
                 ty
             }
@@ -1440,20 +1444,20 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
         },
         |(_, key, _)| MapAccessor::Bracket { key: Box::new(key) },
     );
-    let period = map(
+    let dot = map(
         rule! {
            "." ~ #ident
         },
-        |(_, key)| MapAccessor::Period { key },
+        |(_, key)| MapAccessor::Dot { key },
     );
-    let period_number = map_res(
+    let dot_number = map_res(
         rule! {
            LiteralFloat
         },
         |key| {
             if key.text().starts_with('.') {
                 if let Ok(key) = (key.text()[1..]).parse::<u64>() {
-                    return Ok(MapAccessor::PeriodNumber { key });
+                    return Ok(MapAccessor::DotNumber { key });
                 }
             }
             Err(ErrorKind::ExpectText("."))
@@ -1468,8 +1472,8 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
 
     rule!(
         #bracket
-        | #period
-        | #period_number
+        | #dot
+        | #dot_number
         | #colon
     )(i)
 }

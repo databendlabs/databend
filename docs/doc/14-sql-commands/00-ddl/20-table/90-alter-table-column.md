@@ -3,7 +3,7 @@ title: ALTER TABLE COLUMN
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.50"/>
+<FunctionDescription description="Introduced or updated: v1.2.71"/>
 
 import EEFeature from '@site/src/components/EEFeature';
 
@@ -36,7 +36,7 @@ RENAME COLUMN <column_name> TO <new_column_name>;
 
 -- Change the data type of one or multiple columns
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
-MODIFY COLUMN <column_name> <new_data_type>[, COLUMN <column_name> <new_data_type>, ...]
+MODIFY COLUMN <column_name> <new_data_type> [DEFAULT <constant_value>][, COLUMN <column_name> <new_data_type> [DEFAULT <constant_value>], ...]
 
 -- Set / Unset masking policy for a column
 ALTER TABLE [IF EXISTS] [database.]<table_name>
@@ -51,7 +51,7 @@ DROP COLUMN <column_name>;
 ```
 
 :::note
-- Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
+- Only a constant value can be accepted as a default value when adding or modifying a column. If a non-constant expression is used, an error will occur.
 - Adding a stored computed column with ALTER TABLE is not supported yet.
 - When you change the data type of a table's columns, there's a risk of conversion errors. For example, if you try to convert a column with text (String) to numbers (Float), it might cause problems.
 - When you set a masking policy for a column, make sure that the data type (refer to the parameter *arg_type_to_mask* in the syntax of [CREATE MASKING POLICY](../102-mask-policy/create-mask-policy.md)) defined in the policy matches the column.
@@ -80,8 +80,8 @@ DESC default.users;
 Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 username      |VARCHAR|NO  |''                   |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Add a column to the beginning of the table
@@ -94,8 +94,8 @@ Field         |Type   |Null|Default              |Extra|
 --------------+-------+----+---------------------+-----+
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Add a column after the column 'username'
@@ -109,8 +109,8 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
-age           |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+age           |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Rename a column
@@ -124,8 +124,8 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
-new_age       |INT    |NO  |0                    |     |
+email         |VARCHAR|YES |NULL                 |     |
+new_age       |INT    |YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 
 -- Remove a column
@@ -139,7 +139,7 @@ Field         |Type   |Null|Default              |Extra|
 id            |INT    |NO  |0                    |     |
 username      |VARCHAR|NO  |''                   |     |
 middle_name   |VARCHAR|YES |NULL                 |     |
-email         |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|YES |NULL                 |     |
 business_email|VARCHAR|NO  |'example@example.com'|     |
 ```
 
@@ -207,12 +207,14 @@ INSERT INTO students_info VALUES
   (2, 'Jane Smith', 28),
   (3, 'Michael Johnson', 22);
 
-ALTER TABLE students_info MODIFY COLUMN age VARCHAR(10);
+ALTER TABLE students_info MODIFY COLUMN age VARCHAR(10) DEFAULT '0';
+INSERT INTO students_info (id, name) VALUES  (4, 'Eric McMond');
 
 SELECT * FROM students_info;
 
 id|name           |age|
 --+---------------+---+
+ 4|Eric McMond    |0  |
  1|John Doe       |25 |
  2|Jane Smith     |28 |
  3|Michael Johnson|22 |

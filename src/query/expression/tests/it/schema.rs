@@ -73,11 +73,11 @@ fn test_project_schema_from_tuple() -> Result<()> {
                 (1, "b:b1:b11"),
                 (2, "b:b1:b12"),
                 (3, "b:b2"),
-                (1, "b11"),
-                (2, "b12"),
-                (1, "b11"),
-                (2, "b12"),
-                (3, "b2"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (1, "b:b1:b11"),
+                (2, "b:b1:b12"),
+                (3, "b:b2"),
             ];
             let leaf_fields = project_schema.leaf_fields();
             for (i, leaf_field) in leaf_fields.iter().enumerate() {
@@ -257,26 +257,48 @@ fn test_schema_from_struct() -> Result<()> {
 
     let expected_fields = vec![
         ("u64", TableDataType::Number(NumberDataType::UInt64)),
-        ("0", TableDataType::Number(NumberDataType::UInt64)),
-        ("1", TableDataType::Number(NumberDataType::UInt64)),
-        ("1:0", TableDataType::Number(NumberDataType::UInt64)),
-        ("0", TableDataType::Number(NumberDataType::UInt64)),
-        ("1", TableDataType::Number(NumberDataType::UInt64)),
         (
-            "nullarray",
-            TableDataType::Nullable(Box::new(TableDataType::Array(Box::new(
-                TableDataType::Number(NumberDataType::UInt64),
-            )))),
+            "tuplearray:0:0",
+            TableDataType::Number(NumberDataType::UInt64),
         ),
-        ("key", TableDataType::Number(NumberDataType::UInt64)),
-        ("value", TableDataType::String),
+        (
+            "tuplearray:0:1",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            "tuplearray:1:0",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            "arraytuple:0:0",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            "arraytuple:0:1",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        (
+            "nullarray:0",
+            TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
+        ),
+        (
+            "maparray:key",
+            TableDataType::Number(NumberDataType::UInt64),
+        ),
+        ("maparray:value", TableDataType::String),
         (
             "nullu64",
             TableDataType::Nullable(Box::new(TableDataType::Number(NumberDataType::UInt64))),
         ),
         ("u64array:0", TableDataType::Number(NumberDataType::UInt64)),
-        ("a", TableDataType::Number(NumberDataType::Int32)),
-        ("b", TableDataType::Number(NumberDataType::Int32)),
+        (
+            "tuplesimple:a",
+            TableDataType::Number(NumberDataType::Int32),
+        ),
+        (
+            "tuplesimple:b",
+            TableDataType::Number(NumberDataType::Int32),
+        ),
     ];
 
     for (i, field) in leaf_fields.iter().enumerate() {
@@ -335,18 +357,18 @@ fn test_schema_from_struct() -> Result<()> {
     {
         let expected_column_id_field = vec![
             (0, "u64"),
-            (1, "0"),
-            (2, "1"),
-            (3, "1:0"),
-            (4, "0"),
-            (5, "1"),
-            (6, "nullarray"),
-            (7, "key"),
-            (8, "value"),
+            (1, "tuplearray:0:0"),
+            (2, "tuplearray:0:1"),
+            (3, "tuplearray:1:0"),
+            (4, "arraytuple:0:0"),
+            (5, "arraytuple:0:1"),
+            (6, "nullarray:0"),
+            (7, "maparray:key"),
+            (8, "maparray:value"),
             (9, "nullu64"),
             (10, "u64array:0"),
-            (11, "a"),
-            (12, "b"),
+            (11, "tuplesimple:a"),
+            (12, "tuplesimple:b"),
         ];
         let leaf_fields = schema.leaf_fields();
         for (i, leaf_field) in leaf_fields.iter().enumerate() {
@@ -461,9 +483,9 @@ fn test_schema_modify_field() -> Result<()> {
         let expected_column_id_field = vec![
             (0, "a"),
             (2, "c"),
-            (3, "0"),
-            (4, "1"),
-            (5, "1"),
+            (3, "s:0:0"),
+            (4, "s:0:1"),
+            (5, "s:1"),
             (6, "ary:0:0"),
         ];
         let leaf_fields = schema.leaf_fields();

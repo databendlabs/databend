@@ -211,11 +211,14 @@ fn to_format_tree(
         PhysicalPlan::AsyncSourcer(_) => Ok(FormatTreeNode::new("AsyncSourcer".to_string())),
         PhysicalPlan::Deduplicate(_) => Ok(FormatTreeNode::new("Deduplicate".to_string())),
         PhysicalPlan::ReplaceInto(_) => Ok(FormatTreeNode::new("Replace".to_string())),
+        PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
+        PhysicalPlan::MergeIntoSource(_) => Ok(FormatTreeNode::new("MergeIntoSource".to_string())),
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {
             materialized_cte_to_format_tree(plan, metadata, profs)
         }
         PhysicalPlan::ConstantTableScan(plan) => constant_table_scan_to_format_tree(plan, metadata),
+        PhysicalPlan::FinalCommit(_) => Ok(FormatTreeNode::new("FinalCommit".to_string())),
     }
 }
 
@@ -1199,6 +1202,9 @@ fn format_output_columns(
         .iter()
         .map(|field| match field.name().parse::<usize>() {
             Ok(column_index) => {
+                if column_index == usize::MAX {
+                    return String::from("dummy value");
+                }
                 let column_entry = metadata.column(column_index);
                 match column_entry.table_index() {
                     Some(table_index) if format_table => match metadata

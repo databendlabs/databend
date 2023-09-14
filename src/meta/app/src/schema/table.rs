@@ -32,6 +32,7 @@ use common_meta_types::MetaId;
 use maplit::hashmap;
 
 use crate::schema::database::DatabaseNameIdent;
+use crate::schema::Ownership;
 use crate::share::ShareNameIdent;
 use crate::share::ShareSpec;
 use crate::share::ShareTableInfoMap;
@@ -238,6 +239,7 @@ pub struct TableMeta {
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
     pub column_mask_policy: Option<BTreeMap<String, String>>,
+    pub owner: Option<Ownership>,
 }
 
 impl TableMeta {
@@ -349,6 +351,7 @@ impl Default for TableMeta {
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
             column_mask_policy: None,
+            owner: None,
         }
     }
 }
@@ -870,6 +873,7 @@ mod kvapi_key_impl {
 
     use crate::schema::CountTablesKey;
     use crate::schema::DBIdTableName;
+    use crate::schema::LeastVisibleTimeKey;
     use crate::schema::TableCopiedFileLockKey;
     use crate::schema::TableCopiedFileNameIdent;
     use crate::schema::TableId;
@@ -884,6 +888,7 @@ mod kvapi_key_impl {
     use crate::schema::PREFIX_TABLE_ID_LIST;
     use crate::schema::PREFIX_TABLE_ID_TO_NAME;
     use crate::schema::PREFIX_TABLE_LOCK;
+    use crate::schema::PREFIX_TABLE_LVT;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
@@ -1052,6 +1057,26 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(TableLockKey { table_id, revision })
+        }
+    }
+
+    /// "__fd_table_lvt/table_id"
+    impl kvapi::Key for LeastVisibleTimeKey {
+        const PREFIX: &'static str = PREFIX_TABLE_LVT;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(LeastVisibleTimeKey { table_id })
         }
     }
 }

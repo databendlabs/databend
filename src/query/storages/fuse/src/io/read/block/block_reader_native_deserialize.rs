@@ -26,6 +26,13 @@ use common_arrow::native::read::column_iter_to_arrays;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::ArrayIter;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::Descriptor;
+use common_arrow::parquet::metadata::SchemaDescriptor;
+use common_arrow::parquet::schema::types::FieldInfo;
+use common_arrow::parquet::schema::types::ParquetType;
+use common_arrow::parquet::schema::types::PhysicalType;
+use common_arrow::parquet::schema::types::PrimitiveType;
+use common_arrow::parquet::schema::Repetition;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -101,6 +108,7 @@ impl BlockReader {
             num_rows,
             compression,
             uncompressed_buffer: &uncompressed_buffer,
+            parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
 
         for column_node in &self.project_column_nodes {
@@ -231,7 +239,10 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    return Err(ErrorCode::StorageOther("unexpected: column data not found"));
+                    // If the column is the source of virtual columns, it may be ignored.
+                    // TODO cover more case and add context info for error message
+                    // no raw data of given column id, it is unexpected
+                    return Ok(None);
                 }
             } else {
                 break;
@@ -249,7 +260,7 @@ impl BlockReader {
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
-                // currently, caching of compound filed columns is not support
+                // currently, caching of compound field columns is not support
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached
@@ -280,11 +291,31 @@ impl BlockReader {
 
     pub(crate) fn build_virtual_array_iter(
         name: String,
-        leaf: ColumnDescriptor,
         readers: Vec<NativeReader<Box<dyn NativeReaderExt>>>,
     ) -> Result<ArrayIter<'static>> {
+        // TODO(b41sh): support other data types
+        // The data type of virtual columns are always Nullable Variant,
+        // so we can directly construct `ColumnDescriptor`
+        let primitive_type = PrimitiveType {
+            field_info: FieldInfo {
+                name: name.clone(),
+                repetition: Repetition::Optional,
+                id: None,
+            },
+            logical_type: None,
+            converted_type: None,
+            physical_type: PhysicalType::ByteArray,
+        };
+        let descriptor = Descriptor {
+            primitive_type: primitive_type.clone(),
+            max_def_level: 1,
+            max_rep_level: 0,
+        };
+        let path_in_schema = vec![name.clone()];
+        let base_type = ParquetType::PrimitiveType(primitive_type);
+
         let is_nested = false;
-        let leaves = vec![leaf];
+        let leaves = vec![ColumnDescriptor::new(descriptor, path_in_schema, base_type)];
         let field = ArrowField::new(
             name,
             ArrowType::Extension(

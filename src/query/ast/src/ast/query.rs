@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use common_exception::Span;
 
 use crate::ast::write_comma_separated_list;
-use crate::ast::write_period_separated_list;
+use crate::ast::write_dot_separated_list;
 use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
@@ -263,16 +263,10 @@ pub enum TableReference {
         span: Span,
         join: Join,
     },
-    Stage {
+    Location {
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
-        alias: Option<TableAlias>,
-    },
-    // A set of values generates a temporary constant table that can be used for queries
-    Values {
-        span: Span,
-        values: Vec<Vec<Expr>>,
         alias: Option<TableAlias>,
     },
 }
@@ -424,7 +418,7 @@ impl Display for TableReference {
                 pivot,
                 unpivot,
             } => {
-                write_period_separated_list(
+                write_dot_separated_list(
                     f,
                     catalog.iter().chain(database.iter()).chain(Some(table)),
                 )?;
@@ -528,35 +522,18 @@ impl Display for TableReference {
                     _ => {}
                 }
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
                 write!(f, "{location}")?;
-                write!(f, "{options}")?;
+                if !options.is_empty() {
+                    write!(f, "{options}")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
-                }
-            }
-            TableReference::Values {
-                span: _,
-                values,
-                alias,
-            } => {
-                write!(f, "(VALUES")?;
-                for (i, value) in values.iter().enumerate() {
-                    if i > 0 {
-                        write!(f, ", ")?;
-                    }
-                    write!(f, "(")?;
-                    write_comma_separated_list(f, value)?;
-                    write!(f, ")")?;
-                }
-                write!(f, ")")?;
-                if let Some(alias) = alias {
-                    write!(f, " {alias}")?;
                 }
             }
         }
@@ -588,7 +565,7 @@ impl Display for SelectTarget {
                 }
             }
             SelectTarget::QualifiedName { qualified, exclude } => {
-                write_period_separated_list(f, qualified)?;
+                write_dot_separated_list(f, qualified)?;
                 if let Some(cols) = exclude {
                     // EXCLUDE
                     if !cols.is_empty() {

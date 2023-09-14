@@ -13,13 +13,11 @@
 // limitations under the License.
 
 mod abort_operation;
-mod mutation_accumulator;
 mod mutation_log;
 mod processors;
 mod snapshot_generator;
 
 pub use abort_operation::AbortOperation;
-pub use mutation_accumulator::MutationAccumulator;
 pub use mutation_log::*;
 pub use processors::*;
 pub use snapshot_generator::*;

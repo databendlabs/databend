@@ -14,9 +14,6 @@
 
 use std::sync::Arc;
 
-use common_ast::ast::Identifier;
-use common_ast::ast::ModifyColumnAction;
-use common_ast::ast::TypeName;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
@@ -24,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
 use common_expression::DataSchema;
+use common_expression::TableField;
 use common_expression::TableSchema;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
@@ -37,9 +35,10 @@ use common_meta_types::MatchSeq;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::field_default_value;
+use common_sql::plans::ModifyColumnAction;
 use common_sql::plans::ModifyTableColumnPlan;
 use common_sql::plans::Plan;
-use common_sql::resolve_type_name;
 use common_sql::BloomIndexColumns;
 use common_sql::Planner;
 use common_storages_fuse::FuseTable;
@@ -191,11 +190,30 @@ impl ModifyTableColumnInterpreter {
     async fn do_set_data_type(
         &self,
         table: &Arc<dyn Table>,
-        column_name_types: &Vec<(Identifier, TypeName)>,
+        field_and_comments: &[(TableField, String)],
     ) -> Result<PipelineBuildResult> {
         let schema = table.schema().as_ref().clone();
         let table_info = table.get_table_info();
         let mut new_schema = schema.clone();
+
+        // first check default expr before lock table
+        for (field, _comment) in field_and_comments {
+            let column = &field.name.to_string();
+            let data_type = &field.data_type;
+            if let Ok(i) = schema.index_of(column) {
+                if let Some(default_expr) = &field.default_expr {
+                    let default_expr = default_expr.to_string();
+                    new_schema.fields[i].data_type = data_type.clone();
+                    new_schema.fields[i].default_expr = Some(default_expr);
+                    let _ = field_default_value(self.ctx.clone(), &new_schema.fields[i])?;
+                }
+            } else {
+                return Err(ErrorCode::UnknownColumn(format!(
+                    "Cannot find column {}",
+                    column
+                )));
+            }
+        }
 
         // Add table lock heartbeat.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
@@ -219,32 +237,33 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        for (column, type_name) in column_name_types {
-            let column = column.to_string();
-            if let Ok(i) = schema.index_of(&column) {
-                let new_type = resolve_type_name(type_name)?;
-
-                if new_type != new_schema.fields[i].data_type {
+        let mut table_info = table.get_table_info().clone();
+        for (field, comment) in field_and_comments {
+            let column = &field.name.to_string();
+            let data_type = &field.data_type;
+            if let Ok(i) = schema.index_of(column) {
+                if data_type != &new_schema.fields[i].data_type {
                     // Check if this column is referenced by computed columns.
                     let mut data_schema: DataSchema = table_info.schema().into();
-                    data_schema.set_field_type(i, (&new_type).into());
+                    data_schema.set_field_type(i, data_type.into());
                     check_referenced_computed_columns(
                         self.ctx.clone(),
                         Arc::new(data_schema),
-                        &column,
+                        column,
                     )?;
 
                     // If the column is defined in bloom index columns,
                     // check whether the data type is supported for bloom index.
                     if bloom_index_cols.iter().any(|v| v.as_str() == column)
-                        && !BloomIndex::supported_type(&new_type)
+                        && !BloomIndex::supported_type(data_type)
                     {
                         return Err(ErrorCode::TableOptionInvalid(format!(
                             "Unsupported data type '{}' for bloom index",
-                            new_type
+                            data_type
                         )));
                     }
-                    new_schema.fields[i].data_type = new_type;
+                    new_schema.fields[i].data_type = data_type.clone();
+                    table_info.meta.field_comments[i] = comment.to_string();
                 }
             } else {
                 return Err(ErrorCode::UnknownColumn(format!(
@@ -301,7 +320,6 @@ impl ModifyTableColumnInterpreter {
         };
 
         // 4. define select schema and insert schema of DistributedInsertSelect plan
-        let mut table_info = table.get_table_info().clone();
         table_info.meta.schema = new_schema.clone().into();
         let new_table = FuseTable::try_create(table_info)?;
 
@@ -466,8 +484,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
                 self.do_unset_data_mask_policy(catalog, table, column.to_string())
                     .await
             }
-            ModifyColumnAction::SetDataType(column_name_types) => {
-                self.do_set_data_type(table, column_name_types).await
+            ModifyColumnAction::SetDataType(field_and_comment) => {
+                self.do_set_data_type(table, field_and_comment).await
             }
             ModifyColumnAction::ConvertStoredComputedColumn(column) => {
                 self.do_convert_stored_computed_column(

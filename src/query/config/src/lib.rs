@@ -36,6 +36,7 @@ mod obsolete;
 mod version;
 
 pub use config::CacheStorageTypeConfig;
+pub use config::Commands;
 pub use config::Config;
 pub use config::QueryConfig;
 pub use config::StorageConfig;

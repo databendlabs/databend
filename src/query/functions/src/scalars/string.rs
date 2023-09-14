@@ -136,10 +136,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "lpad",
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-            |s, pad_len, pad, output, _| {
+            |s, pad_len, pad, output, ctx| {
                 let pad_len = pad_len as usize;
                 if pad_len <= s.len() {
-                    output.put_slice(&s[..pad_len])
+                    output.put_slice(&s[..pad_len]);
+                } else if pad.is_empty() {
+                    ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
                 } else {
                     let mut remain_pad_len = pad_len - s.len();
                     while remain_pad_len > 0 {
@@ -183,10 +185,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "rpad",
         |_, _, _, _| FunctionDomain::Full,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
-        |s: &[u8], pad_len: u64, pad: &[u8], output, _| {
+        |s: &[u8], pad_len: u64, pad: &[u8], output, ctx| {
             let pad_len = pad_len as usize;
             if pad_len <= s.len() {
                 output.put_slice(&s[..pad_len])
+            } else if pad.is_empty() {
+                ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
             } else {
                 output.put_slice(s);
                 let mut remain_pad_len = pad_len - s.len();
@@ -260,6 +264,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
+        if substr.is_empty() {
+            // the same behavior as MySQL, Postgres and Clickhouse
+            return if pos == 0 { 1_u64 } else { pos };
+        }
+
         let pos = pos as usize;
         if pos == 0 {
             return 0_u64;
@@ -433,6 +442,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
                     output.put_slice(&val.as_bytes()[idx * chunk_size..]);
@@ -449,6 +464,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let pos = val.rchunks(chunk_size).position(|chunk| chunk != trim_str);
                 if let Some(idx) = pos {
                     output.put_slice(&val.as_bytes()[..val.len() - idx * chunk_size]);
@@ -465,6 +486,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             |col, _| col.data().len(),
             |val, trim_str, _, output| {
                 let chunk_size = trim_str.len();
+                if chunk_size == 0 {
+                    output.put_slice(val);
+                    output.commit_row();
+                    return;
+                }
+
                 let start_pos = val.chunks(chunk_size).position(|chunk| chunk != trim_str);
 
                 // Trim all

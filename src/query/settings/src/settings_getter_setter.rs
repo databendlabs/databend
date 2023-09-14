@@ -20,6 +20,7 @@ use common_meta_app::principal::UserSettingValue;
 use crate::settings::Settings;
 use crate::settings_default::DefaultSettings;
 use crate::ChangeValue;
+use crate::ReplaceIntoShuffleStrategy;
 use crate::ScopeLevel;
 
 impl Settings {
@@ -231,6 +232,30 @@ impl Settings {
         self.try_set_u64("enable_cbo", u64::from(val))
     }
 
+    pub fn get_disable_join_reorder(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_join_reorder")? != 0)
+    }
+
+    pub fn set_disable_join_reorder(&self, val: bool) -> Result<()> {
+        self.try_set_u64("disable_join_reorder", u64::from(val))
+    }
+
+    pub fn get_enable_join_spill(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_join_spill")? != 0)
+    }
+
+    pub fn set_enable_join_spill(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_join_spill", u64::from(val))
+    }
+
+    pub fn get_join_spilling_threshold(&self) -> Result<usize> {
+        Ok(self.try_get_u64("join_spilling_threshold")? as usize)
+    }
+
+    pub fn set_join_spilling_threshold(&self, value: usize) -> Result<()> {
+        self.try_set_u64("join_spilling_threshold", value as u64)
+    }
+
     pub fn get_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }
@@ -383,12 +408,20 @@ impl Settings {
         self.try_set_u64("enable_distributed_copy_into", u64::from(val))
     }
 
+    pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
+    }
+
+    pub fn set_enable_experimental_merge_into(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_experimental_merge_into", u64::from(val))
+    }
+
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
     }
 
     pub fn set_enable_distributed_replace(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_repalce_into", u64::from(val))
+        self.try_set_u64("enable_distributed_replace_into", u64::from(val))
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
@@ -437,10 +470,39 @@ impl Settings {
         self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
     }
 
+    pub fn get_replace_into_shuffle_strategy(&self) -> Result<ReplaceIntoShuffleStrategy> {
+        let v = self.try_get_u64("replace_into_shuffle_strategy")?;
+        ReplaceIntoShuffleStrategy::try_from(v)
+    }
+
+    pub fn set_replace_into_shuffle_strategy(&self, val: u64) -> Result<()> {
+        ReplaceIntoShuffleStrategy::try_from(val)?;
+        self.try_set_u64("replace_into_shuffle_strategy", val)
+    }
+
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("recluster_timeout_secs")
     }
     pub fn set_recluster_timeout_secs(&self, val: u64) -> Result<()> {
         self.try_set_u64("recluster_timeout_secs", val)
+    }
+
+    pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
+    }
+
+    pub fn set_enable_refresh_aggregating_index_after_write(&self, val: bool) -> Result<()> {
+        self.try_set_u64(
+            "enable_refresh_aggregating_index_after_write",
+            u64::from(val),
+        )
+    }
+
+    pub fn get_ddl_column_type_nullable(&self) -> Result<bool> {
+        Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
+    }
+
+    pub fn set_ddl_column_type_nullable(&self, val: bool) -> Result<()> {
+        self.try_set_u64("ddl_column_type_nullable", u64::from(val))
     }
 }

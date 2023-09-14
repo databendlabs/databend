@@ -177,7 +177,7 @@ Specify a list of one or more files names (separated by commas) to be loaded.
 
 ### PATTERN = 'regex_pattern'
 
-A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html. 
+A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
 ### FILE_FORMAT
 
@@ -207,6 +207,19 @@ copyOptions ::=
 :::tip
 When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
 :::
+
+### Output
+
+COPY INTO provides a summary of the data loading results with these columns:
+
+| Column           | DataType | Nullable | Description                                |
+|------------------|----------|----------|--------------------------------------------|
+| FILE             | VARCHAR  | NO       | The relative path to the source file.       |
+| ROWS_LOADED      | INT      | NO       | The number of rows loaded from the source file. |
+| ERRORS_SEEN      | INT      | NO       | Number of error rows in the source file    |
+| FIRST_ERROR      | VARCHAR  | YES      | The first error found in the source file.             |
+| FIRST_ERROR_LINE | INT      | YES      | Line number of the first error.             |
+
 
 ## Examples
 
@@ -289,7 +302,7 @@ As shown in this example, data is loaded from three remote CSV files, but a file
 
 ```sql
 COPY INTO mytable
-FROM 'https://repo.databend.rs/dataset/stateful/ontime_200{6,7,8}_200.csv'
+FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
 FILE_FORMAT = (type = CSV)
 ON_ERROR = continue;
 ```

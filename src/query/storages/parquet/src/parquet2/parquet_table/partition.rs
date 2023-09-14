@@ -27,7 +27,7 @@ use storages_common_pruner::RangePrunerCreator;
 
 use super::table::arrow_to_table_schema;
 use super::Parquet2Table;
-use crate::parquet2::project_parquet_schema;
+use crate::parquet2::projection::project_parquet_schema;
 use crate::parquet2::pruning::build_column_page_pruners;
 use crate::parquet2::pruning::PartitionPruner;
 
@@ -154,7 +154,13 @@ impl Parquet2Table {
         };
 
         pruner
-            .read_and_prune_partitions(self.operator.clone(), &file_locations)
+            .read_and_prune_partitions(
+                self.operator.clone(),
+                &file_locations,
+                ctx.get_settings().get_max_threads()? as usize,
+                &ctx.get_copy_status(),
+                ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+            )
             .await
     }
 }

@@ -268,6 +268,20 @@ pub enum NumberColumn {
     Float64(Buffer<F64>),
 }
 
+#[derive(Clone, PartialEq, EnumAsInner, Debug)]
+pub enum NumberColumnVec {
+    UInt8(Vec<Buffer<u8>>),
+    UInt16(Vec<Buffer<u16>>),
+    UInt32(Vec<Buffer<u32>>),
+    UInt64(Vec<Buffer<u64>>),
+    Int8(Vec<Buffer<i8>>),
+    Int16(Vec<Buffer<i16>>),
+    Int32(Vec<Buffer<i32>>),
+    Int64(Vec<Buffer<i64>>),
+    Float32(Vec<Buffer<F32>>),
+    Float64(Vec<Buffer<F64>>),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum NumberColumnBuilder {
     UInt8(Vec<u8>),
@@ -660,6 +674,20 @@ macro_rules! with_number_mapped_type {
             $t = [
                 UInt8 => u8, UInt16 => u16, UInt32 => u32, UInt64 => u64,
                 Int8 => i8, Int16 => i16, Int32 => i32, Int64 => i64,
+                Float32 => $crate::types::number::F32, Float64 => $crate::types::number::F64
+            ],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! with_number_mapped_type_without_64 {
+    (| $t:tt | $($tail:tt)*) => {
+        match_template::match_template! {
+            $t = [
+                UInt8 => u8, UInt16 => u16, UInt32 => u32,
+                Int8 => i8, Int16 => i16, Int32 => i32,
                 Float32 => $crate::types::number::F32, Float64 => $crate::types::number::F64
             ],
             $($tail)*

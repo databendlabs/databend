@@ -1,3 +1,11 @@
+query I
+select range(10, 20)
+----
+[10,11,12,13,14,15,16,17,18,19]
+
+statement error
+select range(10, 5000000011)
+
 statement ok
 DROP DATABASE IF EXISTS array_func_test
 
@@ -11,7 +19,7 @@ statement ok
 DROP TABLE IF EXISTS t
 
 statement ok
-create table t(col1 Array(Int Null), col2 Array(String), col3 Array(Date), col4 Array(Timestamp), col5 Array(Array(Int null)))
+create table t(col1 Array(Int Null) not null, col2 Array(String) not null, col3 Array(Date) not null, col4 Array(Timestamp) not null, col5 Array(Array(Int null)) not null)
 
 statement ok
 insert into t values([1,2,3,3],['x','x','y','z'], ['2022-02-02'], ['2023-01-01 02:00:01'], [[1,2],[],[null]])
@@ -185,7 +193,7 @@ select array_sort(col1, 'asca', 'nulls first') from t;
 query T
 select array_transform([1, 2, NULL, 3], x -> x + 1)
 ----
-[2,3,NULL,4] 
+[2,3,NULL,4]
 
 query T
 select array_transform(['data', 'a', 'b'], data -> CONCAT(data, 'bend'))

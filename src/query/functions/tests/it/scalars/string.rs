@@ -208,10 +208,14 @@ fn test_trim_leading(file: &mut impl Write) {
     run_ast(file, "trim_leading('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_leading(NULL, 'a')", &[]);
     run_ast(file, "trim_leading('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_leading('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_leading(a, 'a')", &table);
@@ -226,10 +230,14 @@ fn test_trim_trailing(file: &mut impl Write) {
     run_ast(file, "trim_trailing('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_trailing(NULL, 'a')", &[]);
     run_ast(file, "trim_trailing('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_trailing('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_trailing(a, 'b')", &table);
@@ -244,10 +252,14 @@ fn test_trim_both(file: &mut impl Write) {
     run_ast(file, "trim_both('aaabbaaa', 'b')", &[]);
     run_ast(file, "trim_both(NULL, 'a')", &[]);
     run_ast(file, "trim_both('aaaaaaaa', NULL)", &[]);
+    run_ast(file, "trim_both('aaaaaaaa', '')", &[]);
 
     let table = [
-        ("a", StringType::from_data(&["aabbaa", "bbccbb", "ccddcc"])),
-        ("b", StringType::from_data(&["a", "b", "c"])),
+        (
+            "a",
+            StringType::from_data(&["aabbaa", "bbccbb", "ccddcc", "aabbaa"]),
+        ),
+        ("b", StringType::from_data(&["a", "b", "c", ""])),
     ];
 
     run_ast(file, "trim_both(a, 'a')", &table);
@@ -445,19 +457,32 @@ fn test_pad(file: &mut impl Write) {
     run_ast(file, "lpad('hi', 4, '?')", &[]);
     run_ast(file, "lpad('hi', 0, '?')", &[]);
     run_ast(file, "lpad('hi', 1, '?')", &[]);
+    run_ast(file, "lpad('', 1, '')", &[]);
+    run_ast(file, "lpad('hi', 1, '')", &[]);
+    run_ast(file, "lpad('', 1, '?')", &[]);
     run_ast(file, "lpad('hi', -1, '?')", &[]);
     let table = [
         ("a", StringType::from_data(&["hi", "test", "cc"])),
         ("b", UInt8Type::from_data(vec![0u8, 3, 5])),
         ("c", StringType::from_data(&["?", "x", "bb"])),
     ];
+    let table_error = [
+        ("a", StringType::from_data(&["hi"])),
+        ("b", UInt8Type::from_data(vec![5])),
+        ("c", StringType::from_data(&[""])),
+    ];
     run_ast(file, "lpad(a, b, c)", &table);
+    run_ast(file, "lpad(a, b, c)", &table_error);
     run_ast(file, "rpad('hi', 2, '?')", &[]);
     run_ast(file, "rpad('hi', 4, '?')", &[]);
     run_ast(file, "rpad('hi', 0, '?')", &[]);
     run_ast(file, "rpad('hi', 1, '?')", &[]);
+    run_ast(file, "rpad('', 1, '')", &[]);
+    run_ast(file, "rpad('hi', 1, '')", &[]);
+    run_ast(file, "rpad('', 1, '?')", &[]);
     run_ast(file, "rpad('hi', -1, '?')", &[]);
     run_ast(file, "rpad(a, b, c)", &table);
+    run_ast(file, "rpad(a, b, c)", &table_error);
 }
 
 fn test_replace(file: &mut impl Write) {
@@ -488,8 +513,14 @@ fn test_strcmp(file: &mut impl Write) {
 
 fn test_locate(file: &mut impl Write) {
     run_ast(file, "locate('bar', 'foobarbar')", &[]);
+    run_ast(file, "locate('', 'foobarbar')", &[]);
+    run_ast(file, "locate('', '')", &[]);
     run_ast(file, "instr('foobarbar', 'bar')", &[]);
+    run_ast(file, "instr('foobarbar', '')", &[]);
+    run_ast(file, "instr('', '')", &[]);
     run_ast(file, "position('bar' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN '')", &[]);
     run_ast(file, "position('foobarbar' IN 'bar')", &[]);
     run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
 

@@ -52,13 +52,14 @@ clap = { workspace = true }
 derive_more = { workspace = true }
 futures = "0.3.24"
 itertools = { workspace = true }
+lazy_static = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 maplit = "1.0.2"
-metrics = "0.20.1"
 minitrace = { workspace = true }
 once_cell = "1.15.0"
-poem = { version = "1", features = ["rustls"] }
+poem = { version = "~1.3.57", features = ["rustls"] }
+prometheus-client = "0.21.2"
 prost = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

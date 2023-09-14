@@ -1,7 +1,6 @@
 ---
 title: Quick Start Resources
 ---
-
 Welcome to our Quick Start Resources page! 
 
 Whether you're a newbie to Databend or looking to refresh your knowledge, this page is designed to help you get up and running quickly 🚀. We've compiled a list of key documents to help you navigate our documentation and learn the essentials of Databend. From deployment guides to usecases, this page will provide you with everything you need to begin using Databend effectively.
@@ -19,7 +18,7 @@ import TabItem from '@theme/TabItem';
 * [Understanding Deployment Modes](../10-deploy/00-understanding-deployment-modes.md)
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
 * [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
-* [Deploying a Query Cluster on Kubernetes](../10-deploy/06-metasrv/11-deploying-databend-on-kubernetes.md)
+* [Deploying a Query Cluster on Kubernetes](../10-deploy/06-cluster/11-deploying-databend-on-kubernetes.md)
 * [Docker and Local Deployments](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
@@ -36,7 +35,7 @@ import TabItem from '@theme/TabItem';
 <TabItem value="Manage" label="Manage">
 
 * [Managing Databend Settings](../13-sql-reference/42-manage-settings.md)
-* [Backing Up and Restoring a Meta Service Cluster](../10-deploy/06-metasrv/30-metasrv-backup-restore.md)
+* [Backing Up and Restoring a Meta Service Cluster](../10-deploy/06-cluster/30-metasrv-backup-restore.md)
 * [Backing Up and Restoring Schema Data](../10-deploy/09-upgrade/10-backup-and-restore-schema.md)
 * [Upgrading Databend](../10-deploy/09-upgrade/50-upgrade.md)
 
@@ -149,13 +148,13 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 <Tabs>
 <TabItem value="Visualizations" label="Visualizations" default>
 
-* [Deepnote](../13-integrations/deepnote.md)
-* [Grafana](../13-integrations/grafana.md)
-* [Jupyter Notebook](../13-integrations/jupyter.md)
-* [Metabase](../13-integrations/metabase.md)
-* [MindsDB](../13-integrations/mindsdb.md)
-* [Redash](../13-integrations/redash.md)
-* [Tableau](../13-integrations/tableau.md)
+* [Deepnote](../12-visualize/deepnote.md)
+* [Grafana](../12-visualize/grafana.md)
+* [Jupyter Notebook](../12-visualize/jupyter.md)
+* [Metabase](../12-visualize/metabase.md)
+* [MindsDB](../12-visualize/mindsdb.md)
+* [Redash](../12-visualize/redash.md)
+* [Tableau](../12-visualize/tableau.md)
 
 </TabItem>
 

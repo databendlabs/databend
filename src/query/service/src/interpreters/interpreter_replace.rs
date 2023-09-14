@@ -185,6 +185,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: common_sql::executor::FragmentKind::Expansive,
                 keys: vec![],
+                ignore_exchange: false,
             }));
         }
 
@@ -225,6 +226,7 @@ impl ReplaceInterpreter {
                 .into_iter()
                 .enumerate()
                 .collect(),
+            block_slots: None,
             need_insert: true,
         }));
         if is_distributed {
@@ -233,6 +235,7 @@ impl ReplaceInterpreter {
                 input: root,
                 kind: common_sql::executor::FragmentKind::Merge,
                 keys: vec![],
+                ignore_exchange: false,
             }));
         }
         root = Box::new(PhysicalPlan::MutationAggregate(Box::new(

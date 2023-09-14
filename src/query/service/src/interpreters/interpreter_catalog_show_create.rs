@@ -18,10 +18,10 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_meta_app::schema::CatalogOption;
+use common_meta_app::storage::StorageParams;
 use common_sql::plans::ShowCreateCatalogPlan;
 use log::debug;
 
@@ -47,10 +47,6 @@ impl Interpreter for ShowCreateCatalogInterpreter {
         "ShowCreateTableInterpreter"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str()).await?;
@@ -60,7 +56,14 @@ impl Interpreter for ShowCreateCatalogInterpreter {
 
         let (catalog_type, option) = match info.meta.catalog_option {
             CatalogOption::Default => (String::from("default"), String::new()),
-            CatalogOption::Hive(op) => (String::from("hive"), format!("ADDRESS\n{}", op.address)),
+            CatalogOption::Hive(op) => (
+                String::from("hive"),
+                format!(
+                    "METASTORE ADDRESS\n{}\nSTORAGE PARAMS\n{}",
+                    op.address,
+                    op.storage_params.unwrap_or(Box::new(StorageParams::None))
+                ),
+            ),
             CatalogOption::Iceberg(op) => (
                 String::from("iceberg"),
                 format!("STORAGE PARAMS\n{}", op.storage_params),

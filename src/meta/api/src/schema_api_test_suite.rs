@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_ne;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
@@ -71,12 +72,14 @@ use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
+use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReq;
 use common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableCopiedFileInfo;
@@ -309,6 +312,7 @@ impl SchemaApiTestSuite {
             .virtual_column_create_list_drop(&b.build().await)
             .await?;
         suite.catalog_create_get_list_drop(&b.build().await).await?;
+        suite.table_least_visible_time(&b.build().await).await?;
 
         Ok(())
     }
@@ -452,7 +456,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table_name.to_string()
+                table_name: table_name.to_string(),
             });
         }
 
@@ -477,7 +481,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table_name.to_string()
+                table_name: table_name.to_string(),
             });
         }
 
@@ -502,7 +506,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id,
-                table_name: table2_name.to_string()
+                table_name: table2_name.to_string(),
             });
         }
 
@@ -527,7 +531,7 @@ impl SchemaApiTestSuite {
                 get_kv_data(mt.as_kv_api(), &table_id_name_key).await?;
             assert_eq!(ret_table_name_ident, DBIdTableName {
                 db_id: db3_id,
-                table_name: table3_name.to_string()
+                table_name: table3_name.to_string(),
             });
         }
 
@@ -1381,6 +1385,87 @@ impl SchemaApiTestSuite {
 
         let got = mt.list_catalogs(ListCatalogReq::new("tenant1")).await?;
         assert_eq!(got.len(), 0);
+
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_least_visible_time<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let tbl_name = "tb1";
+        let name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+        };
+        let schema = || {
+            Arc::new(TableSchema::new(vec![TableField::new(
+                "number",
+                TableDataType::Number(NumberDataType::UInt64),
+            )]))
+        };
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        info!("--- prepare db");
+        {
+            let plan = CreateDatabaseReq {
+                if_not_exists: false,
+                name_ident: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                meta: DatabaseMeta {
+                    engine: "".to_string(),
+                    ..DatabaseMeta::default()
+                },
+            };
+
+            mt.create_database(plan).await?;
+        }
+
+        let table_id;
+        info!("--- create table");
+        {
+            let table_meta = |created_on| TableMeta {
+                schema: schema(),
+                engine: "JSON".to_string(),
+                options: options(),
+                updated_on: created_on,
+                created_on,
+                ..TableMeta::default()
+            };
+            let created_on = Utc::now();
+            let req = CreateTableReq {
+                if_not_exists: false,
+                name_ident: name_ident.clone(),
+                table_meta: table_meta(created_on),
+            };
+            let res = mt.create_table(req.clone()).await?;
+            table_id = res.table_id;
+        }
+
+        info!("--- test lvt");
+        {
+            let time = 1024;
+            let req = SetLVTReq { table_id, time };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1024);
+
+            // test lvt never fall back
+            let time = 102;
+            let req = SetLVTReq { table_id, time };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1024);
+
+            let time = 1025;
+            let req = SetLVTReq { table_id, time };
+
+            let res = mt.set_table_lvt(req).await?;
+            assert_eq!(res.time, 1025);
+        }
 
         Ok(())
     }
@@ -3170,6 +3255,7 @@ impl SchemaApiTestSuite {
                 dropped_on: None,
                 updated_on: None,
                 query: "select sum(number) from tb1".to_string(),
+                sync_creation: false,
             },
         };
 
@@ -4705,6 +4791,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+            sync_creation: false,
         };
 
         let index_name_2 = "idx2";
@@ -4715,6 +4802,7 @@ impl SchemaApiTestSuite {
             dropped_on: None,
             updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
+            sync_creation: false,
         };
 
         let name_ident_1 = IndexNameIdent {
@@ -4802,6 +4890,17 @@ impl SchemaApiTestSuite {
 
             let res = mt.list_indexes(req).await?;
             assert!(res.is_empty())
+        }
+
+        {
+            info!("--- list indexes by table id");
+            let req = ListIndexesByIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.list_indexes_by_table_id(req).await?;
+            assert_eq!(2, res.len());
         }
 
         {
@@ -4945,7 +5044,7 @@ impl SchemaApiTestSuite {
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
                 "variant:k1".to_string(),
-                "variant[1]".to_string()
+                "variant[1]".to_string(),
             ]);
 
             let req = ListVirtualColumnsReq {
@@ -4978,7 +5077,7 @@ impl SchemaApiTestSuite {
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec![
                 "variant:k2".to_string(),
-                "variant[2]".to_string()
+                "variant[2]".to_string(),
             ]);
         }
 

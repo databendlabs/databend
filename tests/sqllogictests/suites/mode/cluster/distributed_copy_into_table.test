@@ -20,7 +20,7 @@ statement ok
 create stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create table table_random(a int,b string,c string) ENGINE = Random;
+create table table_random(a int not null,b string not null,c string not null) ENGINE = Random;
 
 statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);
@@ -47,7 +47,7 @@ statement ok
 copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-create table t(a int,b string,c string);
+create table t(a int not null,b string not null,c string not null);
 
 statement ok
 copy into t from @st force = true;
@@ -74,7 +74,7 @@ statement ok
 set enable_distributed_copy_into = 1;
 
 statement ok
-create table t_query(a int,b string,c string);
+create table t_query(a int not null,b string not null,c string not null);
 
 statement ok
 create stage st_query FILE_FORMAT = (TYPE = TSV);
@@ -100,7 +100,7 @@ select count(*) from t_query;
 
 ## add parquet_file_test
 statement ok
-create table parquet_table(a int,b string,c string);
+create table parquet_table(a int not null,b string not null,c string not null);
 
 statement ok
 create stage parquet_stage file_format = (type = parquet);
@@ -148,7 +148,7 @@ select count(*) from parquet_table;
 # make sure it's distributed.
 
 statement ok
-create table t_query2(a int,b string,c string);
+create table t_query2(a int not null,b string not null,c string not null);
 
 statement ok
 create stage st_query2 FILE_FORMAT = (TYPE = TSV);
@@ -177,7 +177,7 @@ select block_count from fuse_snapshot('default','t_query2');
 
 #test cluster key
 statement ok
-create table test_order(a int,b string,c timestamp) cluster by(to_yyyymmdd(c),a);
+create table test_order(a int not null,b string not null,c timestamp not null) cluster by(to_yyyymmdd(c),a);
 
 statement ok
 create table random_source like test_order Engine = Random;

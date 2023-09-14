@@ -117,7 +117,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -285,7 +285,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -425,7 +425,7 @@ async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -611,7 +611,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
         fixture.ctx(),
         &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s"),
     )
-    .await?;
+        .await?;
 
     // Refresh Index
     execute_sql(
@@ -668,114 +668,74 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
 }
 
 struct FuzzParams {
-    num_rows_per_block: usize,
-    num_blocks: usize,
-    index_block_ratio: f64,
     query_sql: String,
     index_sql: String,
     is_index_scan: bool,
-    table_format: String,
+    num_blocks: usize,
+    num_rows_per_block: usize,
+    index_block_ratio: f64,
 }
 
 impl Display for FuzzParams {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\nTableFormat: {}\n",
+            "Query: {}\nIndex: {}\nIsIndexScan: {}\nNumBlocks: {}\nNumRowsPerBlock: {}\nIndexBlockRatio: {}\n",
             self.query_sql,
             self.index_sql,
             self.is_index_scan,
             self.num_blocks,
             self.num_rows_per_block,
             self.index_block_ratio,
-            self.table_format,
         )
     }
 }
 
-async fn fuzz(params: FuzzParams) -> Result<()> {
+async fn fuzz(ctx: Arc<QueryContext>, params: FuzzParams) -> Result<()> {
     let fuzz_info = params.to_string();
     let FuzzParams {
-        num_rows_per_block,
-        num_blocks,
-        index_block_ratio,
         query_sql,
         index_sql,
         is_index_scan,
-        table_format: format,
+        num_blocks,
+        index_block_ratio,
+        ..
     } = params;
+    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
 
-    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
-    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-
-    // Prepare table and data
-    // Create random engine table
+    // Create agg index
     execute_sql(
-        fixture.ctx(),
-        "CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM",
-    )
-    .await?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
-    )
-    .await?;
-    execute_sql(
-        fixture.ctx(),
-        &format!("CREATE TABLE temp_t (a int, b int, c int) storage_format = '{format}'"),
-    )
-    .await?;
-    execute_sql(
-        fixture.ctx(),
+        ctx.clone(),
         &format!("CREATE AGGREGATING INDEX index AS {index_sql}"),
     )
     .await?;
 
-    let plan = plan_sql(fixture.ctx(), &query_sql).await?;
+    let plan = plan_sql(ctx.clone(), &query_sql).await?;
     if !is_index_scan_plan(&plan) {
         assert!(!is_index_scan, "{}", fuzz_info);
         // Clear
-        drop_index(fixture.ctx(), "index").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
+        drop_index(ctx.clone(), "index").await?;
         return Ok(());
     }
     assert!(is_index_scan, "{}", fuzz_info);
 
-    // Generate data with index
-    for _ in 0..num_blocks {
-        execute_sql(
-            fixture.ctx(),
-            &format!(
-                "INSERT INTO t SELECT * FROM rt LIMIT {}",
-                num_rows_per_block
-            ),
-        )
+    // Get query result
+    let expect: Vec<DataBlock> = execute_sql(ctx.clone(), &query_sql)
+        .await?
+        .try_collect()
         .await?;
-    }
 
-    let num_index_blocks = (num_blocks as f64 * index_block_ratio) as usize;
+    // Refresh index
     if num_index_blocks > 0 {
         execute_sql(
-            fixture.ctx(),
+            ctx.clone(),
             &format!("REFRESH AGGREGATING INDEX index LIMIT {num_index_blocks}"),
         )
         .await?;
     }
 
-    // Copy data into temp table
-    execute_sql(fixture.ctx(), "INSERT INTO temp_t SELECT * FROM t").await?;
-
-    // Get query result
-    let expect: Vec<DataBlock> =
-        execute_sql(fixture.ctx(), &query_sql.replace("from t", "from temp_t"))
-            .await?
-            .try_collect()
-            .await?;
-
     // Get index scan query result
-    let actual: Vec<DataBlock> = execute_sql(fixture.ctx(), &query_sql)
+    let actual: Vec<DataBlock> = execute_sql(ctx.clone(), &query_sql)
         .await?
         .try_collect()
         .await?;
@@ -794,38 +754,17 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
     if expect.is_empty() {
         assert!(actual.is_empty());
         // Clear
-        drop_index(fixture.ctx(), "index").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
-        execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
+        drop_index(ctx.clone(), "index").await?;
         return Ok(());
     }
 
     assert!(!actual.is_empty(), "{}", fuzz_info);
 
     let expect = DataBlock::concat(&expect)?;
-    let expect = DataBlock::sort(
-        &expect,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let expect = DataBlock::sort(&expect, &get_sort_col_descs(expect.num_columns()), None)?;
 
     let actual = DataBlock::concat(&actual)?;
-    let actual = DataBlock::sort(
-        &actual,
-        &[SortColumnDescription {
-            offset: 0,
-            nulls_first: false,
-            asc: true,
-            is_nullable: false,
-        }],
-        None,
-    )?;
+    let actual = DataBlock::sort(&actual, &get_sort_col_descs(actual.num_columns()), None)?;
 
     let formated_expect = pretty_format_blocks(&[expect])?;
     let formated_actual = pretty_format_blocks(&[actual])?;
@@ -837,12 +776,22 @@ async fn fuzz(params: FuzzParams) -> Result<()> {
     );
 
     // Clear
-    drop_index(fixture.ctx(), "index").await?;
-    execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-    execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
-    execute_sql(fixture.ctx(), "DROP TABLE temp_t ALL").await?;
+    drop_index(ctx, "index").await?;
 
     Ok(())
+}
+
+fn get_sort_col_descs(num_cols: usize) -> Vec<SortColumnDescription> {
+    let mut sorts = Vec::with_capacity(num_cols);
+    for i in 0..num_cols {
+        sorts.push(SortColumnDescription {
+            offset: i,
+            nulls_first: false,
+            asc: true,
+            is_nullable: false,
+        });
+    }
+    sorts
 }
 
 #[derive(Default)]
@@ -1068,28 +1017,76 @@ fn get_test_suites() -> Vec<TestSuite> {
             index: "select b, sum(a) from t where b > 0 group by b",
             is_index_scan: true,
         },
+        // query: eval-agg-scan, index: eval-agg-scan without group by
+        TestSuite {
+            query: "select sum(a) from t",
+            index: "select sum(a) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with multiple agg funcs and without group by
+        TestSuite {
+            query: "select sum(a), approx_count_distinct(b) from t",
+            index: "select sum(a), approx_count_distinct(b) from t",
+            is_index_scan: true,
+        },
+        // query: eval-agg-scan, index: eval-agg-scan with both scalar and agg funcs
+        TestSuite {
+            query: "select sum(a), to_string(b) as bs from t group by bs",
+            index: "select sum(a), to_string(b) as bs from t group by bs",
+            is_index_scan: true,
+        },
     ]
 }
 
 async fn test_fuzz_impl(format: &str) -> Result<()> {
     let test_suites = get_test_suites();
 
-    for suite in test_suites {
-        for num_blocks in [1, 10] {
-            for num_rows_per_block in [1, 50] {
-                for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
-                    fuzz(FuzzParams {
-                        num_rows_per_block,
-                        num_blocks,
-                        index_block_ratio,
+    for num_blocks in [1, 10] {
+        for num_rows_per_block in [1, 50] {
+            let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+            let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+            // Prepare table and data
+            // Create random engine table to generate random data.
+            execute_sql(
+                fixture.ctx(),
+                "CREATE TABLE rt (a int, b int, c int) ENGINE = RANDOM",
+            )
+            .await?;
+            execute_sql(
+                fixture.ctx(),
+                &format!("CREATE TABLE t (a int, b int, c int) storage_format = '{format}'"),
+            )
+            .await?;
+            // Insert random data to table t.
+            for _ in 0..num_blocks {
+                execute_sql(
+                    fixture.ctx(),
+                    &format!(
+                        "INSERT INTO t SELECT * FROM rt LIMIT {}",
+                        num_rows_per_block
+                    ),
+                )
+                .await?;
+            }
+
+            // Run fuzz tests with different index block ratios.
+            for index_block_ratio in [0.2, 0.5, 0.8, 1.0] {
+                for suite in test_suites.iter() {
+                    fuzz(fixture.ctx(), FuzzParams {
                         query_sql: suite.query.to_string(),
                         index_sql: suite.index.to_string(),
                         is_index_scan: suite.is_index_scan,
-                        table_format: format.to_string(),
+                        num_blocks,
+                        num_rows_per_block,
+                        index_block_ratio,
                     })
                     .await?;
                 }
             }
+
+            // Clear data
+            execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
+            execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
         }
     }
     Ok(())

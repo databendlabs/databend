@@ -689,3 +689,61 @@ select * from t1 left join t2 on t1.a = t2.a and t1.b > t2.b order by t1.a, t2.a
 
 statement ok
 set max_block_size = 65536;
+
+# test probe to build
+statement ok
+insert into t1 values(2, 2);
+
+statement ok
+insert into t2 values(2, 6), (2, 8);
+
+query I
+select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.b, t1.b;
+----
+1 2 2
+1 4 2
+1 6 2
+1 8 2
+1 10 2
+2 6 2
+2 6 4
+2 8 2
+2 8 4
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+
+# Test hash join build spill with empty probe
+# The test mainly to test trigger spill and there is no blocking during spilling.
+
+statement ok
+set disable_join_reorder = 1;
+
+statement ok
+set enable_join_spill = 1;
+
+statement ok
+set join_spilling_threshold = 1;
+
+statement ok
+create table t3(a int);
+
+query I
+select * from t3 inner join numbers(100000) on t3.a = number;
+----
+
+statement ok
+drop table t3;
+
+statement ok
+set disable_join_reorder = 0;
+
+statement ok
+set enable_join_spill = 0;
+
+statement ok
+set join_spilling_threshold = 0;

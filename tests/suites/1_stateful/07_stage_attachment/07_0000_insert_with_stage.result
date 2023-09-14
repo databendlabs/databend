@@ -1,4 +1,5 @@
 sample.csv
+Succeeded
 96
 227
 null
@@ -8,6 +9,7 @@ null
 4	'Shenzhen'	70	China
 5	'Shenzhen'	55	China
 6	'Beijing'	99	China
+Succeeded
 96
 null
 1	'Beijing'	100	China
@@ -16,11 +18,12 @@ null
 4	'Shenzhen'	70	China
 5	'Shenzhen'	55	China
 6	'Beijing'	99	China
+Succeeded
 77
 null
-1	'Beijing'	2	China
-2	'Shanghai'	2	China
-3	'Guangzhou'	2	China
-4	'Shenzhen'	2	China
-5	'Shenzhen'	2	China
-6	'Beijing'	2	China
+1	'beijing'	2	China
+2	'shanghai'	2	China
+3	'guangzhou'	2	China
+4	'shenzhen'	2	China
+5	'shenzhen'	2	China
+6	'beijing'	2	China

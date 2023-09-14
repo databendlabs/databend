@@ -83,7 +83,7 @@ impl SuggestedBackgroundTasksTable {
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
-            name: String::from("license_info"),
+            name: String::from("suggested_background_tasks"),
             meta: TableMeta {
                 schema: Self::schema(),
                 engine: String::from(table_func_name),
@@ -166,8 +166,8 @@ impl SuggestedBackgroundTasksSource {
         let mut planner = Planner::new(ctx.clone());
         let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
         ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
+        let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let data_schema = interpreter.schema();
         let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
@@ -242,7 +242,7 @@ impl SuggestedBackgroundTasksSource {
 
 #[async_trait::async_trait]
 impl AsyncSource for SuggestedBackgroundTasksSource {
-    const NAME: &'static str = "license_info";
+    const NAME: &'static str = "suggested_background_tasks";
 
     #[async_trait::unboxed_simple]
     #[async_backtrace::framed]

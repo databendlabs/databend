@@ -299,10 +299,22 @@ impl Session {
     }
 
     #[async_backtrace::framed]
+    pub async fn get_object_owner(
+        self: &Arc<Self>,
+        owner: &GrantObject,
+    ) -> Result<Option<RoleInfo>> {
+        let role_mgr = RoleCacheManager::instance();
+        let tenant = self.get_current_tenant();
+        // return true only if grant object owner is the role itself
+        role_mgr.find_object_owner(&tenant, owner).await
+    }
+
+    #[async_backtrace::framed]
     pub async fn validate_privilege(
         self: &Arc<Self>,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
+        verify_ownership: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
@@ -320,12 +332,24 @@ impl Session {
         // 2. check the user's roles' privilege set
         self.ensure_current_role().await?;
         let available_roles = self.get_all_available_roles().await?;
-        let role_verified = available_roles
+        let role_verified = &available_roles
             .iter()
             .any(|r| r.grants.verify_privilege(object, privilege.clone()));
-        if role_verified {
+        if *role_verified {
             return Ok(());
         }
+
+        if verify_ownership {
+            let object_owner = self.get_object_owner(object).await?;
+            if let Some(owner) = object_owner.as_ref() {
+                for role in &available_roles {
+                    if *role.identity() == *owner.identity() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         let roles_name = available_roles
             .iter()
             .map(|r| r.name.clone())

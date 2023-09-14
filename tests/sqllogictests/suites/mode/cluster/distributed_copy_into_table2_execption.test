@@ -23,13 +23,13 @@ statement ok
 create stage s1 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create table products (id int, name string, description string);
+create table products (id int null, name string null, description string null);
 
 statement ok
-create table table_random(a int,b string,c string) ENGINE = Random;
+create table table_random(a int null,b string null,c string null) ENGINE = Random;
 
 statement ok
-create table table_random2(a int,b string) ENGINE = Random;
+create table table_random2(a int null,b string null) ENGINE = Random;
 
 statement ok
 copy into @s1 from (select a,b,c from table_random limit 1000000);
@@ -108,7 +108,7 @@ select count(*) from products;
 
 ## add parquet_file_test
 statement ok
-create table parquet_table_(a int,b string,c string);
+create table parquet_table_(a int not null,b string not null,c string not null);
 
 statement ok
 create stage parquet_stage_ file_format = (type = parquet);

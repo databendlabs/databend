@@ -30,6 +30,7 @@ use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
 
+use super::config::Commands;
 use super::config::Config;
 use crate::background_config::InnerBackgroundConfig;
 
@@ -38,7 +39,7 @@ use crate::background_config::InnerBackgroundConfig;
 /// All function should implement based on this Config.
 #[derive(Clone, Default, PartialEq, Eq)]
 pub struct InnerConfig {
-    pub cmd: String,
+    pub subcommand: Option<Commands>,
     pub config_file: String,
 
     // Query engine config.
@@ -51,9 +52,6 @@ pub struct InnerConfig {
 
     // Storage backend config.
     pub storage: StorageConfig,
-
-    // Local query config.
-    pub local: LocalConfig,
 
     // external catalog config.
     // - Later, catalog information SHOULD be kept in KV Service
@@ -75,7 +73,7 @@ impl InnerConfig {
         let cfg: Self = Config::load(true)?.try_into()?;
 
         // Only check meta config when cmd is empty.
-        if cfg.cmd.is_empty() {
+        if cfg.subcommand.is_none() {
             cfg.meta.check_valid()?;
         }
         Ok(cfg)
@@ -125,13 +123,12 @@ impl InnerConfig {
 impl Debug for InnerConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("InnerConfig")
-            .field("cmd", &self.cmd)
+            .field("subcommand", &self.subcommand)
             .field("config_file", &self.config_file)
             .field("query", &self.query.sanitize())
             .field("log", &self.log)
             .field("meta", &self.meta)
             .field("storage", &self.storage)
-            .field("local", &self.local)
             .field("catalogs", &self.catalogs)
             .field("cache", &self.cache)
             .field("background", &self.background)
@@ -179,6 +176,7 @@ pub struct QueryConfig {
     /// Certificate for client to identify query rpc server
     pub rpc_tls_query_server_root_ca_cert: String,
     pub rpc_tls_query_service_domain_name: String,
+    pub rpc_client_timeout_secs: u64,
     /// Table engine memory enabled
     pub table_engine_memory_enabled: bool,
     pub wait_timeout_mills: u64,
@@ -247,6 +245,7 @@ impl Default for QueryConfig {
             rpc_tls_server_key: "".to_string(),
             rpc_tls_query_server_root_ca_cert: "".to_string(),
             rpc_tls_query_service_domain_name: "localhost".to_string(),
+            rpc_client_timeout_secs: 0,
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10_000,
@@ -447,14 +446,14 @@ impl Display for ThriftProtocol {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CatalogHiveConfig {
-    pub address: String,
+    pub metastore_address: String,
     pub protocol: ThriftProtocol,
 }
 
 impl Default for CatalogHiveConfig {
     fn default() -> Self {
         Self {
-            address: "127.0.0.1:9083".to_string(),
+            metastore_address: "127.0.0.1:9083".to_string(),
             protocol: ThriftProtocol::Binary,
         }
     }

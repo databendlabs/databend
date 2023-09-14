@@ -79,6 +79,18 @@ error:
 
 
 ---------- Input ----------
+CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+---------- Output ---------
+error: 
+  --> SQL:1:41
+  |
+1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
+  | ------                                  ^ ambiguous NOT NULL constraint
+  | |                                        
+  | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
+
+
+---------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 
@@ -243,7 +255,7 @@ error:
   --> SQL:1:15
   |
 1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
-  | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
+  | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 6 more ...
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -268,7 +280,7 @@ error:
   --> SQL:1:24
   |
 1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
-  | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
+  | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 6 more ...
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`
@@ -347,7 +359,7 @@ error:
   --> SQL:1:9
   |
 1 | PRESIGN INVALID @my_stage/path/to/file
-  | ------- ^^^^^^^ expected `AtString`, `DOWNLOAD`, or `UPLOAD`
+  | ------- ^^^^^^^ expected <QuotedString>, `AtString`, `DOWNLOAD`, or `UPLOAD`
   | |        
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
@@ -443,6 +455,30 @@ error:
 1 | select * from aa.bb limit 10 limit 20;
   | ------                       ^^^^^ duplicated LIMIT clause
   | |                             
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2 offset 2;
+---------- Output ---------
+error: 
+  --> SQL:1:32
+  |
+1 | select * from aa.bb limit 10,2 offset 2;
+  | ------                         ^^^^^^ LIMIT n,m should not appear OFFSET
+  | |                               
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
+select * from aa.bb limit 10,2,3;
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | select * from aa.bb limit 10,2,3;
+  | ------              ^^^^^ [LIMIT n OFFSET m] or [LIMIT n,m]
+  | |                    
   | while parsing `SELECT ...`
 
 

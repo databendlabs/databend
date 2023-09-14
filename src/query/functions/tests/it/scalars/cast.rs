@@ -313,6 +313,8 @@ fn test_cast_between_number_and_boolean(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(1.0 AS BOOLEAN)"), &[]);
     run_ast(file, format!("{prefix}CAST(false AS FLOAT32)"), &[]);
     run_ast(file, format!("{prefix}CAST(true AS FLOAT64)"), &[]);
+    run_ast(file, format!("{prefix}CAST(false AS DECIMAL(4,3))"), &[]);
+    run_ast(file, format!("{prefix}CAST(true AS DECIMAL(4,2))"), &[]);
 
     run_ast(file, format!("{prefix}CAST(num AS BOOLEAN)"), &[(
         "num",

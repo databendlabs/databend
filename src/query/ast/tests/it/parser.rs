@@ -85,6 +85,7 @@ fn test_statement() {
         r#"describe a;"#,
         r#"describe a format TabSeparatedWithNamesAndTypes;"#,
         r#"create table a (c decimal(38, 0))"#,
+        r#"create table a (c decimal(38))"#,
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
@@ -162,6 +163,7 @@ fn test_statement() {
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
+        r#"insert into t (c1, c2) values (1, 2);   "#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
@@ -193,7 +195,8 @@ fn test_statement() {
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t MODIFY COLUMN b UNSET MASKING POLICY;"#,
-        r#"ALTER TABLE t MODIFY COLUMN a int, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int DEFAULT 1, COLUMN b float;"#,
+        r#"ALTER TABLE t MODIFY COLUMN a int NULL DEFAULT 1, COLUMN b float NOT NULL COMMENT 'column b';"#,
         r#"ALTER TABLE t MODIFY COLUMN a int;"#,
         r#"ALTER TABLE t MODIFY COLUMN a DROP STORED;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
@@ -243,6 +246,9 @@ fn test_statement() {
         r#"SET ROLE ROLE1;"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
+                FROM '@~/mybucket/my data.csv'
+                size_limit=10;"#,
+        r#"COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
                     type = CSV
@@ -270,7 +276,7 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10
-                max_files=1000;"#,
+                max_files=3000;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CONNECTION = (
@@ -316,6 +322,9 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
+                size_limit=10;"#,
+        r#"COPY INTO '@my_stage/my data'
+                FROM mytable
                 size_limit=10;"#,
         r#"COPY INTO @my_stage
                 FROM mytable
@@ -423,6 +432,7 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"select $1 FROM '@my_stage/my data/'"#,
         r#"SELECT t.c1 FROM @stage1/dir/file
         ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
         r#"select table0.c1, table1.c2 from
@@ -442,10 +452,10 @@ fn test_statement() {
         r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURNS STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
         r#"DESC MASKING POLICY email_mask"#,
         r#"DROP MASKING POLICY IF EXISTS email_mask"#,
-        r#"CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
-        r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
-        r#"DROP VIRTUAL COLUMNS FOR t"#,
-        r#"GENERATE VIRTUAL COLUMNS FOR t"#,
+        r#"CREATE VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
+        r#"ALTER VIRTUAL COLUMN (a['k1']['k2'], b[0][1]) FOR t"#,
+        r#"DROP VIRTUAL COLUMN FOR t"#,
+        r#"REFRESH VIRTUAL COLUMN FOR t"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
@@ -482,6 +492,7 @@ fn test_statement_error() {
         r#"create table a (c tuple())"#,
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
+        r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,
@@ -515,6 +526,8 @@ fn test_statement_error() {
         r#"select * from aa.bb order by a order by b;"#,
         r#"select * from aa.bb offset 10 offset 20;"#,
         r#"select * from aa.bb limit 10 limit 20;"#,
+        r#"select * from aa.bb limit 10,2 offset 2;"#,
+        r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
     ];
 

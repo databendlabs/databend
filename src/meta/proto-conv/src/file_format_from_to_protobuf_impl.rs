@@ -404,6 +404,11 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
                 reason: format!("invalid StageFileCompression: {}", p.compression),
             })?,
         )?;
+        let null_display = if p.null_display.is_empty() {
+            "\\N".to_string()
+        } else {
+            p.null_display
+        };
         Ok(Self {
             compression,
             headers: p.headers,
@@ -412,6 +417,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             quote: p.quote,
             escape: p.escape,
             nan_display: p.nan_display,
+            null_display,
         })
     }
 
@@ -427,6 +433,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             quote: self.quote.clone(),
             escape: self.escape.clone(),
             nan_display: self.nan_display.clone(),
+            null_display: self.null_display.clone(),
         })
     }
 }

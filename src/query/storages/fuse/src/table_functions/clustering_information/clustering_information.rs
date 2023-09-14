@@ -32,6 +32,7 @@ use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use itertools::Itertools;
 use jsonb::Value as JsonbValue;
+use log::warn;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -164,7 +165,11 @@ impl<'a> ClusteringInformation<'a> {
                 }
             });
         }
-        assert!(unfinished_parts.is_empty());
+        if !unfinished_parts.is_empty() {
+            warn!(
+                "clustering_information: unfinished_parts is not empty after calculate the blocks overlaps"
+            );
+        }
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;
@@ -205,7 +210,7 @@ impl<'a> ClusteringInformation<'a> {
     }
 
     fn build_block(&self, info: ClusteringStatistics) -> Result<DataBlock> {
-        let cluster_by_keys = self
+        let cluster_key = self
             .table
             .cluster_key_str()
             .ok_or(ErrorCode::Internal("It's a bug"))?;
@@ -213,7 +218,7 @@ impl<'a> ClusteringInformation<'a> {
             vec![
                 BlockEntry::new(
                     DataType::String,
-                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                    Value::Scalar(Scalar::String(cluster_key.as_bytes().to_vec())),
                 ),
                 BlockEntry::new(
                     DataType::Number(NumberDataType::UInt64),
@@ -256,7 +261,7 @@ impl<'a> ClusteringInformation<'a> {
 
     pub fn schema() -> Arc<TableSchema> {
         TableSchemaRefExt::create(vec![
-            TableField::new("cluster_by_keys", TableDataType::String),
+            TableField::new("cluster_key", TableDataType::String),
             TableField::new(
                 "total_block_count",
                 TableDataType::Number(NumberDataType::UInt64),

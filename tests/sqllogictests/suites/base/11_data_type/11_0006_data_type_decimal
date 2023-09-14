@@ -51,19 +51,19 @@ drop table if exists t;
 
 ##  p in [1, 76]; s in [0, p]
 statement ok
-create table t (a Decimal(76, 76), b Decimal(76, 0));
+create table t (a Decimal(76, 76) not null, b Decimal(76, 0) not null);
 
 statement ok
 drop table t;
 
 statement error 1049
-create table t (a Decimal(77, 0));
+create table t (a Decimal(77, 0) not null);
 
 statement error 1049
-create table t (a Decimal(1, 2));
+create table t (a Decimal(1, 2) not null);
 
 statement error 1049
-create table t (a Decimal(0, 0));
+create table t (a Decimal(0, 0) not null);
 
 query T
 select typeof(number::decimal(3,2)::decimal(76,2)) from numbers(1)
@@ -420,7 +420,7 @@ statement ok
 drop table if exists t_decimal_4_2;
 
 statement ok
-create table t_decimal_4_2(a Decimal(4,2));
+create table t_decimal_4_2(a Decimal(4,2) not null);
 
 ## illegal
 statement error 1065
@@ -614,7 +614,7 @@ statement ok
 drop table if exists t_decimal_76_2;
 
 statement ok
-create table t_decimal_76_2(a Decimal(76,2));
+create table t_decimal_76_2(a Decimal(76,2) not null);
 
 ## illegal
 statement error 1065
@@ -769,7 +769,7 @@ statement ok
 drop table if exists t2
 
 statement ok
-create table t(c1 decimal(38,2))
+create table t(c1 decimal(38,2) not null)
 
 statement ok
 insert into t(c1) select CAST(2.34 AS DECIMAL(6, 2))
@@ -807,7 +807,7 @@ select * from t order by c1 asc limit 1,2
 2.34
 
 statement ok
-create table t1(c0 int, c1 decimal(39,2) null)
+create table t1(c0 int not null, c1 decimal(39,2) null)
 
 statement ok
 select * from t order by c1
@@ -868,7 +868,7 @@ NULL
 
 
 statement ok
-create table desc_decimal(c1 decimal(4,2), c2 decimal(4,2) null, c3 decimal(39,2), c4 decimal(39,2) null)
+create table desc_decimal(c1 decimal(4,2) not null, c2 decimal(4,2) null, c3 decimal(39,2) not null, c4 decimal(39,2) null)
 
 query TTTT
 desc desc_decimal
@@ -909,3 +909,38 @@ query TT
 select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4)
 ----
 1.2 1.2340
+
+statement ok
+create table t(c1 decimal(28) not null)
+
+statement ok
+insert into t values(1.01);
+
+query T
+select * from t
+----
+1
+
+statement ok
+drop table t
+
+statement ok
+CREATE TABLE t (a BIGINT NULL, b DECIMAL(23, 8) NULL);
+
+statement ok
+insert into t values(1,-0.01683589), (2,0.01683589);
+
+query T
+select -b from t;
+----
+0.01683589
+-0.01683589
+
+query T
+select sum(-b) as s from t group by a order by s;
+----
+-0.01683589
+0.01683589
+
+statement ok
+drop table t

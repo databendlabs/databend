@@ -720,7 +720,7 @@ impl Table for FuseTable {
     }
 
     fn support_virtual_columns(&self) -> bool {
-        matches!(self.storage_format, FuseStorageFormat::Native)
+        true
     }
 
     fn support_row_id_column(&self) -> bool {
@@ -784,7 +784,7 @@ impl FuseTableColumnStatisticsProvider {
 }
 
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        self.column_stats.get(&column_id).cloned().flatten()
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
     }
 }

@@ -33,6 +33,8 @@ use crate::types::decimal::DecimalSize;
 use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
+use crate::BlockMetaInfo;
+use crate::BlockMetaInfoDowncast;
 use crate::Scalar;
 use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
@@ -767,22 +769,35 @@ impl TableSchema {
         )))
     }
 
-    // return leaf fields with column id
+    /// Return leaf fields with column id.
+    ///
+    /// Note: the name of the inner fields is a full-path name.
+    ///
+    /// For example, if the field is `s Tuple(f1 Tuple(f2 Int32))`
+    /// its name will be `s:f1:f2` instead of `f2`.
     pub fn leaf_fields(&self) -> Vec<TableField> {
         fn collect_in_field(
             field: &TableField,
             fields: &mut Vec<TableField>,
+            is_nullable: bool,
             next_column_id: &mut ColumnId,
         ) {
-            match field.data_type() {
+            let ty = field.data_type();
+            let is_nullable = ty.is_nullable() || is_nullable;
+            match ty.remove_nullable() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
                 } => {
                     for (name, ty) in fields_name.iter().zip(fields_type) {
                         collect_in_field(
-                            &TableField::new_from_column_id(name, ty.clone(), *next_column_id),
+                            &TableField::new_from_column_id(
+                                &format!("{}:{}", field.name(), name),
+                                ty.clone(),
+                                *next_column_id,
+                            ),
                             fields,
+                            is_nullable,
                             next_column_id,
                         );
                     }
@@ -795,6 +810,7 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
+                        is_nullable,
                         next_column_id,
                     );
                 }
@@ -806,12 +822,17 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
+                        is_nullable,
                         next_column_id,
                     );
                 }
                 _ => {
                     *next_column_id += 1;
-                    fields.push(field.clone())
+                    let mut field = field.clone();
+                    if is_nullable {
+                        field.data_type = field.data_type.wrap_nullable();
+                    }
+                    fields.push(field)
                 }
             }
         }
@@ -823,7 +844,7 @@ impl TableSchema {
                 continue;
             }
             let mut next_column_id = field.column_id;
-            collect_in_field(field, &mut fields, &mut next_column_id);
+            collect_in_field(field, &mut fields, false, &mut next_column_id);
         }
         fields
     }
@@ -1220,6 +1241,18 @@ impl TableDataType {
 
 pub type DataSchemaRef = Arc<DataSchema>;
 pub type TableSchemaRef = Arc<TableSchema>;
+
+#[typetag::serde(name = "data_schema_meta")]
+impl BlockMetaInfo for DataSchemaRef {
+    #[allow(clippy::borrowed_box)]
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        DataSchemaRef::downcast_ref_from(info).is_some_and(|other| other == self)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
 
 pub struct DataSchemaRefExt;
 

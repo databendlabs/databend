@@ -56,18 +56,19 @@ impl BlockEntry {
     pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
         #[cfg(debug_assertions)]
         {
-            match &value {
-                Value::Scalar(Scalar::Null) => {
-                    assert!(data_type.is_nullable_or_null());
-                }
-                Value::Scalar(s) => {
-                    assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable())
-                }
-                Value::Column(c) => assert_eq!(c.data_type(), data_type),
-            }
+            check_type(&data_type, &value);
         }
 
         Self { data_type, value }
+    }
+
+    pub fn remove_nullable(self) -> Self {
+        match self.value {
+            Value::Column(Column::Nullable(col)) => {
+                Self::new(self.data_type.remove_nullable(), Value::Column(col.column))
+            }
+            _ => self,
+        }
     }
 }
 
@@ -522,15 +523,11 @@ impl DataBlock {
     }
 
     #[inline]
-    pub fn project_with_agg_index(
-        self,
-        projections: &HashSet<usize>,
-        agg_functions_len: usize,
-    ) -> Self {
+    pub fn project_with_agg_index(self, projections: &HashSet<usize>, num_evals: usize) -> Self {
         let mut columns = Vec::with_capacity(projections.len());
-        let agg_functions_offset = self.columns.len() - agg_functions_len;
+        let eval_offset = self.columns.len() - num_evals;
         for (index, column) in self.columns.into_iter().enumerate() {
-            if !projections.contains(&index) && index < agg_functions_offset {
+            if !projections.contains(&index) && index < eval_offset {
                 continue;
             }
             columns.push(column);
@@ -583,5 +580,25 @@ impl PartialEq for Box<dyn BlockMetaInfo> {
 impl Clone for Box<dyn BlockMetaInfo> {
     fn clone(&self) -> Self {
         self.clone_self()
+    }
+}
+
+fn check_type(data_type: &DataType, value: &Value<AnyType>) {
+    match value {
+        Value::Scalar(Scalar::Null) => {
+            assert!(data_type.is_nullable_or_null());
+        }
+        Value::Scalar(Scalar::Tuple(fields)) => {
+            // Check if data_type is Tuple type.
+            let data_type = data_type.remove_nullable();
+            assert!(matches!(data_type, DataType::Tuple(_)));
+            if let DataType::Tuple(dts) = data_type {
+                for (s, dt) in fields.iter().zip(dts.iter()) {
+                    check_type(dt, &Value::Scalar(s.clone()));
+                }
+            }
+        }
+        Value::Scalar(s) => assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable()),
+        Value::Column(c) => assert_eq!(&c.data_type(), data_type),
     }
 }

@@ -32,6 +32,7 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use common_meta_app::storage::STORAGE_GCS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
+use common_storage::STDIN_FD;
 use opendal::Scheme;
 use percent_encoding::percent_decode_str;
 
@@ -297,7 +298,7 @@ fn parse_obs_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
 
 #[cfg(feature = "storage-hdfs")]
 fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
-    let sp = StorageParams::Hdfs(crate::StorageHdfsConfig {
+    let sp = StorageParams::Hdfs(common_meta_app::storage::StorageHdfsConfig {
         name_node: l
             .connection
             .get("name_node")
@@ -308,7 +309,7 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
                 )
             })?
             .to_string(),
-        root: root.to_string(),
+        root: l.path.clone(),
     });
 
     l.connection.check()?;
@@ -393,8 +394,12 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             return Ok((StorageParams::Http(cfg), "/".to_string()));
         }
         Scheme::Fs => {
-            let cfg = StorageFsConfig { root };
-            StorageParams::Fs(cfg)
+            if root == "/" && path == STDIN_FD {
+                StorageParams::Memory
+            } else {
+                let cfg = StorageFsConfig { root };
+                StorageParams::Fs(cfg)
+            }
         }
         Scheme::Webhdfs => parse_webhdfs_params(l)?,
         v => {

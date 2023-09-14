@@ -64,6 +64,8 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
+use common_license::license::Feature::VirtualColumn;
+use common_license::license_manager::get_license_manager;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
 use simsearch::SimSearch;
@@ -346,11 +348,7 @@ impl<'a> TypeChecker<'a> {
                 ..
             } => {
                 let get_max_inlist_to_or = self.ctx.get_settings().get_max_inlist_to_or()? as usize;
-                if list.len() > get_max_inlist_to_or
-                    && list
-                        .iter()
-                        .all(|e| matches!(e, Expr::Literal { lit, .. } if lit != &Literal::Null))
-                {
+                if list.len() > get_max_inlist_to_or && list.iter().all(satisfy_contain_func) {
                     let array_expr = Expr::Array {
                         span: *span,
                         exprs: list.clone(),
@@ -515,7 +513,7 @@ impl<'a> TypeChecker<'a> {
                     span: expr.span(),
                     is_try: false,
                     expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&resolve_type_name(target_type)?),
+                    dest_type: DataType::from(&resolve_type_name(target_type, true)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
@@ -550,7 +548,7 @@ impl<'a> TypeChecker<'a> {
                     span: expr.span(),
                     is_try: true,
                     expr: Box::new(scalar.as_raw_expr()),
-                    dest_type: DataType::from(&resolve_type_name(target_type)?),
+                    dest_type: DataType::from(&resolve_type_name(target_type, true)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
@@ -964,10 +962,10 @@ impl<'a> TypeChecker<'a> {
                         MapAccessor::Bracket {
                             key: box Expr::Literal { lit, .. },
                         } => lit.clone(),
-                        MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                        MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
-                        MapAccessor::PeriodNumber { key } => Literal::UInt64(*key),
+                        MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                         _ => {
                             return Err(ErrorCode::SemanticError(format!(
                                 "Unsupported accessor: {:?}",
@@ -1396,13 +1394,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let offset = if args.len() >= 2 {
-            let off = ScalarExpr::CastExpr(CastExpr {
-                span: args[1].span(),
-                is_try: false,
-                argument: Box::new(args[1].clone()),
-                target_type: Box::new(DataType::Number(NumberDataType::Int64)),
-            })
-            .as_expr()?;
+            let off = args[1].as_expr()?;
             Some(check_number::<_, i64>(
                 off.span(),
                 &self.func_ctx,
@@ -1491,13 +1483,7 @@ impl<'a> TypeChecker<'a> {
                     ));
                 }
                 let return_type = arg_types[0].wrap_nullable();
-                let n_expr = ScalarExpr::CastExpr(CastExpr {
-                    span: args[1].span(),
-                    is_try: false,
-                    argument: Box::new(args[1].clone()),
-                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                })
-                .as_expr()?;
+                let n_expr = args[1].as_expr()?;
                 let n = check_number::<_, u64>(
                     n_expr.span(),
                     &self.func_ctx,
@@ -1529,14 +1515,8 @@ impl<'a> TypeChecker<'a> {
                 "Argument number is invalid".to_string(),
             ));
         }
-        let n_expr = ScalarExpr::CastExpr(CastExpr {
-            span: args[0].span(),
-            is_try: false,
-            argument: Box::new(args[0].clone()),
-            target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-        })
-        .as_expr()?;
-        let return_type = n_expr.data_type().wrap_nullable();
+        let n_expr = args[0].as_expr()?;
+        let return_type = DataType::Number(NumberDataType::UInt64);
         let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
         if n == 0 {
             return Err(ErrorCode::InvalidArgument(
@@ -2857,6 +2837,19 @@ impl<'a> TypeChecker<'a> {
             return None;
         }
 
+        let license_manager = get_license_manager();
+        if license_manager
+            .manager
+            .check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                VirtualColumn,
+            )
+            .is_err()
+        {
+            return None;
+        }
+
         let mut name = String::new();
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
@@ -2880,13 +2873,13 @@ impl<'a> TypeChecker<'a> {
 
         let mut index = 0;
         // Check for duplicate virtual columns
-        for column in self
+        for table_column in self
             .metadata
             .read()
             .virtual_columns_by_table_index(table_index)
         {
-            if column.name() == name {
-                index = column.index();
+            if table_column.name() == name {
+                index = table_column.index();
                 break;
             }
         }
@@ -3225,7 +3218,7 @@ impl<'a> TypeChecker<'a> {
     }
 }
 
-pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
+pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataType> {
     let sql_tokens = common_ast::parser::tokenize_sql(name)?;
     let backtrace = common_ast::Backtrace::new();
     match common_ast::parser::expr::type_name(common_ast::Input(
@@ -3233,7 +3226,7 @@ pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
         common_ast::Dialect::default(),
         &backtrace,
     )) {
-        Ok((_, typename)) => resolve_type_name(&typename),
+        Ok((_, typename)) => resolve_type_name(&typename, not_null),
         Err(err) => Err(ErrorCode::SyntaxException(format!(
             "Unsupported type name: {}, error: {}",
             name, err
@@ -3241,7 +3234,23 @@ pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
     }
 }
 
-pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
+pub fn resolve_type_name(type_name: &TypeName, not_null: bool) -> Result<TableDataType> {
+    let data_type = resolve_type_name_inner(type_name)?;
+    let data_type = match &data_type {
+        TableDataType::Nullable(_) => data_type,
+        _ => {
+            if not_null {
+                data_type
+            } else {
+                data_type.wrap_nullable()
+            }
+        }
+    };
+
+    Ok(data_type)
+}
+
+pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
     let data_type = match type_name {
         TypeName::Boolean => TableDataType::Boolean,
         TypeName::UInt8 => TableDataType::Number(NumberDataType::UInt8),
@@ -3263,9 +3272,11 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
         TypeName::String => TableDataType::String,
         TypeName::Timestamp => TableDataType::Timestamp,
         TypeName::Date => TableDataType::Date,
-        TypeName::Array(item_type) => TableDataType::Array(Box::new(resolve_type_name(item_type)?)),
+        TypeName::Array(item_type) => {
+            TableDataType::Array(Box::new(resolve_type_name_inner(item_type)?))
+        }
         TypeName::Map { key_type, val_type } => {
-            let key_type = resolve_type_name(key_type)?;
+            let key_type = resolve_type_name_inner(key_type)?;
             match key_type {
                 TableDataType::Boolean
                 | TableDataType::String
@@ -3273,7 +3284,7 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
                 | TableDataType::Decimal(_)
                 | TableDataType::Timestamp
                 | TableDataType::Date => {
-                    let val_type = resolve_type_name(val_type)?;
+                    let val_type = resolve_type_name_inner(val_type)?;
                     let inner_type = TableDataType::Tuple {
                         fields_name: vec!["key".to_string(), "value".to_string()],
                         fields_type: vec![key_type, val_type],
@@ -3301,14 +3312,14 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
             },
             fields_type: fields_type
                 .iter()
-                .map(resolve_type_name)
+                .map(resolve_type_name_inner)
                 .collect::<Result<Vec<_>>>()?,
         },
         TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
-            resolve_type_name(inner_type)?
+            resolve_type_name_inner(inner_type)?
         }
         TypeName::Nullable(inner_type) => {
-            TableDataType::Nullable(Box::new(resolve_type_name(inner_type)?))
+            TableDataType::Nullable(Box::new(resolve_type_name_inner(inner_type)?))
         }
         TypeName::Variant => TableDataType::Variant,
     };
@@ -3391,4 +3402,19 @@ fn check_prefix(like_str: &str) -> bool {
         }
     }
     true
+}
+
+// If `InList` expr satisfies the following conditions, it can be converted to `contain` function
+// Note: the method mainly checks if list contains NULL literal, because `contain` can't handle NULL.
+fn satisfy_contain_func(expr: &Expr) -> bool {
+    match expr {
+        Expr::Literal { lit, .. } => !matches!(lit, Literal::Null),
+        Expr::Tuple { exprs, .. } => {
+            // For each expr in `exprs`, check if it satisfies the conditions
+            exprs.iter().all(satisfy_contain_func)
+        }
+        Expr::Array { exprs, .. } => exprs.iter().all(satisfy_contain_func),
+        // FIXME: others expr won't exist in `InList` expr
+        _ => false,
+    }
 }

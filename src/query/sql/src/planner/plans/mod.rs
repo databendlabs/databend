@@ -30,6 +30,8 @@ mod kill;
 mod lambda;
 mod limit;
 mod materialized_cte;
+mod merge_into;
+
 pub mod operator;
 mod pattern;
 mod plan;
@@ -47,7 +49,6 @@ mod sort;
 mod union_all;
 mod update;
 mod window;
-
 pub use aggregate::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
@@ -68,6 +69,9 @@ pub use kill::KillPlan;
 pub use lambda::*;
 pub use limit::*;
 pub use materialized_cte::MaterializedCte;
+pub use merge_into::MatchedEvaluator;
+pub use merge_into::MergeInto;
+pub use merge_into::UnmatchedEvaluator;
 pub use operator::*;
 pub use pattern::PatternPlan;
 pub use plan::*;

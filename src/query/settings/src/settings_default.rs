@@ -154,6 +154,23 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("disable_join_reorder", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Disable join reorder optimization.",
+                    possible_values: None,
+                    display_in_show_settings: false,}),
+                ("enable_join_spill", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enables hash join spill.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("join_spilling_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Maximum amount of memory can use for hash join build or probe, 0 is unlimited.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("enable_runtime_filter", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enables runtime filter optimization for JOIN.",
@@ -326,6 +343,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_experimental_merge_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable unstable merge into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("enable_distributed_replace_into", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of replace into.",
@@ -338,7 +361,6 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-
                 ("enable_recluster_after_write", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables re-clustering after write(copy/replace-into).",
@@ -364,14 +386,32 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("replace_into_bloom_pruning_max_column_number", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(2),
+                    value: UserSettingValue::UInt64(4),
                     desc: "Max number of columns used by bloom pruning for replace-into statement.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("replace_into_shuffle_strategy", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "0 for Block level shuffle, 1 for segment level shuffle",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
                 ("recluster_timeout_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(12 * 60 * 60),
                     desc: "Sets the seconds that recluster final will be timeout.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_refresh_aggregating_index_after_write", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Refresh aggregating index after new data written",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("ddl_column_type_nullable", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "If columns are default nullable when create or alter table",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -493,6 +533,25 @@ impl DefaultSettings {
                 "Unknown variable: {:?}",
                 key
             ))),
+        }
+    }
+}
+
+pub enum ReplaceIntoShuffleStrategy {
+    SegmentLevelShuffling,
+    BlockLevelShuffling,
+}
+
+impl TryFrom<u64> for ReplaceIntoShuffleStrategy {
+    type Error = ErrorCode;
+
+    fn try_from(value: u64) -> std::result::Result<Self, Self::Error> {
+        match value {
+            0 => Ok(ReplaceIntoShuffleStrategy::BlockLevelShuffling),
+            1 => Ok(ReplaceIntoShuffleStrategy::SegmentLevelShuffling),
+            _ => Err(ErrorCode::InvalidConfig(
+                "value of replace_into_shuffle_strategy should be one of {0,1}, 0 for block level shuffling, 1 for segment level shuffling",
+            )),
         }
     }
 }

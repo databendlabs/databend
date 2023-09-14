@@ -1,3 +1,7 @@
 {
-  "label": "Load & Unload Data"
+  "label": "Load & Unload Data",
+  "link": {
+    "type": "generated-index",
+    "slug": "/load-data"
+  }
 }

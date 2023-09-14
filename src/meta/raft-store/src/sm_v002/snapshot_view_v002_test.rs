@@ -20,31 +20,37 @@ use common_meta_types::Membership;
 use common_meta_types::Node;
 use common_meta_types::StoredMembership;
 use common_meta_types::UpsertKV;
+use futures_util::StreamExt;
 use maplit::btreemap;
 use openraft::testing::log_id;
 use pretty_assertions::assert_eq;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
 use crate::sm_v002::SnapshotViewV002;
 use crate::state_machine::ExpireKey;
 
-#[test]
-fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
-    let l = build_3_levels();
+#[tokio::test]
+async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
+    let mut l = build_3_levels().await;
 
-    let mut snapshot = SnapshotViewV002::new(Arc::new(l));
+    let frozen = l.freeze_writable().clone();
 
-    snapshot.compact();
+    let mut snapshot = SnapshotViewV002::new(frozen);
 
-    let top_level = snapshot.top();
+    snapshot.compact_mem_levels().await;
 
-    let d = top_level.data_ref();
+    let top_level = snapshot.compacted();
 
-    assert!(top_level.get_base().is_none());
+    let d = top_level.newest().unwrap().as_ref();
+
+    assert_eq!(top_level.iter_levels().count(), 1);
     assert_eq!(
         d.last_membership_ref(),
         &StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()))
@@ -55,38 +61,47 @@ fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapApi::<String>::range::<String, _>(d, ..).collect::<Vec<_>>();
+    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
-        (&s("a"), &Marked::new_normal(1, b("a0"), None)),
-        (&s("d"), &Marked::new_normal(7, b("d2"), None)),
-        (&s("e"), &Marked::new_normal(6, b("e1"), None)),
+        (s("a"), Marked::new_normal(1, b("a0"), None)),
+        (s("d"), Marked::new_normal(7, b("d2"), None)),
+        (s("e"), Marked::new_normal(6, b("e1"), None)),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..).collect::<Vec<_>>();
+    let got = MapApiRO::<ExpireKey>::range(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![]);
 
     Ok(())
 }
 
-#[test]
-fn test_compact_expire_index() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire();
+#[tokio::test]
+async fn test_compact_expire_index() -> anyhow::Result<()> {
+    let mut sm = build_sm_with_expire().await;
 
     let mut snapshot = sm.full_snapshot_view();
 
-    snapshot.compact();
+    snapshot.compact_mem_levels().await;
 
-    let top_level = snapshot.top();
+    let compacted = snapshot.compacted();
 
-    let d = top_level.data_ref();
+    let d = compacted.newest().unwrap().as_ref();
 
-    let got = MapApi::<String>::range::<String, _>(d, ..).collect::<Vec<_>>();
+    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
         (
-            &s("a"),
-            &Marked::new_normal(
+            s("a"),
+            Marked::new_normal(
                 4,
                 b("a1"),
                 Some(KVMeta {
@@ -95,12 +110,12 @@ fn test_compact_expire_index() -> anyhow::Result<()> {
             )
         ),
         (
-            &s("b"),
-            &Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            s("b"),
+            Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
         ),
         (
-            &s("c"),
-            &Marked::new_normal(
+            s("c"),
+            Marked::new_normal(
                 3,
                 b("c0"),
                 Some(KVMeta {
@@ -110,35 +125,42 @@ fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapApi::<ExpireKey>::range(d, ..).collect::<Vec<_>>();
+    let got = MapApiRO::<ExpireKey>::range(d, ..)
+        .await
+        .collect::<Vec<_>>()
+        .await;
     assert_eq!(got, vec![
         //
         (
-            &ExpireKey::new(5_000, 2),
-            &Marked::new_normal(2, s("b"), None)
+            ExpireKey::new(5_000, 2),
+            Marked::new_normal(2, s("b"), None)
         ),
         (
-            &ExpireKey::new(15_000, 4),
-            &Marked::new_normal(4, s("a"), None)
+            ExpireKey::new(15_000, 4),
+            Marked::new_normal(4, s("a"), None)
         ),
         (
-            &ExpireKey::new(20_000, 3),
-            &Marked::new_normal(3, s("c"), None)
+            ExpireKey::new(20_000, 3),
+            Marked::new_normal(3, s("c"), None)
         ),
     ]);
 
     Ok(())
 }
 
-#[test]
-fn test_export_3_level() -> anyhow::Result<()> {
-    let l = build_3_levels();
+#[tokio::test]
+async fn test_export_3_level() -> anyhow::Result<()> {
+    let mut l = build_3_levels().await;
 
-    let snapshot = SnapshotViewV002::new(Arc::new(l));
+    let frozen = l.freeze_writable().clone();
+
+    let snapshot = SnapshotViewV002::new(frozen);
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     // TODO(1): add tree name: ["state_machine/0",{"Sequences":{"key":"generic-kv","value":159}}]
 
@@ -156,16 +178,18 @@ fn test_export_3_level() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_export_2_level_with_meta() -> anyhow::Result<()> {
-    let mut sm = build_sm_with_expire();
+#[tokio::test]
+async fn test_export_2_level_with_meta() -> anyhow::Result<()> {
+    let mut sm = build_sm_with_expire().await;
 
     let snapshot = sm.full_snapshot_view();
 
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     assert_eq!(got, vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
@@ -182,8 +206,8 @@ fn test_export_2_level_with_meta() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_import() -> anyhow::Result<()> {
+#[tokio::test]
+async fn test_import() -> anyhow::Result<()> {
     let exported = vec![
         r#"{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}"#,
         r#"{"StateMachineMeta":{"key":"LastApplied","value":{"LogId":{"leader_id":{"term":3,"node_id":3},"index":3}}}}"#,
@@ -203,12 +227,14 @@ fn test_import() -> anyhow::Result<()> {
 
     let d = SMV002::import(data)?;
 
-    let snapshot = SnapshotViewV002::new(Arc::new(Level::new(d, None)));
+    let snapshot = SnapshotViewV002::new(StaticLeveledMap::new([Arc::new(d)]));
 
     let got = snapshot
         .export()
+        .await
         .map(|x| serde_json::to_string(&x).unwrap())
-        .collect::<Vec<_>>();
+        .collect::<Vec<_>>()
+        .await;
 
     assert_eq!(got, exported);
 
@@ -220,42 +246,45 @@ fn test_import() -> anyhow::Result<()> {
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d
-fn build_3_levels() -> Level {
-    let mut l = Level::default();
+async fn build_3_levels() -> LeveledMap {
+    let mut l = LeveledMap::default();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(1, 1, 1)), Membership::new(vec![], ()));
-    *l.data_mut().last_applied_mut() = Some(log_id(1, 1, 1));
-    *l.data_mut().nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
+    *sd.last_applied_mut() = Some(log_id(1, 1, 1));
+    *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None)));
-    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None)));
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None)));
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None)));
+    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
+    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None))).await;
+    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None))).await;
+    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
 
-    l.new_level();
+    l.freeze_writable();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(2, 2, 2)), Membership::new(vec![], ()));
-    *l.data_mut().last_applied_mut() = Some(log_id(2, 2, 2));
-    *l.data_mut().nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
+    *sd.last_applied_mut() = Some(log_id(2, 2, 2));
+    *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    MapApi::<String>::set(&mut l, s("b"), None);
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None)));
-    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None)));
+    MapApi::<String>::set(&mut l, s("b"), None).await;
+    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None))).await;
+    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
 
-    l.new_level();
+    l.freeze_writable();
+    let sd = l.writable_mut().sys_data_mut();
 
-    *l.data_mut().last_membership_mut() =
+    *sd.last_membership_mut() =
         StoredMembership::new(Some(log_id(3, 3, 3)), Membership::new(vec![], ()));
-    *l.data_mut().last_applied_mut() = Some(log_id(3, 3, 3));
-    *l.data_mut().nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
+    *sd.last_applied_mut() = Some(log_id(3, 3, 3));
+    *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    MapApi::<String>::set(&mut l, s("c"), None);
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None)));
+    MapApi::<String>::set(&mut l, s("c"), None).await;
+    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None))).await;
 
     l
 }
@@ -267,16 +296,20 @@ fn build_3_levels() -> Level {
 /// l1 | a₄       c₃    |               10,1₄ -> ø    15,4₄ -> a  20,3₃ -> c          
 /// ------------------------------------------------------------
 /// l0 | a₁  b₂         |  5,2₂ -> b    10,1₁ -> a
-fn build_sm_with_expire() -> SMV002 {
+async fn build_sm_with_expire() -> SMV002 {
     let mut sm = SMV002::default();
 
-    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10));
-    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5));
+    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10))
+        .await;
+    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
+        .await;
 
-    sm.top.new_level();
+    sm.levels.freeze_writable();
 
-    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20));
-    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15));
+    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
+        .await;
+    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15))
+        .await;
 
     sm
 }

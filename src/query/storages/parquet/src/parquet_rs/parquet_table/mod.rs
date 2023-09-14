@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod meta;
 mod partition;
 mod read;
+mod stats;
 mod table;
 
-pub use partition::ParquetRSPart;
 pub use table::ParquetRSTable;

@@ -12,40 +12,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_base::runtime::TrySpawn;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
+use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::MutationKind;
+use common_sql::BloomIndexColumns;
 use log::info;
-use storages_common_table_meta::meta::BlockMeta;
+use log::warn;
+use opendal::Operator;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 
-use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
-use crate::operations::common::TableMutationAggregator;
 use crate::operations::common::TransformSerializeBlock;
-use crate::operations::common::TransformSerializeSegment;
-use crate::operations::mutation::MAX_BLOCK_COUNT;
+use crate::operations::mutation::ReclusterAggregator;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
-use crate::pruning::FusePruner;
+use crate::pruning::PruningContext;
+use crate::pruning::SegmentPruner;
 use crate::FuseTable;
+use crate::SegmentLocation;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
@@ -91,6 +96,8 @@ impl FuseTable {
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let block_thresholds = self.get_block_thresholds();
+        let block_per_seg =
+            self.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
             DEFAULT_AVG_DEPTH_THRESHOLD,
@@ -99,42 +106,66 @@ impl FuseTable {
         let threshold = (block_count as f64 * avg_depth_threshold)
             .max(1.0)
             .min(64.0);
-        let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
-
-        let schema = self.table_info.schema();
-        let segment_locations = snapshot.segments.clone();
-        let segment_locations = create_segment_location_vector(segment_locations, None);
-        let mut pruner = FusePruner::create(
-            &ctx,
-            self.operator.clone(),
-            schema,
-            &push_downs,
-            self.bloom_index_cols(),
+        let mut mutator = ReclusterMutator::try_create(
+            ctx.clone(),
+            threshold,
+            block_thresholds,
+            default_cluster_key_id,
         )?;
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        let limit = limit.unwrap_or(max_threads * 4);
-        for chunk in segment_locations.chunks(limit) {
-            let mut block_metas = pruner.read_pruning(chunk.to_vec()).await?;
-            block_metas.truncate(MAX_BLOCK_COUNT);
+        let segment_locations = snapshot.segments.clone();
+        let segment_locations = create_segment_location_vector(segment_locations, None);
 
-            let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> =
-                BTreeMap::new();
-            block_metas.into_iter().for_each(|(idx, b)| {
-                if let Some(stats) = &b.cluster_stats {
-                    if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
-                        blocks_map.entry(stats.level).or_default().push((
-                            BlockMetaIndex {
-                                segment_idx: idx.segment_idx,
-                                block_idx: idx.block_idx,
-                            },
-                            b,
-                        ));
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let limit = limit.unwrap_or(1000);
+
+        let mut need_recluster = false;
+        for chunk in segment_locations.chunks(limit) {
+            // read segments.
+            let compact_segments = Self::segment_pruning(
+                &ctx,
+                self.schema(),
+                self.get_operator(),
+                &push_downs,
+                chunk.to_vec(),
+            )
+            .await?;
+            if compact_segments.is_empty() {
+                continue;
+            }
+
+            // select the segments with the highest depth.
+            let selected_segs = ReclusterMutator::select_segments(
+                &compact_segments,
+                block_per_seg,
+                max_threads * 4,
+                default_cluster_key_id,
+            )?;
+            // select the blocks with the highest depth.
+            if selected_segs.is_empty() {
+                for compact_segment in compact_segments.into_iter() {
+                    if !ReclusterMutator::segment_can_recluster(
+                        &compact_segment.1.summary,
+                        block_per_seg,
+                        default_cluster_key_id,
+                    ) {
+                        continue;
+                    }
+
+                    if mutator.target_select(vec![compact_segment]).await? {
+                        need_recluster = true;
+                        break;
                     }
                 }
-            });
+            } else {
+                let mut selected_segments = Vec::with_capacity(selected_segs.len());
+                selected_segs.into_iter().for_each(|i| {
+                    selected_segments.push(compact_segments[i].clone());
+                });
+                need_recluster = mutator.target_select(selected_segments).await?;
+            }
 
-            if mutator.target_select(blocks_map).await? {
+            if need_recluster {
                 break;
             }
         }
@@ -163,7 +194,6 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            None,
             block_count,
             PruningStatistics::default(),
         )?;
@@ -262,19 +292,12 @@ impl FuseTable {
 
         pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
-            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
-            proc.into_processor()
-        })?;
-
-        pipeline.add_transform(|input, output| {
-            let mut aggregator = TableMutationAggregator::create(
-                self,
-                ctx.clone(),
-                snapshot.segments.clone(),
-                snapshot.summary.clone(),
-                MutationKind::Recluster,
+            let aggregator = ReclusterAggregator::new(
+                &mutator,
+                self.get_operator(),
+                self.meta_location_generator().clone(),
+                block_per_seg,
             );
-            aggregator.accumulate_log_entry(mutator.mutation_logs());
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))
@@ -294,5 +317,73 @@ impl FuseTable {
             )
         })?;
         Ok(block_count as u64)
+    }
+
+    pub async fn segment_pruning(
+        ctx: &Arc<dyn TableContext>,
+        schema: TableSchemaRef,
+        dal: Operator,
+        push_down: &Option<PushDownInfo>,
+        mut segment_locs: Vec<SegmentLocation>,
+    ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
+        let max_concurrency = {
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let v = std::cmp::max(max_io_requests, 10);
+            if v > max_io_requests {
+                warn!(
+                    "max_storage_io_requests setting is too low {}, increased to {}",
+                    max_io_requests, v
+                )
+            }
+            v
+        };
+
+        // Only use push_down here.
+        let pruning_ctx = PruningContext::try_create(
+            ctx,
+            dal,
+            schema.clone(),
+            push_down,
+            None,
+            vec![],
+            BloomIndexColumns::None,
+            max_concurrency,
+        )?;
+
+        let segment_pruner = SegmentPruner::create(pruning_ctx.clone(), schema)?;
+        let mut remain = segment_locs.len() % max_concurrency;
+        let batch_size = segment_locs.len() / max_concurrency;
+        let mut works = Vec::with_capacity(max_concurrency);
+
+        while !segment_locs.is_empty() {
+            let gap_size = std::cmp::min(1, remain);
+            let batch_size = batch_size + gap_size;
+            remain -= gap_size;
+
+            let batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
+            works.push(pruning_ctx.pruning_runtime.spawn({
+                let segment_pruner = segment_pruner.clone();
+
+                async move {
+                    let pruned_segments = segment_pruner.pruning(batch).await?;
+                    Result::<_, ErrorCode>::Ok(pruned_segments)
+                }
+            }));
+        }
+
+        match futures::future::try_join_all(works).await {
+            Err(e) => Err(ErrorCode::StorageOther(format!(
+                "segment pruning failure, {}",
+                e
+            ))),
+            Ok(workers) => {
+                let mut metas = vec![];
+                for worker in workers {
+                    let res = worker?;
+                    metas.extend(res);
+                }
+                Ok(metas)
+            }
+        }
     }
 }

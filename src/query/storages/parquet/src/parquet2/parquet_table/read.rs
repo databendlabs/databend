@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
@@ -32,11 +33,19 @@ use storages_common_index::RangeIndex;
 
 use super::Parquet2Table;
 use crate::parquet2::parquet_reader::Parquet2Reader;
-use crate::processors::AsyncParquetSource;
-use crate::processors::ParquetDeserializeTransform;
-use crate::processors::ParquetPrewhereInfo;
-use crate::processors::SyncParquetSource;
+use crate::parquet2::processors::AsyncParquet2Source;
+use crate::parquet2::processors::Parquet2DeserializeTransform;
+use crate::parquet2::processors::SyncParquet2Source;
 use crate::utils::calc_parallelism;
+
+#[derive(Clone)]
+pub struct Parquet2PrewhereInfo {
+    pub func_ctx: FunctionContext,
+    pub reader: Arc<Parquet2Reader>,
+    pub filter: Expr,
+    pub top_k: Option<(usize, TopKSorter)>,
+    // the usize is the index of the column in ParquetReader.schema
+}
 
 impl Parquet2Table {
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
@@ -127,7 +136,7 @@ impl Parquet2Table {
                     )
                 });
                 let func_ctx = ctx.get_function_context()?;
-                Ok::<_, ErrorCode>(ParquetPrewhereInfo {
+                Ok::<_, ErrorCode>(Parquet2PrewhereInfo {
                     func_ctx,
                     reader,
                     filter,
@@ -143,20 +152,18 @@ impl Parquet2Table {
         let num_deserializer = calc_parallelism(&ctx, plan)?;
         if is_blocking {
             pipeline.add_source(
-                |output| SyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
+                |output| SyncParquet2Source::create(ctx.clone(), output, source_reader.clone()),
                 num_deserializer,
             )?;
         } else {
             pipeline.add_source(
-                |output| AsyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
+                |output| AsyncParquet2Source::create(ctx.clone(), output, source_reader.clone()),
                 num_deserializer,
             )?;
         };
 
-        pipeline.try_resize(num_deserializer)?;
-
         pipeline.add_transform(|input, output| {
-            ParquetDeserializeTransform::create(
+            Parquet2DeserializeTransform::create(
                 ctx.clone(),
                 input,
                 output,

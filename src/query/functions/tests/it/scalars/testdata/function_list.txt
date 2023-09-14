@@ -1825,6 +1825,7 @@ Functions overloads:
 1 is_not_null(T0 NULL) :: Boolean
 0 is_true(Boolean) :: Boolean
 1 is_true(Boolean NULL) :: Boolean
+0 json_array FACTORY
 0 json_extract_path_text(String, String) :: String NULL
 1 json_extract_path_text(String NULL, String NULL) :: String NULL
 0 json_object FACTORY
@@ -1835,8 +1836,14 @@ Functions overloads:
 1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL
 0 json_path_query_first(Variant, String) :: Variant NULL
 1 json_path_query_first(Variant NULL, String NULL) :: Variant NULL
+0 json_pretty(Variant) :: String
+1 json_pretty(Variant NULL) :: String NULL
+0 json_strip_nulls(Variant) :: Variant
+1 json_strip_nulls(Variant NULL) :: Variant NULL
 0 json_to_string(Variant) :: String
 1 json_to_string(Variant NULL) :: String NULL
+0 json_typeof(Variant) :: String
+1 json_typeof(Variant NULL) :: String NULL
 0 l2_distance(Array(Float32), Array(Float32)) :: Float32
 1 l2_distance(Array(Float32) NULL, Array(Float32) NULL) :: Float32 NULL
 0 left(String, UInt64) :: String
@@ -2042,16 +2049,16 @@ Functions overloads:
 1 md5(String NULL) :: String NULL
 0 minus(UInt8) :: Int16
 1 minus(UInt8 NULL) :: Int16 NULL
-2 minus(Int8) :: Int8
-3 minus(Int8 NULL) :: Int8 NULL
+2 minus(Int8) :: Int16
+3 minus(Int8 NULL) :: Int16 NULL
 4 minus(UInt16) :: Int32
 5 minus(UInt16 NULL) :: Int32 NULL
-6 minus(Int16) :: Int16
-7 minus(Int16 NULL) :: Int16 NULL
+6 minus(Int16) :: Int32
+7 minus(Int16 NULL) :: Int32 NULL
 8 minus(UInt32) :: Int64
 9 minus(UInt32 NULL) :: Int64 NULL
-10 minus(Int32) :: Int32
-11 minus(Int32 NULL) :: Int32 NULL
+10 minus(Int32) :: Int64
+11 minus(Int32 NULL) :: Int64 NULL
 12 minus(UInt64) :: Int64
 13 minus(UInt64 NULL) :: Int64 NULL
 14 minus(Int64) :: Int64
@@ -3160,6 +3167,10 @@ Functions overloads:
 17 to_boolean(Int32 NULL) :: Boolean NULL
 18 to_boolean(Int64) :: Boolean
 19 to_boolean(Int64 NULL) :: Boolean NULL
+20 to_boolean(Float32) :: Boolean
+21 to_boolean(Float32 NULL) :: Boolean NULL
+22 to_boolean(Float64) :: Boolean
+23 to_boolean(Float64 NULL) :: Boolean NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
 2 to_date(String, String) :: Date NULL
@@ -3207,6 +3218,8 @@ Functions overloads:
 20 to_float32 FACTORY
 21 to_float32(Float64) :: Float32
 22 to_float32(Float64 NULL) :: Float32 NULL
+23 to_float32(Boolean) :: Float32
+24 to_float32(Boolean NULL) :: Float32 NULL
 0 to_float64(Variant) :: Float64
 1 to_float64(Variant NULL) :: Float64 NULL
 2 to_float64(String) :: Float64
@@ -3230,6 +3243,8 @@ Functions overloads:
 20 to_float64 FACTORY
 21 to_float64(Float32) :: Float64
 22 to_float64(Float32 NULL) :: Float64 NULL
+23 to_float64(Boolean) :: Float64
+24 to_float64(Boolean NULL) :: Float64 NULL
 0 to_hour(Timestamp) :: UInt8
 1 to_hour(Timestamp NULL) :: UInt8 NULL
 0 to_int16(Variant) :: Int16
@@ -3625,6 +3640,10 @@ Functions overloads:
 17 try_to_boolean(Int32 NULL) :: Boolean NULL
 18 try_to_boolean(Int64) :: Boolean NULL
 19 try_to_boolean(Int64 NULL) :: Boolean NULL
+20 try_to_boolean(Float32) :: Boolean NULL
+21 try_to_boolean(Float32 NULL) :: Boolean NULL
+22 try_to_boolean(Float64) :: Boolean NULL
+23 try_to_boolean(Float64 NULL) :: Boolean NULL
 0 try_to_date(Variant) :: Date NULL
 1 try_to_date(Variant NULL) :: Date NULL
 2 try_to_date(String) :: Date NULL
@@ -3657,6 +3676,8 @@ Functions overloads:
 19 try_to_float32(Int64 NULL) :: Float32 NULL
 20 try_to_float32(Float64) :: Float32 NULL
 21 try_to_float32(Float64 NULL) :: Float32 NULL
+22 try_to_float32(Boolean) :: Float32 NULL
+23 try_to_float32(Boolean NULL) :: Float32 NULL
 0 try_to_float64(Variant) :: Float64 NULL
 1 try_to_float64(Variant NULL) :: Float64 NULL
 2 try_to_float64(String) :: Float64 NULL
@@ -3679,6 +3700,8 @@ Functions overloads:
 19 try_to_float64(Int64 NULL) :: Float64 NULL
 20 try_to_float64(Float32) :: Float64 NULL
 21 try_to_float64(Float32 NULL) :: Float64 NULL
+22 try_to_float64(Boolean) :: Float64 NULL
+23 try_to_float64(Boolean NULL) :: Float64 NULL
 0 try_to_int16(Variant) :: Int16 NULL
 1 try_to_int16(Variant NULL) :: Int16 NULL
 2 try_to_int16(String) :: Int16 NULL

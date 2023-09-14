@@ -20,6 +20,7 @@ use std::str::FromStr;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::escape_string;
 use serde::Deserialize;
 use serde::Serialize;
@@ -27,10 +28,11 @@ use serde::Serialize;
 use crate::principal::StageFileCompression;
 use crate::principal::StageFileFormatType;
 
-const OPT_FILED_DELIMITER: &str = "field_delimiter";
+const OPT_FIELD_DELIMITER: &str = "field_delimiter";
 const OPT_RECORDE_DELIMITER: &str = "record_delimiter";
 const OPT_SKIP_HEADER: &str = "skip_header";
 const OPT_NAN_DISPLAY: &str = "nan_display";
+const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
@@ -166,17 +168,19 @@ impl FileFormatParams {
                 let default = CsvFileFormatParams::default();
                 let compression = ast.take_compression()?;
                 let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FILED_DELIMITER, default.field_delimiter);
+                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
                     ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
                 let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
                 let escape = ast.take_string(OPT_ESCAPE, default.escape);
                 let quote = ast.take_string(OPT_QUOTE, default.quote);
+                let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
                     field_delimiter,
                     record_delimiter,
+                    null_display,
                     nan_display,
                     escape,
                     quote,
@@ -186,7 +190,7 @@ impl FileFormatParams {
                 let default = TsvFileFormatParams::default();
                 let compression = ast.take_compression()?;
                 let headers = ast.take_u64(OPT_SKIP_HEADER, default.headers)?;
-                let field_delimiter = ast.take_string(OPT_FILED_DELIMITER, default.field_delimiter);
+                let field_delimiter = ast.take_string(OPT_FIELD_DELIMITER, default.field_delimiter);
                 let record_delimiter =
                     ast.take_string(OPT_RECORDE_DELIMITER, default.record_delimiter);
                 let nan_display = ast.take_string(OPT_NAN_DISPLAY, default.nan_display);
@@ -268,6 +272,7 @@ pub struct CsvFileFormatParams {
     pub headers: u64,
     pub field_delimiter: String,
     pub record_delimiter: String,
+    pub null_display: String,
     pub nan_display: String,
     pub escape: String,
     pub quote: String,
@@ -280,6 +285,7 @@ impl Default for CsvFileFormatParams {
             headers: 0,
             field_delimiter: ",".to_string(),
             record_delimiter: "\n".to_string(),
+            null_display: NULL_BYTES_ESCAPE.to_string(),
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),

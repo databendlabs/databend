@@ -14,16 +14,16 @@ permissions:
 
 env:
   BUILD_PROFILE: release
-  RUNNER_PROVIDER: aws
+  RUNNER_PROVIDER: gcp
 
 jobs:
   build:
     if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 16c32g, gcp]
     outputs:
       sha: ${{ steps.sha.outputs.sha }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
@@ -43,11 +43,11 @@ jobs:
   docker:
     needs: build
     timeout-minutes: 10
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 4c8g, gcp]
     outputs:
       tag: ${{ steps.prepare.outputs.tag }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download artifact
         uses: ./.github/actions/artifact_download
         with:
@@ -101,3 +101,4 @@ jobs:
       source: pr
       source_id: ${{ github.event.pull_request.number }}
       version: ${{ needs.docker.outputs.tag }}
+      runner_provider: aws

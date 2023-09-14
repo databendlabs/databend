@@ -56,6 +56,7 @@ use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
+use crate::types::nullable::NullableColumnVec;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
 use crate::types::number::NumberColumnBuilder;
@@ -78,6 +79,8 @@ use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::utils::FromData;
+use crate::values::decimal::DecimalColumnVec;
+use crate::values::map::KvPair;
 use crate::with_decimal_mapped_type;
 use crate::with_decimal_type;
 use crate::with_number_mapped_type;
@@ -149,6 +152,25 @@ pub enum Column {
     Nullable(Box<NullableColumn<AnyType>>),
     Tuple(Vec<Column>),
     Variant(StringColumn),
+}
+
+#[derive(Clone, EnumAsInner, Debug, PartialEq)]
+pub enum ColumnVec {
+    Null,
+    EmptyArray,
+    EmptyMap,
+    Number(NumberColumnVec),
+    Decimal(DecimalColumnVec),
+    Boolean(Vec<Bitmap>),
+    String(Vec<StringColumn>),
+    Timestamp(Vec<Buffer<i64>>),
+    Date(Vec<Buffer<i32>>),
+    Array(Vec<ArrayColumn<AnyType>>),
+    Map(Vec<ArrayColumn<KvPair<AnyType, AnyType>>>),
+    Bitmap(Vec<StringColumn>),
+    Nullable(Box<NullableColumnVec>),
+    Tuple(Vec<ColumnVec>),
+    Variant(Vec<StringColumn>),
 }
 
 #[derive(Debug, Clone, EnumAsInner)]
@@ -533,11 +555,7 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(b1.as_slice()).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(b2.as_slice()).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -573,11 +591,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(*b1).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(*b2).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
+            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -658,13 +672,7 @@ impl PartialOrd for Column {
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1
-                .iter()
-                .map(|c1| RoaringTreemap::deserialize_from(c1).unwrap().len())
-                .partial_cmp(
-                    col2.iter()
-                        .map(|c2| RoaringTreemap::deserialize_from(c2).unwrap().len()),
-                ),
+            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -1639,11 +1647,17 @@ impl Column {
                 })
             }
             DataType::Decimal(t) => match t {
-                DecimalDataType::Decimal128(x) => {
-                    Column::Decimal(DecimalColumn::Decimal128(vec![0i128; len].into(), *x))
+                DecimalDataType::Decimal128(size) => {
+                    let values = (0..len)
+                        .map(|_| i128::from(SmallRng::from_entropy().gen::<i16>()))
+                        .collect::<Vec<i128>>();
+                    Column::Decimal(DecimalColumn::Decimal128(values.into(), *size))
                 }
-                DecimalDataType::Decimal256(x) => {
-                    Column::Decimal(DecimalColumn::Decimal256(vec![i256::ZERO; len].into(), *x))
+                DecimalDataType::Decimal256(size) => {
+                    let values = (0..len)
+                        .map(|_| i256::from(SmallRng::from_entropy().gen::<i16>()))
+                        .collect::<Vec<i256>>();
+                    Column::Decimal(DecimalColumn::Decimal256(values.into(), *size))
                 }
             },
             DataType::Timestamp => TimestampType::from_data(

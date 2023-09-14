@@ -151,7 +151,7 @@ pub enum TokenKind {
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
 
-    #[regex(r#"@([^\s`;'"]|\\\s|\\'|\\"|\\\\)+"#)]
+    #[regex(r#"@([^\s`;'"()]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
@@ -211,7 +211,7 @@ pub enum TokenKind {
     #[token(",")]
     Comma,
     #[token(".")]
-    Period,
+    Dot,
     #[token(":")]
     Colon,
     #[token("::")]
@@ -493,6 +493,8 @@ pub enum TokenKind {
     FIELD_DELIMITER,
     #[token("NAN_DISPLAY", ignore(ascii_case))]
     NAN_DISPLAY,
+    #[token("NULL_DISPLAY", ignore(ascii_case))]
+    NULL_DISPLAY,
     #[token("FILE_FORMAT", ignore(ascii_case))]
     FILE_FORMAT,
     #[token("FILE", ignore(ascii_case))]
@@ -537,8 +539,6 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
-    #[token("GENERATE", ignore(ascii_case))]
-    GENERATE,
     #[token("GENERATED", ignore(ascii_case))]
     GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
@@ -744,6 +744,12 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("MERGE", ignore(ascii_case))]
+    MERGE,
+    #[token("MATCHED", ignore(ascii_case))]
+    MATCHED,
+    #[token("UNMATCHED", ignore(ascii_case))]
+    UNMATCHED,
     #[token("ROW", ignore(ascii_case))]
     ROW,
     #[token("ROWS", ignore(ascii_case))]
@@ -860,6 +866,8 @@ pub enum TokenKind {
     SEMI,
     #[token("SOUNDS", ignore(ascii_case))]
     SOUNDS,
+    #[token("SYNC", ignore(ascii_case))]
+    SYNC,
     #[token("TABLE", ignore(ascii_case))]
     TABLE,
     #[token("TABLES", ignore(ascii_case))]
@@ -994,10 +1002,19 @@ pub enum TokenKind {
     ROLLUP,
     #[token("INDEXES", ignore(ascii_case))]
     INDEXES,
+    #[token("OWNERSHIP", ignore(ascii_case))]
+    OWNERSHIP,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
 impl TokenKind {
+    pub fn is_literal(&self) -> bool {
+        matches!(
+            self,
+            LiteralInteger | LiteralFloat | QuotedString | PGLiteralHex | MySQLLiteralHex
+        )
+    }
+
     pub fn is_keyword(&self) -> bool {
         !matches!(
             self,
@@ -1027,7 +1044,7 @@ impl TokenKind {
                 | LParen
                 | RParen
                 | Comma
-                | Period
+                | Dot
                 | Colon
                 | DoubleColon
                 | SemiColon

@@ -22,11 +22,11 @@ use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
+use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
-use crate::pipelines::processors::JoinHashTable;
 
 /// Semi join contain semi join and semi-anti join
-impl JoinHashTable {
+impl HashJoinProbeState {
     pub(crate) fn left_semi_anti_join<'a, const SEMI: bool, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -43,11 +43,11 @@ impl JoinHashTable {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let probe_indexes = &mut probe_state.probe_indexes;
-        let mut probe_indexes_occupied = 0;
+        let mut matched_num = 0;
         let mut result_blocks = vec![];
 
         for (i, key) in keys_iter.enumerate() {
-            let contains = if self.hash_join_desc.from_correlated_subquery {
+            let contains = if self.hash_join_state.hash_join_desc.from_correlated_subquery {
                 hash_table.contains(key)
             } else {
                 self.contains(hash_table, key, valids, i)
@@ -55,35 +55,27 @@ impl JoinHashTable {
 
             match (contains, SEMI) {
                 (true, true) | (false, false) => {
-                    probe_indexes[probe_indexes_occupied] = (i as u32, 1);
-                    probe_indexes_occupied += 1;
-                    if probe_indexes_occupied >= max_block_size {
-                        if self.interrupt.load(Ordering::Relaxed) {
+                    probe_indexes[matched_num] = i as u32;
+                    matched_num += 1;
+                    if matched_num >= max_block_size {
+                        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                             return Err(ErrorCode::AbortedQuery(
                                 "Aborted query, because the server is shutting down or the query was killed.",
                             ));
                         }
-                        let probe_block = DataBlock::take_compacted_indices(
-                            input,
-                            &probe_indexes[0..probe_indexes_occupied],
-                            probe_indexes_occupied,
-                        )?;
+                        let probe_block = DataBlock::take(input, probe_indexes)?;
                         result_blocks.push(probe_block);
 
-                        probe_indexes_occupied = 0;
+                        matched_num = 0;
                     }
                 }
                 _ => {}
             }
         }
-        if probe_indexes_occupied == 0 {
+        if matched_num == 0 {
             return Ok(result_blocks);
         }
-        let probe_block = DataBlock::take_compacted_indices(
-            input,
-            &probe_indexes[0..probe_indexes_occupied],
-            probe_indexes_occupied,
-        )?;
+        let probe_block = DataBlock::take(input, &probe_indexes[0..matched_num])?;
         result_blocks.push(probe_block);
         Ok(result_blocks)
     }
@@ -108,24 +100,27 @@ impl JoinHashTable {
         let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         // The semi join will return multiple data chunks of similar size.
-        let mut occupied = 0;
+        let mut matched_num = 0;
         let mut result_blocks = vec![];
-        let mut probe_indexes_len = 0;
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let build_num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let is_build_projected = self.is_build_projected.load(Ordering::Relaxed);
+        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
+        let build_columns_data_type =
+            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
+        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
+        let is_build_projected = self
+            .hash_join_state
+            .is_build_projected
+            .load(Ordering::Relaxed);
 
-        let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
         let dummy_probed_rows = vec![RowPtr {
@@ -135,8 +130,8 @@ impl JoinHashTable {
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
                 } else {
                     self.probe_key(
                         hash_table,
@@ -144,7 +139,7 @@ impl JoinHashTable {
                         valids,
                         i,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     )
                 };
@@ -159,7 +154,7 @@ impl JoinHashTable {
                     unsafe {
                         std::ptr::copy_nonoverlapping(
                             &dummy_probed_rows[0] as *const RowPtr,
-                            build_indexes_ptr.add(occupied),
+                            build_indexes_ptr.add(matched_num),
                             1,
                         )
                     }
@@ -172,58 +167,47 @@ impl JoinHashTable {
                 row_state[i] += true_match_count as u32;
             }
 
-            occupied += match_count;
-            probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-            probe_indexes_len += 1;
-            if occupied >= max_block_size {
+            for _ in 0..match_count {
+                probe_indexes[matched_num] = i as u32;
+                matched_num += 1;
+            }
+            if matched_num >= max_block_size {
                 loop {
-                    if self.interrupt.load(Ordering::Relaxed) {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take_compacted_indices(
-                            input,
-                            &probe_indexes[0..probe_indexes_len],
-                            occupied,
-                        )?)
+                        Some(DataBlock::take(input, probe_indexes)?)
                     } else {
                         None
                     };
                     let build_block = if is_build_projected {
-                        Some(
-                            self.row_space
-                                .gather(build_indexes, &data_blocks, &build_num_rows)?,
-                        )
+                        Some(self.hash_join_state.row_space.gather(
+                            build_indexes,
+                            build_columns,
+                            build_columns_data_type,
+                            build_num_rows,
+                        )?)
                     } else {
                         None
                     };
                     let result_block =
-                        self.merge_eq_block(probe_block.clone(), build_block, occupied);
+                        self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
                     let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
-                        (Some(b), _, _) => b.into_mut().right().unwrap(),
+                        (Some(b), _, _) => b.make_mut(),
                         (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
                         (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
                         _ => unreachable!(),
                     };
 
                     if SEMI {
-                        self.fill_null_for_semi_join(
-                            &mut bm,
-                            probe_indexes,
-                            probe_indexes_len,
-                            &mut row_state,
-                        );
+                        self.fill_null_for_semi_join(&mut bm, probe_indexes, &mut row_state);
                     } else {
-                        self.fill_null_for_anti_join(
-                            &mut bm,
-                            probe_indexes,
-                            probe_indexes_len,
-                            &mut row_state,
-                        );
+                        self.fill_null_for_anti_join(&mut bm, probe_indexes, &mut row_state);
                     }
 
                     if let Some(probe_block) = probe_block {
@@ -232,9 +216,7 @@ impl JoinHashTable {
                             result_blocks.push(result_block);
                         }
                     }
-
-                    probe_indexes_len = 0;
-                    occupied = 0;
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -243,7 +225,7 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         max_block_size,
                     );
                     if match_count == 0 {
@@ -254,58 +236,56 @@ impl JoinHashTable {
                         row_state[i] += match_count as u32;
                     }
 
-                    occupied += match_count;
-                    probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
-                    probe_indexes_len += 1;
+                    for _ in 0..match_count {
+                        probe_indexes[matched_num] = i as u32;
+                        matched_num += 1;
+                    }
 
-                    if occupied < max_block_size {
+                    if matched_num < max_block_size {
                         break;
                     }
                 }
             }
         }
 
-        if occupied == 0 {
+        if matched_num == 0 {
             return Ok(result_blocks);
         }
 
-        if self.interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take_compacted_indices(
-                input,
-                &probe_indexes[0..probe_indexes_len],
-                occupied,
-            )?)
+            Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
         } else {
             None
         };
         let build_block = if is_build_projected {
-            Some(self.row_space.gather(
-                &build_indexes[0..occupied],
-                &data_blocks,
-                &build_num_rows,
+            Some(self.hash_join_state.row_space.gather(
+                &build_indexes[0..matched_num],
+                build_columns,
+                build_columns_data_type,
+                build_num_rows,
             )?)
         } else {
             None
         };
-        let result_block = self.merge_eq_block(probe_block.clone(), build_block, occupied);
+        let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
         let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
-            (Some(b), _, _) => b.into_mut().right().unwrap(),
+            (Some(b), _, _) => b.make_mut(),
             (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
             (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
             _ => unreachable!(),
         };
 
         if SEMI {
-            self.fill_null_for_semi_join(&mut bm, probe_indexes, probe_indexes_len, &mut row_state);
+            self.fill_null_for_semi_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
         } else {
-            self.fill_null_for_anti_join(&mut bm, probe_indexes, probe_indexes_len, &mut row_state);
+            self.fill_null_for_anti_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
         }
 
         if let Some(probe_block) = probe_block {
@@ -326,24 +306,16 @@ impl JoinHashTable {
     fn fill_null_for_semi_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexes: &[(u32, u32)],
-        probe_indexes_len: usize,
+        probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
-        let mut index = 0;
-        let mut idx = 0;
-        while idx < probe_indexes_len {
-            let (row, cnt) = probe_indexes[idx];
-            idx += 1;
-            for _ in 0..cnt {
-                if bm.get(index) {
-                    if row_state[row as usize] == 0 {
-                        row_state[row as usize] = 1;
-                    } else {
-                        bm.set(index, false);
-                    }
+        for (index, row) in probe_indexes.iter().enumerate() {
+            if bm.get(index) {
+                if row_state[*row as usize] == 0 {
+                    row_state[*row as usize] = 1;
+                } else {
+                    bm.set(index, false);
                 }
-                index += 1;
             }
         }
     }
@@ -355,29 +327,21 @@ impl JoinHashTable {
     fn fill_null_for_anti_join(
         &self,
         bm: &mut MutableBitmap,
-        probe_indexes: &[(u32, u32)],
-        probe_indexes_len: usize,
+        probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
-        let mut index = 0;
-        let mut idx = 0;
-        while idx < probe_indexes_len {
-            let (row, cnt) = probe_indexes[idx];
-            idx += 1;
-            for _ in 0..cnt {
-                if row_state[row as usize] == 0 {
-                    // if state is not matched, anti result will take one
-                    bm.set(index, true);
-                } else if row_state[row as usize] == 1 {
-                    // if state has just one, anti reverse the result
-                    row_state[row as usize] -= 1;
-                    bm.set(index, !bm.get(index))
-                } else if !bm.get(index) {
-                    row_state[row as usize] -= 1;
-                } else {
-                    bm.set(index, false);
-                }
-                index += 1;
+        for (index, row) in probe_indexes.iter().enumerate() {
+            if row_state[*row as usize] == 0 {
+                // if state is not matched, anti result will take one
+                bm.set(index, true);
+            } else if row_state[*row as usize] == 1 {
+                // if state has just one, anti reverse the result
+                row_state[*row as usize] -= 1;
+                bm.set(index, !bm.get(index))
+            } else if !bm.get(index) {
+                row_state[*row as usize] -= 1;
+            } else {
+                bm.set(index, false);
             }
         }
     }

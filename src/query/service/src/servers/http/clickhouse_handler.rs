@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_expression::infer_table_schema;
+use common_expression::DataSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
 use common_formats::FileFormatTypeExt;
@@ -106,12 +107,12 @@ impl StatementHandlerParams {
 async fn execute(
     ctx: Arc<QueryContext>,
     interpreter: InterpreterPtr,
+    schema: DataSchemaRef,
     format: ClickhouseFormatType,
     params: StatementHandlerParams,
     handle: Option<JoinHandle<()>>,
 ) -> Result<WithContentType<Body>> {
     let format_typ = format.typ.clone();
-    let schema = interpreter.schema();
 
     // the reason of spawning new task to execute the interpreter:
     // (FIXME describe this in a more concise way)
@@ -256,7 +257,7 @@ pub async fn clickhouse_handler_get(
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
-    execute(context, interpreter, format, params, None)
+    execute(context, interpreter, plan.schema(), format, params, None)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)
@@ -329,6 +330,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_clickhouse(
+                    ctx.clone(),
                     format.as_str(),
                     rx,
                     ctx.get_settings(),
@@ -378,6 +380,7 @@ pub async fn clickhouse_handler_post(
                 .map_err(InternalServerError)?;
             let input_context = Arc::new(
                 InputContext::try_create_from_insert_file_format(
+                    ctx.clone(),
                     rx,
                     ctx.get_settings(),
                     format.clone(),
@@ -420,7 +423,7 @@ pub async fn clickhouse_handler_post(
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
 
-    execute(ctx, interpreter, format, params, handle)
+    execute(ctx, interpreter, schema, format, params, handle)
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(InternalServerError)

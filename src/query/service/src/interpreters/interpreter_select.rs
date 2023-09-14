@@ -18,7 +18,6 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
-use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;
@@ -27,6 +26,8 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
+use common_profile::SharedProcessorProfiles;
+use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::parse_result_scan_args;
 use common_sql::ColumnBinding;
@@ -36,6 +37,7 @@ use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::WriteResultCacheSink;
 use common_users::UserApiProvider;
 use log::error;
+use log::info;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -94,7 +96,16 @@ impl SelectInterpreter {
     }
 
     #[async_backtrace::framed]
-    pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
+    pub async fn build_pipeline(
+        &self,
+        mut physical_plan: PhysicalPlan,
+    ) -> Result<PipelineBuildResult> {
+        if let PhysicalPlan::Exchange(exchange) = &mut physical_plan {
+            if exchange.kind == FragmentKind::Merge && self.ignore_result {
+                exchange.ignore_exchange = self.ignore_result;
+            }
+        }
+
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
@@ -191,6 +202,18 @@ impl SelectInterpreter {
         }
         Ok(None)
     }
+
+    fn attach_tables_to_ctx(&self) {
+        let metadata = self.metadata.read();
+        for table in metadata.tables() {
+            self.ctx.attach_table(
+                table.catalog(),
+                table.database(),
+                table.name(),
+                table.table(),
+            )
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -199,19 +222,25 @@ impl Interpreter for SelectInterpreter {
         "SelectInterpreterV2"
     }
 
-    fn schema(&self) -> DataSchemaRef {
-        self.bind_context.output_schema()
-    }
-
     /// This method will create a new pipeline
     /// The QueryPipelineBuilder will use the optimized plan to generate a Pipeline
     #[minitrace::trace(name = "select_interpreter_execute")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        self.attach_tables_to_ctx();
+
         self.ctx.set_status_info("preparing plan");
 
         // 0. Need to build physical plan first to get the partitions.
         let physical_plan = self.build_physical_plan().await?;
+        let query_plan = physical_plan
+            .format(self.metadata.clone(), SharedProcessorProfiles::default())?
+            .format_pretty()?;
+        info!(
+            "Query id: {}, query plan: \n{}",
+            self.ctx.get_id(),
+            query_plan
+        );
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
@@ -258,7 +287,7 @@ impl Interpreter for SelectInterpreter {
                 Ok(None) => {
                     let mut build_res = self.build_pipeline(physical_plan).await?;
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
-                    let schema = infer_table_schema(&self.schema())?;
+                    let schema = infer_table_schema(&self.bind_context.output_schema())?;
                     self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
                     return Ok(build_res);
                 }

@@ -694,7 +694,7 @@ fn distance(lon1deg: f32, lat1deg: f32, lon2deg: f32, lat2deg: f32, method: GeoM
 
     if lon_diff < 13f32 {
         let latitude_midpoint: f32 = (lat1deg + lat2deg + 180f32) * METRIC_LUT_SIZE as f32 / 360f32;
-        let latitude_midpoint_index = float_to_index(latitude_midpoint);
+        let latitude_midpoint_index = float_to_index(latitude_midpoint) & (METRIC_LUT_SIZE - 1);
 
         let (k_lat, k_lon) = match method {
             GeoMethod::SphereDegrees => {

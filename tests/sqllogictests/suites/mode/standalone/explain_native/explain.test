@@ -28,11 +28,11 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a and t2.a > 5 and t1.a > 1)
 ----
 Filter
-├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
 ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
 ├── estimated rows: 0.13
 └── HashJoin
-    ├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+    ├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
     ├── join type: INNER
     ├── build keys: [t1.a (#0)]
     ├── probe keys: [t2.a (#2)]
@@ -63,7 +63,7 @@ query T
 explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a)
 ----
 HashJoin
-├── output columns: [t2.a (#2), t2.b (#3), t1.a (#0), t1.b (#1)]
+├── output columns: [t2.a (#2), t2.b (#3), t1.b (#1), t1.a (#0)]
 ├── join type: INNER
 ├── build keys: [t1.a (#0)]
 ├── probe keys: [t2.a (#2)]
@@ -226,12 +226,12 @@ query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
 ----
 CREATE TABLE t3 (
-    a Int64 NOT NULL,
-    b UInt64 NOT NULL,
-    c Float64 NOT NULL,
-    d STRING NOT NULL,
-    e ARRAY(Int32) NOT NULL,
-    f TUPLE(f1 BOOLEAN, f2 STRING) NOT NULL
+    a Int64,
+    b UInt64,
+    c Float64,
+    d STRING,
+    e ARRAY(Int32),
+    f TUPLE(f1 BOOLEAN, f2 STRING)
 ) ENGINE = FUSE
 CLUSTER BY (
     a,
@@ -451,7 +451,7 @@ explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CS
 ----
 Copy (children 7)
 ├── CopyUnit (children 1)
-│   └── UriLocation 's3://mybucket/data.csv'
+│   └── Location 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
 │   └── TableIdentifier t1
 ├── FileFormats (children 4)
@@ -1000,7 +1000,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
+├── push downs: [filters: [and_filters(t4.a (#0) = 1, TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
@@ -1040,5 +1040,5 @@ EvalScalar
     ├── read bytes: 0
     ├── partitions total: 0
     ├── partitions scanned: 0
-    ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
+    ├── push downs: [filters: [is_true(t4.a (#0) > 100)], limit: NONE]
     └── estimated rows: 0.00

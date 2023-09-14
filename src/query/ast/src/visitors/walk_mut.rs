@@ -273,17 +273,7 @@ pub fn walk_table_reference_mut<V: VisitorMut>(visitor: &mut V, table_ref: &mut 
         TableReference::Join { join, .. } => {
             visitor.visit_join(join);
         }
-        TableReference::Stage { .. } => {}
-        TableReference::Values { values, alias, .. } => {
-            for row_values in values {
-                for value in row_values {
-                    visitor.visit_expr(value);
-                }
-            }
-            if let Some(alias) = alias {
-                visitor.visit_identifier(&mut alias.name);
-            }
-        }
+        TableReference::Location { .. } => {}
     }
 }
 
@@ -321,6 +311,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::Query(query) => visitor.visit_query(&mut *query),
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
+        Statement::MergeInto(merge_into) => visitor.visit_merge_into(merge_into),
         Statement::Delete {
             table_reference,
             selection,
@@ -383,10 +374,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
-        Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
-        Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
-        Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),
-        Statement::GenerateVirtualColumns(stmt) => visitor.visit_generate_virtual_columns(stmt),
+        Statement::CreateVirtualColumn(stmt) => visitor.visit_create_virtual_column(stmt),
+        Statement::AlterVirtualColumn(stmt) => visitor.visit_alter_virtual_column(stmt),
+        Statement::DropVirtualColumn(stmt) => visitor.visit_drop_virtual_column(stmt),
+        Statement::RefreshVirtualColumn(stmt) => visitor.visit_refresh_virtual_column(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),

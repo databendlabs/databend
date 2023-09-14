@@ -15,56 +15,133 @@
 use std::borrow::Borrow;
 use std::fmt;
 use std::ops::RangeBounds;
+use std::sync::Arc;
 
 use common_meta_types::KVMeta;
-use itertools::Itertools;
+use futures_util::stream::BoxStream;
+use stream_more::KMerge;
+use stream_more::StreamMore;
 
+use crate::sm_v002::leveled_store::level_data::LevelData;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
-/// A map-like data structure that constructs its final state from multiple levels.
-pub(in crate::sm_v002) trait MultiLevelMap<K>
-where K: Ord
-{
-    /// The API to access the data at one level.
-    type API: MapApi<K> + 'static;
+/// State machine data organized in multiple levels.
+///
+/// Similar to leveldb.
+///
+/// The top level is the newest and writable.
+/// Others are immutable.
+#[derive(Debug, Default)]
+pub struct LeveledMap {
+    /// The top level is the newest and writable.
+    writable: LevelData,
 
-    /// Returns the data associated to this level.
-    fn data<'a>(&'a self) -> &Self::API
-    where Self::API: 'a;
-
-    /// Returns the mutable reference of the data associated to this level.
-    fn data_mut<'a>(&'a mut self) -> &mut Self::API
-    where Self::API: 'a;
-
-    /// Return a readonly reference to the base level this level is built on top of.
-    fn base(&self) -> Option<&Self>;
+    /// The immutable levels, from the oldest to the newest.
+    /// levels[0] is the bottom and oldest level.
+    frozen: StaticLeveledMap,
 }
 
-impl<L, K> MapApi<K> for L
-where
-    K: Ord + fmt::Debug,
-    L: MultiLevelMap<K>,
-{
-    type V = <<L as MultiLevelMap<K>>::API as MapApi<K>>::V;
-
-    fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
-    where
-        K: Borrow<Q>,
-        Q: Ord + ?Sized,
-    {
-        let api = self.data();
-        let got = api.get(key);
-
-        if got.is_not_found() {
-            if let Some(base) = self.base() {
-                return base.get(key);
-            }
+impl LeveledMap {
+    pub(crate) fn new(writable: LevelData) -> Self {
+        Self {
+            writable,
+            frozen: Default::default(),
         }
-        got
     }
 
-    fn set(
+    /// Return an iterator of all levels in reverse order.
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+        [&self.writable]
+            .into_iter()
+            .chain(self.frozen.iter_levels())
+    }
+
+    /// Freeze the current writable level and create a new writable level.
+    pub fn freeze_writable(&mut self) -> &StaticLeveledMap {
+        let new_writable = self.writable.new_level();
+
+        let frozen = std::mem::replace(&mut self.writable, new_writable);
+        self.frozen.push(Arc::new(frozen));
+
+        &self.frozen
+    }
+
+    /// Return an immutable reference to the top level i.e., the writable level.
+    pub fn writable_ref(&self) -> &LevelData {
+        &self.writable
+    }
+
+    /// Return a mutable reference to the top level i.e., the writable level.
+    pub fn writable_mut(&mut self) -> &mut LevelData {
+        &mut self.writable
+    }
+
+    /// Return a reference to the immutable levels.
+    pub fn frozen_ref(&self) -> &StaticLeveledMap {
+        &self.frozen
+    }
+
+    /// Replace all immutable levels with the given one.
+    pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
+        self.frozen = b;
+    }
+}
+
+#[async_trait::async_trait]
+impl<K> MapApiRO<K> for LeveledMap
+where
+    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
+    LevelData: MapApiRO<K>,
+{
+    type V = <LevelData as MapApiRO<K>>::V;
+
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+    {
+        for level_data in self.iter_levels() {
+            let got = level_data.get(key).await;
+            if !got.is_not_found() {
+                return got;
+            }
+        }
+        return Marked::empty();
+    }
+
+    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    where
+        K: 'a,
+        K: Borrow<T> + Clone,
+        Self::V: Unpin,
+        T: Ord,
+        R: RangeBounds<T> + Clone + Send + Sync,
+    {
+        let mut km = KMerge::by(util::by_key_seq);
+
+        for api in self.iter_levels() {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
+        }
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let m = km.coalesce(util::choose_greater);
+
+        Box::pin(m)
+    }
+}
+
+#[async_trait::async_trait]
+impl<K> MapApi<K> for LeveledMap
+where
+    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
+    LevelData: MapApi<K>,
+{
+    async fn set(
         &mut self,
         key: K,
         value: Option<(Self::V, Option<KVMeta>)>,
@@ -73,7 +150,7 @@ where
         K: Ord,
     {
         // Get from this level or the base level.
-        let prev = self.get(&key).clone();
+        let prev = self.get(&key).await.clone();
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.is_not_found() && value.is_none() {
@@ -81,41 +158,7 @@ where
         }
 
         // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.data_mut().set(key, value);
+        let (_prev, inserted) = self.writable_mut().set(key, value).await;
         (prev, inserted)
-    }
-
-    fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> Box<dyn Iterator<Item = (&K, &Marked<Self::V>)> + 'a>
-    where
-        K: 'a,
-        K: Borrow<T> + Clone,
-        T: Ord,
-        R: RangeBounds<T> + Clone,
-    {
-        let a = self.data().range(range.clone());
-
-        if let Some(base) = self.base() {
-            let b = base.range(range);
-            let it = a
-                // Put entries with the same key together, smaller internal-seq first
-                .merge_by(b, |(k1, v1), (k2, v2)| {
-                    assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
-                    (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
-                })
-                // Merge entries with the same key, keep the one with larger internal-seq
-                .coalesce(|(k1, v1), (k2, v2)| {
-                    if k1 == k2 {
-                        Ok((k1, Marked::max(v1, v2)))
-                    } else {
-                        Err(((k1, v1), (k2, v2)))
-                    }
-                });
-            Box::new(it)
-        } else {
-            Box::new(a)
-        }
     }
 }

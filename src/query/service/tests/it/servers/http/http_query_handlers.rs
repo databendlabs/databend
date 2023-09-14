@@ -43,6 +43,7 @@ use databend_query::sessions::QueryAffect;
 use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGlobalServices;
 use headers::Header;
+use http::HeaderMap;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
@@ -116,7 +117,8 @@ async fn test_simple_sql() -> Result<()> {
 
     let sql = "select * from system.tables limit 10";
     let ep = create_endpoint().await?;
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, 1).await?;
+    let (status, result) =
+        post_sql_to_endpoint_new_session(&ep, sql, 1, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result.error);
 
@@ -126,7 +128,7 @@ async fn test_simple_sql() -> Result<()> {
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     assert_eq!(result.next_uri, Some(final_uri.clone()), "{:?}", result);
     assert_eq!(result.data.len(), 10, "{:?}", result);
-    assert_eq!(result.schema.len(), 17, "{:?}", result);
+    assert_eq!(result.schema.len(), 18, "{:?}", result);
 
     // get state
     let uri = make_state_uri(query_id);
@@ -204,7 +206,8 @@ async fn test_return_when_finish() -> Result<()> {
     let wait_time_secs = 5;
     let sql = "create table t1(a int)";
     let ep = create_endpoint().await?;
-    let (status, result) = post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs).await?;
+    let (status, result) =
+        post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.state, ExecuteStateKind::Succeeded, "{:?}", result);
     for (sql, state) in [
@@ -226,6 +229,22 @@ async fn test_return_when_finish() -> Result<()> {
             msg()
         );
     }
+    Ok(())
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn test_client_query_id() -> Result<()> {
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+
+    let wait_time_secs = 5;
+    let sql = "select * from numbers(1)";
+    let ep = create_endpoint().await?;
+    let mut headers = HeaderMap::new();
+    headers.insert("x-databend-query-id", "test-query-id".parse().unwrap());
+    let (status, result) =
+        post_sql_to_endpoint_new_session(&ep, sql, wait_time_secs, headers).await?;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(result.id, "test-query-id");
     Ok(())
 }
 
@@ -281,7 +300,7 @@ async fn test_wait_time_secs() -> Result<()> {
     let sql = "select sleep(0.001)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
 
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(result.state, ExecuteStateKind::Running, "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
@@ -332,7 +351,7 @@ async fn test_buffer_size() -> Result<()> {
 
     for buf_size in [0, 99, 100, 101] {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_in_buffer": buf_size}});
-        let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+        let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
         assert_eq!(
             result.data.len(),
             rows,
@@ -353,7 +372,7 @@ async fn test_pagination() -> Result<()> {
     let sql = "select * from numbers(10)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 1, "max_rows_per_page": 2}, "session": { "settings": {}}});
 
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     let query_id = &result.id;
     let next_uri = make_page_uri(query_id, 1);
@@ -404,7 +423,7 @@ async fn test_http_session() -> Result<()> {
     let json =
         serde_json::json!({"sql":  "use system", "session": {"keep_server_session_secs": 10}});
 
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK);
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(result.data.len(), 0, "{:?}", result);
@@ -414,19 +433,19 @@ async fn test_http_session() -> Result<()> {
     let session_id = &result.session_id.unwrap();
 
     let json = serde_json::json!({"sql": "select database()", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert_eq!(result.data[0][0], "system", "{:?}", result);
 
     let json = serde_json::json!({"sql": "select * from x", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
 
     let json = serde_json::json!({"sql": "select 1", "session_id": session_id});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert!(result.error.is_none(), "{:?}", result);
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
@@ -526,7 +545,7 @@ async fn test_insert() -> Result<()> {
 
     for (sql, data_len, rows_written) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
-        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
         assert_eq!(status, StatusCode::OK, "{:?}", result);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len, "{:?}", result);
@@ -611,7 +630,7 @@ async fn test_query_log() -> Result<()> {
 
     let sql = "select sleep(2)";
     let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 0}});
-    let (status, result) = post_json_to_endpoint(&ep, &json).await?;
+    let (status, result) = post_json_to_endpoint(&ep, &json, HeaderMap::default()).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
 
@@ -692,7 +711,7 @@ pub async fn create_endpoint() -> Result<EndpointType> {
 
 async fn post_json(json: &serde_json::Value) -> Result<(StatusCode, QueryResponse)> {
     let ep = create_endpoint().await?;
-    post_json_to_endpoint(&ep, json).await
+    post_json_to_endpoint(&ep, json, HeaderMap::default()).await
 }
 
 async fn post_sql_to_endpoint(
@@ -700,33 +719,36 @@ async fn post_sql_to_endpoint(
     sql: &str,
     wait_time_secs: u64,
 ) -> Result<(StatusCode, QueryResponse)> {
-    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs).await
+    post_sql_to_endpoint_new_session(ep, sql, wait_time_secs, HeaderMap::default()).await
 }
 
 async fn post_sql_to_endpoint_new_session(
     ep: &EndpointType,
     sql: &str,
     wait_time_secs: u64,
+    headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let json = serde_json::json!({ "sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}, "session": { "settings": {}}});
-    post_json_to_endpoint(ep, &json).await
+    post_json_to_endpoint(ep, &json, headers).await
 }
 
 async fn post_json_to_endpoint(
     ep: &EndpointType,
     json: &serde_json::Value,
+    headers: HeaderMap,
 ) -> Result<(StatusCode, QueryResponse)> {
     let uri = "/v1/query";
     let content_type = "application/json";
     let body = serde_json::to_vec(&json)?;
     let basic = headers::Authorization::basic("root", "");
 
-    let req = Request::builder()
+    let mut req = Request::builder()
         .uri(uri.parse().unwrap())
         .method(Method::POST)
         .header(header::CONTENT_TYPE, content_type)
         .typed_header(basic)
         .body(body);
+    req.headers_mut().extend(headers.into_iter());
     let response = ep
         .call(req)
         .await
@@ -1124,7 +1146,7 @@ async fn test_func_object_keys() -> Result<()> {
 
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": 3}});
-        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(result.data.len(), data_len);
@@ -1150,7 +1172,7 @@ async fn test_multi_partition() -> Result<()> {
     let wait_time_secs = 5;
     for (sql, data_len) in sqls {
         let json = serde_json::json!({"sql": sql.to_string(), "pagination": {"wait_time_secs": wait_time_secs}});
-        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
         assert_eq!(status, StatusCode::OK);
         assert!(result.error.is_none(), "{:?}", result.error);
         assert_eq!(
@@ -1215,7 +1237,7 @@ async fn test_affect() -> Result<()> {
     ];
 
     for (json, affect, session_conf) in sqls {
-        let (status, result) = post_json_to_endpoint(&route, &json).await?;
+        let (status, result) = post_json_to_endpoint(&route, &json, HeaderMap::default()).await?;
         assert_eq!(status, StatusCode::OK, "{} {:?}", json, result.error);
         assert!(result.error.is_none(), "{} {:?}", json, result.error);
         assert_eq!(result.state, ExecuteStateKind::Succeeded);

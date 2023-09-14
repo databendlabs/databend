@@ -96,7 +96,9 @@ use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_storage::CopyStatus;
 use common_storage::DataOperator;
+use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
@@ -106,6 +108,7 @@ use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use parking_lot::RwLock;
+use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -597,6 +600,22 @@ impl TableContext for CtxDelegation {
     fn get_materialized_ctes(&self) -> MaterializedCtesBlocks {
         todo!()
     }
+
+    fn add_segment_location(&self, _segment_loc: Location) -> Result<()> {
+        todo!()
+    }
+
+    fn get_segment_locations(&self) -> Result<Vec<Location>> {
+        todo!()
+    }
+
+    fn add_file_status(&self, _file_path: &str, _file_status: FileStatus) -> Result<()> {
+        todo!()
+    }
+
+    fn get_copy_status(&self) -> Arc<CopyStatus> {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -759,7 +778,15 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+    async fn list_index_ids_by_table_id(&self, _req: ListIndexesByIdReq) -> Result<Vec<u64>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes_by_table_id(
+        &self,
+        _req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 

@@ -21,15 +21,18 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_ast::ast::Expr as AExpr;
+use common_ast::ast::Connection;
+use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
+use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
@@ -45,16 +48,10 @@ use common_catalog::table_function::TableFunction;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_expression::ColumnBuilder;
 use common_expression::ColumnId;
 use common_expression::ConstantFolder;
-use common_expression::DataBlock;
 use common_expression::DataField;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRefExt;
-use common_expression::Evaluator;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -81,24 +78,20 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
-use indexmap::IndexMap;
 use parking_lot::RwLock;
 
-use crate::binder::copy::parse_file_location;
+use crate::binder::copy::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
-use crate::binder::wrap_cast_scalar;
 use crate::binder::Binder;
 use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::Visibility;
-use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::normalize_identifier;
 use crate::planner::semantic::TypeChecker;
-use crate::plans::ConstantTableScan;
 use crate::plans::CteScan;
 use crate::plans::Scan;
 use crate::plans::Statistics;
@@ -546,17 +539,30 @@ impl Binder {
                     self.bind_query(&mut new_bind_context, subquery).await?;
                 if let Some(alias) = alias {
                     res_bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    // reset column name as alias column name
+                    for i in 0..alias.columns.len() {
+                        let column = &res_bind_context.columns[i];
+                        self.metadata
+                            .write()
+                            .change_derived_column_alias(column.index, column.column_name.clone());
+                    }
                 }
                 Ok((s_expr, res_bind_context))
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
-                let (mut stage_info, path) =
-                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
+                let location = match location {
+                    FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
+                        connection: Connection::new(options.connection.clone()),
+                        ..uri.clone()
+                    }),
+                    _ => location.clone(),
+                };
+                let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
                 if let Some(f) = &options.file_format {
                     stage_info.file_format_params = match StageFileFormatType::from_str(f) {
                         Ok(t) => FileFormatParams::default_by_type(t)?,
@@ -573,188 +579,26 @@ impl Binder {
                     .await
             }
             TableReference::Join { .. } => unreachable!(),
-            TableReference::Values {
-                span,
-                values,
-                alias,
-            } => self.bind_values(bind_context, *span, values, alias).await,
         }
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn bind_values(
+    pub(crate) async fn bind_merge_into_source(
         &mut self,
         bind_context: &mut BindContext,
-        span: Span,
-        values: &Vec<Vec<AExpr>>,
-        alias: &Option<TableAlias>,
+        _span: Span,
+        source: &MergeSource,
     ) -> Result<(SExpr, BindContext)> {
-        if values.is_empty() {
-            return Err(ErrorCode::SemanticError(
-                "Values lists must have at least one row".to_string(),
-            )
-            .set_span(span));
+        // merge source has three kinds type
+        // a. values b. streamingV2 c. query
+        match source {
+            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
+            MergeSource::StreamingV2 {
+                settings: _,
+                on_error_mode: _,
+                start: _,
+            } => unimplemented!(),
         }
-        let same_length = values.windows(2).all(|v| v[0].len() == v[1].len());
-        if !same_length {
-            return Err(ErrorCode::SemanticError(
-                "Values lists must all be the same length".to_string(),
-            )
-            .set_span(span));
-        }
-
-        let num_rows = values.len();
-        let num_cols = values[0].len();
-
-        let mut names = match alias {
-            Some(alias) => {
-                if alias.columns.len() > num_cols {
-                    return Err(ErrorCode::SemanticError(format!(
-                        "table {} has {} columns available but {} columns specified",
-                        alias.name,
-                        num_cols,
-                        alias.columns.len()
-                    ))
-                    .set_span(span));
-                }
-                alias
-                    .columns
-                    .iter()
-                    .map(|c| c.to_string())
-                    .collect::<Vec<_>>()
-            }
-            None => vec![],
-        };
-        // For columns whose names are not specified, assigns default column names col0, col2, etc.
-        for i in names.len()..num_cols {
-            names.push(format!("col{}", i));
-        }
-
-        let mut scalar_binder = ScalarBinder::new(
-            bind_context,
-            self.ctx.clone(),
-            &self.name_resolution_ctx,
-            self.metadata.clone(),
-            &[],
-            HashMap::new(),
-            Box::new(IndexMap::new()),
-        );
-
-        let mut col_scalars = vec![Vec::with_capacity(values.len()); num_cols];
-        let mut common_types: Vec<Option<DataType>> = vec![None; num_cols];
-
-        for row_values in values.iter() {
-            for (i, value) in row_values.iter().enumerate() {
-                let (scalar, data_type) = scalar_binder.bind(value).await?;
-                col_scalars[i].push((scalar, data_type.clone()));
-
-                // Get the common data type for each columns.
-                match &common_types[i] {
-                    Some(common_type) => {
-                        if common_type != &data_type {
-                            let new_common_type = common_super_type(
-                                common_type.clone(),
-                                data_type.clone(),
-                                &BUILTIN_FUNCTIONS.default_cast_rules,
-                            );
-                            if new_common_type.is_none() {
-                                return Err(ErrorCode::SemanticError(format!(
-                                    "{} and {} don't have common data type",
-                                    common_type, data_type
-                                ))
-                                .set_span(span));
-                            }
-                            common_types[i] = new_common_type;
-                        }
-                    }
-                    None => {
-                        common_types[i] = Some(data_type);
-                    }
-                }
-            }
-        }
-
-        let mut value_fields = Vec::with_capacity(names.len());
-        for (name, common_type) in names.into_iter().zip(common_types.into_iter()) {
-            let value_field = DataField::new(&name, common_type.unwrap());
-            value_fields.push(value_field);
-        }
-        let value_schema = DataSchema::new(value_fields);
-
-        let input = DataBlock::empty();
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
-
-        // use values to build columns
-        let mut value_columns = Vec::with_capacity(col_scalars.len());
-        for (scalars, value_field) in col_scalars.iter().zip(value_schema.fields().iter()) {
-            let mut builder =
-                ColumnBuilder::with_capacity(value_field.data_type(), col_scalars.len());
-            for (scalar, value_type) in scalars {
-                let scalar = if value_type != value_field.data_type() {
-                    wrap_cast_scalar(scalar, value_type, value_field.data_type())?
-                } else {
-                    scalar.clone()
-                };
-                let expr = scalar.as_expr()?.project_column_ref(|col| {
-                    value_schema.index_of(&col.index.to_string()).unwrap()
-                });
-                let result = evaluator.run(&expr)?;
-
-                match result.as_scalar() {
-                    Some(val) => {
-                        builder.push(val.as_ref());
-                    }
-                    None => {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "Value must be a scalar, but get {}",
-                            result
-                        ))
-                        .set_span(span));
-                    }
-                }
-            }
-            value_columns.push(builder.build());
-        }
-
-        // add column bindings
-        let mut columns = ColumnSet::new();
-        let mut fields = Vec::with_capacity(values.len());
-        for value_field in value_schema.fields() {
-            let index = self
-                .metadata
-                .write()
-                .add_derived_column(value_field.name().clone(), value_field.data_type().clone());
-            columns.insert(index);
-
-            let column_binding = ColumnBindingBuilder::new(
-                value_field.name().clone(),
-                index,
-                Box::new(value_field.data_type().clone()),
-                Visibility::Visible,
-            )
-            .build();
-            bind_context.add_column_binding(column_binding);
-
-            let field = DataField::new(&index.to_string(), value_field.data_type().clone());
-            fields.push(field);
-        }
-        let schema = DataSchemaRefExt::create(fields);
-
-        let s_expr = SExpr::create_leaf(Arc::new(
-            ConstantTableScan {
-                values: value_columns,
-                num_rows,
-                schema,
-                columns,
-            }
-            .into(),
-        ));
-        if let Some(alias) = alias {
-            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
-        }
-
-        Ok((s_expr, bind_context.clone()))
     }
 
     #[async_backtrace::framed]
@@ -773,6 +617,7 @@ impl Binder {
                 let read_options = ParquetReadOptions::default();
                 if use_parquet2 {
                     Parquet2Table::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -781,6 +626,7 @@ impl Binder {
                     .await?
                 } else {
                     ParquetRSTable::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -813,7 +659,10 @@ impl Binder {
 
                 let mut fields = vec![];
                 for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
                 }
 
                 let schema = Arc::new(TableSchema::new(fields));
@@ -981,6 +830,7 @@ impl Binder {
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            allow_internal_columns: true,
             window_definitions: DashMap::new(),
         };
 
@@ -1118,7 +968,7 @@ impl Binder {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
-                            col_stats.insert(*column_index, col_stat);
+                            col_stats.insert(*column_index, col_stat.cloned());
                         }
                     }
                 }

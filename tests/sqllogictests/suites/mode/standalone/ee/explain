@@ -16,19 +16,19 @@ statement ok
 DROP DATABASE IF EXISTS test_index_db
 
 statement ok
-DROP TABLE IF EXISTS t1
-
-statement ok
-DROP AGGREGATING INDEX IF EXISTS idx1
-
-statement ok
 CREATE DATABASE test_index_db
 
 statement ok
 USE test_index_db
 
 statement ok
-CREATE TABLE t1(a int,b int) Engine = Fuse
+DROP TABLE IF EXISTS t1
+
+statement ok
+CREATE TABLE t1(a int not null,b int not null) Engine = Fuse
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS idx1
 
 statement ok
 CREATE AGGREGATING INDEX idx1 AS SELECT b, SUM(a) FROM t1 WHERE b > 3 GROUP BY b
@@ -336,3 +336,100 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_index_db
+
+
+statement ok
+DROP DATABASE IF EXISTS test_virtual_db
+
+statement ok
+CREATE DATABASE test_virtual_db
+
+statement ok
+USE test_virtual_db
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1 (a int null, v json null) storage_format = 'native'
+
+statement ok
+insert into t1 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
+
+query T
+explain select a, v['b'] from t1
+----
+TableScan
+├── table: default.test_virtual_db.t1
+├── output columns: [a (#0), v:b (#2)]
+├── read rows: 1
+├── read bytes: 137
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:b]]
+└── estimated rows: 1.00
+
+query T
+explain select a, v['a'][0] from t1
+----
+TableScan
+├── table: default.test_virtual_db.t1
+├── output columns: [a (#0), v:a[0] (#2)]
+├── read rows: 1
+├── read bytes: 137
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0]]]
+└── estimated rows: 1.00
+
+statement ok
+drop table t1
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t2 (a int null, v json null) storage_format = 'parquet'
+
+statement ok
+insert into t2 values(1, parse_json('{"a":[1,2,3],"b":{"c":10}}'))
+
+query T
+explain select a, v['b'] from t2
+----
+TableScan
+├── table: default.test_virtual_db.t2
+├── output columns: [a (#0), v:b (#2)]
+├── read rows: 1
+├── read bytes: 130
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:b]]
+└── estimated rows: 1.00
+
+query T
+explain select a, v['a'][0] from t2
+----
+TableScan
+├── table: default.test_virtual_db.t2
+├── output columns: [a (#0), v:a[0] (#2)]
+├── read rows: 1
+├── read bytes: 130
+├── partitions total: 1
+├── partitions scanned: 1
+├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0]]]
+└── estimated rows: 1.00
+
+statement ok
+drop table t2
+
+statement ok
+USE default
+
+statement ok
+DROP DATABASE IF EXISTS test_virtual_db
+

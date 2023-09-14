@@ -1,0 +1,37 @@
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int, b int);
+
+statement ok
+create table t2(a int, b int);
+
+query T
+explain select * from t1 where (a = 1 and b > 2) or (a = 1 and b < 100) or (a = 1 and b > 2) or (a = 1 and b < 100);
+----
+TableScan
+├── table: default.default.t1
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [and_filters(t1.a (#0) = 1, t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
+└── estimated rows: 0.00
+
+query T
+explain select * from t1 where b > 2 or b > 2 or b < 100;
+----
+TableScan
+├── table: default.default.t1
+├── output columns: [a (#0), b (#1)]
+├── read rows: 0
+├── read bytes: 0
+├── partitions total: 0
+├── partitions scanned: 0
+├── push downs: [filters: [is_true(t1.b (#1) > 2 OR t1.b (#1) < 100)], limit: NONE]
+└── estimated rows: 0.00

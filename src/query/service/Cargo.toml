@@ -98,15 +98,14 @@ storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
-virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
+virtual-column = { path = "../ee-features/virtual-column" }
 # GitHub dependencies
 
 # Crates.io dependencies
-aho-corasick = { version = "1.0.1" }
-arrow-array = { version = "43.0.0" }
-arrow-flight = { version = "43.0.0", features = ["flight-sql-experimental", "tls"] }
-arrow-ipc = { version = "43.0.0" }
-arrow-schema = { version = "43.0.0" }
+arrow-array = { version = "46.0.0" }
+arrow-flight = { version = "46.0.0", features = ["flight-sql-experimental", "tls"] }
+arrow-ipc = { version = "46.0.0" }
+arrow-schema = { version = "46.0.0" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-stream = "0.3.3"
@@ -121,11 +120,14 @@ ctor = "0.1.26"
 dashmap = "5.4"
 ethnum = { workspace = true }
 futures = "0.3.24"
-futures-util = "0.3.24"
+futures-util = { workspace = true }
+
+common-meta-embedded = { path = "../../meta/embedded" }
 h2 = "0.3.17"
 headers = "0.3.8"
 http = "0.2.8"
 humantime = "2.1.0"
+indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
 log = { workspace = true }
@@ -136,26 +138,28 @@ minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
 once_cell = "1.15.0"
 opendal = { workspace = true }
-opensrv-mysql = { git = "https://github.com/datafuselabs/opensrv", rev = "bcfcf8e", features = ["tls"] }
+opensrv-mysql = { version = "0.4.1", features = ["tls"] }
 parking_lot = "0.12.1"
 paste = "1.0.9"
 petgraph = "0.6.2"
 pin-project-lite = "0.2.9"
-poem = { version = "1", features = ["rustls", "multipart", "compression"] }
+poem = { version = "~1.3.57", features = ["rustls", "multipart", "compression"] }
 prost = { version = "0.11", default-features = false }
 rand = "0.8.5"
 regex = "1.8.1"
 reqwest = { workspace = true }
-rustls = "0.21.0"
+rustls = "0.21.6"
 rustls-pemfile = "1.0.2"
+rustyline = "11.0.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
-socket2 = "0.4.7"
+socket2 = "0.5.3"
 strength_reduce = "0.2.4"
 tempfile = "3.4.0"
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }
+toml = { version = "0.7.3", default-features = false }
 tonic = { workspace = true }
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
@@ -163,8 +167,7 @@ uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
 
 [dev-dependencies]
-arrow-cast = { version = "43.0.0", features = ["prettyprint"] }
-common-meta-embedded = { path = "../../meta/embedded" }
+arrow-cast = { version = "46.0.0", features = ["prettyprint"] }
 ordered-float = { workspace = true }
 
 base64 = "0.21.0"
@@ -173,7 +176,7 @@ goldenfile = "1.4"
 hex = "0.4.3"
 jwt-simple = "0.11.0"
 maplit = "1.0.2"
-mysql_async = { version = "0.31", default-features = false, features = ["rustls-tls"] }
+mysql_async = { workspace = true }
 num = "0.4.0"
 p256 = "0.13"
 pretty_assertions = "1.3.0"
@@ -182,7 +185,6 @@ rmp-serde = "1.1.1"
 sysinfo = "0.28.3"
 temp-env = "0.3.0"
 tempfile = "3.4.0"
-toml = { version = "0.7.3", default-features = false }
 tower = "0.4.13"
 url = "2.3.1"
 walkdir = "2.3.2"

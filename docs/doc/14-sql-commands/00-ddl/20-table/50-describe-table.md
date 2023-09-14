@@ -26,9 +26,9 @@ CREATE TABLE books
 
 DESC books; 
 
-Field   |Type     |Null|Default     |Extra|
---------+---------+----+------------+-----+
-price   |FLOAT    |NO  |0.00        |     |
-pub_time|TIMESTAMP|NO  |'1900-01-01'|     |
-author  |VARCHAR  |NO  |""          |     |
+Field   |Type     |Null|Default                     |Extra|
+--------+---------+----+----------------------------+-----+
+price   |FLOAT    |YES |0                           |     |
+pub_time|TIMESTAMP|YES |'1900-01-01 00:00:00.000000'|     |
+author  |VARCHAR  |YES |NULL                        |     |
 ```

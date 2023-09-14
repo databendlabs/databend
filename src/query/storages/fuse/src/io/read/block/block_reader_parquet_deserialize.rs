@@ -22,6 +22,7 @@ use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::parquet::read::PageMetaData;
 use common_arrow::parquet::read::PageReader;
 use common_exception::ErrorCode;
@@ -105,6 +106,7 @@ impl BlockReader {
             num_rows,
             compression,
             uncompressed_buffer: &uncompressed_buffer,
+            parquet_schema_descriptor: &None::<SchemaDescriptor>,
         };
         for column_node in &self.project_column_nodes {
             match self.deserialize_field(&field_deserialization_ctx, column_node)? {
@@ -220,7 +222,7 @@ impl BlockReader {
         )?)
     }
 
-    fn deserialize_field<'a>(
+    pub fn deserialize_field<'a>(
         &self,
         deserialization_context: &'a FieldDeserializationContext,
         column: &ColumnNode,
@@ -244,8 +246,13 @@ impl BlockReader {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
                         DataItem::RawData(data) => {
-                            let column_descriptor =
-                                &self.parquet_schema_descriptor.columns()[*leaf_index];
+                            let column_descriptor = if let Some(parquet_schema_descriptor) =
+                                deserialization_context.parquet_schema_descriptor
+                            {
+                                &parquet_schema_descriptor.columns()[*leaf_index]
+                            } else {
+                                &self.parquet_schema_descriptor.columns()[*leaf_index]
+                            };
                             field_column_metas.push(column_meta);
                             field_column_data.push(*data);
                             field_column_descriptors.push(column_descriptor);
@@ -263,9 +270,10 @@ impl BlockReader {
                         }
                     }
                 } else {
-                    // TODO more context info for error message
+                    // If the column is the source of virtual columns, it may be ignored.
+                    // TODO cover more case and add context info for error message
                     // no raw data of given column id, it is unexpected
-                    return Err(ErrorCode::StorageOther("unexpected: column data not found"));
+                    return Ok(None);
                 }
             } else {
                 // no column meta of given column id
@@ -296,7 +304,7 @@ impl BlockReader {
             // mark the array
             if is_nested {
                 // the array is not intended to be cached
-                // currently, caching of compound filed columns is not support
+                // currently, caching of compound field columns is not support
                 Ok(Some(DeserializedArray::NoNeedToCache(array)))
             } else {
                 // the array is deserialized from raw bytes, should be cached

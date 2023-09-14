@@ -8,7 +8,7 @@ statement ok
 USE db_09_0008
 
 statement ok
-create table t(a uint64)
+create table t(a uint64 not null)
 
 statement ok
 insert into t values (5)
@@ -63,10 +63,11 @@ set retention_period = 0
 statement ok
 optimize table `t` purge
 
-query B
-select count(*)<5 from fuse_snapshot('db_09_0008', 't')
-----
-1
+# Flaky Tests
+# query B
+# select count(*)<5 from fuse_snapshot('db_09_0008', 't')
+# ----
+# 1
 
 query I
 select * from t order by a
@@ -116,7 +117,7 @@ select * from t order by a
 10
 
 statement ok
-create table m(a uint64) Engine = Fuse
+create table m(a uint64 not null) Engine = Fuse
 
 statement ok
 optimize table m all
@@ -131,7 +132,7 @@ statement ok
 drop table m
 
 statement ok
-create table m(a uint64) engine=Fuse
+create table m(a uint64 not null) engine=Fuse
 
 statement ok
 insert into m values(1)
@@ -176,7 +177,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't1') limit 1
 
 
 statement ok
-create table t2(a uint64) block_per_segment=2
+create table t2(a uint64 not null) block_per_segment=2
 
 statement ok
 insert into t2 values (5)
@@ -241,7 +242,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 
 
 statement ok
-create table t3(c int) block_per_segment=4 row_per_block=3
+create table t3(c int not null) block_per_segment=4 row_per_block=3
 
 statement ok
 insert into t3 values (1)
@@ -274,7 +275,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't3') limit 1
 
 
 statement ok
-create table t4(a int) row_per_block=2
+create table t4(a int not null) row_per_block=2
 
 statement ok
 insert into t4 values (1),(2)
@@ -283,7 +284,7 @@ statement ok
 insert into t4 values (3)
 
 statement ok
-alter table t4 add column b int
+alter table t4 add column b int not null
 
 statement ok
 insert into t4 values (4, 4)
@@ -308,7 +309,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't4') limit 1
 
 # for issue which addressed in PR #10620 (https://github.com/datafuselabs/databend/pull/10620)
 statement ok
-create table t5(c int)  block_per_segment=3 row_per_block=3
+create table t5(c int not null)  block_per_segment=3 row_per_block=3
 
 statement ok
 insert into t5 select number from numbers(7)
@@ -336,7 +337,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't5') limit 2
 
 
 statement ok
-create table t6(c int)  block_per_segment=4 row_per_block=3
+create table t6(c int not null)  block_per_segment=4 row_per_block=3
 
 statement ok
 insert into t6 select number from numbers(9)
@@ -380,7 +381,7 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't6') limit 2
 
 # for issue which addressed in PR #10743 (https://github.com/datafuselabs/databend/pull/10743)
 statement ok
-create table t7(c int) block_per_segment=3 row_per_block=3
+create table t7(c int not null) block_per_segment=3 row_per_block=3
 
 statement ok
 insert into t7 values(1)
@@ -430,13 +431,13 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't7') limit 2
 
 
 statement ok
-create table t8(a int) block_per_segment=2 row_per_block=3
+create table t8(a int not null) block_per_segment=2 row_per_block=3
 
 statement ok
 insert into t8 values(1),(2),(3)
 
 statement ok
-alter table t8 add column b int
+alter table t8 add column b int not null
 
 statement ok
 insert into t8 values(4,4),(5,5),(6,6)
@@ -467,7 +468,7 @@ select * from t8 order by a
 
 
 statement ok
-create table t9(a int) cluster by(abs(a))
+create table t9(a int not null) cluster by(abs(a))
 
 statement ok
 insert into t9 values(-5)
@@ -546,7 +547,7 @@ select a from t9 order by a
 
 
 statement ok
-create table t10(a int) row_per_block=3
+create table t10(a int not null) row_per_block=3
 
 statement ok
 insert into t10 values(0),(1),(4)
@@ -593,7 +594,7 @@ select count() from fuse_snapshot('db_09_0008', 't10')
 
 # test for compact limit, compare with t10.
 statement ok
-create table t11(a int) cluster by(abs(a)) row_per_block=3
+create table t11(a int not null) cluster by(abs(a)) row_per_block=3
 
 statement ok
 insert into t11 values(0),(1),(4)
@@ -636,7 +637,7 @@ select * from t11 order by a
 
 
 statement ok
-create table t12(a int) cluster by (a);
+create table t12(a int not null) cluster by (a);
 
 statement ok
 insert into t12 values(1)

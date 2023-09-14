@@ -15,32 +15,32 @@
 use std::collections::HashSet;
 use std::collections::VecDeque;
 
-use common_ast::ast::AlterVirtualColumnsStmt;
-use common_ast::ast::CreateVirtualColumnsStmt;
-use common_ast::ast::DropVirtualColumnsStmt;
+use common_ast::ast::AlterVirtualColumnStmt;
+use common_ast::ast::CreateVirtualColumnStmt;
+use common_ast::ast::DropVirtualColumnStmt;
 use common_ast::ast::Expr;
-use common_ast::ast::GenerateVirtualColumnsStmt;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
+use common_ast::ast::RefreshVirtualColumnStmt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
 
 use crate::binder::Binder;
-use crate::plans::AlterVirtualColumnsPlan;
-use crate::plans::CreateVirtualColumnsPlan;
-use crate::plans::DropVirtualColumnsPlan;
-use crate::plans::GenerateVirtualColumnsPlan;
+use crate::plans::AlterVirtualColumnPlan;
+use crate::plans::CreateVirtualColumnPlan;
+use crate::plans::DropVirtualColumnPlan;
 use crate::plans::Plan;
+use crate::plans::RefreshVirtualColumnPlan;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_create_virtual_columns(
+    pub(in crate::planner::binder) async fn bind_create_virtual_column(
         &mut self,
-        stmt: &CreateVirtualColumnsStmt,
+        stmt: &CreateVirtualColumnStmt,
     ) -> Result<Plan> {
-        let CreateVirtualColumnsStmt {
+        let CreateVirtualColumnStmt {
             catalog,
             database,
             table,
@@ -62,8 +62,8 @@ impl Binder {
             .analyze_virtual_columns(virtual_columns, schema)
             .await?;
 
-        Ok(Plan::CreateVirtualColumns(Box::new(
-            CreateVirtualColumnsPlan {
+        Ok(Plan::CreateVirtualColumn(Box::new(
+            CreateVirtualColumnPlan {
                 catalog,
                 database,
                 table,
@@ -73,11 +73,11 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_alter_virtual_columns(
+    pub(in crate::planner::binder) async fn bind_alter_virtual_column(
         &mut self,
-        stmt: &AlterVirtualColumnsStmt,
+        stmt: &AlterVirtualColumnStmt,
     ) -> Result<Plan> {
-        let AlterVirtualColumnsStmt {
+        let AlterVirtualColumnStmt {
             catalog,
             database,
             table,
@@ -99,22 +99,20 @@ impl Binder {
             .analyze_virtual_columns(virtual_columns, schema)
             .await?;
 
-        Ok(Plan::AlterVirtualColumns(Box::new(
-            AlterVirtualColumnsPlan {
-                catalog,
-                database,
-                table,
-                virtual_columns,
-            },
-        )))
+        Ok(Plan::AlterVirtualColumn(Box::new(AlterVirtualColumnPlan {
+            catalog,
+            database,
+            table,
+            virtual_columns,
+        })))
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_drop_virtual_columns(
+    pub(in crate::planner::binder) async fn bind_drop_virtual_column(
         &mut self,
-        stmt: &DropVirtualColumnsStmt,
+        stmt: &DropVirtualColumnStmt,
     ) -> Result<Plan> {
-        let DropVirtualColumnsStmt {
+        let DropVirtualColumnStmt {
             catalog,
             database,
             table,
@@ -130,7 +128,7 @@ impl Binder {
             ));
         }
 
-        Ok(Plan::DropVirtualColumns(Box::new(DropVirtualColumnsPlan {
+        Ok(Plan::DropVirtualColumn(Box::new(DropVirtualColumnPlan {
             catalog,
             database,
             table,
@@ -138,11 +136,11 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_generate_virtual_columns(
+    pub(in crate::planner::binder) async fn bind_refresh_virtual_column(
         &mut self,
-        stmt: &GenerateVirtualColumnsStmt,
+        stmt: &RefreshVirtualColumnStmt,
     ) -> Result<Plan> {
-        let GenerateVirtualColumnsStmt {
+        let RefreshVirtualColumnStmt {
             catalog,
             database,
             table,
@@ -158,8 +156,8 @@ impl Binder {
             ));
         }
 
-        Ok(Plan::GenerateVirtualColumns(Box::new(
-            GenerateVirtualColumnsPlan {
+        Ok(Plan::RefreshVirtualColumn(Box::new(
+            RefreshVirtualColumnPlan {
                 catalog,
                 database,
                 table,
@@ -188,10 +186,10 @@ impl Binder {
                     MapAccessor::Bracket {
                         key: box Expr::Literal { lit, .. },
                     } => lit.clone(),
-                    MapAccessor::Period { key } | MapAccessor::Colon { key } => {
+                    MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                         Literal::String(key.name.clone())
                     }
-                    MapAccessor::PeriodNumber { key } => Literal::UInt64(*key),
+                    MapAccessor::DotNumber { key } => Literal::UInt64(*key),
                     _ => {
                         return Err(ErrorCode::SemanticError(format!(
                             "Unsupported accessor: {:?}",

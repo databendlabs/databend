@@ -190,7 +190,7 @@ impl Processor for MutationSource {
                             block_id: block_meta.block_id,
                             block_location: block_meta.block_location.clone(),
                             segment_location: block_meta.segment_location.clone(),
-                            snapshot_location: "".to_string(),
+                            snapshot_location: None,
                             offsets: None,
                         };
                         let internal_col = InternalColumn {
@@ -262,6 +262,7 @@ impl Processor for MutationSource {
                                     }
                                 }
                             }
+
                             MutationAction::Update => {
                                 data_block.add_column(BlockEntry::new(
                                     DataType::Boolean,
@@ -394,6 +395,7 @@ impl Processor for MutationSource {
                                     &settings,
                                     &fuse_part.location,
                                     &fuse_part.columns_meta,
+                                    &None,
                                 )
                                 .await?;
                             self.state = State::FilterData(inner_part, read_res);
@@ -415,6 +417,7 @@ impl Processor for MutationSource {
                             &settings,
                             &fuse_part.location,
                             &fuse_part.columns_meta,
+                            &None,
                         )
                         .await?;
                     self.state = State::MergeRemain {

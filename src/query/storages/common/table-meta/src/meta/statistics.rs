@@ -26,6 +26,18 @@ pub type Location = (String, FormatVersion);
 pub type ClusterKey = (u32, String);
 pub type StatisticsOfColumns = HashMap<ColumnId, ColumnStatistics>;
 
+// Assigned to executors, describes that which blocks of given segment, an executor should take care of
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, PartialEq)]
+pub struct BlockSlotDescription {
+    // number of slots
+    pub num_slots: usize,
+    // index of slot that current executor should take care of:
+    // let `block_index` be the index of block in segment,
+    // `block_index` mod `num_slots` == `slot_index` indicates that the block should be taken care of by current executor
+    // otherwise, the block should be taken care of by other executors
+    pub slot: u32,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum MinMax<T> {
     // min eq max

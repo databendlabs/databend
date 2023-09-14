@@ -633,6 +633,7 @@ impl Binder {
                 self.m_cte_bound_ctx.clone(),
                 self.ctes_map.clone(),
             );
+            scalar_binder.allow_pushdown();
             let (scalar_expr, _) = scalar_binder
                 .bind(expr)
                 .await
@@ -714,7 +715,13 @@ impl Binder {
         select_list: &SelectList,
     ) -> Result<(ScalarExpr, String)> {
         // Convert to zero-based index
-        debug_assert!(index > 0);
+        if index < 1 {
+            return Err(ErrorCode::SemanticError(format!(
+                "GROUP BY position {} is illegal",
+                index
+            ))
+            .set_span(expr.span()));
+        }
         let index = index as usize - 1;
         if index >= select_list.items.len() {
             return Err(ErrorCode::SemanticError(format!(

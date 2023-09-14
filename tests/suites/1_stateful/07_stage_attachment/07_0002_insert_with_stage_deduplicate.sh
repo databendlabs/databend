@@ -10,14 +10,14 @@ echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
 cat <<EOF | $MYSQL_CLIENT_CONNECT
 CREATE TABLE sample
 (
-    Id      INT,
-    City    VARCHAR,
-    Score   INT,
-    Country VARCHAR DEFAULT 'China'
+    Id      INT NOT NULL,
+    City    VARCHAR NOT NULL,
+    Score   INT NOT NULL,
+    Country VARCHAR NOT NULL DEFAULT 'China'
 );
 EOF
 
-aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
+aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/csv/sample.csv s3://testbucket/admin/stage/internal/s1/sample.csv >/dev/null
 
 ## Copy from internal stage
 echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $MYSQL_CLIENT_CONNECT

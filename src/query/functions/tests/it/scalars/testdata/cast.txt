@@ -1093,36 +1093,58 @@ output domain  : {1..=1}
 output         : 1
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(0.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(1, 1)` to type `Boolean`
+ast            : CAST(0.0 AS BOOLEAN)
+raw expr       : CAST(0.0 AS Boolean)
+checked expr   : to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
 
 
-
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(1.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(2, 1)` to type `Boolean`
-
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(false AS FLOAT32)
-  | ^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float32`
+ast            : CAST(1.0 AS BOOLEAN)
+raw expr       : CAST(1.0 AS Boolean)
+checked expr   : to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
 
 
+ast            : CAST(false AS FLOAT32)
+raw expr       : CAST(false AS Float32)
+checked expr   : to_float32<Boolean>(false)
+optimized expr : 0_f32
+output type    : Float32
+output domain  : {0..=0}
+output         : 0
 
-error: 
-  --> SQL:1:1
-  |
-1 | CAST(true AS FLOAT64)
-  | ^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float64`
 
+ast            : CAST(true AS FLOAT64)
+raw expr       : CAST(true AS Float64)
+checked expr   : to_float64<Boolean>(true)
+optimized expr : 1_f64
+output type    : Float64
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : CAST(false AS DECIMAL(4,3))
+raw expr       : CAST(false AS Decimal(4, 3))
+checked expr   : to_decimal<Boolean>(4, 3)(false)
+optimized expr : 0.000_d128(4,3)
+output type    : Decimal(4, 3)
+output domain  : {0.000..=0.000}
+output         : 0.000
+
+
+ast            : CAST(true AS DECIMAL(4,2))
+raw expr       : CAST(true AS Decimal(4, 2))
+checked expr   : to_decimal<Boolean>(4, 2)(true)
+optimized expr : 1.00_d128(4,2)
+output type    : Decimal(4, 2)
+output domain  : {1.00..=1.00}
+output         : 1.00
 
 
 ast            : CAST(num AS BOOLEAN)
@@ -3038,36 +3060,58 @@ output domain  : {1..=1}
 output         : 1
 
 
-error: 
-  --> SQL:1:1
-  |
-1 | TRY_CAST(0.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(1, 1)` to type `Boolean NULL`
+ast            : TRY_CAST(0.0 AS BOOLEAN)
+raw expr       : TRY_CAST(0.0 AS Boolean)
+checked expr   : try_to_boolean<Float32>(to_float32<Decimal(1, 1)>(0.0_d128(1,1)))
+optimized expr : false
+output type    : Boolean NULL
+output domain  : {FALSE}
+output         : false
 
 
-
-error: 
-  --> SQL:1:1
-  |
-1 | TRY_CAST(1.0 AS BOOLEAN)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Decimal(2, 1)` to type `Boolean NULL`
-
-
-
-error: 
-  --> SQL:1:1
-  |
-1 | TRY_CAST(false AS FLOAT32)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float32 NULL`
+ast            : TRY_CAST(1.0 AS BOOLEAN)
+raw expr       : TRY_CAST(1.0 AS Boolean)
+checked expr   : try_to_boolean<Float32>(to_float32<Decimal(2, 1)>(1.0_d128(2,1)))
+optimized expr : true
+output type    : Boolean NULL
+output domain  : {TRUE}
+output         : true
 
 
+ast            : TRY_CAST(false AS FLOAT32)
+raw expr       : TRY_CAST(false AS Float32)
+checked expr   : try_to_float32<Boolean>(false)
+optimized expr : 0_f32
+output type    : Float32 NULL
+output domain  : {0..=0}
+output         : 0
 
-error: 
-  --> SQL:1:1
-  |
-1 | TRY_CAST(true AS FLOAT64)
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^ unable to cast type `Boolean` to type `Float64 NULL`
 
+ast            : TRY_CAST(true AS FLOAT64)
+raw expr       : TRY_CAST(true AS Float64)
+checked expr   : try_to_float64<Boolean>(true)
+optimized expr : 1_f64
+output type    : Float64 NULL
+output domain  : {1..=1}
+output         : 1
+
+
+ast            : TRY_CAST(false AS DECIMAL(4,3))
+raw expr       : TRY_CAST(false AS Decimal(4, 3))
+checked expr   : try_to_decimal<Boolean>(4, 3)(false)
+optimized expr : 0.000_d128(4,3)
+output type    : Decimal(4, 3) NULL
+output domain  : {0.000..=0.000}
+output         : 0.000
+
+
+ast            : TRY_CAST(true AS DECIMAL(4,2))
+raw expr       : TRY_CAST(true AS Decimal(4, 2))
+checked expr   : try_to_decimal<Boolean>(4, 2)(true)
+optimized expr : 1.00_d128(4,2)
+output type    : Decimal(4, 2) NULL
+output domain  : {1.00..=1.00}
+output         : 1.00
 
 
 ast            : TRY_CAST(num AS BOOLEAN)

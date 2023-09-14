@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::Field as Arrow2Field;
 use common_arrow::arrow::datatypes::Schema as Arrow2Schema;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -39,7 +40,8 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
-use common_storages_parquet::ParquetRSPart;
+use common_storages_parquet::ParquetFilesPart;
+use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSReader;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
@@ -160,12 +162,17 @@ impl IcebergTable {
             .map(|f| f.into())
             .collect::<Vec<arrow_schema::Field>>();
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
+        let leaf_fields = Arc::new(table_schema.leaf_fields());
 
         let praquet_reader = Arc::new(ParquetRSReader::create(
+            ctx.clone(),
             self.op.clone(),
-            &table_schema,
+            table_schema,
+            leaf_fields,
             &arrow_schema,
             plan,
+            ParquetReadOptions::default(),
+            true,
         )?);
 
         // TODO: we need to support top_k.
@@ -228,8 +235,12 @@ impl IcebergTable {
                             .rel_path(&v.file_path)
                             .expect("file path must be rel to table");
                         Ok(Arc::new(
-                            Box::new(IcebergPartInfo::Parquet(ParquetRSPart { location }))
-                                as Box<dyn PartInfo>,
+                            Box::new(IcebergPartInfo::Parquet(ParquetPart::ParquetFiles(
+                                ParquetFilesPart {
+                                    files: vec![(location, v.file_size_in_bytes as u64)],
+                                    estimated_uncompressed_size: v.file_size_in_bytes as u64, // This field is not used here.
+                                },
+                            ))) as Box<dyn PartInfo>,
                         ))
                     }
                     _ => Err(ErrorCode::Unimplemented(

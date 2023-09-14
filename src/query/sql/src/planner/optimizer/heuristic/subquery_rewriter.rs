@@ -100,6 +100,16 @@ impl SubqueryRewriter {
 
                 Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
+            RelOperator::ProjectSet(mut plan) => {
+                let mut input = self.rewrite(s_expr.child(0)?)?;
+                for item in plan.srfs.iter_mut() {
+                    let res = self.try_rewrite_subquery(&item.scalar, &input, false)?;
+                    input = res.1;
+                    item.scalar = res.0
+                }
+
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
+            }
             RelOperator::Aggregate(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
 
@@ -344,6 +354,7 @@ impl SubqueryRewriter {
                 let limit = Limit {
                     limit: Some(1),
                     offset: 0,
+                    before_exchange: false,
                 };
                 subquery_expr =
                     SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr.clone()));
@@ -590,6 +601,7 @@ impl SubqueryRewriter {
                 Limit {
                     limit: Some(1),
                     offset: 0,
+                    before_exchange: false,
                 }
                 .into(),
             ),

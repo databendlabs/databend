@@ -156,6 +156,25 @@ impl Pipeline {
         Ok(())
     }
 
+    pub fn add_transform_with_specified_len<F>(
+        &mut self,
+        f: F,
+        transform_len: usize,
+    ) -> Result<TransformPipeBuilder>
+    where
+        F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>,
+    {
+        let mut transform_builder = TransformPipeBuilder::create();
+        for _index in 0..transform_len {
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+
+            let processor = f(input_port.clone(), output_port.clone())?;
+            transform_builder.add_transform(input_port, output_port, processor);
+        }
+        Ok(transform_builder)
+    }
+
     // Add source processor to pipeline.
     // numbers: how many output pipe numbers.
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
@@ -201,8 +220,8 @@ impl Pipeline {
             Some(pipe) if !force && pipe.output_length == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_length, new_size);
-                let inputs_port = processor.get_inputs().to_vec();
-                let outputs_port = processor.get_outputs().to_vec();
+                let inputs_port = processor.get_inputs();
+                let outputs_port = processor.get_outputs();
                 self.pipes
                     .push(Pipe::create(inputs_port.len(), outputs_port.len(), vec![
                         PipeItem::create(
@@ -211,6 +230,45 @@ impl Pipeline {
                             outputs_port,
                         ),
                     ]));
+                Ok(())
+            }
+        }
+    }
+
+    /// resize_partial will merge pipe_item into one reference to each range of ranges
+    /// WARN!!!: you must make sure the order. for example:
+    /// if there are 5 pipe_ports, given pipe_port0,pipe_port1,pipe_port2,pipe_port3,pipe_port4
+    /// you can give ranges and last as [0,1],[2,3],[4]
+    /// but you can't give [0,3],[1,4],[2]
+    /// that says the number is successive.
+    pub fn resize_partial_one(&mut self, ranges: Vec<Vec<usize>>) -> Result<()> {
+        match self.pipes.last() {
+            None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
+            Some(pipe) if pipe.output_length == 0 => {
+                Err(ErrorCode::Internal("Cannot resize empty pipe."))
+            }
+            Some(_) => {
+                let mut input_len = 0;
+                let mut output_len = 0;
+                let mut pipe_items = Vec::new();
+                for range in ranges {
+                    if range.is_empty() {
+                        return Err(ErrorCode::Internal("Cannot resize empty pipe."));
+                    }
+                    output_len += 1;
+                    input_len += range.len();
+
+                    let processor = ResizeProcessor::create(range.len(), 1);
+                    let inputs_port = processor.get_inputs().to_vec();
+                    let outputs_port = processor.get_outputs().to_vec();
+                    pipe_items.push(PipeItem::create(
+                        ProcessorPtr::create(Box::new(processor)),
+                        inputs_port,
+                        outputs_port,
+                    ));
+                }
+                self.pipes
+                    .push(Pipe::create(input_len, output_len, pipe_items));
                 Ok(())
             }
         }
@@ -338,4 +396,8 @@ impl Drop for Pipeline {
             let _ = (on_finished)(&cause);
         }
     }
+}
+
+pub fn query_spill_prefix(tenant: &str) -> String {
+    format!("_query_spill/{}", tenant)
 }

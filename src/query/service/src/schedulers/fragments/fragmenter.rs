@@ -96,9 +96,10 @@ impl Fragmenter {
                     Self::get_executors(ctx),
                     plan.keys.clone(),
                 ))),
-                FragmentKind::Merge => {
-                    Ok(Some(MergeExchange::create(Self::get_local_executor(ctx))))
-                }
+                FragmentKind::Merge => Ok(Some(MergeExchange::create(
+                    Self::get_local_executor(ctx),
+                    plan.ignore_exchange,
+                ))),
                 FragmentKind::Expansive => Ok(Some(BroadcastExchange::create(
                     from_multiple_nodes,
                     Self::get_executors(ctx),
@@ -211,6 +212,8 @@ impl PhysicalPlanReplacer for Fragmenter {
             join_type: plan.join_type.clone(),
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
+            probe_to_build: plan.probe_to_build.clone(),
+            output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
             stat_info: plan.stat_info.clone(),
         }))
@@ -239,6 +242,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             // We will connect the fragments later, so we just
             // set the fragment id to a invalid value here.
             destination_fragment_id: usize::MAX,
+            ignore_exchange: plan.ignore_exchange,
         });
         let fragment_type = match self.state {
             State::SelectLeaf => FragmentType::Source,

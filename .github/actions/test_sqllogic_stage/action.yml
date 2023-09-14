@@ -1,0 +1,62 @@
+name: "Test sqllogic Stage"
+description: "Running sqllogic tests in standalone mode"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  handlers:
+    description: "logic test handlers, choices: mysql,http,clickhouse"
+    required: true
+    default: ""
+  storage:
+    description: "storage backend for stage, choices: s3,fs"
+    required: true
+    default: ""
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+    - name: Minio Setup for (ubuntu-latest only)
+      if: inputs.storage == 's3'
+      shell: bash
+      run: |
+        docker run -d --network host --name minio \
+                -e "MINIO_ACCESS_KEY=minioadmin" \
+                -e "MINIO_SECRET_KEY=minioadmin" \
+                -e "MINIO_ADDRESS=:9900" \
+                -v /tmp/data:/data \
+                -v /tmp/config:/root/.minio \
+                minio/minio server /data
+
+        export AWS_ACCESS_KEY_ID=minioadmin
+        export AWS_SECRET_ACCESS_KEY=minioadmin
+        export AWS_EC2_METADATA_DISABLED=true
+
+        aws --endpoint-url http://127.0.0.1:9900/ s3 mb s3://testbucket
+        aws --endpoint-url http://127.0.0.1:9900/ s3 cp tests/data s3://testbucket/data  --recursive --no-progress
+
+    - name: Run sqllogic Tests with Standalone mode parquet2 lib
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_STAGE_STORAGE: ${{ inputs.storage }}
+        TEST_STAGE_PARQUET_LIB: parquet2
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}
+
+    - name: Run sqllogic Tests with Standalone mode parquet_rs lib
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+        TEST_STAGE_STORAGE: ${{ inputs.storage }}
+        TEST_STAGE_PARQUET_LIB: parquet_rs
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-without-sandbox.sh ${{ inputs.dirs }}

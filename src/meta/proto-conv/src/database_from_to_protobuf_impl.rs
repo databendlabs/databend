@@ -79,6 +79,10 @@ impl FromToProto for mt::DatabaseMeta {
                 Some(from_share) => Some(share::ShareNameIdent::from_pb(from_share)?),
                 None => None,
             },
+            owner: match p.owner {
+                Some(o) => Some(mt::Ownership::from_pb(o)?),
+                None => None,
+            },
         };
         Ok(v)
     }
@@ -100,6 +104,10 @@ impl FromToProto for mt::DatabaseMeta {
             shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
             from_share: match &self.from_share {
                 Some(from_share) => Some(from_share.to_pb()?),
+                None => None,
+            },
+            owner: match &self.owner {
+                Some(o) => Some(o.to_pb()?),
                 None => None,
             },
         };

@@ -107,6 +107,8 @@ use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::LeastVisibleTime;
+use common_meta_app::schema::LeastVisibleTimeKey;
 use common_meta_app::schema::ListCatalogReq;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
@@ -120,6 +122,8 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReply;
+use common_meta_app::schema::SetLVTReq;
 use common_meta_app::schema::SetTableColumnMaskPolicyAction;
 use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
@@ -224,7 +228,7 @@ const DEFAULT_DATA_RETENTION_SECONDS: i64 = 24 * 60 * 60;
 /// SchemaApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls SchemaApi.
 #[tonic::async_trait]
-impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
+impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     #[logcall::logcall("debug")]
     #[minitrace::trace]
     async fn create_database(
@@ -1194,7 +1198,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
     #[logcall::logcall("debug")]
     #[minitrace::trace]
-    async fn list_indexes_by_table_id(
+    async fn list_index_ids_by_table_id(
         &self,
         req: ListIndexesByIdReq,
     ) -> Result<Vec<u64>, KVAppError> {
@@ -1231,6 +1235,46 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
 
         Ok(index_ids)
+    }
+
+    #[logcall::logcall("debug")]
+    #[minitrace::trace]
+    async fn list_indexes_by_table_id(
+        &self,
+        req: ListIndexesByIdReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+
+        // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
+            .push_str(&req.tenant)
+            .done();
+
+        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let mut id_name_list = Vec::with_capacity(id_list.len());
+        for (key, seq) in id_list.iter() {
+            let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+            })?;
+            let index_id = deserialize_u64(&seq.data)?;
+            id_name_list.push((index_id.0, name_ident.index_name));
+        }
+
+        debug!(ident = as_display!(&prefix_key); "list_indexes");
+
+        if id_name_list.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let indexes = {
+            let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
+            index_metas
+                .into_iter()
+                .filter(|(_, _, meta)| req.table_id == meta.table_id)
+                .collect::<Vec<_>>()
+        };
+
+        Ok(indexes)
     }
 
     // virtual column
@@ -2947,7 +2991,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                                 inner: db_info.name_ident.clone(),
                                 filter,
                             };
-                            do_get_table_history(&self, req, db_info.ident.db_id, &db_info.meta)
+                            do_get_table_history(self, req, db_info.ident.db_id, &db_info.meta)
                                 .await?
                         } else {
                             // while filter_drop_on is None, then get all the drop db tables
@@ -2956,7 +3000,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                                 inner: db_info.name_ident.clone(),
                                 filter: TableInfoFilter::All,
                             };
-                            do_get_table_history(&self, req, db_info.ident.db_id, &db_info.meta)
+                            do_get_table_history(self, req, db_info.ident.db_id, &db_info.meta)
                                 .await?
                         }
                     }
@@ -2966,7 +3010,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                             filter: TableInfoFilter::Dropped(*filter_drop_on),
                         };
                         // not drop db, only filter drop tables with filter drop on
-                        do_get_table_history(&self, req, db_info.ident.db_id, &db_info.meta).await?
+                        do_get_table_history(self, req, db_info.ident.db_id, &db_info.meta).await?
                     }
                 };
                 if drop_db {
@@ -3015,7 +3059,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             });
         }
 
-        let table_infos = do_get_table_history(&self, req, db_id, &db_meta).await?;
+        let table_infos = do_get_table_history(self, req, db_id, &db_meta).await?;
         table_infos.iter().for_each(|table_info| {
             drop_ids.push(DroppedId::Table(
                 db_id,
@@ -3515,6 +3559,52 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(catalog_infos)
     }
 
+    async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
+        debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
+
+            let lvt_key = LeastVisibleTimeKey { table_id };
+            let (lvt_seq, lvt_opt): (_, Option<LeastVisibleTime>) =
+                get_pb_value(self, &lvt_key).await?;
+            let new_time = match lvt_opt {
+                Some(lvt) => {
+                    if lvt.time >= req.time {
+                        return Ok(SetLVTReply { time: lvt.time });
+                    } else {
+                        req.time
+                    }
+                }
+                None => req.time,
+            };
+
+            let new_lvt = LeastVisibleTime { time: new_time };
+
+            let txn_req = TxnRequest {
+                condition: vec![txn_cond_seq(&lvt_key, Eq, lvt_seq)],
+                if_then: vec![txn_op_put(&lvt_key, serialize_struct(&new_lvt)?)],
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name = as_debug!(req.table_id),
+                succ = succ;
+                "set_table_lvt"
+            );
+
+            if succ {
+                return Ok(SetLVTReply { time: new_time });
+            }
+        }
+    }
+
     fn name(&self) -> String {
         "SchemaApiImpl".to_string()
     }
@@ -3524,7 +3614,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 ///
 /// Returns number of files that are going to be removed.
 async fn remove_table_copied_files(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
@@ -3565,7 +3655,7 @@ async fn remove_table_copied_files(
 
 /// List the copied file identities belonging to a table.
 async fn list_table_copied_files(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: u64,
 ) -> Result<Vec<TableCopiedFileNameIdent>, MetaError> {
     let copied_file_ident = TableCopiedFileNameIdent {
@@ -3657,7 +3747,7 @@ fn table_has_to_not_exist(
 /// It returns (seq, `u64` value).
 /// If the count value is not in the kv space, (0, `u64` value) is returned.
 async fn count_tables(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &CountTablesKey,
 ) -> Result<u64, KVAppError> {
     // For backward compatibility:
@@ -3734,7 +3824,7 @@ async fn get_share_table_info_map(
 }
 
 async fn get_table_id_from_share_by_name(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share: &ShareNameIdent,
     table_name: &String,
 ) -> Result<u64, KVAppError> {
@@ -3845,7 +3935,7 @@ fn set_update_expire_operation(
 #[logcall::logcall("debug")]
 #[minitrace::trace]
 async fn do_get_table_history(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     req: ListDroppedTableReq,
     db_id: u64,
     db_meta: &DatabaseMeta,
@@ -3981,7 +4071,7 @@ pub(crate) async fn get_index_or_err(
 }
 
 async fn gc_dropped_db_by_id(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     db_id: u64,
     tenant: String,
     db_name: String,
@@ -4083,7 +4173,7 @@ async fn gc_dropped_db_by_id(
 }
 
 async fn gc_dropped_table_by_id(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: String,
     db_id: u64,
     table_id: u64,
@@ -4129,7 +4219,7 @@ async fn gc_dropped_table_by_id(
 }
 
 async fn gc_dropped_table_data(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
@@ -4169,7 +4259,7 @@ async fn gc_dropped_table_data(
 }
 
 async fn gc_dropped_table_index(
-    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     tenant: &str,
     table_id: u64,
     if_then: &mut Vec<TxnOp>,

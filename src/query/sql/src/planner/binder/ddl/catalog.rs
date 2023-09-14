@@ -144,9 +144,9 @@ impl Binder {
                 let mut options = options.clone();
 
                 // Remove address and url to avoid unexpected field error in uri location.
-                let address = options
-                    .remove("address")
-                    .ok_or_else(|| ErrorCode::InvalidArgument("expected field: ADDRESS"))?;
+                let address = options.remove("metastore_address").ok_or_else(|| {
+                    ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
+                })?;
 
                 let sp = parse_catalog_url(options)?;
 
@@ -187,6 +187,14 @@ fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<Sto
     let mut location = if let Some(path) = uri.strip_prefix("fs://") {
         UriLocation::new(
             "fs".to_string(),
+            "".to_string(),
+            path.to_string(),
+            "".to_string(),
+            options,
+        )
+    } else if let Some(path) = uri.strip_prefix("hdfs://") {
+        UriLocation::new(
+            "hdfs".to_string(),
             "".to_string(),
             path.to_string(),
             "".to_string(),

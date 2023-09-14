@@ -16,69 +16,76 @@ use std::borrow::Borrow;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
+use futures_util::stream::BoxStream;
 
 use crate::sm_v002::marked::Marked;
 
-/// Provide a key-value map API set, which is used to access state machine data.
-pub(in crate::sm_v002) trait MapApi<K>
-where K: Ord
+/// Provide a readonly key-value map API set, used to access state machine data.
+#[async_trait::async_trait]
+pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
+where K: Ord + Send + Sync + 'static
 {
-    type V: Clone;
+    type V: Clone + Send + Sync + 'static;
 
     /// Get an entry by key.
-    fn get<Q>(&self, key: &Q) -> &Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
-        Q: Ord + ?Sized;
-
-    /// Set an entry and returns the old value and the new value.
-    fn set(
-        &mut self,
-        key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>)
-    where
-        K: Ord;
+        Q: Ord + Send + Sync + ?Sized;
 
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    fn range<'a, T: ?Sized, R>(
-        &'a self,
-        range: R,
-    ) -> Box<dyn Iterator<Item = (&'a K, &'a Marked<Self::V>)> + 'a>
+    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
     where
         K: Clone + Borrow<T> + 'a,
+        Self::V: Unpin,
         T: Ord,
-        R: RangeBounds<T> + Clone;
+        R: RangeBounds<T> + Send + Sync + Clone;
+}
+
+/// Provide a read-write key-value map API set, used to access state machine data.
+#[async_trait::async_trait]
+pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K> + Send + Sync
+where K: Ord + Send + Sync + 'static
+{
+    /// Set an entry and returns the old value and the new value.
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(Self::V, Option<KVMeta>)>,
+    ) -> (Marked<Self::V>, Marked<Self::V>);
 
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
-    fn update_meta(&mut self, key: K, meta: Option<KVMeta>) -> (Marked<Self::V>, Marked<Self::V>) {
-        // let f = key.borrow();
-
-        let got = self.get(&key);
+    async fn update_meta(
+        &mut self,
+        key: K,
+        meta: Option<KVMeta>,
+    ) -> (Marked<Self::V>, Marked<Self::V>) {
+        //
+        let got = self.get(&key).await;
         if got.is_tomb_stone() {
             return (got.clone(), got.clone());
         }
 
         // Safe unwrap(), got is Normal
-        let (v, _) = got.unpack().unwrap();
+        let (v, _) = got.unpack_ref().unwrap();
 
-        self.set(key, Some((v.clone(), meta)))
+        self.set(key, Some((v.clone(), meta))).await
     }
 
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
-    fn upsert_value(&mut self, key: K, value: Self::V) -> (Marked<Self::V>, Marked<Self::V>) {
-        let got = self.get(&key);
+    async fn upsert_value(&mut self, key: K, value: Self::V) -> (Marked<Self::V>, Marked<Self::V>) {
+        let got = self.get(&key).await;
 
-        let meta = if let Some((_, meta)) = got.unpack() {
+        let meta = if let Some((_, meta)) = got.unpack_ref() {
             meta
         } else {
             None
         };
 
-        self.set(key, Some((value, meta.cloned())))
+        self.set(key, Some((value, meta.cloned()))).await
     }
 }

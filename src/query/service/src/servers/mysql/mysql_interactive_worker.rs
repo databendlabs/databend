@@ -349,13 +349,14 @@ impl InteractiveWorkerBase {
 
                     context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
                     let interpreter = InterpreterFactory::get(context.clone(), &plan).await;
+
                     let has_result_set = plan.has_result_set();
 
                     match interpreter {
                         Ok(interpreter) => {
                             let (blocks, extra_info) =
                                 Self::exec_query(interpreter.clone(), &context).await?;
-                            let schema = interpreter.schema();
+                            let schema = plan.schema();
                             let format = context.get_format_settings()?;
                             Ok((
                                 QueryResult::create(

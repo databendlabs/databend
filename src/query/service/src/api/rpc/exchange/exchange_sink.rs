@@ -57,9 +57,12 @@ impl ExchangeSink {
                 }
 
                 let exchange_injector = &params.exchange_injector;
-                exchange_injector.apply_merge_serializer(params, pipeline)?;
 
-                if exchange_injector.exchange_sorting().is_some() {
+                if !params.ignore_exchange {
+                    exchange_injector.apply_merge_serializer(params, pipeline)?;
+                }
+
+                if !params.ignore_exchange && exchange_injector.exchange_sorting().is_some() {
                     let output_len = pipeline.output_len();
                     let sorting = SinkExchangeSorting::create();
                     let transform = TransformExchangeSorting::create(output_len, sorting);
@@ -75,8 +78,10 @@ impl ExchangeSink {
 
                 pipeline.try_resize(1)?;
                 assert_eq!(flight_senders.len(), 1);
-                let item = create_writer_item(flight_senders.remove(0));
-                pipeline.add_pipe(Pipe::create(1, 0, vec![item]));
+                pipeline.add_pipe(Pipe::create(1, 0, vec![create_writer_item(
+                    flight_senders.remove(0),
+                    params.ignore_exchange,
+                )]));
                 Ok(())
             }
             ExchangeParams::ShuffleExchange(params) => {
@@ -84,7 +89,7 @@ impl ExchangeSink {
 
                 // exchange writer sink
                 let len = pipeline.output_len();
-                let items = create_writer_items(flight_senders);
+                let items = create_writer_items(flight_senders, false);
                 pipeline.add_pipe(Pipe::create(len, 0, items));
                 Ok(())
             }

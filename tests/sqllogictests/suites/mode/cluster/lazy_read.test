@@ -2,7 +2,7 @@ statement ok
 drop table if exists t_lazy
 
 statement ok
-create table t_lazy (a int, b float, c string, d tuple(a int, b int), e date)
+create table t_lazy (a int not null, b float not null, c string not null, d tuple(a int, b int) not null, e date not null)
 
 query T
 explain select * from t_lazy order by a desc limit 2
@@ -52,19 +52,24 @@ RowFetch
     └── Exchange
         ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
         ├── exchange type: Merge
-        └── Filter
+        └── Limit
             ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
-            ├── filters: [t_lazy.a (#0) > 1]
+            ├── limit: 2
+            ├── offset: 0
             ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.default.t_lazy
-                ├── output columns: [a (#0), _row_id (#7)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
-                └── estimated rows: 0.00
+            └── Filter
+                ├── output columns: [t_lazy.a (#0), t_lazy._row_id (#7)]
+                ├── filters: [t_lazy.a (#0) > 1]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.default.t_lazy
+                    ├── output columns: [a (#0), _row_id (#7)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+                    └── estimated rows: 0.00
 
 statement ok
 set lazy_read_threshold=0
@@ -99,7 +104,7 @@ Limit
                 └── estimated rows: 0.00
 
 query T
-explain select * from t_lazy where a > 1 limit 2
+explain select * from t_lazy where a > 1 limit 2;
 ----
 Limit
 ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
@@ -109,9 +114,40 @@ Limit
 └── Exchange
     ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
     ├── exchange type: Merge
-    └── Filter
+    └── Limit
         ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-        ├── filters: [t_lazy.a (#0) > 1]
+        ├── limit: 2
+        ├── offset: 0
+        ├── estimated rows: 0.00
+        └── Filter
+            ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+            ├── filters: [t_lazy.a (#0) > 1]
+            ├── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.default.t_lazy
+                ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+                └── estimated rows: 0.00
+
+query T
+explain select * from t_lazy where true limit 2;
+----
+Limit
+├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+├── limit: 2
+├── offset: 0
+├── estimated rows: 0.00
+└── Exchange
+    ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+    ├── exchange type: Merge
+    └── Limit
+        ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
+        ├── limit: 2
+        ├── offset: 0
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t_lazy
@@ -120,29 +156,8 @@ Limit
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [t_lazy.a (#0) > 1], limit: NONE]
+            ├── push downs: [filters: [], limit: 2]
             └── estimated rows: 0.00
-
-query T
-explain select * from t_lazy where true limit 2
-----
-Limit
-├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-├── limit: 2
-├── offset: 0
-├── estimated rows: 0.00
-└── Exchange
-    ├── output columns: [t_lazy.a (#0), t_lazy.b (#1), t_lazy.c (#2), t_lazy.d (#3), t_lazy.e (#6)]
-    ├── exchange type: Merge
-    └── TableScan
-        ├── table: default.default.t_lazy
-        ├── output columns: [a (#0), b (#1), c (#2), d (#3), e (#6)]
-        ├── read rows: 0
-        ├── read bytes: 0
-        ├── partitions total: 0
-        ├── partitions scanned: 0
-        ├── push downs: [filters: [], limit: 2]
-        └── estimated rows: 0.00
 
 
 statement ok

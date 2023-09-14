@@ -19,10 +19,16 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
+use common_expression::types::Int32Type;
+use common_expression::types::StringType;
 use common_expression::BlockThresholds;
+use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::FromData;
+use common_expression::FromOptData;
+use common_expression::SendableDataBlockStream;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
@@ -52,6 +58,7 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
 use crate::sql::plans::Plan;
+use crate::stream::DataBlockStream;
 
 pub struct CopyInterpreter {
     ctx: Arc<QueryContext>,
@@ -208,6 +215,7 @@ impl CopyInterpreter {
                 input: Box::new(root),
                 kind: FragmentKind::Merge,
                 keys: Vec::new(),
+                ignore_exchange: false,
             });
         }
         Ok((root, files))
@@ -243,6 +251,43 @@ impl CopyInterpreter {
         stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
 
         Ok(())
+    }
+
+    fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
+        let cs = self.ctx.get_copy_status();
+
+        let mut results = cs.files.iter().collect::<Vec<_>>();
+        results.sort_by(|a, b| a.key().cmp(b.key()));
+
+        let n = cs.files.len();
+        let mut files = Vec::with_capacity(n);
+        let mut rows_loaded = Vec::with_capacity(n);
+        let mut errors_seen = Vec::with_capacity(n);
+        let mut first_error = Vec::with_capacity(n);
+        let mut first_error_line = Vec::with_capacity(n);
+
+        for entry in results {
+            let status = entry.value();
+            files.push(entry.key().as_bytes().to_vec());
+            rows_loaded.push(status.num_rows_loaded as i32);
+            if let Some(err) = &status.error {
+                errors_seen.push(err.num_errors as i32);
+                first_error.push(Some(err.first_error.message.as_bytes().to_vec()));
+                first_error_line.push(Some(err.first_error.line as i32 + 1));
+            } else {
+                errors_seen.push(0);
+                first_error.push(None);
+                first_error_line.push(None);
+            }
+        }
+        let blocks = vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(files),
+            Int32Type::from_data(rows_loaded),
+            Int32Type::from_data(errors_seen),
+            StringType::from_opt_data(first_error),
+            Int32Type::from_opt_data(first_error_line),
+        ])];
+        Ok(blocks)
     }
 }
 
@@ -303,5 +348,18 @@ impl Interpreter for CopyInterpreter {
             }
             CopyPlan::NoFileToCopy => Ok(PipelineBuildResult::create()),
         }
+    }
+
+    fn inject_result(&self) -> Result<SendableDataBlockStream> {
+        let blocks = match &self.plan {
+            CopyPlan::NoFileToCopy => {
+                vec![DataBlock::empty_with_schema(self.plan.schema())]
+            }
+            CopyPlan::IntoTable(p) if !p.from_attachment => self.get_copy_into_table_result()?,
+            _ => {
+                vec![]
+            }
+        };
+        Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
