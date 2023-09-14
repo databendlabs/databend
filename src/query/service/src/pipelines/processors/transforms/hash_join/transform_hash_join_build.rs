@@ -111,6 +111,7 @@ impl TransformHashJoinBuild {
         if *count == 1 {
             let mut row_space_build_done = self.build_state.row_space_build_done.lock();
             *row_space_build_done = false;
+            self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;
         Ok(())
@@ -201,7 +202,10 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() && !self.from_spill {
+                    if self.from_spill {
+                        return self.build_state.build(data_block);
+                    }
+                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() {
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
                         if need_spill {

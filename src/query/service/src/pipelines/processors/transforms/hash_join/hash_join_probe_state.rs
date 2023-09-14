@@ -265,13 +265,13 @@ impl HashJoinProbeState {
     }
 
     pub fn finish_final_probe(&self) {
+        // Reset build done to false
+        let mut build_done = self.hash_join_state.build_done.lock();
+        *build_done = false;
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
             drop(count);
-            // Reset build done to false
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = false;
             // Do some reset work for next round.
             // Reset probe workers
             let mut probe_workers = self.probe_workers.lock();
@@ -291,6 +291,7 @@ impl HashJoinProbeState {
             } else {
                 *partition_id = -1;
             }
+            info!("next partition to read: {:?}", *partition_id);
             let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
             *final_probe_done = true;
             self.hash_join_state
@@ -300,13 +301,13 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_done(&self) -> Result<()> {
+        // Reset build done to false
+        // For probe processor, it's possible that next phase is `WaitProbe`.
+        let mut build_done = self.hash_join_state.build_done.lock();
+        *build_done = false;
         let mut count = self.probe_workers.lock();
         *count -= 1;
         if *count == 0 {
-            // Reset build done to false
-            // For probe processor, it's possible that next phase is `WaitProbe`.
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = false;
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
 
@@ -318,12 +319,12 @@ impl HashJoinProbeState {
     }
 
     pub fn finish_spill(&self) {
+        // Reset build done to false
+        let mut build_done = self.hash_join_state.build_done.lock();
+        *build_done = false;
         let mut count = self.spill_workers.lock();
         *count -= 1;
         if *count == 0 {
-            // Reset build done to false
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = false;
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partitions = self.spill_partitions.write();

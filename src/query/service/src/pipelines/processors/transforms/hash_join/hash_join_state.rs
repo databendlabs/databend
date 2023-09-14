@@ -223,4 +223,26 @@ impl HashJoinState {
         }
         self.final_probe_done_notify.notified().await;
     }
+
+    // Reset the state for next round run.
+    // It only be called when spill is enable.
+    pub(crate) fn reset(&self) {
+        self.row_space.reset();
+        let chunks = unsafe { &mut *self.chunks.get() };
+        chunks.clear();
+        let build_num_rows = unsafe { &mut *self.build_num_rows.get() };
+        *build_num_rows = 0;
+        let build_columns = unsafe { &mut *self.build_columns.get() };
+        build_columns.clear();
+        let build_columns_data_type = unsafe { &mut *self.build_columns_data_type.get() };
+        build_columns_data_type.clear();
+        if self.need_outer_scan() {
+            let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+            outer_scan_map.clear();
+        }
+        if self.need_mark_scan() {
+            let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+            mark_scan_map.clear();
+        }
+    }
 }
