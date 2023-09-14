@@ -93,7 +93,7 @@ impl TransformHashJoinProbe {
             probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
             max_block_size,
             outer_scan_finished: false,
-            first_round: false,
+            first_round: true,
             spill_state: probe_spill_state,
         }))
     }
@@ -238,12 +238,20 @@ impl Processor for TransformHashJoinProbe {
                         let mut spill_partitions = self.join_probe_state.spill_partitions.write();
                         spill_partitions.extend(spilled_partition_set);
                     }
-                    self.join_probe_state.finish_spill();
 
-                    if self.first_round && !spilled_partition_set.is_empty() {
+                    if self.first_round
+                        && !spilled_partition_set.is_empty()
+                        && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
+                            != &(0_usize)
+                    {
+                        // Don't need partition id, partition id will be set at `finish_final_probe`
+                        self.join_probe_state.finish_spill(false);
                         self.step = HashJoinProbeStep::AsyncRunning;
                         return Ok(Event::Async);
                     }
+
+                    self.first_round = false;
+                    self.join_probe_state.finish_spill(true);
                     if spilled_partition_set.is_empty() {
                         self.output_port.finish();
                         return Ok(Event::Finished);
@@ -417,10 +425,7 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::AsyncRunning => {
                 let spill_state = self.spill_state.as_ref().unwrap();
-                if self.first_round
-                    && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
-                        != &(0_usize)
-                {
+                if self.first_round {
                     let probe_spilled_partitions = &spill_state.spiller.spilled_partition_set;
                     let build_spilled_partitions = self
                         .join_probe_state
