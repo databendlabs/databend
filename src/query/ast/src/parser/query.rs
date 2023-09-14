@@ -641,7 +641,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_stage = map(
         rule! {
-            (#file_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
+            (#file_location) ~  ("(" ~ ^#comma_separated_list0(select_stage_option) ~")")? ~ #table_alias?
         },
         |(location, options, alias)| {
             let options = match options {
