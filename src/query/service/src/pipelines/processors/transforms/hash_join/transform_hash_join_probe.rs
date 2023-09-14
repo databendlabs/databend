@@ -372,12 +372,17 @@ impl Processor for TransformHashJoinProbe {
                     }
                     return Ok(());
                 }
-                // If join spill is enable, next step is spill
                 if self
                     .join_probe_state
                     .ctx
                     .get_settings()
                     .get_enable_join_spill()?
+                    && // If there is no spilled partition, we can skip the spill phase!
+                        self.join_probe_state
+                        .hash_join_state
+                        .spill_partition
+                        .read()
+                        .is_empty()
                 {
                     if !*self
                         .join_probe_state
@@ -385,7 +390,6 @@ impl Processor for TransformHashJoinProbe {
                         .probe_spill_done
                         .lock()
                     {
-                        info!("probe is spilling");
                         self.step = HashJoinProbeStep::Spill;
                     } else {
                         self.step = HashJoinProbeStep::AsyncRunning;
@@ -415,7 +419,7 @@ impl Processor for TransformHashJoinProbe {
                 let spill_state = self.spill_state.as_ref().unwrap();
                 if self.first_round
                     && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
-                        != &(0 as usize)
+                        != &(0_usize)
                 {
                     let probe_spilled_partitions = &spill_state.spiller.spilled_partition_set;
                     let build_spilled_partitions = self
