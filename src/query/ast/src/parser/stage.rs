@@ -17,8 +17,8 @@ use std::collections::BTreeMap;
 use nom::branch::alt;
 use nom::combinator::map;
 
+use crate::ast::FileLocation;
 use crate::ast::SelectStageOption;
-use crate::ast::StageLocation;
 use crate::ast::UriLocation;
 use crate::input::Input;
 use crate::parser::expr::*;
@@ -139,21 +139,28 @@ pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     )(i)
 }
 
-pub fn stage_location(i: Input) -> IResult<StageLocation> {
-    map_res(at_string, |location| {
-        let parsed = location.splitn(2, '/').collect::<Vec<_>>();
-        let name = parsed[0].to_string();
-        let path = if parsed.len() == 1 {
-            "/".to_string()
-        } else {
-            format!("/{}", parsed[1])
-        };
-        Ok(StageLocation { name, path })
+pub fn file_location(i: Input) -> IResult<FileLocation> {
+    alt((
+        string_location,
+        map_res(at_string, |location| Ok(FileLocation::Stage(location))),
+    ))(i)
+}
+
+pub fn stage_location(i: Input) -> IResult<String> {
+    map_res(file_location, |location| match location {
+        FileLocation::Stage(s) => Ok(s),
+        FileLocation::Uri(_) => Err(ErrorKind::Other("expect stage location, got uri location")),
     })(i)
 }
 
-/// Parse input into `UriLocation`
 pub fn uri_location(i: Input) -> IResult<UriLocation> {
+    map_res(string_location, |location| match location {
+        FileLocation::Stage(_) => Err(ErrorKind::Other("uri location should not start with '@'")),
+        FileLocation::Uri(u) => Ok(u),
+    })(i)
+}
+
+pub fn string_location(i: Input) -> IResult<FileLocation> {
     map_res(
         rule! {
             #literal_string
@@ -161,20 +168,32 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
             ~ (CREDENTIALS ~ "=" ~ #connection_options)?
             ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
         },
-        |(location, connection_opt, credentials_opt, location_prefix)| {
-            let part_prefix = if let Some((_, _, p)) = location_prefix {
-                p
+        |(location, connection_opts, credentials_opts, location_prefix)| {
+            if let Some(stripped) = location.strip_prefix('@') {
+                if location_prefix.is_none()
+                    && connection_opts.is_none()
+                    && credentials_opts.is_none()
+                {
+                    Ok(FileLocation::Stage(stripped.to_string()))
+                } else {
+                    Err(ErrorKind::Other("uri location should not start with '@'"))
+                }
             } else {
-                "".to_string()
-            };
-            // fs location is not a valid url, let's check it in advance.
+                let part_prefix = if let Some((_, _, p)) = location_prefix {
+                    p
+                } else {
+                    "".to_string()
+                };
+                // fs location is not a valid url, let's check it in advance.
 
-            // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
-            let mut conns = connection_opt.map(|v| v.2).unwrap_or_default();
-            conns.extend(credentials_opt.map(|v| v.2).unwrap_or_default());
+                // TODO: We will use `CONNECTION` to replace `CREDENTIALS`.
+                let mut conns = connection_opts.map(|v| v.2).unwrap_or_default();
+                conns.extend(credentials_opts.map(|v| v.2).unwrap_or_default());
 
-            UriLocation::from_uri(location, part_prefix, conns)
-                .map_err(|_| ErrorKind::Other("invalid uri"))
+                let uri = UriLocation::from_uri(location, part_prefix, conns)
+                    .map_err(|_| ErrorKind::Other("invalid uri"))?;
+                Ok(FileLocation::Uri(uri))
+            }
         },
     )(i)
 }
