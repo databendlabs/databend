@@ -19,13 +19,39 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_sql::resolve_type_name;
+use databend_client::error::Error as ClientError;
 use databend_driver::Client;
+use databend_driver::Error;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
+
+const KNOWN_ERRORS: [&str; 19] = [
+    // Errors caused by illegal parameters
+    "Overflow on date YMD",
+    "timestamp is out of range",
+    "unable to cast type",
+    "unable to cast to type",
+    "invalid digit found in string",
+    "number overflowed",
+    "date is out of range",
+    "Odd number of digits",
+    "The maximum sleep time is 3 seconds",
+    "Too many times to repeat",
+    "Incorrect arguments to",
+    "divided by zero",
+    "Decimal overflow at line",
+    "cannot parse to type",
+    "invalid resolution",
+    "invalid cell index",
+    "invalid directed edge index",
+    "invalid coordinate range",
+    // Unsupported features
+    "Row format is not yet support for",
+];
 
 pub struct Runner {
     count: usize,
@@ -102,8 +128,16 @@ impl Runner {
             let query = generater.gen_query();
             let query_sql = query.to_string();
             tracing::info!("query_sql: {}", query_sql);
-            // TODO check query result
             if let Err(e) = conn.exec(&query_sql).await {
+                if let Error::Api(ClientError::InvalidResponse(err)) = &e {
+                    if KNOWN_ERRORS
+                        .iter()
+                        .any(|known_err| err.message.starts_with(known_err))
+                    {
+                        continue;
+                    }
+                }
+
                 let err = format!("error: {}", e);
                 tracing::error!(err);
             }

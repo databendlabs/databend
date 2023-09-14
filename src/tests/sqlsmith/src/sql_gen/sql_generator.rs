@@ -54,7 +54,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let mut scalar_func_sigs = Vec::new();
         for (name, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
             // ignore unsupported binary operator
-            if name == "div" || name == "and" || name == "or" || name == "xor" {
+            if name == "div"
+                || name == "and"
+                || name == "or"
+                || name == "xor"
+                || name == "like"
+                || name == "regexp"
+                || name == "rlike"
+            {
                 continue;
             }
             for (scalar_func, _) in func_list {
