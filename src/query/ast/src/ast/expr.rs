@@ -212,7 +212,10 @@ pub enum Expr {
     /// The `Array` expr
     Array { span: Span, exprs: Vec<Expr> },
     /// The `Map` expr
-    Map { span: Span, kvs: Vec<(Expr, Expr)> },
+    Map {
+        span: Span,
+        kvs: Vec<(Literal, Literal)>,
+    },
     /// The `Interval 1 DAY` expr
     Interval {
         span: Span,
