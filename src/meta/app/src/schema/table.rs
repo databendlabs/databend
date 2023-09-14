@@ -477,9 +477,16 @@ pub struct CreateTableReply {
     pub new_table: bool,
 }
 
+/// Drop table by id.
+///
+/// Dropping a table requires just `table_id`, but when dropping a table, it also needs to update
+/// the count of tables belonging to a tenant, which require tenant information.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropTableByIdReq {
     pub if_exists: bool,
+
+    pub tenant: String,
+
     pub tb_id: MetaId,
 }
 
