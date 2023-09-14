@@ -271,16 +271,19 @@ impl FuseTable {
 
         let mut block_metas = block_metas.to_vec();
         if let Some(top_k) = &top_k {
-            block_metas.sort_by(|a, b| {
-                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
-                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
-
-                if top_k.asc {
+            if top_k.asc {
+                block_metas.sort_by(|a, b| {
+                    let a = a.1.col_stats.get(&top_k.column_id).unwrap();
+                    let b = b.1.col_stats.get(&top_k.column_id).unwrap();
                     (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
-                } else {
+                });
+            } else {
+                block_metas.sort_by(|a, b| {
+                    let a = a.1.col_stats.get(&top_k.column_id).unwrap();
+                    let b = b.1.col_stats.get(&top_k.column_id).unwrap();
                     (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
-                }
-            });
+                });
+            }
         }
 
         let (mut statistics, mut partitions) = match &push_downs {

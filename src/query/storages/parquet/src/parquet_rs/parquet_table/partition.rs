@@ -22,12 +22,15 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
 use parquet::arrow::arrow_reader::RowSelector;
+use storages_common_index::Index;
+use storages_common_index::RangeIndex;
 
 use super::meta::read_parquet_metas_batch;
 use super::table::ParquetRSTable;
@@ -132,6 +135,9 @@ impl ParquetRSTable {
         };
 
         let num_columns_to_read = columns_to_read.len();
+        let topk = push_down
+            .as_ref()
+            .and_then(|p| p.top_k(&self.schema(), None, RangeIndex::supported_type));
 
         let (mut stats, mut partitions) = if parquet_metas.is_empty() {
             self.read_and_prune_metas_in_parallel(
@@ -139,6 +145,7 @@ impl ParquetRSTable {
                 large_files,
                 pruner,
                 columns_to_read,
+                Arc::new(topk),
                 copy_status,
             )
             .await?
@@ -149,6 +156,7 @@ impl ParquetRSTable {
                 large_file_indices,
                 pruner,
                 columns_to_read,
+                Arc::new(topk),
                 copy_status,
             )
             .await?
@@ -187,6 +195,7 @@ impl ParquetRSTable {
         file_infos: Vec<(String, u64)>,
         pruner: Arc<ParquetRSPruner>,
         columns_to_read: Vec<usize>,
+        topk: Arc<Option<TopK>>,
         copy_status: Option<Arc<CopyStatus>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let settings = ctx.get_settings();
@@ -211,6 +220,7 @@ impl ParquetRSTable {
             let schema_from = self.schema_from.clone();
             let copy_status = copy_status.clone();
             let leaf_fields = self.leaf_fields.clone();
+            let topk = topk.clone();
 
             tasks.push(async move {
                 let metas = read_parquet_metas_batch(
@@ -222,11 +232,11 @@ impl ParquetRSTable {
                     max_memory_usage,
                 )
                 .await?;
-                prune_and_generate_partitions(&pruner, metas, columns_to_read, copy_status)
+                prune_and_generate_partitions(&pruner, metas, columns_to_read, &topk, copy_status)
             });
         }
 
-        let result = execute_futures_in_parallel(
+        let (stats, parts) = execute_futures_in_parallel(
             tasks,
             num_threads,
             num_threads * 2,
@@ -238,15 +248,12 @@ impl ParquetRSTable {
         .into_iter()
         .reduce(|(mut stats_acc, mut parts_acc), (stats, parts)| {
             stats_acc.merge(&stats);
-            parts_acc.partitions.extend(parts.partitions);
+            parts_acc.extend(parts);
             (stats_acc, parts_acc)
         })
-        .unwrap_or((
-            PartStatistics::default_exact(),
-            Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
-        ));
+        .unwrap_or((PartStatistics::default_exact(), vec![]));
 
-        Ok(result)
+        Ok((stats, create_partitions(parts, &topk)))
     }
 }
 
@@ -258,6 +265,7 @@ async fn prune_metas_in_parallel(
     files: Vec<usize>,
     pruner: Arc<ParquetRSPruner>,
     columns_to_read: Vec<usize>,
+    topk: Arc<Option<TopK>>,
     copy_status: Option<Arc<CopyStatus>>,
 ) -> Result<(PartStatistics, Partitions)> {
     if files.is_empty() {
@@ -289,13 +297,14 @@ async fn prune_metas_in_parallel(
         let pruner = pruner.clone();
         let columns_to_read = columns_to_read.clone();
         let copy_status = copy_status.clone();
+        let topk = topk.clone();
 
         tasks.push(async move {
-            prune_and_generate_partitions(&pruner, metas, columns_to_read, copy_status)
+            prune_and_generate_partitions(&pruner, metas, columns_to_read, &topk, copy_status)
         });
     }
 
-    let result = execute_futures_in_parallel(
+    let (stats, parts) = execute_futures_in_parallel(
         tasks,
         num_threads,
         num_threads * 2,
@@ -307,23 +316,21 @@ async fn prune_metas_in_parallel(
     .into_iter()
     .reduce(|(mut stats_acc, mut parts_acc), (stats, parts)| {
         stats_acc.merge(&stats);
-        parts_acc.partitions.extend(parts.partitions);
+        parts_acc.extend(parts);
         (stats_acc, parts_acc)
     })
-    .unwrap_or((
-        PartStatistics::default_exact(),
-        Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
-    ));
+    .unwrap_or((PartStatistics::default_exact(), vec![]));
 
-    Ok(result)
+    Ok((stats, create_partitions(parts, &topk)))
 }
 
 fn prune_and_generate_partitions(
     pruner: &ParquetRSPruner,
     parquet_metas: Vec<Arc<FullParquetMeta>>,
     columns_to_read: Vec<usize>,
+    topk: &Option<TopK>,
     copy_status: Option<Arc<CopyStatus>>,
-) -> Result<(PartStatistics, Partitions)> {
+) -> Result<(PartStatistics, Vec<ParquetRSRowGroupPart>)> {
     let mut parts = vec![];
     let mut part_stats = PartStatistics::default_exact();
     for meta in parquet_metas {
@@ -373,16 +380,23 @@ fn prune_and_generate_partitions(
                 uncompressed_size += rg_meta.column(*col).uncompressed_size() as u64;
             }
 
-            parts.push(Arc::new(
-                Box::new(ParquetPart::ParquetRSRowGroup(ParquetRSRowGroupPart {
-                    location: location.clone(),
-                    selectors: serde_selection,
-                    meta: rg_meta.clone(),
-                    page_locations,
-                    compressed_size,
-                    uncompressed_size,
-                })) as Box<dyn PartInfo>,
-            ))
+            let sort_min_max =
+                topk.as_ref()
+                    .zip(row_group_level_stats.as_ref())
+                    .map(|(t, stats)| {
+                        let stat = &stats[rg][&t.column_id];
+                        (stat.min.clone(), stat.max.clone())
+                    });
+
+            parts.push(ParquetRSRowGroupPart {
+                location: location.clone(),
+                selectors: serde_selection,
+                meta: rg_meta.clone(),
+                page_locations,
+                compressed_size,
+                uncompressed_size,
+                sort_min_max,
+            });
         }
 
         part_stats.read_rows += rows_read;
@@ -394,8 +408,30 @@ fn prune_and_generate_partitions(
         }
     }
 
-    Ok((
-        part_stats,
-        Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts),
-    ))
+    Ok((part_stats, parts))
+}
+
+fn create_partitions(mut parts: Vec<ParquetRSRowGroupPart>, topk: &Option<TopK>) -> Partitions {
+    if let Some(topk) = topk {
+        if topk.asc {
+            parts.sort_by(|a, b| {
+                let (a_min, a_max) = a.sort_min_max.as_ref().unwrap();
+                let (b_min, b_max) = b.sort_min_max.as_ref().unwrap();
+                (a_min, a_max).cmp(&(b_min, b_max))
+            });
+        } else {
+            parts.sort_by(|a, b| {
+                let (a_min, a_max) = a.sort_min_max.as_ref().unwrap();
+                let (b_min, b_max) = b.sort_min_max.as_ref().unwrap();
+                (b_max, b_min).cmp(&(a_max, a_min))
+            });
+        }
+    }
+
+    let parts = parts
+        .into_iter()
+        .map(|p| Arc::new(Box::new(ParquetPart::ParquetRSRowGroup(p)) as Box<dyn PartInfo>))
+        .collect();
+
+    Partitions::create_nolazy(PartitionsShuffleKind::Mod, parts)
 }
