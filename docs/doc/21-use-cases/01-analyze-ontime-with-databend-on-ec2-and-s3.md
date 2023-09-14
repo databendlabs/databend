@@ -35,7 +35,7 @@ See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-u
 
 ### 2.2 Create OnTime Table
 
-[Create SQL](https://github.com/datafuselabs/databend/blob/main/tests/suites/1_stateful/ddl/ontime.sql)
+[Create SQL](https://github.com/datafuselabs/databend/blob/main/tests/data/ddl/ontime.sql)
 
 ### 2.3 Load Data Into OnTime Table
 

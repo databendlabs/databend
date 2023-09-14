@@ -63,7 +63,7 @@ pub trait FieldEncoderRowBased {
             Column::Nullable(box c) => self.write_nullable(c, row_index, out_buf, raw),
             Column::Array(box c) => self.write_array(c, row_index, out_buf, raw),
             Column::Map(box c) => self.write_map(c, row_index, out_buf, raw),
-            Column::Bitmap(b) => self.write_string(b, row_index, out_buf, raw),
+            Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, raw),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
         }
@@ -163,6 +163,17 @@ pub trait FieldEncoderRowBased {
         let v = unsafe { column.get_unchecked(row_index) };
         let s = timestamp_to_string(*v, self.common_settings().timezone).to_string();
         self.write_string_inner(s.as_bytes(), out_buf, raw);
+    }
+
+    fn write_bitmap(
+        &self,
+        _column: &StringColumn,
+        _row_index: usize,
+        out_buf: &mut Vec<u8>,
+        _raw: bool,
+    ) {
+        let bitmap_result = "<bitmap binary>".as_bytes();
+        self.write_string_inner(bitmap_result, out_buf, false);
     }
 
     fn write_variant(

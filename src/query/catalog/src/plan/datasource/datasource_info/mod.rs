@@ -20,6 +20,7 @@ mod result_scan;
 mod stage;
 
 pub use data_source_info::DataSourceInfo;
+pub use parquet::FullParquetMeta;
 pub use parquet::ParquetTableInfo;
 pub use parquet::ParquetTableInfo as ParquetTableInfoV2;
 pub use parquet2::Parquet2TableInfo;

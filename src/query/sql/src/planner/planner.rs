@@ -64,7 +64,6 @@ impl Planner {
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
-
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(sql).peekable();
 
@@ -92,6 +91,12 @@ impl Planner {
             let res = async {
                 // Step 2: Parse the SQL.
                 let (mut stmt, format) = parse_sql(&tokens, sql_dialect)?;
+
+                if matches!(stmt, Statement::Copy(_)) {
+                    // Indicate binder there is no need to collect column statistics for the binding table.
+                    self.ctx.attach_query_str("Copy".to_string(), String::new());
+                }
+
                 self.replace_stmt(&mut stmt, sql_dialect);
 
                 // Step 3: Bind AST with catalog, and generate a pure logical SExpr
