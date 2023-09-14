@@ -52,6 +52,7 @@ use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
+use common_io::parse_bitmap;
 use common_io::prelude::FormatSettings;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
@@ -139,7 +140,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
-            ColumnBuilder::Bitmap(_) => Err(ErrorCode::Unimplemented("not implement")),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, positions),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             _ => unimplemented!(),
@@ -407,6 +408,20 @@ impl FastFieldDecoderValues {
             }
             return Err(err.into());
         }
+        Ok(())
+    }
+
+    fn read_bitmap<R: AsRef<[u8]>>(
+        &self,
+        column: &mut StringColumnBuilder,
+        reader: &mut Cursor<R>,
+        positions: &mut VecDeque<usize>,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, positions)?;
+        let rb = parse_bitmap(&buf)?;
+        rb.serialize_into(&mut column.data).unwrap();
+        column.commit_row();
         Ok(())
     }
 
