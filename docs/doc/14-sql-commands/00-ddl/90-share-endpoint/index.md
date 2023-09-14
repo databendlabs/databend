@@ -14,6 +14,6 @@ CREATE SHARE ENDPOINT IF NOT EXISTS from_TenantA
     COMMENT = 'Share endpoint to access data from Tenant A';
 ```
 
-For a full data share workflow, see [Share](../90-share/index.md). To manage share endpoints on a tenant, use the following commands:
+For a full data share workflow in Databend, see [Getting Started with Share](../90-share/index.md#getting-started-with-share). To manage share endpoints on a tenant, use the following commands:
 
 <IndexOverviewList />
