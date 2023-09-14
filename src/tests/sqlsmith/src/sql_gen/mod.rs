@@ -15,6 +15,7 @@
 mod ddl;
 mod dml;
 mod expr;
+mod func;
 mod query;
 mod sql_generator;
 mod types;
