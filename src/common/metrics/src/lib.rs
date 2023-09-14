@@ -21,6 +21,8 @@ mod recorder;
 pub mod registry;
 mod reset;
 
+pub type VecLabels = Vec<(&'static str, String)>;
+
 pub use dump::dump_metric_samples;
 pub use dump::HistogramCount;
 pub use dump::MetricSample;
