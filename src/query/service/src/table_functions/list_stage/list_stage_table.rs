@@ -42,7 +42,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::binder::parse_stage_location;
+use common_sql::binder::resolve_stage_location;
 use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
 
@@ -183,7 +183,7 @@ impl AsyncSource for ListStagesSource {
         self.is_finished = true;
 
         let (stage_info, path) =
-            parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
+            resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let op = StageTable::get_op(&stage_info)?;
 
         let files_info = StageFilesInfo {
