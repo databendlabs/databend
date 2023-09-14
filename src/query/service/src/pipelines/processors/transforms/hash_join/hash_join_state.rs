@@ -244,6 +244,6 @@ impl HashJoinState {
             let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
             mark_scan_map.clear();
         }
-        self.is_build_projected.store(true, Ordering::Release);
+        self.is_build_projected.store(true, Ordering::Relaxed);
     }
 }

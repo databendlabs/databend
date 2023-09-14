@@ -98,7 +98,7 @@ impl BuildSpillState {
             self.get_hashes(block, &mut hashes)?;
             let mut indices = Vec::with_capacity(hashes.len());
             for hash in hashes {
-                indices.push(hash2bucket::<2, true>(hash as usize) as u8);
+                indices.push(hash2bucket::<2, false>(hash as usize) as u8);
             }
             let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 2)?;
             for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {

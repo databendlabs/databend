@@ -377,8 +377,8 @@ impl Processor for TransformHashJoinProbe {
                     .ctx
                     .get_settings()
                     .get_enable_join_spill()?
-                    && // If there is no spilled partition, we can skip the spill phase!
-                        self.join_probe_state
+                    && // If there is no spilled partition, we can skip the spill phase
+                        !self.join_probe_state
                         .hash_join_state
                         .spill_partition
                         .read()
@@ -455,6 +455,8 @@ impl Processor for TransformHashJoinProbe {
                 }
                 let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
                 if !spilled_data.is_empty() {
+                    // Reset `ProbeState`
+                    self.probe_state.reset();
                     self.input_data.extend(spilled_data);
                 }
             }
