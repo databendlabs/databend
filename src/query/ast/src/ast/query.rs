@@ -529,7 +529,9 @@ impl Display for TableReference {
                 alias,
             } => {
                 write!(f, "{location}")?;
-                write!(f, "{options}")?;
+                if !options.is_empty() {
+                    write!(f, "{options}")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }
