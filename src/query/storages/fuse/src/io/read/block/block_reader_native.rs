@@ -72,7 +72,6 @@ impl BlockReader {
             .await?;
 
         let column_buffers = read_res.column_buffers()?;
-
         let mut results = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
             if let Some(ignore_column_ids) = ignore_column_ids {

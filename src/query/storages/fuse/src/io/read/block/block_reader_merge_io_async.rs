@@ -155,7 +155,7 @@ impl BlockReader {
 
                 let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
 
-                let mut need_real_io_read = false;
+                let mut need_real_io_read = true;
                 // first, check column array object cache
                 if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                     cached_column_array.push((*column_id, cache_array));
