@@ -11003,7 +11003,7 @@ UnSetVariable(
 ---------- Input ----------
 select $1 FROM '@my_stage/my data/'
 ---------- Output ---------
-SELECT $1 FROM @my_stage/my data/ ()
+SELECT $1 FROM @my_stage/my data/
 ---------- AST ------------
 Query(
     Query {
