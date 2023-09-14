@@ -4,7 +4,7 @@ DROP VIEW IF EXISTS tmp_view
 statement ok
 CREATE VIEW tmp_view AS SELECT number % 3 AS a, avg(number) FROM numbers(1000) GROUP BY a ORDER BY a
 
-query IF
+query I?
 SELECT * FROM tmp_view
 ----
 0 499.5
@@ -45,3 +45,31 @@ drop view if exists v_t;
 
 statement error 1026
 alter view v_t as select 1;
+
+statement ok
+create table t (id int)
+
+statement ok
+create view v_t as select * from system.columns;
+
+statement ok
+use system
+
+query TT
+show create table default.v_t;
+----
+v_t CREATE VIEW `default`.`v_t` AS SELECT * FROM system.columns
+
+statement ok
+alter view default.v_t as select * from t;
+
+query TT
+show create table default.v_t;
+----
+v_t CREATE VIEW `default`.`v_t` AS SELECT * FROM default.t
+
+statement ok
+drop view default.v_t;
+
+statement ok
+drop table default.t;
