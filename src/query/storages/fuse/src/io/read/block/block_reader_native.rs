@@ -94,7 +94,7 @@ impl BlockReader {
                         .as_native()
                         .unwrap();
                     let data = column_buffers.get(column_id).unwrap();
-                    let reader: Reader = Box::new(std::io::Cursor::new(data.clone()));
+                    let reader: Reader = std::io::Cursor::new(data.clone());
                     NativeReader::new(reader, native_meta.pages.clone(), vec![])
                 })
                 .collect();
