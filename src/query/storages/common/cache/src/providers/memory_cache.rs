@@ -15,6 +15,7 @@
 use std::hash::BuildHasher;
 use std::sync::Arc;
 
+use bytes::Bytes;
 use common_cache::BytesMeter;
 use common_cache::Cache;
 use common_cache::Count;
@@ -24,7 +25,7 @@ use common_cache::LruCache;
 use parking_lot::RwLock;
 
 pub type InMemoryCache<V, S, M> = LruCache<String, Arc<V>, S, M>;
-pub type BytesCache = LruCache<String, Arc<Vec<u8>>, DefaultHashBuilder, BytesMeter>;
+pub type BytesCache = LruCache<String, Arc<Bytes>, DefaultHashBuilder, BytesMeter>;
 
 pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
     Arc<RwLock<InMemoryCache<T, S, M>>>;

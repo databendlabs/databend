@@ -15,7 +15,6 @@ test = false
 enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/enable-histogram-metrics"]
 
 [dependencies]
-bytes = { workspace = true }
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-cache = { path = "../../../common/cache" }
@@ -48,7 +47,9 @@ ahash = "0.8.3"
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
+bytes = { workspace = true }
 chrono = { workspace = true }
+enum-as-inner = "0.5"
 futures = "0.3.24"
 futures-util = { workspace = true }
 indexmap = "2.0.0"

@@ -71,7 +71,7 @@ impl BlockReader {
             )
             .await?;
 
-        let column_chunks = read_res.columns_own_bytes()?;
+        let column_buffers = read_res.column_buffers()?;
 
         let mut results = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
@@ -93,8 +93,8 @@ impl BlockReader {
                         .unwrap()
                         .as_native()
                         .unwrap();
-                    let value = column_chunks.get(column_id).unwrap();
-                    let reader: Reader = Box::new(std::io::Cursor::new(value.clone()));
+                    let data = column_buffers.get(column_id).unwrap();
+                    let reader: Reader = Box::new(std::io::Cursor::new(data.clone()));
                     NativeReader::new(reader, native_meta.pages.clone(), vec![])
                 })
                 .collect();

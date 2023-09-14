@@ -221,12 +221,11 @@ impl BlockReader {
             if let Some(column_meta) = deserialization_context.column_metas.get(&column_id) {
                 if let Some(chunk) = column_chunks.get(&column_id) {
                     match chunk {
-                        data @ DataItem::RawData(_) | data @ DataItem::Buffer(_) => {
-                            let data = data.as_bytes().unwrap();
+                        DataItem::RawData(data) => {
                             let column_descriptor =
                                 &self.parquet_schema_descriptor.columns()[*leaf_index];
                             field_column_metas.push(column_meta);
-                            field_column_data.push(data);
+                            field_column_data.push(data.as_ref());
                             field_column_descriptors.push(column_descriptor.clone());
                             field_uncompressed_size += data.len();
                         }
