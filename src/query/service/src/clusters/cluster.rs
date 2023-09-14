@@ -138,8 +138,6 @@ impl ClusterHelper for Cluster {
 }
 
 impl ClusterDiscovery {
-    const METRIC_LABEL_FUNCTION: &'static str = "function";
-
     #[async_backtrace::framed]
     pub async fn create_meta_client(cfg: &InnerConfig) -> Result<MetaStore> {
         let meta_api_provider = MetaStoreProvider::new(cfg.meta.to_meta_grpc_client_conf());
@@ -202,7 +200,13 @@ impl ClusterDiscovery {
     pub async fn discover(&self, config: &InnerConfig) -> Result<Arc<Cluster>> {
         match self.api_provider.get_nodes().await {
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(&self.local_id, "discover", &self.cluster_id, &self.tenant_id, &self.flight_address);
+                super::metrics::metric_incr_cluster_error_count(
+                    &self.local_id,
+                    "discover",
+                    &self.cluster_id,
+                    &self.tenant_id,
+                    &self.flight_address,
+                );
                 Err(cause.add_message_back("(while cluster api get_nodes)."))
             }
             Ok(cluster_nodes) => {
@@ -225,7 +229,13 @@ impl ClusterDiscovery {
                     res.push(Arc::new(node.clone()));
                 }
 
-                super::metrics::metrics_gauge_discovered_nodes(&self.local_id, &self.cluster_id, &self.tenant_id, &self.flight_address, cluster_nodes.len() as f64);
+                super::metrics::metrics_gauge_discovered_nodes(
+                    &self.local_id,
+                    &self.cluster_id,
+                    &self.tenant_id,
+                    &self.flight_address,
+                    cluster_nodes.len() as f64,
+                );
                 Ok(Cluster::create(res, self.local_id.clone()))
             }
         }
@@ -236,7 +246,13 @@ impl ClusterDiscovery {
         let current_nodes_info = match self.api_provider.get_nodes().await {
             Ok(nodes) => nodes,
             Err(cause) => {
-                super::metrics::metric_incr_cluster_error_count(&self.local_id, "drop_invalid_ndes.get_nodes", &self.cluster_id, &self.tenant_id, &self.flight_address);
+                super::metrics::metric_incr_cluster_error_count(
+                    &self.local_id,
+                    "drop_invalid_ndes.get_nodes",
+                    &self.cluster_id,
+                    &self.tenant_id,
+                    &self.flight_address,
+                );
                 return Err(cause.add_message_back("(while drop_invalid_nodes)"));
             }
         };
@@ -347,8 +363,6 @@ struct ClusterHeartbeat {
 }
 
 impl ClusterHeartbeat {
-    const METRIC_LABEL_RESULT: &'static str = "result";
-
     pub fn create(
         timeout: Duration,
         cluster_api: Arc<dyn ClusterApi>,
@@ -393,7 +407,13 @@ impl ClusterHeartbeat {
                         shutdown_notified = new_shutdown_notified;
                         let heartbeat = cluster_api.heartbeat(&node, MatchSeq::GE(1));
                         if let Err(failure) = heartbeat.await {
-                            super::metrics::metric_incr_cluster_heartbeat_count(&node.id, &node.flight_address, &cluster_id, &tenant_id, "failure");
+                            super::metrics::metric_incr_cluster_heartbeat_count(
+                                &node.id,
+                                &node.flight_address,
+                                &cluster_id,
+                                &tenant_id,
+                                "failure",
+                            );
                             error!("Cluster cluster api heartbeat failure: {:?}", failure);
                         }
                     }
