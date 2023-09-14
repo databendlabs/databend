@@ -68,10 +68,7 @@ impl UpdatePlan {
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            match use_column_name_index {
-                Some(nums) => nums,
-                None => schema.num_fields(),
-            },
+            use_column_name_index.unwrap_or_else(schema.num_fields()),
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
