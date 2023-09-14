@@ -19,10 +19,6 @@ use common_metrics::Histogram;
 use lazy_static::lazy_static;
 use metrics::histogram;
 
-// TODO: to be removed
-pub static METRIC_MYSQL_PROCESSOR_REQUEST_DURATION: &str = "mysql.process_request_duration";
-pub static METRIC_INTERPRETER_USEDTIME: &str = "interpreter.usedtime";
-
 lazy_static! {
     static ref MYSQL_PROCESSOR_REQUEST_DURATION: Histogram =
         register_histogram_in_milliseconds("mysql_process_request_duration_ms");
@@ -31,14 +27,9 @@ lazy_static! {
 }
 
 pub fn observe_mysql_process_request_duration(duration: Duration) {
-    histogram!(
-        METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-        duration.as_millis()
-    );
     MYSQL_PROCESSOR_REQUEST_DURATION.observe(duration.as_millis() as f64);
 }
 
 pub fn observe_mysql_interpreter_used_time(duration: Duration) {
-    histogram!(METRIC_INTERPRETER_USEDTIME, duration.as_millis());
     MYSQL_INTERPRETER_USEDTIME.observe(duration.as_millis() as f64);
 }
