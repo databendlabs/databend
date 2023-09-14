@@ -15,7 +15,6 @@
 use common_metrics::register_counter;
 use common_metrics::register_counter_family;
 use common_metrics::register_histogram_family_in_milliseconds;
-use common_metrics::register_histogram_in_milliseconds;
 use common_metrics::Counter;
 use common_metrics::Family;
 use common_metrics::Histogram;
@@ -41,7 +40,7 @@ lazy_static! {
     static ref SPILL_WRITE_BYTES: Family<VecLabels, Counter> =
         register_counter_family(key!("spill_write_bytes"));
     static ref SPILL_WRITE_MILLISECONDS: Family<VecLabels, Histogram> =
-        register_histogram_in_milliseconds(key!("spill_write_milliseconds"));
+        register_histogram_family_in_milliseconds(key!("spill_write_milliseconds"));
     static ref SPILL_READ_COUNT: Family<VecLabels, Counter> =
         register_counter_family(key!("spill_read_count"));
     static ref SPILL_READ_BYTES: Family<VecLabels, Counter> =
@@ -70,7 +69,7 @@ pub fn metrics_inc_aggregate_partial_hashtable_allocated_bytes(c: u64) {
         key!("aggregate_partial_hashtable_allocated_bytes"),
         c as f64
     );
-    AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c)
+    AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
 }
 
 pub fn metrics_inc_group_by_spill_write_count() {
@@ -88,7 +87,9 @@ pub fn metrics_inc_group_by_spill_write_bytes(c: u64) {
 pub fn metrics_inc_group_by_spill_write_milliseconds(c: u64) {
     increment_gauge!(key!("group_by_spill_write_milliseconds"), c as f64);
     let labels = &vec![("spill", "group_by_spill".to_string())];
-    SPILL_WRITE_MILLISECONDS.observe(c as f64)
+    SPILL_WRITE_MILLISECONDS
+        .get_or_create(labels)
+        .observe(c as f64)
 }
 
 pub fn metrics_inc_aggregate_spill_write_count() {
