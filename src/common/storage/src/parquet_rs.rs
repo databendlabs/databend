@@ -16,8 +16,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
-use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
@@ -77,64 +75,6 @@ pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema
     }
 
     Ok(arrow_schema)
-}
-
-#[allow(dead_code)]
-async fn read_parquet_metas_batch(
-    file_infos: Vec<(String, u64)>,
-    op: Operator,
-    max_memory_usage: u64,
-) -> Result<Vec<ParquetMetaData>> {
-    let mut metas = vec![];
-    for (path, size) in file_infos {
-        metas.push(read_metadata_async(&path, &op, Some(size)).await?)
-    }
-    let used = GLOBAL_MEM_STAT.get_memory_usage();
-    if max_memory_usage as i64 - used < 100 * 1024 * 1024 {
-        Err(ErrorCode::Internal(format!(
-            "not enough memory to load parquet file metas, max_memory_usage = {}, used = {}.",
-            max_memory_usage, used
-        )))
-    } else {
-        Ok(metas)
-    }
-}
-
-#[async_backtrace::framed]
-pub async fn read_parquet_metas_in_parallel(
-    op: Operator,
-    file_infos: Vec<(String, u64)>,
-    thread_nums: usize,
-    permit_nums: usize,
-    max_memory_usage: u64,
-) -> Result<Vec<ParquetMetaData>> {
-    let batch_size = 100;
-    if file_infos.len() <= batch_size {
-        read_parquet_metas_batch(file_infos, op.clone(), max_memory_usage).await
-    } else {
-        let mut chunks = file_infos.chunks(batch_size);
-
-        let tasks = std::iter::from_fn(move || {
-            chunks.next().map(|location| {
-                read_parquet_metas_batch(location.to_vec(), op.clone(), max_memory_usage)
-            })
-        });
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            thread_nums,
-            permit_nums,
-            "read-parquet-metas-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<Vec<_>>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Ok(result)
-    }
 }
 
 /// Layout of Parquet file

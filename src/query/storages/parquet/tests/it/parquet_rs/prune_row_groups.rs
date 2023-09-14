@@ -44,10 +44,12 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     let plan = get_data_source_plan(fixture.ctx(), &sql).await.unwrap();
     let parquet_meta = parquet::file::footer::parse_metadata(file.as_file()).unwrap();
     let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
+    let leaf_fields = Arc::new(schema.leaf_fields());
 
     let pruner = ParquetRSPruner::try_create(
         FunctionContext::default(),
         Arc::new(schema),
+        leaf_fields,
         &plan.push_downs,
         ParquetReadOptions::new()
             .with_prune_row_groups(prune)
@@ -55,7 +57,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     )
     .unwrap();
 
-    let rgs = pruner.prune_row_groups(&parquet_meta).unwrap();
+    let rgs = pruner.prune_row_groups(&parquet_meta, None).unwrap();
 
     assert_eq!(
         expected_rgs, rgs,

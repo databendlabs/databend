@@ -799,14 +799,8 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                     self.children.push(columns_node);
                 }
             }
-            CopyUnit::StageLocation(v) => {
-                let location_format_ctx =
-                    AstFormatContext::new(format!("Location @{}{}", v.name, v.path));
-                let location_node = FormatTreeNode::new(location_format_ctx);
-                self.children.push(location_node);
-            }
-            CopyUnit::UriLocation(v) => {
-                let location_format_ctx = AstFormatContext::new(format!("UriLocation {}", v));
+            CopyUnit::Location(v) => {
+                let location_format_ctx = AstFormatContext::new(format!("Location {}", v));
                 let location_node = FormatTreeNode::new(location_format_ctx);
                 self.children.push(location_node);
             }
@@ -2708,7 +2702,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let node = FormatTreeNode::with_children(format_ctx, vec![child]);
                 self.children.push(node);
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,

@@ -24,7 +24,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 
-use super::super::copy::parse_stage_location;
+use super::super::copy::resolve_stage_location;
 use crate::binder::location::parse_uri_location;
 use crate::binder::Binder;
 use crate::plans::CreateStagePlan;
@@ -38,8 +38,7 @@ impl Binder {
         location: &str,
         pattern: &str,
     ) -> Result<Plan> {
-        let stage_name = format!("@{location}");
-        let (stage, path) = parse_stage_location(&self.ctx, stage_name.as_str()).await?;
+        let (stage, path) = resolve_stage_location(&self.ctx, location).await?;
         let plan_node = RemoveStagePlan {
             path,
             stage,

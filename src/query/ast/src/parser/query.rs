@@ -22,8 +22,8 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use super::stage::file_location;
 use super::stage::select_stage_option;
-use super::stage::stage_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
@@ -639,11 +639,9 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
-    let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
-    let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
         rule! {
-            (#stage_location | #uri_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
+            (#file_location) ~  ("(" ~ ^#comma_separated_list0(select_stage_option) ~")")? ~ #table_alias?
         },
         |(location, options, alias)| {
             let options = match options {
@@ -748,7 +746,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
             } => {
                 let options = SelectStageOptions::from(options);
-                TableReference::Stage {
+                TableReference::Location {
                     span: transform_span(input.span.0),
                     location,
                     options,
