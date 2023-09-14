@@ -923,3 +923,24 @@ select * from t
 
 statement ok
 drop table t
+
+statement ok
+CREATE TABLE t (a BIGINT NULL, b DECIMAL(23, 8) NULL);
+
+statement ok
+insert into t values(1,-0.01683589), (2,0.01683589);
+
+query T
+select -b from t;
+----
+0.01683589
+-0.01683589
+
+query T
+select sum(-b) as s from t group by a order by s;
+----
+-0.01683589
+0.01683589
+
+statement ok
+drop table t
