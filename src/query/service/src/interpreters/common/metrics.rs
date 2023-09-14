@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use metrics::increment_gauge;
 use common_metrics::register_histogram_family_in_milliseconds;
 use common_metrics::Family;
 use common_metrics::Histogram;
 use lazy_static::lazy_static;
+use metrics::increment_gauge;
 
 lazy_static! {
-    static ref COMPACT_HOOK_EXECUTION_MS: Family<Vec<(&'static str, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_execution_ms");
-
-    static ref COMPACT_HOOK_COMPACTION_MS: Family<Vec<(&'static str, String)>, Histogram> = register_histogram_family_in_milliseconds("compact_hook_compaction_ms");
+    static ref COMPACT_HOOK_EXECUTION_MS: Family<Vec<(&'static str, String)>, Histogram> =
+        register_histogram_family_in_milliseconds("compact_hook_execution_ms");
+    static ref COMPACT_HOOK_COMPACTION_MS: Family<Vec<(&'static str, String)>, Histogram> =
+        register_histogram_family_in_milliseconds("compact_hook_compaction_ms");
 }
 
 // the time used in executing the main operation  (replace-into, copy-into, etc)
@@ -32,7 +33,9 @@ pub fn metrics_inc_compact_hook_main_operation_time_ms(operation_name: &str, c: 
         c as f64
     );
     let labels = &vec![("operation", operation_name.to_string())];
-    COMPACT_HOOK_EXECUTION_MS.get_or_create(&labels).observe(c as f64);
+    COMPACT_HOOK_EXECUTION_MS
+        .get_or_create(labels)
+        .observe(c as f64);
 }
 
 // the time used in executing the compaction
@@ -43,5 +46,7 @@ pub fn metrics_inc_compact_hook_compact_time_ms(operation_name: &str, c: u64) {
         c as f64
     );
     let labels = &vec![("operation", operation_name.to_string())];
-    COMPACT_HOOK_COMPACTION_MS.get_or_create(&labels).observe(c as f64);
+    COMPACT_HOOK_COMPACTION_MS
+        .get_or_create(labels)
+        .observe(c as f64);
 }

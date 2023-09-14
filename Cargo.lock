@@ -2440,7 +2440,6 @@ dependencies = [
  "log",
  "metrics",
  "openai_api_rust",
- "prometheus-client",
 ]
 
 [[package]]

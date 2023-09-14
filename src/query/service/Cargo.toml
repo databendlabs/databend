@@ -65,6 +65,7 @@ common-license = { path = "../../common/license" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
+common-metrics = { path = "../../common/metrics" }
 common-openai = { path = "../../common/openai" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
@@ -88,7 +89,6 @@ common-storages-stage = { path = "../storages/stage" }
 common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
-common-metrics = { path = "../../common/metrics" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee-features/data-mask" }
 storages-common-blocks = { path = "../storages/common/blocks" }
@@ -130,6 +130,7 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
+lazy_static = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = "0.0.1"
@@ -165,7 +166,6 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
-lazy_static = { workspace = true }
 
 [dev-dependencies]
 arrow-cast = { version = "46.0.0", features = ["prettyprint"] }
