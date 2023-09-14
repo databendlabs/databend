@@ -31,11 +31,12 @@ use common_expression::BLOCK_NAME_COLUMN_ID;
 use common_expression::ROW_ID_COLUMN_ID;
 use common_expression::SEGMENT_NAME_COLUMN_ID;
 use common_expression::SNAPSHOT_NAME_COLUMN_ID;
+use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 // Segment and Block id Bits when generate internal column `_row_id`
+// Assumes that the max block count of a segment is NUM_BLOCK_ID_BITS
 // Since `DEFAULT_BLOCK_PER_SEGMENT` is 1000, so `block_id` 10 bits is enough.
 // for compact_segment, we will get 2*thresholds-1 blocks in one segment at most.
-pub const NUM_BLOCK_ID_BITS: usize = 11;
 pub const NUM_SEGMENT_ID_BITS: usize = 22;
 pub const NUM_ROW_ID_PREFIX_BITS: usize = NUM_BLOCK_ID_BITS + NUM_SEGMENT_ID_BITS;
 
