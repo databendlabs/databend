@@ -33,12 +33,12 @@ lazy_static! {
 pub fn observe_mysql_process_request_duration(duration: Duration) {
     histogram!(
         METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-        duration.as_millis() as u64
+        duration.as_millis()
     );
     MYSQL_PROCESSOR_REQUEST_DURATION.observe(duration.as_millis() as f64);
 }
 
 pub fn observe_mysql_interpreter_used_time(duration: Duration) {
-    histogram!(METRIC_INTERPRETER_USEDTIME, duration.as_millis() as u64);
+    histogram!(METRIC_INTERPRETER_USEDTIME, duration.as_millis());
     MYSQL_INTERPRETER_USEDTIME.observe(duration.as_millis() as f64);
 }
