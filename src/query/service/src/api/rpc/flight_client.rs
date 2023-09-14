@@ -193,7 +193,6 @@ impl FlightReceiver {
     }
 }
 
-#[derive(Clone)]
 pub struct FlightSender {
     tx: Sender<Result<FlightData, Status>>,
 }

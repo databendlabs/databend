@@ -49,6 +49,7 @@ impl ParquetRSTable {
             ctx.clone(),
             self.operator.clone(),
             table_schema,
+            self.leaf_fields.clone(),
             &self.schema_descr,
             plan,
             self.read_options,
@@ -59,6 +60,7 @@ impl ParquetRSTable {
 
         // TODO(parquet):
         // - introduce Top-K optimization.
+        // - pass `self.parquet_metas` to `ParquetSource` to avoid duplicate meta processing for small files.
         pipeline.add_source(
             |output| ParquetSource::create(ctx.clone(), output, reader.clone()),
             num_threads,

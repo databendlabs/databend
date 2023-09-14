@@ -56,7 +56,7 @@ pub use binder::Binder;
 pub use builders::*;
 pub use column_binding::ColumnBinding;
 pub use column_binding::ColumnBindingBuilder;
-pub use copy::parse_stage_location;
+pub use copy::resolve_stage_location;
 pub use internal_column_factory::INTERNAL_COLUMN_FACTORY;
 pub use location::parse_uri_location;
 pub use scalar::ScalarBinder;

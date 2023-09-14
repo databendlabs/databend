@@ -451,7 +451,7 @@ explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CS
 ----
 Copy (children 7)
 ├── CopyUnit (children 1)
-│   └── UriLocation 's3://mybucket/data.csv'
+│   └── Location 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
 │   └── TableIdentifier t1
 ├── FileFormats (children 4)

@@ -220,8 +220,11 @@ impl<'a> Display for ScalarRef<'a> {
                 write!(f, "}}")
             }
             ScalarRef::Bitmap(bits) => {
-                let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
-                write!(f, "{rb:?}")
+                if !bits.is_empty() {
+                    let rb = RoaringTreemap::deserialize_from(*bits).unwrap();
+                    write!(f, "{rb:?}")?;
+                }
+                Ok(())
             }
             ScalarRef::Tuple(fields) => {
                 write!(f, "(")?;
