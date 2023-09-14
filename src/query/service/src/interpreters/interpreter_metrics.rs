@@ -26,24 +26,24 @@ use crate::sessions::TableContext;
 
 pub struct InterpreterMetrics;
 
-const QUERY_START: &str = "query_start";
-const QUERY_ERROR: &str = "query_error";
-const QUERY_SUCCESS: &str = "query_success";
-const QUERY_FAILED: &str = "query_failed";
+const METRIC_QUERY_START: &str = "query_start";
+const METRIC_QUERY_ERROR: &str = "query_error";
+const METRIC_QUERY_SUCCESS: &str = "query_success";
+const METRIC_QUERY_FAILED: &str = "query_failed";
 
-const QUERY_DURATION_MS: &str = "query_duration_ms";
-const QUERY_WRITE_ROWS: &str = "query_write_rows";
-const QUERY_WRITE_BYTES: &str = "query_write_bytes";
-const QUERY_WRITE_IO_BYTES: &str = "query_write_io_bytes";
-const QUERY_WRITE_IO_BYTES_COST_MS: &str = "query_write_io_bytes_cost_ms";
-const QUERY_SCAN_ROWS: &str = "query_scan_rows";
-const QUERY_SCAN_BYTES: &str = "query_scan_bytes";
-const QUERY_SCAN_IO_BYTES: &str = "query_scan_io_bytes";
-const QUERY_SCAN_IO_BYTES_COST_MS: &str = "query_scan_io_bytes_cost_ms";
-const QUERY_SCAN_PARTITIONS: &str = "query_scan_partitions";
-const QUERY_TOTAL_PARTITIONS: &str = "query_total_partitions";
-const QUERY_RESULT_ROWS: &str = "query_result_rows";
-const QUERY_RESULT_BYTES: &str = "query_result_bytes";
+const METRIC_QUERY_DURATION_MS: &str = "query_duration_ms";
+const METRIC_QUERY_WRITE_ROWS: &str = "query_write_rows";
+const METRIC_QUERY_WRITE_BYTES: &str = "query_write_bytes";
+const METRIC_QUERY_WRITE_IO_BYTES: &str = "query_write_io_bytes";
+const METRIC_QUERY_WRITE_IO_BYTES_COST_MS: &str = "query_write_io_bytes_cost_ms";
+const METRIC_QUERY_SCAN_ROWS: &str = "query_scan_rows";
+const METRIC_QUERY_SCAN_BYTES: &str = "query_scan_bytes";
+const METRIC_QUERY_SCAN_IO_BYTES: &str = "query_scan_io_bytes";
+const METRIC_QUERY_SCAN_IO_BYTES_COST_MS: &str = "query_scan_io_bytes_cost_ms";
+const METRIC_QUERY_SCAN_PARTITIONS: &str = "query_scan_partitions";
+const METRIC_QUERY_TOTAL_PARTITIONS: &str = "query_total_partitions";
+const METRIC_QUERY_RESULT_ROWS: &str = "query_result_rows";
+const METRIC_QUERY_RESULT_BYTES: &str = "query_result_bytes";
 
 const LABEL_HANDLER: &str = "handler";
 const LABEL_KIND: &str = "kind";
@@ -89,39 +89,39 @@ impl InterpreterMetrics {
         let result_rows = ctx.get_result_progress_value().rows as u64;
         let result_bytes = ctx.get_result_progress_value().bytes as u64;
 
-        label_histogram_with_val(QUERY_DURATION_MS, labels, query_duration_ms);
+        label_histogram_with_val(METRIC_QUERY_DURATION_MS, labels, query_duration_ms);
 
-        label_counter_with_val_and_labels(QUERY_WRITE_ROWS, labels, written_rows);
-        label_counter_with_val_and_labels(QUERY_WRITE_BYTES, labels, written_bytes);
-        label_counter_with_val_and_labels(QUERY_WRITE_IO_BYTES, labels, written_io_bytes);
+        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_ROWS, labels, written_rows);
+        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_BYTES, labels, written_bytes);
+        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_IO_BYTES, labels, written_io_bytes);
         if written_io_bytes_cost_ms > 0 {
             label_histogram_with_val(
-                QUERY_WRITE_IO_BYTES_COST_MS,
+                METRIC_QUERY_WRITE_IO_BYTES_COST_MS,
                 labels,
                 written_io_bytes_cost_ms as f64,
             );
         }
 
-        label_counter_with_val_and_labels(QUERY_SCAN_ROWS, labels, scan_rows);
-        label_counter_with_val_and_labels(QUERY_SCAN_BYTES, labels, scan_bytes);
-        label_counter_with_val_and_labels(QUERY_SCAN_IO_BYTES, labels, scan_io_bytes);
+        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_ROWS, labels, scan_rows);
+        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_BYTES, labels, scan_bytes);
+        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_IO_BYTES, labels, scan_io_bytes);
         if scan_io_bytes_cost_ms > 0 {
             label_histogram_with_val(
-                QUERY_SCAN_IO_BYTES_COST_MS,
+                METRIC_QUERY_SCAN_IO_BYTES_COST_MS,
                 labels,
                 scan_io_bytes_cost_ms as f64,
             );
         }
 
-        label_counter_with_val_and_labels(QUERY_SCAN_PARTITIONS, labels, scan_partitions);
-        label_counter_with_val_and_labels(QUERY_TOTAL_PARTITIONS, labels, total_partitions);
-        label_counter_with_val_and_labels(QUERY_RESULT_ROWS, labels, result_rows);
-        label_counter_with_val_and_labels(QUERY_RESULT_BYTES, labels, result_bytes);
+        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_PARTITIONS, labels, scan_partitions);
+        label_counter_with_val_and_labels(METRIC_QUERY_TOTAL_PARTITIONS, labels, total_partitions);
+        label_counter_with_val_and_labels(METRIC_QUERY_RESULT_ROWS, labels, result_rows);
+        label_counter_with_val_and_labels(METRIC_QUERY_RESULT_BYTES, labels, result_bytes);
     }
 
     pub fn record_query_start(ctx: &QueryContext) {
         let labels = Self::common_labels(ctx);
-        label_counter_with_val_and_labels(QUERY_START, &labels, 1);
+        label_counter_with_val_and_labels(METRIC_QUERY_START, &labels, 1);
     }
 
     pub fn record_query_finished(ctx: &QueryContext, err: Option<ErrorCode>) {
@@ -129,18 +129,18 @@ impl InterpreterMetrics {
         Self::record_query_detail(ctx, &labels);
         match err {
             None => {
-                label_counter_with_val_and_labels(QUERY_SUCCESS, &labels, 1);
+                label_counter_with_val_and_labels(METRIC_QUERY_SUCCESS, &labels, 1);
             }
             Some(err) => {
                 labels.push((LABEL_CODE, err.code().to_string()));
-                label_counter_with_val_and_labels(QUERY_FAILED, &labels, 1);
+                label_counter_with_val_and_labels(METRIC_QUERY_FAILED, &labels, 1);
             }
         };
     }
 
     pub fn record_query_error(ctx: &QueryContext) {
         let labels = Self::common_labels(ctx);
-        label_counter_with_val_and_labels(QUERY_ERROR, &labels, 1);
+        label_counter_with_val_and_labels(METRIC_QUERY_ERROR, &labels, 1);
     }
 }
 

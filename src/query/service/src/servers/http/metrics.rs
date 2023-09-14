@@ -32,19 +32,19 @@ lazy_static! {
 }
 
 pub fn metrics_incr_http_request_count(method: String, api: String, status: String) {
-    let labels = [("method", method), ("api", api), ("status", status)];
+    let labels = vec![("method", method), ("api", api), ("status", status)];
     counter!("query_http_requests_count", 1, &labels);
     QUERY_HTTP_REQUESTS_COUNT.get_or_create(&labels).inc();
 }
 
 pub fn metrics_incr_http_slow_request_count(method: String, api: String, status: String) {
-    let labels = [("method", method), ("api", api), ("status", status)];
+    let labels = vec![("method", method), ("api", api), ("status", status)];
     counter!("query_http_slow_requests_count", 1, &labels);
     QUERY_HTTP_SLOW_REQUESTS_COUNT.get_or_create(&labels).inc();
 }
 
 pub fn metrics_incr_http_response_errors_count(err: String, code: u16) {
-    let labels = [("err", err), ("code", code.to_string())];
+    let labels = vec![("err", err), ("code", code.to_string())];
     counter!("query_http_response_errors_count", 1, &labels);
     QUERY_HTTP_RESPONSE_ERRORS_COUNT
         .get_or_create(&labels)
