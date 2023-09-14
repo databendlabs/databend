@@ -38,7 +38,15 @@ impl ListStageArgsParsed {
         for (k, v) in &args {
             match k.to_lowercase().as_str() {
                 "location" => {
-                    location = Some(string_value(v)?);
+                    let v = string_value(v)?;
+                    if let Some(name) = v.strip_prefix('@') {
+                        location = Some(name.to_string());
+                    } else {
+                        return Err(ErrorCode::BadArguments(format!(
+                            "location must start with @, but got {}",
+                            v
+                        )));
+                    }
                 }
                 "pattern" => {
                     files_info.pattern = Some(string_value(v)?);

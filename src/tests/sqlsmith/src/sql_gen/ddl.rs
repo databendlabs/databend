@@ -20,6 +20,7 @@ use common_ast::ast::CreateTableStmt;
 use common_ast::ast::DropTableStmt;
 use common_ast::ast::Engine;
 use common_ast::ast::Identifier;
+use common_ast::ast::NullableConstraint;
 use common_ast::ast::TypeName;
 use rand::Rng;
 
@@ -50,8 +51,7 @@ const SIMPLE_COLUMN_TYPES: [TypeName; 18] = [
     TypeName::Date,
     TypeName::Timestamp,
     TypeName::String,
-    // TypeName::Bitmap,
-    TypeName::String,
+    TypeName::Bitmap,
     TypeName::Variant,
 ];
 
@@ -154,14 +154,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         for i in 0..36 {
             let name = format!("c{}", i);
-            let data_type = if i <= 17 {
-                SIMPLE_COLUMN_TYPES[i].clone()
+            let (data_type, nullable_constraint) = if i <= 17 {
+                (
+                    SIMPLE_COLUMN_TYPES[i].clone(),
+                    Some(NullableConstraint::NotNull),
+                )
             } else if i <= 35 {
-                TypeName::Nullable(Box::new(SIMPLE_COLUMN_TYPES[i - 18].clone()))
+                (SIMPLE_COLUMN_TYPES[i - 18].clone(), None)
             } else {
                 // TODO: add nested data types
                 let depth = self.rng.gen_range(1..=3);
-                self.gen_nested_type(depth)
+                (self.gen_nested_type(depth), None)
             };
 
             let column_def = ColumnDefinition {
@@ -170,7 +173,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 // TODO
                 expr: None,
                 comment: None,
-                nullable_constraint: None,
+                nullable_constraint,
             };
             column_defs.push(column_def);
         }
