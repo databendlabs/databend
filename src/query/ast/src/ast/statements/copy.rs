@@ -28,7 +28,6 @@ use crate::ast::write_space_separated_map;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::parser::unescape::escape_at_string;
 
 /// CopyStmt is the parsed statement of `COPY`.
 ///
@@ -147,18 +146,7 @@ pub enum CopyUnit {
         table: Identifier,
         columns: Option<Vec<Identifier>>,
     },
-    /// StageLocation (a.k.a internal and external stage) can be used
-    /// in `INTO` or `FROM`.
-    ///
-    /// For examples:
-    ///
-    /// - internal stage: `@internal_stage/path/to/dir/`
-    /// - external stage: `@s3_external_stage/path/to/dir/`
-    StageLocation(StageLocation),
-    /// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
-    ///
-    /// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-    UriLocation(UriLocation),
+    Location(FileLocation),
     /// Query can only be used as `FROM`.
     ///
     /// For example:`(SELECT field_a,field_b FROM table)`
@@ -169,8 +157,7 @@ impl CopyUnit {
     pub fn target(&self) -> &'static str {
         match self {
             CopyUnit::Table { .. } => "Table",
-            CopyUnit::StageLocation { .. } => "StageLocation",
-            CopyUnit::UriLocation { .. } => "UriLocation",
+            CopyUnit::Location { .. } => "Location",
             CopyUnit::Query(_) => "Query",
         }
     }
@@ -202,8 +189,7 @@ impl Display for CopyUnit {
                     ret
                 }
             }
-            CopyUnit::StageLocation(v) => v.fmt(f),
-            CopyUnit::UriLocation(v) => v.fmt(f),
+            CopyUnit::Location(v) => v.fmt(f),
             CopyUnit::Query(query) => {
                 write!(f, "({query})")
             }
@@ -218,7 +204,7 @@ pub struct Connection {
 }
 
 impl Connection {
-    fn new(conns: BTreeMap<String, String>) -> Self {
+    pub fn new(conns: BTreeMap<String, String>) -> Self {
         Self {
             visited_keys: HashSet::new(),
             conns,
@@ -365,32 +351,30 @@ impl Display for UriLocation {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StageLocation {
-    pub name: String,
-    pub path: String,
-}
-
-impl Display for StageLocation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "@{}{}", self.name, escape_at_string(&self.path))
-    }
-}
-
+/// StageLocation (a.k.a internal and external stage) can be used
+/// in `INTO` or `FROM`.
+///
+/// For examples:
+///
+/// - internal stage: `@internal_stage/path/to/dir/`
+/// - external stage: `@s3_external_stage/path/to/dir/`
+/// UriLocation (a.k.a external location) can be used in `INTO` or `FROM`.
+///
+/// For examples: `'s3://example/path/to/dir' CONNECTION = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FileLocation {
-    Stage(StageLocation),
-    Uri(String),
+    Stage(String),
+    Uri(UriLocation),
 }
 
 impl Display for FileLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             FileLocation::Uri(loc) => {
-                write!(f, "'{}'", loc)
+                write!(f, "{}", loc)
             }
             FileLocation::Stage(loc) => {
-                write!(f, "{}", loc)
+                write!(f, "@{}", loc)
             }
         }
     }
