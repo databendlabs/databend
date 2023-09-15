@@ -14,38 +14,38 @@
 
 use std::collections::HashMap;
 
+use common_exception::ErrorCode;
 use common_metrics::dump_metric_samples;
-use common_metrics::try_handle;
+use common_metrics::load_global_prometheus_registry;
+use common_metrics::register_counter;
+use common_metrics::register_histogram_in_milliseconds;
 use common_metrics::MetricValue;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_dump_metric_samples() -> common_exception::Result<()> {
-    metrics::counter!("test.test1_count", 1);
-    metrics::counter!("test.test2_count", 2);
+    let counter1 = register_counter("test_test1_count");
+    let counter2 = register_counter("test_test2_count");
+    let histogram1 = register_histogram_in_milliseconds("test_test_query_usedtime");
+    counter1.inc();
+    counter2.inc_by(2);
+    histogram1.observe(2.0);
 
-    #[cfg(feature = "enable_histogram")]
-    metrics::histogram!("test.test_query_usedtime", 2.0);
-
-    let handle = crate::try_handle().unwrap();
-    let samples = dump_metric_samples(handle)
+    let registry = load_global_prometheus_registry();
+    let samples = dump_metric_samples(&registry)
         .unwrap()
         .into_iter()
         .map(|s| (s.name.clone(), s))
         .collect::<HashMap<_, _>>();
     assert_eq!(
-        MetricValue::Counter(1.0),
-        samples.get("test_test1_count").unwrap().value
+        MetricValue::Untyped(1.0),
+        samples.get("test_test1_count_total").unwrap().value
     );
 
-    #[cfg(feature = "enable_histogram")]
-    {
-        use common_exception::ErrorCode;
-        let summaries = match &samples.get("test_test_query_usedtime").unwrap().value {
-            MetricValue::Summary(summaries) => summaries,
-            _ => return Err(ErrorCode::Internal("test failed")),
-        };
-        assert_eq!(7, summaries.len());
-    }
+    let histogram = match &samples.get("test_test_query_usedtime").unwrap().value {
+        MetricValue::Histogram(histogram) => histogram,
+        _ => return Err(ErrorCode::Internal("test failed")),
+    };
+    assert_eq!(16, histogram.len());
 
     Ok(())
 }

@@ -35,7 +35,7 @@ pub struct MetricService {
 #[async_backtrace::framed]
 pub async fn metrics_handler() -> impl IntoResponse {
     let registry = load_global_prometheus_registry();
-    render_prometheus_metrics(registry)
+    render_prometheus_metrics(&registry)
 }
 
 impl MetricService {
@@ -48,8 +48,7 @@ impl MetricService {
 
     #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
-        let app = poem::Route::new()
-            .at("/metrics", poem::get(metrics_handler));
+        let app = poem::Route::new().at("/metrics", poem::get(metrics_handler));
         let addr = self
             .shutdown_handler
             .start_service(listening, None, app, Some(Duration::from_millis(100)))
