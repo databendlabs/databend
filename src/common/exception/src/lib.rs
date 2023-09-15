@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
+mod errors;
 pub mod exception;
 mod exception_backtrace;
 mod exception_code;
@@ -21,6 +22,8 @@ mod exception_into;
 mod span;
 mod with_context;
 
+pub use errors::Error;
+pub use errors::Errors;
 pub use exception::ErrorCode;
 pub use exception::Result;
 pub use exception::ToErrorCode;

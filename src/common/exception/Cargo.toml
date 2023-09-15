@@ -25,6 +25,7 @@ arrow-schema = "46.0.0"
 backtrace = "0.3.69"
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 http = "0.2"
+lazy_static = { workspace = true, features = [] }
 opendal = { workspace = true }
 parquet = "46.0.0"
 paste = "1.0.9"
