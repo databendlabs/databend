@@ -323,7 +323,7 @@ impl PredicateSet {
         }
     }
 
-    fn into_predicates(&mut self) -> (bool, Vec<ScalarExpr>) {
+    fn derive_predicates(&mut self) -> (bool, Vec<ScalarExpr>) {
         let mut is_updated = self.is_merged;
         let mut result = vec![];
         let num_exprs = self.num_exprs;
@@ -581,8 +581,8 @@ impl Rule for RuleInferFilter {
         }
         is_rewritten |= predicate_set.is_merged;
         if !predicate_set.is_falsy {
-            // `into_predicates` may change is_falsy to true.
-            let (is_merged, infer_predicates) = predicate_set.into_predicates();
+            // `derive_predicates` may change is_falsy to true.
+            let (is_merged, infer_predicates) = predicate_set.derive_predicates();
             is_rewritten |= is_merged;
             new_predicates.extend(infer_predicates);
         }
