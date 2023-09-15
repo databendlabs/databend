@@ -16,6 +16,7 @@ use std::sync::Mutex;
 use std::sync::MutexGuard;
 
 use lazy_static::lazy_static;
+use prometheus_client::encoding::text::encode as prometheus_encode;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
@@ -32,6 +33,14 @@ lazy_static! {
 
 pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
     REGISTRY.lock().unwrap()
+}
+
+pub fn render_prometheus_metrics(registry: &Registry) -> String {
+    let mut text = String::new();
+    match prometheus_encode(&mut text, &registry) {
+        Ok(_) => text,
+        Err(err) => format!("Failed to encode metrics: {}", err),
+    }
 }
 
 pub fn register_counter(name: &str) -> Counter {

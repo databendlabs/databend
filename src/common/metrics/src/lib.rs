@@ -46,4 +46,5 @@ pub use registry::register_histogram_family_in_milliseconds;
 pub use registry::register_histogram_family_in_seconds;
 pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
+pub use registry::render_prometheus_metrics;
 pub use reset::reset_metrics;
