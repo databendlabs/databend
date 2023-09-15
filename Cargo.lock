@@ -2694,6 +2694,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
