@@ -35,6 +35,13 @@ pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
     REGISTRY.lock().unwrap()
 }
 
+pub fn reset_global_prometheus_registry() {
+    // TODO(liyz): do nothing yet. This function would be trivial once prometheus_client
+    // supports iterating metrics. However it's not supported yet. I've raised an issue about
+    // this: https://github.com/prometheus/client_rust/issues/163 . If this feature request
+    // got denied, we can still wrap a customized Registry which record the metrics by itself.
+}
+
 pub fn render_prometheus_metrics(registry: &Registry) -> String {
     let mut text = String::new();
     match prometheus_encode(&mut text, registry) {

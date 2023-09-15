@@ -29,7 +29,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_metrics::reset_metrics;
+use common_metrics::reset_global_prometheus_registry;
 use common_metrics::MetricSample;
 use common_metrics::MetricValue;
 
@@ -82,7 +82,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
-        reset_metrics()?;
+        reset_global_prometheus_registry()?;
         Ok(())
     }
 }
