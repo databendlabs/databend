@@ -203,7 +203,7 @@ pub enum Expr {
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: Span,
         expr: Box<Expr>,

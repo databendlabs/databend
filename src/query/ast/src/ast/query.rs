@@ -263,7 +263,7 @@ pub enum TableReference {
         span: Span,
         join: Join,
     },
-    Stage {
+    Location {
         span: Span,
         location: FileLocation,
         options: SelectStageOptions,
@@ -522,14 +522,16 @@ impl Display for TableReference {
                     _ => {}
                 }
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
                 write!(f, "{location}")?;
-                write!(f, "{options}")?;
+                if !options.is_empty() {
+                    write!(f, "{options}")?;
+                }
                 if let Some(alias) = alias {
                     write!(f, " AS {alias}")?;
                 }

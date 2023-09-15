@@ -241,11 +241,11 @@ impl Statement {
             Statement::Copy(copy) => {
                 let mut copy_clone = copy.clone();
 
-                if let CopyUnit::UriLocation(location) = &mut copy_clone.src {
+                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.src {
                     location.connection = location.connection.mask()
                 }
 
-                if let CopyUnit::UriLocation(location) = &mut copy_clone.dst {
+                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.dst {
                     location.connection = location.connection.mask()
                 }
                 format!("{}", Statement::Copy(copy_clone))

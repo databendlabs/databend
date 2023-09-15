@@ -282,11 +282,7 @@ impl ScalarExpr {
     }
 
     pub fn is_column_ref(&self) -> bool {
-        match self {
-            ScalarExpr::BoundColumnRef(_) => true,
-            ScalarExpr::CastExpr(cast) => (*cast.argument).is_column_ref(),
-            _ => false,
-        }
+        matches!(self, ScalarExpr::BoundColumnRef(_))
     }
 }
 

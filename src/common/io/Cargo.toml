@@ -25,6 +25,7 @@ ethnum = { workspace = true }
 lexical-core = "0.8.5"
 micromarshal = "0.4.0"
 ordered-float = { workspace = true }
+roaring = { version = "0.10.1", features = ["serde"] }
 serde = { workspace = true }
 
 [dev-dependencies]

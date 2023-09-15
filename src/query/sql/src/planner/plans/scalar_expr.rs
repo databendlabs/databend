@@ -410,10 +410,10 @@ impl ComparisonOp {
         match &self {
             ComparisonOp::Equal => ComparisonOp::Equal,
             ComparisonOp::NotEqual => ComparisonOp::NotEqual,
-            ComparisonOp::GT => ComparisonOp::LTE,
-            ComparisonOp::LT => ComparisonOp::GTE,
-            ComparisonOp::GTE => ComparisonOp::LT,
-            ComparisonOp::LTE => ComparisonOp::GT,
+            ComparisonOp::GT => ComparisonOp::LT,
+            ComparisonOp::LT => ComparisonOp::GT,
+            ComparisonOp::GTE => ComparisonOp::LTE,
+            ComparisonOp::LTE => ComparisonOp::GTE,
         }
     }
 }

@@ -19,6 +19,7 @@ mod grouping_check;
 mod lowering;
 mod name_resolution;
 mod type_check;
+mod view_rewriter;
 mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
@@ -35,6 +36,7 @@ pub use type_check::resolve_type_name;
 pub use type_check::resolve_type_name_by_str;
 pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
+pub use view_rewriter::ViewRewriter;
 pub use window_check::WindowChecker;
 
 pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 5] =
