@@ -39,8 +39,8 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 
 // The rule tries to infer new predicates from existing predicates, for example:
-// [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
-// TODO(Dousir9): [A = 10 and A = B] => [B = 10]
+// 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
+// 2. [A = 10 and A = B] => [B = 10]
 // TODO(Dousir9): [A = B and A = C] => [B = C]
 pub struct RuleInferFilter {
     id: RuleID,
@@ -72,13 +72,18 @@ impl RuleInferFilter {
     }
 }
 
+#[derive(Clone)]
 pub struct Predicate {
     op: ComparisonOp,
     constant: ConstantExpr,
 }
 
 pub struct PredicateSet {
-    predicates: HashMap<ScalarExpr, Vec<Predicate>>,
+    exprs: Vec<ScalarExpr>,
+    num_exprs: usize,
+    expr_to_idx: HashMap<ScalarExpr, usize>,
+    equal_exprs: Vec<Vec<ScalarExpr>>,
+    predicates: Vec<Vec<Predicate>>,
     is_merged: bool,
     is_falsy: bool,
 }
@@ -91,24 +96,43 @@ enum MergeResult {
 }
 
 impl PredicateSet {
-    fn into_predicates(self) -> Vec<ScalarExpr> {
-        let mut result = vec![];
-        for (scalar, predicates) in self.predicates.into_iter() {
-            for predicate in predicates.into_iter() {
-                result.push(ScalarExpr::FunctionCall(FunctionCall {
-                    span: None,
-                    func_name: String::from(predicate.op.to_func_name()),
-                    params: vec![],
-                    arguments: vec![scalar.clone(), ScalarExpr::ConstantExpr(predicate.constant)],
-                }));
-            }
+    fn new() -> Self {
+        Self {
+            exprs: vec![],
+            num_exprs: 0,
+            expr_to_idx: HashMap::new(),
+            equal_exprs: vec![],
+            predicates: vec![],
+            is_merged: false,
+            is_falsy: false,
         }
-        result
     }
 
-    fn merge_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
-        match self.predicates.get_mut(left) {
-            Some(predicates) => {
+    fn add_expr(&mut self, expr: &ScalarExpr, predicates: Vec<Predicate>) {
+        self.exprs.push(expr.clone());
+        self.expr_to_idx.insert(expr.clone(), self.num_exprs);
+        self.predicates.push(predicates);
+        self.equal_exprs.push(vec![]);
+        self.num_exprs += 1;
+    }
+
+    fn add_equal(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
+        match self.expr_to_idx.get(left) {
+            Some(idx) => {
+                let equal_exprs = &mut self.equal_exprs[*idx];
+                equal_exprs.push(right.clone());
+            }
+            None => self.add_expr(left, vec![]),
+        };
+        if self.expr_to_idx.get(right).is_none() {
+            self.add_expr(right, vec![]);
+        }
+    }
+
+    fn add_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
+        match self.expr_to_idx.get(left) {
+            Some(idx) => {
+                let predicates = &mut self.predicates[*idx];
                 for predicate in predicates.iter_mut() {
                     match Self::merge(predicate, &right) {
                         MergeResult::None => {
@@ -130,9 +154,7 @@ impl PredicateSet {
                 }
                 predicates.push(right);
             }
-            None => {
-                self.predicates.insert(left.clone(), vec![right]);
-            }
+            None => self.add_expr(left, vec![right]),
         };
     }
 
@@ -280,6 +302,62 @@ impl PredicateSet {
             },
         }
     }
+
+    fn find(parent: &mut [usize], x: usize) -> usize {
+        if parent[x] != x {
+            parent[x] = Self::find(parent, parent[x]);
+        }
+        parent[x]
+    }
+
+    fn union(parent: &mut [usize], x: usize, y: usize) {
+        let parent_x = Self::find(parent, x);
+        let parent_y = Self::find(parent, y);
+        if parent_x != parent_y {
+            parent[parent_y] = parent_x;
+        }
+    }
+
+    fn into_predicates(mut self) -> Vec<ScalarExpr> {
+        let mut result = vec![];
+        let num_exprs = self.num_exprs;
+        let mut parents = vec![0; num_exprs];
+        for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
+            *parent = i;
+        }
+        for (left_idx, equal_exprs) in self.equal_exprs.iter().enumerate() {
+            for expr in equal_exprs.iter() {
+                let right_idx = self.expr_to_idx.get(expr).unwrap();
+                Self::union(&mut parents, left_idx, *right_idx);
+            }
+        }
+        for idx in 0..num_exprs {
+            let parent_idx = Self::find(&mut parents, idx);
+            if idx != parent_idx {
+                let predicates = self.predicates[idx].clone();
+                for predicate in predicates {
+                    let expr = self.exprs[parent_idx].clone();
+                    self.add_predicate(&expr, predicate);
+                }
+            }
+        }
+        for (scalar, idx) in self.expr_to_idx.iter() {
+            let parent_idx = Self::find(&mut parents, *idx);
+            let predicates = &self.predicates[parent_idx];
+            for predicate in predicates.iter() {
+                result.push(ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: String::from(predicate.op.to_func_name()),
+                    params: vec![],
+                    arguments: vec![
+                        scalar.clone(),
+                        ScalarExpr::ConstantExpr(predicate.constant.clone()),
+                    ],
+                }));
+            }
+        }
+        result
+    }
 }
 
 pub fn adjust_scalar(scalar: Scalar, data_type: DataType) -> (bool, ConstantExpr) {
@@ -402,11 +480,7 @@ impl Rule for RuleInferFilter {
         let mut predicates = filter.predicates;
         let mut new_predicates = vec![];
         let mut is_rewritten = false;
-        let mut predicate_set = PredicateSet {
-            predicates: HashMap::new(),
-            is_merged: false,
-            is_falsy: false,
-        };
+        let mut predicate_set = PredicateSet::new();
         for predicate in predicates.iter_mut() {
             if let ScalarExpr::FunctionCall(func) = predicate {
                 if ComparisonOp::try_from_func_name(&func.func_name).is_some() {
@@ -433,7 +507,7 @@ impl Rule for RuleInferFilter {
                         func.arguments[1].is_column_ref(),
                     ) {
                         (true, true) => {
-                            // TODO(Dousir9): infer column ref equal predicate.
+                            predicate_set.add_equal(&func.arguments[0], &func.arguments[1]);
                             new_predicates.push(predicate);
                         }
                         (true, false) => {
@@ -443,7 +517,7 @@ impl Rule for RuleInferFilter {
                                     func.arguments[0].data_type()?,
                                 );
                                 if is_adjusted {
-                                    predicate_set.merge_predicate(&func.arguments[0], Predicate {
+                                    predicate_set.add_predicate(&func.arguments[0], Predicate {
                                         op,
                                         constant,
                                     });
@@ -461,7 +535,7 @@ impl Rule for RuleInferFilter {
                                     func.arguments[1].data_type()?,
                                 );
                                 if is_adjusted {
-                                    predicate_set.merge_predicate(&func.arguments[1], Predicate {
+                                    predicate_set.add_predicate(&func.arguments[1], Predicate {
                                         op: op.reverse(),
                                         constant,
                                     });
