@@ -64,7 +64,6 @@ impl Planner {
     pub async fn plan_sql(&mut self, sql: &str) -> Result<(Plan, PlanExtras)> {
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
-
         // Step 1: Tokenize the SQL.
         let mut tokenizer = Tokenizer::new(sql).peekable();
 

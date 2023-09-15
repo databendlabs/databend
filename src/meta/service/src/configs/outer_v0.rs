@@ -14,6 +14,7 @@
 
 use std::env;
 
+use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
 use common_meta_raft_store::config::get_default_raft_advertise_host;
@@ -600,11 +601,11 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-file-on", default_value = "true")]
+    #[clap(long = "log-file-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub file_on: bool,
 
+    /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(long = "log-file-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub file_level: String,
@@ -652,11 +653,11 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-stderr-on")]
+    #[clap(long = "log-stderr-on", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
+    /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(long = "log-stderr-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub stderr_level: String,

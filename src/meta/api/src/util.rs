@@ -21,6 +21,7 @@ use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownDatabase;
+use common_meta_app::app_error::UnknownDatabaseId;
 use common_meta_app::app_error::UnknownShare;
 use common_meta_app::app_error::UnknownShareAccounts;
 use common_meta_app::app_error::UnknownShareEndpoint;
@@ -375,6 +376,24 @@ pub fn db_has_to_exist(
                 format!("{}: {}", msg, db_name_ident),
             ),
         )))
+    } else {
+        Ok(())
+    }
+}
+
+/// Return OK if a db_id to db_meta exists by checking the seq.
+///
+/// Otherwise returns UnknownDatabaseId error
+pub fn db_id_has_to_exist(seq: u64, db_id: u64, msg: impl Display) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq = seq, db_name_ident = as_debug!(db_id); "db_id does not exist");
+
+        let app_err = AppError::UnknownDatabaseId(UnknownDatabaseId::new(
+            db_id,
+            format!("{}: {}", msg, db_id),
+        ));
+
+        Err(KVAppError::AppError(app_err))
     } else {
         Ok(())
     }
@@ -1022,7 +1041,7 @@ pub async fn remove_table_from_share(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     share_id: u64,
     table_id: u64,
-    table_name: &TableNameIdent,
+    tenant: String,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<(String, ShareMeta, Option<TableInfoMap>), KVAppError> {
@@ -1056,8 +1075,8 @@ pub async fn remove_table_from_share(
         }
         None => {
             warn!(
-                "remove_table_from_share: table {} not found of share {} in tenant {}",
-                &table_name.table_name, &share_name.share_name, &table_name.tenant
+                "remove_table_from_share: table-id {} not found of share {} in tenant {}",
+                table_id, &share_name.share_name, &tenant
             );
         }
     }
@@ -1077,7 +1096,7 @@ pub async fn remove_table_from_share(
             shared_db_id = db_id;
         } else {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(&table_name.tenant, &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(&tenant, &share_name.share_name),
             )));
         }
     }
@@ -1113,7 +1132,7 @@ pub async fn remove_table_from_share(
         }
         None => {
             return Err(KVAppError::AppError(AppError::ShareHasNoGrantedDatabase(
-                ShareHasNoGrantedDatabase::new(&table_name.tenant, &share_name.share_name),
+                ShareHasNoGrantedDatabase::new(&tenant, &share_name.share_name),
             )));
         }
     };

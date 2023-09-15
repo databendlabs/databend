@@ -1,52 +1,72 @@
 ---
 title: SHARE
 ---
+import IndexOverviewList from '@site/src/components/IndexOverviewList';
 
-## What is a Share?
+A "Share" in Databend refers to a feature that enables the sharing of various types of database objects, such as tables, views, and user-defined functions (UDFs), across different tenants. 
 
-In Databend Cloud, you can create shares to share the following types of database objects across organizations:
+:::note
+Sharing data via a share does not involve physically copying or transferring the data to the recipient tenants. Instead, the shared data remains in a read-only state for the recipient tenants. Users belonging to these tenants can only execute queries on the shared data; they are not allowed to perform updates, inserts, or deletions on the shared data.
+:::
 
-- Table
-- View
-- UDF
+## Getting Started with Share
 
-When you create a share, you grant appropriate privileges to the other organizations for the data you want to share. Sharing data using a share does not physically copy to transfer the data to the organizations you want to share with. The shared data is READ-ONLY to the organizations. Users from the organizations can only query the shared data. Updating, inserting, and deleting the shared data are not allowed.
+The section describes how to share data via a share and access the shared data across tenants:
 
-The following sections explain how to create and access a share in Databend Cloud:
+### Step 1. Creating a Share
 
-## Creating a Share
+These steps create a share for sharing data with another tenant and grant privileges for the shared data. Perform these steps within the tenant where the data is to be shared.
 
-To create a share to share your data across organizations, follow the steps below:
-
-1. Create an empty share using the [CREATE SHARE](01-create-share.md) command. The following example creates a share named `myshare`:
+1. Create an empty share using the [CREATE SHARE](01-create-share.md) command.
 
 ```sql
+-- Create a share named "myshare"
 CREATE SHARE myshare;
 ```
 
-2. Grant appropriate privileges to the share you created using the [GRANT `<privilege>` to SHARE](06-grant-privilege.md) command. Before granting privileges on the objects you want to share, you must grant privileges for the database that contains the objects. For more information about the available privileges, see [GRANT `<privilege>` to SHARE](06-grant-privilege.md). The following example grants the USAGE privilege to the share `myshare` for the database `db1`, then grants the SELECT privilege for the table `table1` in the database `db1`:
+2. Grant appropriate privileges to the share you created using the [GRANT `<privilege>` to SHARE](06-grant-privilege.md) command. Before granting privileges on the objects you want to share, you must grant privileges for the database that contains the objects.
 
 ```sql
+-- Grant the USAGE privilege on the database "db1"
 GRANT USAGE ON DATABASE db1 TO SHARE myshare;
+
+-- Grant the SELECT privilege on the table "table1" in the database "db1"
 GRANT SELECT ON TABLE db1.table1 TO SHARE myshare;
 ```
 
-3. Add the organizations you want to share with to the share using the [ALTER SHARE](03-alter-share.md) command. Each organization is assigned a unique tenant ID when they sign up in Databend Cloud. When you share across organizations, you specify organizations by their tenant IDs. The following example adds the tenants `x` and `y` to the share `myshare`:
+3. Add the tenants you want to share with to the share using the [ALTER SHARE](03-alter-share.md) command. When sharing data with another organization, you specify the organization by its tenant ID.
 
 ```sql
-ALTER SHARE myshare ADD TENANTS = x, y;
+-- Add tenant B to the share "myshare"
+ALTER SHARE myshare ADD TENANTS = B;
 ```
 
-## Accessing a Share
+### Step 2. Accessing Shared Data
 
-Before accessing the data in a share, you need to create a database from the share using the [CREATE DATABASE](../10-database/ddl-create-database.md) command. The following example creates a database named `db2` from the share `myshare`:
+These steps create a share endpoint and a database using the share created in [Step 1](#step-1-creating-a-share). Perform these steps within the tenant where you intend to access the shared data.
+
+1. Create a [SHARE ENDPOINT](../90-share-endpoint/index.md).
 
 ```sql
+-- Create a share endpoint named "to_share"
+CREATE SHARE ENDPOINT to_share URL = 'http://<shared-tenant-endpoint>:<port>' TENANT = <shared-tenant-name>;
+```
+
+2. Create a database from the share using the [CREATE DATABASE](../10-database/ddl-create-database.md) command.
+
+```sql
+-- Create a database named "db2" using the share "myshare"
 CREATE DATABASE db2 FROM SHARE myshare;
 ```
 
-To access the shared data, code a SELECT statement like this:
+3. To access the shared data, run a SELECT statement like this:
 
 ```sql
 SELECT * FROM db2.table1 ...
 ```
+
+## Managing Shares
+
+To manage shares on a tenant, use the following commands:
+
+<IndexOverviewList />

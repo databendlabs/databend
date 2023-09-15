@@ -19,6 +19,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
+use clap::ArgAction;
 use clap::Args;
 use clap::Parser;
 use clap::Subcommand;
@@ -1807,11 +1808,11 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-file-on", default_value = "true")]
+    #[clap(long = "log-file-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub file_on: bool,
 
+    /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(long = "log-file-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub file_level: String,
@@ -1860,11 +1861,11 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-stderr-on")]
+    #[clap(long = "log-stderr-on", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
+    /// Log level <DEBUG|INFO|WARN|ERROR>
     #[clap(long = "log-stderr-level", default_value = "INFO")]
     #[serde(rename = "level")]
     pub stderr_level: String,
@@ -1905,18 +1906,18 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "query-log-on", default_value = "true")]
+    #[clap(long = "log-query-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
-    pub query_log_on: bool,
+    pub log_query_on: bool,
 
     /// Query Log file dir
     #[clap(
-        long = "query-log-dir",
+        long = "log-query-dir",
         default_value = "",
         help = "Default to <log-file-dir>/query-details"
     )]
     #[serde(rename = "dir")]
-    pub query_log_dir: String,
+    pub log_query_dir: String,
 }
 
 impl Default for QueryLogConfig {
@@ -1930,8 +1931,8 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
 
     fn try_into(self) -> Result<InnerQueryLogConfig> {
         Ok(InnerQueryLogConfig {
-            on: self.query_log_on,
-            dir: self.query_log_dir,
+            on: self.log_query_on,
+            dir: self.log_query_dir,
         })
     }
 }
@@ -1939,8 +1940,8 @@ impl TryInto<InnerQueryLogConfig> for QueryLogConfig {
 impl From<InnerQueryLogConfig> for QueryLogConfig {
     fn from(inner: InnerQueryLogConfig) -> Self {
         Self {
-            query_log_on: inner.on,
-            query_log_dir: inner.dir,
+            log_query_on: inner.on,
+            log_query_dir: inner.dir,
         }
     }
 }
