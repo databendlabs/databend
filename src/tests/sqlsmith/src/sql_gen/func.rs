@@ -33,7 +33,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             return self.gen_scalar_value(ty);
         }
         let idx = self.rng.gen_range(0..indices.len());
-        let func_sig = unsafe { self.scalar_func_sigs.get_unchecked(idx) }.clone();
+        let func_sig = unsafe { self.scalar_func_sigs.get_unchecked(indices[idx]) }.clone();
 
         self.gen_func(func_sig.name.clone(), vec![], func_sig.args_type)
     }
@@ -103,7 +103,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         _ => unreachable!(),
                     }
                 } else {
-                    let len = self.rng.gen_range(1..=6);
+                    let len = self.rng.gen_range(2..=6);
                     vec![DataType::String; len]
                 };
                 let params = vec![];
@@ -126,10 +126,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     let len = self.rng.gen_range(1..=3) * 2 + 1;
                     let mut args_type = Vec::with_capacity(len);
                     for i in 0..len {
-                        if i % 2 == 0 {
-                            args_type.push(ty.clone());
-                        } else {
+                        if i % 2 == 0 && i != len - 1 {
                             args_type.push(DataType::Boolean);
+                        } else {
+                            args_type.push(ty.clone());
                         }
                     }
                     let params = vec![];
