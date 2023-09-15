@@ -655,7 +655,7 @@ pub trait VisitorMut: Sized {
         }
 
         for table_ref in from.iter_mut() {
-            walk_table_reference_mut(self, table_ref);
+            self.visit_table_reference(table_ref);
         }
 
         if let Some(selection) = selection {
@@ -703,8 +703,8 @@ pub trait VisitorMut: Sized {
             ..
         } = join;
 
-        walk_table_reference_mut(self, left);
-        walk_table_reference_mut(self, right);
+        self.visit_table_reference(left);
+        self.visit_table_reference(right);
 
         walk_join_condition_mut(self, condition);
     }

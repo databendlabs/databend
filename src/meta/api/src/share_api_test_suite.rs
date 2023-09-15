@@ -1704,6 +1704,7 @@ impl ShareApiTestSuite {
 
             let plan = DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id: table_id,
             };
             let _res = mt.drop_table_by_id(plan).await;
