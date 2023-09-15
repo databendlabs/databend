@@ -68,16 +68,7 @@ impl ParquetRSTable {
             // Already fetched the parquet metas when creating column statistics provider.
             parquet_metas
                 .iter()
-                .map(|p| {
-                    (
-                        p.location.clone(),
-                        p.meta
-                            .row_groups()
-                            .iter()
-                            .map(|rg| rg.total_byte_size() as u64)
-                            .sum(),
-                    )
-                })
+                .map(|p| (p.location.clone(), p.size))
                 .collect()
         };
 
@@ -86,6 +77,7 @@ impl ParquetRSTable {
         let fast_read_bytes = ctx.get_settings().get_parquet_fast_read_bytes()?;
         let mut large_files = vec![];
         let mut large_file_indices = vec![];
+        let mut small_file_indices = vec![];
         let mut small_files = vec![];
         for (index, (location, size)) in file_locations.into_iter().enumerate() {
             if size > fast_read_bytes {
@@ -93,6 +85,7 @@ impl ParquetRSTable {
                 large_file_indices.push(index);
             } else {
                 small_files.push((location, size));
+                small_file_indices.push(index);
             }
         }
 
@@ -165,7 +158,6 @@ impl ParquetRSTable {
         // If there are only row group parts, the `stats` is exact.
         // It will be changed to `false` if there are small files parts.
         if !small_files.is_empty() {
-            stats.is_exact = false;
             let mut max_compression_ratio = self.compression_ratio;
             let mut max_compressed_size = 0u64;
             for part in partitions.partitions.iter() {
@@ -175,14 +167,37 @@ impl ParquetRSTable {
                 max_compressed_size = max_compressed_size.max(p.compressed_size());
             }
 
-            collect_small_file_parts(
-                small_files,
-                max_compression_ratio,
-                max_compressed_size,
-                &mut partitions,
-                &mut stats,
-                num_columns_to_read,
-            );
+            if parquet_metas.is_empty() {
+                // If we don't get the parquet metas, we cannot get the exact stats.
+                stats.is_exact = false;
+                collect_small_file_parts(
+                    small_files,
+                    max_compression_ratio,
+                    max_compressed_size,
+                    &mut partitions,
+                    &mut stats,
+                    num_columns_to_read,
+                );
+            } else {
+                // We have already got the parquet metas, we can compute the exact stats by the metas directly.
+                stats.partitions_total += small_file_indices.len();
+                stats.partitions_scanned += small_file_indices.len();
+                for file in small_file_indices {
+                    let meta = &parquet_metas[file];
+                    stats.read_bytes += meta.size as usize;
+                    stats.read_rows += meta.meta.file_metadata().num_rows() as usize;
+                }
+
+                let mut dummy_stats = PartStatistics::default(); // This will not be used.
+                collect_small_file_parts(
+                    small_files,
+                    max_compression_ratio,
+                    max_compressed_size,
+                    &mut partitions,
+                    &mut dummy_stats,
+                    num_columns_to_read,
+                );
+            }
         }
 
         Ok((stats, partitions))
@@ -338,6 +353,7 @@ fn prune_and_generate_partitions(
             location,
             meta,
             row_group_level_stats,
+            ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
         let rgs = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
