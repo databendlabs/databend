@@ -980,12 +980,12 @@ impl Binder {
 
         let stat = table.table().table_statistics()?;
 
-        let mut num_rows = stat.as_ref().map(|s| s.num_rows.unwrap_or(0)).unwrap_or(0);
-        // For external storage (parquet)
-        if let Some(rows) = statistics_provider.num_rows() {
-            num_rows = rows;
-        }
-
+        let num_rows = if let Some(rows) = statistics_provider.num_rows() {
+            // For external storage (parquet)
+            rows
+        } else {
+            stat.as_ref().and_then(|s| s.num_rows).unwrap_or(0)
+        };
         Ok((
             SExpr::create_leaf(Arc::new(
                 Scan {
