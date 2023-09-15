@@ -16,7 +16,6 @@ use std::net::SocketAddr;
 
 use common_base::base::tokio;
 use common_metrics::register_counter;
-use common_metrics::Counter;
 use databend_query::metrics::MetricService;
 use databend_query::servers::Server;
 

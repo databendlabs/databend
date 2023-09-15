@@ -54,8 +54,8 @@ impl SyncSystemTable for MetricsTable {
         let local_id = ctx.get_cluster().local_id.clone();
 
         let mut samples = {
-            let registr = common_metrics::load_global_prometheus_registry();
-            common_metrics::dump_metric_samples(registry)?
+            let registry = common_metrics::load_global_prometheus_registry();
+            common_metrics::dump_metric_samples(&registry)?
         };
         samples.extend(self.custom_metric_samples()?);
 

@@ -20,8 +20,6 @@ use common_http::HttpError;
 use common_http::HttpShutdownHandler;
 use common_metrics::load_global_prometheus_registry;
 use common_metrics::render_prometheus_metrics;
-use poem::web::Data;
-use poem::EndpointExt;
 use poem::IntoResponse;
 
 use crate::servers::Server;
