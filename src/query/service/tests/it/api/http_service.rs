@@ -112,7 +112,7 @@ async fn test_http_service_tls_server_mutual_tls() -> Result<()> {
         .build()
         .expect("preconfigured rustls tls");
     let resp = client.get(url).send().await;
-    assert!(resp.is_ok());
+    assert!(resp.is_ok(), "{:?}", resp.err().unwrap());
     let resp = resp.unwrap();
     assert!(resp.status().is_success());
     assert_eq!("/v1/health", resp.url().path());

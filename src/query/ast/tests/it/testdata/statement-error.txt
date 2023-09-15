@@ -494,3 +494,63 @@ error:
   | while parsing `SELECT ...`
 
 
+---------- Input ----------
+copy into t1 from "" FILE
+---------- Output ---------
+error: 
+  --> SQL:1:22
+  |
+1 | copy into t1 from "" FILE
+  |                      ^^^^ expected `.`, `(`, `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, or 11 more ...
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT
+---------- Output ---------
+error: 
+  --> SQL:1:33
+  |
+1 | copy into t1 from "" FILE_FORMAT
+  |                                 ^ expected `=`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = 
+---------- Output ---------
+error: 
+  --> SQL:1:36
+  |
+1 | copy into t1 from "" FILE_FORMAT = 
+  |                                    ^ expected `(`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (
+---------- Output ---------
+error: 
+  --> SQL:1:37
+  |
+1 | copy into t1 from "" FILE_FORMAT = (
+  |                                     ^ expected `TYPE`, `COMPRESSION`, `FORMAT_NAME`, `RECORD_DELIMITER`, `FIELD_DELIMITER`, `QUOTE`, or 7 more ...
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE
+---------- Output ---------
+error: 
+  --> SQL:1:41
+  |
+1 | copy into t1 from "" FILE_FORMAT = (TYPE
+  |                                         ^ expected `=`
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE =
+---------- Output ---------
+error: 
+  --> SQL:1:43
+  |
+1 | copy into t1 from "" FILE_FORMAT = (TYPE =
+  |                                           ^ expected `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or 1 more ...
+
+

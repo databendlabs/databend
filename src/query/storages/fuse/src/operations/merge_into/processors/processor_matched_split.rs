@@ -19,6 +19,8 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
+use common_expression::BlockMetaInfo;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
@@ -42,6 +44,23 @@ enum MutationKind {
     Delete(DeleteDataBlockMutation),
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum RowIdKind {
+    Update,
+    Delete,
+}
+
+#[typetag::serde(name = "row_id_kind")]
+impl BlockMetaInfo for RowIdKind {
+    fn equals(&self, info: &Box<dyn BlockMetaInfo>) -> bool {
+        RowIdKind::downcast_ref_from(info).is_some_and(|other| self == other)
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        Box::new(self.clone())
+    }
+}
+
 struct UpdateDataBlockMutation {
     update_mutator: UpdateByExprMutator,
 }
@@ -59,7 +78,7 @@ pub struct MatchedSplitProcessor {
     update_projections: Vec<usize>,
     row_id_idx: usize,
     input_data: Option<DataBlock>,
-    output_data_row_id_data: Option<DataBlock>,
+    output_data_row_id_data: Vec<DataBlock>,
     output_data_updated_data: Option<DataBlock>,
     target_table_schema: DataSchemaRef,
 }
@@ -113,7 +132,7 @@ impl MatchedSplitProcessor {
         Ok(Self {
             ctx,
             input_port,
-            output_data_row_id_data: None,
+            output_data_row_id_data: Vec::new(),
             output_data_updated_data: None,
             input_data: None,
             output_port_row_id,
@@ -151,7 +170,7 @@ impl Processor for MatchedSplitProcessor {
         // 1. if there is no data and input_port is finished, this processor has finished
         // it's work
         let finished = self.input_port.is_finished()
-            && self.output_data_row_id_data.is_none()
+            && self.output_data_row_id_data.is_empty()
             && self.output_data_updated_data.is_none();
         if finished {
             self.output_port_row_id.finish();
@@ -162,11 +181,10 @@ impl Processor for MatchedSplitProcessor {
         let mut pushed_something = false;
 
         // 2. process data stage here
-        if self.output_port_row_id.can_push() {
-            if let Some(row_id_data) = self.output_data_row_id_data.take() {
-                self.output_port_row_id.push_data(Ok(row_id_data));
-                pushed_something = true
-            }
+        if self.output_port_row_id.can_push() && !self.output_data_row_id_data.is_empty() {
+            self.output_port_row_id
+                .push_data(Ok(self.output_data_row_id_data.pop().unwrap()));
+            pushed_something = true
         }
 
         if self.output_port_updated.can_push() {
@@ -184,7 +202,8 @@ impl Processor for MatchedSplitProcessor {
             // we need to make sure only when the all out_pudt_data are empty ,and we start to split
             // datablock held by input_data
             if self.input_port.has_data() {
-                if self.output_data_row_id_data.is_none() && self.output_data_updated_data.is_none()
+                if self.output_data_row_id_data.is_empty()
+                    && self.output_data_updated_data.is_none()
                 {
                     // no pending data (being sent to down streams)
                     self.input_data = Some(self.input_port.pull_data().unwrap()?);
@@ -211,7 +230,6 @@ impl Processor for MatchedSplitProcessor {
                 return Ok(());
             }
             let mut current_block = data_block;
-            let mut row_id_blocks = Vec::new();
             for op in self.ops.iter() {
                 match op {
                     MutationKind::Update(update_mutation) => {
@@ -222,46 +240,39 @@ impl Processor for MatchedSplitProcessor {
                     }
 
                     MutationKind::Delete(delete_mutation) => {
-                        let (stage_block, row_ids) = delete_mutation
+                        let (stage_block, mut row_ids) = delete_mutation
                             .delete_mutator
                             .delete_by_expr(current_block)?;
-                        row_id_blocks.push(row_ids);
                         if stage_block.is_empty() {
                             // delete all
-                            // the row_id is small, so use concat is well.
-                            let row_id_block = DataBlock::concat(&row_id_blocks)?;
-                            if !row_id_block.is_empty() {
-                                self.output_data_row_id_data = Some(row_id_block);
+                            if !row_ids.is_empty() {
+                                row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
+                                self.output_data_row_id_data.push(row_ids);
                             }
                             return Ok(());
                         }
-
                         current_block = stage_block;
                     }
                 }
             }
+
             let filter: Value<BooleanType> = current_block
                 .get_by_offset(current_block.num_columns() - 1)
                 .value
                 .try_downcast()
                 .unwrap();
             current_block = current_block.filter_boolean_value(&filter)?;
-            // add updated row_ids
-            row_id_blocks.push(DataBlock::new(
-                vec![current_block.get_by_offset(self.row_id_idx).clone()],
-                current_block.num_rows(),
-            ));
-            let op = BlockOperator::Project {
-                projection: self.update_projections.clone(),
-            };
-            current_block = op.execute(&self.ctx.get_function_context()?, current_block)?;
-            // the row_id is small, so use concat is well.
-            let row_id_block = DataBlock::concat(&row_id_blocks)?;
-            if !row_id_block.is_empty() {
-                self.output_data_row_id_data = Some(row_id_block);
-            }
-
             if !current_block.is_empty() {
+                // add updated row_ids
+                self.output_data_row_id_data.push(DataBlock::new_with_meta(
+                    vec![current_block.get_by_offset(self.row_id_idx).clone()],
+                    current_block.num_rows(),
+                    Some(Box::new(RowIdKind::Update)),
+                ));
+                let op = BlockOperator::Project {
+                    projection: self.update_projections.clone(),
+                };
+                current_block = op.execute(&self.ctx.get_function_context()?, current_block)?;
                 metrics_inc_merge_into_append_blocks_counter(1);
                 current_block =
                     current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
