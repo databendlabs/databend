@@ -245,6 +245,9 @@ impl MergeIntoInterpreter {
                             remote_expr
                                 .as_expr(&BUILTIN_FUNCTIONS)
                                 .project_column_ref(|name| {
+                                    // there will add a predicate col when we process matched clauses.
+                                    // so it's not in join_output_schema for now. But it's must be added
+                                    // to the tail, so let do it like below.
                                     if name == &join_output_schema.num_fields().to_string() {
                                         join_output_schema.num_fields()
                                     } else {
