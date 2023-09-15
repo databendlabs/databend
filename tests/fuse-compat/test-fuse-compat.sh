@@ -49,14 +49,16 @@ echo " === old query ver: $old_query_ver"
 
 
 
-move ./bins/current ./current
+tree ./bins
+
+mv ./bins/current ./
 mkdir -p ./target/${BUILD_PROFILE}/
 
 download_query_config "$old_query_ver" old_config
 download_binary "$old_query_ver"
 
 
-mv ./current ./bins/current
+mv ./current ./bins/
 
 tree ./bins
 old_config_path="old_config/$query_config_path"
