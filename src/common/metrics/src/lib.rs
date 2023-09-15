@@ -17,7 +17,6 @@
 pub mod counter;
 mod dump;
 pub mod histogram;
-mod recorder;
 pub mod registry;
 
 pub type VecLabels = Vec<(&'static str, String)>;
@@ -32,10 +31,6 @@ pub use prometheus_client::metrics::counter::Counter;
 pub use prometheus_client::metrics::family::Family;
 pub use prometheus_client::metrics::gauge::Gauge;
 pub use prometheus_client::metrics::histogram::Histogram;
-pub use recorder::init_default_metrics_recorder;
-pub use recorder::try_handle;
-pub use recorder::LABEL_KEY_CLUSTER;
-pub use recorder::LABEL_KEY_TENANT;
 pub use registry::load_global_prometheus_registry;
 pub use registry::register_counter;
 pub use registry::register_counter_family;

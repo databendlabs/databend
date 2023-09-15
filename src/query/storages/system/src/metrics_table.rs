@@ -82,7 +82,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
-        reset_global_prometheus_registry()?;
+        reset_global_prometheus_registry();
         Ok(())
     }
 }
