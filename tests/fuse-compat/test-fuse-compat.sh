@@ -49,16 +49,16 @@ echo " === old query ver: $old_query_ver"
 
 
 
-tree ./bins
 
-mv ./bins/current ./
 mkdir -p ./target/${BUILD_PROFILE}/
 
+
+echo "CURRENT_DIR: ${PWD}"
+tree ./bins
 download_query_config "$old_query_ver" old_config
 download_binary "$old_query_ver"
 
-
-mv ./current ./bins/
+echo "CURRENT_DIR AFTER DOWNLOAD: ${PWD}"
 
 tree ./bins
 old_config_path="old_config/$query_config_path"
