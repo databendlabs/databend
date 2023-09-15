@@ -329,7 +329,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     2 => {
                         let expr_ty = self.gen_data_type();
-                        let len = self.rng.gen_range(0..=5);
+                        let len = self.rng.gen_range(1..=5);
                         let list = (0..len)
                             .map(|_| self.gen_expr(&expr_ty))
                             .collect::<Vec<_>>();
@@ -432,7 +432,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
             DataType::Date | DataType::Timestamp => {
-                let unit = match self.rng.gen_range(0..=8) {
+                let unit = match self.rng.gen_range(0..=6) {
                     0 => IntervalKind::Year,
                     1 => IntervalKind::Quarter,
                     2 => IntervalKind::Month,
@@ -440,8 +440,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     4 => IntervalKind::Hour,
                     5 => IntervalKind::Minute,
                     6 => IntervalKind::Second,
-                    7 => IntervalKind::Doy,
-                    8 => IntervalKind::Dow,
                     _ => unreachable!(),
                 };
                 let interval_ty = DataType::Number(NumberDataType::Int64);

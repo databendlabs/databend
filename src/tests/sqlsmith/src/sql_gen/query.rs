@@ -77,6 +77,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             for _ in 0..order_nums {
                 let ty = self.gen_data_type();
                 let expr = self.gen_expr(&ty);
+                let expr = self.rewrite_position_expr(expr);
                 let order_by_expr = if self.rng.gen_bool(0.2) {
                     OrderByExpr {
                         expr,
@@ -170,23 +171,25 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_group_by(&mut self) -> Option<GroupBy> {
-        let mode = self.rng.gen_range(0..=25);
+        if self.rng.gen_bool(0.8) {
+            return None;
+        }
         let group_cap = self.rng.gen_range(1..=5);
         let mut groupby_items = Vec::with_capacity(group_cap);
 
         for _ in 0..group_cap {
             let ty = self.gen_data_type();
             let groupby_item = self.gen_expr(&ty);
+            let groupby_item = self.rewrite_position_expr(groupby_item);
             groupby_items.push(groupby_item);
         }
 
-        match mode {
-            0..=20 => None,
-            21 => Some(GroupBy::Normal(groupby_items)),
-            22 => Some(GroupBy::All),
-            23 => Some(GroupBy::GroupingSets(vec![groupby_items])),
-            24 => Some(GroupBy::Cube(groupby_items)),
-            25 => Some(GroupBy::Rollup(groupby_items)),
+        match self.rng.gen_range(0..=4) {
+            0 => Some(GroupBy::Normal(groupby_items)),
+            1 => Some(GroupBy::All),
+            2 => Some(GroupBy::GroupingSets(vec![groupby_items])),
+            3 => Some(GroupBy::Cube(groupby_items)),
+            4 => Some(GroupBy::Rollup(groupby_items)),
             _ => unreachable!(),
         }
     }
@@ -240,7 +243,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }));
             }
             None => {
-                let select_num = self.rng.gen_range(1..=5);
+                let select_num = self.rng.gen_range(1..=7);
                 for _ in 0..select_num {
                     let ty = self.gen_data_type();
                     let expr = self.gen_expr(&ty);
@@ -397,5 +400,23 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.bound_columns.push(column);
         }
         self.bound_tables.push(table);
+    }
+
+    // rewrite position expr in group by and order by,
+    // avoiding `GROUP BY position n is not in select list` errors
+    fn rewrite_position_expr(&mut self, expr: Expr) -> Expr {
+        if let Expr::Literal {
+            lit: Literal::UInt64(n),
+            ..
+        } = expr
+        {
+            let pos = n % 3 + 1;
+            Expr::Literal {
+                span: None,
+                lit: Literal::UInt64(pos),
+            }
+        } else {
+            expr
+        }
     }
 }
