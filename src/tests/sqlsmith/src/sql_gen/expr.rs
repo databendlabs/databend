@@ -17,7 +17,10 @@ use common_ast::ast::ColumnID;
 use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal;
+use common_ast::ast::MapAccessor;
+use common_ast::ast::TrimWhere;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
@@ -29,11 +32,12 @@ use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_expr(&mut self, ty: &DataType) -> Expr {
-        match self.rng.gen_range(0..=9) {
+        match self.rng.gen_range(0..=10) {
             0..=3 => self.gen_column(ty),
             4..=6 => self.gen_scalar_value(ty),
             7..=8 => self.gen_scalar_func(ty),
-            9 => self.gen_binary_op(ty),
+            9 => self.gen_factory_scalar_func(ty),
+            10 => self.gen_inner_expr(ty),
             // TODO other exprs
             _ => unreachable!(),
         }
@@ -66,7 +70,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         self.gen_scalar_value(ty)
     }
 
-    fn gen_scalar_value(&mut self, ty: &DataType) -> Expr {
+    pub(crate) fn gen_scalar_value(&mut self, ty: &DataType) -> Expr {
         match ty {
             DataType::Null => Expr::Literal {
                 span: None,
@@ -205,14 +209,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 Expr::Array { span: None, exprs }
             }
             DataType::Map(box inner_ty) => {
-                if let DataType::Tuple(inner_tys) = inner_ty {
-                    let key_ty = &inner_tys[0];
-                    let val_ty = &inner_tys[1];
+                if let DataType::Tuple(_) = inner_ty {
                     let len = self.rng.gen_range(1..=3);
                     let mut kvs = Vec::with_capacity(len);
                     for _ in 0..len {
-                        let key = self.gen_expr(key_ty);
-                        let val = self.gen_expr(val_ty);
+                        let key = self.gen_literal();
+                        let val = self.gen_literal();
                         kvs.push((key, val));
                     }
                     Expr::Map { span: None, kvs }
@@ -266,82 +268,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    fn gen_binary_op(&mut self, ty: &DataType) -> Expr {
-        if ty.remove_nullable() != DataType::Boolean {
-            return self.gen_scalar_value(ty);
-        }
-        let (op, left, right) = match self.rng.gen_range(0..=3) {
-            0..=1 => {
-                let inner_ty = self.gen_simple_data_type();
-                let left = self.gen_expr(&inner_ty);
-                let right = self.gen_expr(&inner_ty);
-                let op = match self.rng.gen_range(0..=5) {
-                    0 => BinaryOperator::Gt,
-                    1 => BinaryOperator::Lt,
-                    2 => BinaryOperator::Gte,
-                    3 => BinaryOperator::Lte,
-                    4 => BinaryOperator::Eq,
-                    5 => BinaryOperator::NotEq,
-                    _ => unreachable!(),
-                };
-                (op, left, right)
-            }
-            2..=3 => {
-                let left = self.gen_expr(ty);
-                let right = self.gen_expr(ty);
-                let op = match self.rng.gen_range(0..=2) {
-                    0 => BinaryOperator::And,
-                    1 => BinaryOperator::Or,
-                    2 => BinaryOperator::Xor,
-                    _ => unreachable!(),
-                };
-                (op, left, right)
-            }
-            // TODO other binary operators
-            _ => unreachable!(),
-        };
-        Expr::BinaryOp {
-            span: None,
-            op,
-            left: Box::new(left),
-            right: Box::new(right),
-        }
-    }
-
-    fn gen_scalar_func(&mut self, ty: &DataType) -> Expr {
-        let mut indices = Vec::new();
-        for (i, func_sig) in self.scalar_func_sigs.iter().enumerate() {
-            if ty == &func_sig.return_type {
-                indices.push(i);
-            }
-        }
-        if indices.is_empty() {
-            return self.gen_scalar_value(ty);
-        }
-        let idx = self.rng.gen_range(0..indices.len());
-        let func_sig = unsafe { self.scalar_func_sigs.get_unchecked(idx) }.clone();
-
-        let name = Identifier::from_name(func_sig.name.clone());
-        let args = func_sig
-            .args_type
-            .iter()
-            .map(|ty| self.gen_expr(ty))
-            .collect::<Vec<_>>();
-
-        Expr::FunctionCall {
-            span: None,
-            distinct: false,
-            name,
-            args,
-            params: vec![],
-            window: None,
-            lambda: None,
-        }
-    }
-
-    #[allow(dead_code)]
     fn gen_literal(&mut self) -> Literal {
-        let n = self.rng.gen_range(1..7);
+        let n = self.rng.gen_range(1..=7);
         match n {
             1 => Literal::Null,
             2 => Literal::String(
@@ -364,21 +292,217 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
-        let idx = self.rng.gen_range(0..self.agg_func_names.len() - 1);
-        let name = self.agg_func_names.get(idx).unwrap().clone();
-        let mut args = Vec::with_capacity(1);
-        let arg = self.gen_expr(ty);
-        args.push(arg);
-        // can ignore ErrorCode::BadDataValueType
-        Expr::FunctionCall {
-            span: None,
-            distinct: name.to_uppercase() == "COUNT" && self.rng.gen_bool(0.5),
-            name: Identifier::from_name(name),
-            args,
-            params: vec![],
-            window: None,
-            lambda: None,
+    fn gen_identifier(&mut self) -> Identifier {
+        Identifier::from_name(
+            rand::thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(5)
+                .map(char::from)
+                .collect::<String>(),
+        )
+    }
+
+    fn gen_inner_expr(&mut self, ty: &DataType) -> Expr {
+        match ty.remove_nullable() {
+            DataType::Boolean => {
+                match self.rng.gen_range(0..=6) {
+                    0 => {
+                        let inner_ty = self.gen_data_type();
+                        Expr::IsNull {
+                            span: None,
+                            expr: Box::new(self.gen_expr(&inner_ty)),
+                            not: self.rng.gen_bool(0.5),
+                        }
+                    }
+                    1 => {
+                        let left_ty = self.gen_data_type();
+                        let right_ty = self.gen_data_type();
+                        Expr::IsDistinctFrom {
+                            span: None,
+                            left: Box::new(self.gen_expr(&left_ty)),
+                            right: Box::new(self.gen_expr(&right_ty)),
+                            not: self.rng.gen_bool(0.5),
+                        }
+                    }
+                    2 => {
+                        let expr_ty = self.gen_data_type();
+                        let len = self.rng.gen_range(1..=5);
+                        let list = (0..len)
+                            .map(|_| self.gen_expr(&expr_ty))
+                            .collect::<Vec<_>>();
+                        Expr::InList {
+                            span: None,
+                            expr: Box::new(self.gen_expr(&expr_ty)),
+                            list,
+                            not: self.rng.gen_bool(0.5),
+                        }
+                    }
+                    3 => {
+                        let expr_ty = self.gen_data_type();
+                        Expr::Between {
+                            span: None,
+                            expr: Box::new(self.gen_expr(&expr_ty)),
+                            low: Box::new(self.gen_expr(&expr_ty)),
+                            high: Box::new(self.gen_expr(&expr_ty)),
+                            not: self.rng.gen_bool(0.5),
+                        }
+                    }
+                    4..=6 => {
+                        let (op, left, right) = match self.rng.gen_range(0..=3) {
+                            0..=1 => {
+                                let inner_ty = self.gen_simple_data_type();
+                                let left = self.gen_expr(&inner_ty);
+                                let right = self.gen_expr(&inner_ty);
+                                let op = match self.rng.gen_range(0..=5) {
+                                    0 => BinaryOperator::Gt,
+                                    1 => BinaryOperator::Lt,
+                                    2 => BinaryOperator::Gte,
+                                    3 => BinaryOperator::Lte,
+                                    4 => BinaryOperator::Eq,
+                                    5 => BinaryOperator::NotEq,
+                                    _ => unreachable!(),
+                                };
+                                (op, left, right)
+                            }
+                            2..=3 => {
+                                let left = self.gen_expr(ty);
+                                let right = self.gen_expr(ty);
+                                let op = match self.rng.gen_range(0..=2) {
+                                    0 => BinaryOperator::And,
+                                    1 => BinaryOperator::Or,
+                                    2 => BinaryOperator::Xor,
+                                    _ => unreachable!(),
+                                };
+                                (op, left, right)
+                            }
+                            // TODO other binary operators
+                            _ => unreachable!(),
+                        };
+                        Expr::BinaryOp {
+                            span: None,
+                            op,
+                            left: Box::new(left),
+                            right: Box::new(right),
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            DataType::String => {
+                if self.rng.gen_bool(0.5) {
+                    let expr_ty = DataType::String;
+                    let from_ty = DataType::Number(NumberDataType::Int64);
+
+                    let expr = self.gen_expr(&expr_ty);
+                    let from_expr = self.gen_expr(&from_ty);
+                    let for_expr = if self.rng.gen_bool(0.5) {
+                        Some(Box::new(self.gen_expr(&from_ty)))
+                    } else {
+                        None
+                    };
+                    Expr::Substring {
+                        span: None,
+                        expr: Box::new(expr),
+                        substring_from: Box::new(from_expr),
+                        substring_for: for_expr,
+                    }
+                } else {
+                    let expr_ty = DataType::String;
+                    let expr = self.gen_expr(&expr_ty);
+                    let trim_where_expr = if self.rng.gen_bool(0.5) {
+                        let trim_where = match self.rng.gen_range(0..=2) {
+                            0 => TrimWhere::Both,
+                            1 => TrimWhere::Leading,
+                            2 => TrimWhere::Trailing,
+                            _ => unreachable!(),
+                        };
+                        let where_expr = self.gen_expr(&expr_ty);
+                        Some((trim_where, Box::new(where_expr)))
+                    } else {
+                        None
+                    };
+                    Expr::Trim {
+                        span: None,
+                        expr: Box::new(expr),
+                        trim_where: trim_where_expr,
+                    }
+                }
+            }
+            DataType::Date | DataType::Timestamp => {
+                let unit = match self.rng.gen_range(0..=6) {
+                    0 => IntervalKind::Year,
+                    1 => IntervalKind::Quarter,
+                    2 => IntervalKind::Month,
+                    3 => IntervalKind::Day,
+                    4 => IntervalKind::Hour,
+                    5 => IntervalKind::Minute,
+                    6 => IntervalKind::Second,
+                    _ => unreachable!(),
+                };
+                let interval_ty = DataType::Number(NumberDataType::Int64);
+                let date_ty = if self.rng.gen_bool(0.5) {
+                    DataType::Date
+                } else {
+                    DataType::Timestamp
+                };
+                let interval_expr = self.gen_expr(&interval_ty);
+                let date_expr = self.gen_expr(&date_ty);
+
+                match self.rng.gen_range(0..2) {
+                    0 => Expr::DateAdd {
+                        span: None,
+                        unit,
+                        interval: Box::new(interval_expr),
+                        date: Box::new(date_expr),
+                    },
+                    1 => Expr::DateSub {
+                        span: None,
+                        unit,
+                        interval: Box::new(interval_expr),
+                        date: Box::new(date_expr),
+                    },
+                    2 => Expr::DateTrunc {
+                        span: None,
+                        unit,
+                        date: Box::new(date_expr),
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            DataType::Variant => {
+                let mut expr = self.gen_expr(ty);
+                let len = self.rng.gen_range(1..=3);
+                for _ in 0..len {
+                    let accessor = match self.rng.gen_range(0..=3) {
+                        0 => MapAccessor::Bracket {
+                            key: Box::new(self.gen_expr(&DataType::Number(NumberDataType::UInt8))),
+                        },
+                        1 => {
+                            let key = self.gen_identifier();
+                            MapAccessor::Dot { key }
+                        }
+                        2 => {
+                            let key = self.rng.gen_range(0..=10);
+                            MapAccessor::DotNumber { key }
+                        }
+                        3 => {
+                            let key = self.gen_identifier();
+                            MapAccessor::Colon { key }
+                        }
+                        _ => unreachable!(),
+                    };
+                    expr = Expr::MapAccess {
+                        span: None,
+                        expr: Box::new(expr.clone()),
+                        accessor,
+                    };
+                }
+                expr
+            }
+            _ => {
+                // no suitable expr exist, generate scalar value instead
+                self.gen_scalar_value(ty)
+            }
         }
     }
 }

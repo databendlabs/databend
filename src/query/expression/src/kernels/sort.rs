@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::Ordering;
 use std::iter::once;
 use std::sync::Arc;
 
@@ -222,6 +223,10 @@ fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCompar
     }))
 }
 
+fn compare_null() -> ArrowResult<DynComparator> {
+    Ok(Box::new(move |_, _| Ordering::Equal))
+}
+
 fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     let left = left
         .as_any()
@@ -239,16 +244,15 @@ fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCom
 
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     match left.data_type() {
-        ArrowType::Extension(name, _, _) => {
-            if name == "Variant" {
-                compare_variant(left, right)
-            } else {
-                Err(ArrowError::NotYetImplemented(format!(
-                    "Sort not supported for data type {:?}",
-                    left.data_type()
-                )))
-            }
-        }
+        ArrowType::Extension(name, _, _) => match name.as_str() {
+            "Variant" => compare_variant(left, right),
+            "EmptyArray" | "EmptyMap" => compare_null(),
+            _ => Err(ArrowError::NotYetImplemented(format!(
+                "Sort not supported for data type {:?}",
+                left.data_type()
+            ))),
+        },
+        ArrowType::Null => compare_null(),
         ArrowType::Decimal256(_, _) => compare_decimal256(left, right),
         _ => arrow_ord::build_compare(left, right),
     }

@@ -3115,40 +3115,20 @@ Map {
     ),
     kvs: [
         (
-            Literal {
-                span: Some(
-                    1..5,
-                ),
-                lit: String(
-                    "k1",
-                ),
-            },
-            Literal {
-                span: Some(
-                    6..7,
-                ),
-                lit: UInt64(
-                    1,
-                ),
-            },
+            String(
+                "k1",
+            ),
+            UInt64(
+                1,
+            ),
         ),
         (
-            Literal {
-                span: Some(
-                    8..12,
-                ),
-                lit: String(
-                    "k2",
-                ),
-            },
-            Literal {
-                span: Some(
-                    13..14,
-                ),
-                lit: UInt64(
-                    2,
-                ),
-            },
+            String(
+                "k2",
+            ),
+            UInt64(
+                2,
+            ),
         ),
     ],
 }

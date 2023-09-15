@@ -2156,6 +2156,33 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : array_sort_asc_null_first([NULL, NULL, NULL])
+raw expr       : array_sort_asc_null_first(array(NULL, NULL, NULL))
+checked expr   : array_sort_asc_null_first<T0=NULL><Array(T0)>(array<T0=NULL><T0, T0, T0>(NULL, NULL, NULL))
+optimized expr : [NULL, NULL, NULL]
+output type    : Array(NULL)
+output domain  : [{NULL}]
+output         : [NULL, NULL, NULL]
+
+
+ast            : array_sort_desc_null_first([[], [], []])
+raw expr       : array_sort_desc_null_first(array(array(), array(), array()))
+checked expr   : array_sort_desc_null_first<T0=Array(Nothing)><Array(T0)>(array<T0=Array(Nothing)><T0, T0, T0>(array<>(), array<>(), array<>()))
+optimized expr : [[], [], []]
+output type    : Array(Array(Nothing))
+output domain  : [[]]
+output         : [[], [], []]
+
+
+ast            : array_sort_asc_null_first([{}, {}, {}])
+raw expr       : array_sort_asc_null_first(array(map(array(), array()), map(array(), array()), map(array(), array())))
+checked expr   : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>(array<T0=Map(Nothing)><T0, T0, T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>())))
+optimized expr : [{}, {}, {}]
+output type    : Array(Map(Nothing))
+output domain  : [Undefined]
+output         : [{}, {}, {}]
+
+
 ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])
 raw expr       : array_sort_asc_null_first(array(8, 20, 1, 2, 3, 4, 5, 6, 7))
 checked expr   : array_sort_asc_null_first<T0=UInt8><Array(T0)>(array<T0=UInt8><T0, T0, T0, T0, T0, T0, T0, T0, T0>(8_u8, 20_u8, 1_u8, 2_u8, 3_u8, 4_u8, 5_u8, 6_u8, 7_u8))
