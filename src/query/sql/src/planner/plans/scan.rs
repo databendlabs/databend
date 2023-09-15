@@ -183,9 +183,7 @@ impl Operator for Scan {
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
-        let num_rows = self
-            .statistics
-            .num_rows;
+        let num_rows = self.statistics.num_rows;
         let precise_cardinality = Some(num_rows);
 
         let mut column_stats: ColumnStatSet = Default::default();

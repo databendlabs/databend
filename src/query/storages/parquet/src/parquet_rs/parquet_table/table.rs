@@ -15,13 +15,12 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use chrono::Utc;
-use chrono::TimeZone;
-use chrono::NaiveDateTime;
-
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_base::base::tokio::sync::Mutex;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -40,7 +39,9 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
 use common_storage::parquet_rs::infer_schema_with_extension;
@@ -51,12 +52,8 @@ use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
 
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableMeta;
-
 use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
-use crate::utils::naive_parquet_table_info;
 
 pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
