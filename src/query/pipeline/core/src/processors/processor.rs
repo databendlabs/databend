@@ -32,6 +32,7 @@ pub enum Event {
     Finished,
 }
 
+#[derive(Clone)]
 pub enum EventCause {
     Other,
     // Which input of the processor triggers the event
@@ -57,6 +58,10 @@ pub trait Processor: Send {
 
     fn event_with_cause(&mut self, _cause: EventCause) -> Result<Event> {
         self.event()
+    }
+
+    fn un_reacted(&self, _cause: EventCause, _id: usize) -> Result<()> {
+        Ok(())
     }
 
     // When the synchronization task needs to run for a long time, the interrupt function needs to be implemented.
@@ -115,6 +120,11 @@ impl ProcessorPtr {
     /// # Safety
     pub unsafe fn event(&self, cause: EventCause) -> Result<Event> {
         (*self.inner.get()).event_with_cause(cause)
+    }
+
+    /// # Safety
+    pub unsafe fn un_reacted(&self, cause: EventCause) -> Result<()> {
+        (*self.inner.get()).un_reacted(cause, self.id().index())
     }
 
     /// # Safety
