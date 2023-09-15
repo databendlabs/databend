@@ -37,7 +37,7 @@ pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
 
 pub fn render_prometheus_metrics(registry: &Registry) -> String {
     let mut text = String::new();
-    match prometheus_encode(&mut text, &registry) {
+    match prometheus_encode(&mut text, registry) {
         Ok(_) => text,
         Err(err) => format!("Failed to encode metrics: {}", err),
     }
