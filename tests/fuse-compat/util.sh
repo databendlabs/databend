@@ -38,6 +38,7 @@ git_partial_clone() {
 
 	ls "$worktree_path"
 
+    cd -
 }
 
 # Download config.toml for a specific version of query.

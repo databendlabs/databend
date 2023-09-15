@@ -47,20 +47,11 @@ echo " === current   query ver: $(./bins/current/databend-query --cmd ver | tr '
 echo " === old query ver: $old_query_ver"
 
 
-
-
-
 mkdir -p ./target/${BUILD_PROFILE}/
 
-
-echo "CURRENT_DIR: ${PWD}"
-tree ./bins
 download_query_config "$old_query_ver" old_config
 download_binary "$old_query_ver"
 
-echo "CURRENT_DIR AFTER DOWNLOAD: ${PWD}"
-
-tree ./bins
 old_config_path="old_config/$query_config_path"
 run_test $old_query_ver $old_config_path $logictest_path
 
