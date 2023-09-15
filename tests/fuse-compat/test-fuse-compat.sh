@@ -52,6 +52,8 @@ mkdir -p ./target/${BUILD_PROFILE}/
 download_query_config "$old_query_ver" old_config
 download_binary "$old_query_ver"
 
+tree ./bins
+
 old_config_path="old_config/$query_config_path"
 run_test $old_query_ver $old_config_path $logictest_path
 
