@@ -15,6 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use chrono::Utc;
+use chrono::TimeZone;
+use chrono::NaiveDateTime;
+
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
@@ -46,6 +50,9 @@ use common_storage::StageFilesInfo;
 use opendal::Operator;
 use parquet::file::metadata::ParquetMetaData;
 use parquet::schema::types::SchemaDescPtr;
+
+use common_meta_app::schema::TableIdent;
+use common_meta_app::schema::TableMeta;
 
 use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
@@ -126,7 +133,7 @@ impl ParquetRSTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(&arrow_schema)?;
+        let table_info = create_parquet_table_info(&arrow_schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
@@ -318,10 +325,20 @@ fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
-    Ok(naive_parquet_table_info(
-        arrow_to_table_schema(schema)?.into(),
-    ))
+fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+    Ok(TableInfo {
+        ident: TableIdent::new(0, 0),
+        desc: "''.'read_parquet'".to_string(),
+        name: format!("read_parquet({})", stage_info.stage_name),
+        meta: TableMeta {
+            schema: arrow_to_table_schema(schema)?.into(),
+            engine: "SystemReadParquet".to_string(),
+            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
 fn get_compression_ratio(filemeta: &ParquetMetaData) -> f64 {
