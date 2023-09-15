@@ -323,8 +323,8 @@ impl PredicateSet {
         }
     }
 
-    fn into_predicates(mut self) -> (bool, Vec<ScalarExpr>) {
-        let mut is_merged = self.is_merged;
+    fn into_predicates(&mut self) -> (bool, Vec<ScalarExpr>) {
+        let mut is_updated = self.is_merged;
         let mut result = vec![];
         let num_exprs = self.num_exprs;
         let mut parents = vec![0; num_exprs];
@@ -359,11 +359,11 @@ impl PredicateSet {
             let old_predicates = &old_predicates_set[*idx];
             let parent_predicates = &self.predicates[parent_idx];
             if old_predicates.len() != parent_predicates.len() {
-                is_merged = true;
+                is_updated = true;
             }
             for (i, predicate) in parent_predicates.iter().enumerate() {
                 if i < old_predicates.len() && &old_predicates[i] != predicate {
-                    is_merged = true;
+                    is_updated = true;
                 }
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
@@ -376,7 +376,7 @@ impl PredicateSet {
                 }));
             }
         }
-        (is_merged, result)
+        (is_updated | self.is_falsy, result)
     }
 }
 
@@ -580,6 +580,12 @@ impl Rule for RuleInferFilter {
             }
         }
         is_rewritten |= predicate_set.is_merged;
+        if !predicate_set.is_falsy {
+            // `into_predicates` may change is_falsy to true.
+            let (is_merged, infer_predicates) = predicate_set.into_predicates();
+            is_rewritten |= is_merged;
+            new_predicates.extend(infer_predicates);
+        }
         if predicate_set.is_falsy {
             new_predicates = vec![
                 ConstantExpr {
@@ -588,10 +594,6 @@ impl Rule for RuleInferFilter {
                 }
                 .into(),
             ];
-        } else {
-            let (is_merged, infer_predicates) = predicate_set.into_predicates();
-            is_rewritten |= is_merged;
-            new_predicates.extend(infer_predicates);
         }
         if is_rewritten {
             state.add_result(SExpr::create_unary(
