@@ -64,7 +64,10 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs),
+            PushDownInfo::projection_of_push_downs(
+                &self.table_info.schema(),
+                plan.push_downs.as_ref(),
+            ),
             plan.query_internal_columns,
             ctx,
         )

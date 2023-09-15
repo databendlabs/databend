@@ -42,6 +42,7 @@ use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
 use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
+use common_storages_parquet::ParquetRSPruner;
 use common_storages_parquet::ParquetRSReader;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
@@ -164,19 +165,23 @@ impl IcebergTable {
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
-        let praquet_reader = Arc::new(ParquetRSReader::create(
-            ctx.clone(),
-            self.op.clone(),
-            table_schema,
+        let options = ParquetReadOptions::default();
+        let pruner = ParquetRSPruner::try_create(
+            ctx.get_function_context()?,
+            table_schema.clone(),
             leaf_fields,
-            &arrow_schema,
-            plan,
-            ParquetReadOptions::default(),
-            true,
-        )?);
+            &plan.push_downs,
+            options,
+        )?;
+
+        let builder =
+            ParquetRSReader::builder(ctx.clone(), self.op.clone(), table_schema, &arrow_schema)?
+                .with_push_downs(plan.push_downs.as_ref())
+                .with_pruner(Some(pruner));
+
+        let praquet_reader = Arc::new(builder.build()?);
 
         // TODO: we need to support top_k.
-        // TODO: we need to support prewhere.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
         pipeline.add_source(
             |output| {

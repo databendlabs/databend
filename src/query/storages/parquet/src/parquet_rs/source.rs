@@ -17,10 +17,12 @@ use std::sync::Arc;
 
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::TopKSorter;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -57,6 +59,8 @@ pub struct ParquetSource {
     // (Because we cannot collect copy status of small parquet files during `read_partition`).
     is_copy: bool,
     copy_status: Arc<CopyStatus>,
+    /// Pushed-down topk sorter.
+    _topk_sorter: Option<TopKSorter>,
 }
 
 impl ParquetSource {
@@ -64,10 +68,17 @@ impl ParquetSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         reader: Arc<ParquetRSReader>,
+        topk: Arc<Option<TopK>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         let is_copy = ctx.get_query_kind().eq_ignore_ascii_case("copy");
         let copy_status = ctx.get_copy_status();
+
+        let topk_sorter = topk
+            .as_ref()
+            .as_ref()
+            .map(|t| TopKSorter::new(t.limit, t.asc));
+
         Ok(ProcessorPtr::create(Box::new(Self {
             output,
             scan_progress,
@@ -78,6 +89,7 @@ impl ParquetSource {
             state: State::Init,
             is_copy,
             copy_status,
+            _topk_sorter: topk_sorter,
         })))
     }
 }

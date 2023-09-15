@@ -106,6 +106,8 @@ pub struct TopK {
     pub column_id: u32,
 }
 
+pub const TOPK_PUSHDOWN_THRESHOLD: usize = 1000;
+
 impl PushDownInfo {
     pub fn top_k(
         &self,
@@ -117,8 +119,7 @@ impl PushDownInfo {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
 
-            const MAX_TOPK_LIMIT: usize = 1000;
-            if limit > MAX_TOPK_LIMIT {
+            if limit > TOPK_PUSHDOWN_THRESHOLD {
                 return None;
             }
 
@@ -160,7 +161,7 @@ impl PushDownInfo {
         }
     }
 
-    pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+    pub fn prewhere_of_push_downs(push_downs: Option<&PushDownInfo>) -> Option<PrewhereInfo> {
         if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()
         } else {
@@ -170,7 +171,7 @@ impl PushDownInfo {
 
     pub fn projection_of_push_downs(
         schema: &TableSchema,
-        push_downs: &Option<PushDownInfo>,
+        push_downs: Option<&PushDownInfo>,
     ) -> Projection {
         if let Some(PushDownInfo {
             projection: Some(prj),

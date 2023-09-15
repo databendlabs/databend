@@ -132,7 +132,7 @@ impl NativeDeserializeDataTransform {
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let mut prewhere_columns: Vec<usize> =
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+            match PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) {
                 None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
                     let projected_schema = v
@@ -254,7 +254,7 @@ impl NativeDeserializeDataTransform {
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|name| schema.column_with_name(name).unwrap().0)

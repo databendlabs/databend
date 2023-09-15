@@ -106,7 +106,7 @@ impl ParquetRSTable {
         // Get columns needed to be read into memory.
         // It will be used to calculate the memory will be used in reading.
         let columns_to_read = if let Some(prewhere) =
-            PushDownInfo::prewhere_of_push_downs(&push_down)
+            PushDownInfo::prewhere_of_push_downs(push_down.as_ref())
         {
             let (_, prewhere_columns) = prewhere
                 .prewhere_columns
@@ -122,7 +122,7 @@ impl ParquetRSTable {
             columns
         } else {
             let output_projection =
-                PushDownInfo::projection_of_push_downs(&self.schema(), &push_down);
+                PushDownInfo::projection_of_push_downs(&self.schema(), push_down.as_ref());
             let (_, columns) = output_projection.to_arrow_projection(&self.schema_descr);
             columns
         };
