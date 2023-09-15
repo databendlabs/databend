@@ -114,7 +114,8 @@ run_test() {
     python3 -m pip list
 
     local query_old_ver="$1"
-    local logictest_path="tests/fuse-compat/compat-logictest/$2"
+    local old_config_path="$2"
+    local logictest_path="tests/fuse-compat/compat-logictest/$3"
 
     echo " === Test with query-$query_old_ver and current query"
 
@@ -123,6 +124,7 @@ run_test() {
     local metasrv_old="./bins/$query_old_ver/bin/databend-meta"
     local metasrv_new="./bins/current/databend-meta"
     local sqllogictests="./bins/current/databend-sqllogictests"
+
 
     echo " === metasrv version:"
     # TODO remove --single
@@ -153,9 +155,6 @@ run_test() {
     python3 scripts/ci/wait_tcp.py --timeout 10 --port 9191
 
     echo ' === Start old databend-query...'
-
-    download_query_config "$query_old_ver" old_config
-    old_config_path="old_config/$query_config_path"
 
     # TODO clean up data?
     echo " === bring up $query_old"
