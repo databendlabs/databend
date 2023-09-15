@@ -32,6 +32,6 @@ pub fn incr_session_close_numbers() {
     SESSION_CLOSE_NUMBERS.inc();
 }
 
-pub fn set_session_active_connections(num: i64) {
-    SESSION_ACTIVE_CONNECTIONS.set(num);
+pub fn set_session_active_connections(num: usize) {
+    SESSION_ACTIVE_CONNECTIONS.set(num as i64);
 }

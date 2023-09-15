@@ -129,7 +129,6 @@ impl SessionManager {
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
 
-        let config = GlobalConfig::instance();
         session_metrics::incr_session_connect_numbers();
         session_metrics::set_session_active_connections(sessions.len());
 
@@ -157,8 +156,6 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
-        let config = GlobalConfig::instance();
-
         // stop tracking session
         {
             // Make sure this write lock has been released before dropping.
@@ -175,7 +172,10 @@ impl SessionManager {
             }
         }
 
-        let sessions_count = { self.active_sessions.read().count() };
+        let sessions_count = {
+            let sessions = self.active_sessions.read();
+            sessions.len()
+        };
         session_metrics::incr_session_close_numbers();
         session_metrics::set_session_active_connections(sessions_count);
     }

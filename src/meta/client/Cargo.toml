@@ -28,6 +28,7 @@ common-tracing = { path = "../../common/tracing" }
 
 derive_more = { workspace = true }
 futures = "0.3.24"
+lazy_static = { workspace = true }
 log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
@@ -38,7 +39,6 @@ semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }
-lazy_static = { workspace = true }
 
 [dev-dependencies]
 common-exception = { path = "../../common/exception" }

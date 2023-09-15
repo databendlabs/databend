@@ -19,10 +19,6 @@ use common_metrics::Family;
 use common_metrics::Gauge;
 use lazy_static::lazy_static;
 
-pub static METRIC_CLUSTER_HEARTBEAT_COUNT: &str = "cluster.heartbeat.count";
-pub static METRIC_CLUSTER_ERROR_COUNT: &str = "cluster.error.count";
-pub static METRIC_CLUSTER_DISCOVERED_NODE_GAUGE: &str = "cluster.discovered_node.gauge";
-
 lazy_static! {
     static ref CLUSTER_CLUSTER_HEARTBEAT_COUNT: Family<Vec<(&'static str, String)>, Counter> =
         register_counter_family("cluster_heartbeat_count");
