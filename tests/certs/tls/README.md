@@ -6,7 +6,7 @@ Please use `./gencert.sh generate_keys` to refresh all the certs.
 
 ## Current Used
 
-The next refresh time will be `Sep 15 05:03:00 2023 GMT`
+The next refresh time will be `Sep 15 05:03:00 2024 GMT`
 
 ```shell
 :) openssl x509 -noout -text -in ./tests/certs/tls/cfssl/server/server.pem
