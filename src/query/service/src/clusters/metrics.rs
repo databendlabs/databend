@@ -12,18 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::label_counter_with_val_and_labels;
 use common_metrics::register_counter_family;
 use common_metrics::register_gauge_family;
 use common_metrics::Counter;
 use common_metrics::Family;
 use common_metrics::Gauge;
 use lazy_static::lazy_static;
-use metrics::gauge;
-
-pub static METRIC_CLUSTER_HEARTBEAT_COUNT: &str = "cluster.heartbeat.count";
-pub static METRIC_CLUSTER_ERROR_COUNT: &str = "cluster.error.count";
-pub static METRIC_CLUSTER_DISCOVERED_NODE_GAUGE: &str = "cluster.discovered_node.gauge";
 
 lazy_static! {
     static ref CLUSTER_CLUSTER_HEARTBEAT_COUNT: Family<Vec<(&'static str, String)>, Counter> =
@@ -49,7 +43,6 @@ pub(crate) fn metric_incr_cluster_heartbeat_count(
         ("result", result.to_string()),
     ];
 
-    label_counter_with_val_and_labels(METRIC_CLUSTER_HEARTBEAT_COUNT, labels, 1);
     CLUSTER_CLUSTER_HEARTBEAT_COUNT.get_or_create(labels).inc();
 }
 
@@ -68,8 +61,6 @@ pub(crate) fn metric_incr_cluster_error_count(
         ("flight_address", flight_address.to_string()),
     ];
 
-    label_counter_with_val_and_labels(METRIC_CLUSTER_ERROR_COUNT, labels, 1);
-
     CLUSTER_CLUSTER_ERROR_COUNT.get_or_create(labels).inc();
 }
 
@@ -87,7 +78,6 @@ pub(crate) fn metrics_gauge_discovered_nodes(
         ("flight_address", flight_address.to_string()),
     ];
 
-    gauge!(METRIC_CLUSTER_DISCOVERED_NODE_GAUGE, val, labels);
     CLUSTER_DISCOVERED_NODE_GAUGE
         .get_or_create(labels)
         .set(val as i64);

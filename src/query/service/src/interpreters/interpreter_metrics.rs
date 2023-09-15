@@ -18,8 +18,6 @@ use std::time::UNIX_EPOCH;
 
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
-use common_metrics::label_counter_with_val_and_labels;
-use common_metrics::label_histogram_with_val;
 use common_metrics::register_counter_family;
 use common_metrics::register_histogram_family_in_milliseconds;
 use common_metrics::Counter;
@@ -133,14 +131,10 @@ impl InterpreterMetrics {
         let result_rows = ctx.get_result_progress_value().rows as u64;
         let result_bytes = ctx.get_result_progress_value().bytes as u64;
 
-        label_histogram_with_val(METRIC_QUERY_DURATION_MS, labels, query_duration_ms);
         QUERY_DURATION_MS
             .get_or_create(labels)
             .observe(query_duration_ms);
 
-        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_ROWS, labels, written_rows);
-        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_BYTES, labels, written_bytes);
-        label_counter_with_val_and_labels(METRIC_QUERY_WRITE_IO_BYTES, labels, written_io_bytes);
         QUERY_WRITE_ROWS.get_or_create(labels).inc_by(written_rows);
         QUERY_WRITE_BYTES
             .get_or_create(labels)
@@ -150,39 +144,22 @@ impl InterpreterMetrics {
             .inc_by(written_io_bytes);
 
         if written_io_bytes_cost_ms > 0 {
-            label_histogram_with_val(
-                METRIC_QUERY_WRITE_IO_BYTES_COST_MS,
-                labels,
-                written_io_bytes_cost_ms as f64,
-            );
             QUERY_WRITE_IO_BYTES_COST_MS
                 .get_or_create(labels)
                 .observe(written_io_bytes_cost_ms as f64);
         }
 
-        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_ROWS, labels, scan_rows);
-        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_BYTES, labels, scan_bytes);
-        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_IO_BYTES, labels, scan_io_bytes);
         QUERY_SCAN_ROWS.get_or_create(labels).inc_by(scan_rows);
         QUERY_SCAN_BYTES.get_or_create(labels).inc_by(scan_bytes);
         QUERY_SCAN_IO_BYTES
             .get_or_create(labels)
             .inc_by(scan_io_bytes);
         if scan_io_bytes_cost_ms > 0 {
-            label_histogram_with_val(
-                METRIC_QUERY_SCAN_IO_BYTES_COST_MS,
-                labels,
-                scan_io_bytes_cost_ms as f64,
-            );
             QUERY_SCAN_IO_BYTES_COST_MS
                 .get_or_create(labels)
                 .observe(scan_io_bytes_cost_ms as f64);
         }
 
-        label_counter_with_val_and_labels(METRIC_QUERY_SCAN_PARTITIONS, labels, scan_partitions);
-        label_counter_with_val_and_labels(METRIC_QUERY_TOTAL_PARTITIONS, labels, total_partitions);
-        label_counter_with_val_and_labels(METRIC_QUERY_RESULT_ROWS, labels, result_rows);
-        label_counter_with_val_and_labels(METRIC_QUERY_RESULT_BYTES, labels, result_bytes);
         QUERY_SCAN_PARTITIONS
             .get_or_create(labels)
             .inc_by(scan_partitions);
@@ -197,7 +174,6 @@ impl InterpreterMetrics {
 
     pub fn record_query_start(ctx: &QueryContext) {
         let labels = Self::common_labels(ctx);
-        label_counter_with_val_and_labels(METRIC_QUERY_START, &labels, 1);
         QUERY_START.get_or_create(&labels).inc();
     }
 
@@ -206,12 +182,10 @@ impl InterpreterMetrics {
         Self::record_query_detail(ctx, &labels);
         match err {
             None => {
-                label_counter_with_val_and_labels(METRIC_QUERY_SUCCESS, &labels, 1);
                 QUERY_SUCCESS.get_or_create(&labels).inc();
             }
             Some(err) => {
                 labels.push((LABEL_CODE, err.code().to_string()));
-                label_counter_with_val_and_labels(METRIC_QUERY_FAILED, &labels, 1);
                 QUERY_FAILED.get_or_create(&labels).inc();
             }
         };
@@ -219,7 +193,6 @@ impl InterpreterMetrics {
 
     pub fn record_query_error(ctx: &QueryContext) {
         let labels = Self::common_labels(ctx);
-        label_counter_with_val_and_labels(METRIC_QUERY_ERROR, &labels, 1);
         QUERY_ERROR.get_or_create(&labels).inc();
     }
 }

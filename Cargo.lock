@@ -2234,6 +2234,7 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "futures",
+ "lazy_static",
  "log",
  "logcall",
  "minitrace",

@@ -25,7 +25,6 @@ use common_config::QUERY_SEMVER;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_metrics::init_default_metrics_recorder;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
@@ -59,7 +58,6 @@ pub async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
 }
 
 pub async fn init_services(conf: &InnerConfig) -> Result<()> {
-    init_default_metrics_recorder();
     set_panic_hook();
     set_alloc_error_hook();
 
