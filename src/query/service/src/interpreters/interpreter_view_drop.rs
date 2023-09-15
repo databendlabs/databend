@@ -75,6 +75,7 @@ impl Interpreter for DropViewInterpreter {
             catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
+                    tenant: self.plan.tenant.clone(),
                     tb_id: table.get_id(),
                 })
                 .await?;
