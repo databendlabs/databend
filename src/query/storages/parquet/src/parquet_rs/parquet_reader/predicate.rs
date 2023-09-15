@@ -26,7 +26,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 
-use super::parquet_reader::transform_record_batch;
+use super::reader::transform_record_batch;
 
 pub struct ParquetPredicate {
     func_ctx: FunctionContext,

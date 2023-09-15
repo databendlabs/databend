@@ -52,8 +52,8 @@ use parquet::format::PageLocation;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::predicate::ParquetPredicate;
-use super::pruning::ParquetRSPruner;
 use super::row_group::InMemoryRowGroup;
+use crate::ParquetRSPruner;
 use crate::ParquetRSRowGroupPart;
 
 pub struct ParquetRSReaderBuilder<'a> {

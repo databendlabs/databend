@@ -12,14 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod parquet_reader;
-mod parquet_table;
-mod partition;
-mod pruning;
-mod source;
-mod statistics;
+mod predicate;
+mod reader;
+mod row_group;
 
-pub use parquet_reader::ParquetRSReader;
-pub use parquet_table::ParquetRSTable;
-pub use partition::ParquetRSRowGroupPart;
-pub use pruning::ParquetRSPruner;
+pub use reader::ParquetRSReader;
+pub use reader::ParquetRSReaderBuilder;
