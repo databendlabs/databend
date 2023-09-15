@@ -324,7 +324,7 @@ pub enum ExprElement {
     },
     /// `{'k1':'v1','k2':'v2'}`
     Map {
-        kvs: Vec<(Expr, Expr)>,
+        kvs: Vec<(Literal, Literal)>,
     },
     Interval {
         expr: Expr,
@@ -1478,10 +1478,10 @@ pub fn map_access(i: Input) -> IResult<MapAccessor> {
     )(i)
 }
 
-pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
+pub fn map_element(i: Input) -> IResult<(Literal, Literal)> {
     map(
         rule! {
-            #subexpr(0) ~ ":" ~ #subexpr(0)
+            #literal ~ ":" ~ #literal
         },
         |(key, _, value)| (key, value),
     )(i)
