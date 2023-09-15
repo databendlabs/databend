@@ -277,6 +277,9 @@ impl SchemaApiTestSuite {
             .await?;
 
         suite.table_create_get_drop(&b.build().await).await?;
+        suite
+            .table_drop_without_db_id_to_name(&b.build().await)
+            .await?;
         suite.table_rename(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
         suite.table_update_mask_policy(&b.build().await).await?;
@@ -1708,6 +1711,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1734,6 +1738,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 let res = mt.drop_table_by_id(plan).await;
@@ -1750,6 +1755,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: true,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1762,6 +1768,26 @@ impl SchemaApiTestSuite {
             assert_eq!(expected_tb_count, tb_count.count);
         }
 
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_drop_without_db_id_to_name<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
+
+        info!("--- prepare db and table");
+        {
+            util.create_db().await?;
+            let (_tid, _table_meta) = util.create_table().await?;
+        }
+
+        info!("--- drop db to ensure dropping table does not rely on db");
+        {
+            util.drop_db().await?;
+        }
+
+        info!("--- drop table to ensure dropping table does not rely on db");
+        util.drop_table_by_id().await?;
         Ok(())
     }
 
@@ -3577,6 +3603,7 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3598,6 +3625,7 @@ impl SchemaApiTestSuite {
                 let resp = mt.create_table(req.clone()).await?;
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3673,6 +3701,7 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3695,6 +3724,7 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3884,6 +3914,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id,
             })
             .await?;
@@ -3938,6 +3969,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id,
             })
             .await?;
@@ -3995,6 +4027,7 @@ impl SchemaApiTestSuite {
             let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id: tb_info.ident.table_id,
             })
             .await?;
@@ -4096,6 +4129,7 @@ impl SchemaApiTestSuite {
             // then drop table2
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id: new_tb_info.ident.table_id,
             };
 
@@ -5832,7 +5866,7 @@ where MT: SchemaApi
 }
 
 impl<'a, MT> Util<'a, MT>
-// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
+// where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 where MT: SchemaApi
 {
     fn new(
@@ -5856,6 +5890,7 @@ where MT: SchemaApi
     fn tenant(&self) -> String {
         self.tenant.clone()
     }
+
     fn db_name(&self) -> String {
         self.db_name.clone()
     }
@@ -5906,6 +5941,19 @@ where MT: SchemaApi
         Ok(())
     }
 
+    async fn drop_db(&self) -> anyhow::Result<()> {
+        let req = DropDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: self.tenant(),
+                db_name: self.db_name(),
+            },
+        };
+
+        self.mt.drop_database(req).await?;
+        Ok(())
+    }
+
     async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
         let table_meta = self.table_meta();
         let req = CreateTableReq {
@@ -5923,6 +5971,17 @@ where MT: SchemaApi
         self.table_id = table_id;
 
         Ok((table_id, table_meta))
+    }
+
+    async fn drop_table_by_id(&mut self) -> anyhow::Result<()> {
+        let req = DropTableByIdReq {
+            if_exists: false,
+            tenant: self.tenant(),
+            tb_id: self.table_id,
+        };
+        self.mt.drop_table_by_id(req.clone()).await?;
+
+        Ok(())
     }
 
     async fn update_copied_files(
