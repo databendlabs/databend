@@ -978,13 +978,12 @@ impl Binder {
             }
         }
 
-        let stat = table.table().table_statistics()?;
-
-        let num_rows = if let Some(rows) = statistics_provider.num_rows() {
+        let mut stat = table.table().table_statistics()?;
+        if let Some(rows) = statistics_provider.num_rows() {
             // For external storage (parquet)
-            rows
-        } else {
-            stat.as_ref().and_then(|s| s.num_rows).unwrap_or(0)
+            if let Some(stat) = &mut stat {
+                stat.num_rows = Some(rows);
+            }
         };
         Ok((
             SExpr::create_leaf(Arc::new(
@@ -992,7 +991,6 @@ impl Binder {
                     table_index,
                     columns: columns.into_iter().map(|col| col.index()).collect(),
                     statistics: Statistics {
-                        num_rows,
                         statistics: stat,
                         col_stats,
                     },

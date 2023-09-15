@@ -79,7 +79,6 @@ impl AggIndexInfo {
 
 #[derive(Clone, Debug, Default)]
 pub struct Statistics {
-    pub num_rows: u64,
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,
     // statistics will be ignored in comparison and hashing
@@ -116,7 +115,6 @@ impl Scan {
             limit: self.limit,
             order_by: self.order_by.clone(),
             statistics: Statistics {
-                num_rows: self.statistics.num_rows,
                 statistics: self.statistics.statistics,
                 col_stats,
             },
@@ -183,8 +181,12 @@ impl Operator for Scan {
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
-        let num_rows = self.statistics.num_rows;
-        let precise_cardinality = Some(num_rows);
+        let num_rows = self
+            .statistics
+            .statistics
+            .as_ref()
+            .map(|s| s.num_rows.unwrap_or(0))
+            .unwrap_or(0);
 
         let mut column_stats: ColumnStatSet = Default::default();
         for (k, v) in &self.statistics.col_stats {
@@ -214,6 +216,12 @@ impl Operator for Scan {
                 column_stats.insert(*k as IndexType, column_stat);
             }
         }
+
+        let precise_cardinality = self
+            .statistics
+            .statistics
+            .as_ref()
+            .and_then(|stat| stat.num_rows);
 
         let cardinality = match (precise_cardinality, &self.prewhere) {
             (Some(precise_cardinality), Some(ref prewhere)) => {
