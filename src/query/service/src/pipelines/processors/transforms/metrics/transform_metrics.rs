@@ -20,7 +20,6 @@ use common_metrics::Family;
 use common_metrics::Histogram;
 use common_metrics::VecLabels;
 use lazy_static::lazy_static;
-use metrics::increment_gauge;
 
 macro_rules! key {
     ($key: literal) => {
@@ -54,38 +53,29 @@ lazy_static! {
 }
 
 pub fn metrics_inc_aggregate_partial_spill_count() {
-    increment_gauge!(key!("aggregate_partial_spill_count"), 1_f64);
     let labels = &vec![("spill", "aggregate_partial_spill".to_string())];
     SPILL_COUNT.get_or_create(labels).inc();
 }
 
 pub fn metrics_inc_aggregate_partial_spill_cell_count(c: u64) {
-    increment_gauge!(key!("aggregate_partial_spill_cell_count"), c as f64);
     AGGREGATE_PARTIAL_SPILL_CELL_COUNT.inc_by(c);
 }
 
 pub fn metrics_inc_aggregate_partial_hashtable_allocated_bytes(c: u64) {
-    increment_gauge!(
-        key!("aggregate_partial_hashtable_allocated_bytes"),
-        c as f64
-    );
     AGGREGATE_PARTIAL_HASHTABLE_ALLOCATED_BYTES.inc_by(c);
 }
 
 pub fn metrics_inc_group_by_spill_write_count() {
-    increment_gauge!(key!("group_by_spill_write_count"), 1_f64);
     let labels = &vec![("spill", "group_by_spill".to_string())];
     SPILL_WRITE_COUNT.get_or_create(labels).inc();
 }
 
 pub fn metrics_inc_group_by_spill_write_bytes(c: u64) {
-    increment_gauge!(key!("group_by_spill_write_bytes"), c as f64);
     let labels = &vec![("spill", "group_by_spill".to_string())];
     SPILL_WRITE_BYTES.get_or_create(labels).inc_by(c);
 }
 
 pub fn metrics_inc_group_by_spill_write_milliseconds(c: u64) {
-    increment_gauge!(key!("group_by_spill_write_milliseconds"), c as f64);
     let labels = &vec![("spill", "group_by_spill".to_string())];
     SPILL_WRITE_MILLISECONDS
         .get_or_create(labels)
@@ -93,19 +83,16 @@ pub fn metrics_inc_group_by_spill_write_milliseconds(c: u64) {
 }
 
 pub fn metrics_inc_aggregate_spill_write_count() {
-    increment_gauge!(key!("aggregate_spill_write_count"), 1_f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_WRITE_COUNT.get_or_create(labels).inc();
 }
 
 pub fn metrics_inc_aggregate_spill_write_bytes(c: u64) {
-    increment_gauge!(key!("aggregate_spill_write_bytes"), c as f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_WRITE_BYTES.get_or_create(labels).inc_by(c);
 }
 
 pub fn metrics_inc_aggregate_spill_write_milliseconds(c: u64) {
-    increment_gauge!(key!("aggregate_spill_write_milliseconds"), c as f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_WRITE_MILLISECONDS
         .get_or_create(labels)
@@ -113,19 +100,16 @@ pub fn metrics_inc_aggregate_spill_write_milliseconds(c: u64) {
 }
 
 pub fn metrics_inc_aggregate_spill_read_count() {
-    increment_gauge!(key!("aggregate_spill_read_count"), 1_f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_READ_COUNT.get_or_create(labels).inc();
 }
 
 pub fn metrics_inc_aggregate_spill_read_bytes(c: u64) {
-    increment_gauge!(key!("aggregate_spill_read_bytes"), c as f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_READ_BYTES.get_or_create(labels).inc_by(c);
 }
 
 pub fn metrics_inc_aggregate_spill_read_milliseconds(c: u64) {
-    increment_gauge!(key!("aggregate_spill_read_milliseconds"), c as f64);
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_READ_MILLISECONDS
         .get_or_create(labels)
@@ -133,10 +117,6 @@ pub fn metrics_inc_aggregate_spill_read_milliseconds(c: u64) {
 }
 
 pub fn metrics_inc_aggregate_spill_data_serialize_milliseconds(c: u64) {
-    increment_gauge!(
-        key!("aggregate_spill_data_serialize_milliseconds"),
-        c as f64
-    );
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_DATA_SERIALIZE_MILLISECONDS
         .get_or_create(labels)
@@ -144,10 +124,6 @@ pub fn metrics_inc_aggregate_spill_data_serialize_milliseconds(c: u64) {
 }
 
 pub fn metrics_inc_aggregate_spill_data_deserialize_milliseconds(c: u64) {
-    increment_gauge!(
-        key!("aggregate_spill_data_deserialize_milliseconds"),
-        c as f64
-    );
     let labels = &vec![("spill", "aggregate_spill".to_string())];
     SPILL_DATA_DESERIALIZE_MILLISECONDS
         .get_or_create(labels)
