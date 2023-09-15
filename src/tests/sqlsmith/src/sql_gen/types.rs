@@ -91,7 +91,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     // TODO: boolean, date, timestamp
                     _ => unreachable!(),
                 };
-                let val_ty = self.gen_data_type();
+                let val_ty = key_ty.clone();
                 let inner_ty = DataType::Tuple(vec![key_ty, val_ty]);
                 DataType::Map(Box::new(inner_ty))
             }
