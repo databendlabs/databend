@@ -2471,15 +2471,27 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map(
         &mut self,
         span: Span,
-        kvs: &[(Expr, Expr)],
+        kvs: &[(Literal, Literal)],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve(key_expr).await?;
-            keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve(val_expr).await?;
-            vals.push(val_arg);
+            let box (key_arg, _data_type) = self.resolve_literal(key_expr)?;
+            keys.push(
+                ConstantExpr {
+                    span,
+                    value: key_arg,
+                }
+                .into(),
+            );
+            let box (val_arg, _data_type) = self.resolve_literal(val_expr)?;
+            vals.push(
+                ConstantExpr {
+                    span,
+                    value: val_arg,
+                }
+                .into(),
+            );
         }
         let box (key_arg, _data_type) = self
             .resolve_scalar_function_call(span, "array", vec![], keys)

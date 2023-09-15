@@ -209,14 +209,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 Expr::Array { span: None, exprs }
             }
             DataType::Map(box inner_ty) => {
-                if let DataType::Tuple(inner_tys) = inner_ty {
-                    let key_ty = &inner_tys[0];
-                    let val_ty = &inner_tys[1];
+                if let DataType::Tuple(_) = inner_ty {
                     let len = self.rng.gen_range(1..=3);
                     let mut kvs = Vec::with_capacity(len);
                     for _ in 0..len {
-                        let key = self.gen_scalar_value(key_ty);
-                        let val = self.gen_scalar_value(val_ty);
+                        let key = self.gen_literal();
+                        let val = self.gen_literal();
                         kvs.push((key, val));
                     }
                     Expr::Map { span: None, kvs }
@@ -270,7 +268,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    #[allow(dead_code)]
     fn gen_literal(&mut self) -> Literal {
         let n = self.rng.gen_range(1..=7);
         match n {
@@ -329,7 +326,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     2 => {
                         let expr_ty = self.gen_data_type();
-                        let len = self.rng.gen_range(0..=5);
+                        let len = self.rng.gen_range(1..=5);
                         let list = (0..len)
                             .map(|_| self.gen_expr(&expr_ty))
                             .collect::<Vec<_>>();
@@ -432,7 +429,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
             DataType::Date | DataType::Timestamp => {
-                let unit = match self.rng.gen_range(0..=8) {
+                let unit = match self.rng.gen_range(0..=6) {
                     0 => IntervalKind::Year,
                     1 => IntervalKind::Quarter,
                     2 => IntervalKind::Month,
@@ -440,8 +437,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     4 => IntervalKind::Hour,
                     5 => IntervalKind::Minute,
                     6 => IntervalKind::Second,
-                    7 => IntervalKind::Doy,
-                    8 => IntervalKind::Dow,
                     _ => unreachable!(),
                 };
                 let interval_ty = DataType::Number(NumberDataType::Int64);
