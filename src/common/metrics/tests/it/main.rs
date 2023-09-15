@@ -15,13 +15,11 @@
 use std::collections::HashMap;
 
 use common_metrics::dump_metric_samples;
-use common_metrics::init_default_metrics_recorder;
 use common_metrics::try_handle;
 use common_metrics::MetricValue;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_dump_metric_samples() -> common_exception::Result<()> {
-    init_default_metrics_recorder();
     metrics::counter!("test.test1_count", 1);
     metrics::counter!("test.test2_count", 2);
 
