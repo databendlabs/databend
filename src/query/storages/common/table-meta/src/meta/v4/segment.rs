@@ -64,7 +64,7 @@ pub struct SegmentInfo {
 impl SegmentInfo {
     pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
         assert!(
-            blocks.len() > MAX_SEGMENT_BLOCK_NUMBER,
+            blocks.len() <= MAX_SEGMENT_BLOCK_NUMBER,
             "number of block overflow: {},  max number allowed {}",
             blocks.len(),
             MAX_SEGMENT_BLOCK_NUMBER,
