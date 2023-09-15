@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::ops::Not;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -21,22 +20,15 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
-use common_expression::types::NumberScalar;
-use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::ScalarRef;
 
 pub struct MergeIntoSplitMutator {
     pub row_id_idx: u32,
-    pub row_id_set: HashSet<u64>,
 }
 
 impl MergeIntoSplitMutator {
     pub fn try_create(row_id_idx: u32) -> Self {
-        Self {
-            row_id_idx,
-            row_id_set: HashSet::new(),
-        }
+        Self { row_id_idx }
     }
 
     // (matched_block,not_matched_block)
@@ -46,10 +38,6 @@ impl MergeIntoSplitMutator {
             row_id_column.data_type,
             DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt64))),
         );
-
-        for row_id_offset in 0..block.num_rows() {
-            self.check_duplicate(row_id_column, row_id_offset)?
-        }
 
         // get row_id do check duplicate and get filter
         let filter: Bitmap = match &row_id_column.value {
@@ -77,26 +65,5 @@ impl MergeIntoSplitMutator {
             block.clone().filter_with_bitmap(&filter)?,
             block.clone().filter_with_bitmap(&filter.not())?,
         ))
-    }
-
-    fn check_duplicate(&mut self, row_id_column: &BlockEntry, row_id_offset: usize) -> Result<()> {
-        match row_id_column.value.index(row_id_offset).ok_or_else(|| {
-            ErrorCode::Internal("can't get row_id_col when do merge into operations")
-        })? {
-            ScalarRef::Null => Ok(()),
-            ScalarRef::Number(NumberScalar::UInt64(v)) => {
-                if self.row_id_set.contains(&v) {
-                    Err(ErrorCode::UnresolvableConflict(
-                        "multi rows from source match one and the same row in the target_table multi times",
-                    ))
-                } else {
-                    self.row_id_set.insert(v);
-                    Ok(())
-                }
-            }
-            _ => Err(ErrorCode::Internal(
-                "row_id_type must be UInt64 for merge into",
-            )),
-        }
     }
 }
