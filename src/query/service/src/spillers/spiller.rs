@@ -176,7 +176,9 @@ impl Spiller {
                 file,
                 p_id
             );
-            spilled_data.push(block);
+            if block.num_rows() != 0 {
+                spilled_data.push(block);
+            }
         }
         Ok(spilled_data)
     }

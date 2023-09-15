@@ -210,18 +210,30 @@ impl HashJoinState {
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_probe_spill(&self) {
-        if *self.probe_spill_done.lock() {
-            return;
+        let notified = {
+            let finalized_guard = self.probe_spill_done.lock();
+            match *finalized_guard {
+                true => None,
+                false => Some(self.probe_spill_done_notify.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
         }
-        self.probe_spill_done_notify.notified().await;
     }
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_final_probe(&self) {
-        if *self.final_probe_done.lock() {
-            return;
+        let notified = {
+            let finalized_guard = self.final_probe_done.lock();
+            match *finalized_guard {
+                true => None,
+                false => Some(self.final_probe_done_notify.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
         }
-        self.final_probe_done_notify.notified().await;
     }
 
     // Reset the state for next round run.

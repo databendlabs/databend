@@ -199,6 +199,21 @@ impl TransformHashJoinProbe {
         self.input_port.set_need_data();
         Ok(Event::NeedData)
     }
+
+    fn reset(&mut self) {
+        self.probe_state.reset();
+        if self.join_probe_state.hash_join_state.need_outer_scan()
+            || self.join_probe_state.hash_join_state.need_mark_scan()
+        {
+            let mut probe_workers = self.join_probe_state.probe_workers.lock();
+            *probe_workers += 1;
+        }
+
+        let mut final_probe_workers = self.join_probe_state.final_probe_workers.lock();
+        *final_probe_workers += 1;
+
+        self.outer_scan_finished = false;
+    }
 }
 
 #[async_trait::async_trait]
@@ -461,8 +476,10 @@ impl Processor for TransformHashJoinProbe {
                 let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
                 if !spilled_data.is_empty() {
                     // Reset `ProbeState`
-                    self.probe_state.reset();
+                    self.reset();
                     self.input_data.extend(spilled_data);
+                } else {
+                    self.step = HashJoinProbeStep::Running;
                 }
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),

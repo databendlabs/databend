@@ -59,7 +59,7 @@ pub struct HashJoinProbeState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) processor_count: usize,
+    pub(crate) _processor_count: usize,
     /// It will be increased by 1 when a new hash join probe processor is created.
     /// After the processor finish probe hash table, it will be decreased by 1.
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
@@ -112,7 +112,7 @@ impl HashJoinProbeState {
         Ok(HashJoinProbeState {
             ctx,
             hash_join_state,
-            processor_count,
+            _processor_count: processor_count,
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
             final_probe_workers: Default::default(),
@@ -256,12 +256,16 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_attach(&self) -> Result<()> {
-        let mut count = self.probe_workers.lock();
-        *count += 1;
-        let mut count = self.spill_workers.lock();
-        *count += 1;
-        let mut count = self.final_probe_workers.lock();
-        *count += 1;
+        if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
+            let mut count = self.probe_workers.lock();
+            *count += 1;
+        }
+        if self.ctx.get_settings().get_enable_join_spill()? {
+            let mut count = self.spill_workers.lock();
+            *count += 1;
+            let mut count = self.final_probe_workers.lock();
+            *count += 1;
+        }
         Ok(())
     }
 
@@ -272,16 +276,8 @@ impl HashJoinProbeState {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
-            drop(count);
-            // Do some reset work for next round.
-            // Reset probe workers
-            let mut probe_workers = self.probe_workers.lock();
-            *probe_workers = self.processor_count;
             let mut probe_done = self.probe_done.lock();
             *probe_done = false;
-            // Rest final scan workers
-            let mut final_probe_workers = self.final_probe_workers.lock();
-            *final_probe_workers = self.processor_count;
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
@@ -302,12 +298,6 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_done(&self) -> Result<()> {
-        if self.ctx.get_settings().get_enable_join_spill()? {
-            // Reset build done to false
-            // For probe processor, it's possible that next phase is `WaitBuild`.
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = false;
-        }
         let mut count = self.probe_workers.lock();
         *count -= 1;
         if *count == 0 {
@@ -325,6 +315,8 @@ impl HashJoinProbeState {
         // Reset build done to false
         let mut build_done = self.hash_join_state.build_done.lock();
         *build_done = false;
+        let mut count = self.final_probe_workers.lock();
+        *count -= 1;
         let mut count = self.spill_workers.lock();
         *count -= 1;
         if *count == 0 {
