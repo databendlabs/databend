@@ -23,28 +23,15 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
-use log::info;
-use z3::ast::Bool;
-use z3::ast::Dynamic;
-use z3::ast::Int;
-use z3::Config;
-use z3::Context;
-use z3::SatResult;
-use z3::Solver;
 
-use crate::binder::Recursion;
-use crate::optimizer::rule::constant::remove_trivial_type_cast;
-use crate::plans::BoundColumnRef;
-use crate::plans::ComparisonOp;
-use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::IndexType;
 use crate::ScalarExpr;
-use crate::ScalarVisitor;
 
 #[derive(Debug)]
 pub struct ConstraintSet {
     constraints: Vec<(ScalarExpr, MirExpr)>,
+    #[allow(dead_code)]
     unsupported_constraints: Vec<ScalarExpr>,
 }
 
@@ -101,7 +88,7 @@ impl ConstraintSet {
 }
 
 /// Transform a logical expression into a MIR expresssion.
-pub fn as_mir<'ctx>(scalar: &ScalarExpr) -> Option<MirExpr> {
+pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
     match scalar {
         ScalarExpr::FunctionCall(func) => {
             if let Some(unary_op) = match func.func_name.as_str() {
