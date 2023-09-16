@@ -23,7 +23,6 @@ use common_constraint::problem::variable_must_not_null;
 use common_constraint::simplify::simplify;
 use criterion::black_box;
 use criterion::Criterion;
-use z3::Context;
 
 fn bench(c: &mut Criterion) {
     let mut group = c.benchmark_group("bench_parser");
