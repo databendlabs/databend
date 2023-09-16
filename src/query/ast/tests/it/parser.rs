@@ -536,6 +536,8 @@ fn test_statement_error() {
         r#"copy into t1 from "" FILE_FORMAT = ("#,
         r#"copy into t1 from "" FILE_FORMAT = (TYPE"#,
         r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);"#,
     ];
 
     for case in cases {
