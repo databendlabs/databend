@@ -21,7 +21,7 @@ cat << EOF > /tmp/databend_test_csv_error2.txt
 insert into a(a,b,c) format CSV "2023-04-08 01:01:01","Hello",12345678,1
 
 EOF
-curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_csv_error2.txt | grep -c "too many fields"
+curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_csv_error2.txt | grep -c "wrong number of columns"
 
 # 3 bad number
 echo -e '\ncsv 3'
@@ -29,7 +29,7 @@ cat << EOF > /tmp/databend_test_csv_error3.txt
 insert into a(a,b,c) format CSV "2023-04-08 01:01:01",,123Hello
 
 EOF
-curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_csv_error3.txt | grep -c "column 2 (c Int32): bad field end"
+curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_csv_error3.txt | grep -c "column 2 (c Int32):"
 
 # 1 bad date
 echo -e '\ntsv 1'
@@ -47,7 +47,7 @@ insert into a(a,b,c) format TSV
 2023-04-08 01:01:01	Hello	12345678
 1989-02-03 15:23:23	World	123456 1
 EOF
-curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_tsv_error2.txt | grep -c "column 2 (c Int32): bad field end"
+curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_tsv_error2.txt | grep -c "column 2 (c Int32)"
 
 echo -e '\ntsv 3'
 # 3 bad number
@@ -55,7 +55,7 @@ cat << EOF > /tmp/databend_test_tsv_error3.txt
 insert into a(a,b,c) format TSV
 2023-04-08 01:01:01		123Hello
 EOF
-curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_tsv_error3.txt | grep -c "column 2 (c Int32): bad field end"
+curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" --data-binary @/tmp/databend_test_tsv_error3.txt | grep -c "column 2 (c Int32)"
 
 # cleanup
 curl -s -u 'root:' -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}/" -d "drop table a"

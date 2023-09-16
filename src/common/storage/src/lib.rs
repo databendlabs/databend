@@ -68,6 +68,7 @@ mod copy;
 mod statistics;
 
 pub use copy::CopyStatus;
+pub use copy::FileParseError;
 pub use copy::FileStatus;
 pub use statistics::Datum;
 pub use statistics::F64;
