@@ -360,7 +360,7 @@ pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }
 
-#[derive(Clone, Debug, Educe, PartialOrd)]
+#[derive(Clone, Debug, Educe, Ord, PartialOrd)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
@@ -368,7 +368,7 @@ pub struct ConstantExpr {
     pub value: Scalar,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,

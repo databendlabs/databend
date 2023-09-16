@@ -116,6 +116,7 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
+use common_meta_types::UpsertKV;
 use log::debug;
 use log::info;
 
@@ -1772,7 +1773,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn table_drop_without_db_id_to_name<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_drop_without_db_id_to_name<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
 
         info!("--- prepare db and table");
@@ -1781,12 +1783,16 @@ impl SchemaApiTestSuite {
             let (_tid, _table_meta) = util.create_table().await?;
         }
 
-        info!("--- drop db to ensure dropping table does not rely on db");
+        info!("--- drop db-id-to-name mapping to ensure dropping table does not rely on it");
         {
-            util.drop_db().await?;
+            let id_to_name_key = DatabaseIdToName { db_id: util.db_id };
+            util.mt
+                .as_kv_api()
+                .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
+                .await?;
         }
 
-        info!("--- drop table to ensure dropping table does not rely on db");
+        info!("--- drop table to ensure dropping table does not rely on db-id-to-name");
         util.drop_table_by_id().await?;
         Ok(())
     }
@@ -4439,7 +4445,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn truncate_table<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
         let table_id;
 
@@ -4801,7 +4808,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant = "tenant1";
 
         let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
@@ -5019,7 +5027,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn virtual_column_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn virtual_column_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant = "tenant1";
 
         let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
@@ -5150,7 +5159,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn table_lock_revision<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
         let table_id;
 
@@ -5853,21 +5863,21 @@ impl SchemaApiTestSuite {
 }
 
 struct Util<'a, MT>
-// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
-where MT: SchemaApi
+// where MT: SchemaApi
+where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
 {
     tenant: String,
     db_name: String,
     table_name: String,
     engine: String,
     created_on: DateTime<Utc>,
+    db_id: u64,
     table_id: u64,
     mt: &'a MT,
 }
 
 impl<'a, MT> Util<'a, MT>
-// where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
-where MT: SchemaApi
+where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 {
     fn new(
         mt: &'a MT,
@@ -5882,6 +5892,7 @@ where MT: SchemaApi
             table_name: tbl_name.to_string(),
             engine: engine.to_string(),
             created_on: Utc::now(),
+            db_id: 0,
             table_id: 0,
             mt,
         }
@@ -5924,7 +5935,7 @@ where MT: SchemaApi
         }
     }
 
-    async fn create_db(&self) -> anyhow::Result<()> {
+    async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
             if_not_exists: false,
             name_ident: DatabaseNameIdent {
@@ -5937,10 +5948,13 @@ where MT: SchemaApi
             },
         };
 
-        self.mt.create_database(plan).await?;
+        let res = self.mt.create_database(plan).await?;
+        self.db_id = res.db_id;
+
         Ok(())
     }
 
+    #[allow(dead_code)]
     async fn drop_db(&self) -> anyhow::Result<()> {
         let req = DropDatabaseReq {
             if_exists: false,

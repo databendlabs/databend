@@ -1093,7 +1093,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( #copy_option )*
+            ~ ( #copy_option ~ ","? )*
         },
         |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
@@ -1114,7 +1114,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
             };
-            for opt in opts {
+            for (opt, _) in opts {
                 copy_stmt.apply_option(opt);
             }
             Statement::Copy(copy_stmt)
