@@ -13,22 +13,26 @@
 // limitations under the License.
 
 use std::ops::Add;
+use std::ops::Mul;
 use std::ops::Sub;
 
 use z3::ast::Ast;
 use z3::ast::Bool;
+use z3::ast::Datatype;
 use z3::ast::Dynamic;
 use z3::ast::Int;
 use z3::Context;
+use z3::DatatypeAccessor;
 use z3::DatatypeBuilder;
 use z3::DatatypeSort;
+use z3::Sort;
 
 /// Get the Z3 sort of Nullable Boolean type.
 pub fn nullable_bool_sort(ctx: &Context) -> DatatypeSort {
     DatatypeBuilder::new(ctx, "Nullable(Boolean)")
-        .variant("TRUE", vec![])
-        .variant("FALSE", vec![])
-        .variant("NULL", vec![])
+        .variant("TRUE_BOOL", vec![])
+        .variant("FALSE_BOOL", vec![])
+        .variant("NULL_BOOL", vec![])
         .finish()
 }
 
@@ -53,17 +57,66 @@ pub fn is_true<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Bool<'ctx> {
     a._eq(&true_bool(ctx))
 }
 
+/// Check if a Nullable Boolean value is false.
+pub fn is_false<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Bool<'ctx> {
+    debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
+    a._eq(&false_bool(ctx))
+}
+
+/// Construct a Nullable Boolean value from a bool constant.
+pub fn const_bool(ctx: &Context, a: bool) -> Dynamic<'_> {
+    if a { true_bool(ctx) } else { false_bool(ctx) }
+}
+
+/// Construct a variable of Nullable Boolean type.
+pub fn var_bool<'ctx>(ctx: &'ctx Context, name: &str) -> Dynamic<'ctx> {
+    Dynamic::from_ast(&Datatype::new_const(
+        ctx,
+        name,
+        &nullable_bool_sort(ctx).sort,
+    ))
+}
+
 /// Construct a Nullable Boolean value from a Boolean value.
 pub fn from_bool<'ctx>(ctx: &'ctx Context, a: &Bool<'ctx>) -> Dynamic<'ctx> {
     a.ite(&true_bool(ctx), &false_bool(ctx))
 }
 
-/// Construct a NULL value of Nullable Int type.
-pub fn null_int(ctx: &Context) -> Int {
-    Int::new_const(ctx, "null_int")
+pub fn nullable_int_sort(ctx: &Context) -> DatatypeSort {
+    DatatypeBuilder::new(ctx, "Nullable(Int)")
+        .variant("NULL_INT", vec![])
+        .variant("JUST_INT", vec![(
+            "unwrap-int",
+            DatatypeAccessor::Sort(Sort::int(ctx)),
+        )])
+        .finish()
 }
 
-/// Equality check for Nullable Int type.
+/// Construct a NULL value of Nullable(Int) type.
+pub fn null_int(ctx: &Context) -> Dynamic<'_> {
+    nullable_int_sort(ctx).variants[0].constructor.apply(&[])
+}
+
+/// Construct a const Nullable(Int) from an i64.
+pub fn const_int(ctx: &Context, a: i64) -> Dynamic<'_> {
+    from_int(ctx, &Int::from_i64(ctx, a))
+}
+
+/// Construct a variable of Nullable(Int) type.
+pub fn var_int<'ctx>(ctx: &'ctx Context, name: &str) -> Dynamic<'ctx> {
+    Dynamic::from_ast(&Datatype::new_const(
+        ctx,
+        name,
+        &nullable_int_sort(ctx).sort,
+    ))
+}
+
+/// Construct a const value of Int type.
+pub fn from_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>) -> Dynamic<'ctx> {
+    nullable_int_sort(ctx).variants[1].constructor.apply(&[a])
+}
+
+/// Equality check for Nullable(Int) type.
 /// The table below shows the result of `eq_int`:
 ///
 /// | a | b | result |
@@ -73,33 +126,37 @@ pub fn null_int(ctx: &Context) -> Int {
 /// | 1 | NULL | NULL |
 /// | 1 | 1 | TRUE |
 /// | 1 | 2 | FALSE |
-pub fn eq_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
+pub fn eq_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a = b)
-    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
-        &null_bool(ctx),
-        &a._eq(b).ite(&true_bool(ctx), &false_bool(ctx)),
-    )
+    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)])
+        .ite(&null_bool(ctx), &from_bool(ctx, &a._eq(b)))
 }
 
-/// Inequality check for Nullable Int type.
-/// The table below shows the result of `ne_int`:
-///
-/// | a | b | result |
-/// |---|---|--------|
-/// | NULL | NULL | NULL |
-/// | NULL | 1 | NULL |
-/// | 1 | NULL | NULL |
-/// | 1 | 1 | FALSE |
-/// | 1 | 2 | TRUE |
-pub fn ne_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
-    // IF(a IS NULL OR b IS NULL, NULL, a != b)
-    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
-        &null_bool(ctx),
-        &a._eq(b).ite(&false_bool(ctx), &true_bool(ctx)),
-    )
-}
+// /// Inequality check for Nullable(Int) type.
+// /// The table below shows the result of `ne_int`:
+// ///
+// /// | a | b | result |
+// /// |---|---|--------|
+// /// | NULL | NULL | NULL |
+// /// | NULL | 1 | NULL |
+// /// | 1 | NULL | NULL |
+// /// | 1 | 1 | FALSE |
+// /// | 1 | 2 | TRUE |
+// pub fn ne_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+//     debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+//     debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
 
-/// Greater than check for Nullable Int type.
+//     // IF(a IS NULL OR b IS NULL, NULL, a != b)
+//     Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
+//         &null_bool(ctx),
+//         &a._eq(b).ite(&false_bool(ctx), &true_bool(ctx)),
+//     )
+// }
+
+/// Greater than check for Nullable(Int) type.
 /// The table below shows the result of `gt_int`:
 ///
 /// | a | b | result |
@@ -110,15 +167,18 @@ pub fn ne_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic
 /// | 1 | 1 | FALSE |
 /// | 1 | 2 | FALSE |
 /// | 2 | 1 | TRUE |
-pub fn gt_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
+pub fn gt_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a > b)
     Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
         &null_bool(ctx),
-        &a.gt(b).ite(&true_bool(ctx), &false_bool(ctx)),
+        &from_bool(ctx, &unwrap_int(ctx, a).gt(&unwrap_int(ctx, b))),
     )
 }
 
-/// Less than check for Nullable Int type.
+/// Less than check for Nullable(Int) type.
 /// The table below shows the result of `lt_int`:
 ///
 /// | a | b | result |
@@ -129,15 +189,18 @@ pub fn gt_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic
 /// | 1 | 1 | FALSE |
 /// | 1 | 2 | TRUE |
 /// | 2 | 1 | FALSE |
-pub fn lt_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
+pub fn lt_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a < b)
     Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
         &null_bool(ctx),
-        &a.lt(b).ite(&true_bool(ctx), &false_bool(ctx)),
+        &from_bool(ctx, &unwrap_int(ctx, a).lt(&unwrap_int(ctx, b))),
     )
 }
 
-/// Greater than or equal check for Nullable Int type.
+/// Greater than or equal check for Nullable(Int) type.
 /// The table below shows the result of `ge_int`:
 ///
 /// | a | b | result |
@@ -148,15 +211,18 @@ pub fn lt_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic
 /// | 1 | 1 | TRUE |
 /// | 1 | 2 | FALSE |
 /// | 2 | 1 | TRUE |
-pub fn ge_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
+pub fn ge_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a >= b)
     Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
         &null_bool(ctx),
-        &a.ge(b).ite(&true_bool(ctx), &false_bool(ctx)),
+        &from_bool(ctx, &unwrap_int(ctx, a).ge(&unwrap_int(ctx, b))),
     )
 }
 
-/// Less than or equal check for Nullable Int type.
+/// Less than or equal check for Nullable(Int) type.
 /// The table below shows the result of `le_int`:
 ///
 /// | a | b | result |
@@ -167,15 +233,18 @@ pub fn ge_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic
 /// | 1 | 1 | TRUE |
 /// | 1 | 2 | TRUE |
 /// | 2 | 1 | FALSE |
-pub fn le_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic<'ctx> {
+pub fn le_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a <= b)
     Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
         &null_bool(ctx),
-        &a.le(b).ite(&true_bool(ctx), &false_bool(ctx)),
+        &from_bool(ctx, &unwrap_int(ctx, a).le(&unwrap_int(ctx, b))),
     )
 }
 
-/// Plus operation for Nullable Int type.
+/// Plus operation for Nullable(Int) type.
 /// The table below shows the result of `plus_int`:
 ///
 /// | a | b | result |
@@ -184,12 +253,18 @@ pub fn le_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Dynamic
 /// | NULL | 1 | NULL |
 /// | 1 | NULL | NULL |
 /// | 1 | 1 | 2 |
-pub fn plus_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Int<'ctx> {
+pub fn plus_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a + b)
-    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(&null_int(ctx), &a.add(b))
+    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
+        &null_int(ctx),
+        &from_int(ctx, &unwrap_int(ctx, a).add(unwrap_int(ctx, b))),
+    )
 }
 
-/// Minus operation for Nullable Int type.
+/// Minus operation for Nullable(Int) type.
 /// The table below shows the result of `minus_int`:
 ///
 /// | a | b | result |
@@ -198,13 +273,60 @@ pub fn plus_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Int<'
 /// | NULL | 1 | NULL |
 /// | 1 | NULL | NULL |
 /// | 1 | 1 | 0 |
-pub fn minus_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Int<'ctx> {
+pub fn minus_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
     // IF(a IS NULL OR b IS NULL, NULL, a - b)
-    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(&null_int(ctx), &a.sub(b))
+    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
+        &null_int(ctx),
+        &from_int(ctx, &unwrap_int(ctx, a).sub(unwrap_int(ctx, b))),
+    )
+}
+
+/// Multiply operation for Nullable(Int) type.
+/// The table below shows the result of `multiply_int`:
+///
+/// | a | b | result |
+/// |---|---|--------|
+/// | NULL | NULL | NULL |
+/// | NULL | 1 | NULL |
+/// | 1 | NULL | NULL |
+/// | 2 | 2 | 4 |
+pub fn multiply_int<'ctx>(
+    ctx: &'ctx Context,
+    a: &Dynamic<'ctx>,
+    b: &Dynamic<'ctx>,
+) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_int_sort(ctx).sort);
+
+    // IF(a IS NULL OR b IS NULL, NULL, a * b)
+    Bool::or(ctx, &[&is_null_int(ctx, a), &is_null_int(ctx, b)]).ite(
+        &null_int(ctx),
+        &from_int(ctx, &unwrap_int(ctx, a).mul(unwrap_int(ctx, b))),
+    )
+}
+
+/// Minus operation for Nullable(Int) type.
+/// The table below shows the result of `minus_int`:
+///
+/// | a | result |
+/// |---|--------|
+/// | NULL | NULL |
+/// | 1 | -1 |
+pub fn unary_minus_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+
+    // IF(a IS NULL, NULL, -a)
+    is_null_int(ctx, a).ite(
+        &null_int(ctx),
+        &from_int(ctx, &unwrap_int(ctx, a).unary_minus()),
+    )
 }
 
 /// Logical AND operation for Nullable Boolean type.
-/// The table below shows the result of `and_nullable_bool`:
+/// The table below shows the result of `and_bool`:
 ///
 /// | a | b | result |
 /// |---|---|--------|
@@ -217,34 +339,20 @@ pub fn minus_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>, b: &Int<'ctx>) -> Int<
 /// | FALSE | NULL | FALSE |
 /// | FALSE | TRUE | FALSE |
 /// | FALSE | FALSE | FALSE |
-pub fn and_nullable_bool<'ctx>(
-    ctx: &'ctx Context,
-    a: &Dynamic<'ctx>,
-    b: &Dynamic<'ctx>,
-) -> Dynamic<'ctx> {
+pub fn and_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
     debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
     debug_assert!(b.get_sort() == nullable_bool_sort(ctx).sort);
 
-    // IF(is_true(a) AND is_true(b),
-    //     TRUE,
-    //     IF((is_true(a) AND b IS NULL) OR (a IS NULL AND is_true(b)) OR (a IS NULL AND b IS NULL),
-    //         NULL,
-    //         FALSE
-    //     )
-    // )
-    Bool::and(ctx, &[&is_true(ctx, a), &is_true(ctx, b)]).ite(
-        &true_bool(ctx),
-        &Bool::or(ctx, &[
-            &Bool::and(ctx, &[&is_true(ctx, a), &is_null_bool(ctx, b)]),
-            &Bool::and(ctx, &[&is_null_bool(ctx, a), &is_true(ctx, b)]),
-            &Bool::and(ctx, &[&is_null_bool(ctx, a), &is_null_bool(ctx, b)]),
-        ])
-        .ite(&null_bool(ctx), &false_bool(ctx)),
+    // IF(is_false(a) OR is_false(b), FALSE, IF(a IS NULL OR b IS NULL, NULL, TRUE))
+    Bool::or(ctx, &[&is_false(ctx, a), &is_false(ctx, b)]).ite(
+        &false_bool(ctx),
+        &Bool::or(ctx, &[&is_null_bool(ctx, a), &is_null_bool(ctx, b)])
+            .ite(&null_bool(ctx), &true_bool(ctx)),
     )
 }
 
 /// Logical OR operation for Nullable Boolean type.
-/// The table below shows the result of `or_nullable_bool`:
+/// The table below shows the result of `or_bool`:
 ///
 /// | a | b | result |
 /// |---|---|--------|
@@ -257,11 +365,7 @@ pub fn and_nullable_bool<'ctx>(
 /// | FALSE | NULL | NULL |
 /// | FALSE | TRUE | TRUE |
 /// | FALSE | FALSE | FALSE |
-pub fn or_nullable_bool<'ctx>(
-    ctx: &'ctx Context,
-    a: &Dynamic<'ctx>,
-    b: &Dynamic<'ctx>,
-) -> Dynamic<'ctx> {
+pub fn or_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
     debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
     debug_assert!(b.get_sort() == nullable_bool_sort(ctx).sort);
 
@@ -273,15 +377,38 @@ pub fn or_nullable_bool<'ctx>(
     )
 }
 
+/// Equality check for Nullable Boolean type.
+/// The table below shows the result of `eq_bool`:
+///
+/// | a | b | result |
+/// |---|---|--------|
+/// | NULL | NULL | NULL |
+/// | NULL | TRUE | NULL |
+/// | NULL | FALSE | NULL |
+/// | TRUE | NULL | NULL |
+/// | TRUE | TRUE | TRUE |
+/// | TRUE | FALSE | FALSE |
+/// | FALSE | NULL | NULL |
+/// | FALSE | TRUE | FALSE |
+/// | FALSE | FALSE | TRUE |
+pub fn eq_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>, b: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+    debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
+    debug_assert!(b.get_sort() == nullable_bool_sort(ctx).sort);
+
+    // IF(a IS NULL OR b IS NULL, NULL, a = b)
+    Bool::or(ctx, &[&is_null_bool(ctx, a), &is_null_bool(ctx, b)])
+        .ite(&null_bool(ctx), &from_bool(ctx, &a._eq(b)))
+}
+
 /// Logical NOT operation for Nullable Boolean type.
-/// The table below shows the result of `not_nullable_bool`:
+/// The table below shows the result of `not_bool`:
 ///
 /// | a | result |
 /// |---|--------|
 /// | NULL | NULL |
 /// | TRUE | FALSE |
 /// | FALSE | TRUE |
-pub fn not_nullable_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Dynamic<'ctx> {
+pub fn not_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Dynamic<'ctx> {
     debug_assert!(a.get_sort() == nullable_bool_sort(ctx).sort);
 
     // IF(a IS NULL, NULL, NOT a)
@@ -297,10 +424,17 @@ pub fn is_null_bool<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Bool<'ctx> {
     a._eq(&null_bool(ctx))
 }
 
-pub fn is_null_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>) -> Bool<'ctx> {
+pub fn is_null_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Bool<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+
     a._eq(&null_int(ctx))
 }
 
-pub fn is_not_null_int<'ctx>(ctx: &'ctx Context, a: &Int<'ctx>) -> Bool<'ctx> {
-    a._eq(&null_int(ctx)).not()
+pub fn unwrap_int<'ctx>(ctx: &'ctx Context, a: &Dynamic<'ctx>) -> Int<'ctx> {
+    debug_assert!(a.get_sort() == nullable_int_sort(ctx).sort);
+
+    nullable_int_sort(ctx).variants[1].accessors[0]
+        .apply(&[a])
+        .as_int()
+        .unwrap()
 }

@@ -1900,7 +1900,9 @@ dependencies = [
 name = "common-constraint"
 version = "0.1.0"
 dependencies = [
+ "common-ast",
  "criterion",
+ "goldenfile",
  "z3",
 ]
 
