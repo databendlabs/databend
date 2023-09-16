@@ -118,7 +118,7 @@ impl BlockReader {
             let start = (column_range.start - merged_range.start) as usize;
             let end = (column_range.end - merged_range.start) as usize;
             let column_id = *raw_idx as ColumnId;
-            read_res.add_column_chunk(merged_range_idx, column_id, start..end);
+            read_res.add_column_chunk(merged_range_idx, column_id, column_range, start..end);
         }
 
         Ok(read_res)
@@ -149,23 +149,30 @@ impl BlockReader {
                     continue;
                 }
             }
-            let column_cache_key = TableDataCacheKey::new(location, *column_id);
 
-            // first, check column array object cache
-            if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
-                cached_column_array.push((*column_id, cache_array));
-                continue;
-            }
-
-            // and then, check column data cache
-            if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
-                cached_column_data.push((*column_id, cached_column_raw_data));
-                continue;
-            }
-
-            // if all cache missed, prepare the ranges to be read
             if let Some(column_meta) = columns_meta.get(column_id) {
                 let (offset, len) = column_meta.offset_length();
+
+                let column_cache_key = TableDataCacheKey::new(location, *column_id, offset, len);
+
+                let mut need_real_io_read = true;
+                // first, check column array object cache
+                if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                    cached_column_array.push((*column_id, cache_array));
+                    need_real_io_read = false;
+                }
+
+                // and then, check column data cache
+                if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
+                    cached_column_data.push((*column_id, cached_column_raw_data));
+                    need_real_io_read = false;
+                }
+
+                if !need_real_io_read {
+                    continue;
+                }
+
+                // if all cache missed, prepare the ranges to be read
                 ranges.push((*column_id, offset..(offset + len)));
 
                 // Perf
