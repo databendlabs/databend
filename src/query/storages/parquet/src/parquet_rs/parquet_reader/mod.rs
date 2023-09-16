@@ -15,6 +15,7 @@
 mod predicate;
 mod reader;
 mod row_group;
+mod topk;
 
 pub use reader::ParquetRSReader;
 pub use reader::ParquetRSReaderBuilder;

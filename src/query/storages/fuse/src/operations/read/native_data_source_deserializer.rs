@@ -577,11 +577,11 @@ impl Processor for NativeDeserializeDataTransform {
                     self.offset_in_part = fuse_part.page_size() * range.start;
                 }
 
-                if let Some((_top_k, sorter, _index)) = self.top_k.as_mut() {
-                    if let Some(sort_min_max) = &fuse_part.sort_min_max {
-                        if sorter.never_match(sort_min_max) {
-                            return self.finish_process();
-                        }
+                if let Some(((_top_k, sorter, _index), min_max)) =
+                    self.top_k.as_mut().zip(fuse_part.sort_min_max.as_ref())
+                {
+                    if sorter.never_match(min_max) {
+                        return self.finish_process();
                     }
                 }
 

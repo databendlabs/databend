@@ -22,6 +22,7 @@ use bytes::Bytes;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +31,7 @@ use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_expression::TopKSorter;
 use common_functions::BUILTIN_FUNCTIONS;
 use futures::StreamExt;
 use opendal::Operator;
@@ -53,6 +55,7 @@ use parquet::schema::types::SchemaDescPtr;
 
 use super::predicate::ParquetPredicate;
 use super::row_group::InMemoryRowGroup;
+use super::topk::ParquetTopK;
 use crate::ParquetRSPruner;
 use crate::ParquetRSRowGroupPart;
 
@@ -65,6 +68,7 @@ pub struct ParquetRSReaderBuilder<'a> {
     push_downs: Option<&'a PushDownInfo>,
     options: ParquetReadOptions,
     pruner: Option<ParquetRSPruner>,
+    topk: Option<&'a TopK>,
 }
 
 impl<'a> ParquetRSReaderBuilder<'a> {
@@ -80,6 +84,11 @@ impl<'a> ParquetRSReaderBuilder<'a> {
 
     pub fn with_pruner(mut self, pruner: Option<ParquetRSPruner>) -> Self {
         self.pruner = pruner;
+        self
+    }
+
+    pub fn with_topk(mut self, topk: Option<&'a TopK>) -> Self {
+        self.topk = topk;
         self
     }
 
@@ -117,6 +126,18 @@ impl<'a> ParquetRSReaderBuilder<'a> {
                 )))
             })
             .transpose()?;
+
+        let topk = self
+            .topk
+            .map(|topk| {
+                let projection =
+                    ProjectionMask::leaves(&self.schema_desc, vec![topk.column_id as usize]);
+                let field_levels =
+                    parquet_to_arrow_field_levels(&self.schema_desc, projection.clone(), None)?;
+                Ok::<_, ErrorCode>(ParquetTopK::new(projection, field_levels))
+            })
+            .transpose()?;
+
         // Build projection mask and field paths for transforming `RecordBatch` to output block.
         // The number of columns in `output_projection` may be less than the number of actual read columns.
         let (projection, _) = output_projection.to_arrow_projection(&self.schema_desc);
@@ -139,6 +160,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             need_page_index: self.options.prune_pages(),
             batch_size,
             field_levels,
+            topk,
         })
     }
 }
@@ -162,6 +184,8 @@ pub struct ParquetRSReader {
     field_levels: FieldLevels,
 
     pruner: Option<ParquetRSPruner>,
+
+    topk: Option<ParquetTopK>,
 
     // Options
     need_page_index: bool,
@@ -202,6 +226,7 @@ impl ParquetRSReader {
             push_downs: None,
             options: Default::default(),
             pruner: None,
+            topk: None,
         }
     }
 
@@ -346,12 +371,19 @@ impl ParquetRSReader {
     pub async fn prepare_row_group_reader(
         &self,
         part: &ParquetRSRowGroupPart,
+        topk_sorter: &mut Option<TopKSorter>,
     ) -> Result<Option<ParquetRecordBatchReader>> {
+        if let Some((sorter, min_max)) = topk_sorter.as_ref().zip(part.sort_min_max.as_ref()) {
+            if sorter.never_match(min_max) {
+                return Ok(None);
+            }
+        }
         let page_locations = part.page_locations.as_ref().map(|x| {
             x.iter()
                 .map(|x| x.iter().map(PageLocation::from).collect())
                 .collect::<Vec<Vec<_>>>()
         });
+        // TODO(parquet): cache deserilaized columns to avoid deserialize multiple times.
         let mut row_group = InMemoryRowGroup::new(&part.meta, page_locations.as_deref());
         let mut selection = part
             .selectors
@@ -381,6 +413,44 @@ impl ParquetRSReader {
             for batch in reader {
                 let batch = batch?;
                 let filter = predicate.evaluate(&batch)?;
+                filters.push(filter);
+            }
+            let sel = RowSelection::from_filters(&filters);
+            if !sel.selects_any() {
+                // All rows in current row group are filtered out.
+                return Ok(None);
+            }
+            match selection.as_mut() {
+                Some(selection) => {
+                    selection.and_then(&sel);
+                }
+                None => {
+                    selection = Some(sel);
+                }
+            }
+        }
+
+        // TODO(parquet): fetch topk column data with prewhere columns to reduce IO times.
+        // Apply TopK.
+        if let Some((topk, sorter)) = self.topk.as_ref().zip(topk_sorter.as_mut()) {
+            row_group
+                .fetch(
+                    &part.location,
+                    self.op.clone(),
+                    topk.projection(),
+                    selection.as_ref(),
+                )
+                .await?;
+            let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+                topk.field_levels(),
+                &row_group,
+                self.batch_size,
+                selection.clone(),
+            )?;
+            let mut filters = vec![];
+            for batch in reader {
+                let batch = batch?;
+                let filter = topk.evaluate(&batch, sorter)?;
                 filters.push(filter);
             }
             let sel = RowSelection::from_filters(&filters);
