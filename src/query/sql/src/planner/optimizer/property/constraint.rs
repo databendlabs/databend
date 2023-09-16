@@ -87,7 +87,7 @@ impl ConstraintSet {
     }
 }
 
-/// Transform a logical expression into a MIR expresssion.
+/// Transform a logical expression into a MIR expression.
 pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
     match scalar {
         ScalarExpr::FunctionCall(func) => {
