@@ -179,6 +179,7 @@ run_test() {
 
     echo " === Start new databend-query..."
 
+    config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
     echo "new databend config path: $config_path"
 
     nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &
