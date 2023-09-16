@@ -130,7 +130,7 @@ impl ParquetRSTable {
         let num_columns_to_read = columns_to_read.len();
         let topk = push_down
             .as_ref()
-            .and_then(|p| p.top_k(&self.schema(), None, RangeIndex::supported_type));
+            .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
 
         let (mut stats, mut partitions) = if parquet_metas.is_empty() {
             self.read_and_prune_metas_in_parallel(

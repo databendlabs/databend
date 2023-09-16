@@ -60,7 +60,7 @@ pub struct ParquetSource {
     is_copy: bool,
     copy_status: Arc<CopyStatus>,
     /// Pushed-down topk sorter.
-    _topk_sorter: Option<TopKSorter>,
+    topk_sorter: Option<TopKSorter>,
 }
 
 impl ParquetSource {
@@ -89,7 +89,7 @@ impl ParquetSource {
             state: State::Init,
             is_copy,
             copy_status,
-            _topk_sorter: topk_sorter,
+            topk_sorter,
         })))
     }
 }
@@ -181,7 +181,10 @@ impl Processor for ParquetSource {
                 if let Some(part) = self.ctx.get_partition() {
                     match ParquetPart::from_part(&part)? {
                         ParquetPart::ParquetRSRowGroup(part) => {
-                            if let Some(reader) = self.reader.prepare_row_group_reader(part).await?
+                            if let Some(reader) = self
+                                .reader
+                                .prepare_row_group_reader(part, &mut self.topk_sorter)
+                                .await?
                             {
                                 self.state = State::ReadRowGroup(reader);
                             }

@@ -61,31 +61,10 @@ impl ParquetRSTable {
 
         let num_threads = calc_parallelism(&ctx, plan)?;
 
-        let mut topk = plan
+        let topk = plan
             .push_downs
             .as_ref()
-            .and_then(|p| p.top_k(&self.schema(), None, RangeIndex::supported_type));
-        let topk_limit = topk.as_ref().map(|p| p.limit).unwrap_or(0);
-
-        if topk_limit > 0 {
-            let row_group_cnt = plan
-                .parts
-                .partitions
-                .iter()
-                .filter(|p| {
-                    matches!(
-                        p.as_any().downcast_ref::<ParquetPart>().unwrap(),
-                        ParquetPart::ParquetRSRowGroup(_)
-                    )
-                })
-                .count();
-            // Only if the row group parts in each pipeline is greater than the topk limit,
-            // can we push down topk.
-            // Reason: if not, the topk sorter heap will never be filled up and it will make no sense.
-            if row_group_cnt / num_threads <= topk_limit {
-                topk = None;
-            }
-        }
+            .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
 
         let builder = ParquetRSReader::builder_with_parquet_schema(
             ctx.clone(),
@@ -95,7 +74,9 @@ impl ParquetRSTable {
         )
         .with_options(self.read_options)
         .with_push_downs(plan.push_downs.as_ref())
-        .with_pruner(pruner);
+        .with_pruner(pruner)
+        .with_topk(topk.as_ref());
+
         let reader = Arc::new(builder.build()?);
 
         let topk = Arc::new(topk);

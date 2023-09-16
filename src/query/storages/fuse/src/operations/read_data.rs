@@ -192,13 +192,10 @@ impl FuseTable {
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
-        let topk = plan.push_downs.as_ref().and_then(|x| {
-            x.top_k(
-                plan.schema().as_ref(),
-                self.cluster_key_str(),
-                RangeIndex::supported_type,
-            )
-        });
+        let topk = plan
+            .push_downs
+            .as_ref()
+            .and_then(|x| x.top_k(plan.schema().as_ref(), RangeIndex::supported_type));
 
         let index_reader = Arc::new(
             plan.push_downs

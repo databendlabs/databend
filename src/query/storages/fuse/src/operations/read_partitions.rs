@@ -231,13 +231,7 @@ impl FuseTable {
 
         let top_k = push_downs
             .as_ref()
-            .map(|p| {
-                p.top_k(
-                    self.schema().as_ref(),
-                    self.cluster_key_str(),
-                    RangeIndex::supported_type,
-                )
-            })
+            .map(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
             .unwrap_or_default();
         let (mut statistics, parts) =
             Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
