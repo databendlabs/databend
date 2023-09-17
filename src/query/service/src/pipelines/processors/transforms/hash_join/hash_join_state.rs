@@ -210,17 +210,52 @@ impl HashJoinState {
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_probe_spill(&self) {
-        if *self.probe_spill_done.lock() {
-            return;
+        let notified = {
+            let finalized_guard = self.probe_spill_done.lock();
+            match *finalized_guard {
+                true => None,
+                false => Some(self.probe_spill_done_notify.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
         }
-        self.probe_spill_done_notify.notified().await;
     }
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_final_probe(&self) {
-        if *self.final_probe_done.lock() {
-            return;
+        let notified = {
+            let finalized_guard = self.final_probe_done.lock();
+            match *finalized_guard {
+                true => None,
+                false => Some(self.final_probe_done_notify.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
         }
-        self.final_probe_done_notify.notified().await;
+    }
+
+    // Reset the state for next round run.
+    // It only be called when spill is enable.
+    pub(crate) fn reset(&self) {
+        self.row_space.reset();
+        let chunks = unsafe { &mut *self.chunks.get() };
+        chunks.clear();
+        let build_num_rows = unsafe { &mut *self.build_num_rows.get() };
+        *build_num_rows = 0;
+        let build_columns = unsafe { &mut *self.build_columns.get() };
+        build_columns.clear();
+        let build_columns_data_type = unsafe { &mut *self.build_columns_data_type.get() };
+        build_columns_data_type.clear();
+        if self.need_outer_scan() {
+            let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+            outer_scan_map.clear();
+        }
+        if self.need_mark_scan() {
+            let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+            mark_scan_map.clear();
+        }
+        self.is_build_projected.store(true, Ordering::Relaxed);
     }
 }

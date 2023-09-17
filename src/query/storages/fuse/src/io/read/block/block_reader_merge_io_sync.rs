@@ -88,7 +88,7 @@ impl BlockReader {
             // Fetch the raw data for the raw range.
             let start = (column_range.start - merged_range.start) as usize;
             let end = (column_range.end - merged_range.start) as usize;
-            read_res.add_column_chunk(merged_range_idx, column_id, start..end);
+            read_res.add_column_chunk(merged_range_idx, column_id, column_range, start..end);
         }
 
         Ok(read_res)
@@ -111,15 +111,16 @@ impl BlockReader {
                     continue;
                 }
             }
-            // first, check column array object cache
             let block_path = &part.location;
-            let column_cache_key = TableDataCacheKey::new(block_path, *column_id);
-            if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
-                cached_column_array.push((*column_id, cache_array));
-                continue;
-            }
+
             if let Some(column_meta) = part.columns_meta.get(column_id) {
+                // first, check column array object cache
                 let (offset, len) = column_meta.offset_length();
+                let column_cache_key = TableDataCacheKey::new(block_path, *column_id, offset, len);
+                if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
+                    cached_column_array.push((*column_id, cache_array));
+                    continue;
+                }
                 ranges.push((*column_id, offset..(offset + len)));
             }
         }

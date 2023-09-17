@@ -124,6 +124,17 @@ pub fn format_scalar(scalar: &ScalarExpr) -> String {
             )
         }
         ScalarExpr::SubqueryExpr(_) => "SUBQUERY".to_string(),
+        ScalarExpr::UDFServerCall(udf) => {
+            format!(
+                "{}({})",
+                &udf.func_name,
+                udf.arguments
+                    .iter()
+                    .map(|arg| { format_scalar(arg) })
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            )
+        }
     }
 }
 

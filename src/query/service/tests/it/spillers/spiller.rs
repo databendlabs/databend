@@ -87,6 +87,6 @@ async fn create_spiller() -> Result<Spiller> {
     Ok(Spiller::create(
         operator,
         spiller_config,
-        SpillerType::HashJoin,
+        SpillerType::HashJoinBuild,
     ))
 }

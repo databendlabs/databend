@@ -419,29 +419,12 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Grant(stmt) => visitor.visit_grant(stmt),
         Statement::ShowGrants { principal } => visitor.visit_show_grant(principal),
         Statement::Revoke(stmt) => visitor.visit_revoke(stmt),
-        Statement::CreateUDF {
-            if_not_exists,
-            udf_name,
-            parameters,
-            definition,
-            description,
-        } => visitor.visit_create_udf(
-            *if_not_exists,
-            udf_name,
-            parameters,
-            definition,
-            description,
-        ),
+        Statement::CreateUDF(stmt) => visitor.visit_create_udf(stmt),
         Statement::DropUDF {
             if_exists,
             udf_name,
         } => visitor.visit_drop_udf(*if_exists, udf_name),
-        Statement::AlterUDF {
-            udf_name,
-            parameters,
-            definition,
-            description,
-        } => visitor.visit_alter_udf(udf_name, parameters, definition, description),
+        Statement::AlterUDF(stmt) => visitor.visit_alter_udf(stmt),
         Statement::ListStage { location, pattern } => visitor.visit_list_stage(location, pattern),
         Statement::ShowStages => visitor.visit_show_stages(),
         Statement::DropStage {

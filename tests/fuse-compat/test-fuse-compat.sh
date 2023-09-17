@@ -17,7 +17,7 @@ query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
 usage() {
     echo " === Assert that latest query being compatible with an old version query on fuse-table format"
     echo " === Expect ./bins/current contains current version binaries"
-    echo " === Usage: $0 <old_version> <old_config_path> <logictest_path> <supplementray_statless_test_path>"
+    echo " === Usage: $0 <old_version> <logictest_path> <supplementray_statless_test_path>"
 }
 
 source "${SCRIPT_PATH}/util.sh"
@@ -46,10 +46,13 @@ echo " === current metasrv ver: $(./bins/current/databend-meta --single --cmd ve
 echo " === current   query ver: $(./bins/current/databend-query --cmd ver | tr '\n' ' ')"
 echo " === old query ver: $old_query_ver"
 
-download_binary "$old_query_ver"
 
 mkdir -p ./target/${BUILD_PROFILE}/
 
+download_query_config "$old_query_ver" old_config
+download_binary "$old_query_ver"
+
+old_config_path="old_config/$query_config_path"
 run_test $old_query_ver $old_config_path $logictest_path
 
 if [ -n "$stateless_test_path" ];

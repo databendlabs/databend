@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::exception::Result;
-use common_meta_app::principal::UserDefinedFunction;
+mod probe_spill_state;
 
-#[test]
-fn test_udf() -> Result<()> {
-    let udf = UserDefinedFunction::new(
-        "is_not_null",
-        vec!["p".to_string()],
-        "not(is_null(p))",
-        "this is a description",
-    );
-    let ser = serde_json::to_string(&udf)?;
-
-    let de = UserDefinedFunction::try_from(ser.into_bytes())?;
-    assert_eq!(udf, de);
-
-    Ok(())
-}
+pub use probe_spill_state::ProbeSpillState;

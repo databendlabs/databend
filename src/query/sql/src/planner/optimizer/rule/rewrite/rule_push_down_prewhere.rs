@@ -89,6 +89,11 @@ impl RulePushDownPrewhere {
                 Self::collect_columns_impl(table_index, schema, cast.argument.as_ref(), columns)?;
             }
             ScalarExpr::ConstantExpr(_) => {}
+            ScalarExpr::UDFServerCall(udf) => {
+                for arg in udf.arguments.iter() {
+                    Self::collect_columns_impl(table_index, schema, arg, columns)?;
+                }
+            }
             _ => {
                 // SubqueryExpr and AggregateFunction will not appear in Filter-LogicalGet
                 return Err(ErrorCode::Unimplemented(format!(
