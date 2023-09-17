@@ -2300,7 +2300,7 @@ pub struct CacheConfig {
     ///   increase this value.
     ///
     /// default value is 0, which means queue size will be adjusted automatically based on
-    /// mummer of CPU cores.
+    /// number of CPU cores.
     #[clap(long = "cache-data-cache-population-queue-size", default_value = "0")]
     pub table_data_cache_population_queue_size: u32,
 

@@ -18,4 +18,5 @@ common-exception = { path = "../../../../common/exception" }
 storages-common-cache = { path = "../../common/cache" }
 storages-common-index = { path = "../../common/index" }
 storages-common-table-meta = { path = "../../common/table-meta" }
-log = "0.4.19"
+
+log = { workspace = true }
