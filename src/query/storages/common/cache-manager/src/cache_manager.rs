@@ -71,9 +71,13 @@ impl CacheManager {
                     let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
                         config.table_data_cache_population_queue_size
                     } else {
-                        std::thread::available_parallelism()
-                            .expect("Cannot get thread count")
-                            .get() as u32
+                        std::cmp::max(
+                            1,
+                            std::thread::available_parallelism()
+                                .expect("Cannot get thread count")
+                                .get() as u32
+                                / 2,
+                        )
                     };
 
                     info!(
