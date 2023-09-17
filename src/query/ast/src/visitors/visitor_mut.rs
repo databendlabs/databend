@@ -530,26 +530,11 @@ pub trait VisitorMut: Sized {
 
     fn visit_revoke(&mut self, _revoke: &mut RevokeStmt) {}
 
-    fn visit_create_udf(
-        &mut self,
-        _if_not_exists: bool,
-        _udf_name: &mut Identifier,
-        _parameters: &mut [Identifier],
-        _definition: &mut Expr,
-        _description: &mut Option<String>,
-    ) {
-    }
+    fn visit_create_udf(&mut self, _stmt: &mut CreateUDFStmt) {}
 
     fn visit_drop_udf(&mut self, _if_exists: bool, _udf_name: &mut Identifier) {}
 
-    fn visit_alter_udf(
-        &mut self,
-        _udf_name: &mut Identifier,
-        _parameters: &mut [Identifier],
-        _definition: &mut Expr,
-        _description: &mut Option<String>,
-    ) {
-    }
+    fn visit_alter_udf(&mut self, _stmt: &mut AlterUDFStmt) {}
 
     fn visit_create_stage(&mut self, _stmt: &mut CreateStageStmt) {}
 

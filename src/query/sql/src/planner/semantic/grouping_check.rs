@@ -23,6 +23,7 @@ use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
+use crate::plans::UDFServerCall;
 use crate::BindContext;
 
 /// Check validity of scalar expression in a grouping context.
@@ -191,6 +192,22 @@ impl<'a> GroupingChecker<'a> {
                     .into());
                 }
                 Err(ErrorCode::Internal("Invalid aggregate function"))
+            }
+            ScalarExpr::UDFServerCall(udf) => {
+                let args = udf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.resolve(arg, span))
+                    .collect::<Result<Vec<ScalarExpr>>>()?;
+                Ok(UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments: args,
+                }
+                .into())
             }
         }
     }

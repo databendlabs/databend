@@ -17,7 +17,7 @@ use common_expression::Scalar;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::UDFServerCall { .. } => {}
         Expr::Cast { expr, .. } => find_eq_filter(expr, visitor),
         Expr::FunctionCall { function, args, .. } => {
             if function.signature.name == "eq" {
