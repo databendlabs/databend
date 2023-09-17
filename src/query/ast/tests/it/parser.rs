@@ -159,6 +159,7 @@ fn test_statement() {
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
+        r#"select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');"#,
         r#"select 'stringwith''quote'''"#,
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,

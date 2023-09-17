@@ -641,13 +641,12 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_stage = map(
         rule! {
-            (#file_location) ~  ("(" ~ ^#comma_separated_list0(select_stage_option) ~")")? ~ #table_alias?
+            (#file_location) ~  ( "(" ~ (#select_stage_option ~ ","?)* ~ ")" )? ~ #table_alias?
         },
         |(location, options, alias)| {
-            let options = match options {
-                None => vec![],
-                Some((_, v, _)) => v,
-            };
+            let options = options
+                .map(|(_, options, _)| options.into_iter().map(|(option, _)| option).collect())
+                .unwrap_or_default();
             TableReferenceElement::Stage {
                 location,
                 alias,
