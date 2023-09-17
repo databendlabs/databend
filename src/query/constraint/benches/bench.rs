@@ -50,7 +50,7 @@ fn bench(c: &mut Criterion) {
                     right: Box::new(MirExpr::Constant(MirConstant::Int(1))),
                 }),
             };
-            let result = variable_must_not_null("a", &assertion);
+            let result = variable_must_not_null(&assertion, "a");
             black_box(result);
         });
     });
@@ -99,7 +99,7 @@ fn bench(c: &mut Criterion) {
                     }),
                 }),
             };
-            let result = variable_must_not_null("a", &assertion);
+            let result = variable_must_not_null(&assertion, "a");
             black_box(result);
         });
     });

@@ -12,135 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_constraint::mir::MirBinaryOperator;
-use common_constraint::mir::MirConstant;
 use common_constraint::mir::MirDataType;
-use common_constraint::mir::MirExpr;
-use common_constraint::mir::MirUnaryOperator;
 use common_constraint::problem::variable_must_not_null;
+
+use crate::parser::parse_mir_expr;
 
 #[test]
 fn test_assert_int_not_null() {
-    // a is not null => a is not null
-    assert!(variable_must_not_null("a", &MirExpr::UnaryOperator {
-        op: MirUnaryOperator::Not,
-        arg: Box::new(MirExpr::UnaryOperator {
-            op: MirUnaryOperator::IsNull,
-            arg: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            })
-        })
-    }));
+    let variables = &[("a".to_string(), MirDataType::Int)].into_iter().collect();
 
-    // a > 0 => a is not null
-    assert!(variable_must_not_null("a", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::Gt,
-        left: Box::new(MirExpr::Variable {
-            name: "a".to_string(),
-            data_type: MirDataType::Int
-        }),
-        right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-    }));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a is not null", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 or a < 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and a < 1", variables),
+        "a",
+    ));
 
-    // a > 0 or true => a may be null
-    assert!(!variable_must_not_null("a", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::Or,
-        left: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        }),
-        right: Box::new(MirExpr::Constant(MirConstant::Bool(true)))
-    }));
-
-    // a > 0 or a < 0 => a is not null
-    assert!(variable_must_not_null("a", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::Or,
-        left: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        }),
-        right: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Lt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        })
-    }));
-
-    // a > 0 and a < 1 => a is not null
-    assert!(variable_must_not_null("a", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::And,
-        left: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        }),
-        right: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Lt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(1)))
-        })
-    }));
+    assert!(!variable_must_not_null(
+        &parse_mir_expr("a > 0 or true", variables),
+        "a",
+    ));
+    assert!(!variable_must_not_null(
+        &parse_mir_expr("a is null", variables),
+        "a",
+    ));
 }
 
 #[test]
 fn test_assert_int_is_not_null_multiple_variable() {
-    // a > 0 and b > 0 => a is not null
-    assert!(variable_must_not_null("a", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::And,
-        left: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        }),
-        right: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "b".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        })
-    }));
+    let variables = &[
+        ("a".to_string(), MirDataType::Int),
+        ("b".to_string(), MirDataType::Int),
+    ]
+    .into_iter()
+    .collect();
 
-    // a > 0 and b > 0 => b is not null
-    assert!(variable_must_not_null("b", &MirExpr::BinaryOperator {
-        op: MirBinaryOperator::And,
-        left: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "a".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        }),
-        right: Box::new(MirExpr::BinaryOperator {
-            op: MirBinaryOperator::Gt,
-            left: Box::new(MirExpr::Variable {
-                name: "b".to_string(),
-                data_type: MirDataType::Int
-            }),
-            right: Box::new(MirExpr::Constant(MirConstant::Int(0)))
-        })
-    }));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and b > 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and b > 0", variables),
+        "b",
+    ));
 }

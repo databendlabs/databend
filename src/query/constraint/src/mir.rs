@@ -239,7 +239,6 @@ impl MirExpr {
 
     pub fn from_z3_ast(ast: &Dynamic, variables: &HashMap<String, MirDataType>) -> Option<MirExpr> {
         let decl = ast.safe_decl().ok()?;
-        dbg!(decl.kind(), decl.name().as_str());
         match (decl.kind(), decl.name().as_str()) {
             (DeclKind::DT_CONSTRUCTOR, "TRUE_BOOL") | (DeclKind::TRUE, _) => {
                 Some(MirExpr::Constant(MirConstant::Bool(true)))

@@ -49,7 +49,7 @@ use crate::mir::MirUnaryOperator;
 /// // a > 0 => a is not null
 /// assert!(variable_must_not_null("a", &assertion));
 /// ```
-pub fn variable_must_not_null(variable: &str, assertion: &MirExpr) -> bool {
+pub fn variable_must_not_null(assertion: &MirExpr, variable: &str) -> bool {
     let ctx = &Context::new(&Config::new());
 
     let variables = assertion.variables();

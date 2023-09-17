@@ -21,6 +21,7 @@ use common_constraint::problem::variable_must_not_null;
 use common_expression::cast_scalar;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
 
@@ -83,7 +84,7 @@ impl ConstraintSet {
             })
             .unwrap();
 
-        variable_must_not_null(&variable.to_string(), &conjunctions)
+        variable_must_not_null(&conjunctions, &variable.to_string())
     }
 }
 
@@ -148,8 +149,8 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
         }
         ScalarExpr::ConstantExpr(constant) => {
             let value = match &constant.value {
-                scalar @ Scalar::Number(_) if scalar.as_ref().infer_data_type().is_integer() => {
-                    MirConstant::Int(parse_int_literal(scalar)?)
+                Scalar::Number(scalar) if scalar.data_type().is_integer() => {
+                    MirConstant::Int(parse_int_literal(*scalar)?)
                 }
                 Scalar::Boolean(value) => MirConstant::Bool(*value),
                 Scalar::Null => MirConstant::Null,
@@ -159,9 +160,9 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
         }
         ScalarExpr::BoundColumnRef(column_ref) => {
             let name = column_ref.column.index.to_string();
-            let data_type = match &*column_ref.column.data_type {
+            let data_type = match column_ref.column.data_type.remove_nullable() {
                 DataType::Boolean => MirDataType::Bool,
-                ty @ DataType::Number(_) if ty.is_integer() => MirDataType::Int,
+                DataType::Number(num_ty) if num_ty.is_integer() => MirDataType::Int,
                 _ => return None,
             };
             Some(MirExpr::Variable { name, data_type })
@@ -172,11 +173,11 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
 
 /// Parse a scalar value into a i64 if possible.
 /// This is used to parse a constant expression into z3 ast.
-fn parse_int_literal(lit: &Scalar) -> Option<i64> {
+fn parse_int_literal(lit: NumberScalar) -> Option<i64> {
     Some(
         cast_scalar(
             None,
-            lit.clone(),
+            Scalar::Number(lit),
             DataType::Number(NumberDataType::Int64),
             &BUILTIN_FUNCTIONS,
         )
