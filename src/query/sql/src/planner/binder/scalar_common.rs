@@ -161,6 +161,7 @@ pub fn contain_subquery(scalar: &ScalarExpr) -> bool {
         }
         ScalarExpr::FunctionCall(func) => func.arguments.iter().any(contain_subquery),
         ScalarExpr::CastExpr(CastExpr { argument, .. }) => contain_subquery(argument),
+        ScalarExpr::UDFServerCall(udf) => udf.arguments.iter().any(contain_subquery),
         _ => false,
     }
 }
@@ -212,6 +213,10 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
             .all(|arg| prune_by_children(arg, columns)),
         ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
         ScalarExpr::SubqueryExpr(_) => false,
+        ScalarExpr::UDFServerCall(udf) => udf
+            .arguments
+            .iter()
+            .all(|arg| prune_by_children(arg, columns)),
     }
 }
 

@@ -80,13 +80,13 @@ impl AsyncSystemTable for FunctionsTable {
         let definitions = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    ""
+                    "".to_string()
                 } else {
                     udfs.get(i - builtin_func_len)
-                        .map_or("", |udf| udf.definition.as_str())
+                        .map_or("".to_string(), |udf| udf.definition.to_string())
                 }
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<String>>();
 
         let categories = (0..names.len())
             .map(|i| if i < builtin_func_len { "" } else { "UDF" })
@@ -106,24 +106,28 @@ impl AsyncSystemTable for FunctionsTable {
         let syntaxes = (0..names.len())
             .map(|i| {
                 if i < builtin_func_len {
-                    ""
+                    "".to_string()
                 } else {
                     udfs.get(i - builtin_func_len)
-                        .map_or("", |udf| udf.definition.as_str())
+                        .map_or("".to_string(), |udf| udf.definition.to_string())
                 }
             })
-            .collect::<Vec<&str>>();
+            .collect::<Vec<String>>();
 
         let examples = (0..names.len()).map(|_| "").collect::<Vec<&str>>();
-
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             BooleanType::from_data(is_builtin),
             BooleanType::from_data(is_aggregate),
-            StringType::from_data(definitions),
+            StringType::from_data(
+                definitions
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<&str>>(),
+            ),
             StringType::from_data(categories),
             StringType::from_data(descriptions),
-            StringType::from_data(syntaxes),
+            StringType::from_data(syntaxes.iter().map(String::as_str).collect::<Vec<&str>>()),
             StringType::from_data(examples),
         ]))
     }
