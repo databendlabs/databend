@@ -79,6 +79,6 @@ error:
   --> SQL:1:10
   |
 1 | select 1 1
-  |          ^ expected <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, or 14 more ...
+  |          ^ expected <Ident>, <QuotedString>, `AS`, `,`, `FROM`, `WHERE`, `GROUP`, `HAVING`, `WINDOW`, `(`, `WITH`, `UNION`, `EXCEPT`, `INTERSECT`, `SELECT`, `VALUES`, `ORDER`, `LIMIT`, `OFFSET`, or `IGNORE_RESULT`
 
 

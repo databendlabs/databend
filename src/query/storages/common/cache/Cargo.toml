@@ -15,6 +15,7 @@ test = false
 enable-histogram-metrics = ["metrics/enable-histogram"]
 
 [dependencies]
+bytes = { workspace = true }
 common-cache = { path = "../../../../common/cache" }
 common-exception = { path = "../../../../common/exception" }
 common-metrics = { path = "../../../../common/metrics" }

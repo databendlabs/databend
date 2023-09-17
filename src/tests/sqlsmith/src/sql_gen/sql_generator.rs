@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::GroupBy;
 use common_expression::types::DataType;
 use common_expression::FunctionSignature;
 use common_expression::TableSchemaRef;
@@ -45,16 +46,29 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) is_join: bool,
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) rng: &'a mut R,
+    pub(crate) group_by: Option<GroupBy>,
 }
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn new(rng: &'a mut R) -> Self {
         let mut scalar_func_sigs = Vec::new();
-        for (_, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
+        for (name, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
+            // Ignore unsupported binary functions, avoid parse binary operator failure
+            if name == "div"
+                || name == "and"
+                || name == "or"
+                || name == "xor"
+                || name == "like"
+                || name == "regexp"
+                || name == "rlike"
+            {
+                continue;
+            }
             for (scalar_func, _) in func_list {
                 scalar_func_sigs.push(scalar_func.signature.clone());
             }
         }
+
         SqlGenerator {
             tables: vec![],
             bound_tables: vec![],
@@ -62,6 +76,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             is_join: false,
             scalar_func_sigs,
             rng,
+            group_by: None,
         }
     }
 }

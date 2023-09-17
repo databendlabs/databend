@@ -513,8 +513,14 @@ fn test_strcmp(file: &mut impl Write) {
 
 fn test_locate(file: &mut impl Write) {
     run_ast(file, "locate('bar', 'foobarbar')", &[]);
+    run_ast(file, "locate('', 'foobarbar')", &[]);
+    run_ast(file, "locate('', '')", &[]);
     run_ast(file, "instr('foobarbar', 'bar')", &[]);
+    run_ast(file, "instr('foobarbar', '')", &[]);
+    run_ast(file, "instr('', '')", &[]);
     run_ast(file, "position('bar' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN '')", &[]);
     run_ast(file, "position('foobarbar' IN 'bar')", &[]);
     run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
 

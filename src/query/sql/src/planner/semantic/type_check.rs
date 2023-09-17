@@ -1394,13 +1394,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let offset = if args.len() >= 2 {
-            let off = ScalarExpr::CastExpr(CastExpr {
-                span: args[1].span(),
-                is_try: false,
-                argument: Box::new(args[1].clone()),
-                target_type: Box::new(DataType::Number(NumberDataType::Int64)),
-            })
-            .as_expr()?;
+            let off = args[1].as_expr()?;
             Some(check_number::<_, i64>(
                 off.span(),
                 &self.func_ctx,
@@ -1489,13 +1483,7 @@ impl<'a> TypeChecker<'a> {
                     ));
                 }
                 let return_type = arg_types[0].wrap_nullable();
-                let n_expr = ScalarExpr::CastExpr(CastExpr {
-                    span: args[1].span(),
-                    is_try: false,
-                    argument: Box::new(args[1].clone()),
-                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-                })
-                .as_expr()?;
+                let n_expr = args[1].as_expr()?;
                 let n = check_number::<_, u64>(
                     n_expr.span(),
                     &self.func_ctx,
@@ -1527,14 +1515,8 @@ impl<'a> TypeChecker<'a> {
                 "Argument number is invalid".to_string(),
             ));
         }
-        let n_expr = ScalarExpr::CastExpr(CastExpr {
-            span: args[0].span(),
-            is_try: false,
-            argument: Box::new(args[0].clone()),
-            target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
-        })
-        .as_expr()?;
-        let return_type = n_expr.data_type().wrap_nullable();
+        let n_expr = args[0].as_expr()?;
+        let return_type = DataType::Number(NumberDataType::UInt64);
         let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
         if n == 0 {
             return Err(ErrorCode::InvalidArgument(
@@ -2483,15 +2465,27 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map(
         &mut self,
         span: Span,
-        kvs: &[(Expr, Expr)],
+        kvs: &[(Literal, Literal)],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs {
-            let box (key_arg, _data_type) = self.resolve(key_expr).await?;
-            keys.push(key_arg);
-            let box (val_arg, _data_type) = self.resolve(val_expr).await?;
-            vals.push(val_arg);
+            let box (key_arg, _data_type) = self.resolve_literal(key_expr)?;
+            keys.push(
+                ConstantExpr {
+                    span,
+                    value: key_arg,
+                }
+                .into(),
+            );
+            let box (val_arg, _data_type) = self.resolve_literal(val_expr)?;
+            vals.push(
+                ConstantExpr {
+                    span,
+                    value: val_arg,
+                }
+                .into(),
+            );
         }
         let box (key_arg, _data_type) = self
             .resolve_scalar_function_call(span, "array", vec![], keys)

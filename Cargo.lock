@@ -1295,9 +1295,9 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "bytes"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89b2fd2a0dcf38d7971e2194b6b6eebab45ae01067456a7fd93d5547a61b70be"
+checksum = "a2bd12c1caf447e69cd4528f47f94d203fd2582878ecb9e9465484c4148a8223"
 
 [[package]]
 name = "bytesize"
@@ -1744,10 +1744,12 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
+ "ordered-float 3.7.0",
  "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
  "regex",
+ "strsim",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "url",
@@ -1813,6 +1815,7 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "hashbrown 0.14.0",
  "hashlink",
  "heapsize",
@@ -2123,6 +2126,7 @@ dependencies = [
  "micromarshal",
  "ordered-float 3.7.0",
  "rand 0.8.5",
+ "roaring",
  "serde",
 ]
 
@@ -2693,6 +2697,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -2720,6 +2725,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "backoff",
+ "bytes",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2739,6 +2745,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "enum-as-inner",
  "futures",
  "futures-util",
  "indexmap 2.0.0",
@@ -3030,6 +3037,7 @@ dependencies = [
  "common-pipeline-sources",
  "common-profile",
  "common-sql",
+ "common-storage",
  "common-storages-fuse",
  "common-storages-result-cache",
  "common-storages-view",
@@ -3038,6 +3046,7 @@ dependencies = [
  "jsonb",
  "log",
  "once_cell",
+ "opendal",
  "parking_lot 0.12.1",
  "serde",
  "serde_json",
@@ -3672,9 +3681,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fd1d9d1b4f474f743549112dfb85e71ccd9530abd47edd19241f4567ff336a2"
+checksum = "f2941c5d2097957273b7bcd5ac435cbb26300623ad552b338a2c33e11ad2e1c6"
 dependencies = [
  "http",
  "once_cell",
@@ -3691,9 +3700,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c402b1f20c258ac6a910b66d8cc195cf6c118e8e52f8b9650c47e2b9782c1ec8"
+checksum = "c28bce2614c0380c1e53484f0ee69927838a5ce7dd25bbb2f2b1d82eef15cfbd"
 dependencies = [
  "arrow",
  "async-trait",
@@ -3712,9 +3721,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ce225a910749970199d090f4e2b13724e757e9b383b24c808a1fb45ae81b534"
+checksum = "1158e6a1226782ff59133a62c802b376e46766f4776c2b57e28dd7c0528b2b0a"
 dependencies = [
  "quote",
  "syn 2.0.29",
@@ -3918,9 +3927,9 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.6.4"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c2f7f18c2bd9ff509937fc4601cb9ce8c1b5134539c1f8650d1a397c2325ec8"
+checksum = "ab55fde0ba5e4e967265d0f2757b51969abdea338230a8b120a2799f38c48335"
 dependencies = [
  "arrow",
  "chrono",
@@ -3965,11 +3974,15 @@ dependencies = [
  "common-expression",
  "common-formats",
  "common-functions",
+ "common-io",
  "common-sql",
+ "databend-client",
  "databend-driver",
  "ethnum",
+ "itertools 0.10.5",
  "jsonb",
  "rand 0.8.5",
+ "roaring",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -10952,6 +10965,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "common-cache",
  "common-exception",
  "common-metrics",

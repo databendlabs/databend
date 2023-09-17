@@ -18,14 +18,13 @@ bend 2 d
 statement ok
 truncate table tit
 
-query
+query 
 copy into tit (c, b) from (select $2, $1 + 1 from @data/csv/it.csv ) FILE_FORMAT = (type = CSV) force = true
 ----
 csv/it.csv 2 0 NULL NULL
 
-query
+query 
 select * from tit order by b
 ----
 bend 2 b
 bend 3 d
-

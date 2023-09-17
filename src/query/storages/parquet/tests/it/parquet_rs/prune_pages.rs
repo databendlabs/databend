@@ -45,10 +45,12 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     .unwrap();
     let parquet_meta = metadata.metadata();
     let schema = TableSchema::try_from(arrow_schema.as_ref()).unwrap();
+    let leaf_fields = Arc::new(schema.leaf_fields());
 
     let pruner = ParquetRSPruner::try_create(
         FunctionContext::default(),
         Arc::new(schema),
+        leaf_fields,
         &plan.push_downs,
         ParquetReadOptions::new()
             .with_prune_row_groups(false)
@@ -65,7 +67,7 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
     assert_eq!(
         expected_selection, selection,
         "Expected {:?}, got {:?}. Scenario: {:?}, predicate: {}",
-        selection, selection, scenario, predicate
+        expected_selection, selection, scenario, predicate
     );
 }
 
@@ -308,113 +310,112 @@ async fn test_int32_eq_in_list_negated() {
     .await;
 }
 
-// TODO(parquet): uncomment until decimal types support `calc_domain`.
-// #[tokio::test]
-// async fn test_decimal_lt() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three pages each 5 rows:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col < 4",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     // compare with the casted decimal value
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col < cast(4.55 as decimal(20,2))",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
+#[tokio::test]
+async fn test_decimal_lt() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three pages each 5 rows:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(
+        Scenario::Decimal,
+        "decimal_col < 4",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    // compare with the casted decimal value
+    test(
+        Scenario::Decimal,
+        "decimal_col < cast(4.55 as decimal(20,2))",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col < 4",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     // compare with the casted decimal value
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col < cast(4.55 as decimal(20,2))",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col < 4",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    // compare with the casted decimal value
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col < cast(4.55 as decimal(20,2))",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+}
 
-// #[tokio::test]
-// async fn test_decimal_eq() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three pages:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col = 4",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col = 4.00",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
+#[tokio::test]
+async fn test_decimal_eq() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three pages:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(
+        Scenario::Decimal,
+        "decimal_col = 4",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    test(
+        Scenario::Decimal,
+        "decimal_col = 4.00",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col = 4",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "SELECT * FROM t where decimal_col = 4.00",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col = 30.00",
-//         RowSelection::from(vec![RowSelector::skip(10), RowSelector::select(5)]),
-//     )
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col = 4",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col = 4.00",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col = 30.00",
+        RowSelection::from(vec![RowSelector::skip(10), RowSelector::select(5)]),
+    )
+    .await;
+}
 
-// #[tokio::test]
-// async fn test_decimal_in_list() {
-//     // The data type of decimal_col is decimal(9,2)
-//     // There are three pages:
-//     // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col in (4,3,2,123456789123)",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     test(
-//         Scenario::Decimal,
-//         "decimal_col in (4.00,3.00,11.2345,1)",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
+#[tokio::test]
+async fn test_decimal_in_list() {
+    // The data type of decimal_col is decimal(9,2)
+    // There are three pages:
+    // [1.00, 6.00], [-5.00,6.00], [20.00,60.00]
+    test(
+        Scenario::Decimal,
+        "decimal_col in (4,3,123456789123)",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    test(
+        Scenario::Decimal,
+        "decimal_col in (4.00,3.00,11.2345)",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
 
-//     // The data type of decimal_col is decimal(38,2)
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col in (4,3,2,123456789123)",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-//     test(
-//         Scenario::DecimalLargePrecision,
-//         "decimal_col in (4.00,3.00,11.2345,1)",
-//         RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
-//     )
-//     .await;
-// }
+    // The data type of decimal_col is decimal(38,2)
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col in (4,3,123456789123)",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+    test(
+        Scenario::DecimalLargePrecision,
+        "decimal_col in (4.00,3.00,11.2345,1)",
+        RowSelection::from(vec![RowSelector::select(10), RowSelector::skip(5)]),
+    )
+    .await;
+}
 
 #[tokio::test]
 async fn test_periods_in_column_names() {

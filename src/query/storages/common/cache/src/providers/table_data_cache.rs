@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
+use bytes::Bytes;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
@@ -35,7 +36,7 @@ use crate::LruDiskCacheBuilder;
 
 struct CacheItem {
     key: String,
-    value: Arc<Vec<u8>>,
+    value: Arc<Bytes>,
 }
 
 #[derive(Clone)]
@@ -44,9 +45,9 @@ pub struct TableDataCacheKey {
 }
 
 impl TableDataCacheKey {
-    pub fn new(block_path: &str, column_id: u32) -> Self {
+    pub fn new(block_path: &str, column_id: u32, offset: u64, len: u64) -> Self {
         Self {
-            cache_key: format!("{block_path}-{column_id}"),
+            cache_key: format!("{block_path}-{column_id}-{offset}-{len}"),
         }
     }
 }
@@ -90,8 +91,8 @@ impl TableDataCacheBuilder {
     }
 }
 
-impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCache {
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
+impl CacheAccessor<String, Bytes, DefaultHashBuilder, Count> for TableDataCache {
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
         metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
@@ -103,7 +104,7 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
         }
     }
 
-    fn put(&self, k: String, v: Arc<Vec<u8>>) {
+    fn put(&self, k: String, v: Arc<Bytes>) {
         // check if external(disk/redis) already have it.
         if !self.external_cache.contains_key(&k) {
             // populate the cache to external cache(disk/redis) asyncly
@@ -146,7 +147,7 @@ struct CachePopulationWorker<T> {
 }
 
 impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static
+where T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static
 {
     fn populate(&self) {
         loop {
@@ -187,7 +188,7 @@ impl DiskCachePopulator {
         _num_worker_thread: usize,
     ) -> Result<Self>
     where
-        T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static,
+        T: CacheAccessor<String, Bytes, DefaultHashBuilder, Count> + Send + Sync + 'static,
     {
         let worker = Arc::new(CachePopulationWorker {
             cache,

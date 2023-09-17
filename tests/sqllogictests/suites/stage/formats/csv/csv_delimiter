@@ -55,7 +55,7 @@ copy into it from @data/csv/header_only.csv file_format = (type = CSV skip_heade
 query TIITI
 copy into it from @data/csv/whitespace_number.csv file_format = (type = CSV) on_error=continue
 ----
-csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): invalid text for number, [column_data]=[" 123"] 1
+csv/whitespace_number.csv 0 2 fail to decode column 0 (a Int32): invalid text for number 1
 
 statement ok
 drop table if exists tt

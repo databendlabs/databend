@@ -19,6 +19,7 @@ use common_catalog::plan::ParquetReadOptions;
 use common_catalog::plan::PushDownInfo;
 use common_exception::Result;
 use common_expression::FunctionContext;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use parquet::arrow::arrow_reader::RowSelection;
@@ -27,6 +28,7 @@ use parquet::file::metadata::ParquetMetaData;
 use parquet::format::PageLocation;
 use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::statistics::collect_row_group_stats;
 use crate::parquet_rs::statistics::convert_index_to_column_statistics;
@@ -35,7 +37,7 @@ use crate::parquet_rs::statistics::convert_index_to_column_statistics;
 ///
 /// We can use this pruner to compute row groups and pages to skip.
 pub struct ParquetRSPruner {
-    schema: TableSchemaRef,
+    leaf_fields: Arc<Vec<TableField>>,
     range_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
     prune_row_groups: bool,
     prune_pages: bool,
@@ -48,6 +50,7 @@ impl ParquetRSPruner {
     pub fn try_create(
         func_ctx: FunctionContext,
         schema: TableSchemaRef,
+        leaf_fields: Arc<Vec<TableField>>,
         push_down: &Option<PushDownInfo>,
         options: ParquetReadOptions,
     ) -> Result<Self> {
@@ -60,14 +63,13 @@ impl ParquetRSPruner {
         let mut predicate_columns = vec![];
         let range_pruner =
             if filter.is_some() && (options.prune_row_groups() || options.prune_pages()) {
-                let fields = schema.leaf_fields();
                 predicate_columns = filter
                     .as_ref()
                     .unwrap()
                     .column_refs()
                     .into_keys()
                     .map(|name| {
-                        fields
+                        leaf_fields
                             .iter()
                             .position(|f| f.name.eq_ignore_ascii_case(&name))
                             .unwrap()
@@ -81,7 +83,7 @@ impl ParquetRSPruner {
             };
 
         Ok(ParquetRSPruner {
-            schema,
+            leaf_fields,
             range_pruner,
             prune_row_groups: options.prune_row_groups(),
             prune_pages: options.prune_pages(),
@@ -92,36 +94,41 @@ impl ParquetRSPruner {
     /// Prune row groups of a parquet file.
     ///
     /// Return the selected row groups' indices in the meta.
-    pub fn prune_row_groups(&self, meta: &ParquetMetaData) -> Result<Vec<usize>> {
+    ///
+    /// If `stats` is not [None], we use this statistics to prune but not collect again.
+    pub fn prune_row_groups(
+        &self,
+        meta: &ParquetMetaData,
+        stats: Option<&[StatisticsOfColumns]>,
+    ) -> Result<Vec<usize>> {
         if !self.prune_row_groups {
             return Ok((0..meta.num_row_groups()).collect());
         }
         match &self.range_pruner {
             None => Ok((0..meta.num_row_groups()).collect()),
             Some(pruner) => {
-                // Only if the file has row groups level statistics, we can use them to prune.
-                if meta
-                    .row_groups()
-                    .iter()
-                    .any(|rg| rg.columns().iter().any(|c| c.statistics().is_none()))
-                {
-                    return Ok((0..meta.num_row_groups()).collect());
-                }
-                let leaf_fields = self.schema.leaf_fields();
-                let row_group_stats = collect_row_group_stats(
-                    meta.row_groups(),
-                    &leaf_fields,
-                    &self.predicate_columns,
-                )?;
                 let mut selection = Vec::with_capacity(meta.num_row_groups());
-
-                for (i, row_group) in row_group_stats.iter().enumerate() {
-                    if pruner.should_keep(row_group, None) {
-                        selection.push(i);
+                if let Some(row_group_stats) = stats {
+                    for (i, row_group) in row_group_stats.iter().enumerate() {
+                        if pruner.should_keep(row_group, None) {
+                            selection.push(i);
+                        }
                     }
+                    Ok(selection)
+                } else if let Some(row_group_stats) = collect_row_group_stats(
+                    meta.row_groups(),
+                    &self.leaf_fields,
+                    Some(&self.predicate_columns),
+                ) {
+                    for (i, row_group) in row_group_stats.iter().enumerate() {
+                        if pruner.should_keep(row_group, None) {
+                            selection.push(i);
+                        }
+                    }
+                    Ok(selection)
+                } else {
+                    Ok((0..meta.num_row_groups()).collect())
                 }
-
-                Ok(selection)
             }
         }
     }
@@ -144,7 +151,7 @@ impl ParquetRSPruner {
                 if meta.column_index().is_none() || meta.offset_index().is_none() {
                     return Ok(None);
                 }
-                let fields = self.schema.leaf_fields();
+                let fields = self.leaf_fields.as_ref();
                 let all_column_index = meta.column_index().unwrap();
                 let all_offset_index = meta.offset_index().unwrap();
                 assert_eq!(all_column_index.len(), all_offset_index.len());

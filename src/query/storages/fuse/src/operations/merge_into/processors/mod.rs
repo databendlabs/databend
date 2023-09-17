@@ -17,5 +17,6 @@ mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
 mod transform_matched_mutation_aggregator;
 pub use processor_matched_split::MatchedSplitProcessor;
+pub(crate) use processor_matched_split::RowIdKind;
 pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;

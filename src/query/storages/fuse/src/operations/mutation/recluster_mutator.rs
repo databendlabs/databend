@@ -371,7 +371,7 @@ impl ReclusterMutator {
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
-    fn check_point(start: &[usize], end: &[usize]) -> bool {
+    pub fn check_point(start: &[usize], end: &[usize]) -> bool {
         if start.len() + end.len() > 3 || start.is_empty() || end.is_empty() {
             return false;
         }

@@ -331,7 +331,7 @@ impl StoreInner {
             move || {
                 Self::testing_sleep("compact", sleep);
                 // TODO: this is a future never returning Pending:
-                futures::executor::block_on(s.compact())
+                futures::executor::block_on(s.compact_mem_levels())
             }
         });
 

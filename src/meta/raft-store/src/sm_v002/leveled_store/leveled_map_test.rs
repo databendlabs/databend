@@ -15,14 +15,14 @@
 use common_meta_types::KVMeta;
 use futures_util::StreamExt;
 
-use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 
 #[tokio::test]
-async fn test_new_level() -> anyhow::Result<()> {
-    let mut l = Level::default();
+async fn test_freeze() -> anyhow::Result<()> {
+    let mut l = LeveledMap::default();
 
     // Insert an entry at level 0
     let (prev, result) = MapApi::<String>::set(&mut l, s("a1"), Some((b("b0"), None))).await;
@@ -30,7 +30,7 @@ async fn test_new_level() -> anyhow::Result<()> {
     assert_eq!(result, Marked::new_normal(1, b("b0"), None));
 
     // Insert the same entry at level 1
-    l.new_level();
+    l.freeze_writable();
 
     let (prev, result) = MapApi::<String>::set(&mut l, s("a1"), Some((b("b1"), None))).await;
     assert_eq!(prev, Marked::new_normal(1, b("b0"), None));
@@ -47,9 +47,9 @@ async fn test_new_level() -> anyhow::Result<()> {
     ]);
 
     // Listing from the base level sees the old value.
-    let base = l.get_base().unwrap();
+    let frozen = l.frozen_ref();
 
-    let got = MapApiRO::<String>::range(base.as_ref(), s("")..)
+    let got = MapApiRO::<String>::range(frozen, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -63,7 +63,7 @@ async fn test_new_level() -> anyhow::Result<()> {
 
 #[tokio::test]
 async fn test_single_level() -> anyhow::Result<()> {
-    let mut l = Level::default();
+    let mut l = LeveledMap::default();
 
     // Write a1
     let (prev, result) = MapApi::<String>::set(&mut l, s("a1"), Some((b("b1"), None))).await;
@@ -122,7 +122,7 @@ async fn test_single_level() -> anyhow::Result<()> {
 async fn test_two_levels() -> anyhow::Result<()> {
     // Create the first level
 
-    let mut l = Level::default();
+    let mut l = LeveledMap::default();
 
     MapApi::<String>::set(&mut l, s("a1"), Some((b("b1"), None))).await;
     MapApi::<String>::set(&mut l, s("a2"), Some((b("b2"), None))).await;
@@ -141,7 +141,7 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Create a new level
 
-    l.new_level();
+    l.freeze_writable();
 
     // Override
     let (prev, result) = MapApi::<String>::set(&mut l, s("a2"), Some((b("b3"), None))).await;
@@ -187,9 +187,9 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
     // Check base level
 
-    let base = l.get_base().unwrap();
+    let frozen = l.frozen_ref();
 
-    let it = MapApiRO::<String>::range(base.as_ref(), s("")..).await;
+    let it = MapApiRO::<String>::range(frozen, s("")..).await;
     let got = it.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
@@ -207,21 +207,21 @@ async fn test_two_levels() -> anyhow::Result<()> {
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d
-async fn build_3_levels() -> Level {
-    let mut l = Level::default();
+async fn build_3_levels() -> LeveledMap {
+    let mut l = LeveledMap::default();
     // internal_seq: 0
     MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
     MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None))).await;
     MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None))).await;
     MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
 
-    l.new_level();
+    l.freeze_writable();
     // internal_seq: 4
     MapApi::<String>::set(&mut l, s("b"), None).await;
     MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None))).await;
     MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
 
-    l.new_level();
+    l.freeze_writable();
     // internal_seq: 6
     MapApi::<String>::set(&mut l, s("c"), None).await;
     MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None))).await;
@@ -358,8 +358,8 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
 
 /// |      b(m) c
 /// | a(m) b    c(m)
-async fn build_2_level_with_meta() -> Level {
-    let mut l = Level::default();
+async fn build_2_level_with_meta() -> LeveledMap {
+    let mut l = LeveledMap::default();
 
     // internal_seq: 0
     MapApi::<String>::set(
@@ -376,7 +376,7 @@ async fn build_2_level_with_meta() -> Level {
     )
     .await;
 
-    l.new_level();
+    l.freeze_writable();
 
     // internal_seq: 3
     MapApi::<String>::set(

@@ -203,7 +203,7 @@ pub enum Expr {
         modifier: Option<SubqueryModifier>,
         subquery: Box<Query>,
     },
-    /// Access elements of `Array`, `Object` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
+    /// Access elements of `Array`, `Map` and `Variant` by index or key, like `arr[0]`, or `obj:k1`
     MapAccess {
         span: Span,
         expr: Box<Expr>,
@@ -212,7 +212,10 @@ pub enum Expr {
     /// The `Array` expr
     Array { span: Span, exprs: Vec<Expr> },
     /// The `Map` expr
-    Map { span: Span, kvs: Vec<(Expr, Expr)> },
+    Map {
+        span: Span,
+        kvs: Vec<(Literal, Literal)>,
+    },
     /// The `Interval 1 DAY` expr
     Interval {
         span: Span,
@@ -1164,7 +1167,7 @@ impl Display for Expr {
                 date,
                 ..
             } => {
-                write!(f, "DATE_ADD({unit}, INTERVAL {interval}, {date})")?;
+                write!(f, "DATE_ADD({unit}, {interval}, {date})")?;
             }
             Expr::DateSub {
                 unit,
@@ -1172,7 +1175,7 @@ impl Display for Expr {
                 date,
                 ..
             } => {
-                write!(f, "DATE_SUB({unit}, INTERVAL {interval}, {date})")?;
+                write!(f, "DATE_SUB({unit}, {interval}, {date})")?;
             }
             Expr::DateTrunc { unit, date, .. } => {
                 write!(f, "DATE_TRUNC({unit}, {date})")?;

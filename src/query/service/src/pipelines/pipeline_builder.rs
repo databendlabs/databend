@@ -128,6 +128,7 @@ use parking_lot::RwLock;
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
+use super::processors::TransformResortAddOnWithoutSourceSchema;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
@@ -137,6 +138,7 @@ use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -437,6 +439,7 @@ impl PipelineBuilder {
             matched.clone(),
             field_index_of_input_schema.clone(),
             input.output_schema()?,
+            Arc::new(DataSchema::from(tbl.schema())),
         )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
@@ -482,6 +485,21 @@ impl PipelineBuilder {
 
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
+        // fill default columns
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                TransformResortAddOnWithoutSourceSchema::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    Arc::new(DataSchema::from(tbl.schema())),
+                    tbl.clone(),
+                )
+            },
+            1,
+        )?;
+        builder.add_items_prepend(vec![create_dummy_item()]);
+        self.main_pipeline.add_pipe(builder.finalize());
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
@@ -513,10 +531,6 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        // todo:(JackTan25): process filling default columns
-        // because the datablock we receive here may have different
-        // schema, so we can't just add build_filling_default_columns
-        // to solve it simply. we will add new processor in the later pr.
         Ok(())
     }
 
@@ -1831,16 +1845,27 @@ impl PipelineBuilder {
             self.ctx.clone(),
             state,
             &join.probe_projections,
+            &join.probe_keys,
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
-        ));
+        )?);
+
         self.main_pipeline.add_transform(|input, output| {
+            let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+                Some(Box::new(ProbeSpillState::create(
+                    self.ctx.clone(),
+                    probe_state.clone(),
+                )))
+            } else {
+                None
+            };
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
                 probe_state.clone(),
+                probe_spill_state,
                 max_block_size,
                 func_ctx.clone(),
                 &join.join_type,

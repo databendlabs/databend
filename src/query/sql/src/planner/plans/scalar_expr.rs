@@ -324,7 +324,7 @@ pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }
 
-#[derive(Clone, Debug, Educe)]
+#[derive(Clone, Debug, Educe, Ord, PartialOrd)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
@@ -332,7 +332,7 @@ pub struct ConstantExpr {
     pub value: Scalar,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,
@@ -367,6 +367,17 @@ impl ComparisonOp {
             ComparisonOp::LT => "lt",
             ComparisonOp::GTE => "gte",
             ComparisonOp::LTE => "lte",
+        }
+    }
+
+    pub fn reverse(&self) -> Self {
+        match &self {
+            ComparisonOp::Equal => ComparisonOp::Equal,
+            ComparisonOp::NotEqual => ComparisonOp::NotEqual,
+            ComparisonOp::GT => ComparisonOp::LT,
+            ComparisonOp::LT => ComparisonOp::GT,
+            ComparisonOp::GTE => ComparisonOp::LTE,
+            ComparisonOp::LTE => ComparisonOp::GTE,
         }
     }
 }

@@ -16,8 +16,6 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use crate::ast::StageLocation;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignAction {
     Download,
@@ -42,7 +40,7 @@ impl Display for PresignAction {
 /// TODO: we can support uri location in the future.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresignLocation {
-    StageLocation(StageLocation),
+    StageLocation(String),
 }
 
 impl Display for PresignLocation {

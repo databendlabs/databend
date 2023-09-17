@@ -251,6 +251,10 @@ impl ScalarExpr {
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         self.as_raw_expr().type_check()
     }
+
+    pub fn is_column_ref(&self) -> bool {
+        matches!(self, ScalarExpr::BoundColumnRef(_))
+    }
 }
 
 fn new_dummy_column(data_type: DataType) -> ColumnBinding {

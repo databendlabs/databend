@@ -1,3 +1,11 @@
+query I
+select range(10, 20)
+----
+[10,11,12,13,14,15,16,17,18,19]
+
+statement error
+select range(10, 5000000011)
+
 statement ok
 DROP DATABASE IF EXISTS array_func_test
 
@@ -166,10 +174,10 @@ select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 
 ----
 3 1 9
 
-query TTTTT
-select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
+query TTTTTTTT
+select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5), array_sort([NULL, NULL, NULL]), array_sort([[], [], []]), array_sort([{}, {}, {}]) from t
 ----
-[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]]
+[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]] [NULL,NULL,NULL] [[],[],[]] [{},{},{}]
 
 query TTTTT
 select array_sort(col1, 'asc', 'NULLS FIRST'),array_sort(col2, 'desc'),array_sort(col3, 'desc', 'nulls last'),array_sort(col4),array_sort(col5, 'DESC', 'NULLS FIRST') from t
@@ -185,7 +193,7 @@ select array_sort(col1, 'asca', 'nulls first') from t;
 query T
 select array_transform([1, 2, NULL, 3], x -> x + 1)
 ----
-[2,3,NULL,4] 
+[2,3,NULL,4]
 
 query T
 select array_transform(['data', 'a', 'b'], data -> CONCAT(data, 'bend'))

@@ -19,6 +19,7 @@ mod rule;
 mod rule_set;
 mod transform;
 mod transform_result;
+mod utils;
 
 pub use factory::RuleFactory;
 pub use rewrite::agg_index;
@@ -29,3 +30,4 @@ pub use rule::RulePtr;
 pub use rule_set::AppliedRules;
 pub use rule_set::RuleSet;
 pub use transform_result::TransformResult;
+pub use utils::constant;

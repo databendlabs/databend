@@ -167,7 +167,22 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_2_arg::<NumberType<u64>, NumberType<u64>, ArrayType<NumberType<u64>>, _, _>(
         "range",
         |_, _, _| FunctionDomain::Full,
-        |start, end, _| (start..end).collect(),
+        |start, end, ctx| {
+            const MAX: u64 = 500000000;
+            if end - start > MAX {
+                // the same behavior as Clickhouse
+                ctx.set_error(
+                    0,
+                    format!(
+                        "the allowed maximum values of range function is {}, but got {}",
+                        MAX,
+                        end - start
+                    ),
+                );
+                return vec![0u64].into();
+            }
+            (start..end).collect()
+        },
     );
 
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
@@ -739,27 +754,30 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
 
         registry.register_passthrough_nullable_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>, _, _>(
             fn_name,
-            |_, _| FunctionDomain::Full,
-            vectorize_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, _| {
+            |_, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_1_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<0>>>(|arr, output, ctx| {
                 let len = arr.len();
-                if arr.len() > 1 {
-                    let sort_desc = vec![SortColumnDescription {
-                        offset: 0,
-                        asc: sort_desc.0,
-                        nulls_first: sort_desc.1,
-                        is_nullable: false,  // This information is not needed here.
-                    }];
-                    let columns = vec![BlockEntry{
-                        data_type: arr.data_type(),
-                        value: Value::Column(arr)
-                    }];
-                    let sort_block = DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None).unwrap();
-                    sort_block.columns()[0].value.clone().into_column().unwrap()
-                } else {
-                    arr
+                let sort_desc = vec![SortColumnDescription {
+                    offset: 0,
+                    asc: sort_desc.0,
+                    nulls_first: sort_desc.1,
+                    is_nullable: false,  // This information is not needed here.
+                }];
+                let columns = vec![BlockEntry{
+                    data_type: arr.data_type(),
+                    value: Value::Column(arr)
+                }];
+                match DataBlock::sort(&DataBlock::new(columns, len), &sort_desc, None) {
+                    Ok(block) => {
+                        let sorted_arr = block.columns()[0].value.clone().into_column().unwrap();
+                        output.push(sorted_arr);
+                    }
+                    Err(err) => {
+                        ctx.set_error(output.len(), err.to_string());
+                        output.push_default();
+                    }
                 }
-            },
-            ),
+            }),
         );
     }
 }

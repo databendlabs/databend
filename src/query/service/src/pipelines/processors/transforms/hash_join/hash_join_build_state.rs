@@ -48,6 +48,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
 use ethnum::U256;
 use itertools::Itertools;
+use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -245,6 +246,7 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
+                && !self.ctx.get_settings().get_enable_join_spill()?
             {
                 {
                     let mut fast_return = self.hash_join_state.fast_return.write();
@@ -593,6 +595,9 @@ impl HashJoinBuildState {
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count -= 1;
         if *count == 0 {
+            info!("finish build hash table with {} rows", unsafe {
+                *self.hash_join_state.build_num_rows.get()
+            });
             let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross

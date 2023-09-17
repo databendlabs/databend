@@ -1111,7 +1111,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( #copy_option )*
+            ~ ( #copy_option ~ ","? )*
         },
         |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
@@ -1132,7 +1132,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
             };
-            for opt in opts {
+            for (opt, _) in opts {
                 copy_stmt.apply_option(opt);
             }
             Statement::Copy(copy_stmt)
@@ -2382,16 +2382,6 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
 ///
 /// It's required to parse stage location first. Or stage could be parsed as table.
 pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
-    // Parse input like `@my_stage/path/to/dir`
-    let stage_location = |i| {
-        map_res(
-            rule! {
-                #stage_location
-            },
-            |v| Ok(CopyUnit::StageLocation(v)),
-        )(i)
-    };
-
     // Parse input like `mytable`
     let table = |i| {
         map(
@@ -2415,19 +2405,10 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
         })(i)
     };
 
-    // Parse input like `'s3://example/path/to/dir' CREDENTIALS = (AWS_ACCESS_ID="admin" AWS_SECRET_KEY="admin")`
-    let inner_uri_location = |i| {
-        map_res(
-            rule! {
-                #uri_location
-            },
-            |v| Ok(CopyUnit::UriLocation(v)),
-        )(i)
-    };
+    let location = |i| map(file_location, CopyUnit::Location)(i);
 
     rule!(
-       #stage_location: "@<stage_name> { <path> }"
-        | #inner_uri_location: "'<protocol>://<name> {<path>} { CONNECTION = ({ AWS_ACCESS_KEY = 'aws_access_key' }) } '"
+       #location
         | #table: "{ { <catalog>. } <database>. }<table>"
         | #query: "( <query> )"
     )(i)

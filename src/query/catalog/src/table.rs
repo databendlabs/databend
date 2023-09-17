@@ -438,7 +438,7 @@ pub enum AppendMode {
 pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
-    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics>;
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics>;
 }
 
 pub mod column_stats_provider_impls {
@@ -447,7 +447,7 @@ pub mod column_stats_provider_impls {
     pub struct DummyColumnStatisticsProvider;
 
     impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
-        fn column_statistics(&self, _column_id: ColumnId) -> Option<BasicColumnStatistics> {
+        fn column_statistics(&self, _column_id: ColumnId) -> Option<&BasicColumnStatistics> {
             None
         }
     }
@@ -492,7 +492,34 @@ impl Parquet2TableColumnStatisticsProvider {
 }
 
 impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        self.column_stats.get(&column_id).cloned().flatten()
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ParquetTableColumnStatisticsProvider {
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    num_rows: u64,
+}
+
+impl ParquetTableColumnStatisticsProvider {
+    pub fn new(
+        column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+        num_rows: u64,
+    ) -> Self {
+        Self {
+            column_stats,
+            num_rows,
+        }
+    }
+    pub fn num_rows(&self) -> u64 {
+        self.num_rows
+    }
+}
+
+impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
     }
 }
