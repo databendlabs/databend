@@ -22,7 +22,7 @@ anyhow = { workspace = true }
 arrow-schema = "46.0.0"
 async-backtrace = { workspace = true }
 async-trait = "0.1"
-bytes = "1"
+bytes = { workspace = true }
 chrono = { workspace = true }
 dashmap = { version = "5.5.1", features = ["serde"] }
 flagset = "0.4"
