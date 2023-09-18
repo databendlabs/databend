@@ -464,7 +464,10 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Val
         builder.push(NumberScalar::UInt8(u8::from(is_in)));
     }
 
-    Value::Column(Column::Number(builder.build()))
+    match input_rows {
+        1 => Value::Scalar(Scalar::Number(builder.build_scalar())),
+        _ => Value::Column(Column::Number(builder.build())),
+    }
 }
 
 fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
