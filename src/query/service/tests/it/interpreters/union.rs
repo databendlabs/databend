@@ -21,6 +21,7 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
+use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::planner::plans::Plan;
 use common_sql::Planner;
@@ -112,89 +113,77 @@ const ALL_CREATABLE_TYPES: &[&str] = &[
     "TIMESTAMP",
 ];
 
-fn get_created_data_type(plan: &Plan) -> DataType {
+fn table_schema(plan: &Plan) -> TableSchemaRef {
     if let Plan::CreateTable(plan) = plan {
-        plan.schema.field(0).data_type().into()
+        plan.schema.clone()
     } else {
         unreachable!()
     }
 }
 
-fn get_create_table_sql(table_name: &str, ty: &str, nullable: bool) -> String {
-    let nullable = if nullable { " null" } else { "" };
-    format!("create table {table_name} (a {ty}{nullable})")
+fn field_name(ty: &str, nullable: bool) -> String {
+    format!(
+        "f_{}_{}",
+        ty.to_lowercase(),
+        if nullable { "null" } else { "not_null" }
+    )
+}
+
+fn create_all_types_table_sql(table_name: &str) -> String {
+    let mut sql = format!("create table {} (", table_name);
+    for (i, ty) in ALL_CREATABLE_TYPES.iter().enumerate() {
+        if i > 0 {
+            sql.push_str(", ");
+        }
+        sql.push_str(&format!("{} {}", field_name(ty, false), ty));
+    }
+    for ty in ALL_CREATABLE_TYPES.iter() {
+        sql.push_str(", ");
+        sql.push_str(&format!("{} {} NULL", field_name(ty, true), ty));
+    }
+    sql.push(')');
+    sql
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_union_output_type() -> Result<()> {
-    fn null_str(nullable: bool) -> &'static str {
-        if nullable { "null" } else { "not_null" }
-    }
-
     let fixture = TestFixture::new().await;
 
-    // Permutation of all data types: ALL_CREATABLE_TYPES x [true, false]
-    let mut data_types = vec![];
+    // Prepare tables
+    let sql1 = create_all_types_table_sql("t1");
+    let plan1 = plan_sql(fixture.ctx(), &sql1).await?;
+    execute_plan(fixture.ctx(), &plan1).await?;
+    let sql2 = create_all_types_table_sql("t2");
+    let plan2 = plan_sql(fixture.ctx(), &sql2).await?;
+    execute_plan(fixture.ctx(), &plan2).await?;
 
-    // Prepare all tables
-    for ty1 in ALL_CREATABLE_TYPES {
-        for nullable1 in [true, false] {
-            let type_str = format!("{}_{}", ty1, null_str(nullable1));
+    let table_schema = table_schema(&plan1);
+    let table_fields = table_schema.fields();
 
-            let t1_name = format!("t1_{}", type_str);
-            let table1_sql = get_create_table_sql(&t1_name, ty1, nullable1);
-            let plan1 = plan_sql(fixture.ctx(), &table1_sql).await?;
-            execute_plan(fixture.ctx(), &plan1).await?;
+    for f1 in table_fields.iter() {
+        let name1 = f1.name();
+        let ty1: DataType = f1.data_type().into();
 
-            let t2_name = format!("t2_{}", type_str);
-            let table2_sql = get_create_table_sql(&t2_name, ty1, nullable1);
-            let plan2 = plan_sql(fixture.ctx(), &table2_sql).await?;
-            execute_plan(fixture.ctx(), &plan2).await?;
+        for f2 in table_fields.iter() {
+            let name2 = f2.name();
+            let ty2: DataType = f2.data_type().into();
 
-            let dt = get_created_data_type(&plan1);
-            data_types.push((dt.clone(), type_str));
-        }
-    }
+            if let Some(common_type) = common_super_type(
+                ty1.clone(),
+                ty2.clone(),
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            ) {
+                let (_, schema) = get_interpreter(
+                    fixture.ctx(),
+                    &format!("select {name1} from t1 union all select {name2} from t2",),
+                )
+                .await?;
 
-    for ty1 in ALL_CREATABLE_TYPES {
-        for nullable1 in [true, false] {
-            let t1_name = format!("t1_{}_{}", ty1, null_str(nullable1));
-            let table1_sql = get_create_table_sql(&t1_name, ty1, nullable1);
-            let plan1 = plan_sql(fixture.ctx(), &table1_sql).await?;
-            let data_type_1 = get_created_data_type(&plan1);
-
-            for ty2 in ALL_CREATABLE_TYPES {
-                for nullable2 in [true, false] {
-                    let t2_name = format!("t2_{}_{}", ty2, null_str(nullable2));
-                    let table2_sql = get_create_table_sql(&t2_name, ty2, nullable2);
-                    let plan2 = plan_sql(fixture.ctx(), &table2_sql).await?;
-                    let data_type_2 = get_created_data_type(&plan2);
-
-                    if let Some(common_type) = common_super_type(
-                        data_type_1.clone(),
-                        data_type_2,
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    ) {
-                        let (_, schema) = get_interpreter(
-                            fixture.ctx(),
-                            &format!(
-                                "select * from {} union all select * from {}",
-                                t1_name, t2_name
-                            ),
-                        )
-                        .await?;
-
-                        assert_eq!(
-                            schema.field(0).data_type(),
-                            &common_type,
-                            "ty1: {} {}, ty2: {} {}",
-                            ty1,
-                            nullable1,
-                            ty2,
-                            nullable2
-                        );
-                    }
-                }
+                assert_eq!(
+                    schema.field(0).data_type(),
+                    &common_type,
+                    "field1: {name1}, field2: {name2}"
+                );
             }
         }
     }
