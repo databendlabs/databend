@@ -1831,6 +1831,8 @@ Functions overloads:
 0 json_object FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
+0 json_path_exists(Variant, String) :: Boolean
+1 json_path_exists(Variant NULL, String NULL) :: Boolean NULL
 0 json_path_query FACTORY
 0 json_path_query_array(Variant, String) :: Variant NULL
 1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL

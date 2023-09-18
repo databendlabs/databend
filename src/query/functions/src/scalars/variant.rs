@@ -72,6 +72,7 @@ use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::object_keys;
 use jsonb::parse_value;
+use jsonb::path_exists;
 use jsonb::strip_nulls;
 use jsonb::to_bool;
 use jsonb::to_f64;
@@ -390,6 +391,34 @@ pub fn register(registry: &mut FunctionRegistry) {
                             format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
                         );
                         output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
+        "json_path_exists",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
+            |val, path, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                match parse_json_path(path) {
+                    Ok(json_path) => {
+                        let res = path_exists(val, json_path);
+                        output.push(res);
+                    }
+                    Err(_) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
+                        );
+                        output.push(false);
                     }
                 }
             },
