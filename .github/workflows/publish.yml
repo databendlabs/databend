@@ -10,6 +10,9 @@ on:
 jobs:
   crates:
     runs-on: ubuntu-latest
+    environment:
+      name: crates
+      url: https://crates.io/crates/databend-driver
     steps:
     - uses: actions/checkout@v4
     - name: Setup Cargo Release

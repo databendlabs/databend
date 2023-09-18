@@ -6,7 +6,6 @@ version = { workspace = true }
 edition = { workspace = true }
 license = { workspace = true }
 authors = { workspace = true }
-repository = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]

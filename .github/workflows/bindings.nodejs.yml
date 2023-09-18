@@ -110,6 +110,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    environment:
+      name: npmjs
+      url: https://www.npmjs.com/package/databend-driver
     steps:
       - uses: actions/checkout@v4
       - name: Setup node
@@ -143,5 +146,5 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
           npm publish --access public --provenance
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
