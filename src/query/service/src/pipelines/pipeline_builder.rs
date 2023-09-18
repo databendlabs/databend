@@ -72,6 +72,8 @@ use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CommitSink;
+use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
@@ -83,14 +85,12 @@ use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
-use common_sql::executor::FinalCommit;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -258,7 +258,10 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
+            PhysicalPlan::CompactPartial(compact_partial) => {
+                self.build_compact_partial(compact_partial)
+            }
+            PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
@@ -271,25 +274,7 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::FinalCommit(final_commit) => self.build_final_commit(final_commit),
         }
-    }
-
-    fn build_final_commit(&mut self, final_commit: &FinalCommit) -> Result<()> {
-        self.build_pipeline(&final_commit.input)?;
-        let tbl = self.ctx.build_table_by_table_info(
-            &final_commit.catalog_info,
-            &final_commit.table_info,
-            None,
-        )?;
-        let table = FuseTable::try_from_table(tbl.as_ref())?;
-        table.chain_commit_meta_merger(&mut self.main_pipeline, table.cluster_key_id())?;
-        let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_commit_sink(
-            &ctx,
-            &mut self.main_pipeline,
-            Arc::new(final_commit.snapshot.clone()),
-        )
     }
 
     fn check_schema_cast(
@@ -757,6 +742,21 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+        let table = self.ctx.build_table_by_table_info(
+            &compact_block.catalog_info,
+            &compact_block.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.build_compact_partial(
+            self.ctx.clone(),
+            compact_block.parts.clone(),
+            compact_block.column_ids.clone(),
+            &mut self.main_pipeline,
+        )
+    }
+
     /// The flow of Pipeline is as follows:
     ///
     /// +---------------+      +-----------------------+
@@ -795,29 +795,26 @@ impl PipelineBuilder {
         table.chain_mutation_aggregator(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(delete.snapshot.clone()),
+            delete.snapshot.clone(),
             MutationKind::Delete,
         )?;
         Ok(())
     }
 
-    /// The flow of Pipeline is as follows:
-    ///
-    /// +-----------------------+      +----------+
-    /// |TableMutationAggregator| ---> |CommitSink|
-    /// +-----------------------+      +----------+
-    fn build_mutation_aggregate(&mut self, plan: &MutationAggregate) -> Result<()> {
+    fn build_commit_sink(&mut self, plan: &CommitSink) -> Result<()> {
         self.build_pipeline(&plan.input)?;
         let table =
             self.ctx
                 .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
+
         table.chain_mutation_pipes(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(plan.snapshot.clone()),
+            plan.snapshot.clone(),
             plan.mutation_kind,
+            plan.merge_meta,
         )?;
         Ok(())
     }

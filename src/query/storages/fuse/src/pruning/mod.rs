@@ -22,7 +22,6 @@ mod segment_pruner;
 pub use block_pruner::BlockPruner;
 pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
-pub use fuse_pruner::DeletedSegmentInfo;
 pub use fuse_pruner::FusePruner;
 pub use fuse_pruner::PruningContext;
 pub use pruner_location::create_segment_location_vector;

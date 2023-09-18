@@ -24,9 +24,9 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::executor::CommitSink;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
@@ -297,14 +297,15 @@ impl MergeIntoInterpreter {
         });
 
         // build mutation_aggregate
-        let physical_plan = PhysicalPlan::MutationAggregate(Box::new(MutationAggregate {
+        let physical_plan = PhysicalPlan::CommitSink(CommitSink {
             input: Box::new(merge_into),
-            snapshot: (*base_snapshot).clone(),
+            snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
-        }));
+            merge_meta: false,
+        });
 
         Ok((physical_plan, table_info.clone()))
     }

@@ -69,7 +69,8 @@ use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::FinalCommit;
+use crate::sql::executor::CommitSink;
+use crate::sql::executor::MutationKind;
 use crate::sql::plans::DeletePlan;
 use crate::stream::PullingExecutorStream;
 
@@ -275,7 +276,7 @@ impl DeleteInterpreter {
         partitions: Partitions,
         table_info: TableInfo,
         col_indices: Vec<usize>,
-        snapshot: TableSnapshot,
+        snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
         query_row_id_col: bool,
@@ -300,12 +301,14 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::FinalCommit(Box::new(FinalCommit {
+        Ok(PhysicalPlan::CommitSink(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
             catalog_info,
-        })))
+            mutation_kind: MutationKind::Delete,
+            merge_meta: true,
+        }))
     }
 }
 

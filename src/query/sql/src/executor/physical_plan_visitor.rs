@@ -14,39 +14,40 @@
 
 use common_exception::Result;
 
-use super::AggregateExpand;
-use super::AggregateFinal;
-use super::AggregatePartial;
-use super::AsyncSourcerPlan;
-use super::CopyIntoTable;
-use super::CopyIntoTableSource;
-use super::Deduplicate;
-use super::DeletePartial;
-use super::DistributedInsertSelect;
-use super::EvalScalar;
-use super::Exchange;
-use super::ExchangeSink;
-use super::ExchangeSource;
-use super::Filter;
-use super::HashJoin;
-use super::Lambda;
-use super::Limit;
-use super::MergeInto;
-use super::MergeIntoSource;
-use super::MutationAggregate;
-use super::PhysicalPlan;
-use super::Project;
-use super::ProjectSet;
-use super::QuerySource;
-use super::ReplaceInto;
-use super::RowFetch;
-use super::Sort;
-use super::TableScan;
+use crate::executor::AggregateExpand;
+use crate::executor::AggregateFinal;
+use crate::executor::AggregatePartial;
+use crate::executor::AsyncSourcerPlan;
+use crate::executor::CommitSink;
+use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
+use crate::executor::CopyIntoTable;
+use crate::executor::CopyIntoTableSource;
 use crate::executor::CteScan;
+use crate::executor::Deduplicate;
+use crate::executor::DeletePartial;
+use crate::executor::DistributedInsertSelect;
+use crate::executor::EvalScalar;
+use crate::executor::Exchange;
+use crate::executor::ExchangeSink;
+use crate::executor::ExchangeSource;
+use crate::executor::Filter;
+use crate::executor::HashJoin;
+use crate::executor::Lambda;
+use crate::executor::Limit;
 use crate::executor::MaterializedCte;
+use crate::executor::MergeInto;
+use crate::executor::MergeIntoSource;
+use crate::executor::PhysicalPlan;
+use crate::executor::Project;
+use crate::executor::ProjectSet;
+use crate::executor::QuerySource;
 use crate::executor::RangeJoin;
+use crate::executor::ReplaceInto;
+use crate::executor::RowFetch;
 use crate::executor::RuntimeFilterSource;
+use crate::executor::Sort;
+use crate::executor::TableScan;
 use crate::executor::UnionAll;
 use crate::executor::Window;
 
@@ -74,8 +75,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::CompactPartial(plan) => self.replace_compact_partial(plan),
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
-            PhysicalPlan::MutationAggregate(plan) => self.replace_delete_final(plan),
+            PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
             PhysicalPlan::AsyncSourcer(plan) => self.replace_async_sourcer(plan),
@@ -85,7 +87,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
-            PhysicalPlan::FinalCommit(plan) => self.replace_final_commit(plan),
         }
     }
 
@@ -365,18 +366,20 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CompactPartial(plan.clone()))
+    }
+
     fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
     }
 
-    fn replace_delete_final(&mut self, plan: &MutationAggregate) -> Result<PhysicalPlan> {
+    fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MutationAggregate(Box::new(
-            MutationAggregate {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
+        Ok(PhysicalPlan::CommitSink(CommitSink {
+            input: Box::new(input),
+            ..plan.clone()
+        }))
     }
 
     fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
@@ -397,19 +400,6 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             ..plan.clone()
         }))
-    }
-
-    fn replace_final_commit(
-        &mut self,
-        plan: &crate::executor::FinalCommit,
-    ) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::FinalCommit(Box::new(
-            crate::executor::FinalCommit {
-                input: Box::new(input),
-                ..plan.clone()
-            },
-        )))
     }
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
@@ -547,8 +537,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
+                PhysicalPlan::CompactPartial(_) => {}
                 PhysicalPlan::DeletePartial(_) => {}
-                PhysicalPlan::MutationAggregate(plan) => {
+                PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
                 PhysicalPlan::Deduplicate(plan) => {
@@ -566,9 +557,6 @@ impl PhysicalPlan {
                 PhysicalPlan::MaterializedCte(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
-                }
-                PhysicalPlan::FinalCommit(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
             }
             post_visit(plan);
