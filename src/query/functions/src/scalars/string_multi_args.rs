@@ -18,7 +18,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::passthrough_nullable;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Int64Type;
-
 use common_expression::types::number::UInt8Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
@@ -141,7 +140,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
 
-                    Value::Column(Column::String(builder.build()))
+                    match size {
+                        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
+                        _ => Value::Column(Column::String(builder.build())),
+                    }
                 }),
             },
         }))
@@ -224,8 +226,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
                     }
-                    let col = T::upcast_column(nullable_builder.build());
-                    Value::Column(col)
+
+                    match size {
+                        1 => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
+                        _ => {
+                            let col = T::upcast_column(nullable_builder.build());
+                            Value::Column(col)
+                        }
+                    }
                 }),
             },
         }))
@@ -468,7 +476,10 @@ fn concat_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType
         builder.commit_row();
     }
 
-    Value::Column(Column::String(builder.build()))
+    match input_rows {
+        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
+        _ => Value::Column(Column::String(builder.build())),
+    }
 }
 
 fn char_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -602,7 +613,10 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
         builder.push(instr);
     }
 
-    Value::Column(Column::Number(NumberColumn::UInt64(builder.into())))
+    match size {
+        1 => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
+        _ => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
+    }
 }
 
 fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -657,7 +671,10 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
             .unwrap_or_else(|| local_re.as_ref().unwrap());
         builder.push(re.is_match(source));
     }
-    Value::Column(Column::Boolean(builder.into()))
+    match size {
+        1 => Value::Scalar(Scalar::Boolean(builder.pop().unwrap())),
+        _ => Value::Column(Column::Boolean(builder.into())),
+    }
 }
 
 fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -759,7 +776,11 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         regexp::regexp_replace(source, re, repl, pos, occur, &mut builder.data);
         builder.commit_row();
     }
-    Value::Column(Column::String(builder.build()))
+
+    match size {
+        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
+        _ => Value::Column(Column::String(builder.build())),
+    }
 }
 
 fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

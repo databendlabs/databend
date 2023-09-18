@@ -51,7 +51,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -1020,7 +1020,10 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
         };
         builder.commit_row();
     }
-    Value::Column(Column::Variant(builder.build()))
+    match ctx.num_rows {
+        1 => Value::Scalar(Scalar::Variant(builder.build_scalar())),
+        _ => Value::Column(Column::Variant(builder.build())),
+    }
 }
 
 fn json_object_fn(
@@ -1073,7 +1076,11 @@ fn json_object_fn(
             builder.commit_row();
         }
     }
-    Value::Column(Column::Variant(builder.build()))
+
+    match ctx.num_rows {
+        1 => Value::Scalar(Scalar::Variant(builder.build_scalar())),
+        _ => Value::Column(Column::Variant(builder.build())),
+    }
 }
 
 fn prepare_args_columns(

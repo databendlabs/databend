@@ -40,7 +40,6 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -517,7 +516,10 @@ fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
         builder.push(NumberScalar::UInt8(r));
     }
 
-    Value::Column(Column::Number(builder.build()))
+    match input_rows {
+        1 => Value::Scalar(Scalar::Number(builder.build_scalar())),
+        _ => Value::Column(Column::Number(builder.build())),
+    }
 }
 
 fn is_point_in_ellipses(
