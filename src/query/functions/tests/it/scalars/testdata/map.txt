@@ -160,6 +160,15 @@ output domain  : {NULL}
 output         : NULL
 
 
+ast            : {1:NULL}[1]
+raw expr       : get(map(array(1), array(NULL)), 1)
+checked expr   : get<T0=UInt8><Map(T0, NULL), T0 NULL>(map<T0=UInt8, T1=NULL><Array(T0), Array(T1)>(array<T0=UInt8><T0>(1_u8), array<T0=NULL><T0>(NULL)), CAST(1_u8 AS UInt8 NULL))
+optimized expr : NULL
+output type    : NULL
+output domain  : {NULL}
+output         : NULL
+
+
 ast            : {'k1':'v1','k2':'v2'}['k1']
 raw expr       : get(map(array('k1', 'k2'), array('v1', 'v2')), 'k1')
 checked expr   : get<T0=String, T1=String><Map(T0, T1), T0>(map<T0=String, T1=String><Array(T0), Array(T1)>(array<T0=String><T0, T0>("k1", "k2"), array<T0=String><T0, T0>("v1", "v2")), "k1")
