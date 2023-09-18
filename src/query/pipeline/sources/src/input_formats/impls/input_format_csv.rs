@@ -176,16 +176,13 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.field_ends[field_end_idx..field_end_idx + num_fields],
                 &builder.projection,
             ) {
-                builder
-                    .ctx
-                    .on_error(
-                        e,
-                        Some((columns, builder.num_rows)),
-                        &mut builder.file_status,
-                        &batch.split_info.file.path,
-                        i + batch.start_row_in_split,
-                    )
-                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                builder.ctx.on_error(
+                    e,
+                    Some((columns, builder.num_rows)),
+                    &mut builder.file_status,
+                    &batch.split_info.file.path,
+                    i + batch.start_row_in_split,
+                )?
             } else {
                 builder.num_rows += 1;
                 builder.file_status.num_rows_loaded += 1;
@@ -228,7 +225,7 @@ impl CsvReaderState {
         match result {
             ReadRecordResult::InputEmpty => {
                 if input.is_empty() {
-                    Err(self.csv_error("unexpected eof"))
+                    Err(ErrorCode::BadBytes("unexpected eof"))
                 } else {
                     Ok((None, n_in, n_out))
                 }
@@ -260,7 +257,7 @@ impl CsvReaderState {
             }
             ReadRecordResult::End => {
                 if !input.is_empty() {
-                    Err(self.csv_error("unexpected eof"))
+                    Err(ErrorCode::BadBytes("unexpected eof"))
                 } else {
                     Ok((None, n_in, n_out))
                 }
@@ -419,31 +416,21 @@ impl CsvReaderState {
     }
 
     fn error_output_full(&self) -> ErrorCode {
-        self.csv_error("Bug: CSV Reader return output longer then input.")
+        ErrorCode::BadBytes("Bug: CSV Reader return output longer then input.")
     }
 
     fn error_output_ends_full(&self) -> ErrorCode {
         if self.projection.is_some() {
-            self.csv_error(&format!(
+            ErrorCode::BadBytes(format!(
                 "too many fields, expect {}, got more than {}",
                 self.num_fields,
                 self.field_ends.len()
             ))
         } else {
-            self.csv_error(&format!(
+            ErrorCode::BadBytes(format!(
                 "select from CSV allow at most {} fields",
                 MAX_CSV_COLUMNS
             ))
         }
-    }
-
-    fn csv_error(&self, msg: &str) -> ErrorCode {
-        self.ctx.parse_error_row_based(
-            msg,
-            &self.split_info,
-            self.common.offset,
-            self.common.rows,
-            self.split_info.start_row_text(),
-        )
     }
 }
