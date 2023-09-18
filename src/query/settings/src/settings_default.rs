@@ -415,6 +415,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_query_profiling", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables recording query profile",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                    }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
