@@ -35,6 +35,15 @@ COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
 [ copyOptions ]
 ```
 
+:::note
+When the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+```sql
+COPY INTO mytable FROM 's3://mybucket/dataset(databend)/' ...
+
+COPY INTO mytable FROM 's3://mybucket/dataset databend/' ...
+```
+:::
+
 ### internalStage
 
 ```sql
