@@ -40,6 +40,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
