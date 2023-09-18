@@ -1744,10 +1744,12 @@ dependencies = [
  "logos",
  "nom",
  "nom-rule",
+ "ordered-float 3.7.0",
  "pratt 0.4.0",
  "pretty",
  "pretty_assertions",
  "regex",
+ "strsim",
  "strum 0.24.1",
  "strum_macros 0.24.3",
  "url",
@@ -1813,6 +1815,7 @@ dependencies = [
 name = "common-cache"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "hashbrown 0.14.0",
  "hashlink",
  "heapsize",
@@ -1939,14 +1942,18 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-flight",
  "arrow-ord",
  "arrow-schema",
+ "arrow-select 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "async-backtrace",
  "base64 0.21.0",
  "chrono",
  "chrono-tz",
  "comfy-table 6.1.4",
  "common-arrow",
  "common-ast",
+ "common-base",
  "common-datavalues",
  "common-exception",
  "common-hashtable",
@@ -1974,6 +1981,7 @@ dependencies = [
  "serde",
  "serde_json",
  "terminal_size",
+ "tonic 0.9.2",
  "typetag",
  "unicode-segmentation",
 ]
@@ -2147,6 +2155,7 @@ dependencies = [
  "chrono",
  "common-base",
  "common-exception",
+ "common-expression",
  "common-functions",
  "common-meta-api",
  "common-meta-app",
@@ -2694,6 +2703,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
@@ -2721,6 +2731,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "backoff",
+ "bytes",
  "chrono",
  "common-arrow",
  "common-base",
@@ -2740,6 +2751,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "enum-as-inner",
  "futures",
  "futures-util",
  "indexmap 2.0.0",
@@ -3095,6 +3107,7 @@ dependencies = [
  "cidr",
  "common-base",
  "common-exception",
+ "common-expression",
  "common-grpc",
  "common-management",
  "common-meta-api",
@@ -3970,6 +3983,7 @@ dependencies = [
  "common-functions",
  "common-io",
  "common-sql",
+ "databend-client",
  "databend-driver",
  "ethnum",
  "itertools 0.10.5",
@@ -10958,6 +10972,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "bytes",
  "common-cache",
  "common-exception",
  "common-metrics",
