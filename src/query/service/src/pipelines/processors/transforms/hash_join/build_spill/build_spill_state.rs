@@ -22,6 +22,7 @@ use common_hashtable::hash2bucket;
 use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
+use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
@@ -163,6 +164,11 @@ impl BuildSpillState {
             for block in chunks.iter() {
                 total_bytes += block.memory_size();
             }
+
+            info!(
+                "check if need to spill: total_bytes: {}, spill_threshold: {}",
+                total_bytes, spill_threshold
+            );
 
             if total_bytes > spill_threshold {
                 return Ok(true);
