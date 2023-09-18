@@ -409,7 +409,10 @@ impl CsvReaderState {
             || found > expected + 1
             || (found == expected + 1 && self.field_ends[expected] != self.field_ends[expected - 1])
         {
-            Err(FileParseError::NumberOfColumnsMismatch { expected, found })
+            Err(FileParseError::NumberOfColumnsMismatch {
+                table: expected,
+                file: found,
+            })
         } else {
             Ok(())
         }
