@@ -26,6 +26,15 @@ FROM {@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]}
 )]
 ```
 
+:::note
+When the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+```sql
+SELECT * FROM 's3://mybucket/dataset(databend)/' ...
+
+SELECT *  FROM 's3://mybucket/dataset databend/' ...
+```
+:::
+
 ### FILE_FORMAT
 
 The FILE_FORMAT parameter allows you to specify the format of your file, which can be one of the following options: CSV, TSV, NDJSON, PARQUET, XML, or a custom format that you've defined using the [CREATE FILE FORMAT](/14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md) command. For example, 
