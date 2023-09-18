@@ -2664,20 +2664,10 @@ evaluation (internal):
 ast            : char(65,66,67)
 raw expr       : char(65, 66, 67)
 checked expr   : char<UInt8, UInt8, UInt8>(65_u8, 66_u8, 67_u8)
-evaluation:
-+--------+--------+
-|        | Output |
-+--------+--------+
-| Type   | String |
-| Domain | {""..} |
-| Row 0  | 'ABC'  |
-+--------+--------+
-evaluation (internal):
-+--------+--------------------------------------------------+
-| Column | Data                                             |
-+--------+--------------------------------------------------+
-| Output | StringColumn { data: 0x414243, offsets: [0, 3] } |
-+--------+--------------------------------------------------+
+optimized expr : "ABC"
+output type    : String
+output domain  : {"ABC"..="ABC"}
+output         : 'ABC'
 
 
 ast            : char(65, null)
