@@ -94,7 +94,8 @@ impl Planner {
 
                 if matches!(stmt, Statement::Copy(_)) {
                     // Indicate binder there is no need to collect column statistics for the binding table.
-                    self.ctx.attach_query_str("Copy".to_string(), String::new());
+                    let kind = "Copy".to_string();
+                    self.ctx.attach_query_str(kind, String::new());
                 }
 
                 self.replace_stmt(&mut stmt, sql_dialect);

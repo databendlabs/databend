@@ -18,6 +18,9 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_base::base::tokio::sync::Mutex;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -36,7 +39,9 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
 use common_storage::parquet_rs::infer_schema_with_extension;
@@ -49,7 +54,6 @@ use parquet::schema::types::SchemaDescPtr;
 
 use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
-use crate::utils::naive_parquet_table_info;
 
 pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
@@ -126,7 +130,7 @@ impl ParquetRSTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(&arrow_schema)?;
+        let table_info = create_parquet_table_info(&arrow_schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
@@ -318,10 +322,20 @@ fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
-    Ok(naive_parquet_table_info(
-        arrow_to_table_schema(schema)?.into(),
-    ))
+fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+    Ok(TableInfo {
+        ident: TableIdent::new(0, 0),
+        desc: "''.'read_parquet'".to_string(),
+        name: format!("read_parquet({})", stage_info.stage_name),
+        meta: TableMeta {
+            schema: arrow_to_table_schema(schema)?.into(),
+            engine: "SystemReadParquet".to_string(),
+            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
 fn get_compression_ratio(filemeta: &ParquetMetaData) -> f64 {

@@ -16,12 +16,9 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_expression::types::ArgType;
-use common_expression::types::ArrayType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt32Type;
-use common_expression::types::ValueType;
 use common_expression::types::VariantType;
 use common_expression::DataBlock;
 use common_expression::FromData;
@@ -31,67 +28,11 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_profile::OperatorAttribute;
 use common_profile::OperatorExecutionInfo;
 use common_profile::QueryProfileManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
-
-// Encode an `OperatorAttribute` into jsonb::Value.
-fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
-    match attr {
-        OperatorAttribute::Join(join_attr) => (&serde_json::json! ({
-            "join_type": join_attr.join_type,
-            "equi_conditions": join_attr.equi_conditions,
-            "non_equi_conditions": join_attr.non_equi_conditions,
-        }))
-            .into(),
-        OperatorAttribute::Aggregate(agg_attr) => (&serde_json::json!({
-            "group_keys": agg_attr.group_keys,
-            "functions": agg_attr.functions,
-        }))
-            .into(),
-        OperatorAttribute::AggregateExpand(expand_attr) => (&serde_json::json!({
-            "group_keys": expand_attr.group_keys,
-            "aggr_exprs": expand_attr.aggr_exprs,
-        }))
-            .into(),
-        OperatorAttribute::Filter(filter_attr) => {
-            (&serde_json::json!({ "predicate": filter_attr.predicate })).into()
-        }
-        OperatorAttribute::EvalScalar(scalar_attr) => {
-            (&serde_json::json!({ "scalars": scalar_attr.scalars })).into()
-        }
-        OperatorAttribute::ProjectSet(project_attr) => {
-            (&serde_json::json!({ "functions": project_attr.functions })).into()
-        }
-        OperatorAttribute::Lambda(lambda_attr) => {
-            (&serde_json::json!({ "scalars": lambda_attr.scalars })).into()
-        }
-        OperatorAttribute::Limit(limit_attr) => (&serde_json::json!({
-            "limit": limit_attr.limit,
-            "offset": limit_attr.offset,
-        }))
-            .into(),
-        OperatorAttribute::TableScan(scan_attr) => {
-            (&serde_json::json!({ "qualified_name": scan_attr.qualified_name })).into()
-        }
-        OperatorAttribute::CteScan(cte_scan_attr) => {
-            (&serde_json::json!({ "cte_idx": cte_scan_attr.cte_idx })).into()
-        }
-        OperatorAttribute::Sort(sort_attr) => {
-            (&serde_json::json!({ "sort_keys": sort_attr.sort_keys })).into()
-        }
-        OperatorAttribute::Window(window_attr) => {
-            (&serde_json::json!({ "functions": window_attr.functions })).into()
-        }
-        OperatorAttribute::Exchange(exchange_attr) => {
-            (&serde_json::json!({ "exchange_mode": exchange_attr.exchange_mode })).into()
-        }
-        OperatorAttribute::Empty => jsonb::Value::Null,
-    }
-}
 
 fn encode_operator_execution_info(info: &OperatorExecutionInfo) -> jsonb::Value {
     // Process time represent with number of milliseconds.
@@ -115,13 +56,7 @@ impl QueryProfileTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("query_id", TableDataType::String),
             TableField::new("operator_id", TableDataType::Number(NumberDataType::UInt32)),
-            TableField::new("operator_type", TableDataType::String),
-            TableField::new(
-                "operator_children",
-                TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt32))),
-            ),
             TableField::new("execution_info", TableDataType::Variant),
-            TableField::new("operator_attribute", TableDataType::Variant),
         ]);
 
         let table_info = TableInfo {
@@ -130,7 +65,7 @@ impl QueryProfileTable {
             name: "query_profile".to_string(),
             meta: TableMeta {
                 schema,
-                engine: "QueryProfile".to_string(),
+                engine: "QueryProfileTable".to_string(),
                 ..Default::default()
             },
             ..Default::default()
@@ -153,23 +88,15 @@ impl SyncSystemTable for QueryProfileTable {
 
         let mut query_ids: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
         let mut operator_ids: Vec<u32> = Vec::with_capacity(query_profs.len());
-        let mut operator_types: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
-        let mut operator_childrens: Vec<Vec<u32>> = Vec::with_capacity(query_profs.len());
         let mut execution_infos: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
-        let mut operator_attributes: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
 
         for prof in query_profs.iter() {
             for plan_prof in prof.operator_profiles.iter() {
                 query_ids.push(prof.query_id.clone().into_bytes());
                 operator_ids.push(plan_prof.id);
-                operator_types.push(plan_prof.operator_type.to_string().into_bytes());
-                operator_childrens.push(plan_prof.children.clone());
 
                 let execution_info = encode_operator_execution_info(&plan_prof.execution_info);
                 execution_infos.push(execution_info.to_vec());
-
-                let attribute_value = encode_operator_attribute(&plan_prof.attribute);
-                operator_attributes.push(attribute_value.to_vec());
             }
         }
 
@@ -178,19 +105,8 @@ impl SyncSystemTable for QueryProfileTable {
             StringType::from_data(query_ids),
             // operator_id
             UInt32Type::from_data(operator_ids),
-            // operator_type
-            StringType::from_data(operator_types),
-            // operator_children
-            ArrayType::upcast_column(ArrayType::<UInt32Type>::column_from_iter(
-                operator_childrens
-                    .into_iter()
-                    .map(|children| UInt32Type::column_from_iter(children.into_iter(), &[])),
-                &[],
-            )),
             // execution_info
             VariantType::from_data(execution_infos),
-            // operator_attribute
-            VariantType::from_data(operator_attributes),
         ]);
 
         Ok(block)

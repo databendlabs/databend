@@ -793,4 +793,8 @@ impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
         self.column_stats.get(&column_id).and_then(|s| s.as_ref())
     }
+
+    fn num_rows(&self) -> Option<u64> {
+        None
+    }
 }

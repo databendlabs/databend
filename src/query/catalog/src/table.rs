@@ -439,6 +439,9 @@ pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics>;
+
+    // returns the num rows of the table, if any.
+    fn num_rows(&self) -> Option<u64>;
 }
 
 pub mod column_stats_provider_impls {
@@ -448,6 +451,10 @@ pub mod column_stats_provider_impls {
 
     impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
         fn column_statistics(&self, _column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+            None
+        }
+
+        fn num_rows(&self) -> Option<u64> {
             None
         }
     }
@@ -485,15 +492,15 @@ impl Parquet2TableColumnStatisticsProvider {
             num_rows,
         }
     }
-
-    pub fn num_rows(&self) -> u64 {
-        self.num_rows
-    }
 }
 
 impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
         self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+
+    fn num_rows(&self) -> Option<u64> {
+        Some(self.num_rows)
     }
 }
 
@@ -513,13 +520,14 @@ impl ParquetTableColumnStatisticsProvider {
             num_rows,
         }
     }
-    pub fn num_rows(&self) -> u64 {
-        self.num_rows
-    }
 }
 
 impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
         self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+
+    fn num_rows(&self) -> Option<u64> {
+        Some(self.num_rows)
     }
 }

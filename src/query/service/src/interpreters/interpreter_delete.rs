@@ -369,7 +369,6 @@ pub async fn subquery_filter(
         &[row_id_column_binding.clone()],
         &physical_plan,
         false,
-        false,
     )
     .await?;
 
