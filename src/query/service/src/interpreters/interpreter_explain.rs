@@ -290,8 +290,7 @@ impl ExplainInterpreter {
     ) -> Result<Vec<DataBlock>> {
         let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr, required).await?;
-        let mut build_res =
-            build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;
+        let mut build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result).await?;
 
         let prof_span_set = build_res.prof_span_set.clone();
 
