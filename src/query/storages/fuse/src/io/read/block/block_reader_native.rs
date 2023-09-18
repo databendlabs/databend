@@ -16,13 +16,12 @@ use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::io::BufReader;
 use std::ops::Range;
-use std::sync::Arc;
+use std::time::Instant;
 
 use common_arrow::arrow::array::Array;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::NativeReadBuf;
 use common_catalog::plan::PartInfoPtr;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -35,8 +34,10 @@ use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
-use crate::io::ReadSettings;
+use crate::metrics::metrics_inc_remote_io_read_bytes;
+use crate::metrics::metrics_inc_remote_io_read_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_parts;
+use crate::metrics::metrics_inc_remote_io_seeks;
 
 // Native storage format
 
@@ -52,7 +53,6 @@ impl BlockReader {
     pub async fn async_read_native_columns_data(
         &self,
         part: &PartInfoPtr,
-        ctx: &Arc<dyn TableContext>,
         ignore_column_ids: &Option<HashSet<ColumnId>>,
     ) -> Result<NativeSourceData> {
         // Perf
@@ -61,18 +61,8 @@ impl BlockReader {
         }
 
         let part = FusePartInfo::from_part(part)?;
-        let settings = ReadSettings::from_ctx(ctx)?;
-        let read_res = self
-            .read_columns_data_by_merge_io(
-                &settings,
-                &part.location,
-                &part.columns_meta,
-                ignore_column_ids,
-            )
-            .await?;
+        let mut join_handlers = Vec::with_capacity(self.project_column_nodes.len());
 
-        let column_buffers = read_res.column_buffers()?;
-        let mut results = BTreeMap::new();
         for (index, column_node) in self.project_column_nodes.iter().enumerate() {
             if let Some(ignore_column_ids) = ignore_column_ids {
                 if column_node.leaf_column_ids.len() == 1
@@ -82,23 +72,46 @@ impl BlockReader {
                 }
             }
 
-            let readers = column_node
+            let metas: Vec<ColumnMeta> = column_node
                 .leaf_column_ids
                 .iter()
-                .map(|column_id| {
-                    let native_meta = part
-                        .columns_meta
-                        .get(column_id)
-                        .unwrap()
-                        .as_native()
-                        .unwrap();
-                    let data = column_buffers.get(column_id).unwrap();
-                    let reader: Reader = Box::new(std::io::Cursor::new(data.clone()));
-                    NativeReader::new(reader, native_meta.pages.clone(), vec![])
-                })
-                .collect();
+                .filter_map(|column_id| part.columns_meta.get(column_id))
+                .cloned()
+                .collect::<Vec<_>>();
 
-            results.insert(index, readers);
+            join_handlers.push(Self::read_native_columns_data(
+                self.operator.clone(),
+                &part.location,
+                index,
+                metas,
+                part.range(),
+            ));
+
+            // Perf
+            {
+                let total_len = column_node
+                    .leaf_column_ids
+                    .iter()
+                    .map(|column_id| {
+                        if let Some(meta) = part.columns_meta.get(column_id) {
+                            let (_, len) = meta.offset_length();
+                            len
+                        } else {
+                            0
+                        }
+                    })
+                    .sum();
+                metrics_inc_remote_io_seeks(column_node.leaf_column_ids.len() as u64);
+                metrics_inc_remote_io_read_bytes(total_len);
+            }
+        }
+        let start = Instant::now();
+        let readers = futures::future::try_join_all(join_handlers).await?;
+        let results: BTreeMap<usize, Vec<NativeReader<Reader>>> = readers.into_iter().collect();
+
+        // Perf.
+        {
+            metrics_inc_remote_io_read_milliseconds(start.elapsed().as_millis() as u64);
         }
         Ok(results)
     }

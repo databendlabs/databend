@@ -203,7 +203,7 @@ impl Processor for ReadNativeDataSource<false> {
                 let block_reader = self.block_reader.clone();
                 let index_reader = self.index_reader.clone();
                 let virtual_reader = self.virtual_reader.clone();
-                let ctx = self.partitions.ctx.clone();
+
                 chunks.push(async move {
                     let handler = tokio::spawn(async_backtrace::location!().frame(async move {
                         let fuse_part = FusePartInfo::from_part(&part)?;
@@ -229,7 +229,7 @@ impl Processor for ReadNativeDataSource<false> {
                                 virtual_reader.read_native_data(&loc).await
                             {
                                 let mut source_data = block_reader
-                                    .async_read_native_columns_data(&part, &ctx, &ignore_column_ids)
+                                    .async_read_native_columns_data(&part, &ignore_column_ids)
                                     .await?;
                                 source_data.append(&mut virtual_source_data);
                                 return Ok(DataSource::Normal(source_data));
@@ -238,7 +238,7 @@ impl Processor for ReadNativeDataSource<false> {
 
                         Ok(DataSource::Normal(
                             block_reader
-                                .async_read_native_columns_data(&part, &ctx, &None)
+                                .async_read_native_columns_data(&part, &None)
                                 .await?,
                         ))
                     }));

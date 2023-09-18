@@ -15,8 +15,6 @@
 use std::borrow::Borrow;
 use std::sync::Arc;
 
-use bytes::Bytes;
-
 use super::Meter;
 pub struct BytesMeter;
 
@@ -31,14 +29,6 @@ impl<K> Meter<K, Vec<u8>> for BytesMeter {
 impl<K> Meter<K, Arc<Vec<u8>>> for BytesMeter {
     type Measure = usize;
     fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<Vec<u8>>) -> usize
-    where K: Borrow<Q> {
-        v.len()
-    }
-}
-
-impl<K> Meter<K, Arc<Bytes>> for BytesMeter {
-    type Measure = usize;
-    fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<Bytes>) -> usize
     where K: Borrow<Q> {
         v.len()
     }

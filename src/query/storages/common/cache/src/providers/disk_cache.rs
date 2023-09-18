@@ -22,7 +22,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use bytes::Bytes;
 use common_cache::Cache;
 use common_cache::Count;
 use common_cache::DefaultHashBuilder;
@@ -259,8 +258,10 @@ pub mod result {
 
 use result::*;
 
-impl CacheAccessor<String, Bytes, common_cache::DefaultHashBuilder, Count> for LruDiskCacheHolder {
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Bytes>> {
+impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count>
+    for LruDiskCacheHolder
+{
+    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         let k = k.as_ref();
         {
             let mut cache = self.write();
@@ -295,7 +296,7 @@ impl CacheAccessor<String, Bytes, common_cache::DefaultHashBuilder, Count> for L
                         let total_len = bytes.len();
                         let body_len = total_len - 4;
                         bytes.truncate(body_len);
-                        let item = Arc::new(bytes.into());
+                        let item = Arc::new(bytes);
                         Some(item)
                     }
                 }
@@ -307,11 +308,11 @@ impl CacheAccessor<String, Bytes, common_cache::DefaultHashBuilder, Count> for L
         })
     }
 
-    fn put(&self, key: String, value: Arc<Bytes>) {
-        let crc = crc32fast::hash(value.as_ref());
+    fn put(&self, key: String, value: Arc<Vec<u8>>) {
+        let crc = crc32fast::hash(value.as_slice());
         let crc_bytes = crc.to_le_bytes();
         let mut cache = self.write();
-        if let Err(e) = cache.insert_bytes(&key, &[value.as_ref(), &crc_bytes]) {
+        if let Err(e) = cache.insert_bytes(&key, &[value.as_slice(), &crc_bytes]) {
             error!("put disk cache item failed {}", e);
         }
     }

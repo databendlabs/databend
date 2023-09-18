@@ -643,7 +643,7 @@ impl Processor for NativeDeserializeDataTransform {
             // Step 1: Check TOP_K, if prewhere_columns contains not only TOP_K, we can check if TOP_K column can satisfy the heap.
             if self.prewhere_columns.len() > 1 {
                 if let Some((top_k, sorter, index)) = self.top_k.as_mut() {
-                    if let Some(array_iter) = self.array_iters.get_mut(index) {
+                    if let Some(mut array_iter) = self.array_iters.remove(index) {
                         match array_iter.next() {
                             Some(array) => {
                                 let array = array?;
@@ -652,6 +652,7 @@ impl Processor for NativeDeserializeDataTransform {
                                 let col = Column::from_arrow(array.as_ref(), &data_type);
 
                                 arrays.push((*index, array));
+                                self.array_iters.insert(*index, array_iter);
                                 if sorter.never_match_any(&col) {
                                     self.offset_in_part += col.len();
                                     return self.finish_process_skip_page();
@@ -671,13 +672,14 @@ impl Processor for NativeDeserializeDataTransform {
                 if self.read_columns.contains(index) {
                     continue;
                 }
-                if let Some(array_iter) = self.array_iters.get_mut(index) {
+                if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
+                            self.array_iters.insert(*index, array_iter);
                             self.array_skip_pages.insert(*index, 0);
                         }
                         None => {
@@ -758,13 +760,14 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Step 5: read remain columns and filter block if needed.
             for index in self.remain_columns.iter() {
-                if let Some(array_iter) = self.array_iters.get_mut(index) {
+                if let Some(mut array_iter) = self.array_iters.remove(index) {
                     let skip_pages = self.array_skip_pages.get(index).unwrap();
 
                     match array_iter.nth(*skip_pages) {
                         Some(array) => {
                             self.read_columns.push(*index);
                             arrays.push((*index, array?));
+                            self.array_iters.insert(*index, array_iter);
                             self.array_skip_pages.insert(*index, 0);
                         }
                         None => {

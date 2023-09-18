@@ -281,9 +281,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             }
         } else {
             for (part, _) in parts.iter() {
-                let chunk = reader
-                    .async_read_native_columns_data(part, &reader.ctx, &None)
-                    .await?;
+                let chunk = reader.async_read_native_columns_data(part, &None).await?;
                 chunks.push(chunk);
             }
         }

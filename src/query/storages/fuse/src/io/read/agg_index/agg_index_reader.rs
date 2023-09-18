@@ -39,7 +39,6 @@ pub struct AggIndexReader {
 
     pub(super) reader: Arc<BlockReader>,
     pub(super) compression: TableCompression,
-    pub(crate) ctx: Arc<dyn TableContext>,
 
     func_ctx: FunctionContext,
     selection: Vec<(Expr, Option<usize>)>,
@@ -78,7 +77,6 @@ impl AggIndexReader {
         Ok(Self {
             index_id: agg.index_id,
             reader,
-            ctx,
             func_ctx,
             selection,
             filter,

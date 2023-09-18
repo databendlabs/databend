@@ -38,7 +38,6 @@ use opendal::Operator;
 // TODO: make BlockReader as a trait.
 #[derive(Clone)]
 pub struct BlockReader {
-    pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) operator: Operator,
     pub(crate) projection: Projection,
     pub(crate) projected_schema: TableSchemaRef,
@@ -128,7 +127,6 @@ impl BlockReader {
         let project_indices = Self::build_projection_indices(&project_column_nodes);
 
         Ok(Arc::new(BlockReader {
-            ctx,
             operator,
             projection,
             projected_schema,
