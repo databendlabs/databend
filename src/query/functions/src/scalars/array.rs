@@ -127,12 +127,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                     )
                 }),
                 eval: Box::new(|args, ctx| {
-                    let len = ctx.num_rows;
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
 
                     let mut builder: ArrayColumnBuilder<GenericType<0>> =
-                        ArrayColumnBuilder::with_capacity(len, 0, ctx.generics);
+                        ArrayColumnBuilder::with_capacity(len.unwrap_or(1), 0, ctx.generics);
 
-                    for idx in 0..len {
+                    for idx in 0..(len.unwrap_or(1)) {
                         for arg in args {
                             match arg {
                                 ValueRef::Scalar(scalar) => {
@@ -147,8 +150,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
 
                     match len {
-                        1 => Value::Scalar(Scalar::Array(builder.build_scalar())),
-                        _ => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
+                        Some(_) => Value::Column(Column::Array(Box::new(builder.build().upcast()))),
+                        None => Value::Scalar(Scalar::Array(builder.build_scalar())),
                     }
                 }),
             },

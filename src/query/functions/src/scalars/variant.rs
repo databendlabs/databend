@@ -1002,8 +1002,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    let (columns, _) = prepare_args_columns(args, ctx);
-    let cap = ctx.num_rows;
+    let (columns, len) = prepare_args_columns(args, ctx);
+    let cap = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
     let mut items = Vec::with_capacity(columns.len());
 
@@ -1020,9 +1020,9 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
         };
         builder.commit_row();
     }
-    match ctx.num_rows {
-        1 => Value::Scalar(Scalar::Variant(builder.build_scalar())),
-        _ => Value::Column(Column::Variant(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::Variant(builder.build())),
+        None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
     }
 }
 
@@ -1031,8 +1031,8 @@ fn json_object_fn(
     ctx: &mut EvalContext,
     keep_null: bool,
 ) -> Value<AnyType> {
-    let (columns, _) = prepare_args_columns(args, ctx);
-    let cap = ctx.num_rows;
+    let (columns, len) = prepare_args_columns(args, ctx);
+    let cap = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
         ctx.set_error(0, "The number of keys and values must be equal");
@@ -1076,10 +1076,9 @@ fn json_object_fn(
             builder.commit_row();
         }
     }
-
-    match ctx.num_rows {
-        1 => Value::Scalar(Scalar::Variant(builder.build_scalar())),
-        _ => Value::Column(Column::Variant(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::Variant(builder.build())),
+        None => Value::Scalar(Scalar::Variant(builder.build_scalar())),
     }
 }
 

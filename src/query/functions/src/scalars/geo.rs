@@ -344,8 +344,13 @@ fn get_coord(fields: &[ScalarRef]) -> Coord {
     Coord { x: v[0], y: v[1] }
 }
 
-fn point_in_polygon_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
-    let input_rows = ctx.num_rows;
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
+    let input_rows = len.unwrap_or(1);
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
         let arg0: Vec<f64> = match &args[0] {
@@ -465,19 +470,24 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Val
         builder.push(NumberScalar::UInt8(u8::from(is_in)));
     }
 
-    match input_rows {
-        1 => Value::Scalar(Scalar::Number(builder.build_scalar())),
-        _ => Value::Column(Column::Number(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
     }
 }
 
-fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<Float64Type>().unwrap())
         .collect::<Vec<_>>();
 
-    let input_rows = ctx.num_rows;
+    let input_rows = len.unwrap_or(1);
+
     let ellipses_cnt = (args.len() - 2) / 4;
     let mut ellipses: Vec<Ellipse> = Vec::with_capacity(ellipses_cnt);
 
@@ -520,9 +530,9 @@ fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Va
         builder.push(NumberScalar::UInt8(r));
     }
 
-    match input_rows {
-        1 => Value::Scalar(Scalar::Number(builder.build_scalar())),
-        _ => Value::Column(Column::Number(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::Number(builder.build())),
+        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
     }
 }
 

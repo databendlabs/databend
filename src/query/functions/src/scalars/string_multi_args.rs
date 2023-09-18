@@ -18,6 +18,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::passthrough_nullable;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Int64Type;
+use common_expression::types::number::NumberScalar;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
@@ -104,13 +105,17 @@ pub fn register(registry: &mut FunctionRegistry) {
                         max: None,
                     }))
                 }),
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, _| {
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
                     let args = args
                         .iter()
                         .map(|arg| arg.try_downcast::<StringType>().unwrap())
                         .collect::<Vec<_>>();
 
-                    let size = ctx.num_rows;
+                    let size = len.unwrap_or(1);
                     let mut builder = StringColumnBuilder::with_capacity(size, 0);
 
                     match &args[0] {
@@ -140,9 +145,9 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }
                     }
 
-                    match size {
-                        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
-                        _ => Value::Column(Column::String(builder.build())),
+                    match len {
+                        Some(_) => Value::Column(Column::String(builder.build())),
+                        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
                     }
                 }),
             },
@@ -162,10 +167,14 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::Full),
-                eval: Box::new(|args, ctx| {
+                eval: Box::new(|args, _| {
                     type T = NullableType<StringType>;
+                    let len = args.iter().find_map(|arg| match arg {
+                        ValueRef::Column(col) => Some(col.len()),
+                        _ => None,
+                    });
 
-                    let size = ctx.num_rows;
+                    let size = len.unwrap_or(1);
                     let new_args = args
                         .iter()
                         .map(|arg| arg.try_downcast::<T>().unwrap())
@@ -226,13 +235,12 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         }
                     }
-
-                    match size {
-                        1 => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
-                        _ => {
+                    match len {
+                        Some(_) => {
                             let col = T::upcast_column(nullable_builder.build());
                             Value::Column(col)
                         }
+                        _ => Value::Scalar(T::upcast_scalar(nullable_builder.build_scalar())),
                     }
                 }),
             },
@@ -462,33 +470,42 @@ pub fn register(registry: &mut FunctionRegistry) {
     });
 }
 
-fn concat_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn concat_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<StringType>().unwrap())
         .collect::<Vec<_>>();
-    let input_rows = ctx.num_rows;
-    let mut builder = StringColumnBuilder::with_capacity(input_rows, 0);
-    for idx in 0..input_rows {
+
+    let size = len.unwrap_or(1);
+    let mut builder = StringColumnBuilder::with_capacity(size, 0);
+    for idx in 0..size {
         for arg in &args {
             unsafe { builder.put_slice(arg.index_unchecked(idx)) }
         }
         builder.commit_row();
     }
 
-    match input_rows {
-        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
-        _ => Value::Column(Column::String(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::String(builder.build())),
+        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
     }
 }
 
-fn char_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<UInt8Type>().unwrap())
         .collect::<Vec<_>>();
 
-    let input_rows = ctx.num_rows;
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let input_rows = len.unwrap_or(1);
 
     let mut values: Vec<u8> = vec![0; input_rows * args.len()];
     let values_ptr = values.as_mut_ptr();
@@ -515,10 +532,20 @@ fn char_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> 
         .step_by(args.len())
         .collect::<Vec<_>>();
     let result = StringColumn::new(values.into(), offsets.into());
-    Value::Column(Column::String(result))
+
+    let col = Column::String(result);
+    match len {
+        Some(_) => Value::Column(col),
+        _ => Value::Scalar(StringType::index_column(&col, 0).to_owned()),
+    }
 }
 
 fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
     let source_arg = args[0].try_downcast::<StringType>().unwrap();
     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
     let pos_arg = if args.len() >= 3 {
@@ -542,7 +569,7 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
         None
     };
 
-    let size = ctx.num_rows;
+    let size = len.unwrap_or(1);
     let mut builder = Vec::with_capacity(size);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
@@ -613,13 +640,17 @@ fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<A
         builder.push(instr);
     }
 
-    match size {
-        1 => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
-        _ => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
+    match len {
+        Some(_) => Value::Column(Column::Number(NumberColumn::UInt64(builder.into()))),
+        _ => Value::Scalar(Scalar::Number(NumberScalar::UInt64(builder.pop().unwrap()))),
     }
 }
 
 fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
     let source_arg = args[0].try_downcast::<StringType>().unwrap();
     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
     let mt_arg = if args.len() >= 3 {
@@ -644,7 +675,7 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
         _ => None,
     };
 
-    let size = ctx.num_rows;
+    let size = len.unwrap_or(1);
     let mut builder = MutableBitmap::with_capacity(size);
     for idx in 0..size {
         let source = unsafe { source_arg.index_unchecked(idx) };
@@ -671,13 +702,18 @@ fn regexp_like_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<An
             .unwrap_or_else(|| local_re.as_ref().unwrap());
         builder.push(re.is_match(source));
     }
-    match size {
-        1 => Value::Scalar(Scalar::Boolean(builder.pop().unwrap())),
-        _ => Value::Column(Column::Boolean(builder.into())),
+    match len {
+        Some(_) => Value::Column(Column::Boolean(builder.into())),
+        _ => Value::Scalar(Scalar::Boolean(builder.pop().unwrap())),
     }
 }
 
 fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
     let source_arg = args[0].try_downcast::<StringType>().unwrap();
     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
     let repl_arg = args[2].try_downcast::<StringType>().unwrap();
@@ -697,7 +733,7 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         None
     };
 
-    let size = ctx.num_rows;
+    let size = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
 
     let cached_reg = match (&pat_arg, &mt_arg) {
@@ -776,14 +812,18 @@ fn regexp_replace_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value
         regexp::regexp_replace(source, re, repl, pos, occur, &mut builder.data);
         builder.commit_row();
     }
-
-    match size {
-        1 => Value::Scalar(Scalar::String(builder.build_scalar())),
-        _ => Value::Column(Column::String(builder.build())),
+    match len {
+        Some(_) => Value::Column(Column::String(builder.build())),
+        _ => Value::Scalar(Scalar::String(builder.build_scalar())),
     }
 }
 
 fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let len = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+
     let source_arg = args[0].try_downcast::<StringType>().unwrap();
     let pat_arg = args[1].try_downcast::<StringType>().unwrap();
     let pos_arg = if args.len() >= 3 {
@@ -818,7 +858,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
         _ => None,
     };
 
-    let size = ctx.num_rows;
+    let size = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(size, 0);
     let mut validity = MutableBitmap::with_capacity(size);
     for idx in 0..size {
@@ -878,8 +918,15 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
         }
         builder.commit_row();
     }
-    match size {
-        1 => match validity.pop() {
+    match len {
+        Some(_) => {
+            let col = Column::Nullable(Box::new(NullableColumn {
+                validity: validity.into(),
+                column: Column::String(builder.build()),
+            }));
+            Value::Column(col)
+        }
+        _ => match validity.pop() {
             Some(is_not_null) => {
                 if is_not_null {
                     Value::Scalar(Scalar::String(builder.build_scalar()))
@@ -889,13 +936,6 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
             }
             None => Value::Scalar(Scalar::Null),
         },
-        _ => {
-            let col = Column::Nullable(Box::new(NullableColumn {
-                validity: validity.into(),
-                column: Column::String(builder.build()),
-            }));
-            Value::Column(col)
-        }
     }
 }
 
