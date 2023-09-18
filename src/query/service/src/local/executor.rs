@@ -271,11 +271,11 @@ impl SessionExecutor {
                 }
                 _ => {
                     if !in_comment {
-                        self.query.push_str(&line[start..token.span.end]);
+                        self.query.push_str(&line[start..token.span.end()]);
                     }
                 }
             }
-            start = token.span.end;
+            start = token.span.end();
         }
 
         queries

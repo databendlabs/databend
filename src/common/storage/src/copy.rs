@@ -132,10 +132,10 @@ impl FileParseError {
         let pos: String = format!("at file '{}', line {}", file_path, line);
         let message = match mode {
             OnErrorMode::AbortNum(n) if *n > 1u64 => {
-                format!("meat {n} errors, abort! the last error: {self}, {pos}",)
+                format!("meat {n} errors, abort! the last error: {self}",)
             }
-            _ => format!("{self}, {pos}"),
+            _ => format!("{self}"),
         };
-        ErrorCode::BadBytes(message)
+        ErrorCode::BadBytes(message).add_detail_back(pos)
     }
 }

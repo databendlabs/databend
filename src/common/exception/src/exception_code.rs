@@ -37,6 +37,7 @@ macro_rules! build_exceptions {
                         $code,
                         stringify!($body),
                         display_text.into(),
+                        String::new(),
                         None,
                         bt,
                     )

@@ -212,16 +212,13 @@ impl InputFormatTextBase for InputFormatTSV {
                 schema,
                 &builder.projection,
             ) {
-                builder
-                    .ctx
-                    .on_error(
-                        e,
-                        Some((columns, builder.num_rows)),
-                        &mut builder.file_status,
-                        &batch.split_info.file.path,
-                        i + batch.start_row_in_split,
-                    )
-                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                builder.ctx.on_error(
+                    e,
+                    Some((columns, builder.num_rows)),
+                    &mut builder.file_status,
+                    &batch.split_info.file.path,
+                    i + batch.start_row_in_split,
+                )?
             } else {
                 builder.num_rows += 1;
                 builder.file_status.num_rows_loaded += 1;

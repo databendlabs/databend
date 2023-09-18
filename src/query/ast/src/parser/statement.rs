@@ -1722,8 +1722,8 @@ pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     Ok((
         i.slice((i.len() - 1)..),
         (
-            first_token.source[first_token.span.start..last_token.span.end].to_string(),
-            first_token.span.start,
+            first_token.source[first_token.span.start()..last_token.span.end()].to_string(),
+            first_token.span.start(),
         ),
     ))
 }
