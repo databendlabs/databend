@@ -127,32 +127,72 @@ fn get_create_table_sql(table_name: &str, ty: &str, nullable: bool) -> String {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_union_output_type() -> Result<()> {
+    fn null_str(nullable: bool) -> &'static str {
+        if nullable { "null" } else { "not_null" }
+    }
+
+    let fixture = TestFixture::new().await;
+
+    // Permutation of all data types: ALL_CREATABLE_TYPES x [true, false]
+    let mut data_types = vec![];
+
+    // Prepare all tables
     for ty1 in ALL_CREATABLE_TYPES {
         for nullable1 in [true, false] {
-            let table1_sql = get_create_table_sql("t1", ty1, nullable1);
+            let type_str = format!("{}_{}", ty1, null_str(nullable1));
+
+            let t1_name = format!("t1_{}", type_str);
+            let table1_sql = get_create_table_sql(&t1_name, ty1, nullable1);
+            let plan1 = plan_sql(fixture.ctx(), &table1_sql).await?;
+            execute_plan(fixture.ctx(), &plan1).await?;
+
+            let t2_name = format!("t2_{}", type_str);
+            let table2_sql = get_create_table_sql(&t2_name, ty1, nullable1);
+            let plan2 = plan_sql(fixture.ctx(), &table2_sql).await?;
+            execute_plan(fixture.ctx(), &plan2).await?;
+
+            let dt = get_created_data_type(&plan1);
+            data_types.push((dt.clone(), type_str));
+        }
+    }
+
+    for ty1 in ALL_CREATABLE_TYPES {
+        for nullable1 in [true, false] {
+            let t1_name = format!("t1_{}_{}", ty1, null_str(nullable1));
+            let table1_sql = get_create_table_sql(&t1_name, ty1, nullable1);
+            let plan1 = plan_sql(fixture.ctx(), &table1_sql).await?;
+            let data_type_1 = get_created_data_type(&plan1);
+
             for ty2 in ALL_CREATABLE_TYPES {
                 for nullable2 in [true, false] {
-                    let table2_sql = get_create_table_sql("t2", ty2, nullable2);
+                    let t2_name = format!("t2_{}_{}", ty2, null_str(nullable2));
+                    let table2_sql = get_create_table_sql(&t2_name, ty2, nullable2);
+                    let plan2 = plan_sql(fixture.ctx(), &table2_sql).await?;
+                    let data_type_2 = get_created_data_type(&plan2);
 
-                    {
-                        let fixture = TestFixture::new().await;
-                        let plan1 = plan_sql(fixture.ctx(), &table1_sql).await?;
-                        let ty1 = get_created_data_type(&plan1);
-                        let plan2 = plan_sql(fixture.ctx(), &table2_sql).await?;
-                        let ty2 = get_created_data_type(&plan2);
+                    if let Some(common_type) = common_super_type(
+                        data_type_1.clone(),
+                        data_type_2,
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    ) {
+                        let (_, schema) = get_interpreter(
+                            fixture.ctx(),
+                            &format!(
+                                "select * from {} union all select * from {}",
+                                t1_name, t2_name
+                            ),
+                        )
+                        .await?;
 
-                        if let Some(common_type) =
-                            common_super_type(ty1, ty2, &BUILTIN_FUNCTIONS.default_cast_rules)
-                        {
-                            execute_plan(fixture.ctx(), &plan1).await?;
-                            execute_plan(fixture.ctx(), &plan2).await?;
-                            let (_, schema) = get_interpreter(
-                                fixture.ctx(),
-                                "select * from t1 union all select * from t2",
-                            )
-                            .await?;
-                            assert_eq!(schema.field(0).data_type(), &common_type);
-                        }
+                        assert_eq!(
+                            schema.field(0).data_type(),
+                            &common_type,
+                            "ty1: {} {}, ty2: {} {}",
+                            ty1,
+                            nullable1,
+                            ty2,
+                            nullable2
+                        );
                     }
                 }
             }

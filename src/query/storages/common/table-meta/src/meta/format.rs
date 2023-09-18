@@ -32,6 +32,12 @@ use snap::raw::Encoder as SnapEncoder;
 use zstd::Decoder as ZstdDecoder;
 use zstd::Encoder as ZstdEncoder;
 
+// Formerly defined in internal_columns.rs, for dependency reasons, we move it here.
+// The "_row_id" of internal column assumes that the max block count of a segment is 2^11
+// (during compaction, a more modest constraint is used : 2 * 1000 -1)
+pub const NUM_BLOCK_ID_BITS: usize = 11;
+pub const MAX_SEGMENT_BLOCK_NUMBER: usize = 1 << NUM_BLOCK_ID_BITS;
+
 #[repr(u8)]
 #[derive(Default, Debug, Clone)]
 pub enum MetaCompression {
