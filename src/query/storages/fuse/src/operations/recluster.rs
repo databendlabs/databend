@@ -191,6 +191,7 @@ impl FuseTable {
         }
 
         let (statistics, parts) = self.read_partitions_with_metas(
+            ctx.clone(),
             self.table_info.schema(),
             None,
             &block_metas,
