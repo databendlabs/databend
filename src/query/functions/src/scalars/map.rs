@@ -90,7 +90,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _, _| Value::Scalar(()),
     );
 
-    registry.register_2_arg_core::<MapType<GenericType<0>, NullType>, NullableType<GenericType<0>>, NullType, _, _>(
+    registry.register_2_arg_core::<NullableType<MapType<GenericType<0>, NullType>>, NullableType<GenericType<0>>, NullType, _, _>(
         "get",
         |_, _, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
