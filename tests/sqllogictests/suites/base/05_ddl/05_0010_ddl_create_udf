@@ -27,4 +27,3 @@ DROP FUNCTION isnotempty
 
 statement ok
 DROP FUNCTION isnotempty_with_desc
-

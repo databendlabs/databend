@@ -314,5 +314,6 @@ fn find_subquery_in_expr(expr: &ScalarExpr) -> bool {
         ScalarExpr::FunctionCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
         ScalarExpr::CastExpr(expr) => find_subquery_in_expr(&expr.argument),
         ScalarExpr::SubqueryExpr(_) => true,
+        ScalarExpr::UDFServerCall(expr) => expr.arguments.iter().any(find_subquery_in_expr),
     }
 }

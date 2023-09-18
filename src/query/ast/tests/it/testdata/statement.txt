@@ -6513,6 +6513,71 @@ Query(
 
 
 ---------- Input ----------
+select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');
+---------- Output ---------
+SELECT * FROM @foo (FILE_FORMAT => 'tsv',PATTERN => '[.]*parquet')
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..62,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..62,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Location {
+                        span: Some(
+                            14..62,
+                        ),
+                        location: Stage(
+                            "foo",
+                        ),
+                        options: SelectStageOptions {
+                            files: None,
+                            pattern: Some(
+                                "[.]*parquet",
+                            ),
+                            file_format: Some(
+                                "tsv",
+                            ),
+                            connection: {},
+                        },
+                        alias: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select 'stringwith''quote'''
 ---------- Output ---------
 SELECT 'stringwith\'quote\''

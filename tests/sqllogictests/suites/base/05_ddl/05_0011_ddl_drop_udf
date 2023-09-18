@@ -12,4 +12,3 @@ DROP FUNCTION IF EXISTS isnotempty
 
 statement error 2602
 DROP FUNCTION isnotempty
-
