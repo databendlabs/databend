@@ -357,7 +357,10 @@ impl Session {
         let dir = std::env::temp_dir();
         // TODO:(everpcpc) write by chunks
         let mut lines = std::io::stdin().lock().lines();
-        let tmp_file = dir.join(format!("bendsql_{}", chrono::Utc::now().timestamp_nanos()));
+        let now = chrono::Utc::now().timestamp_nanos_opt().ok_or_else(|| {
+            anyhow!("Failed to get timestamp, please check your system time is correct and retry.")
+        })?;
+        let tmp_file = dir.join(format!("bendsql_{}", now));
         {
             let mut file = File::create(&tmp_file).await?;
             while let Some(Ok(line)) = lines.next() {

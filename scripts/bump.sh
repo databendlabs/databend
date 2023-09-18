@@ -34,3 +34,5 @@ else
 fi
 
 git status
+git add Cargo.toml bindings/nodejs/package.json bindings/nodejs/npm/*/package.json
+git commit -m "chore: bump version to $VERSION"

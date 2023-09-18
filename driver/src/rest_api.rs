@@ -113,7 +113,10 @@ impl Connection for RestAPIConnection {
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,
     ) -> Result<QueryProgress> {
-        let stage = format!("@~/client/load/{}", chrono::Utc::now().timestamp_nanos());
+        let now = chrono::Utc::now()
+            .timestamp_nanos_opt()
+            .ok_or_else(|| Error::IO("Failed to get current timestamp".to_string()))?;
+        let stage = format!("@~/client/load/{}", now);
         self.upload_to_stage(&stage, data, size).await?;
         let file_format_options =
             file_format_options.unwrap_or_else(Self::default_file_format_options);
