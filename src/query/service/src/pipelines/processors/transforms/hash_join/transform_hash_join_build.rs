@@ -57,6 +57,7 @@ pub struct TransformHashJoinBuild {
     finalize_finished: bool,
     // The flag indicates whether data is from spilled data.
     from_spill: bool,
+    _processor_id: usize,
 }
 
 impl TransformHashJoinBuild {
@@ -65,7 +66,7 @@ impl TransformHashJoinBuild {
         build_state: Arc<HashJoinBuildState>,
         spill_state: Option<Box<BuildSpillState>>,
     ) -> Result<Box<dyn Processor>> {
-        build_state.build_attach();
+        let processor_id = build_state.build_attach();
         Ok(Box::new(TransformHashJoinBuild {
             input_port,
             input_data: None,
@@ -75,6 +76,7 @@ impl TransformHashJoinBuild {
             spill_data: None,
             finalize_finished: false,
             from_spill: false,
+            _processor_id: processor_id,
         }))
     }
 
@@ -102,13 +104,14 @@ impl TransformHashJoinBuild {
     // Called after processor read spilled data
     // It means next round build will start, need to reset some variables.
     fn reset(&mut self) -> Result<()> {
-        let mut count = self.build_state.row_space_builders.lock();
-        *count += 1;
-        let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
         self.finalize_finished = false;
-        *count += 1;
         // Only need to reset the following variables once
-        if *count == 1 {
+        if *self.build_state.row_space_builders.lock() == 0 {
+            let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
+            let mut count = self.build_state.row_space_builders.lock();
+            *count = worker_num;
+            let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
+            *count = worker_num;
             let mut row_space_build_done = self.build_state.row_space_build_done.lock();
             *row_space_build_done = false;
             self.build_state.hash_join_state.reset();
@@ -182,6 +185,7 @@ impl Processor for TransformHashJoinBuild {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
+                        self.build_state.build_worker_num.fetch_sub(1, Ordering::SeqCst);
                         Ok(Event::Finished)
                     }
                 }
