@@ -241,3 +241,11 @@ select to_string(to_bitmap(number)), to_string(to_bitmap(number+3)) FROM numbers
 1 4
 2 5
 
+
+# group by aggregate functions
+
+statement error 1065
+select sum(number + 3 ), number % 3  from numbers(10) group by  sum(number + 3 ), number % 3;
+
+statement error 1065
+select sum(number + 3 ), number % 3  from numbers(10) group by  1, 2;
