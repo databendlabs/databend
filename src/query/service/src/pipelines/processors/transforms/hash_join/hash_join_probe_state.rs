@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -59,7 +60,7 @@ pub struct HashJoinProbeState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) _processor_count: usize,
+    pub(crate) active_processor_count: AtomicUsize,
     /// It will be increased by 1 when a new hash join probe processor is created.
     /// After the processor finish probe hash table, it will be decreased by 1.
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
@@ -112,7 +113,7 @@ impl HashJoinProbeState {
         Ok(HashJoinProbeState {
             ctx,
             hash_join_state,
-            _processor_count: processor_count,
+            active_processor_count: AtomicUsize::new(processor_count),
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
             final_probe_workers: Default::default(),

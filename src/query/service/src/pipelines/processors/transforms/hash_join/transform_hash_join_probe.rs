@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -137,7 +138,9 @@ impl TransformHashJoinProbe {
             {
                 self.join_probe_state.probe_done()?;
             }
-
+            self.join_probe_state
+                .active_processor_count
+                .fetch_sub(1, Ordering::SeqCst);
             return Ok(Event::Finished);
         }
 
@@ -193,6 +196,9 @@ impl TransformHashJoinProbe {
                     self.join_probe_state.finish_final_probe();
                 }
                 self.output_port.finish();
+                self.join_probe_state
+                    .active_processor_count
+                    .fetch_sub(1, Ordering::SeqCst);
                 Ok(Event::Finished)
             };
         }
@@ -205,12 +211,22 @@ impl TransformHashJoinProbe {
         if self.join_probe_state.hash_join_state.need_outer_scan()
             || self.join_probe_state.hash_join_state.need_mark_scan()
         {
-            let mut probe_workers = self.join_probe_state.probe_workers.lock();
-            *probe_workers += 1;
+            let mut count = self.join_probe_state.probe_workers.lock();
+            if *count == 0 {
+                *count = self
+                    .join_probe_state
+                    .active_processor_count
+                    .load(Ordering::Relaxed);
+            }
         }
 
-        let mut final_probe_workers = self.join_probe_state.final_probe_workers.lock();
-        *final_probe_workers += 1;
+        let mut count = self.join_probe_state.final_probe_workers.lock();
+        if *count == 0 {
+            *count = self
+                .join_probe_state
+                .active_processor_count
+                .load(Ordering::Relaxed);
+        }
 
         self.outer_scan_finished = false;
     }
@@ -269,6 +285,9 @@ impl Processor for TransformHashJoinProbe {
                     self.join_probe_state.finish_spill(true);
                     if spilled_partition_set.is_empty() {
                         self.output_port.finish();
+                        self.join_probe_state
+                            .active_processor_count
+                            .fetch_sub(1, Ordering::SeqCst);
                         return Ok(Event::Finished);
                     }
                     // Wait build side to build hash table
@@ -280,12 +299,18 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::FastReturn => {
                 self.output_port.finish();
+                self.join_probe_state
+                    .active_processor_count
+                    .fetch_sub(1, Ordering::SeqCst);
                 Ok(Event::Finished)
             }
             HashJoinProbeStep::Running => self.run(),
             HashJoinProbeStep::AsyncRunning => self.async_run(),
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
+                    self.join_probe_state
+                        .active_processor_count
+                        .fetch_sub(1, Ordering::SeqCst);
                     return Ok(Event::Finished);
                 }
 
@@ -320,6 +345,9 @@ impl Processor for TransformHashJoinProbe {
                             self.join_probe_state.finish_final_probe();
                         }
                         self.output_port.finish();
+                        self.join_probe_state
+                            .active_processor_count
+                            .fetch_sub(1, Ordering::SeqCst);
                         Ok(Event::Finished)
                     }
                 }
