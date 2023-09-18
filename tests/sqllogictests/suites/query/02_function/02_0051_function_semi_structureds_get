@@ -24,6 +24,11 @@ select get(parse_json('{"aa": null, "aA": 2, "Aa": 3}'), 'aa')
 null
 
 query T
+select get(null, 'aa')
+----
+NULL
+
+query T
 select parse_json('[2.71, 3.14]')[0]
 ----
 2.71
