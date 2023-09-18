@@ -6513,6 +6513,71 @@ Query(
 
 
 ---------- Input ----------
+select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');
+---------- Output ---------
+SELECT * FROM @foo (FILE_FORMAT => 'tsv',PATTERN => '[.]*parquet')
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..62,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..62,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    QualifiedName {
+                        qualified: [
+                            Star(
+                                Some(
+                                    7..8,
+                                ),
+                            ),
+                        ],
+                        exclude: None,
+                    },
+                ],
+                from: [
+                    Location {
+                        span: Some(
+                            14..62,
+                        ),
+                        location: Stage(
+                            "foo",
+                        ),
+                        options: SelectStageOptions {
+                            files: None,
+                            pattern: Some(
+                                "[.]*parquet",
+                            ),
+                            file_format: Some(
+                                "tsv",
+                            ),
+                            connection: {},
+                        },
+                        alias: None,
+                    },
+                ],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 select 'stringwith''quote'''
 ---------- Output ---------
 SELECT 'stringwith\'quote\''
@@ -9167,8 +9232,8 @@ COPY INTO mytable
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;
+                ),
+                size_limit=10,;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
@@ -9224,7 +9289,7 @@ COPY INTO mytable
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10
+                size_limit=10,
                 max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
@@ -9595,10 +9660,10 @@ Copy(
 COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
+                    type = CSV,
+                    field_delimiter = ',',
+                    record_delimiter = '\n',
+                    skip_header = 1,
                 )
                 size_limit=10;
 ---------- Output ---------
@@ -9764,7 +9829,7 @@ COPY INTO @my_stage
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
+                ),
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
@@ -9818,14 +9883,14 @@ COPY INTO mytable
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                )
+                ),
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;
+                ),
+                size_limit=10,;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
@@ -10113,6 +10178,60 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: true,
+        on_error: "abort",
+    },
+)
+
+
+---------- Input ----------
+copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)
+---------- Output ---------
+COPY INTO t1 FROM "" FILE_FORMAT = ( compression = 'GZIP' type = 'TSV' ) SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+---------- AST ------------
+Copy(
+    CopyStmt {
+        hints: None,
+        src: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "",
+                quote: Some(
+                    '"',
+                ),
+                span: Some(
+                    18..20,
+                ),
+            },
+            columns: None,
+        },
+        dst: Table {
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t1",
+                quote: None,
+                span: Some(
+                    10..12,
+                ),
+            },
+            columns: None,
+        },
+        files: None,
+        pattern: None,
+        file_format: {
+            "compression": "GZIP",
+            "type": "TSV",
+        },
+        validation_mode: "",
+        size_limit: 0,
+        max_files: 0,
+        max_file_size: 0,
+        split_size: 0,
+        single: false,
+        purge: false,
+        force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )

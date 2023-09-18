@@ -32,7 +32,7 @@ sample_3_replace.csv	5	0	NULL	NULL
 105	hammer	14oz carpenter's hammer
 24
 null
-Text = expect 3 fields, only found 2
+Text = Number of columns in file (2) does not match that of the corresponding table (3), at file 'sample_2_columns.csv', line 0.
 24
 5
 itt.csv	5	0	NULL	NULL

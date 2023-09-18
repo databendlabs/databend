@@ -62,3 +62,4 @@ mod v054_index_meta;
 mod v055_table_meta;
 mod v056_least_visible_time;
 mod v057_hdfs_storage;
+mod v058_udf;

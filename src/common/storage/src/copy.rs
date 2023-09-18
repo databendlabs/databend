@@ -13,10 +13,12 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_meta_app::principal::OnErrorMode;
 use dashmap::mapref::entry::Entry;
 use dashmap::DashMap;
 use serde::Deserialize;
 use serde::Serialize;
+use thiserror::Error;
 
 #[derive(Default, Clone, Serialize, Deserialize)]
 pub struct CopyStatus {
@@ -50,26 +52,18 @@ pub struct FileStatus {
 }
 
 impl FileStatus {
-    pub fn add_error(&mut self, e: ErrorCode, line: usize) {
+    pub fn add_error(&mut self, error: FileParseError, line: usize) {
         match &mut self.error {
             None => {
                 self.error = Some(FileErrorsInfo {
                     num_errors: 1,
-                    first_error: FileErrorInfo {
-                        code: e.code(),
-                        message: e.message(),
-                        line,
-                    },
+                    first_error: FileErrorInfo { error, line },
                 });
             }
             Some(info) => {
                 info.num_errors += 1;
                 if info.first_error.line > line {
-                    info.first_error = FileErrorInfo {
-                        code: e.code(),
-                        message: e.message(),
-                        line,
-                    };
+                    info.first_error = FileErrorInfo { error, line };
                 }
             }
         };
@@ -85,7 +79,7 @@ impl FileStatus {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FileErrorsInfo {
     pub num_errors: usize,
     pub first_error: FileErrorInfo,
@@ -100,9 +94,48 @@ impl FileErrorsInfo {
     }
 }
 
-#[derive(Default, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct FileErrorInfo {
-    pub code: u16,
-    pub message: String,
+    pub error: FileParseError,
     pub line: usize,
+}
+
+#[derive(Error, Debug, Clone, Serialize, Deserialize)]
+pub enum FileParseError {
+    #[error(
+        "Number of columns in file ({file}) does not match that of the corresponding table ({table})"
+    )]
+    NumberOfColumnsMismatch { table: usize, file: usize },
+    #[error("fail todo decode JSON: {message}")]
+    InvalidNDJsonRow { message: String },
+    #[error("fail to decode column {column_index} ({column_name} {column_type}): {decode_error}")]
+    ColumnDecodeError {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+        decode_error: String,
+    },
+    #[error(
+        "fail to decode column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char is {next_char}"
+    )]
+    ColumnDataNotDrained {
+        column_index: usize,
+        column_name: String,
+        column_type: String,
+        size_remained: usize,
+        next_char: String,
+    },
+}
+
+impl FileParseError {
+    pub fn to_error_code(&self, mode: &OnErrorMode, file_path: &str, line: usize) -> ErrorCode {
+        let pos: String = format!("at file '{}', line {}", file_path, line);
+        let message = match mode {
+            OnErrorMode::AbortNum(n) if *n > 1u64 => {
+                format!("meat {n} errors, abort! the last error: {self}, {pos}",)
+            }
+            _ => format!("{self}, {pos}"),
+        };
+        ErrorCode::BadBytes(message)
+    }
 }

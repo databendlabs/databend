@@ -111,6 +111,7 @@ impl TransformHashJoinBuild {
         if *count == 1 {
             let mut row_space_build_done = self.build_state.row_space_build_done.lock();
             *row_space_build_done = false;
+            self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;
         Ok(())
@@ -201,6 +202,9 @@ impl Processor for TransformHashJoinBuild {
         match self.step {
             HashJoinBuildStep::Running => {
                 if let Some(data_block) = self.input_data.take() {
+                    if self.from_spill {
+                        return self.build_state.build(data_block);
+                    }
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() {
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
@@ -278,8 +282,10 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::FollowSpill => {
                 if let Some(data) = self.spill_data.take() {
-                    let unspilled_data =
-                        self.spill_state.as_mut().unwrap().spill_input(data).await?;
+                    let spill_state = self.spill_state.as_mut().unwrap();
+                    let mut hashes = Vec::with_capacity(data.num_rows());
+                    spill_state.get_hashes(&data, &mut hashes)?;
+                    let unspilled_data = spill_state.spiller.spill_input(data, &hashes).await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;
                     }
@@ -300,6 +306,18 @@ impl Processor for TransformHashJoinBuild {
                 // Which means it's time to finish.
                 if partition_id == -1 {
                     self.step = HashJoinBuildStep::Finished;
+                    return Ok(());
+                }
+                if !self
+                    .build_state
+                    .hash_join_state
+                    .spill_partition
+                    .read()
+                    .contains(&(partition_id as u8))
+                {
+                    // Skip if the partition is not spilled in build side
+                    self.from_spill = true;
+                    self.reset()?;
                     return Ok(());
                 }
                 let spilled_data = self

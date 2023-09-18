@@ -75,4 +75,10 @@ impl RowSpace {
             Ok(DataBlock::empty_with_schema(self.build_schema.clone()))
         }
     }
+
+    pub fn reset(&self) {
+        let mut buffer = self.buffer.write();
+        buffer.clear();
+        *self.buffer_row_size.write() = 0;
+    }
 }

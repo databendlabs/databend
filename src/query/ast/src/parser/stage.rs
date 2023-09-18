@@ -39,18 +39,16 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
 
 fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
     move |i| {
-        let sep1 = match_text(sep);
-        let sep2 = match_text(sep);
         let string_options = map(
             rule! {
-                ( #ident ) ~ #sep1 ~ #literal_string
+                ( #ident ) ~ #match_text(sep) ~ #literal_string
             },
             |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
 
         let bool_options = map(
             rule! {
-                (ENABLE_VIRTUAL_HOST_STYLE) ~ #sep2 ~ #literal_bool
+                (ENABLE_VIRTUAL_HOST_STYLE) ~ #match_text(sep) ~ #literal_bool
             },
             |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
         );
@@ -69,14 +67,14 @@ pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let option_type = map(
         rule! {
-        (TYPE ~ "=" ~ (TSV| CSV | NDJSON | PARQUET | JSON | XML) )
+            TYPE ~ "=" ~ (TSV | CSV | NDJSON | PARQUET | JSON | XML)
         },
         |(_, _, v)| ("type".to_string(), v.text().to_string()),
     );
 
     let option_compression = map(
         rule! {
-        (COMPRESSION ~ "=" ~ (AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ ) )
+            COMPRESSION ~ "=" ~ (AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ)
         },
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
@@ -112,8 +110,8 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     );
 
     map(
-        rule! { (#option_type | #option_compression | #string_options | #int_options | #none_options)* },
-        |opts| BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone()))),
+        rule! { ((#option_type | #option_compression | #string_options | #int_options | #none_options) ~ ","?)* },
+        |opts| BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone()))),
     )(i)
 }
 
@@ -164,9 +162,9 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #connection_options)?
-            ~ (CREDENTIALS ~ "=" ~ #connection_options)?
-            ~ (LOCATION_PREFIX ~ "=" ~ #literal_string)?
+            ~ (CONNECTION ~ "=" ~ #connection_options ~ ","?)?
+            ~ (CREDENTIALS ~ "=" ~ #connection_options ~ ","?)?
+            ~ (LOCATION_PREFIX ~ "=" ~ #literal_string ~ ","?)?
         },
         |(location, connection_opts, credentials_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {
@@ -179,7 +177,7 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
                     Err(ErrorKind::Other("uri location should not start with '@'"))
                 }
             } else {
-                let part_prefix = if let Some((_, _, p)) = location_prefix {
+                let part_prefix = if let Some((_, _, p, _)) = location_prefix {
                     p
                 } else {
                     "".to_string()
@@ -199,7 +197,6 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
 }
 
 pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
-    let connection_opt = connection_opt("=>");
     alt((
         map(
             rule! { FILES ~ "=>" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
@@ -213,6 +210,6 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILE_FORMAT ~ "=>" ~ #literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
         ),
-        map(connection_opt, SelectStageOption::Connection),
+        map(connection_opt("=>"), SelectStageOption::Connection),
     ))(i)
 }

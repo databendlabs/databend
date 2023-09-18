@@ -565,12 +565,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Expr, Expr)]) {
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Literal)]) {
         let mut children = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs.iter() {
-            self.visit_expr(key_expr);
+            self.visit_literal(_span, key_expr);
             children.push(self.children.pop().unwrap());
-            self.visit_expr(val_expr);
+            self.visit_literal(_span, val_expr);
             children.push(self.children.pop().unwrap());
         }
         let name = "Literal Map".to_string();
@@ -1907,39 +1907,81 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_create_udf(
-        &mut self,
-        _if_not_exists: bool,
-        udf_name: &'ast Identifier,
-        parameters: &'ast [Identifier],
-        definition: &'ast Expr,
-        description: &'ast Option<String>,
-    ) {
+    fn visit_create_udf(&mut self, stmt: &'ast CreateUDFStmt) {
         let mut children = Vec::new();
-        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {}", udf_name));
+        let udf_name_format_ctx =
+            AstFormatContext::new(format!("UdfNameIdentifier {}", stmt.udf_name));
         children.push(FormatTreeNode::new(udf_name_format_ctx));
-        if !parameters.is_empty() {
-            let mut parameters_children = Vec::with_capacity(parameters.len());
-            for parameter in parameters.iter() {
-                self.visit_identifier(parameter);
-                parameters_children.push(self.children.pop().unwrap());
+
+        match &stmt.definition {
+            UDFDefinition::LambdaUDF {
+                parameters,
+                definition,
+            } => {
+                if !parameters.is_empty() {
+                    let mut parameters_children = Vec::with_capacity(parameters.len());
+                    for parameter in parameters.iter() {
+                        self.visit_identifier(parameter);
+                        parameters_children.push(self.children.pop().unwrap());
+                    }
+                    let parameters_name = "UdfParameters".to_string();
+                    let parameters_format_ctx =
+                        AstFormatContext::with_children(parameters_name, parameters_children.len());
+                    children.push(FormatTreeNode::with_children(
+                        parameters_format_ctx,
+                        parameters_children,
+                    ));
+                }
+                self.visit_expr(definition);
+                let definition_child = self.children.pop().unwrap();
+                let definition_name = "UdfDefinition".to_string();
+                let definition_format_ctx = AstFormatContext::with_children(definition_name, 1);
+                children.push(FormatTreeNode::with_children(definition_format_ctx, vec![
+                    definition_child,
+                ]));
             }
-            let parameters_name = "UdfParameters".to_string();
-            let parameters_format_ctx =
-                AstFormatContext::with_children(parameters_name, parameters_children.len());
-            children.push(FormatTreeNode::with_children(
-                parameters_format_ctx,
-                parameters_children,
-            ));
+            UDFDefinition::UDFServer {
+                arg_types,
+                return_type,
+                address,
+                handler,
+                language,
+            } => {
+                if !arg_types.is_empty() {
+                    let mut arg_types_children = Vec::with_capacity(arg_types.len());
+                    for arg_type in arg_types.iter() {
+                        let type_format_ctx = AstFormatContext::new(format!("DataType {arg_type}"));
+                        arg_types_children.push(FormatTreeNode::new(type_format_ctx));
+                    }
+                    let arg_format_ctx = AstFormatContext::with_children(
+                        "UdfArgTypes".to_string(),
+                        arg_types_children.len(),
+                    );
+                    children.push(FormatTreeNode::with_children(
+                        arg_format_ctx,
+                        arg_types_children,
+                    ));
+                }
+
+                let return_type_format_ctx =
+                    AstFormatContext::new(format!("UdfReturnType {return_type}"));
+                children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx =
+                    AstFormatContext::new(format!("UdfServerHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx =
+                    AstFormatContext::new(format!("UdfServerLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
+
+                let address_format_ctx =
+                    AstFormatContext::new(format!("UdfServerAddress {address}"));
+                children.push(FormatTreeNode::new(address_format_ctx));
+            }
         }
-        self.visit_expr(definition);
-        let definition_child = self.children.pop().unwrap();
-        let definition_name = "UdfDefinition".to_string();
-        let definition_format_ctx = AstFormatContext::with_children(definition_name, 1);
-        children.push(FormatTreeNode::with_children(definition_format_ctx, vec![
-            definition_child,
-        ]));
-        if let Some(description) = description {
+
+        if let Some(description) = &stmt.description {
             let description_name = format!("UdfDescription {}", description);
             let description_format_ctx = AstFormatContext::new(description_name);
             children.push(FormatTreeNode::new(description_format_ctx));
@@ -1961,38 +2003,81 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_alter_udf(
-        &mut self,
-        udf_name: &'ast Identifier,
-        parameters: &'ast [Identifier],
-        definition: &'ast Expr,
-        description: &'ast Option<String>,
-    ) {
+    fn visit_alter_udf(&mut self, stmt: &'ast AlterUDFStmt) {
         let mut children = Vec::new();
-        let udf_name_format_ctx = AstFormatContext::new(format!("UdfNameIdentifier {}", udf_name));
+        let udf_name_format_ctx =
+            AstFormatContext::new(format!("UdfNameIdentifier {}", stmt.udf_name));
         children.push(FormatTreeNode::new(udf_name_format_ctx));
-        if !parameters.is_empty() {
-            let mut parameters_children = Vec::with_capacity(parameters.len());
-            for parameter in parameters.iter() {
-                self.visit_identifier(parameter);
-                parameters_children.push(self.children.pop().unwrap());
+
+        match &stmt.definition {
+            UDFDefinition::LambdaUDF {
+                parameters,
+                definition,
+            } => {
+                if !parameters.is_empty() {
+                    let mut parameters_children = Vec::with_capacity(parameters.len());
+                    for parameter in parameters.iter() {
+                        self.visit_identifier(parameter);
+                        parameters_children.push(self.children.pop().unwrap());
+                    }
+                    let parameters_name = "UdfParameters".to_string();
+                    let parameters_format_ctx =
+                        AstFormatContext::with_children(parameters_name, parameters_children.len());
+                    children.push(FormatTreeNode::with_children(
+                        parameters_format_ctx,
+                        parameters_children,
+                    ));
+                }
+                self.visit_expr(definition);
+                let definition_child = self.children.pop().unwrap();
+                let definition_name = "UdfDefinition".to_string();
+                let definition_format_ctx = AstFormatContext::with_children(definition_name, 1);
+                children.push(FormatTreeNode::with_children(definition_format_ctx, vec![
+                    definition_child,
+                ]));
             }
-            let parameters_name = "UdfParameters".to_string();
-            let parameters_format_ctx =
-                AstFormatContext::with_children(parameters_name, parameters_children.len());
-            children.push(FormatTreeNode::with_children(
-                parameters_format_ctx,
-                parameters_children,
-            ));
+            UDFDefinition::UDFServer {
+                arg_types,
+                return_type,
+                address,
+                handler,
+                language,
+            } => {
+                if !arg_types.is_empty() {
+                    let mut arg_types_children = Vec::with_capacity(arg_types.len());
+                    for arg_type in arg_types.iter() {
+                        let type_format_ctx = AstFormatContext::new(format!("DataType {arg_type}"));
+                        arg_types_children.push(FormatTreeNode::new(type_format_ctx));
+                    }
+                    let arg_format_ctx = AstFormatContext::with_children(
+                        "UdfArgTypes".to_string(),
+                        arg_types_children.len(),
+                    );
+                    children.push(FormatTreeNode::with_children(
+                        arg_format_ctx,
+                        arg_types_children,
+                    ));
+                }
+
+                let return_type_format_ctx =
+                    AstFormatContext::new(format!("UdfReturnType {return_type}"));
+                children.push(FormatTreeNode::new(return_type_format_ctx));
+
+                let handler_format_ctx =
+                    AstFormatContext::new(format!("UdfServerHandler {handler}"));
+                children.push(FormatTreeNode::new(handler_format_ctx));
+
+                let language_format_ctx =
+                    AstFormatContext::new(format!("UdfServerLanguage {language}"));
+                children.push(FormatTreeNode::new(language_format_ctx));
+
+                let address_format_ctx =
+                    AstFormatContext::new(format!("UdfServerAddress {address}"));
+                children.push(FormatTreeNode::new(address_format_ctx));
+            }
         }
-        self.visit_expr(definition);
-        let definition_child = self.children.pop().unwrap();
-        let definition_name = "UdfDefinition".to_string();
-        let definition_format_ctx = AstFormatContext::with_children(definition_name, 1);
-        children.push(FormatTreeNode::with_children(definition_format_ctx, vec![
-            definition_child,
-        ]));
-        if let Some(description) = description {
+
+        if let Some(description) = &stmt.description {
             let description_name = format!("UdfDescription {}", description);
             let description_format_ctx = AstFormatContext::new(description_name);
             children.push(FormatTreeNode::new(description_format_ctx));

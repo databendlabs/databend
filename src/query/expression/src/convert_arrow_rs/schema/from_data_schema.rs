@@ -51,3 +51,19 @@ impl From<&DataType> for ArrowDataType {
         (&infer_schema_type(ty).expect("Generic type can not convert to arrow")).into()
     }
 }
+
+/// This function is similar to the above, but does not change the nullability of any type.
+pub fn data_schema_to_arrow_schema(data_schema: &DataSchema) -> ArrowSchema {
+    let fields = data_schema
+        .fields
+        .iter()
+        .map(|f| {
+            let ty = f.data_type().into();
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null())
+        })
+        .collect::<Vec<_>>();
+    ArrowSchema {
+        fields: Fields::from(fields),
+        metadata: Default::default(),
+    }
+}

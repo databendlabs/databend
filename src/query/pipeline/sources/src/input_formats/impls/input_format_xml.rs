@@ -28,9 +28,11 @@ use common_io::cursor_ext::*;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::XmlFileFormatParams;
+use common_storage::FileParseError;
 use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
+use crate::input_formats::error_utils::check_column_end;
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
@@ -49,9 +51,7 @@ impl InputFormatXML {
         row_data: &mut HashMap<String, Vec<u8>>,
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
-        path: &str,
-        row_index: usize,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), FileParseError> {
         let raw_data = if !field_decoder.ident_case_sensitive {
             row_data
                 .drain()
@@ -61,7 +61,9 @@ impl InputFormatXML {
             row_data.clone()
         };
 
-        for (field, column) in schema.fields().iter().zip(columns.iter_mut()) {
+        for ((column_index, field), column) in
+            schema.fields().iter().enumerate().zip(columns.iter_mut())
+        {
             let value = if field_decoder.ident_case_sensitive {
                 raw_data.get(field.name())
             } else {
@@ -73,16 +75,14 @@ impl InputFormatXML {
                     column.push_default();
                 } else {
                     if let Err(e) = field_decoder.read_field(column, &mut reader, true) {
-                        let value_str = format!("{:?}", value);
-                        let err_msg = format!("{}. column={} value={}", e, field.name(), value_str);
-                        return Err(xml_error(&err_msg, path, row_index));
-                    };
-                    if reader.must_eof().is_err() {
-                        let value_str = format!("{:?}", value);
-                        let err_msg =
-                            format!("bad field end. column={} value={}", field.name(), value_str);
-                        return Err(xml_error(&err_msg, path, row_index));
+                        return Err(FileParseError::ColumnDecodeError {
+                            column_index,
+                            column_name: field.name().to_string(),
+                            column_type: field.data_type.to_string(),
+                            decode_error: e.message(),
+                        });
                     }
+                    check_column_end(&mut reader, schema, column_index)?;
                 }
             } else {
                 column.push_default();
@@ -241,8 +241,6 @@ impl InputFormatTextBase for InputFormatXML {
                                 &mut cols,
                                 columns,
                                 &builder.ctx.schema,
-                                &batch.split_info.file.path,
-                                num_rows,
                             ) {
                                 builder
                                     .ctx
@@ -250,6 +248,7 @@ impl InputFormatTextBase for InputFormatXML {
                                         e,
                                         Some((columns, builder.num_rows)),
                                         &mut builder.file_status,
+                                        path,
                                         num_rows + batch.start_row_in_split,
                                     )
                                     .map_err(|e| xml_error(&e.message(), path, num_rows))?;

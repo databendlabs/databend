@@ -138,6 +138,7 @@ use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -1847,16 +1848,27 @@ impl PipelineBuilder {
             self.ctx.clone(),
             state,
             &join.probe_projections,
+            &join.probe_keys,
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
-        ));
+        )?);
+
         self.main_pipeline.add_transform(|input, output| {
+            let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+                Some(Box::new(ProbeSpillState::create(
+                    self.ctx.clone(),
+                    probe_state.clone(),
+                )))
+            } else {
+                None
+            };
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
                 probe_state.clone(),
+                probe_spill_state,
                 max_block_size,
                 func_ctx.clone(),
                 &join.join_type,

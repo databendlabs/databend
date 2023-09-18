@@ -973,31 +973,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_udf = map(
         rule! {
             CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
-            ~ #ident
-            ~ AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
-            ~ "->" ~ #expr
+            ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(
-            _,
-            _,
-            opt_if_not_exists,
-            udf_name,
-            _,
-            _,
-            parameters,
-            _,
-            _,
-            definition,
-            opt_description,
-        )| {
-            Statement::CreateUDF {
+        |(_, _, opt_if_not_exists, udf_name, definition, opt_description)| {
+            Statement::CreateUDF(CreateUDFStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 udf_name,
-                parameters,
-                definition: Box::new(definition),
                 description: opt_description.map(|(_, _, description)| description),
-            }
+                definition,
+            })
         },
     );
     let drop_udf = map(
@@ -1012,18 +997,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let alter_udf = map(
         rule! {
             ALTER ~ FUNCTION
-            ~ #ident
-            ~ AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
-            ~ "->" ~ #expr
+            ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
-        |(_, _, udf_name, _, _, parameters, _, _, definition, opt_description)| {
-            Statement::AlterUDF {
+        |(_, _, udf_name, definition, opt_description)| {
+            Statement::AlterUDF(AlterUDFStmt {
                 udf_name,
-                parameters,
-                definition: Box::new(definition),
                 description: opt_description.map(|(_, _, description)| description),
-            }
+                definition,
+            })
         },
     );
 
@@ -1111,7 +1093,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( #copy_option )*
+            ~ ( #copy_option ~ ","? )*
         },
         |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
@@ -1132,7 +1114,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
             };
-            for opt in opts {
+            for (opt, _) in opts {
                 copy_stmt.apply_option(opt);
             }
             Statement::Copy(copy_stmt)
@@ -1543,7 +1525,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_roles : "`SHOW ROLES`"
             | #create_role : "`CREATE ROLE [IF NOT EXISTS] <role_name>`"
             | #drop_role : "`DROP ROLE [IF EXISTS] <role_name>`"
-            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <udf_name> (<parameter>, ...) -> <definition expr> [DESC = <description>]`"
+            | #create_udf : "`CREATE FUNCTION [IF NOT EXISTS] <name> {AS (<parameter>, ...) -> <definition expr> | (<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>} [DESC = <description>]`"
             | #drop_udf : "`DROP FUNCTION [IF EXISTS] <udf_name>`"
             | #alter_udf : "`ALTER FUNCTION <udf_name> (<parameter>, ...) -> <definition_expr> [DESC = <description>]`"
         ),
@@ -2686,6 +2668,59 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
     map(rule! { ( #ident ~ "=" ~ ^#expr ) }, |(name, _, expr)| {
         UpdateExpr { name, expr }
     })(i)
+}
+
+pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+    let nullable = alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ));
+    map(
+        rule! {
+            #type_name ~ #nullable?
+        },
+        |(type_name, nullable)| match nullable {
+            Some(false) => type_name,
+            _ => type_name.wrap_nullable(),
+        },
+    )(i)
+}
+
+pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
+    let lambda_udf = map(
+        rule! {
+            AS ~ "(" ~ #comma_separated_list0(ident) ~ ")"
+            ~ "->" ~ #expr
+        },
+        |(_, _, parameters, _, _, definition)| UDFDefinition::LambdaUDF {
+            parameters,
+            definition: Box::new(definition),
+        },
+    );
+
+    let udf_server = map(
+        rule! {
+            "(" ~ #comma_separated_list0(udf_arg_type) ~ ")"
+            ~ RETURNS ~ #udf_arg_type
+            ~ LANGUAGE ~ #ident
+            ~ HANDLER ~ ^"=" ~ ^#literal_string
+            ~ ADDRESS ~ ^"=" ~ ^#literal_string
+        },
+        |(_, arg_types, _, _, return_type, _, language, _, _, handler, _, _, address)| {
+            UDFDefinition::UDFServer {
+                arg_types,
+                return_type,
+                address,
+                handler,
+                language: language.to_string(),
+            }
+        },
+    );
+
+    rule!(
+        #udf_server: "(<arg_type>, ...) RETURNS <return_type> LANGUAGE <language> HANDLER=<handler> ADDRESS=<udf_server_address>"
+        | #lambda_udf: "AS (<parameter>, ...) -> <definition expr>"
+    )(i)
 }
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {

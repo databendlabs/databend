@@ -76,6 +76,7 @@ mod schema_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
+mod udf_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
 mod virtual_column_from_to_protobuf_impl;
