@@ -134,13 +134,13 @@ impl InputFormatTSV {
                 // expect: field_end > buf_len && column_index == num_columns
                 if column_index < num_columns {
                     error = Some(FileParseError::NumberOfColumnsMismatch {
-                        expected: num_columns,
-                        found: column_index,
+                        table: num_columns,
+                        file: column_index,
                     });
                 } else if field_end <= buf_len {
                     error = Some(FileParseError::NumberOfColumnsMismatch {
-                        expected: num_columns,
-                        found: num_columns + 1,
+                        table: num_columns,
+                        file: num_columns + 1,
                     });
                 }
             }
