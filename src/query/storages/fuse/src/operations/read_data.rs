@@ -195,6 +195,7 @@ impl FuseTable {
         let topk = plan
             .push_downs
             .as_ref()
+            .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|x| x.top_k(plan.schema().as_ref(), RangeIndex::supported_type));
 
         let index_reader = Arc::new(

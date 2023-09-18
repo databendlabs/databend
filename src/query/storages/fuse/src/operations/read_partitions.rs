@@ -236,8 +236,8 @@ impl FuseTable {
 
         let top_k = push_downs
             .as_ref()
-            .map(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
-            .flatten()
+            .filter(|_| self.is_native()) // Only native format supports topk push down.
+            .and_then(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
             .map(|topk| field_default_value(ctx.clone(), &topk.order_by).map(|d| (topk, d)))
             .transpose()?;
 
@@ -497,7 +497,7 @@ impl FuseTable {
         let sort_min_max = top_k.map(|(top_k, default)| {
             let stat = meta.col_stats.get(&top_k.column_id);
             stat.map(|stat| (stat.min().clone(), stat.max().clone()))
-                .unwrap_or((default.clone(), default.clone()))
+                .unwrap_or((default.clone(), default))
         });
 
         // TODO
