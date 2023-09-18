@@ -568,13 +568,13 @@ impl ToNumber<i32> for ToStartOfMonth {
 impl ToNumber<i32> for ToStartOfQuarter {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
         let new_month = dt.month0() / 3 * 3 + 1;
-        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(1).unwrap())
+        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(new_month).unwrap())
     }
 }
 
 impl ToNumber<i32> for ToStartOfYear {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(&dt.with_month(1).unwrap().with_day(1).unwrap())
+        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(1).unwrap())
     }
 }
 

@@ -380,6 +380,11 @@ select to_start_of_quarter(to_date(18762))
 2021-04-01
 
 query T
+select to_start_of_quarter(to_date('2023-05-31'))
+----
+2023-04-01
+
+query T
 select to_start_of_month(to_date(18885))
 ----
 2021-09-01
