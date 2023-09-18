@@ -536,7 +536,7 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
     let col = Column::String(result);
     match len {
         Some(_) => Value::Column(col),
-        _ => Value::Scalar(StringType::index_column(&col, 0).to_owned()),
+        _ => Value::Scalar(AnyType::index_column(&col, 0).unwrap().to_owned()),
     }
 }
 
