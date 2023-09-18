@@ -29,7 +29,7 @@ use rand::SeedableRng;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 19] = [
+const KNOWN_ERRORS: [&str; 20] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -51,6 +51,7 @@ const KNOWN_ERRORS: [&str; 19] = [
     "invalid coordinate range",
     // Unsupported features
     "Row format is not yet support for",
+    "to_decimal not support this DataType",
 ];
 
 pub struct Runner {

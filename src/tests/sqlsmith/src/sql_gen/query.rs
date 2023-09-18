@@ -74,25 +74,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let order_nums = self.rng.gen_range(1..5);
         let mut orders = Vec::with_capacity(order_nums);
         if self.flip_coin() {
-            for _ in 0..order_nums {
-                let ty = self.gen_data_type();
-                let expr = self.gen_expr(&ty);
-                let expr = self.rewrite_position_expr(expr);
-                let order_by_expr = if self.rng.gen_bool(0.2) {
-                    OrderByExpr {
-                        expr,
-                        asc: None,
-                        nulls_first: None,
-                    }
-                } else {
-                    OrderByExpr {
-                        expr,
-                        asc: Some(self.flip_coin()),
-                        nulls_first: Some(self.flip_coin()),
-                    }
-                };
-                orders.push(order_by_expr);
-            }
             if let Some(group_by) = group_by {
                 match group_by {
                     GroupBy::GroupingSets(group_by) => {
@@ -111,7 +92,45 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             nulls_first: Some(self.flip_coin()),
                         }))
                     }
-                    _ => {}
+                    GroupBy::All => {
+                        for _ in 0..order_nums {
+                            let ty = self.gen_data_type();
+                            let expr = self.gen_expr(&ty);
+                            let order_by_expr = if self.rng.gen_bool(0.2) {
+                                OrderByExpr {
+                                    expr,
+                                    asc: None,
+                                    nulls_first: None,
+                                }
+                            } else {
+                                OrderByExpr {
+                                    expr,
+                                    asc: Some(self.flip_coin()),
+                                    nulls_first: Some(self.flip_coin()),
+                                }
+                            };
+                            orders.push(order_by_expr);
+                        }
+                    }
+                }
+            } else {
+                for _ in 0..order_nums {
+                    let ty = self.gen_data_type();
+                    let expr = self.gen_expr(&ty);
+                    let order_by_expr = if self.rng.gen_bool(0.2) {
+                        OrderByExpr {
+                            expr,
+                            asc: None,
+                            nulls_first: None,
+                        }
+                    } else {
+                        OrderByExpr {
+                            expr,
+                            asc: Some(self.flip_coin()),
+                            nulls_first: Some(self.flip_coin()),
+                        }
+                    };
+                    orders.push(order_by_expr);
                 }
             }
         }
