@@ -692,6 +692,20 @@ impl Binder {
             );
         }
 
+        // Check group by contains aggregate functions or not
+        for item in bind_context.aggregate_info.group_items.iter() {
+            let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::AggregateFunction(_));
+            let finder = Finder::new(&f);
+            let finder = item.scalar.accept(finder)?;
+
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "GROUP BY items can't contain aggregate functions".to_string(),
+                )
+                .set_span(item.scalar.span()));
+            }
+        }
+
         // If it's `GROUP BY GROUPING SETS`, ignore the optimization below.
         if collect_grouping_sets {
             return Ok(());
