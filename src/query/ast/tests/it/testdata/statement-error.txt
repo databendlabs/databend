@@ -97,7 +97,9 @@ error:
   --> SQL:1:15
   |
 1 | drop table if a.b
-  |               ^ expected `ALL`, `EXISTS`, `.`, `FORMAT`, or `;`
+  | ----          ^ expected `EXISTS`
+  | |              
+  | while parsing `DROP TABLE [IF EXISTS] [<database>.]<table>`
 
 
 ---------- Input ----------
@@ -511,7 +513,16 @@ error:
   --> SQL:1:33
   |
 1 | copy into t1 from "" FILE_FORMAT
-  |                                 ^ expected `=`
+  | ----                            ^ expected `=`
+  | |                               
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -521,7 +532,16 @@ error:
   --> SQL:1:36
   |
 1 | copy into t1 from "" FILE_FORMAT = 
-  |                                    ^ expected `(`
+  | ----                               ^ expected `(`
+  | |                                  
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -531,7 +551,16 @@ error:
   --> SQL:1:37
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  |                                     ^ expected `TYPE`, `COMPRESSION`, `FORMAT_NAME`, `RECORD_DELIMITER`, `FIELD_DELIMITER`, `QUOTE`, `NAN_DISPLAY`, `NULL_DISPLAY`, `ESCAPE`, `ROW_TAG`, `SKIP_HEADER`, `NON_DISPLAY`, or `)`
+  | ----                                ^ expected `)`, `TYPE`, `COMPRESSION`, `FORMAT_NAME`, `RECORD_DELIMITER`, `FIELD_DELIMITER`, `QUOTE`, `NAN_DISPLAY`, `NULL_DISPLAY`, `ESCAPE`, `ROW_TAG`, `SKIP_HEADER`, or `NON_DISPLAY`
+  | |                                   
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -541,7 +570,16 @@ error:
   --> SQL:1:41
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  |                                         ^ expected `=`
+  | ----                                    ^ expected `)` or `=`
+  | |                                       
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -551,7 +589,16 @@ error:
   --> SQL:1:43
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  |                                           ^ expected `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | ----                                      ^ expected `)`, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | |                                         
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -561,7 +608,16 @@ error:
   --> SQL:1:43
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  |                                           ^ expected `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | ----                                      ^ expected `)`, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | |                                         
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
 ---------- Input ----------
@@ -571,6 +627,15 @@ error:
   --> SQL:1:92
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
-  |                                                                                            ^^^^^^^^^^^^ expected `SKIP_HEADER`, `FIELD_DELIMITER`, `ESCAPE`, `NON_DISPLAY`, `NULL_DISPLAY`, `TYPE`, `NAN_DISPLAY`, `ROW_TAG`, `RECORD_DELIMITER`, `QUOTE`, `COMPRESSION`, `FORMAT_NAME`, `,`, or `)`
+  | ----                                                                                       ^^^^^^^^^^^^ expected `SKIP_HEADER`, `FIELD_DELIMITER`, `ESCAPE`, `NON_DISPLAY`, `NULL_DISPLAY`, `TYPE`, `NAN_DISPLAY`, `ROW_TAG`, `RECORD_DELIMITER`, `QUOTE`, `COMPRESSION`, `FORMAT_NAME`, `)`, or `,`
+  | |                                                                                           
+  | while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
 
 
