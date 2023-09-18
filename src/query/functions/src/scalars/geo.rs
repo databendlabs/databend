@@ -40,7 +40,7 @@ use common_expression::FunctionDomain;
 use common_expression::FunctionEval;
 use common_expression::FunctionRegistry;
 use common_expression::FunctionSignature;
-use common_expression::Scalar;
+
 use common_expression::ScalarRef;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -344,13 +344,8 @@ fn get_coord(fields: &[ScalarRef]) -> Coord {
     Coord { x: v[0], y: v[1] }
 }
 
-fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
-    let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
-        _ => None,
-    });
-
-    let input_rows = len.unwrap_or(1);
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    let input_rows = ctx.num_rows;
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
         let arg0: Vec<f64> = match &args[0] {
@@ -470,24 +465,16 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
         builder.push(NumberScalar::UInt8(u8::from(is_in)));
     }
 
-    match len {
-        Some(_) => Value::Column(Column::Number(builder.build())),
-        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
-    }
+    Value::Column(Column::Number(builder.build()))
 }
 
-fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
-    let len = args.iter().find_map(|arg| match arg {
-        ValueRef::Column(col) => Some(col.len()),
-        _ => None,
-    });
+fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let args = args
         .iter()
         .map(|arg| arg.try_downcast::<Float64Type>().unwrap())
         .collect::<Vec<_>>();
 
-    let input_rows = len.unwrap_or(1);
-
+    let input_rows = ctx.num_rows;
     let ellipses_cnt = (args.len() - 2) / 4;
     let mut ellipses: Vec<Ellipse> = Vec::with_capacity(ellipses_cnt);
 
@@ -530,10 +517,7 @@ fn point_in_ellipses_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Valu
         builder.push(NumberScalar::UInt8(r));
     }
 
-    match len {
-        Some(_) => Value::Column(Column::Number(builder.build())),
-        _ => Value::Scalar(Scalar::Number(builder.build_scalar())),
-    }
+    Value::Column(Column::Number(builder.build()))
 }
 
 fn is_point_in_ellipses(

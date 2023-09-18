@@ -346,11 +346,8 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(move |_, _| FunctionDomain::Full),
-                    eval: Box::new(move |args, _| {
-                        let len = args.iter().find_map(|arg| match arg {
-                            ValueRef::Column(col) => Some(col.len()),
-                            _ => None,
-                        });
+                    eval: Box::new(move |args, ctx| {
+                        let len = ctx.num_rows;
 
                         let lhs_fields: Vec<ValueRef<AnyType>> = match &args[0] {
                             ValueRef::Scalar(ScalarRef::Tuple(fields)) => {
@@ -371,10 +368,9 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                             _ => unreachable!(),
                         };
 
-                        let size = len.unwrap_or(1);
-                        let mut builder = BooleanType::create_builder(size, &[]);
+                        let mut builder = BooleanType::create_builder(len, &[]);
 
-                        'outer: for row in 0..size {
+                        'outer: for row in 0..len {
                             for (lhs_field, rhs_field) in lhs_fields.iter().zip(&rhs_fields) {
                                 let lhs = lhs_field.index(row).unwrap();
                                 let rhs = rhs_field.index(row).unwrap();
@@ -387,14 +383,14 @@ fn register_tuple_cmp(registry: &mut FunctionRegistry) {
                         }
 
                         match len {
-                            Some(_) => {
+                            1 => Value::Scalar(BooleanType::upcast_scalar(
+                                BooleanType::build_scalar(builder),
+                            )),
+                            _ => {
                                 let col =
                                     BooleanType::upcast_column(BooleanType::build_column(builder));
                                 Value::Column(col)
                             }
-                            _ => Value::Scalar(BooleanType::upcast_scalar(
-                                BooleanType::build_scalar(builder),
-                            )),
                         }
                     }),
                 },
