@@ -26,8 +26,8 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
-use common_catalog::plan::NUM_BLOCK_ID_BITS;
 use goldenfile::Mint;
+use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 struct TestPartInfo {

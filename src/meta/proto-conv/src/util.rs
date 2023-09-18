@@ -86,7 +86,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (54, "2023-08-17: Add: index.proto/IndexMeta::sync_creation", ),
     (55, "2023-07-31: Add: TableMeta and DatabaseMeta add Ownership", ),
     (56, "2023-08-31: Add: Least Visible Time", ),
-    (57, "2023-09-05: Add: catalog.proto add hdfs config", )
+    (57, "2023-09-05: Add: catalog.proto add hdfs config", ),
+    (58, "2023-09-06: Add: udf.proto/UserDefinedFunction", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

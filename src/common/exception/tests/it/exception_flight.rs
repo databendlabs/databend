@@ -26,6 +26,7 @@ fn test_serialize() -> Result<()> {
         1,
         "test_name",
         String::from("test_message"),
+        String::new(),
         None,
         Some(ErrorCodeBacktrace::Symbols(Arc::new(Backtrace::new()))),
     )

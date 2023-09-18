@@ -125,16 +125,13 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    builder
-                        .ctx
-                        .on_error(
-                            e,
-                            Some((columns, builder.num_rows)),
-                            &mut builder.file_status,
-                            &batch.split_info.file.path,
-                            batch.start_row_in_split + i,
-                        )
-                        .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                    builder.ctx.on_error(
+                        e,
+                        Some((columns, builder.num_rows)),
+                        &mut builder.file_status,
+                        &batch.split_info.file.path,
+                        batch.start_row_in_split + i,
+                    )?
                 } else {
                     builder.num_rows += 1;
                     builder.file_status.num_rows_loaded += 1;

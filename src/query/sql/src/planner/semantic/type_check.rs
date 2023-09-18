@@ -38,6 +38,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -66,8 +67,12 @@ use common_functions::GENERAL_LAMBDA_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
 use common_license::license::Feature::VirtualColumn;
 use common_license::license_manager::get_license_manager;
+use common_meta_app::principal::LambdaUDF;
+use common_meta_app::principal::UDFDefinition;
+use common_meta_app::principal::UDFServer;
 use common_users::UserApiProvider;
 use indexmap::IndexMap;
+use itertools::Itertools;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
@@ -94,6 +99,7 @@ use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncFrame;
 use crate::plans::WindowFuncFrameBound;
@@ -2563,7 +2569,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_udf(
         &mut self,
         span: Span,
-        func_name: &str,
+        udf_name: &str,
         arguments: &[Expr],
     ) -> Result<Option<Box<(ScalarExpr, DataType)>>> {
         if self.forbid_udf {
@@ -2571,7 +2577,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let udf = UserApiProvider::instance()
-            .get_udf(self.ctx.get_tenant().as_str(), func_name)
+            .get_udf(self.ctx.get_tenant().as_str(), udf_name)
             .await;
 
         let udf = if let Ok(udf) = udf {
@@ -2580,7 +2586,83 @@ impl<'a> TypeChecker<'a> {
             return Ok(None);
         };
 
-        let parameters = udf.parameters;
+        match udf.definition {
+            UDFDefinition::LambdaUDF(udf_def) => Ok(Some(
+                self.resolve_lambda_udf(span, arguments, udf_def).await?,
+            )),
+            UDFDefinition::UDFServer(udf_def) => Ok(Some(
+                self.resolve_udf_server(span, arguments, udf_def).await?,
+            )),
+        }
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_udf_server(
+        &mut self,
+        span: Span,
+        arguments: &[Expr],
+        udf_definition: UDFServer,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if !GlobalConfig::instance().query.enable_udf_server {
+            return Err(ErrorCode::Unimplemented(
+                "UDF server is not allowed, you can enable it by setting 'enable_udf_server = true' in query node config",
+            ));
+        }
+
+        let udf_server_allow_list = &GlobalConfig::instance().query.udf_server_allow_list;
+        let address = &udf_definition.address;
+        if udf_server_allow_list
+            .iter()
+            .all(|addr| addr.trim_end_matches('/') != address.trim_end_matches('/'))
+        {
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Unallowed UDF server address, '{address}' is not in udf_server_allow_list"
+            )));
+        }
+
+        let mut args = Vec::with_capacity(arguments.len());
+        for argument in arguments {
+            let box (arg, _) = self.resolve(argument).await?;
+            args.push(arg);
+        }
+
+        let raw_expr_args = args.iter().map(|arg| arg.as_raw_expr()).collect_vec();
+        let raw_expr = RawExpr::UDFServerCall {
+            span,
+            func_name: udf_definition.handler.clone(),
+            server_addr: udf_definition.address.clone(),
+            arg_types: udf_definition.arg_types.clone(),
+            return_type: udf_definition.return_type.clone(),
+            args: raw_expr_args,
+        };
+
+        type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+
+        self.ctx.set_cacheable(false);
+        Ok(Box::new((
+            UDFServerCall {
+                span,
+                func_name: udf_definition.handler,
+                server_addr: udf_definition.address,
+                arg_types: udf_definition.arg_types,
+                return_type: Box::new(udf_definition.return_type.clone()),
+                arguments: args,
+            }
+            .into(),
+            udf_definition.return_type.clone(),
+        )))
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_lambda_udf(
+        &mut self,
+        span: Span,
+        arguments: &[Expr],
+        udf_definition: LambdaUDF,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        let parameters = udf_definition.parameters;
         if parameters.len() != arguments.len() {
             return Err(ErrorCode::SyntaxException(format!(
                 "Require {} parameters, but got: {}",
@@ -2591,7 +2673,7 @@ impl<'a> TypeChecker<'a> {
         }
         let settings = self.ctx.get_settings();
         let sql_dialect = settings.get_sql_dialect()?;
-        let sql_tokens = tokenize_sql(udf.definition.as_str())?;
+        let sql_tokens = tokenize_sql(udf_definition.definition.as_str())?;
         let expr = parse_expr(&sql_tokens, sql_dialect)?;
         let mut args_map = HashMap::new();
         arguments.iter().enumerate().for_each(|(idx, argument)| {
@@ -2610,7 +2692,7 @@ impl<'a> TypeChecker<'a> {
             })
             .map_err(|e| e.set_span(span))?;
 
-        Ok(Some(self.resolve(&udf_expr).await?))
+        self.resolve(&udf_expr).await
     }
 
     #[async_recursion::async_recursion]

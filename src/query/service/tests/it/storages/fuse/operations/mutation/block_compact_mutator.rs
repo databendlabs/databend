@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -25,9 +24,10 @@ use common_storages_fuse::operations::BlockCompactMutator;
 use common_storages_fuse::operations::CompactOptions;
 use common_storages_fuse::operations::CompactPartInfo;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
-use common_storages_fuse::FuseTable;
+use databend_query::interpreters::OptimizeTableInterpreter;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
+use databend_query::schedulers::build_query_pipeline_without_render_result_set;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::test_kits::table_test_fixture::execute_command;
@@ -106,12 +106,25 @@ async fn test_compact() -> Result<()> {
 }
 
 async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<bool> {
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let settings = ctx.get_settings();
     let mut pipeline = common_pipeline_core::Pipeline::create();
-    fuse_table
-        .compact(ctx.clone(), CompactTarget::Blocks, None, &mut pipeline)
-        .await?;
+    let res = table.compact_blocks(ctx.clone(), None).await?;
+
+    let table_info = table.get_table_info().clone();
+    let catalog_info = ctx.get_catalog("default").await?.info();
+    if let Some((parts, snapshot)) = res {
+        let physical_plan = OptimizeTableInterpreter::build_physical_plan(
+            parts,
+            table_info,
+            snapshot,
+            catalog_info,
+            false,
+        )?;
+
+        let build_res =
+            build_query_pipeline_without_render_result_set(&ctx, &physical_plan, false).await?;
+        pipeline = build_res.main_pipeline;
+    };
 
     if !pipeline.is_empty() {
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
@@ -190,13 +203,6 @@ async fn test_safety() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, None);
         }
 
-        let mut block_ids = HashSet::new();
-        for seg in &segment_infos {
-            for b in &seg.blocks {
-                block_ids.insert(b.location.clone());
-            }
-        }
-
         let id = Uuid::new_v4();
         let snapshot = TableSnapshot::new(
             id,
@@ -204,7 +210,7 @@ async fn test_safety() -> Result<()> {
             None,
             schema.as_ref().clone(),
             summary,
-            locations,
+            locations.clone(),
             None,
             None,
         );
@@ -224,42 +230,57 @@ async fn test_safety() -> Result<()> {
             operator.clone(),
             cluster_key_id,
         );
-        block_compact_mutator.target_select().await?;
-        let selections = block_compact_mutator.compact_tasks;
-        let mut blocks_number = 0;
+        let selections = block_compact_mutator.target_select().await?;
+        if selections.is_empty() {
+            eprintln!("no target select");
+            continue;
+        }
+        assert!(!selections.is_lazy);
 
-        let mut block_ids_after_compaction = HashSet::new();
+        let mut actual_blocks_number = 0;
+        let mut compact_segment_indices = HashSet::new();
+        let mut actual_block_ids = HashSet::new();
         for part in selections.partitions.into_iter() {
             let part = CompactPartInfo::from_part(&part)?;
-            blocks_number += part.blocks.len();
-            for b in &part.blocks {
-                block_ids_after_compaction.insert(b.location.clone());
+            match part {
+                CompactPartInfo::CompactExtraInfo(extra) => {
+                    compact_segment_indices.insert(extra.segment_index);
+                    compact_segment_indices.extend(extra.removed_segment_indexes.iter());
+                    actual_blocks_number += extra.unchanged_blocks.len();
+                    for b in &extra.unchanged_blocks {
+                        actual_block_ids.insert(b.1.location.clone());
+                    }
+                }
+                CompactPartInfo::CompactTaskInfo(task) => {
+                    compact_segment_indices.insert(task.index.segment_idx);
+                    actual_blocks_number += task.blocks.len();
+                    for b in &task.blocks {
+                        actual_block_ids.insert(b.location.clone());
+                    }
+                }
             }
         }
 
-        for unchanged in block_compact_mutator.unchanged_blocks_map.values() {
-            blocks_number += unchanged.len();
-            for b in unchanged.values() {
-                block_ids_after_compaction.insert(b.location.clone());
-            }
-        }
-
-        for unchanged_segment in block_compact_mutator.unchanged_segments_map.values() {
+        eprintln!("compact_segment_indices: {:?}", compact_segment_indices);
+        let mut except_blocks_number = 0;
+        let mut except_block_ids = HashSet::new();
+        for idx in compact_segment_indices.into_iter() {
+            let loc = locations.get(idx).unwrap();
             let compact_segment = SegmentsIO::read_compact_segment(
                 ctx.get_data_operator()?.operator(),
-                unchanged_segment.clone(),
+                loc.clone(),
                 TestFixture::default_table_schema(),
                 false,
             )
             .await?;
             let segment = SegmentInfo::try_from(compact_segment)?;
-            blocks_number += segment.blocks.len();
+            except_blocks_number += segment.blocks.len();
             for b in &segment.blocks {
-                block_ids_after_compaction.insert(b.location.clone());
+                except_block_ids.insert(b.location.clone());
             }
         }
-        assert_eq!(number_of_blocks, blocks_number);
-        assert_eq!(block_ids, block_ids_after_compaction);
+        assert_eq!(except_blocks_number, actual_blocks_number);
+        assert_eq!(except_block_ids, actual_block_ids);
     }
 
     Ok(())

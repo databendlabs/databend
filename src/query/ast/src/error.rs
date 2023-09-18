@@ -181,7 +181,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         Some(inner) => inner,
         None => return String::new(),
     };
-    let span_text = &source[inner.span.start..inner.span.end];
+    let span_text = &source[std::ops::Range::from(inner.span)];
 
     let mut labels = vec![];
 

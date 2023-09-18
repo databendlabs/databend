@@ -532,7 +532,12 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
         .step_by(args.len())
         .collect::<Vec<_>>();
     let result = StringColumn::new(values.into(), offsets.into());
-    Value::Column(Column::String(result))
+
+    let col = Column::String(result);
+    match len {
+        Some(_) => Value::Column(col),
+        _ => Value::Scalar(AnyType::index_column(&col, 0).unwrap().to_owned()),
+    }
 }
 
 fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {

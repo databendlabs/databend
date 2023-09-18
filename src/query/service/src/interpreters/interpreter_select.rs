@@ -111,7 +111,6 @@ impl SelectInterpreter {
             &self.bind_context.columns,
             &physical_plan,
             self.ignore_result,
-            false,
         )
         .await
     }

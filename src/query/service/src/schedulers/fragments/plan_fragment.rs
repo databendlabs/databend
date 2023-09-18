@@ -22,6 +22,7 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
+use common_sql::executor::CompactPartial;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
@@ -61,6 +62,7 @@ pub enum FragmentType {
     DeleteLeaf,
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
+    Compact,
 }
 
 #[derive(Clone)]
@@ -142,6 +144,13 @@ impl PlanFragment {
             FragmentType::ReplaceInto => {
                 // Redistribute partitions
                 let mut fragment_actions = self.redistribute_replace_into(ctx)?;
+                if let Some(ref exchange) = self.exchange {
+                    fragment_actions.set_exchange(exchange.clone());
+                }
+                actions.add_fragment_actions(fragment_actions)?;
+            }
+            FragmentType::Compact => {
+                let mut fragment_actions = self.redistribute_compact(ctx)?;
                 if let Some(ref exchange) = self.exchange {
                     fragment_actions.set_exchange(exchange.clone());
                 }
@@ -254,8 +263,7 @@ impl PlanFragment {
             };
             plan = replace_delete_partial.replace(&plan)?;
 
-            fragment_actions
-                .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
         Ok(fragment_actions)
@@ -273,30 +281,29 @@ impl PlanFragment {
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
         let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-        let local_id = &ctx.get_cluster().local_id;
+        let local_id = ctx.get_cluster().local_id.clone();
         match ctx.get_settings().get_replace_into_shuffle_strategy()? {
             ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
                 let partition_reshuffle = Self::reshuffle(executors, partitions.clone())?;
-                for (executor, parts) in partition_reshuffle.iter() {
+                for (executor, parts) in partition_reshuffle.into_iter() {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
 
                     let mut replace_replace_into = ReplaceReplaceInto {
-                        partitions: parts.clone(),
+                        partitions: parts,
                         slot: None,
                         need_insert,
                     };
                     plan = replace_replace_into.replace(&plan)?;
 
-                    fragment_actions
-                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                    fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
             ReplaceIntoShuffleStrategy::BlockLevelShuffling => {
                 let num_slots = executors.len();
                 // assign all the segment locations to each one of the executors,
                 // but for each segment, one executor only need to take part of the blocks
-                for (executor_idx, executor) in executors.iter().enumerate() {
+                for (executor_idx, executor) in executors.into_iter().enumerate() {
                     let mut plan = self.plan.clone();
                     let need_insert = executor == local_id;
                     let mut replace_replace_into = ReplaceReplaceInto {
@@ -309,11 +316,38 @@ impl PlanFragment {
                     };
                     plan = replace_replace_into.replace(&plan)?;
 
-                    fragment_actions
-                        .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
+                    fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
                 }
             }
         }
+        Ok(fragment_actions)
+    }
+
+    fn redistribute_compact(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+        let exchange_sink = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let compact_block = match exchange_sink.input.as_ref() {
+            PhysicalPlan::CompactPartial(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let partitions: &Partitions = &compact_block.parts;
+        let executors = Fragmenter::get_executors(ctx);
+        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
+
+        let partition_reshuffle = partitions.reshuffle(executors)?;
+
+        for (executor, parts) in partition_reshuffle.into_iter() {
+            let mut plan = self.plan.clone();
+
+            let mut replace_compact_partial = ReplaceCompactBlock { partitions: parts };
+            plan = replace_compact_partial.replace(&plan)?;
+
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
+        }
+
         Ok(fragment_actions)
     }
 
@@ -428,6 +462,19 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
                 })))
             }
         }
+    }
+}
+
+struct ReplaceCompactBlock {
+    pub partitions: Partitions,
+}
+
+impl PhysicalPlanReplacer for ReplaceCompactBlock {
+    fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CompactPartial(CompactPartial {
+            parts: self.partitions.clone(),
+            ..plan.clone()
+        }))
     }
 }
 

@@ -49,6 +49,7 @@ use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
 use crate::plans::WindowOrderBy;
@@ -211,7 +212,22 @@ impl<'a> AggregateRewriter<'a> {
                 }
                 .into())
             }
-
+            ScalarExpr::UDFServerCall(udf) => {
+                let new_args = udf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.visit(arg))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments: new_args,
+                }
+                .into())
+            }
             ScalarExpr::LambdaFunction(lambda_func) => {
                 let new_args = lambda_func
                     .args
@@ -674,6 +690,26 @@ impl Binder {
                 scalar_expr,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
+        }
+
+        // Check group by contains aggregate functions or not
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+            )
+        };
+        for item in bind_context.aggregate_info.group_items.iter() {
+            let finder = Finder::new(&f);
+            let finder = item.scalar.accept(finder)?;
+
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "GROUP BY items can't contain aggregate functions or window functions"
+                        .to_string(),
+                )
+                .set_span(item.scalar.span()));
+            }
         }
 
         // If it's `GROUP BY GROUPING SETS`, ignore the optimization below.

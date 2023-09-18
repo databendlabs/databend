@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,8 +26,9 @@ use common_expression::BlockMetaInfoPtr;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
-use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use common_sql::executor::MutationKind;
+use itertools::Itertools;
 use log::debug;
 use log::info;
 use opendal::Operator;
@@ -47,7 +49,6 @@ use crate::operations::common::MutationLogs;
 use crate::operations::common::SnapshotChanges;
 use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockIndex;
-use crate::operations::mutation::MutationDeletedSegment;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
@@ -64,8 +65,9 @@ pub struct TableMutationAggregator {
 
     mutations: HashMap<SegmentIndex, BlockMutations>,
     appended_segments: Vec<Location>,
-    deleted_segments: Vec<MutationDeletedSegment>,
     appended_statistics: Statistics,
+    removed_segment_indexes: Vec<SegmentIndex>,
+    removed_statistics: Statistics,
     abort_operation: AbortOperation,
 
     kind: MutationKind,
@@ -117,7 +119,8 @@ impl TableMutationAggregator {
             base_segments,
             abort_operation: AbortOperation::default(),
             appended_statistics: Statistics::default(),
-            deleted_segments: vec![],
+            removed_segment_indexes: vec![],
+            removed_statistics: Statistics::default(),
             kind,
             finished_tasks: 0,
             start_time: Instant::now(),
@@ -142,14 +145,15 @@ impl TableMutationAggregator {
     pub fn accumulate_log_entry(&mut self, log_entry: MutationLogEntry) {
         match log_entry {
             MutationLogEntry::ReplacedBlock { index, block_meta } => {
-                self.mutations
-                    .entry(index.segment_idx)
-                    .and_modify(|v| v.push_replaced(index.block_idx, block_meta.clone()))
-                    .or_insert(BlockMutations::new_replacement(
-                        index.block_idx,
-                        block_meta.clone(),
-                    ));
                 self.abort_operation.add_block(&block_meta);
+                match self.mutations.entry(index.segment_idx) {
+                    Entry::Occupied(mut v) => {
+                        v.get_mut().push_replaced(index.block_idx, block_meta);
+                    }
+                    Entry::Vacant(v) => {
+                        v.insert(BlockMutations::new_replacement(index.block_idx, block_meta));
+                    }
+                }
             }
             MutationLogEntry::DeletedBlock { index } => {
                 self.mutations
@@ -158,7 +162,12 @@ impl TableMutationAggregator {
                     .or_insert(BlockMutations::new_deletion(index.block_idx));
             }
             MutationLogEntry::DeletedSegment { deleted_segment } => {
-                self.deleted_segments.push(deleted_segment)
+                self.removed_segment_indexes.push(deleted_segment.index);
+                merge_statistics_mut(
+                    &mut self.removed_statistics,
+                    &deleted_segment.summary,
+                    self.default_cluster_key_id,
+                );
             }
             MutationLogEntry::DoNothing => (),
             MutationLogEntry::AppendSegment {
@@ -176,6 +185,29 @@ impl TableMutationAggregator {
 
                 self.appended_segments
                     .push((segment_location, format_version))
+            }
+            MutationLogEntry::CompactExtras { extras } => {
+                match self.mutations.entry(extras.segment_index) {
+                    Entry::Occupied(mut v) => {
+                        v.get_mut()
+                            .replaced_blocks
+                            .extend(extras.unchanged_blocks.into_iter());
+                    }
+                    Entry::Vacant(v) => {
+                        v.insert(BlockMutations {
+                            replaced_blocks: extras.unchanged_blocks,
+                            deleted_blocks: vec![],
+                        });
+                    }
+                }
+
+                self.removed_segment_indexes
+                    .extend(extras.removed_segment_indexes);
+                merge_statistics_mut(
+                    &mut self.removed_statistics,
+                    &extras.removed_segment_summary,
+                    self.default_cluster_key_id,
+                );
             }
         }
     }
@@ -195,17 +227,6 @@ impl TableMutationAggregator {
                 let start = Instant::now();
                 let mut count = 0;
 
-                let mut removed_segment_indexes = vec![];
-                let mut removed_statistics = Statistics::default();
-                for s in &self.deleted_segments {
-                    removed_segment_indexes.push(s.deleted_segment.index);
-                    merge_statistics_mut(
-                        &mut removed_statistics,
-                        &s.deleted_segment.segment_info.1,
-                        self.default_cluster_key_id,
-                    );
-                }
-
                 let mut replaced_segments = HashMap::new();
                 let mut merged_statistics = Statistics::default();
                 let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
@@ -224,21 +245,24 @@ impl TableMutationAggregator {
                             replaced_segments
                                 .insert(result.index, (location, SegmentInfo::VERSION));
                         } else {
-                            removed_segment_indexes.push(result.index);
+                            self.removed_segment_indexes.push(result.index);
                         }
 
-                        merge_statistics_mut(
-                            &mut removed_statistics,
-                            &result.origin_summary,
-                            self.default_cluster_key_id,
-                        );
+                        if let Some(origin_summary) = result.origin_summary {
+                            merge_statistics_mut(
+                                &mut self.removed_statistics,
+                                &origin_summary,
+                                self.default_cluster_key_id,
+                            );
+                        }
                     }
 
                     // Refresh status
                     {
                         count += chunk.len();
                         let status = format!(
-                            "mutation: generate new segment files:{}/{}, cost:{} sec",
+                            "{}: generate new segment files:{}/{}, cost:{} sec",
+                            self.kind,
                             count,
                             segment_indices.len(),
                             start.elapsed().as_secs()
@@ -247,7 +271,7 @@ impl TableMutationAggregator {
                     }
                 }
 
-                info!("removed_segment_indexes:{:?}", removed_segment_indexes);
+                info!("removed_segment_indexes:{:?}", self.removed_segment_indexes);
 
                 merge_statistics_mut(
                     &mut merged_statistics,
@@ -258,9 +282,9 @@ impl TableMutationAggregator {
                 ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
                     appended_segments,
                     replaced_segments,
-                    removed_segment_indexes,
+                    removed_segment_indexes: std::mem::take(&mut self.removed_segment_indexes),
                     merged_statistics,
-                    removed_statistics,
+                    removed_statistics: std::mem::take(&mut self.removed_statistics),
                 })
             }
         };
@@ -278,59 +302,73 @@ impl TableMutationAggregator {
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
             let segment_mutation = self.mutations.remove(&index).unwrap();
-            let location = self.base_segments[index].clone();
+            let location = self.base_segments.get(index).cloned();
             let schema = self.schema.clone();
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
 
             tasks.push(async move {
-                // read the old segment
-                let compact_segment_info =
-                    SegmentsIO::read_compact_segment(op.clone(), location, schema, false).await?;
-                let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
+                let (new_blocks, origin_summary) = if let Some(loc) = location {
+                    // read the old segment
+                    let compact_segment_info =
+                        SegmentsIO::read_compact_segment(op.clone(), loc, schema, false).await?;
+                    let mut segment_info = SegmentInfo::try_from(compact_segment_info)?;
 
-                // take away the blocks, they are being mutated
-                let mut block_editor = BTreeMap::<_, _>::from_iter(
-                    std::mem::take(&mut segment_info.blocks)
-                        .into_iter()
-                        .enumerate(),
-                );
-                for (idx, new_meta) in segment_mutation.replaced_blocks {
-                    block_editor.insert(idx, new_meta);
-                }
-                for idx in segment_mutation.deleted_blocks {
-                    block_editor.remove(&idx);
-                }
+                    // take away the blocks, they are being mutated
+                    let mut block_editor = BTreeMap::<_, _>::from_iter(
+                        std::mem::take(&mut segment_info.blocks)
+                            .into_iter()
+                            .enumerate(),
+                    );
+                    for (idx, new_meta) in segment_mutation.replaced_blocks {
+                        block_editor.insert(idx, new_meta);
+                    }
+                    for idx in segment_mutation.deleted_blocks {
+                        block_editor.remove(&idx);
+                    }
 
-                if !block_editor.is_empty() {
+                    if block_editor.is_empty() {
+                        return Ok(SegmentLite {
+                            index,
+                            new_segment_info: None,
+                            origin_summary: Some(segment_info.summary),
+                        });
+                    }
+
                     // assign back the mutated blocks to segment
                     let new_blocks = block_editor.into_values().collect::<Vec<_>>();
-                    // re-calculate the segment statistics
-                    let new_summary =
-                        reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);
-                    // create new segment info
-                    let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
-
-                    // write the segment info.
-                    let location = location_gen.gen_segment_info_location();
-                    let serialized_segment = SerializedSegment {
-                        path: location.clone(),
-                        segment: Arc::new(new_segment),
-                    };
-                    SegmentsIO::write_segment(op, serialized_segment).await?;
-
-                    Ok(SegmentLite {
-                        index,
-                        new_segment_info: Some((location, new_summary)),
-                        origin_summary: segment_info.summary,
-                    })
+                    (new_blocks, Some(segment_info.summary))
                 } else {
-                    Ok(SegmentLite {
-                        index,
-                        new_segment_info: None,
-                        origin_summary: segment_info.summary,
-                    })
-                }
+                    // use by compact.
+                    assert!(segment_mutation.deleted_blocks.is_empty());
+                    let new_blocks = segment_mutation
+                        .replaced_blocks
+                        .into_iter()
+                        .sorted_by(|a, b| a.0.cmp(&b.0))
+                        .map(|(_, meta)| meta)
+                        .collect::<Vec<_>>();
+                    (new_blocks, None)
+                };
+
+                // re-calculate the segment statistics
+                let new_summary =
+                    reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);
+                // create new segment info
+                let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
+
+                // write the segment info.
+                let location = location_gen.gen_segment_info_location();
+                let serialized_segment = SerializedSegment {
+                    path: location.clone(),
+                    segment: Arc::new(new_segment),
+                };
+                SegmentsIO::write_segment(op, serialized_segment).await?;
+
+                Ok(SegmentLite {
+                    index,
+                    new_segment_info: Some((location, new_summary)),
+                    origin_summary,
+                })
             });
         }
 
@@ -384,5 +422,5 @@ struct SegmentLite {
     // new segment location and summary.
     new_segment_info: Option<(String, Statistics)>,
     // origin segment summary.
-    origin_summary: Statistics,
+    origin_summary: Option<Statistics>,
 }

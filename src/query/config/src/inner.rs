@@ -208,6 +208,9 @@ pub struct QueryConfig {
     pub openai_api_embedding_base_url: String,
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
+
+    pub enable_udf_server: bool,
+    pub udf_server_allow_list: Vec<String>,
 }
 
 impl Default for QueryConfig {
@@ -271,6 +274,8 @@ impl Default for QueryConfig {
             openai_api_version: "".to_string(),
             openai_api_completion_model: "gpt-3.5-turbo".to_string(),
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
+            enable_udf_server: false,
+            udf_server_allow_list: Vec::new(),
         }
     }
 }

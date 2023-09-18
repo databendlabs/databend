@@ -102,8 +102,10 @@ pub struct FileErrorInfo {
 
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum FileParseError {
-    #[error("wrong number of columns (expected {expected}, found {found})")]
-    NumberOfColumnsMismatch { expected: usize, found: usize },
+    #[error(
+        "Number of columns in file ({file}) does not match that of the corresponding table ({table})"
+    )]
+    NumberOfColumnsMismatch { table: usize, file: usize },
     #[error("fail todo decode JSON: {message}")]
     InvalidNDJsonRow { message: String },
     #[error("fail to decode column {column_index} ({column_name} {column_type}): {decode_error}")]
@@ -127,13 +129,13 @@ pub enum FileParseError {
 
 impl FileParseError {
     pub fn to_error_code(&self, mode: &OnErrorMode, file_path: &str, line: usize) -> ErrorCode {
-        let pos: String = format!("at {}:{}", file_path, line);
+        let pos: String = format!("at file '{}', line {}", file_path, line);
         let message = match mode {
             OnErrorMode::AbortNum(n) if *n > 1u64 => {
-                format!("meat {n} errors, abort! the last error: {self}, {pos}",)
+                format!("meat {n} errors, abort! the last error: {self}",)
             }
-            _ => format!("{self}, {pos}"),
+            _ => format!("{self}"),
         };
-        ErrorCode::BadBytes(message)
+        ErrorCode::BadBytes(message).add_detail_back(pos)
     }
 }

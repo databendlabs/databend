@@ -39,18 +39,16 @@ pub fn parameter_to_string(i: Input) -> IResult<String> {
 
 fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, String)> {
     move |i| {
-        let sep1 = match_text(sep);
-        let sep2 = match_text(sep);
         let string_options = map(
             rule! {
-                ( #ident ) ~ #sep1 ~ #literal_string
+                ( #ident ) ~ #match_text(sep) ~ #literal_string
             },
             |(k, _, v)| (k.to_string().to_lowercase(), v),
         );
 
         let bool_options = map(
             rule! {
-                (ENABLE_VIRTUAL_HOST_STYLE) ~ #sep2 ~ #literal_bool
+                (ENABLE_VIRTUAL_HOST_STYLE) ~ #match_text(sep) ~ #literal_bool
             },
             |(k, _, v)| (k.text().to_string().to_lowercase(), v.to_string()),
         );
@@ -119,7 +117,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
 pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
-        rule! { FILE_FORMAT ~ "=" ~ "(" ~ #format_options ~ ")" },
+        rule! { FILE_FORMAT ~ ^"=" ~ ^"(" ~ ^#format_options ~ ^")" },
         |(_, _, _, opts, _)| opts,
     )(i)
 }
@@ -128,7 +126,7 @@ pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-        "(" ~ ( #ident ~ "=" ~ #parameter_to_string )* ~ ")"
+        "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string )* ~ ^")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(
@@ -164,9 +162,9 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #connection_options ~ ","?)?
-            ~ (CREDENTIALS ~ "=" ~ #connection_options ~ ","?)?
-            ~ (LOCATION_PREFIX ~ "=" ~ #literal_string ~ ","?)?
+            ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
+            ~ (CREDENTIALS ~ ^"=" ~ ^#connection_options ~ ","?)?
+            ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
         |(location, connection_opts, credentials_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {
@@ -199,7 +197,6 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
 }
 
 pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
-    let connection_opt = connection_opt("=>");
     alt((
         map(
             rule! { FILES ~ "=>" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
@@ -213,6 +210,6 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILE_FORMAT ~ "=>" ~ #literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
         ),
-        map(connection_opt, SelectStageOption::Connection),
+        map(connection_opt("=>"), SelectStageOption::Connection),
     ))(i)
 }

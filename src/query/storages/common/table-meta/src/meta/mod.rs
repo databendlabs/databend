@@ -33,6 +33,7 @@ pub use current::*;
 pub(crate) use format::load_json;
 pub(crate) use format::MetaCompression;
 pub(crate) use format::MetaEncoding;
+pub use format::NUM_BLOCK_ID_BITS;
 pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only

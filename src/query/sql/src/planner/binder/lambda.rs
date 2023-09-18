@@ -29,6 +29,7 @@ use crate::plans::Lambda;
 use crate::plans::LambdaFunc;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
+use crate::plans::UDFServerCall;
 use crate::plans::WindowFunc;
 use crate::plans::WindowOrderBy;
 use crate::BindContext;
@@ -85,6 +86,23 @@ impl<'a> LambdaRewriter<'a> {
                 target_type: cast.target_type.clone(),
             }
             .into()),
+
+            ScalarExpr::UDFServerCall(udf) => {
+                let new_args = udf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.visit(arg))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments: new_args,
+                }
+                .into())
+            }
 
             // TODO(leiysky): should we recursively process subquery here?
             ScalarExpr::SubqueryExpr(_) => Ok(scalar.clone()),
