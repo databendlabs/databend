@@ -332,10 +332,10 @@ pub trait VisitorMut: Sized {
         }
     }
 
-    fn visit_map(&mut self, _span: Span, kvs: &mut [(Literal, Literal)]) {
+    fn visit_map(&mut self, _span: Span, kvs: &mut [(Literal, Expr)]) {
         for (key_expr, val_expr) in kvs {
             self.visit_literal(_span, key_expr);
-            self.visit_literal(_span, val_expr);
+            walk_expr_mut(self, val_expr);
         }
     }
 
