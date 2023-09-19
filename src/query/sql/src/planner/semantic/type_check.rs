@@ -650,7 +650,7 @@ impl<'a> TypeChecker<'a> {
                 params,
                 window,
                 lambda,
-            } => {
+            } if window.is_none() => {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
@@ -726,28 +726,7 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 let name = func_name.to_lowercase();
-                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
-                    if matches!(
-                        self.bind_context.expr_context,
-                        ExprContext::InLambdaFunction
-                    ) {
-                        return Err(ErrorCode::SemanticError(
-                            "window functions can not be used in lambda function".to_string(),
-                        )
-                        .set_span(*span));
-                    }
-                    // general window function
-                    if window.is_none() {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "window function {name} can only be used in window clause"
-                        )));
-                    }
-                    let func = self.resolve_general_window_function(&name, &args).await?;
-                    let window = window.as_ref().unwrap();
-                    let display_name = format!("{:#}", expr);
-                    self.resolve_window(*span, display_name, window, func)
-                        .await?
-                } else if AggregateFunctionFactory::instance().contains(&name) {
+                if AggregateFunctionFactory::instance().contains(&name) {
                     if matches!(
                         self.bind_context.expr_context,
                         ExprContext::InLambdaFunction
@@ -758,24 +737,12 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
 
-                    let in_window = self.in_window_function;
-                    self.in_window_function = self.in_window_function || window.is_some();
                     let in_aggregate_function = self.in_aggregate_function;
                     let (new_agg_func, data_type) = self
                         .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
                         .await?;
-                    self.in_window_function = in_window;
                     self.in_aggregate_function = in_aggregate_function;
-                    if let Some(window) = window {
-                        // aggregate window function
-                        let display_name = format!("{:#}", expr);
-                        let func = WindowFuncType::Aggregate(new_agg_func);
-                        self.resolve_window(*span, display_name, window, func)
-                            .await?
-                    } else {
-                        // aggregate function
-                        Box::new((new_agg_func.into(), data_type))
-                    }
+                    Box::new((new_agg_func.into(), data_type))
                 } else if GENERAL_LAMBDA_FUNCTIONS.contains(&name.as_str()) {
                     if matches!(
                         self.bind_context.expr_context,
@@ -878,6 +845,77 @@ impl<'a> TypeChecker<'a> {
 
                     self.resolve_function(*span, func_name, params, &args)
                         .await?
+                }
+            }
+
+            Expr::FunctionCall {
+                span,
+                distinct,
+                name,
+                args,
+                params,
+                window,
+                lambda: _,
+            } => {
+                let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
+                let func_name = func_name.as_str();
+                let args: Vec<&Expr> = args.iter().collect();
+                let name = func_name.to_lowercase();
+
+                if GENERAL_WINDOW_FUNCTIONS.contains(&name.as_str()) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InLambdaFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "window functions can not be used in lambda function".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+                    // general window function
+                    if window.is_none() {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "window function {name} can only be used in window clause"
+                        )));
+                    }
+                    let func = self.resolve_general_window_function(&name, &args).await?;
+                    let window = window.as_ref().unwrap();
+                    let display_name = format!("{:#}", expr);
+                    self.resolve_window(*span, display_name, window, func)
+                        .await?
+                } else if AggregateFunctionFactory::instance().contains(&name) {
+                    if matches!(
+                        self.bind_context.expr_context,
+                        ExprContext::InLambdaFunction
+                    ) {
+                        return Err(ErrorCode::SemanticError(
+                            "aggregate functions can not be used in lambda function".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+
+                    self.in_window_function = true;
+                    let in_aggregate_function = self.in_aggregate_function;
+                    let (new_agg_func, data_type) = self
+                        .resolve_aggregate_function(*span, &name, expr, *distinct, params, &args)
+                        .await?;
+                    self.in_window_function = false;
+                    self.in_aggregate_function = in_aggregate_function;
+                    if let Some(window) = window {
+                        // aggregate window function
+                        let display_name = format!("{:#}", expr);
+                        let func = WindowFuncType::Aggregate(new_agg_func);
+                        self.resolve_window(*span, display_name, window, func)
+                            .await?
+                    } else {
+                        // aggregate function
+                        Box::new((new_agg_func.into(), data_type))
+                    }
+                } else {
+                    return Err(ErrorCode::SemanticError(
+                        "only general and aggregate functions allowed in window syntax",
+                    )
+                    .set_span(*span));
                 }
             }
 
