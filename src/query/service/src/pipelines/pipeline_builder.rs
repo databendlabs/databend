@@ -1306,6 +1306,7 @@ impl PipelineBuilder {
             .collect::<Result<Vec<_>>>()?;
         let grouping_sets = expand
             .grouping_sets
+            .sets
             .iter()
             .map(|sets| {
                 sets.iter()

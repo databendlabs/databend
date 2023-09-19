@@ -212,6 +212,7 @@ impl Display for AggregateExpand {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let sets = self
             .grouping_sets
+            .sets
             .iter()
             .map(|set| {
                 set.iter()

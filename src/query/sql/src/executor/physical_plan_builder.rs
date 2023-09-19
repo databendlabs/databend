@@ -324,7 +324,6 @@ impl PhysicalPlanBuilder {
                     from_distinct: agg.from_distinct,
                     mode: agg.mode,
                     limit: agg.limit,
-                    grouping_id_index: agg.grouping_id_index,
                     grouping_sets: agg.grouping_sets.clone(),
                 };
 
@@ -383,31 +382,31 @@ impl PhysicalPlanBuilder {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. })
                                 if group_by_shuffle_mode == "before_merge" =>
                             {
-                                let aggregate_partial = if !agg.grouping_sets.is_empty() {
-                                    let expand = AggregateExpand {
-                                        plan_id: self.next_plan_id(),
-                                        input,
-                                        group_bys: group_items.clone(),
-                                        grouping_id_index: agg.grouping_id_index,
-                                        grouping_sets: agg.grouping_sets.clone(),
-                                        stat_info: Some(stat_info.clone()),
+                                let aggregate_partial =
+                                    if let Some(grouping_sets) = agg.grouping_sets {
+                                        let expand = AggregateExpand {
+                                            plan_id: self.next_plan_id(),
+                                            input,
+                                            group_bys: group_items.clone(),
+                                            grouping_sets,
+                                            stat_info: Some(stat_info.clone()),
+                                        };
+                                        AggregatePartial {
+                                            plan_id: self.next_plan_id(),
+                                            input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                            agg_funcs,
+                                            group_by: group_items,
+                                            stat_info: Some(stat_info),
+                                        }
+                                    } else {
+                                        AggregatePartial {
+                                            plan_id: self.next_plan_id(),
+                                            input,
+                                            agg_funcs,
+                                            group_by: group_items,
+                                            stat_info: Some(stat_info),
+                                        }
                                     };
-                                    AggregatePartial {
-                                        plan_id: self.next_plan_id(),
-                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
-                                        agg_funcs,
-                                        group_by: group_items,
-                                        stat_info: Some(stat_info),
-                                    }
-                                } else {
-                                    AggregatePartial {
-                                        plan_id: self.next_plan_id(),
-                                        input,
-                                        agg_funcs,
-                                        group_by: group_items,
-                                        stat_info: Some(stat_info),
-                                    }
-                                };
 
                                 let settings = self.ctx.get_settings();
                                 let efficiently_memory =
@@ -441,13 +440,12 @@ impl PhysicalPlanBuilder {
                                 })
                             }
                             _ => {
-                                if !agg.grouping_sets.is_empty() {
+                                if let Some(grouping_sets) = agg.grouping_sets {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),
                                         input: Box::new(input),
                                         group_bys: group_items.clone(),
-                                        grouping_id_index: agg.grouping_id_index,
-                                        grouping_sets: agg.grouping_sets.clone(),
+                                        grouping_sets,
                                         stat_info: Some(stat_info.clone()),
                                     };
                                     PhysicalPlan::AggregatePartial(AggregatePartial {

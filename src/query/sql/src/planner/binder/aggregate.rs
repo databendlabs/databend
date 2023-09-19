@@ -44,6 +44,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::GroupingSets;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
@@ -56,6 +57,14 @@ use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct GroupingSetsInfo {
+    /// Index for virtual column `grouping_id`.
+    pub grouping_id_column: ColumnBinding,
+    /// Each grouping set is a list of column indices in `group_items`.
+    pub sets: Vec<Vec<IndexType>>,
+}
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
@@ -82,10 +91,8 @@ pub struct AggregateInfo {
     /// We will check the validity by lookup this map with display name.
     pub group_items_map: HashMap<ScalarExpr, usize>,
 
-    /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_column: Option<ColumnBinding>,
-    /// Each grouping set is a list of column indices in `group_items`.
-    pub grouping_sets: Vec<Vec<IndexType>>,
+    /// Information of grouping sets
+    pub grouping_sets: Option<GroupingSetsInfo>,
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -320,13 +327,17 @@ impl<'a> AggregateRewriter<'a> {
 
     fn replace_grouping(&mut self, function: &FunctionCall) -> Result<ScalarExpr> {
         let agg_info = &mut self.bind_context.aggregate_info;
-        if agg_info.grouping_id_column.is_none() {
+        if agg_info.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(
                 "grouping can only be called in GROUP BY GROUPING SETS clauses",
             ));
         }
-        let grouping_id_column = agg_info.grouping_id_column.clone().unwrap();
-
+        let grouping_id_column = agg_info
+            .grouping_sets
+            .as_ref()
+            .unwrap()
+            .grouping_id_column
+            .clone();
         // Rewrite the args to params.
         // The params are the index offset in `grouping_id`.
         // Here is an example:
@@ -498,12 +509,10 @@ impl Binder {
             aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
-            grouping_sets: agg_info.grouping_sets.clone(),
-            grouping_id_index: agg_info
-                .grouping_id_column
-                .as_ref()
-                .map(|g| g.index)
-                .unwrap_or(0),
+            grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
+                grouping_id_index: g.grouping_id_column.index,
+                sets: g.sets.clone(),
+            }),
         };
         new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
 
@@ -548,28 +557,33 @@ impl Binder {
             })
             .collect::<Vec<_>>();
         let grouping_sets = grouping_sets.into_iter().unique().collect();
-        agg_info.grouping_sets = grouping_sets;
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
-        let index = grouping_id_column.index;
-        agg_info.grouping_id_column = Some(grouping_id_column.clone());
+
+        let bound_grouping_id_col = BoundColumnRef {
+            span: None,
+            column: grouping_id_column.clone(),
+        };
+
         agg_info.group_items_map.insert(
-            ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: grouping_id_column.clone(),
-            }),
+            bound_grouping_id_col.clone().into(),
             agg_info.group_items.len(),
         );
         agg_info.group_items.push(ScalarItem {
-            index,
-            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: grouping_id_column,
-            }),
+            index: grouping_id_column.index,
+            scalar: bound_grouping_id_col.into(),
         });
+
+        let grouping_sets_info = GroupingSetsInfo {
+            grouping_id_column,
+            sets: grouping_sets,
+        };
+
+        agg_info.grouping_sets = Some(grouping_sets_info);
+
         Ok(())
     }
 

@@ -53,6 +53,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::CopyIntoTableMode;
+use crate::plans::GroupingSets;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
 use crate::plans::ValidationMode;
@@ -296,8 +297,7 @@ pub struct AggregateExpand {
 
     pub input: Box<PhysicalPlan>,
     pub group_bys: Vec<IndexType>,
-    pub grouping_id_index: IndexType,
-    pub grouping_sets: Vec<Vec<IndexType>>,
+    pub grouping_sets: GroupingSets,
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -310,7 +310,7 @@ impl AggregateExpand {
         for group_by in self
             .group_bys
             .iter()
-            .filter(|&index| *index != self.grouping_id_index)
+            .filter(|&index| *index != self.grouping_sets.grouping_id_index)
         {
             // All group by columns will wrap nullable.
             let i = input_schema.index_of(&group_by.to_string())?;
@@ -319,7 +319,7 @@ impl AggregateExpand {
         }
 
         output_fields.push(DataField::new(
-            &self.grouping_id_index.to_string(),
+            &self.grouping_sets.grouping_id_index.to_string(),
             DataType::Number(NumberDataType::UInt32),
         ));
         Ok(DataSchemaRefExt::create(output_fields))

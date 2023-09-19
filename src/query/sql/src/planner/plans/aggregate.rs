@@ -41,6 +41,14 @@ pub enum AggregateMode {
     Initial,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct GroupingSets {
+    /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
+    pub grouping_id_index: IndexType,
+    /// The grouping sets, each grouping set is a list of `group_items` indices.
+    pub sets: Vec<Vec<IndexType>>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Aggregate {
     pub mode: AggregateMode,
@@ -51,10 +59,7 @@ pub struct Aggregate {
     // True if the plan is generated from distinct, else the plan is a normal aggregate;
     pub from_distinct: bool,
     pub limit: Option<usize>,
-    /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_index: IndexType,
-    /// The grouping sets, each grouping set is a list of `group_items` indices.
-    pub grouping_sets: Vec<Vec<IndexType>>,
+    pub grouping_sets: Option<GroupingSets>,
 }
 
 impl Aggregate {
