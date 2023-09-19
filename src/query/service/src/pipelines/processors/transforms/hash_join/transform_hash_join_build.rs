@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Barrier;
 
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -109,8 +110,9 @@ impl TransformHashJoinBuild {
         *count += 1;
         // Only need to reset the following variables once
         if *count == 1 {
-            let mut row_space_build_done = self.build_state.row_space_build_done.lock();
-            *row_space_build_done = false;
+            let mut barrier = self.build_state.barrier.write();
+            *barrier =
+                Barrier::new(self.build_state.build_worker_num.load(Ordering::Relaxed) as usize);
             self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;
@@ -151,7 +153,13 @@ impl Processor for TransformHashJoinBuild {
                         }
                     }
                     self.build_state.row_space_build_done()?;
-                    return Ok(Event::Async);
+                    self.build_state.barrier.read().wait();
+                    if self.build_state.hash_join_state.fast_return()? {
+                        self.step = HashJoinBuildStep::FastReturn;
+                        return Ok(Event::Sync);
+                    }
+                    self.step = HashJoinBuildStep::Finalize;
+                    return Ok(Event::Sync);
                 }
 
                 match self.input_port.has_data() {
@@ -182,6 +190,7 @@ impl Processor for TransformHashJoinBuild {
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
                     } else {
+                        self.build_state.build_worker_num.fetch_sub(1, Ordering::SeqCst);
                         Ok(Event::Finished)
                     }
                 }
@@ -245,8 +254,8 @@ impl Processor for TransformHashJoinBuild {
                     self.build_state.build_done()
                 }
             }
-            HashJoinBuildStep::FastReturn
-            | HashJoinBuildStep::WaitSpill
+            HashJoinBuildStep::FastReturn => Ok(()),
+            HashJoinBuildStep::WaitSpill
             | HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
             | HashJoinBuildStep::WaitProbe
@@ -254,17 +263,8 @@ impl Processor for TransformHashJoinBuild {
         }
     }
 
-    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
-            HashJoinBuildStep::Running => {
-                self.build_state.wait_row_space_build_finish().await?;
-                if self.build_state.hash_join_state.fast_return()? {
-                    self.step = HashJoinBuildStep::FastReturn;
-                    return Ok(());
-                }
-                self.step = HashJoinBuildStep::Finalize;
-            }
             HashJoinBuildStep::WaitSpill => {
                 self.spill_state
                     .as_ref()

@@ -17,10 +17,10 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Barrier;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -73,16 +73,13 @@ pub struct HashJoinBuildState {
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
     /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
     pub(crate) chunk_size_limit: Arc<usize>,
+    /// Wait util all processors finish row space build, then go to next phase.
+    pub(crate) barrier: RwLock<Barrier>,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
     /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
     pub(crate) row_space_builders: Mutex<usize>,
-    /// After `row_space_builders` is 0, it will be set as true.
-    /// It works with notify to make sure processors go to next phase's work.
-    pub(crate) row_space_build_done: Mutex<bool>,
-    /// Notify processors `RowSpace` build is done. They can go to next phase.
-    pub(crate) row_space_build_done_notify: Arc<Notify>,
     /// Hash method for hash join keys.
     pub(crate) method: Arc<HashMethodKind>,
     /// The size of each entry in HashTable.
@@ -104,6 +101,7 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         processor_count: usize,
+        barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -115,9 +113,8 @@ impl HashJoinBuildState {
             hash_join_state,
             _processor_count: processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            barrier: RwLock::new(barrier),
             row_space_builders: Default::default(),
-            row_space_build_done: Default::default(),
-            row_space_build_done_notify: Arc::new(Default::default()),
             method: Arc::new(method),
             entry_size: Arc::new(Default::default()),
             raw_entry_spaces: Default::default(),
@@ -230,9 +227,6 @@ impl HashJoinBuildState {
             let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
                 return Ok(());
             }
 
@@ -252,10 +246,6 @@ impl HashJoinBuildState {
                     let mut fast_return = self.hash_join_state.fast_return.write();
                     *fast_return = true;
                 }
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
-
                 let mut build_done = self.hash_join_state.build_done.lock();
                 *build_done = true;
                 self.hash_join_state.build_done_notify.notify_waiters();
@@ -332,10 +322,6 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
-
-            let mut row_space_build_done = self.row_space_build_done.lock();
-            *row_space_build_done = true;
-            self.row_space_build_done_notify.notify_waiters();
         }
         Ok(())
     }
@@ -638,23 +624,6 @@ impl HashJoinBuildState {
             let mut build_done = self.hash_join_state.build_done.lock();
             *build_done = true;
             self.hash_join_state.build_done_notify.notify_waiters();
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn wait_row_space_build_finish(&self) -> Result<()> {
-        let notified = {
-            let built_guard = self.row_space_build_done.lock();
-
-            match *built_guard {
-                true => None,
-                false => Some(self.row_space_build_done_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
         }
         Ok(())
     }
