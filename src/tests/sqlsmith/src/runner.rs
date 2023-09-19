@@ -29,7 +29,7 @@ use rand::SeedableRng;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 25] = [
+const KNOWN_ERRORS: [&str; 27] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -49,6 +49,7 @@ const KNOWN_ERRORS: [&str; 25] = [
     "invalid cell index",
     "invalid directed edge index",
     "invalid coordinate range",
+    "window function calls cannot be nested",
     // Unsupported features
     "Row format is not yet support for",
     "to_decimal not support this DataType",
@@ -57,6 +58,7 @@ const KNOWN_ERRORS: [&str; 25] = [
     "AggregateArrayMovingSumFunction does not support type",
     "The arguments of AggregateRetention should be an expression which returns a Boolean result",
     "AggregateWindowFunnelFunction does not support type",
+    "nth_value should count from 1",
 ];
 
 pub struct Runner {
