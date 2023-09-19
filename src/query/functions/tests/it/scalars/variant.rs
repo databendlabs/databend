@@ -46,6 +46,7 @@ fn test_variant() {
     test_json_strip_nulls(file);
     test_json_typeof(file);
     test_json_array(file);
+    test_json_path_exists(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -767,4 +768,48 @@ fn test_json_array(file: &mut impl Write) {
             ]),
         ),
     ]);
+}
+
+fn test_json_path_exists(file: &mut impl Write) {
+    run_ast(file, "json_path_exists(NULL, '$.a')", &[]);
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')"#,
+        &[],
+    );
 }
