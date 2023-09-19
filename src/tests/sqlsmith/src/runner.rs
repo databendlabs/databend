@@ -29,7 +29,7 @@ use rand::SeedableRng;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 25] = [
+const KNOWN_ERRORS: [&str; 26] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -57,6 +57,7 @@ const KNOWN_ERRORS: [&str; 25] = [
     "AggregateArrayMovingSumFunction does not support type",
     "The arguments of AggregateRetention should be an expression which returns a Boolean result",
     "AggregateWindowFunnelFunction does not support type",
+    "nth_value should count from 1",
 ];
 
 pub struct Runner {

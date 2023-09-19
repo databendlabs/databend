@@ -14,7 +14,14 @@
 
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
+use common_ast::ast::Lambda;
 use common_ast::ast::Literal;
+use common_ast::ast::OrderByExpr;
+use common_ast::ast::Window;
+use common_ast::ast::WindowFrame;
+use common_ast::ast::WindowFrameBound;
+use common_ast::ast::WindowFrameUnits;
+use common_ast::ast::WindowSpec;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType::Decimal128;
 use common_expression::types::DecimalDataType::Decimal256;
@@ -40,7 +47,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let idx = self.rng.gen_range(0..indices.len());
         let func_sig = unsafe { self.scalar_func_sigs.get_unchecked(indices[idx]) }.clone();
 
-        self.gen_func(func_sig.name.clone(), vec![], func_sig.args_type)
+        self.gen_func(
+            func_sig.name.clone(),
+            vec![],
+            func_sig.args_type,
+            None,
+            None,
+        )
     }
 
     pub(crate) fn gen_factory_scalar_func(&mut self, ty: &DataType) -> Expr {
@@ -317,7 +330,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
         };
 
-        self.gen_func(name, params, args_type)
+        self.gen_func(name, params, args_type, None, None)
     }
 
     pub(crate) fn gen_agg_func(&mut self, ty: &DataType) -> Expr {
@@ -524,10 +537,104 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             _ => unreachable!(),
         };
 
-        self.gen_func(name, params, args_type)
+        let window = if self.rng.gen_bool(0.8) {
+            None
+        } else {
+            self.gen_window()
+        };
+
+        self.gen_func(name, params, args_type, window, None)
     }
 
-    fn gen_func(&mut self, name: String, params: Vec<Literal>, args_type: Vec<DataType>) -> Expr {
+    pub(crate) fn gen_window_func(&mut self, ty: &DataType) -> Expr {
+        let window = self.gen_window();
+        let ty = ty.clone();
+        match ty {
+            DataType::Number(NumberDataType::UInt64) => {
+                let number = vec!["row_number", "rank", "dense_rank", "ntile"];
+                let name = number[self.rng.gen_range(0..=2)];
+                let args_type = if name == "ntile" {
+                    vec![DataType::Number(NumberDataType::UInt64)]
+                } else {
+                    vec![]
+                };
+                self.gen_func(name.to_string(), vec![], args_type, window, None)
+            }
+            DataType::Number(NumberDataType::Float64) => {
+                let float = vec!["percent_rank", "cume_dist"];
+                let name = float[self.rng.gen_range(0..=1)].to_string();
+                self.gen_func(name, vec![], vec![], window, None)
+            }
+            _ => {
+                let name = vec![
+                    "lag",
+                    "lead",
+                    "first_value",
+                    "first",
+                    "last_value",
+                    "last",
+                    "nth_value",
+                ];
+                let name = name[self.rng.gen_range(0..=7)];
+                let args_type = if name == "lag" || name == "lead" {
+                    vec![ty; 3]
+                } else if name == "nth_value" {
+                    vec![ty, DataType::Number(NumberDataType::UInt64)]
+                } else {
+                    vec![ty]
+                };
+                self.gen_func(name.to_string(), vec![], args_type, window, None)
+            }
+        }
+    }
+
+    fn gen_window(&mut self) -> Option<Window> {
+        if self.rng.gen_bool(0.5) {
+            None
+        } else {
+            let ty = self.gen_data_type();
+            let expr1 = self.gen_expr(&ty);
+            let expr2 = self.gen_expr(&ty);
+            let expr3 = self.gen_expr(&ty);
+            let expr4 = self.gen_expr(&ty);
+
+            let order_by = vec![
+                OrderByExpr {
+                    expr: expr1,
+                    asc: None,
+                    nulls_first: None,
+                },
+                OrderByExpr {
+                    expr: expr2,
+                    asc: Some(true),
+                    nulls_first: Some(true),
+                },
+            ];
+            Some(Window::WindowSpec(WindowSpec {
+                existing_window_name: None,
+                partition_by: vec![expr3, expr4],
+                order_by,
+                window_frame: if self.rng.gen_bool(0.8) {
+                    None
+                } else {
+                    Some(WindowFrame {
+                        units: WindowFrameUnits::Rows,
+                        start_bound: WindowFrameBound::Preceding(None),
+                        end_bound: WindowFrameBound::CurrentRow,
+                    })
+                },
+            }))
+        }
+    }
+
+    fn gen_func(
+        &mut self,
+        name: String,
+        params: Vec<Literal>,
+        args_type: Vec<DataType>,
+        window: Option<Window>,
+        lambda: Option<Lambda>,
+    ) -> Expr {
         let distinct = if name == *"count" {
             self.rng.gen_bool(0.5)
         } else {
@@ -545,8 +652,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             name,
             args,
             params,
-            window: None,
-            lambda: None,
+            window,
+            lambda,
         }
     }
 }
