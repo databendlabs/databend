@@ -59,8 +59,7 @@ impl PyDataFrame {
     async fn df_collect(&self) -> Result<Vec<DataBlock>> {
         let interpreter = InterpreterFactory::get(self.ctx.clone(), &self.df).await?;
         let stream = interpreter.execute(self.ctx.clone()).await?;
-        let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
-        Ok(blocks)
+        stream.collect::<Result<Vec<_>>>().await
     }
 }
 
@@ -87,8 +86,12 @@ impl PyDataFrame {
     pub fn collect(&self, py: Python) -> PyResult<PyDataBlocks> {
         let blocks = wait_for_future(py, self.df_collect());
         let display_width = self.get_box();
+        let blocks = blocks.map_err(|err| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("DataFrame collect error: {:?}", err))
+        })?;
+
         Ok(PyDataBlocks {
-            blocks: blocks.unwrap(),
+            blocks,
             schema: self.df.schema(),
             display_width,
         })
@@ -117,7 +120,11 @@ impl PyDataFrame {
     }
 
     pub fn to_py_arrow(&self, py: Python) -> PyResult<Vec<PyObject>> {
-        let blocks = wait_for_future(py, self.df_collect()).unwrap();
+        let blocks = wait_for_future(py, self.df_collect());
+        let blocks = blocks.map_err(|err| {
+            pyo3::exceptions::PyRuntimeError::new_err(format!("DataFrame collect error: {:?}", err))
+        })?;
+
         blocks
             .into_iter()
             .map(|block| {
