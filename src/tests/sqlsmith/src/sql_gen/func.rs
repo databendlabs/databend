@@ -324,26 +324,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let (name, params, mut args_type) = match ty.remove_nullable() {
             DataType::Number(NumberDataType::UInt8) => {
                 let name = "window_funnel".to_string();
-                let other_type = vec![DataType::Boolean; 31];
-                let mut args_type = vec![];
-                let args_type = match self.rng.gen_range(0..2) {
-                    0 => {
-                        args_type.push(self.gen_number_data_type(false));
-                        args_type.extend_from_slice(&other_type);
-                        args_type
-                    }
-                    1 => {
-                        args_type.push(DataType::Date);
-                        args_type.extend_from_slice(&other_type);
-                        args_type
-                    }
-                    2 => {
-                        args_type.push(DataType::Timestamp);
-                        args_type.extend_from_slice(&other_type);
-                        args_type
-                    }
+                let other_type = vec![DataType::Boolean; 6];
+                let mut args_type = Vec::with_capacity(7);
+
+                match self.rng.gen_range(0..=2) {
+                    0 => args_type.push(self.gen_number_data_type()),
+                    1 => args_type.push(DataType::Date),
+                    2 => args_type.push(DataType::Timestamp),
                     _ => unreachable!(),
                 };
+                args_type.extend_from_slice(&other_type);
                 let params = vec![Literal::UInt64(self.rng.gen_range(1..=10))];
                 (name, params, args_type)
             }
@@ -373,7 +363,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         vec![DataType::Nullable(Box::new(DataType::Bitmap)); 2]
                     }
                 } else if idx == 7 {
-                    vec![self.gen_number_data_type(true)]
+                    vec![self.gen_all_number_data_type()]
                 } else {
                     vec![self.gen_data_type()]
                 };
@@ -411,12 +401,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     vec![self.gen_data_type()]
                 } else if idx == 1 {
                     if self.rng.gen_bool(0.9) {
-                        vec![DataType::Boolean; 32]
+                        vec![DataType::Boolean; 6]
                     } else {
-                        vec![self.gen_data_type(); 32]
+                        vec![self.gen_data_type(); 6]
                     }
                 } else {
-                    vec![self.gen_number_data_type(true)]
+                    vec![self.gen_all_number_data_type()]
                 };
 
                 let params = if idx == 2 {
@@ -459,11 +449,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
                 let args_type = if idx == 1 || idx == 2 {
                     vec![
-                        self.gen_number_data_type(true),
-                        self.gen_number_data_type(true),
+                        self.gen_all_number_data_type(),
+                        self.gen_all_number_data_type(),
                     ]
                 } else {
-                    vec![self.gen_number_data_type(true)]
+                    vec![self.gen_all_number_data_type()]
                 };
 
                 let params = if idx >= 11 {
