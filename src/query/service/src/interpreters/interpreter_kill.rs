@@ -129,13 +129,10 @@ impl Interpreter for KillInterpreter {
         match id.parse::<u32>() {
             Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
                 Some(get) => self.execute_kill(&get).await,
-                None => match self.proxy_to_cluster {
-                    true => self.kill_cluster_query().await,
-                    false => Err(ErrorCode::UnknownSession(format!(
-                        "MySQL connection id {} not found session id",
-                        mysql_conn_id
-                    ))),
-                },
+                None => Err(ErrorCode::UnknownSession(format!(
+                    "MySQL connection id {} not found session id",
+                    mysql_conn_id
+                ))),
             },
             Err(_) => self.execute_kill(id).await,
         }
