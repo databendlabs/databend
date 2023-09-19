@@ -21,6 +21,7 @@ use std::time::Instant;
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
@@ -958,12 +959,14 @@ impl PipelineBuilder {
             join_state,
             build_res.main_pipeline.output_len(),
         )?;
+        let spill_notify = Arc::new(Notify::new());
         let create_sink_processor = |input| {
             let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
                     build_state.clone(),
+                    spill_notify.clone(),
                 )))
             } else {
                 None
