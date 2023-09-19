@@ -404,7 +404,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (name, params, args_type)
             }
             DataType::Array(_) => {
-                let idx = self.rng.gen_range(0..=3);
+                let idx = self.rng.gen_range(0..=2);
                 let name = match idx {
                     0 => {
                         if self.rng.gen_bool(0.5) {
