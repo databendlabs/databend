@@ -218,6 +218,7 @@ fn test_factorial(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a!", columns);
     run_ast(file, "b!", columns);
     run_ast(file, "12!", columns);
+    run_ast(file, "30!", columns);
 }
 
 fn test_abs(file: &mut impl Write, columns: &[(&str, Column)]) {
