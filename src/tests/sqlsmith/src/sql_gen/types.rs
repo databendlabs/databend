@@ -29,8 +29,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_number_data_type(&mut self, gen_decimal: bool) -> DataType {
+    pub(crate) fn gen_all_number_data_type(&mut self) -> DataType {
         match self.rng.gen_range(0..=22) {
+            0..=20 => self.gen_number_data_type(),
+            21..=22 => self.gen_decimal_data_type(),
+            _ => unreachable!(),
+        }
+    }
+    pub(crate) fn gen_number_data_type(&mut self) -> DataType {
+        match self.rng.gen_range(0..=20) {
             0 => DataType::Number(NumberDataType::UInt8),
             1 => DataType::Number(NumberDataType::UInt16),
             2 => DataType::Number(NumberDataType::UInt32),
@@ -41,13 +48,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             12..=13 => DataType::Number(NumberDataType::Int64),
             14 => DataType::Number(NumberDataType::Float32),
             15..=20 => DataType::Number(NumberDataType::Float64),
-            21..=22 => {
-                if gen_decimal {
-                    self.gen_decimal_data_type()
-                } else {
-                    DataType::Number(NumberDataType::UInt64)
-                }
-            }
             _ => unreachable!(),
         }
     }
@@ -68,7 +68,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             0 => DataType::Null,
             1 => DataType::Boolean,
             2 => DataType::String,
-            3..=5 => self.gen_number_data_type(true),
+            3..=5 => self.gen_all_number_data_type(),
             6 => DataType::Timestamp,
             7 => DataType::Date,
             8 => DataType::Bitmap,
