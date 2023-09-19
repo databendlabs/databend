@@ -66,7 +66,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     2 => "concat_ws".to_string(),
                     3 => "regexp_replace".to_string(),
                     4 => "regexp_substr".to_string(),
-                    5 => "to_sting".to_string(),
+                    5 => "to_string".to_string(),
                     _ => unreachable!(),
                 };
                 let args_type = if idx == 0 {
@@ -143,8 +143,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     let len = self.rng.gen_range(2..=6);
                     vec![DataType::String; len]
                 };
-                let params = vec![];
-                (name, params, args_type)
+                (name, vec![], args_type)
             }
             DataType::Boolean => {
                 let idx = self.rng.gen_range(0..=3);
@@ -178,34 +177,52 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     _ => unreachable!(),
                 };
-                let params = vec![];
-                (name, params, args_type)
+                (name, vec![], args_type)
             }
             DataType::Number(_) => {
-                let arithmetic = vec![
-                    "plus",
-                    "minus",
-                    "multiply",
-                    "divide",
-                    "point_in_ellipses",
-                    "point_in_polygon",
-                    "regexp_instr",
-                ];
-                let name = arithmetic[self.rng.gen_range(0..=6)].to_string();
-                let args_type = if name == "point_in_ellipses" {
-                    vec![DataType::Number(NumberDataType::Float64); 7]
-                } else if name == "point_in_polygon" {
-                    let mut args_type = vec![];
-                    let arg1 = DataType::Tuple(vec![DataType::Number(NumberDataType::Float64); 3]);
-                    let arg2 =
-                        DataType::Array(Box::from(DataType::Number(NumberDataType::Float64)));
-                    let arg3 = DataType::Array(Box::from(DataType::Number(NumberDataType::Int64)));
-                    args_type.push(arg1);
-                    args_type.push(arg2);
-                    args_type.push(arg3);
-                    args_type
-                } else if name == "regexp_instr" {
-                    match self.rng.gen_range(2..=6) {
+                let idx = self.rng.gen_range(0..=4);
+                let name = match idx {
+                    0 => "point_in_ellipses".to_string(),
+                    1 => "point_in_polygon".to_string(),
+                    2 => "regexp_instr".to_string(),
+                    3 => {
+                        let arithmetic_func = vec!["plus", "minus", "multiply", "divide"];
+                        arithmetic_func[self.rng.gen_range(0..=3)].to_string()
+                    }
+                    4 => {
+                        let array_func = vec![
+                            "array_approx_count_distinct",
+                            "array_avg",
+                            "array_kurtosis",
+                            "array_median",
+                            "array_skewness",
+                            "array_std",
+                            "array_stddev",
+                            "array_stddev_pop",
+                            "array_stddev_samp",
+                            "array_sum",
+                        ];
+                        array_func[self.rng.gen_range(0..=9)].to_string()
+                    }
+                    _ => unreachable!(),
+                };
+
+                let args_type = match idx {
+                    0 => vec![DataType::Number(NumberDataType::Float64); 7],
+                    1 => {
+                        let mut args_type = vec![];
+                        let arg1 =
+                            DataType::Tuple(vec![DataType::Number(NumberDataType::Float64); 3]);
+                        let arg2 =
+                            DataType::Array(Box::from(DataType::Number(NumberDataType::Float64)));
+                        let arg3 =
+                            DataType::Array(Box::from(DataType::Number(NumberDataType::Int64)));
+                        args_type.push(arg1);
+                        args_type.push(arg2);
+                        args_type.push(arg3);
+                        args_type
+                    }
+                    2 => match self.rng.gen_range(2..=6) {
                         2 => vec![DataType::String; 2],
                         3 => vec![
                             DataType::String,
@@ -234,31 +251,36 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             DataType::String,
                         ],
                         _ => unreachable!(),
+                    },
+                    3 => {
+                        let mut args_type = vec![];
+                        let int_num = ALL_INTEGER_TYPES.len();
+                        let float_num = ALL_FLOAT_TYPES.len();
+                        let left = ALL_INTEGER_TYPES[self.rng.gen_range(0..=int_num - 1)];
+                        let right = ALL_FLOAT_TYPES[self.rng.gen_range(0..=float_num - 1)];
+                        if self.rng.gen_bool(0.5) {
+                            args_type.push(DataType::Number(left));
+                            args_type.push(DataType::Number(right));
+                        } else {
+                            args_type.push(DataType::Number(right));
+                            args_type.push(DataType::Number(left));
+                        }
+                        args_type
                     }
-                } else {
-                    let mut args_type = vec![];
-                    let int_num = ALL_INTEGER_TYPES.len();
-                    let float_num = ALL_FLOAT_TYPES.len();
-                    let left = ALL_INTEGER_TYPES[self.rng.gen_range(0..=int_num - 1)];
-                    let right = ALL_FLOAT_TYPES[self.rng.gen_range(0..=float_num - 1)];
-                    if self.rng.gen_bool(0.5) {
-                        args_type.push(DataType::Number(left));
-                        args_type.push(DataType::Number(right));
-                    } else {
-                        args_type.push(DataType::Number(right));
-                        args_type.push(DataType::Number(left));
+                    4 => {
+                        let inner_ty = self.gen_number_data_type();
+                        vec![DataType::Array(Box::new(inner_ty))]
                     }
-                    args_type
+                    _ => unreachable!(),
                 };
 
-                let params = vec![];
-                (name, params, args_type)
+                (name, vec![], args_type)
             }
-            DataType::Array(nested) => {
+            DataType::Array(box inner_ty) => {
                 let name = "array".to_string();
-                let args_type = vec![DataType::Array(nested)];
-                let params = vec![];
-                (name, params, args_type)
+                let len = self.rng.gen_range(0..=4);
+                let args_type = vec![inner_ty; len];
+                (name, vec![], args_type)
             }
             DataType::Decimal(_) => {
                 let decimal = vec!["to_float64", "to_folat32", "to_decimal", "try_to_decimal"];
@@ -284,30 +306,29 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     (name, params, args_type)
                 }
             }
-            DataType::Tuple(tuple) => {
-                let tuple_func = ["json_path_query", "tuple"];
-                let name = tuple_func[self.rng.gen_range(0..=1)].to_string();
-                let params = vec![];
-                if name == "tuple" {
-                    let args_type = vec![DataType::Tuple(tuple)];
-                    (name, params, args_type)
-                } else {
-                    let args_type = vec![DataType::Variant, DataType::String];
-                    (name, params, args_type)
-                }
+            DataType::Tuple(inner_tys) => {
+                let name = "tuple".to_string();
+                (name, vec![], inner_tys)
             }
             DataType::Variant => {
-                let json = vec!["json_array", "json_object", "json_object_keep_null"];
-                let name = json[self.rng.gen_range(0..=2)].to_string();
-                let ty1 = self.gen_data_type();
-                let ty2 = self.gen_data_type();
-                let ty3 = self.gen_data_type();
-                let args_type = vec![ty1, ty2, ty3];
-                let params = vec![];
-                (name, params, args_type)
+                if self.rng.gen_bool(0.5) {
+                    let json_func = vec!["json_array", "json_object", "json_object_keep_null"];
+                    let name = json_func[self.rng.gen_range(0..=2)].to_string();
+                    let len = self.rng.gen_range(0..=2);
+                    let mut args_type = Vec::with_capacity(len * 2);
+                    for _ in 0..len {
+                        args_type.push(DataType::String);
+                        args_type.push(self.gen_data_type());
+                    }
+                    (name, vec![], args_type)
+                } else {
+                    let json_func = vec!["unnest", "json_path_query"];
+                    let name = json_func[self.rng.gen_range(0..=1)].to_string();
+                    let args_type = vec![ty.clone()];
+                    (name, vec![], args_type)
+                }
             }
             _ => {
-                // TODO: other factory functions
                 if self.rng.gen_bool(0.3) {
                     let name = "if".to_string();
                     let len = self.rng.gen_range(1..=3) * 2 + 1;
@@ -319,10 +340,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             args_type.push(ty.clone());
                         }
                     }
-                    let params = vec![];
-                    (name, params, args_type)
+                    (name, vec![], args_type)
                 } else {
-                    return self.gen_scalar_value(ty);
+                    let array_func = vec![
+                        "unnest",
+                        "array_any",
+                        "array_count",
+                        "array_max",
+                        "array_min",
+                    ];
+                    let name = array_func[self.rng.gen_range(0..=4)].to_string();
+                    let args_type = vec![DataType::Array(Box::new(ty.clone()))];
+                    (name, vec![], args_type)
                 }
             }
         };
@@ -388,7 +417,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (name, params, args_type)
             }
             DataType::Array(_) => {
-                let idx = self.rng.gen_range(0..=3);
+                let idx = self.rng.gen_range(0..=2);
                 let name = match idx {
                     0 => {
                         if self.rng.gen_bool(0.5) {
