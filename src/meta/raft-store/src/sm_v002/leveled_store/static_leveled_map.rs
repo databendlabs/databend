@@ -62,19 +62,20 @@ impl StaticLeveledMap {
 }
 
 #[async_trait::async_trait]
-impl<'s, K> MapApiRO<'s, 's, K> for StaticLeveledMap
+impl<'s, K> MapApiRO<'s, 's, K> for &'s StaticLeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<'s, 's, K>,
+    &'s LevelData: MapApiRO<'s, 's, K>,
 {
-    type V = <LevelData as MapApiRO<'s, 's, K>>::V;
+    type V = <&'s LevelData as MapApiRO<'s, 's, K>>::V;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'s Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
         for level_data in self.iter_levels() {
+            // let got = <&LevelData as MapApiRO<'_, '_, K>>::get(level_data, key).await;
             let got = level_data.get(key).await;
             if !got.is_not_found() {
                 return got;
@@ -83,7 +84,7 @@ where
         return Marked::empty();
     }
 
-    async fn range<T: ?Sized, R>(&self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
     where
         K: Borrow<T> + Clone,
         Self::V: Unpin,

@@ -21,14 +21,24 @@ use futures_util::stream::BoxStream;
 use crate::sm_v002::marked::Marked;
 
 /// Provide a readonly key-value map API set, used to access state machine data.
+///
+/// `MapApiRO` and `MapApi` both have two lifetime parameters, `'me` and `'d`,
+/// to describe the lifetime of the MapApi object and the lifetime of the data.
+///
+/// When an implementation owns the data it operates on, `'me` must outlive `'d`.
+/// Otherwise, i.e., the implementation just keeps a reference to the data,
+/// `'me` could be shorter than `'d`.
+///
+/// There is no lifetime constraint on the trait,
+/// and it's the implementation's duty to specify a valid lifetime constraint.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApiRO<'me, 's, K>: Send + Sync
+pub(in crate::sm_v002) trait MapApiRO<'me, 'd, K>: Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     type V: Clone + Send + Sync + 'static;
 
     /// Get an entry by key.
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized;
@@ -36,7 +46,7 @@ where K: Ord + Send + Sync + 'static
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<T: ?Sized, R>(&'me self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (K, Marked<Self::V>)>
     where
         K: Clone + Borrow<T>,
         Self::V: Unpin,
@@ -46,30 +56,33 @@ where K: Ord + Send + Sync + 'static
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApi<'me, 's, K>:
-    MapApiRO<'me, 's, K> + Send + Sync
+pub(in crate::sm_v002) trait MapApi<'me, 'd, K>:
+    MapApiRO<'me, 'd, K> + Send + Sync
 where K: Ord + Send + Sync + 'static
 {
     /// Set an entry and returns the old value and the new value.
     async fn set(
-        &mut self,
+        mut self,
         key: K,
-        value: Option<(<Self as MapApiRO<'me, 's, K>>::V, Option<KVMeta>)>,
+        value: Option<(<Self as MapApiRO<'me, 'd, K>>::V, Option<KVMeta>)>,
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
     );
 
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
     async fn update_meta(
-        &mut self,
+        self,
         key: K,
         meta: Option<KVMeta>,
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
-    ) {
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
+    )
+    where
+        Self: Sized,
+    {
         //
         let got = self.get(&key).await;
         if got.is_tomb_stone() {
@@ -85,13 +98,13 @@ where K: Ord + Send + Sync + 'static
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
     async fn upsert_value(
-        &mut self,
+        &'me mut self,
         key: K,
-        value: <Self as MapApiRO<'me, 's, K>>::V,
+        value: <Self as MapApiRO<'me, 'd, K>>::V,
         // TODO: use Self::V
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
     ) {
         let got = self.get(&key).await;
 
@@ -102,5 +115,33 @@ where K: Ord + Send + Sync + 'static
         };
 
         self.set(key, Some((value, meta.cloned()))).await
+    }
+}
+
+#[async_trait::async_trait]
+impl<'me, 'd, K, T> MapApiRO<'me, 'd, K> for &'me mut T
+where
+    &'me T: MapApiRO<'me, 'd, K>,
+    K: Ord + Send + Sync + 'static,
+    T: Send + Sync,
+{
+    type V = <&'me T as MapApiRO<'me, 'd, K>>::V;
+
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
+    where
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+    {
+        (&*self).get(key).await
+    }
+
+    async fn range<Q: ?Sized, R>(self, range: R) -> BoxStream<'d, (K, Marked<Self::V>)>
+    where
+        K: Clone + Borrow<Q>,
+        Self::V: Unpin,
+        Q: Ord,
+        R: RangeBounds<Q> + Send + Sync + Clone,
+    {
+        (&*self).range(range).await
     }
 }

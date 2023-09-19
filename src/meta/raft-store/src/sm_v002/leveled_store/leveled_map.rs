@@ -31,22 +31,25 @@ use crate::sm_v002::marked::Marked;
 
 /// A readonly leveled map store that does not not own the data.
 #[derive(Debug)]
-pub struct LeveledRef<'a> {
+pub struct LeveledRef<'d> {
     /// The top level is the newest and writable.
-    writable: &'a LevelData,
+    writable: &'d LevelData,
 
     /// The immutable levels, from the oldest to the newest.
     /// levels[0] is the bottom and oldest level.
-    frozen: &'a [Arc<LevelData>],
+    frozen: &'d [Arc<LevelData>],
 }
 
-impl<'a> LeveledRef<'a> {
-    pub(in crate::sm_v002) fn new(writable: &'a LevelData, frozen: &'a [Arc<LevelData>]) -> Self {
+impl<'d> LeveledRef<'d> {
+    pub(in crate::sm_v002) fn new(
+        writable: &'d LevelData,
+        frozen: &'d [Arc<LevelData>],
+    ) -> LeveledRef<'d> {
         Self { writable, frozen }
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d LevelData> + 'd {
         [self.writable]
             .into_iter()
             .chain(self.frozen.iter().map(|x| x.as_ref()).rev())
@@ -54,14 +57,14 @@ impl<'a> LeveledRef<'a> {
 }
 
 #[async_trait::async_trait]
-impl<'me, 's, K> MapApiRO<'me, 's, K> for LeveledRef<'s>
+impl<'me, 'd, K> MapApiRO<'me, 'd, K> for LeveledRef<'d>
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<'me, 's, K>,
+    &'d LevelData: MapApiRO<'d, 'd, K>,
 {
-    type V = <LevelData as MapApiRO<'me, 's, K>>::V;
+    type V = <&'d LevelData as MapApiRO<'d, 'd, K>>::V;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -75,7 +78,7 @@ where
         return Marked::empty();
     }
 
-    async fn range<T: ?Sized, R>(&self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (K, Marked<Self::V>)>
     where
         K: Borrow<T> + Clone,
         Self::V: Unpin,
@@ -98,44 +101,45 @@ where
 
 /// A writable leveled map store that does not not own the data.
 #[derive(Debug)]
-pub struct LeveledRefMut<'a> {
+pub struct LeveledRefMut<'d> {
     /// The top level is the newest and writable.
-    writable: &'a mut LevelData,
+    writable: &'d mut LevelData,
 
     /// The immutable levels, from the oldest to the newest.
     /// levels[0] is the bottom and oldest level.
-    frozen: &'a [Arc<LevelData>],
+    frozen: &'d [Arc<LevelData>],
 }
 
-impl<'a> LeveledRefMut<'a> {
+impl<'d> LeveledRefMut<'d> {
     pub(in crate::sm_v002) fn new(
-        writable: &'a mut LevelData,
-        frozen: &'a [Arc<LevelData>],
+        writable: &'d mut LevelData,
+        frozen: &'d [Arc<LevelData>],
     ) -> Self {
         Self { writable, frozen }
     }
 
-    /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
-        [&*self.writable]
-            .into_iter()
-            .chain(self.frozen.iter().map(|x| x.as_ref()).rev())
-    }
-
-    pub(in crate::sm_v002) fn to_leveled_ref(&self) -> LeveledRef<'_> {
-        LeveledRef::new(self.writable, self.frozen)
+    pub(in crate::sm_v002) fn to_leveled_ref<'me>(&'me self) -> LeveledRef<'d>
+    where 'me: 'd {
+        // LeveledRef::new(self.writable, self.frozen)
+        LeveledRef::<'d> {
+            writable: self.writable,
+            frozen: self.frozen,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl<'me, 's, K> MapApiRO<'me, 's, K> for LeveledRefMut<'s>
+impl<'me, 'd, K> MapApiRO<'me, 'd, K> for &'me LeveledRefMut<'d>
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<'me, 's, K>,
+    &'d LevelData: MapApiRO<'d, 'd, K>,
+    // Because `LeveledRefMut` has a mut ref of lifetime 'd,
+    // `self` must outlive 'd otherwise there will be two mut ref.
+    'me: 'd,
 {
-    type V = <LevelData as MapApiRO<'me, 's, K>>::V;
+    type V = <&'d LevelData as MapApiRO<'d, 'd, K>>::V;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -143,7 +147,7 @@ where
         self.to_leveled_ref().get(key).await
     }
 
-    async fn range<T: ?Sized, R>(&self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (K, Marked<Self::V>)>
     where
         K: Borrow<T> + Clone,
         Self::V: Unpin,
@@ -155,18 +159,21 @@ where
 }
 
 #[async_trait::async_trait]
-impl<'me, 's, K> MapApi<'me, 's, K> for LeveledRefMut<'s>
+impl<'me, 'd, K, V> MapApi<'me, 'd, K> for &'me mut LeveledRefMut<'d>
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApi<'me, 's, K>,
+    V: Clone + Send + Sync + 'static,
+    &'d LevelData: MapApiRO<'d, 'd, K, V = V>,
+    &'d mut LevelData: MapApi<'d, 'd, K, V = V>,
+    'me: 'd,
 {
-    async fn set<'a>(
-        &'a mut self,
+    async fn set(
+        mut self,
         key: K,
-        value: Option<(<Self as MapApiRO<'me, 's, K>>::V, Option<KVMeta>)>,
+        value: Option<(<Self as MapApiRO<'me, 'd, K>>::V, Option<KVMeta>)>,
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, K>>::V>,
     )
     where
         K: Ord,
@@ -247,7 +254,7 @@ impl LeveledMap {
         self.frozen = b;
     }
 
-    pub(crate) fn leveled_ref_mut<'s>(&mut self) -> LeveledRefMut<'s> {
+    pub(crate) fn leveled_ref_mut<'s>(&'s mut self) -> LeveledRefMut<'s> {
         LeveledRefMut::new(&mut self.writable, self.frozen.levels())
     }
 
@@ -257,14 +264,14 @@ impl LeveledMap {
 }
 
 #[async_trait::async_trait]
-impl<'s, K> MapApiRO<'s, 's, K> for LeveledMap
+impl<'d, K> MapApiRO<'d, 'd, K> for &'d LeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<'s, 's, K>,
+    &'d LevelData: MapApiRO<'d, 'd, K>,
 {
-    type V = <LevelData as MapApiRO<'s, 's, K>>::V;
+    type V = <&'d LevelData as MapApiRO<'d, 'd, K>>::V;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -272,7 +279,7 @@ where
         self.leveled_ref().get(key).await
     }
 
-    async fn range<T: ?Sized, R>(&self, range: R) -> BoxStream<'s, (K, Marked<Self::V>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (K, Marked<Self::V>)>
     where
         K: Borrow<T> + Clone,
         Self::V: Unpin,
@@ -284,22 +291,27 @@ where
 }
 
 #[async_trait::async_trait]
-impl<'s, K> MapApi<'s, 's, K> for LeveledMap
+impl<'d, K, V> MapApi<'d, 'd, K> for &'d mut LeveledMap
 where
     K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApi<'s, 's, K>,
+    V: Clone + Send + Sync + 'static,
+    &'d mut LevelData: MapApi<'d, 'd, K, V = V>,
+    &'d LevelData: MapApiRO<'d, 'd, K, V = V>,
 {
     async fn set(
-        &mut self,
+        mut self,
         key: K,
-        value: Option<(<Self as MapApiRO<'s, 's, K>>::V, Option<KVMeta>)>,
+        value: Option<(<Self as MapApiRO<'d, 'd, K>>::V, Option<KVMeta>)>,
     ) -> (
-        Marked<<Self as MapApiRO<'s, 's, K>>::V>,
-        Marked<<Self as MapApiRO<'s, 's, K>>::V>,
+        Marked<<Self as MapApiRO<'d, 'd, K>>::V>,
+        Marked<<Self as MapApiRO<'d, 'd, K>>::V>,
     )
     where
         K: Ord,
     {
-        self.leveled_ref_mut::<'s>().set(key, value).await
+        let mut l = self.leveled_ref_mut();
+        MapApi::set(&mut l, key, value).await
+
+        // (&mut l).set(key, value).await
     }
 }

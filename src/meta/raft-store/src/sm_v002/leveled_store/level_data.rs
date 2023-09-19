@@ -74,10 +74,12 @@ impl LevelData {
 }
 
 #[async_trait::async_trait]
-impl<'me, 's> MapApiRO<'me, 's, String> for LevelData {
+impl<'me, 'd> MapApiRO<'me, 'd, String> for &'me LevelData
+where 'me: 'd
+{
     type V = Vec<u8>;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -85,7 +87,7 @@ impl<'me, 's> MapApiRO<'me, 's, String> for LevelData {
         self.kv.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<T, R>(&'me self, range: R) -> BoxStream<'s, (String, Marked)>
+    async fn range<T, R>(self, range: R) -> BoxStream<'d, (String, Marked)>
     where
         String: Borrow<T>,
         T: Ord + ?Sized,
@@ -96,14 +98,16 @@ impl<'me, 's> MapApiRO<'me, 's, String> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl<'me, 's> MapApi<'me, 's, String> for LevelData {
+impl<'me, 'd> MapApi<'me, 'd, String> for &'me mut LevelData
+where 'me: 'd
+{
     async fn set(
-        &mut self,
+        mut self,
         key: String,
-        value: Option<(<Self as MapApiRO<'me, 's, String>>::V, Option<KVMeta>)>,
+        value: Option<(<Self as MapApiRO<'me, 'd, String>>::V, Option<KVMeta>)>,
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, String>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, String>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, String>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, String>>::V>,
     ) {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
@@ -119,17 +123,19 @@ impl<'me, 's> MapApi<'me, 's, String> for LevelData {
             Marked::new_tomb_stone(seq)
         };
 
-        let prev = MapApiRO::<String>::get(self, key.as_str()).await;
+        let prev = MapApiRO::<String>::get(&*self, key.as_str()).await;
         self.kv.insert(key, marked.clone());
         (prev, marked)
     }
 }
 
 #[async_trait::async_trait]
-impl<'me, 's> MapApiRO<'me, 's, ExpireKey> for LevelData {
+impl<'me, 'd> MapApiRO<'me, 'd, ExpireKey> for &'me LevelData
+where 'me: 'd
+{
     type V = String;
 
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -137,7 +143,7 @@ impl<'me, 's> MapApiRO<'me, 's, ExpireKey> for LevelData {
         self.expire.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<T: ?Sized, R>(&'me self, range: R) -> BoxStream<'s, (ExpireKey, Marked<String>)>
+    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (ExpireKey, Marked<String>)>
     where
         ExpireKey: Borrow<T>,
         T: Ord,
@@ -153,14 +159,16 @@ impl<'me, 's> MapApiRO<'me, 's, ExpireKey> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl<'me, 's> MapApi<'me, 's, ExpireKey> for LevelData {
+impl<'me, 'd> MapApi<'me, 'd, ExpireKey> for &'me mut LevelData
+where 'me: 'd
+{
     async fn set(
-        &mut self,
+        mut self,
         key: ExpireKey,
-        value: Option<(<Self as MapApiRO<'me, 's, ExpireKey>>::V, Option<KVMeta>)>,
+        value: Option<(<Self as MapApiRO<'me, 'd, ExpireKey>>::V, Option<KVMeta>)>,
     ) -> (
-        Marked<<Self as MapApiRO<'me, 's, ExpireKey>>::V>,
-        Marked<<Self as MapApiRO<'me, 's, ExpireKey>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, ExpireKey>>::V>,
+        Marked<<Self as MapApiRO<'me, 'd, ExpireKey>>::V>,
     ) {
         // dbg!("set expire", &key, &value);
 
@@ -172,7 +180,7 @@ impl<'me, 's> MapApi<'me, 's, ExpireKey> for LevelData {
             Marked::TombStone { internal_seq: seq }
         };
 
-        let prev = MapApiRO::<ExpireKey>::get(self, &key).await;
+        let prev = MapApiRO::<ExpireKey>::get(&*self, &key).await;
         self.expire.insert(key, marked.clone());
         (prev, marked)
     }
