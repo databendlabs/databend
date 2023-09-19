@@ -104,6 +104,11 @@ select array_distinct(col1), array_distinct(col2), array_distinct(col3) from t
 ----
 [1,2,3] ['x','y','z'] ['2022-02-02']
 
+query T
+select array_distinct([array_distinct([NULL, NULL])])
+----
+[]
+
 query I
 select array_sum(col1) from t
 ----

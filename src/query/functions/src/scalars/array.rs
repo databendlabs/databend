@@ -108,6 +108,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| Value::Scalar(()),
     );
 
+    registry.register_1_arg_core::<ArrayType<NullType>, EmptyArrayType, _, _>(
+        "array",
+        |_, _| FunctionDomain::Full,
+        |_, _| Value::Scalar(()),
+    );
+
     registry.register_function_factory("array", |_, args_type| {
         if args_type.is_empty() {
             return None;
