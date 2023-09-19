@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use log::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -83,20 +82,27 @@ impl TransformHashJoinBuild {
 
     fn wait_spill(&mut self, data_block: DataBlock) -> Result<()> {
         let spill_state = self.spill_state.as_ref().unwrap();
-        let wait = spill_state.spill_coordinator.wait_spill()?;
+        let wait = {
+            let mut spill_coordinator = spill_state.spill_coordinator.write();
+            spill_coordinator.wait_spill()?
+        };
         self.input_data = Some(data_block);
         if wait {
             self.step = HashJoinBuildStep::WaitSpill;
         } else {
+            let mut spill_coordinator = spill_state.spill_coordinator.write();
             // Make `need_spill` to false for `SpillCoordinator`
-            spill_state.spill_coordinator.no_need_spill();
+            spill_coordinator.no_need_spill();
             // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
             // Partition all rows and stat how many partitions and rows in each partition.
             // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
             // For each partition, we should equally divide the rows into each processor.
             // Then all processors will spill same partitions.
-            spill_state.split_spill_tasks()?;
-            spill_state.spill_coordinator.notify_spill();
+            let active_processors_num =
+                spill_coordinator.total_builder_count - spill_coordinator.non_spill_processors;
+            let spill_tasks = &mut spill_coordinator.spill_tasks;
+            spill_state.split_spill_tasks(active_processors_num, spill_tasks)?;
+            spill_state.notify_spill();
             self.step = HashJoinBuildStep::FirstSpill;
         }
         Ok(())
@@ -143,16 +149,17 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &self.spill_state && !self.from_spill {
                         // The processor won't be triggered spill, because there won't be data from input port
                         // Add the processor to `non_spill_processors`
-                        info!("{:?} before", self._processor_id);
-                        let mut non_spill_processors = spill_state.spill_coordinator.non_spill_processors.write();
-                        let mut waiting_spill_count = spill_state.spill_coordinator.waiting_spill_count.write();
-                        *non_spill_processors += 1;
-                        if *waiting_spill_count != 0 && *non_spill_processors + *waiting_spill_count == spill_state.spill_coordinator.total_builder_count {
-                            drop(non_spill_processors);
-                            spill_state.spill_coordinator.no_need_spill();
-                            spill_state.split_spill_tasks()?;
-                            spill_state.spill_coordinator.notify_spill();
-                            *waiting_spill_count = 0;
+                        let mut spill_coordinator = spill_state.spill_coordinator.write();
+                        spill_coordinator.non_spill_processors += 1;
+                        let waiting_spill_count = spill_coordinator.waiting_spill_count;
+                        let non_spill_processors = spill_coordinator.non_spill_processors;
+                        if waiting_spill_count != 0 && non_spill_processors + waiting_spill_count == spill_coordinator.total_builder_count {
+                            spill_coordinator.no_need_spill();
+                            let active_processors_num = spill_coordinator.total_builder_count
+                                - non_spill_processors;
+                            spill_state.split_spill_tasks(active_processors_num, &mut spill_coordinator.spill_tasks)?;
+                            spill_state.notify_spill();
+                            spill_coordinator.waiting_spill_count = 0;
                         }
                     }
                     self.build_state.row_space_build_done()?;
@@ -178,11 +185,12 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.partition_location.is_empty() {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         // The method should be called only once.
-                        if !spill_state.spill_coordinator.send_partition_set.load(Ordering::SeqCst) {
+                        let mut spill_coordinator = spill_state.spill_coordinator.write();
+                        if !spill_coordinator.send_partition_set {
                             self.build_state
                                 .hash_join_state
                                 .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
-                            spill_state.spill_coordinator.send_partition_set.store(true, Ordering::SeqCst);
+                            spill_coordinator.send_partition_set = true;
                         }
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
@@ -215,9 +223,9 @@ impl Processor for TransformHashJoinBuild {
                         // Check if need to spill
                         let need_spill = spill_state.check_need_spill()?;
                         if need_spill {
-                            spill_state.spill_coordinator.need_spill()?;
+                            spill_state.spill_coordinator.write().need_spill()?;
                             self.wait_spill(data_block)?;
-                        } else if spill_state.spill_coordinator.get_need_spill() {
+                        } else if spill_state.spill_coordinator.read().get_need_spill() {
                                 // even if input can fit into memory, but there exists one processor need to spill,
                                 // then it needs to wait spill.
                                 self.wait_spill(data_block)?;
@@ -260,7 +268,6 @@ impl Processor for TransformHashJoinBuild {
         }
     }
 
-    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
             HashJoinBuildStep::Running => {
@@ -272,12 +279,7 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Finalize;
             }
             HashJoinBuildStep::WaitSpill => {
-                self.spill_state
-                    .as_ref()
-                    .unwrap()
-                    .spill_coordinator
-                    .wait_spill_notify()
-                    .await;
+                self.spill_state.as_ref().unwrap().wait_spill_notify().await;
                 self.step = HashJoinBuildStep::FirstSpill
             }
             HashJoinBuildStep::FirstSpill => {

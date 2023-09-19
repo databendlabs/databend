@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -23,6 +25,7 @@ use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 use log::info;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
@@ -33,20 +36,24 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
 /// Define some states for hash join build spilling
+/// Each processor owns its `BuildSpillState`
 pub struct BuildSpillState {
     /// Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
     /// Hash join build spilling coordinator
-    pub spill_coordinator: Arc<BuildSpillCoordinator>,
+    pub spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
     /// Spiller, responsible for specific spill work
     pub spiller: Spiller,
+    /// Notify all waiting spilling processors to start spill.
+    pub(crate) notify_spill: Arc<Notify>,
 }
 
 impl BuildSpillState {
     pub fn create(
         ctx: Arc<QueryContext>,
-        spill_coordinator: Arc<BuildSpillCoordinator>,
+        spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
         build_state: Arc<HashJoinBuildState>,
+        notify_spill: Arc<Notify>,
     ) -> Self {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -56,7 +63,19 @@ impl BuildSpillState {
             build_state,
             spill_coordinator,
             spiller,
+            notify_spill,
         }
+    }
+
+    // Start to spill.
+    pub(crate) fn notify_spill(&self) {
+        self.notify_spill.notify_waiters();
+    }
+
+    // Wait for notify to spill
+    #[async_backtrace::framed]
+    pub async fn wait_spill_notify(&self) {
+        self.notify_spill.notified().await
     }
 
     // Get all hashes for build input data.
@@ -119,8 +138,8 @@ impl BuildSpillState {
     // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
     pub(crate) async fn spill(&mut self) -> Result<()> {
         let spill_partitions = {
-            let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
-            spill_tasks.pop_back().unwrap()
+            let mut spill_coordinator = self.spill_coordinator.write();
+            spill_coordinator.spill_tasks.pop_back().unwrap()
         };
         self.spiller.spill(&spill_partitions).await
     }
@@ -179,10 +198,11 @@ impl BuildSpillState {
 
     // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
-    pub(crate) fn split_spill_tasks(&self) -> Result<()> {
-        let active_processors_num = self.spill_coordinator.total_builder_count
-            - *self.spill_coordinator.non_spill_processors.read();
-        let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+    pub(crate) fn split_spill_tasks(
+        &self,
+        active_processors_num: usize,
+        spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
+    ) -> Result<()> {
         let blocks = self.collect_rows()?;
         let partition_blocks = self.partition_input_blocks(&blocks)?;
         let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());
