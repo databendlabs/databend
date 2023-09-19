@@ -37,10 +37,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         match self.rng.gen_range(0..=10) {
             0..=3 => self.gen_column(ty),
             4..=6 => self.gen_scalar_value(ty),
-            7..=8 => self.gen_scalar_func(ty),
-            9 => self.gen_factory_scalar_func(ty),
+            7 => self.gen_scalar_func(ty),
+            8 => self.gen_factory_scalar_func(ty),
+            9 => self.gen_window_func(ty),
             10 => self.gen_other_expr(ty),
-            // TODO other exprs
             _ => unreachable!(),
         }
     }

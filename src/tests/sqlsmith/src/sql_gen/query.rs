@@ -43,8 +43,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
-
         let order_by = self.gen_order_by(self.group_by.clone());
+
         Query {
             span: None,
             // TODO
