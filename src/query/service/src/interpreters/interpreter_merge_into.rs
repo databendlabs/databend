@@ -92,7 +92,6 @@ impl Interpreter for MergeIntoInterpreter {
     }
 }
 
-// todo:(JackTan25) computed exprs
 impl MergeIntoInterpreter {
     async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
         let MergePlan {
