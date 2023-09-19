@@ -83,7 +83,7 @@ The following code snippet demonstrates how to create a UDF Server in Python for
 ```python
 from udf import *
 
-# Define a function that accpets nullable values, and set skip_null to True to enable it returns NULL if any argument is NULL.
+# Define a function that accepts nullable values, and set skip_null to True to enable it returns NULL if any argument is NULL.
 @udf(
     input_types=["INT", "INT"],
     result_type="INT",
