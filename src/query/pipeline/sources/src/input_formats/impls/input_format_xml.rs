@@ -33,6 +33,7 @@ use xml::reader::XmlEvent;
 use xml::ParserConfig;
 
 use crate::input_formats::error_utils::check_column_end;
+use crate::input_formats::error_utils::truncate_column_data;
 use crate::input_formats::AligningStateTextBased;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
@@ -80,6 +81,9 @@ impl InputFormatXML {
                             column_name: field.name().to_string(),
                             column_type: field.data_type.to_string(),
                             decode_error: e.message(),
+                            column_data: truncate_column_data(
+                                String::from_utf8_lossy(value).to_string(),
+                            ),
                         });
                     }
                     check_column_end(&mut reader, schema, column_index)?;
