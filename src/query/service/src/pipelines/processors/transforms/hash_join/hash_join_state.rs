@@ -107,13 +107,8 @@ pub struct HashJoinState {
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     /// Spill partition set
     pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
-    /// After all probe processors finish spill or probe processors finish a round run, notify build processors.
-    pub(crate) probe_spill_done_notify: Arc<Notify>,
-    pub(crate) probe_spill_done: Mutex<bool>,
-    /// After `final_probe_workers` is 0, it will be set as true
-    pub(crate) final_probe_done: Mutex<bool>,
-    /// Notify build workers `final scan` is done. They can go to next phase.
-    pub(crate) final_probe_done_notify: Arc<Notify>,
+    /// Notify build workers to go to next phase.
+    pub(crate) notify_build_processors: Arc<Notify>,
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
@@ -155,10 +150,7 @@ impl HashJoinState {
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             spill_partition: Default::default(),
-            probe_spill_done_notify: Arc::new(Default::default()),
-            probe_spill_done: Default::default(),
-            final_probe_done: Default::default(),
-            final_probe_done_notify: Arc::new(Default::default()),
+            notify_build_processors: Arc::new(Default::default()),
             partition_id: Arc::new(Default::default()),
         }))
     }
@@ -209,31 +201,8 @@ impl HashJoinState {
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn wait_probe_spill(&self) {
-        let notified = {
-            let finalized_guard = self.probe_spill_done.lock();
-            match *finalized_guard {
-                true => None,
-                false => Some(self.probe_spill_done_notify.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn wait_final_probe(&self) {
-        let notified = {
-            let finalized_guard = self.final_probe_done.lock();
-            match *finalized_guard {
-                true => None,
-                false => Some(self.final_probe_done_notify.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
-        }
+    pub(crate) async fn wait_probe_notify(&self) {
+        self.notify_build_processors.notified().await;
     }
 
     // Reset the state for next round run.

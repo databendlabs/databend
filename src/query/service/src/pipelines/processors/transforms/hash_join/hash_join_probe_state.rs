@@ -262,9 +262,9 @@ impl HashJoinProbeState {
             *count += 1;
         }
         if self.ctx.get_settings().get_enable_join_spill()? {
-            let mut count = self.spill_workers.lock();
-            *count += 1;
             let mut count = self.final_probe_workers.lock();
+            *count += 1;
+            let mut count = self.spill_workers.lock();
             *count += 1;
         }
         Ok(())
@@ -290,10 +290,8 @@ impl HashJoinProbeState {
                 *partition_id = -1;
             }
             info!("next partition to read: {:?}", *partition_id);
-            let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
-            *final_probe_done = true;
             self.hash_join_state
-                .final_probe_done_notify
+                .notify_build_processors
                 .notify_waiters();
         }
     }
@@ -312,7 +310,7 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    pub fn finish_spill(&self, need_p_id: bool) {
+    pub fn finish_spill(&self) {
         // Reset build done to false
         let mut build_done = self.hash_join_state.build_done.lock();
         *build_done = false;
@@ -321,24 +319,19 @@ impl HashJoinProbeState {
         let mut count = self.spill_workers.lock();
         *count -= 1;
         if *count == 0 {
-            if need_p_id {
-                // Set partition id to `HashJoinState`
-                let mut partition_id = self.hash_join_state.partition_id.write();
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    *partition_id = id as i8;
-                } else {
-                    *partition_id = -1;
-                };
-                info!("next partition to read: {:?}", *partition_id);
-            }
-            // Set spill done
-            let mut spill_done = self.hash_join_state.probe_spill_done.lock();
-            *spill_done = true;
+            // Set partition id to `HashJoinState`
+            let mut partition_id = self.hash_join_state.partition_id.write();
+            let mut spill_partitions = self.spill_partitions.write();
+            if let Some(id) = spill_partitions.iter().next().cloned() {
+                spill_partitions.remove(&id);
+                *partition_id = id as i8;
+            } else {
+                *partition_id = -1;
+            };
+            info!("next partition to read: {:?}", *partition_id);
             // All probe processors have finished spill, notify build processors to work
             self.hash_join_state
-                .probe_spill_done_notify
+                .notify_build_processors
                 .notify_waiters();
         }
     }

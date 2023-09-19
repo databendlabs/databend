@@ -65,6 +65,8 @@ pub struct TransformHashJoinProbe {
     // If it's first round, after last processor finish spill
     // We need to read corresponding spilled data to probe with build hash table.
     first_round: bool,
+    // If the processor has finished spill, set it to true.
+    spill_done: bool,
 
     spill_state: Option<Box<ProbeSpillState>>,
 }
@@ -95,6 +97,7 @@ impl TransformHashJoinProbe {
             max_block_size,
             outer_scan_finished: false,
             first_round: true,
+            spill_done: false,
             spill_state: probe_spill_state,
         }))
     }
@@ -275,14 +278,14 @@ impl Processor for TransformHashJoinProbe {
                         && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
                             != &(0_usize)
                     {
-                        // Don't need partition id, partition id will be set at `finish_final_probe`
-                        self.join_probe_state.finish_spill(false);
+                        self.spill_done = true;
                         self.step = HashJoinProbeStep::AsyncRunning;
                         return Ok(Event::Async);
                     }
 
                     self.first_round = false;
-                    self.join_probe_state.finish_spill(true);
+                    self.spill_done = true;
+                    self.join_probe_state.finish_spill();
                     if spilled_partition_set.is_empty() {
                         self.output_port.finish();
                         self.join_probe_state
@@ -435,12 +438,7 @@ impl Processor for TransformHashJoinProbe {
                         .read()
                         .is_empty()
                 {
-                    if !*self
-                        .join_probe_state
-                        .hash_join_state
-                        .probe_spill_done
-                        .lock()
-                    {
+                    if !self.spill_done {
                         self.step = HashJoinProbeStep::Spill;
                     } else {
                         self.step = HashJoinProbeStep::AsyncRunning;

@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use log::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -142,6 +143,7 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &self.spill_state && !self.from_spill {
                         // The processor won't be triggered spill, because there won't be data from input port
                         // Add the processor to `non_spill_processors`
+                        info!("{:?} before", self._processor_id);
                         let mut non_spill_processors = spill_state.spill_coordinator.non_spill_processors.write();
                         let mut waiting_spill_count = spill_state.spill_coordinator.waiting_spill_count.write();
                         *non_spill_processors += 1;
@@ -297,11 +299,7 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::WaitProbe => {
-                if !*self.build_state.hash_join_state.probe_spill_done.lock() {
-                    self.build_state.hash_join_state.wait_probe_spill().await;
-                } else {
-                    self.build_state.hash_join_state.wait_final_probe().await;
-                }
+                self.build_state.hash_join_state.wait_probe_notify().await;
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
