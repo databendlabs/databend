@@ -37,6 +37,7 @@ pub use rpc::FragmentData;
 pub use rpc::FragmentPlanPacket;
 pub use rpc::HashFlightScatter;
 pub use rpc::InitNodesChannelPacket;
+pub use rpc::KillQueryPacket;
 pub use rpc::MergeExchange;
 pub use rpc::MergeExchangeParams;
 pub use rpc::Packet;
