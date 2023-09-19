@@ -1849,7 +1849,7 @@ impl PipelineBuilder {
 
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
-
+        let barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             state,
@@ -1858,6 +1858,7 @@ impl PipelineBuilder {
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
+            barrier,
         )?);
 
         self.main_pipeline.add_transform(|input, output| {

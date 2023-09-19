@@ -140,6 +140,7 @@ impl TransformHashJoinProbe {
                 || self.join_probe_state.hash_join_state.need_mark_scan()
             {
                 self.join_probe_state.probe_done()?;
+                self.join_probe_state.barrier.read().wait();
             }
             self.join_probe_state
                 .active_processor_count
@@ -182,7 +183,13 @@ impl TransformHashJoinProbe {
                 || self.join_probe_state.hash_join_state.need_mark_scan()
             {
                 self.join_probe_state.probe_done()?;
-                Ok(Event::Async)
+                self.join_probe_state.barrier.read().wait();
+                if self.join_probe_state.hash_join_state.fast_return()? {
+                    self.step = HashJoinProbeStep::FastReturn;
+                } else {
+                    self.step = HashJoinProbeStep::FinalScan;
+                }
+                Ok(Event::Sync)
             } else {
                 if !self.join_probe_state.spill_partitions.read().is_empty() {
                     self.join_probe_state.finish_final_probe();
@@ -379,8 +386,8 @@ impl Processor for TransformHashJoinProbe {
                 }
                 Ok(())
             }
+            HashJoinProbeStep::FastReturn => Ok(()),
             HashJoinProbeStep::WaitBuild
-            | HashJoinProbeStep::FastReturn
             | HashJoinProbeStep::Spill
             | HashJoinProbeStep::AsyncRunning => unreachable!(),
         }
@@ -447,14 +454,6 @@ impl Processor for TransformHashJoinProbe {
                     self.step = HashJoinProbeStep::Running;
                 }
             }
-            HashJoinProbeStep::Running => {
-                self.join_probe_state.wait_probe_finish().await?;
-                if self.join_probe_state.hash_join_state.fast_return()? {
-                    self.step = HashJoinProbeStep::FastReturn;
-                } else {
-                    self.step = HashJoinProbeStep::FinalScan;
-                }
-            }
             HashJoinProbeStep::Spill => {
                 if let Some(data) = self.input_data.pop_front() {
                     let spill_state = self.spill_state.as_mut().unwrap();
@@ -508,7 +507,9 @@ impl Processor for TransformHashJoinProbe {
                     self.step = HashJoinProbeStep::Running;
                 }
             }
-            HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
+            HashJoinProbeStep::FinalScan
+            | HashJoinProbeStep::FastReturn
+            | HashJoinProbeStep::Running => unreachable!(),
         };
         Ok(())
     }
