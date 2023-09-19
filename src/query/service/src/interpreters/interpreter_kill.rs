@@ -14,10 +14,14 @@
 
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
+use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::KillPlan;
 
+use crate::api::KillQueryPacket;
+use crate::api::Packet;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -25,20 +29,75 @@ use crate::sessions::QueryContext;
 pub struct KillInterpreter {
     ctx: Arc<QueryContext>,
     plan: KillPlan,
+    proxy_to_cluster: bool,
 }
 
 impl KillInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: KillPlan) -> Result<Self> {
-        Ok(KillInterpreter { ctx, plan })
+        Ok(KillInterpreter {
+            ctx,
+            plan,
+            proxy_to_cluster: true,
+        })
+    }
+
+    pub fn from_flight(ctx: Arc<QueryContext>, packet: KillQueryPacket) -> Result<Self> {
+        Ok(KillInterpreter {
+            ctx,
+            plan: KillPlan {
+                id: packet.id,
+                kill_connection: packet.kill_connection,
+            },
+            proxy_to_cluster: false,
+        })
+    }
+
+    #[async_backtrace::framed]
+    async fn kill_cluster_query(&self) -> Result<PipelineBuildResult> {
+        let settings = self.ctx.get_settings();
+        let timeout = settings.get_flight_client_timeout()?;
+        let conf = GlobalConfig::instance();
+        let cluster = self.ctx.get_cluster();
+        for node_info in &cluster.nodes {
+            if node_info.id != cluster.local_id {
+                let kill_query_packet = KillQueryPacket::create(
+                    self.plan.id.clone(),
+                    self.plan.kill_connection,
+                    node_info.clone(),
+                );
+
+                match kill_query_packet.commit(conf.as_ref(), timeout).await {
+                    Ok(_) => {
+                        return Ok(PipelineBuildResult::create());
+                    }
+                    Err(cause) => match cause.code() == ErrorCode::UNKNOWN_SESSION {
+                        true => {
+                            continue;
+                        }
+                        false => {
+                            return Err(cause);
+                        }
+                    },
+                }
+            }
+        }
+
+        Err(ErrorCode::UnknownSession(format!(
+            "Not found session id {}",
+            self.plan.id
+        )))
     }
 
     #[async_backtrace::framed]
     async fn execute_kill(&self, session_id: &String) -> Result<PipelineBuildResult> {
         match self.ctx.get_session_by_id(session_id) {
-            None => Err(ErrorCode::UnknownSession(format!(
-                "Not found session id {}",
-                session_id
-            ))),
+            None => match self.proxy_to_cluster {
+                true => self.kill_cluster_query().await,
+                false => Err(ErrorCode::UnknownSession(format!(
+                    "Not found session id {}",
+                    session_id
+                ))),
+            },
             Some(kill_session) if self.plan.kill_connection => {
                 kill_session.force_kill_session();
                 Ok(PipelineBuildResult::create())
@@ -70,10 +129,13 @@ impl Interpreter for KillInterpreter {
         match id.parse::<u32>() {
             Ok(mysql_conn_id) => match self.ctx.get_id_by_mysql_conn_id(&Some(mysql_conn_id)) {
                 Some(get) => self.execute_kill(&get).await,
-                None => Err(ErrorCode::UnknownSession(format!(
-                    "MySQL connection id {} not found session id",
-                    mysql_conn_id
-                ))),
+                None => match self.proxy_to_cluster {
+                    true => self.kill_cluster_query().await,
+                    false => Err(ErrorCode::UnknownSession(format!(
+                        "MySQL connection id {} not found session id",
+                        mysql_conn_id
+                    ))),
+                },
             },
             Err(_) => self.execute_kill(id).await,
         }
