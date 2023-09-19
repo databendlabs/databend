@@ -191,5 +191,50 @@ select * from t1 order by a,b,c;
 ----
 1 b1 c_5
 
+## test star for merge into
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+statement ok
+insert into t1 values(1,'b1','c1'),(2,'b2','c2');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+
+statement ok
+insert into t2 values(1,'b3','c3'),(3,'b4','c4');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b3 c3
+3 b4 c4
+
+statement ok
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update *  when not matched then insert *;
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b3 c3
+2 b2 c2
+3 b4 c4
+
 statement ok
 set enable_experimental_merge_into = 0;
