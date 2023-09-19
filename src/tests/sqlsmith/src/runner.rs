@@ -29,7 +29,7 @@ use rand::SeedableRng;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 20] = [
+const KNOWN_ERRORS: [&str; 25] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -52,6 +52,11 @@ const KNOWN_ERRORS: [&str; 20] = [
     // Unsupported features
     "Row format is not yet support for",
     "to_decimal not support this DataType",
+    "AggregateSumFunction does not support type",
+    "AggregateArrayMovingAvgFunction does not support type",
+    "AggregateArrayMovingSumFunction does not support type",
+    "The arguments of AggregateRetention should be an expression which returns a Boolean result",
+    "AggregateWindowFunnelFunction does not support type",
 ];
 
 pub struct Runner {
