@@ -100,9 +100,9 @@ impl Column {
             Column::Boolean(bm) => {
                 Self::take_compacted_arg_types::<BooleanType>(bm, indices, num_rows)
             }
-            Column::String(column) => {
-                StringType::upcast_column(Self::take_compact_string_types(column, indices, num_rows))
-            }
+            Column::String(column) => StringType::upcast_column(Self::take_compact_string_types(
+                column, indices, num_rows,
+            )),
             Column::Timestamp(column) => {
                 let builder = Self::take_compacted_primitive_types(column, indices, num_rows);
                 let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
@@ -154,9 +154,9 @@ impl Column {
                     &column, builder, indices,
                 )
             }
-            Column::Bitmap(column) => {
-                BitmapType::upcast_column(Self::take_compact_string_types(column, indices, num_rows))
-            }
+            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_compact_string_types(
+                column, indices, num_rows,
+            )),
             Column::Nullable(c) => {
                 let column = c.column.take_compacted_indices(indices, num_rows);
                 let validity =
