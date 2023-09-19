@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use parking_lot::RwLock;
 
 /// Coordinate all hash join build processors to spill.
 /// It's shared by all hash join build processors.
