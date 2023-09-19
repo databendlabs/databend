@@ -83,8 +83,7 @@ Functions overloads:
 1 and(Boolean NULL, Boolean NULL) :: Boolean NULL
 0 and_filters FACTORY
 0 array() :: Array(Nothing)
-1 array(Array(NULL)) :: Array(Nothing)
-2 array FACTORY
+1 array FACTORY
 0 array_any FACTORY
 0 array_append(Array(T0), T0) :: Array(T0)
 0 array_approx_count_distinct FACTORY

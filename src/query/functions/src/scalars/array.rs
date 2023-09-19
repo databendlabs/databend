@@ -108,12 +108,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_| Value::Scalar(()),
     );
 
-    registry.register_1_arg_core::<ArrayType<NullType>, EmptyArrayType, _, _>(
-        "array",
-        |_, _| FunctionDomain::Full,
-        |_, _| Value::Scalar(()),
-    );
-
     registry.register_function_factory("array", |_, args_type| {
         if args_type.is_empty() {
             return None;
@@ -636,8 +630,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                 let data_type = arr.data_type();
                 let mut builder = ColumnBuilder::with_capacity(&data_type, arr.len());
                 let mut set: StackHashSet<u128, 16> = StackHashSet::with_capacity(arr.len());
+                let mut has_null = false;
                 for val in arr.iter() {
                     if val == ScalarRef::Null {
+                        if !has_null {
+                            builder.push(ScalarRef::Null);
+                            has_null = true;
+                        }
                         continue;
                     }
                     let mut hasher = SipHasher24::new();
