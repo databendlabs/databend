@@ -58,7 +58,7 @@ impl Parquet2Table {
 
         let top_k = push_down
             .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), None, RangeIndex::supported_type))
+            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.

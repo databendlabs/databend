@@ -130,6 +130,7 @@ pub async fn read_parquet_metas_batch(
         let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields, None);
         metas.push(Arc::new(FullParquetMeta {
             location,
+            size,
             meta,
             row_group_level_stats: stats,
         }));

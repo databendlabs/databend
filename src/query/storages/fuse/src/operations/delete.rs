@@ -353,6 +353,7 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
+            ctx.clone(),
             self.table_info.schema(),
             None,
             &range_block_metas,

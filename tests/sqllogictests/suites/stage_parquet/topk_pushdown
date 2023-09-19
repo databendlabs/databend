@@ -1,0 +1,63 @@
+statement ok
+set max_threads = 1;
+
+query TTT
+select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet order by id limit 2;
+----
+0 1 0.0
+1 0 10.1
+
+query TTT
+select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet order by id desc limit 2;
+----
+7 0 10.1
+6 1 0.0
+
+query TTT
+select bool_col, double_col from @data/parquet/alltypes_plain.parquet order by id limit 2;
+----
+1 0.0
+0 10.1
+
+
+# TopK push down after prewhere push down
+query TTT
+select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet where bool_col = true order by id limit 2
+----
+0 1 0.0
+2 1 0.0
+
+query TTT
+select bool_col, double_col from @data/parquet/alltypes_plain.parquet where bool_col = true order by id limit 2
+----
+1 0.0
+1 0.0
+
+query TTT
+select double_col from @data/parquet/alltypes_plain.parquet where bool_col = true order by id limit 2
+----
+0.0
+0.0
+
+query TTT
+select id, bool_col, double_col from @data/parquet/alltypes_plain.parquet where id > 4 order by id limit 2
+----
+5 0 10.1
+6 1 0.0
+
+# More row groups
+
+query TT
+select * from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int limit 2;
+----
+[1] 0
+[1] 0
+
+query TT
+select col_arr from @data/parquet/multi_page/ (PATTERN => '.*[.]parquet') order by col_int desc limit 2;
+----
+[1,2]
+[1,2]
+
+statement ok
+set max_threads = 16;
