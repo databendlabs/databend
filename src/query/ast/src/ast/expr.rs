@@ -214,7 +214,7 @@ pub enum Expr {
     /// The `Map` expr
     Map {
         span: Span,
-        kvs: Vec<(Literal, Literal)>,
+        kvs: Vec<(Literal, Expr)>,
     },
     /// The `Interval 1 DAY` expr
     Interval {

@@ -13,13 +13,13 @@ CREATE TABLE IF NOT EXISTS t1(id Int null, var Variant null) Engine = Fuse
 statement ok
 INSERT INTO t1 (id, var) VALUES(1, null), (2, true),(3, false),(4, 1),(5, -1),(6, 1000),(7, -1000),(8, 9223372036854775807),(9, -9223372036854775808),(10, 18446744073709551615),(11, 0.12345679),(12, 0.12345678912121212),(13, '"abcd"'),(14, '[1,2,3]'),(15, '{"k":"v"}'),(16, '"a\"b\\"c"'),(17, '"http:\/\/databend.rs"')
 
-statement error 1001
+statement error (?s)1001.*expected value, pos 1 while evaluating function `parse_json\('abc'\)`
 INSERT INTO t1 (id, var) VALUES(1, 'abc')
 
-statement error 1001
+statement error (?s)1001.*EOF while parsing a value, pos 5 while evaluating function `parse_json\('\{"a":'\)`
 INSERT INTO t1 (id, var) VALUES(1, '{"a":')
 
-statement error 1046
+statement error (?s)1046.*unable to cast type `Array\(UInt8\)` to type `Variant NULL`
 INSERT INTO t1 (id, var) VALUES(1, [1,2,3])
 
 skipif clickhouse
@@ -197,4 +197,3 @@ select * from t4 where id >= 1 and 'vv' = m:b:k
 
 statement ok
 DROP DATABASE db1
-
