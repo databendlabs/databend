@@ -22,4 +22,3 @@ SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>7 ORD
 
 statement ok
 SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max<7
-
