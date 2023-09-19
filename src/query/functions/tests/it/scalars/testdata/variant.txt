@@ -2577,3 +2577,84 @@ evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 
 
+ast            : json_path_exists(NULL, '$.a')
+raw expr       : json_path_exists(NULL, '$.a')
+checked expr   : json_path_exists<Variant NULL, String NULL>(CAST(NULL AS Variant NULL), CAST("$.a" AS String NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
+checked expr   : json_path_exists<Variant NULL, String NULL>(CAST(parse_json<String>("{\"a\": 1, \"b\": 2}") AS Variant NULL), CAST(NULL AS String NULL))
+optimized expr : NULL
+output type    : Boolean NULL
+output domain  : {NULL}
+output         : NULL
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.c")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ == 1)")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": 2}"), "$.a ? (@ > 1)")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[0]")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[3]")
+optimized expr : false
+output type    : Boolean
+output domain  : {FALSE}
+output         : false
+
+
+ast            : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
+raw expr       : json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')
+checked expr   : json_path_exists<Variant, String>(parse_json<String>("{\"a\": 1, \"b\": [1,2,3]}"), "$.b[1 to last] ? (@ >=2 && @ <=3)")
+optimized expr : true
+output type    : Boolean
+output domain  : {TRUE}
+output         : true
+
+
