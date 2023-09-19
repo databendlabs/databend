@@ -123,10 +123,10 @@ impl HashJoinProbeState {
             .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
-        let dummy_probed_rows = vec![RowPtr {
+        let dummy_probed_row = RowPtr {
             chunk_index: 0,
             row_index: 0,
-        }];
+        };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) =
@@ -150,14 +150,10 @@ impl HashJoinProbeState {
                     continue;
                 }
                 false => {
-                    // dummy_probed_rows
+                    // dummy_probed_row
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &dummy_probed_rows[0] as *const RowPtr,
-                            build_indexes_ptr.add(matched_num),
-                            1,
-                        )
-                    }
+                        std::ptr::write(build_indexes_ptr.add(matched_num), dummy_probed_row)
+                    };
                     match_count = 1;
                 }
                 true => (),

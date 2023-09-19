@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_hashtable::RowPtr;
 use itertools::Itertools;
@@ -24,6 +25,7 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -576,22 +578,16 @@ impl Column {
             ColumnVec::EmptyMap { .. } => Column::EmptyMap { len: result_size },
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
-                    let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_block_vec_value_types::<NumberType<NUM_TYPE>>(
-                        columns, builder, indices,
-                    )
+                    let builder = Self::take_block_vec_primitive_types(columns, indices);
+                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
                 }
             }),
             ColumnVec::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumnVec::DECIMAL_TYPE(columns, size) => {
-                    let mut builder = Vec::with_capacity(result_size);
-                    for row_ptr in indices {
-                        let val = unsafe {
-                            columns[row_ptr.chunk_index as usize]
-                                .get_unchecked(row_ptr.row_index as usize)
-                        };
-                        builder.push(*val);
-                    }
+                    let builder = Self::take_block_vec_primitive_types(columns, indices);
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
@@ -600,16 +596,31 @@ impl Column {
                 Self::take_block_vec_value_types::<BooleanType>(columns, builder, indices)
             }
             ColumnVec::String(columns) => {
-                let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<StringType>(columns, builder, indices)
+                StringType::upcast_column(Self::take_block_vec_string_types(columns, indices))
             }
             ColumnVec::Timestamp(columns) => {
-                let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<TimestampType>(columns, builder, indices)
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
+                Column::Timestamp(ts)
             }
             ColumnVec::Date(columns) => {
-                let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<DateType>(columns, builder, indices)
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
+                Column::Date(d)
             }
             ColumnVec::Array(columns) => {
                 let data_type = data_type.as_array().unwrap();
@@ -640,8 +651,7 @@ impl Column {
                 )
             }
             ColumnVec::Bitmap(columns) => {
-                let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<BitmapType>(columns, builder, indices)
+                BitmapType::upcast_column(Self::take_block_vec_string_types(columns, indices))
             }
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
@@ -682,10 +692,73 @@ impl Column {
                 Column::Tuple(fields)
             }
             ColumnVec::Variant(columns) => {
-                let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<VariantType>(columns, builder, indices)
+                StringType::upcast_column(Self::take_block_vec_string_types(columns, indices))
             }
         }
+    }
+
+    pub fn take_block_vec_primitive_types<T>(col: &[Buffer<T>], indices: &[RowPtr]) -> Vec<T>
+    where T: Copy {
+        let num_rows = indices.len();
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let ptr = builder.as_mut_ptr();
+        // # Safety
+        // `i` must be less than `num_rows` and the capacity of builder is `num_rows`.
+        unsafe {
+            for (i, row_ptr) in indices.iter().enumerate() {
+                std::ptr::write(
+                    ptr.add(i),
+                    col[row_ptr.chunk_index as usize][row_ptr.row_index as usize],
+                );
+            }
+            builder.set_len(num_rows);
+        }
+        builder
+    }
+
+    pub fn take_block_vec_string_types<'a>(
+        col: &'a [StringColumn],
+        indices: &[RowPtr],
+    ) -> StringColumn {
+        let num_rows = indices.len();
+        let mut items: Vec<&[u8]> = Vec::with_capacity(num_rows);
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        offsets.push(0);
+        let items_ptr = items.as_mut_ptr();
+        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+
+        let mut data_size = 0;
+        for (i, row_ptr) in indices.iter().enumerate() {
+            let item = unsafe {
+                col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize)
+            };
+            data_size += item.len() as u64;
+            // # Safety
+            // `i` must be less than the capacity of Vec.
+            unsafe {
+                std::ptr::write(items_ptr.add(i), item);
+                std::ptr::write(offsets_ptr.add(i), data_size);
+            }
+        }
+        unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
+        }
+
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let data_ptr = data.as_mut_ptr();
+        let mut offset = 0;
+        for item in items {
+            let len = item.len();
+            // # Safety
+            // `offset` + `len` < `data_size`.
+            unsafe {
+                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+            }
+            offset += len;
+        }
+        unsafe { data.set_len(offset) };
+        StringColumn::new(data.into(), offsets.into())
     }
 
     fn take_block_vec_value_types<T: ValueType>(

@@ -130,7 +130,7 @@ where A: Allocator + Clone + 'static
             if raw_entry_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *const StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
@@ -145,13 +145,7 @@ where A: Allocator + Clone + 'static
                 if key == key_ref {
                     // # Safety
                     // occupied is less than the capacity of vec_ptr.
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &raw_entry.row_ptr as *const RowPtr,
-                            vec_ptr.add(occupied),
-                            1,
-                        )
-                    };
+                    unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
                     occupied += 1;
                 }
             }
@@ -177,7 +171,7 @@ where A: Allocator + Clone + 'static
             if incomplete_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(incomplete_ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(incomplete_ptr as *const StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
@@ -192,13 +186,7 @@ where A: Allocator + Clone + 'static
                 if key == key_ref {
                     // # Safety
                     // occupied is less than the capacity of vec_ptr.
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &raw_entry.row_ptr as *const RowPtr,
-                            vec_ptr.add(occupied),
-                            1,
-                        )
-                    };
+                    unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
                     occupied += 1;
                 }
             }

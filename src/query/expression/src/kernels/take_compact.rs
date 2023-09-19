@@ -12,17 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
-use crate::types::decimal::Decimal128Type;
-use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -32,6 +32,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -40,16 +41,16 @@ use crate::DataBlock;
 use crate::Value;
 
 impl DataBlock {
-    pub fn take_compacted_indices(&self, indices: &[(u32, u32)], row_num: usize) -> Result<Self> {
+    pub fn take_compacted_indices(&self, indices: &[(u32, u32)], num_rows: usize) -> Result<Self> {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
 
         // Each item in the `indices` consists of an `index` and a `cnt`, the sum
-        // of the `cnt` must be equal to the `row_num`.
+        // of the `cnt` must be equal to the `num_rows`.
         debug_assert_eq!(
             indices.iter().fold(0, |acc, &(_, x)| acc + x as usize),
-            row_num
+            num_rows
         );
 
         let after_columns = self
@@ -62,92 +63,82 @@ impl DataBlock {
                 },
                 Value::Column(c) => BlockEntry {
                     data_type: entry.data_type.clone(),
-                    value: Value::Column(Column::take_compacted_indices(c, indices, row_num)),
+                    value: Value::Column(Column::take_compacted_indices(c, indices, num_rows)),
                 },
             })
             .collect();
 
         Ok(DataBlock::new_with_meta(
             after_columns,
-            row_num,
+            num_rows,
             self.get_meta().cloned(),
         ))
     }
 }
 
 impl Column {
-    pub fn take_compacted_indices(&self, indices: &[(u32, u32)], row_num: usize) -> Self {
+    pub fn take_compacted_indices(&self, indices: &[(u32, u32)], num_rows: usize) -> Self {
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..row_num)
+                self.slice(0..num_rows)
             }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
-                NumberColumn::NUM_TYPE(values) =>
-                    Self::take_compacted_arg_types::<NumberType<NUM_TYPE>>(values, indices, row_num),
+                NumberColumn::NUM_TYPE(values) => {
+                    let builder = Self::take_compacted_primitive_types(values, indices, num_rows);
+                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
+                }
             }),
-            Column::Decimal(column) => match column {
-                DecimalColumn::Decimal128(values, size) => {
-                    let mut builder = Decimal128Type::create_builder(row_num, &[]);
-                    for (index, cnt) in indices {
-                        let item = unsafe {
-                            Decimal128Type::index_column_unchecked(values, *index as usize)
-                        };
-                        for _ in 0..*cnt {
-                            Decimal128Type::push_item(&mut builder, item);
-                        }
-                    }
-                    let column = Decimal128Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal128(column, *size))
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(values, size) => {
+                    let builder = Self::take_compacted_primitive_types(values, indices, num_rows);
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
-                DecimalColumn::Decimal256(values, size) => {
-                    let mut builder = Decimal256Type::create_builder(row_num, &[]);
-                    for (index, cnt) in indices {
-                        let item = unsafe {
-                            Decimal256Type::index_column_unchecked(values, *index as usize)
-                        };
-                        for _ in 0..*cnt {
-                            Decimal256Type::push_item(&mut builder, item);
-                        }
-                    }
-                    let column = Decimal256Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal256(column, *size))
-                }
-            },
+            }),
             Column::Boolean(bm) => {
-                Self::take_compacted_arg_types::<BooleanType>(bm, indices, row_num)
+                Self::take_compacted_arg_types::<BooleanType>(bm, indices, num_rows)
             }
             Column::String(column) => {
-                Self::take_compacted_arg_types::<StringType>(column, indices, row_num)
+                StringType::upcast_column(Self::take_compact_string_types(column, indices, num_rows))
             }
             Column::Timestamp(column) => {
-                let ts =
-                    Self::take_compacted_arg_types::<NumberType<i64>>(column, indices, row_num)
-                        .into_number()
-                        .unwrap()
-                        .into_int64()
-                        .unwrap();
+                let builder = Self::take_compacted_primitive_types(column, indices, num_rows);
+                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
                 Column::Timestamp(ts)
             }
             Column::Date(column) => {
-                let d = Self::take_compacted_arg_types::<NumberType<i32>>(column, indices, row_num)
-                    .into_number()
-                    .unwrap()
-                    .into_int32()
-                    .unwrap();
+                let builder = Self::take_compacted_primitive_types(column, indices, num_rows);
+                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
                 Column::Date(d)
             }
             Column::Array(column) => {
-                let mut offsets = Vec::with_capacity(row_num + 1);
+                let mut offsets = Vec::with_capacity(num_rows + 1);
                 offsets.push(0);
-                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), row_num);
+                let builder = ColumnBuilder::with_capacity(&column.values.data_type(), num_rows);
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_compacted_value_types::<ArrayType<AnyType>>(column, builder, indices)
             }
             Column::Map(column) => {
-                let mut offsets = Vec::with_capacity(row_num + 1);
+                let mut offsets = Vec::with_capacity(num_rows + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
-                    ColumnBuilder::with_capacity(&column.values.data_type(), row_num).build(),
+                    ColumnBuilder::with_capacity(&column.values.data_type(), num_rows).build(),
                 );
                 let (key_builder, val_builder) = match builder {
                     ColumnBuilder::Tuple(fields) => (fields[0].clone(), fields[1].clone()),
@@ -164,12 +155,12 @@ impl Column {
                 )
             }
             Column::Bitmap(column) => {
-                Self::take_compacted_arg_types::<BitmapType>(column, indices, row_num)
+                BitmapType::upcast_column(Self::take_compact_string_types(column, indices, num_rows))
             }
             Column::Nullable(c) => {
-                let column = c.column.take_compacted_indices(indices, row_num);
+                let column = c.column.take_compacted_indices(indices, num_rows);
                 let validity =
-                    Self::take_compacted_arg_types::<BooleanType>(&c.validity, indices, row_num);
+                    Self::take_compacted_arg_types::<BooleanType>(&c.validity, indices, num_rows);
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
@@ -178,22 +169,183 @@ impl Column {
             Column::Tuple(fields) => {
                 let fields = fields
                     .iter()
-                    .map(|c| c.take_compacted_indices(indices, row_num))
+                    .map(|c| c.take_compacted_indices(indices, num_rows))
                     .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => {
-                Self::take_compacted_arg_types::<VariantType>(column, indices, row_num)
+            Column::Variant(column) => VariantType::upcast_column(Self::take_compact_string_types(
+                column, indices, num_rows,
+            )),
+        }
+    }
+
+    pub fn take_compacted_primitive_types<T>(
+        col: &Buffer<T>,
+        indices: &[(u32, u32)],
+        num_rows: usize,
+    ) -> Vec<T>
+    where
+        T: Copy,
+    {
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let ptr = builder.as_mut_ptr();
+        let mut offset = 0;
+        let mut remain;
+        for (index, cnt) in indices {
+            if *cnt == 1 {
+                // # Safety
+                // offset + 1 <= num_rows
+                unsafe { std::ptr::write(ptr.add(offset), col[*index as usize]) };
+                offset += 1;
+                continue;
+            }
+            // Using the doubling method to copy the max segment memory.
+            // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
+            let base_offset = offset;
+            // # Safety
+            // base_offset + 1 <= num_rows
+            unsafe { std::ptr::write(ptr.add(offset), col[*index as usize]) };
+            remain = *cnt as usize;
+            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+            let max_segment = 1 << (31 - cnt.leading_zeros());
+            let mut cur_segment = 1;
+            while cur_segment < max_segment {
+                // # Safety
+                // base_offset + 2 * cur_segment <= num_rows
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        ptr.add(base_offset),
+                        ptr.add(base_offset + cur_segment),
+                        cur_segment,
+                    )
+                };
+                cur_segment <<= 1;
+            }
+            remain -= max_segment;
+            offset += max_segment;
+
+            if remain > 0 {
+                // Copy the remaining memory directly.
+                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
+                //  ^^^^ ---> ^^^^
+                // # Safety
+                // max_segment > remain and offset + remain <= num_rows
+                unsafe {
+                    std::ptr::copy_nonoverlapping(ptr.add(base_offset), ptr.add(offset), remain)
+                };
+                offset += remain;
             }
         }
+        // # Safety
+        // `offset` is equal to `num_rows`
+        unsafe { builder.set_len(offset) };
+
+        builder
+    }
+
+    pub fn take_compact_string_types<'a>(
+        col: &'a StringColumn,
+        indices: &[(u32, u32)],
+        num_rows: usize,
+    ) -> StringColumn {
+        let mut items: Vec<(&[u8], u32)> = Vec::with_capacity(indices.len());
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        offsets.push(0);
+        let items_ptr = items.as_mut_ptr();
+        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+
+        let mut data_size = 0;
+        let mut offset_idx = 0;
+        for (items_idx, (index, cnt)) in indices.iter().enumerate() {
+            let item = unsafe { col.index_unchecked(*index as usize) };
+            // # Safety
+            // items_idx < indices.len() and offset_idx < num_rows + 1
+            unsafe {
+                std::ptr::write(items_ptr.add(items_idx), (item, *cnt));
+                for _ in 0..*cnt {
+                    data_size += item.len() as u64;
+                    std::ptr::write(offsets_ptr.add(offset_idx), data_size);
+                    offset_idx += 1;
+                }
+            }
+        }
+        unsafe {
+            items.set_len(indices.len());
+            offsets.set_len(num_rows + 1);
+        }
+
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let data_ptr = data.as_mut_ptr();
+        let mut offset = 0;
+        let mut remain;
+        for (item, cnt) in items {
+            let len = item.len();
+            if cnt == 1 {
+                // # Safety
+                // offset + len <= data_capacity
+                unsafe {
+                    std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+                }
+                offset += len;
+                continue;
+            }
+
+            // Using the doubling method to copy the max segment memory.
+            // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
+            let base_offset = offset;
+            // # Safety
+            // base_offset + len <= data_capacity
+            unsafe {
+                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+            }
+            remain = cnt as usize;
+            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+            let max_bit_num = 1 << (31 - cnt.leading_zeros());
+            let max_segment = max_bit_num * len;
+            let mut cur_segment = len;
+            while cur_segment < max_segment {
+                unsafe {
+                    // # Safety
+                    // offset + 2 * cur_segment <= data_capacity
+                    std::ptr::copy_nonoverlapping(
+                        data_ptr.add(base_offset),
+                        data_ptr.add(base_offset + cur_segment),
+                        cur_segment,
+                    )
+                };
+                cur_segment <<= 1;
+            }
+            remain -= max_bit_num;
+            offset += max_segment;
+
+            if remain > 0 {
+                // Copy the remaining memory directly.
+                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
+                //  ^^^^ ---> ^^^^
+                // # Safety
+                // max_segment > remain * len and offset + remain * len <= data_capacity
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        data_ptr.add(base_offset),
+                        data_ptr.add(offset),
+                        remain * len,
+                    )
+                };
+                offset += remain * len;
+            }
+        }
+        // # Safety
+        // `offset` is equal to `data_capacity`
+        unsafe { data.set_len(offset) };
+        StringColumn::new(data.into(), offsets.into())
     }
 
     fn take_compacted_arg_types<T: ArgType>(
         col: &T::Column,
         indices: &[(u32, u32)],
-        row_num: usize,
+        num_rows: usize,
     ) -> Column {
-        let mut builder = T::create_builder(row_num, &[]);
+        let mut builder = T::create_builder(num_rows, &[]);
         for (index, cnt) in indices {
             for _ in 0..*cnt {
                 T::push_item(&mut builder, unsafe {

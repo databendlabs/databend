@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
-use crate::types::decimal::Decimal128Type;
-use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalColumn;
+use crate::with_decimal_type;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -76,47 +77,46 @@ impl Column {
                 self.slice(0..indices.len())
             }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
-                NumberColumn::NUM_TYPE(values) =>
-                    Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
+                NumberColumn::NUM_TYPE(values) => {
+                    let builder = Self::take_primitive_types(values, indices);
+                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
+                }
             }),
-            Column::Decimal(column) => match column {
-                DecimalColumn::Decimal128(values, size) => {
-                    let mut builder = Decimal128Type::create_builder(indices.len(), &[]);
-                    for index in indices {
-                        Decimal128Type::push_item(&mut builder, unsafe {
-                            Decimal128Type::index_column_unchecked(values, index.to_usize())
-                        });
-                    }
-                    let column = Decimal128Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal128(column, *size))
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(values, size) => {
+                    let builder = Self::take_primitive_types(values, indices);
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
-                DecimalColumn::Decimal256(values, size) => {
-                    let mut builder = Decimal256Type::create_builder(indices.len(), &[]);
-                    for index in indices {
-                        Decimal256Type::push_item(&mut builder, unsafe {
-                            Decimal256Type::index_column_unchecked(values, index.to_usize())
-                        });
-                    }
-                    let column = Decimal256Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal256(column, *size))
-                }
-            },
+            }),
             Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
-            Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
+            Column::String(column) => {
+                StringType::upcast_column(Self::take_string_types(column, indices))
+            }
             Column::Timestamp(column) => {
-                let ts = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
-                    .into_number()
-                    .unwrap()
-                    .into_int64()
-                    .unwrap();
+                let builder = Self::take_primitive_types(column, indices);
+                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
                 Column::Timestamp(ts)
             }
             Column::Date(column) => {
-                let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)
-                    .into_number()
-                    .unwrap()
-                    .into_int32()
-                    .unwrap();
+                let builder = Self::take_primitive_types(column, indices);
+                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
                 Column::Date(d)
             }
             Column::Array(column) => {
@@ -144,7 +144,9 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
-            Column::Bitmap(column) => Self::take_arg_types::<BitmapType, _>(column, indices),
+            Column::Bitmap(column) => {
+                BitmapType::upcast_column(Self::take_string_types(column, indices))
+            }
             Column::Nullable(c) => {
                 let column = c.column.take(indices);
                 let validity = Self::take_arg_types::<BooleanType, _>(&c.validity, indices);
@@ -157,8 +159,70 @@ impl Column {
                 let fields = fields.iter().map(|c| c.take(indices)).collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => Self::take_arg_types::<VariantType, _>(column, indices),
+            Column::Variant(column) => {
+                VariantType::upcast_column(Self::take_string_types(column, indices))
+            }
         }
+    }
+
+    pub fn take_primitive_types<T, I>(col: &Buffer<T>, indices: &[I]) -> Vec<T>
+    where
+        T: Copy,
+        I: common_arrow::arrow::types::Index,
+    {
+        let num_rows = indices.len();
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let ptr = builder.as_mut_ptr();
+        // # Safety
+        // `i` must be less than `num_rows` and the capacity of builder is `num_rows`.
+        unsafe {
+            for (i, index) in indices.iter().enumerate() {
+                std::ptr::write(ptr.add(i), col[index.to_usize()]);
+            }
+            builder.set_len(num_rows);
+        }
+        builder
+    }
+
+    pub fn take_string_types<'a, I>(col: &'a StringColumn, indices: &[I]) -> StringColumn
+    where I: common_arrow::arrow::types::Index {
+        let num_rows = indices.len();
+        let mut items: Vec<&[u8]> = Vec::with_capacity(num_rows);
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        offsets.push(0);
+        let items_ptr = items.as_mut_ptr();
+        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+
+        let mut data_size = 0;
+        for (i, index) in indices.iter().enumerate() {
+            let item = unsafe { col.index_unchecked(index.to_usize()) };
+            data_size += item.len() as u64;
+            // # Safety
+            // `i` must be less than the capacity of Vec.
+            unsafe {
+                std::ptr::write(items_ptr.add(i), item);
+                std::ptr::write(offsets_ptr.add(i), data_size);
+            }
+        }
+        unsafe {
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
+        }
+
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let data_ptr = data.as_mut_ptr();
+        let mut offset = 0;
+        for item in items {
+            let len = item.len();
+            // # Safety
+            // `offset` + `len` < `data_size`.
+            unsafe {
+                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+            }
+            offset += len;
+        }
+        unsafe { data.set_len(offset) };
+        StringColumn::new(data.into(), offsets.into())
     }
 
     fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
