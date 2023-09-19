@@ -20,29 +20,37 @@ Readings in Database Systems,Michael Stonebraker,2004
 ### Step 1. Create Database and Table
 
 ```shell
-> bendsql
-Welcome to BendSQL.
-Trying connect to localhost:8000 as user root.
-Connected to DatabendQuery v1.1.2-nightly-8ade21e4669e0a2cc100615247705feacdf76c5b(rust-1.70.0-nightly-2023-04-15T16:08:52.195357424Z)
+eric@macdeMBP Documents % bendsql
+Welcome to BendSQL 0.6.7-135f76b(2023-09-18T14:39:54.786133000Z).
+Connecting to localhost:8000 as user root.
+Connected to DatabendQuery v1.2.100-nightly-29d6bf3217(rust-1.72.0-nightly-2023-09-05T16:14:14.152454000Z)
 
-root@localhost> CREATE DATABASE book_db;
-Processed in (0.020 sec)
+root@localhost:8000/default> CREATE DATABASE book_db;
 
-root@localhost> use book_db;
+CREATE DATABASE book_db
+
+0 row written in 0.058 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
+
+root@localhost:8000/default> USE book_db;
 
 USE book_db
 
-0 row in 0.020 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
+0 row result in 0.016 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
 
-root@localhost> CREATE TABLE books
+root@localhost:8000/book_db> CREATE TABLE books
 (
     title VARCHAR,
     author VARCHAR,
     date VARCHAR
 );
-Processed in (0.029 sec)
 
-root@localhost>
+CREATE TABLE books (
+  title VARCHAR,
+  author VARCHAR,
+  date VARCHAR
+)
+
+0 row written in 0.063 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
 ```
 
 ### Step 2. Load Data into Table
@@ -50,22 +58,27 @@ root@localhost>
 Send loading data request with the following command:
 
 ```shell
-> bendsql --query='INSERT INTO book_db.books VALUES;' --format=csv --data=@books.csv --progress
-==> Stream Loaded books.csv:
-    Written 2 (24.29 rows/s), 157B (1.86 KiB/s)
+eric@macdeMBP Documents % bendsql --query='INSERT INTO book_db.books VALUES;' --format=csv --data=@books.csv
 ```
 
 ### Step 3. Verify Loaded Data
 
 ```shell
-> echo "SELECT * FROM books;" | bendsql --database book_db
-┌─────────────────────────────────────────────────────────────┐
-│             title            │        author       │  date  │
-│            String            │        String       │ String │
-├──────────────────────────────┼─────────────────────┼────────┤
-│ Transaction Processing       │ Jim Gray            │ 1992   │
-│ Readings in Database Systems │ Michael Stonebraker │ 2004   │
-└─────────────────────────────────────────────────────────────┘
+root@localhost:8000/book_db> SELECT * FROM books;
+
+SELECT
+  *
+FROM
+  books
+
+┌───────────────────────────────────────────────────────────────────────┐
+│             title            │        author       │       date       │
+│       Nullable(String)       │   Nullable(String)  │ Nullable(String) │
+├──────────────────────────────┼─────────────────────┼──────────────────┤
+│ Transaction Processing       │ Jim Gray            │ 1992             │
+│ Readings in Database Systems │ Michael Stonebraker │ 2004             │
+└───────────────────────────────────────────────────────────────────────┘
+2 rows result in 0.046 sec. Processed 2 rows, 2 B (43.14 rows/s, 4.49 KiB/s)
 ```
 
 ## Tutorial 2 - Load into Specified Columns
@@ -80,40 +93,51 @@ Before you start this tutorial, make sure you have completed [Tutorial 1](#tutor
 
 Create a table including an extra column named "comments" compared to the table "books":
 
-```sql
-CREATE TABLE bookcomments
+```shell
+root@localhost:8000/book_db> CREATE TABLE bookcomments
 (
     title VARCHAR,
     author VARCHAR,
     comments VARCHAR,
     date VARCHAR
 );
+
+CREATE TABLE bookcomments (
+  title VARCHAR,
+  author VARCHAR,
+  comments VARCHAR,
+  date VARCHAR
+)
+
+0 row written in 0.071 sec. Processed 0 rows, 0 B (0 rows/s, 0 B/s)
 ```
 
 ### Step 2. Load Data into Table
 
 Send loading data request with the following command:
 
-```bash
-> bendsql --query='INSERT INTO book_db.bookcomments(title,author,date) VALUES;' --format=csv --data=@books.csv --progress
-==> Stream Loaded books.csv:
-    Written 2 (23.23 rows/s), 221B (2.51 KiB/s)
+```shell
+eric@macdeMBP Documents % bendsql --query='INSERT INTO book_db.bookcomments(title,author,date) VALUES;' --format=csv --data=@books.csv
 ```
 
 Notice that the `query` part above specifies the columns (title, author, and date) to match the loaded data.
 
 ### Step 3. Verify Loaded Data
 
-```sql
-SELECT * FROM bookcomments;
+```shell
+root@localhost:8000/book_db> SELECT * FROM bookcomments;
 
-┌────────────────────────────────────────────────────────────────────────┐
-│             title            │        author       │ comments │  date  │
-│            String            │        String       │  String  │ String │
-├──────────────────────────────┼─────────────────────┼──────────┼────────┤
-│ Transaction Processing       │ Jim Gray            │          │ 1992   │
-│ Readings in Database Systems │ Michael Stonebraker │          │ 2004   │
-└────────────────────────────────────────────────────────────────────────┘
+SELECT
+  *
+FROM
+  bookcomments
 
-2 rows in 0.033 sec. Processed 2 rows, 2B (60.42 rows/s, 7.14 KiB/s)
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
+│             title            │        author       │     comments     │       date       │
+│       Nullable(String)       │   Nullable(String)  │ Nullable(String) │ Nullable(String) │
+├──────────────────────────────┼─────────────────────┼──────────────────┼──────────────────┤
+│ Transaction Processing       │ Jim Gray            │ NULL             │ 1992             │
+│ Readings in Database Systems │ Michael Stonebraker │ NULL             │ 2004             │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
+2 rows result in 0.037 sec. Processed 2 rows, 2 B (54.31 rows/s, 6.42 KiB/s)
 ```
