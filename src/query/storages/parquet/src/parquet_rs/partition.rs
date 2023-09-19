@@ -15,6 +15,7 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
+use common_expression::Scalar;
 use parquet::arrow::arrow_reader::RowSelector;
 use parquet::file::metadata::RowGroupMetaData;
 use parquet::format::PageLocation;
@@ -98,6 +99,7 @@ pub struct ParquetRSRowGroupPart {
     // `uncompressed_size` and `compressed_size` are the sizes of the actually read columns.
     pub uncompressed_size: u64,
     pub compressed_size: u64,
+    pub sort_min_max: Option<(Scalar, Scalar)>,
 }
 
 impl Eq for ParquetRSRowGroupPart {}

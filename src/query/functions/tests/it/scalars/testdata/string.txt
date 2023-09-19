@@ -2272,6 +2272,14 @@ has tried possible overloads:
 
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | lpad('hi', 2000000, '?')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `lpad('hi', 2000000, '?')`
+
+
+
 ast            : lpad(a, b, c)
 raw expr       : lpad(a::String, b::UInt8, c::String)
 checked expr   : lpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
@@ -2280,7 +2288,7 @@ evaluation:
 |        | a               | b       | c           | Output  |
 +--------+-----------------+---------+-------------+---------+
 | Type   | String          | UInt8   | String      | String  |
-| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | Unknown |
 | Row 0  | 'hi'            | 0       | '?'         | ''      |
 | Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
 | Row 2  | 'cc'            | 5       | 'bb'        | 'bbbcc' |
@@ -2378,6 +2386,14 @@ has tried possible overloads:
 
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | rpad('hi', 2000000, '?')
+  | ^^^^^^^^^^^^^^^^^^^^^^^^ padding length '2000000' is too big, max is: '1000000' while evaluating function `rpad('hi', 2000000, '?')`
+
+
+
 ast            : rpad(a, b, c)
 raw expr       : rpad(a::String, b::UInt8, c::String)
 checked expr   : rpad<String, UInt64, String>(a, to_uint64<UInt8>(b), c)
@@ -2386,7 +2402,7 @@ evaluation:
 |        | a               | b       | c           | Output  |
 +--------+-----------------+---------+-------------+---------+
 | Type   | String          | UInt8   | String      | String  |
-| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | {""..}  |
+| Domain | {"cc"..="test"} | {0..=5} | {"?"..="x"} | Unknown |
 | Row 0  | 'hi'            | 0       | '?'         | ''      |
 | Row 1  | 'test'          | 3       | 'x'         | 'tes'   |
 | Row 2  | 'cc'            | 5       | 'bb'        | 'ccbbb' |
@@ -3014,26 +3030,34 @@ output domain  : {"     "..="     "}
 output         : '     '
 
 
+error: 
+  --> SQL:1:1
+  |
+1 | space(2000000)
+  | ^^^^^^^^^^^^^^ space length is too big, max is: 1000000 while evaluating function `space(2000000)`
+
+
+
 ast            : space(a)
 raw expr       : space(a::UInt8)
 checked expr   : space<UInt64>(to_uint64<UInt8>(a))
 evaluation:
-+--------+---------+--------------------+
-|        | a       | Output             |
-+--------+---------+--------------------+
-| Type   | UInt8   | String             |
-| Domain | {0..=9} | {""..="         "} |
-| Row 0  | 0       | ''                 |
-| Row 1  | 1       | ' '                |
-| Row 2  | 2       | '  '               |
-| Row 3  | 3       | '   '              |
-| Row 4  | 4       | '    '             |
-| Row 5  | 5       | '     '            |
-| Row 6  | 6       | '      '           |
-| Row 7  | 7       | '       '          |
-| Row 8  | 8       | '        '         |
-| Row 9  | 9       | '         '        |
-+--------+---------+--------------------+
++--------+---------+-------------+
+|        | a       | Output      |
++--------+---------+-------------+
+| Type   | UInt8   | String      |
+| Domain | {0..=9} | Unknown     |
+| Row 0  | 0       | ''          |
+| Row 1  | 1       | ' '         |
+| Row 2  | 2       | '  '        |
+| Row 3  | 3       | '   '       |
+| Row 4  | 4       | '    '      |
+| Row 5  | 5       | '     '     |
+| Row 6  | 6       | '      '    |
+| Row 7  | 7       | '       '   |
+| Row 8  | 8       | '        '  |
+| Row 9  | 9       | '         ' |
++--------+---------+-------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                  |

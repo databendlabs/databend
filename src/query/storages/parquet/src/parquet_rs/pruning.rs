@@ -59,7 +59,6 @@ impl ParquetRSPruner {
             .as_ref()
             .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
 
-        // TODO(parquet): Top-K in `push_down` can also help to prune.
         let mut predicate_columns = vec![];
         let range_pruner =
             if filter.is_some() && (options.prune_row_groups() || options.prune_pages()) {
