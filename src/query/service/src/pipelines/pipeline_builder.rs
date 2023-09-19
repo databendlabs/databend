@@ -126,6 +126,7 @@ use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
+use super::processors::transforms::TransformAddComputedColumns;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use super::processors::TransformResortAddOnWithoutSourceSchema;
@@ -486,20 +487,43 @@ impl PipelineBuilder {
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
         // fill default columns
+        let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
                 TransformResortAddOnWithoutSourceSchema::try_create(
                     self.ctx.clone(),
                     transform_input_port,
                     transform_output_port,
-                    Arc::new(DataSchema::from(tbl.schema())),
+                    Arc::new(DataSchema::from(table_default_schema)),
                     tbl.clone(),
                 )
             },
             1,
         )?;
+
         builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
+
+        // fill computed columns
+        let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+        if default_schema != computed_schema {
+            builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    TransformAddComputedColumns::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        default_schema.clone(),
+                        computed_schema.clone(),
+                    )
+                },
+                1,
+            )?;
+            builder.add_items_prepend(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+        }
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));

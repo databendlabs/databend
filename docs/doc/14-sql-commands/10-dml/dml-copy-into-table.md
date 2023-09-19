@@ -22,7 +22,7 @@ COPY INTO [<database>.]<table_name>
      FROM { internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET} [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | PARQUET} [ formatTypeOptions ] ) ]
 [ copyOptions ]
 
 /* Data load with transformation(Only support Parquet format) */

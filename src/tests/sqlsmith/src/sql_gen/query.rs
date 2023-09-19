@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
+
 use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
@@ -41,8 +43,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
-
         let order_by = self.gen_order_by(self.group_by.clone());
+
         Query {
             span: None,
             // TODO
@@ -53,6 +55,24 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             offset,
             ignore_result: false,
         }
+    }
+
+    pub(crate) fn gen_subquery(&mut self) -> Query {
+        let current_bound_tables = mem::take(&mut self.bound_tables);
+        let current_bound_columns = mem::take(&mut self.bound_columns);
+        let current_is_join = self.is_join;
+
+        self.bound_tables = vec![];
+        self.bound_columns = vec![];
+        self.is_join = false;
+
+        let query = self.gen_query();
+
+        self.bound_tables = current_bound_tables;
+        self.bound_columns = current_bound_columns;
+        self.is_join = current_is_join;
+
+        query
     }
 
     fn gen_set_expr(&mut self) -> SetExpr {

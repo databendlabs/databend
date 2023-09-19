@@ -67,7 +67,7 @@ impl InputFormatCSV {
         }
         field_decoder
             .read_field(builder, &mut reader, true)
-            .map_err(|e| get_decode_error_by_pos(column_index, schema, &e.message()))?;
+            .map_err(|e| get_decode_error_by_pos(column_index, schema, &e.message(), col_data))?;
         check_column_end(&mut reader, schema, column_index)
     }
 
