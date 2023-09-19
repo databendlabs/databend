@@ -191,10 +191,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     "point_in_polygon",
                     "regexp_instr",
                 ];
-                let name = arithmetic
-                    .get(self.rng.gen_range(0..=3))
-                    .unwrap()
-                    .to_string();
+                let name = arithmetic[self.rng.gen_range(0..=6)].to_string();
                 let args_type = if name == "point_in_ellipses" {
                     vec![DataType::Number(NumberDataType::Float64); 7]
                 } else if name == "point_in_polygon" {
@@ -289,7 +286,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
             DataType::Tuple(tuple) => {
                 let tuple_func = ["json_path_query", "tuple"];
-                let name = tuple_func[self.rng.gen_range(0..=2)].to_string();
+                let name = tuple_func[self.rng.gen_range(0..=1)].to_string();
                 let params = vec![];
                 if name == "tuple" {
                     let args_type = vec![DataType::Tuple(tuple)];
@@ -575,7 +572,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     "last",
                     "nth_value",
                 ];
-                let name = name[self.rng.gen_range(0..=7)];
+                let name = name[self.rng.gen_range(0..=6)];
                 let args_type = if name == "lag" || name == "lead" {
                     vec![ty; 3]
                 } else if name == "nth_value" {
@@ -589,42 +586,38 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_window(&mut self) -> Option<Window> {
-        if self.rng.gen_bool(0.5) {
-            None
-        } else {
-            let ty = self.gen_data_type();
-            let expr1 = self.gen_expr(&ty);
-            let expr2 = self.gen_expr(&ty);
-            let expr3 = self.gen_expr(&ty);
-            let expr4 = self.gen_expr(&ty);
+        let ty = self.gen_data_type();
+        let expr1 = self.gen_scalar_value(&ty);
+        let expr2 = self.gen_scalar_value(&ty);
+        let expr3 = self.gen_scalar_value(&ty);
+        let expr4 = self.gen_scalar_value(&ty);
 
-            let order_by = vec![
-                OrderByExpr {
-                    expr: expr1,
-                    asc: None,
-                    nulls_first: None,
-                },
-                OrderByExpr {
-                    expr: expr2,
-                    asc: Some(true),
-                    nulls_first: Some(true),
-                },
-            ];
-            Some(Window::WindowSpec(WindowSpec {
-                existing_window_name: None,
-                partition_by: vec![expr3, expr4],
-                order_by,
-                window_frame: if self.rng.gen_bool(0.8) {
-                    None
-                } else {
-                    Some(WindowFrame {
-                        units: WindowFrameUnits::Rows,
-                        start_bound: WindowFrameBound::Preceding(None),
-                        end_bound: WindowFrameBound::CurrentRow,
-                    })
-                },
-            }))
-        }
+        let order_by = vec![
+            OrderByExpr {
+                expr: expr1,
+                asc: None,
+                nulls_first: None,
+            },
+            OrderByExpr {
+                expr: expr2,
+                asc: Some(true),
+                nulls_first: Some(true),
+            },
+        ];
+        Some(Window::WindowSpec(WindowSpec {
+            existing_window_name: None,
+            partition_by: vec![expr3, expr4],
+            order_by,
+            window_frame: if self.rng.gen_bool(0.8) {
+                None
+            } else {
+                Some(WindowFrame {
+                    units: WindowFrameUnits::Rows,
+                    start_bound: WindowFrameBound::Preceding(None),
+                    end_bound: WindowFrameBound::CurrentRow,
+                })
+            },
+        }))
     }
 
     fn gen_func(
