@@ -58,7 +58,7 @@ impl Session {
         if is_repl {
             println!("Welcome to BendSQL {}.", VERSION.as_str());
             println!(
-                "Trying connect to {}:{} as user {}.",
+                "Connecting to {}:{} as user {}.",
                 info.host, info.port, info.user
             );
             let version = conn.version().await?;
@@ -405,7 +405,7 @@ impl Session {
         if self.is_repl {
             let info = self.conn.info().await;
             eprintln!(
-                "Trying reconnect to {}:{} as user {}.",
+                "Reconnecting to {}:{} as user {}.",
                 info.host, info.port, info.user
             );
             let version = self.conn.version().await?;
