@@ -57,7 +57,12 @@ impl InputFormatTSV {
         } else {
             let mut reader = Cursor::new(col_data);
             if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
-                return Err(get_decode_error_by_pos(column_index, schema, &e.message()));
+                return Err(get_decode_error_by_pos(
+                    column_index,
+                    schema,
+                    &e.message(),
+                    col_data,
+                ));
             };
             check_column_end(&mut reader, schema, column_index)
         }
