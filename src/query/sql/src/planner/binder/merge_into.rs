@@ -204,7 +204,7 @@ impl Binder {
                 field_index_map.insert(idx, used_idx.to_string());
             }
         }
-        // bind matched clause columns and add update fileds and exprs
+        // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
             matched_evaluators.push(
                 self.bind_matched_clause(
