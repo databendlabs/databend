@@ -192,9 +192,6 @@ statement error 1301
 create table t_virtual3(a json null, b uint32 null as (a['id']::uint32) virtual, c string null as (a['name']::string) virtual) bloom_index_columns = 'b, c'
 
 statement ok
-DROP DATABASE test_computed_column
-
-statement ok
 set enable_experimental_merge_into = 1;
 
 ## test computed columns
@@ -261,3 +258,6 @@ a2 a2-c2 c2
 
 statement ok
 set enable_experimental_merge_into = 0;
+
+statement ok
+DROP DATABASE test_computed_column
