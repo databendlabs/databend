@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::sync::Barrier;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -931,12 +932,14 @@ impl PipelineBuilder {
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
         let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
+        let barrier = Barrier::new(build_res.main_pipeline.output_len());
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
             build_res.main_pipeline.output_len(),
+            barrier,
         )?;
         let spill_notify = Arc::new(Notify::new());
         let create_sink_processor = |input| {
