@@ -10,7 +10,9 @@ sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 log = None
 
 try:
-    mydb = mysql.connector.connect(host="127.0.0.1", user="root", passwd="", port="3307", connection_timeout=6)
+    mydb = mysql.connector.connect(
+        host="127.0.0.1", user="root", passwd="", port="3307", connection_timeout=6
+    )
     cursor = mydb.cursor()
 
     cursor.execute("drop user if exists u1;")
@@ -20,9 +22,15 @@ try:
     cursor.execute("drop network policy if exists p1;")
     cursor.execute("drop network policy if exists p2;")
     cursor.execute("create network policy p1 allowed_ip_list=('127.0.0.0/24');")
-    cursor.execute("create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');")
-    cursor.execute("create user u2 identified by 'abc123' with set network policy='p1';")
-    cursor.execute("create user u3 identified by 'abc123' with set network policy='p2';")
+    cursor.execute(
+        "create network policy p2 allowed_ip_list=('127.0.0.0/24') blocked_ip_list=('127.0.0.1');"
+    )
+    cursor.execute(
+        "create user u2 identified by 'abc123' with set network policy='p1';"
+    )
+    cursor.execute(
+        "create user u3 identified by 'abc123' with set network policy='p2';"
+    )
 except mysql.connector.errors.OperationalError:
     print("root@127.0.0.1 is timeout")
 

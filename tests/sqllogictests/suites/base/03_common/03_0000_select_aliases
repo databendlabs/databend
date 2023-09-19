@@ -52,16 +52,16 @@ SELECT a.number FROM (SELECT * FROM numbers(3) AS b ORDER BY b.number) AS a
 1
 2
 
-statement error 1065
+statement error (?s)1065.*column number doesn't exist
 SELECT b.number FROM numbers(3) AS a ORDER BY a.number
 
-statement error 1065
+statement error (?s)1065.*column number doesn't exist
 SELECT a.number FROM numbers(3) AS a ORDER BY b.number
 
-statement error 1065
+statement error (?s)1065.*column number doesn't exist
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a
 
-statement error 1065
+statement error (?s)1065.*column number doesn't exist
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number
 
 query I

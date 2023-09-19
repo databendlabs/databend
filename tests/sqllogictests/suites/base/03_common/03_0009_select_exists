@@ -29,4 +29,3 @@ select number from numbers_mt(20) where number > 15  and not exists (select numb
 17
 18
 19
-

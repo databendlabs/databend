@@ -64,8 +64,20 @@ select * from t2 where m['k3'] = ['2023-01-01'::date]
 ----
 2 {'k3':['2023-01-01']}
 
-statement error 1005
-select {id:id} from t2
+query T
+select {'id':id} from t2
+----
+{'id':1}
+{'id':2}
+
+query T
+select {'id':number} from numbers(5)
+----
+{'id':0}
+{'id':1}
+{'id':2}
+{'id':3}
+{'id':4}
 
 statement error 1001
 CREATE TABLE IF NOT EXISTS t3(id Int, m Map(Array(Date), String)) Engine = Fuse
