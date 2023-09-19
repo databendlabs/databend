@@ -11,7 +11,7 @@ query
 copy /*+ set_var(max_threads=1) */into iti from @data/csv/ pattern = 'wrong_sample.*[.]csv' file_format = (type = CSV) ON_ERROR=continue
 ----
 csv/wrong_sample.csv 3 4 Number of columns in file (4) does not match that of the corresponding table (3) 2
-csv/wrong_sample2.csv 4 3 fail to decode column 2 (c Int32 NULL): invalid text for number 4
+csv/wrong_sample2.csv 4 3 Invalid value 'b1' for column 2 (c Int32 NULL): invalid text for number 4
 
 skipif clickhouse
 query 
@@ -44,7 +44,7 @@ select * from iti order by a
 statement ok
 truncate table iti
 
-query error fail to decode column 2
+query error (?s)1046.*abort after 4 errors! the last error: Invalid value 'b1' for column 2 \(c Int32 NULL\): invalid text for number\nat file 'csv/wrong_sample\.csv', line 2
 copy into iti from @data/csv/wrong_sample.csv file_format = (type = CSV) ON_ERROR=abort_4 force=true
 
 query 
