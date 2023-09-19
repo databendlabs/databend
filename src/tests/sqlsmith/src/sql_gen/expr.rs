@@ -32,12 +32,13 @@ use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_expr(&mut self, ty: &DataType) -> Expr {
-        match self.rng.gen_range(0..=10) {
+        match self.rng.gen_range(0..=11) {
             0..=3 => self.gen_column(ty),
             4..=6 => self.gen_scalar_value(ty),
             7..=8 => self.gen_scalar_func(ty),
             9 => self.gen_factory_scalar_func(ty),
             10 => self.gen_inner_expr(ty),
+            11 => self.gen_window_func(ty),
             // TODO other exprs
             _ => unreachable!(),
         }
