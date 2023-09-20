@@ -802,26 +802,26 @@ impl PipelineBuilder {
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        let ctx = self.ctx.clone();
-        let projection = Projection::Columns(delete.col_indices.clone());
-        let filter = delete.filters.filter.clone();
-        let inverted_filter = delete.filters.inverted_filter.clone();
-        let table_clone = table.clone();
-        let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
-        for part in &delete.parts.partitions {
-            // Safe to downcast because we know the type of the partition
-            let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
-            segment_locations.push(SegmentLocation {
-                segment_idx: part.segment_index,
-                location: part.segment_location.clone(),
-                snapshot_loc: None,
-            });
-        }
-        let prune_ctx = MutationBlockPruningContext {
-            segment_locations,
-            block_count: None,
-        };
         if delete.parts.is_lazy {
+            let ctx = self.ctx.clone();
+            let projection = Projection::Columns(delete.col_indices.clone());
+            let filter = delete.filters.filter.clone();
+            let inverted_filter = delete.filters.inverted_filter.clone();
+            let table_clone = table.clone();
+            let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
+            for part in &delete.parts.partitions {
+                // Safe to downcast because we know the the partition is lazy
+                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                segment_locations.push(SegmentLocation {
+                    segment_idx: part.segment_index,
+                    location: part.segment_location.clone(),
+                    snapshot_loc: None,
+                });
+            }
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations,
+                block_count: None,
+            };
             self.main_pipeline.set_on_init(move || {
                 let ctx_clone = ctx.clone();
                 let (partitions, info) =
