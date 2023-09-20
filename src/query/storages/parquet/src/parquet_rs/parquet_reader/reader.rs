@@ -242,30 +242,40 @@ impl ParquetRSReader {
         .with_projection(self.projection.clone())
         .with_batch_size(self.batch_size);
 
+        let mut full_match = false;
+
+        let file_meta = builder.metadata().clone();
+
         // Prune row groups.
-        let file_meta = builder.metadata();
-
         if let Some(pruner) = &self.pruner {
-            let selected_row_groups = pruner.prune_row_groups(file_meta, None)?;
-            let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
+            let (selected_row_groups, rowgroup_full_match) =
+                pruner.prune_row_groups(&file_meta, None)?;
 
-            builder = builder.with_row_groups(selected_row_groups);
-            if let Some(row_selection) = row_selection {
-                builder = builder.with_row_selection(row_selection);
+            full_match = rowgroup_full_match;
+            builder = builder.with_row_groups(selected_row_groups.clone());
+
+            if !full_match {
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+
+                if let Some(row_selection) = row_selection {
+                    builder = builder.with_row_selection(row_selection);
+                }
             }
         }
 
-        if let Some(predicate) = self.predicate.as_ref() {
-            let projection = predicate.projection().clone();
-            let predicate = predicate.clone();
-            let predicate_fn = move |batch| {
-                predicate
-                    .evaluate(&batch)
-                    .map_err(|e| ArrowError::from_external_error(Box::new(e)))
-            };
-            builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
-                ArrowPredicateFn::new(projection, predicate_fn),
-            )]));
+        if !full_match {
+            if let Some(predicate) = self.predicate.as_ref() {
+                let projection = predicate.projection().clone();
+                let predicate = predicate.clone();
+                let predicate_fn = move |batch| {
+                    predicate
+                        .evaluate(&batch)
+                        .map_err(|e| ArrowError::from_external_error(Box::new(e)))
+                };
+                builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
+                    ArrowPredicateFn::new(projection, predicate_fn),
+                )]));
+            }
         }
 
         Ok(builder.build()?)
@@ -319,29 +329,38 @@ impl ParquetRSReader {
         .with_batch_size(self.batch_size);
 
         // Prune row groups.
-        let file_meta = builder.metadata();
+        let file_meta = builder.metadata().clone();
 
+        let mut full_match = false;
         if let Some(pruner) = &self.pruner {
-            let selected_row_groups = pruner.prune_row_groups(file_meta, None)?;
-            let row_selection = pruner.prune_pages(file_meta, &selected_row_groups)?;
+            let (selected_row_groups, rowgroup_full_match) =
+                pruner.prune_row_groups(&file_meta, None)?;
 
-            builder = builder.with_row_groups(selected_row_groups);
-            if let Some(row_selection) = row_selection {
-                builder = builder.with_row_selection(row_selection);
+            full_match = rowgroup_full_match;
+            builder = builder.with_row_groups(selected_row_groups.clone());
+
+            if !full_match {
+                let row_selection = pruner.prune_pages(&file_meta, &selected_row_groups)?;
+
+                if let Some(row_selection) = row_selection {
+                    builder = builder.with_row_selection(row_selection);
+                }
             }
         }
 
-        if let Some(predicate) = self.predicate.as_ref() {
-            let projection = predicate.projection().clone();
-            let predicate = predicate.clone();
-            let predicate_fn = move |batch| {
-                predicate
-                    .evaluate(&batch)
-                    .map_err(|e| ArrowError::from_external_error(Box::new(e)))
-            };
-            builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
-                ArrowPredicateFn::new(projection, predicate_fn),
-            )]));
+        if !full_match {
+            if let Some(predicate) = self.predicate.as_ref() {
+                let projection = predicate.projection().clone();
+                let predicate = predicate.clone();
+                let predicate_fn = move |batch| {
+                    predicate
+                        .evaluate(&batch)
+                        .map_err(|e| ArrowError::from_external_error(Box::new(e)))
+                };
+                builder = builder.with_row_filter(RowFilter::new(vec![Box::new(
+                    ArrowPredicateFn::new(projection, predicate_fn),
+                )]));
+            }
         }
 
         let reader = builder.build()?;

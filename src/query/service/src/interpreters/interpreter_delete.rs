@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
-use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -165,13 +164,6 @@ impl Interpreter for DeleteInterpreter {
 
         let (filters, col_indices) = if let Some(scalar) = selection {
             // prepare the filter expression
-            let filter = cast_expr_to_non_null_boolean(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone()),
-            )?
-            .as_remote_expr();
-
             let filters = create_push_down_filters(&scalar)?;
 
             let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);

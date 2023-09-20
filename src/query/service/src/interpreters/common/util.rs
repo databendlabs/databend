@@ -16,13 +16,11 @@ use std::sync::Arc;
 
 use common_catalog::plan::Filters;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_kvapi::kvapi::KVApi;
 use common_users::UserApiProvider;
 
-use crate::executor::cast_expr_to_non_null_boolean;
+use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::sql::ScalarExpr;
 
 /// Checks if a duplicate label exists in the meta store.

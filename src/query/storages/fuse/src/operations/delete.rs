@@ -22,7 +22,6 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::table::DeletionFilters;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -132,8 +131,7 @@ impl FuseTable {
         let (partitions, info) = self
             .do_mutation_block_pruning(
                 ctx.clone(),
-                Some(deletion_filters.filter),
-                Some(deletion_filters.inverted_filter),
+                Some(deletion_filters),
                 projection,
                 &snapshot,
                 true,
@@ -281,8 +279,7 @@ impl FuseTable {
     pub async fn do_mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        inverted_filter: Option<RemoteExpr<String>>,
+        filters: Option<Filters>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
         with_origin: bool,
@@ -290,7 +287,7 @@ impl FuseTable {
     ) -> Result<(Partitions, MutationTaskInfo)> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
-            filter: filter.clone(),
+            filters: filters.clone(),
             ..PushDownInfo::default()
         });
 
@@ -305,7 +302,7 @@ impl FuseTable {
 
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
-        if let Some(inverse) = inverted_filter {
+        if let Some(inverse) = filters.map(|f| f.inverted_filter) {
             // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
             //
             // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that

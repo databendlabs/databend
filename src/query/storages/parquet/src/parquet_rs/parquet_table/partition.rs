@@ -356,7 +356,7 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let rgs = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
+        let (rgs, _) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
         let mut row_selections = pruner.prune_pages(meta, &rgs)?;
         let mut rows_read = 0; // Rows read in current file.
 

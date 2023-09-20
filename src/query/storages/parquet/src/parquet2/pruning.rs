@@ -123,7 +123,7 @@ impl PartitionPruner {
         let row_group_stats = if no_stats {
             None
         } else if self.row_group_pruner.is_some() && !self.skip_pruning {
-            let (pruner, inverted_filter) = self.row_group_pruner.as_ref().unwrap();
+            let (pruner, _) = self.row_group_pruner.as_ref().unwrap();
             // If collecting stats fails or `should_keep` is true, we still read the row group.
             // Otherwise, the row group will be pruned.
             if let Ok(row_group_stats) =

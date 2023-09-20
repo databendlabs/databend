@@ -124,14 +124,17 @@ pub enum Expr<Index: ColumnIndex = usize> {
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
 /// up the function registry with the `FunctionID`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Educe, Serialize, Deserialize)]
+#[educe(PartialEq, Eq, Hash)]
 pub enum RemoteExpr<Index: ColumnIndex = usize> {
     Constant {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         scalar: Scalar,
         data_type: DataType,
     },
     ColumnRef {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: Index,
         data_type: DataType,
@@ -140,12 +143,14 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         display_name: String,
     },
     Cast {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         is_try: bool,
         expr: Box<RemoteExpr<Index>>,
         dest_type: DataType,
     },
     FunctionCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: FunctionID,
         generics: Vec<DataType>,
@@ -153,6 +158,7 @@ pub enum RemoteExpr<Index: ColumnIndex = usize> {
         return_type: DataType,
     },
     UDFServerCall {
+        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         func_name: String,
         server_addr: String,

@@ -63,8 +63,8 @@ pub struct PrewhereInfo {
     /// filter for prewhere
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filter: RemoteExpr<String>,
-    /// reverse filter for prewhere
-    pub reverse_filter: RemoteExpr<String>,
+    /// inverted_filter  for prewhere
+    pub inverted_filter: RemoteExpr<String>,
     /// Optional prewhere virtual columns
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
