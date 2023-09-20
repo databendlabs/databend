@@ -29,8 +29,6 @@ use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metrics::label_counter;
-use common_metrics::label_gauge;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -38,14 +36,11 @@ use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
+use crate::sessions::session_metrics;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-
-static METRIC_SESSION_CONNECT_NUMBERS: &str = "session_connect_numbers";
-static METRIC_SESSION_CLOSE_NUMBERS: &str = "session_close_numbers";
-static METRIC_SESSION_ACTIVE_CONNECTIONS: &str = "session_connections";
 
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
@@ -134,18 +129,8 @@ impl SessionManager {
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
 
-        let config = GlobalConfig::instance();
-        label_counter(
-            METRIC_SESSION_CONNECT_NUMBERS,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
-        label_gauge(
-            METRIC_SESSION_ACTIVE_CONNECTIONS,
-            sessions.len() as f64,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
+        session_metrics::incr_session_connect_numbers();
+        session_metrics::set_session_active_connections(sessions.len());
 
         if !matches!(typ, SessionType::FlightRPC) {
             sessions.insert(session.get_id(), Arc::downgrade(&session));
@@ -171,13 +156,6 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
-        let config = GlobalConfig::instance();
-        label_counter(
-            METRIC_SESSION_CLOSE_NUMBERS,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
-
         // stop tracking session
         {
             // Make sure this write lock has been released before dropping.
@@ -193,6 +171,13 @@ impl SessionManager {
                 mysql_conns_map.remove(&k);
             }
         }
+
+        let sessions_count = {
+            let sessions = self.active_sessions.read();
+            sessions.len()
+        };
+        session_metrics::incr_session_close_numbers();
+        session_metrics::set_session_active_connections(sessions_count);
     }
 
     pub fn graceful_shutdown(

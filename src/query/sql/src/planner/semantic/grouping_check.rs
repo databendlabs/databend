@@ -56,8 +56,8 @@ impl<'a> GroupingChecker<'a> {
                 .build()
             };
 
-            if let Some(grouping_id) = &self.bind_context.aggregate_info.grouping_id_column {
-                if grouping_id.index != column_binding.index {
+            if let Some(grouping_sets) = &self.bind_context.aggregate_info.grouping_sets {
+                if grouping_sets.grouping_id_column.index != column_binding.index {
                     column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
                 }
             }

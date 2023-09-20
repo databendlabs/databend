@@ -18,9 +18,8 @@ use std::time::Duration;
 use common_exception::ErrorCode;
 use common_http::HttpError;
 use common_http::HttpShutdownHandler;
-use common_metrics::PrometheusHandle;
-use poem::web::Data;
-use poem::EndpointExt;
+use common_metrics::load_global_prometheus_registry;
+use common_metrics::render_prometheus_metrics;
 use poem::IntoResponse;
 
 use crate::servers::Server;
@@ -32,8 +31,9 @@ pub struct MetricService {
 #[allow(clippy::let_with_type_underscore)]
 #[poem::handler]
 #[async_backtrace::framed]
-pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl IntoResponse {
-    prom_extension.0.render()
+pub async fn metrics_handler() -> impl IntoResponse {
+    let registry = load_global_prometheus_registry();
+    render_prometheus_metrics(&registry)
 }
 
 impl MetricService {
@@ -46,11 +46,7 @@ impl MetricService {
 
     #[async_backtrace::framed]
     async fn start_without_tls(&mut self, listening: SocketAddr) -> Result<SocketAddr, HttpError> {
-        let prometheus_handle = common_metrics::try_handle().unwrap();
-
-        let app = poem::Route::new()
-            .at("/metrics", poem::get(metric_handler))
-            .data(prometheus_handle);
+        let app = poem::Route::new().at("/metrics", poem::get(metrics_handler));
         let addr = self
             .shutdown_handler
             .start_service(listening, None, app, Some(Duration::from_millis(100)))

@@ -53,6 +53,7 @@ use crate::executor::explain::PlanStatsInfo;
 use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::CopyIntoTableMode;
+use crate::plans::GroupingSets;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
 use crate::plans::ValidationMode;
@@ -288,6 +289,7 @@ impl ProjectSet {
     }
 }
 
+/// Add dummy data before `GROUPING SETS`.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateExpand {
     /// A unique id of operator in a `PhysicalPlan` tree.
@@ -296,8 +298,7 @@ pub struct AggregateExpand {
 
     pub input: Box<PhysicalPlan>,
     pub group_bys: Vec<IndexType>,
-    pub grouping_id_index: IndexType,
-    pub grouping_sets: Vec<Vec<IndexType>>,
+    pub grouping_sets: GroupingSets,
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -306,20 +307,25 @@ impl AggregateExpand {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         let mut output_fields = input_schema.fields().clone();
+        // Add virtual columns to group by.
+        output_fields.reserve(self.group_bys.len() + 1);
 
-        for group_by in self
+        for (group_by, (actual, ty)) in self
             .group_bys
             .iter()
-            .filter(|&index| *index != self.grouping_id_index)
+            .zip(self.grouping_sets.dup_group_items.iter())
         {
             // All group by columns will wrap nullable.
             let i = input_schema.index_of(&group_by.to_string())?;
             let f = &mut output_fields[i];
-            *f = DataField::new(f.name(), f.data_type().wrap_nullable())
+            debug_assert_eq!(f.data_type(), ty);
+            *f = DataField::new(f.name(), f.data_type().wrap_nullable());
+            let new_field = DataField::new(&actual.to_string(), ty.clone());
+            output_fields.push(new_field);
         }
 
         output_fields.push(DataField::new(
-            &self.grouping_id_index.to_string(),
+            &self.grouping_sets.grouping_id_index.to_string(),
             DataType::Number(NumberDataType::UInt32),
         ));
         Ok(DataSchemaRefExt::create(output_fields))
@@ -342,7 +348,8 @@ pub struct AggregatePartial {
 impl AggregatePartial {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
+        let mut fields =
+            Vec::with_capacity(self.agg_funcs.len() + self.group_by.is_empty() as usize);
         for agg in self.agg_funcs.iter() {
             fields.push(DataField::new(
                 &agg.output_column.to_string(),
@@ -1266,7 +1273,7 @@ impl PhysicalPlan {
 pub struct AggregateFunctionDesc {
     pub sig: AggregateFunctionSignature,
     pub output_column: IndexType,
-    pub args: Vec<usize>,
+    /// Bound indices of arguments. Only used in partial aggregation.
     pub arg_indices: Vec<IndexType>,
 }
 

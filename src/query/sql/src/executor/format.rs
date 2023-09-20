@@ -507,6 +507,7 @@ fn aggregate_expand_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let sets = plan
         .grouping_sets
+        .sets
         .iter()
         .map(|set| {
             set.iter()
