@@ -1,0 +1,23 @@
+# the following 2 cases show that `pattern` only matching sub path (or suffix) after the 'parquet/' prefix
+# wrong case
+query
+select name from list_stage(location => '@data/parquet/', pattern => 'parquet/.*_page_1.*') order by name
+----
+
+# right case
+query
+select name from list_stage(location => '@data/parquet/', pattern => 'multi_page/.*_page_1.*') order by name
+----
+parquet/multi_page/multi_page_1.parquet
+
+
+# the following 2 cases show that `pattern` need to matching match the whole suffix, it is in fact '%<pattern>$'
+# wrong case
+query
+select name from list_stage(location => '@data/parquet/', pattern => 'multi_page_1') order by name
+----
+
+query
+select name from list_stage(location => '@data/parquet/', pattern => '.*multi_page_1.*') order by name
+----
+parquet/multi_page/multi_page_1.parquet
