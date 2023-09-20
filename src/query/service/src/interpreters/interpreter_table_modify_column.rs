@@ -238,6 +238,7 @@ impl ModifyTableColumnInterpreter {
         }
 
         let mut table_info = table.get_table_info().clone();
+        table_info.meta.fill_field_comments();
         for (field, comment) in field_and_comments {
             let column = &field.name.to_string();
             let data_type = &field.data_type;

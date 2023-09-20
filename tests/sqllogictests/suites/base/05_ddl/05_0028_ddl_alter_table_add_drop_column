@@ -233,4 +233,29 @@ statement ok
 ALTER TABLE `05_0028_at_t0_3` ADD COLUMN d int not null AFTER c
 
 statement ok
+CREATE TABLE `05_0028_at_t0_4` AS SELECT a,d FROM `05_0028_at_t0_3`
+
+statement ok
+ALTER TABLE `05_0028_at_t0_4` ADD COLUMN e int COMMENT 'end'
+
+statement ok
+ALTER TABLE `05_0028_at_t0_4` MODIFY COLUMN d uint64 COMMENT 'middle'
+
+query TT
+SHOW CREATE TABLE `05_0028_at_t0_4`
+----
+05_0028_at_t0_4 CREATE TABLE `05_0028_at_t0_4` (   `a` FLOAT,   `d` BIGINT UNSIGNED NULL COMMENT 'middle',   `e` INT NULL COMMENT 'end' ) ENGINE=FUSE
+
+query IIT
+SELECT * FROM `05_0028_at_t0_4` order by a
+----
+0.1 0 NULL
+0.2 0 NULL
+0.3 0 NULL
+0.4 0 NULL
+
+statement ok
 DROP TABLE IF EXISTS `05_0028_at_t0_3`
+
+statement ok
+DROP TABLE IF EXISTS `05_0028_at_t0_4`
