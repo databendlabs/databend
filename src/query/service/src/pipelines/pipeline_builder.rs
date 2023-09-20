@@ -22,6 +22,9 @@ use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
+use common_catalog::plan::Partitions;
+use common_catalog::plan::Projection;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -123,6 +126,7 @@ use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use common_storages_stage::StageTable;
+use log::info;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
@@ -795,13 +799,43 @@ impl PipelineBuilder {
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        let ctx = self.ctx.clone();
+        let projection = Projection::Columns(delete.col_indices.clone());
+        let filter = delete.filters.filter.clone();
+        let inverted_filter = delete.filters.inverted_filter.clone();
+        let snapshot = delete.snapshot.clone();
+        let table_clone = table.clone();
+        self.main_pipeline.set_on_init(move || {
+            let ctx_clone = ctx.clone();
+            let (partitions, info) =
+                Runtime::with_worker_threads(1, None)?.block_on(async move {
+                    table_clone
+                        .do_mutation_block_pruning(
+                            ctx_clone,
+                            Some(filter),
+                            Some(inverted_filter),
+                            projection,
+                            &snapshot,
+                            true,
+                            true,
+                        )
+                        .await
+                })?;
+            info!(
+                "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                info.num_whole_block_mutation
+            );
+            ctx.set_partitions(partitions)?;
+            Ok(())
+        });
+
         table.add_deletion_source(
             self.ctx.clone(),
-            &delete.filter,
+            &delete.filters.filter,
             delete.col_indices.clone(),
             delete.query_row_id_col,
             &mut self.main_pipeline,
-            delete.parts.clone(),
+            Partitions::default(), // will be set in on_init
         )?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;

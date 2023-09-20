@@ -43,7 +43,6 @@ use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use log::info;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::StatisticsOfColumns;
@@ -62,8 +61,8 @@ use crate::pruning::FusePruner;
 use crate::FuseTable;
 
 pub struct MutationTaskInfo {
-    pub(crate) total_tasks: usize,
-    pub(crate) num_whole_block_mutation: usize,
+    pub total_tasks: usize,
+    pub num_whole_block_mutation: usize,
 }
 
 impl FuseTable {
@@ -75,7 +74,7 @@ impl FuseTable {
         filters: Option<DeletionFilters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
-    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+    ) -> Result<Option<Arc<TableSnapshot>>> {
         let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty
@@ -127,26 +126,7 @@ impl FuseTable {
                 return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
         }
-        let projection = Projection::Columns(col_indices);
-        let (partitions, info) = self
-            .do_mutation_block_pruning(
-                ctx.clone(),
-                Some(deletion_filters.filter),
-                Some(deletion_filters.inverted_filter),
-                projection,
-                &snapshot,
-                true,
-                true,
-            )
-            .await?;
-        info!(
-            "fast delete done, number of whole block deletion detected in pruning phase: {}",
-            info.num_whole_block_mutation
-        );
-        if partitions.is_empty() {
-            return Ok(None);
-        }
-        Ok(Some((partitions, snapshot.clone())))
+        Ok(Some(snapshot.clone()))
     }
 
     pub fn try_eval_const(

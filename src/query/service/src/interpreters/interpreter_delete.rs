@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
-use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
@@ -54,6 +54,7 @@ use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 use common_storages_factory::Table;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
@@ -225,7 +226,7 @@ impl Interpreter for DeleteInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
-        if let Some((partitions, snapshot)) = fuse_table
+        if let Some(snapshot) = fuse_table
             .fast_delete(
                 self.ctx.clone(),
                 filters.clone(),
@@ -234,10 +235,15 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?
         {
+            let mut segments = Vec::with_capacity(snapshot.segments.len());
+            for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+            }
+            let partitions = Partitions::create(PartitionsShuffleKind::Mod, segments, true);
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
-            let filter = filters.unwrap().filter;
+            let filters = filters.unwrap();
             let physical_plan = Self::build_physical_plan(
-                filter,
+                filters,
                 partitions,
                 fuse_table.get_table_info().clone(),
                 col_indices,
@@ -272,7 +278,7 @@ impl Interpreter for DeleteInterpreter {
 impl DeleteInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
-        filter: RemoteExpr<String>,
+        filters: DeletionFilters,
         partitions: Partitions,
         table_info: TableInfo,
         col_indices: Vec<usize>,
@@ -283,7 +289,7 @@ impl DeleteInterpreter {
     ) -> Result<PhysicalPlan> {
         let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
             parts: partitions,
-            filter,
+            filters,
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),
             col_indices,

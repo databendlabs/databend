@@ -24,6 +24,7 @@ use common_catalog::plan::InternalColumn;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::table::DeletionFilters;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -868,7 +869,7 @@ impl RuntimeFilterSource {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeletePartial {
     pub parts: Partitions,
-    pub filter: RemoteExpr<String>,
+    pub filters: DeletionFilters,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,

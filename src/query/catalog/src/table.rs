@@ -465,7 +465,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeletionFilters {
     // the filter expression for the deletion
     pub filter: RemoteExpr<String>,
