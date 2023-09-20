@@ -867,12 +867,14 @@ impl PipelineBuilder {
             proc.into_processor()
         })?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_mutation_aggregator(
-            &ctx,
-            &mut self.main_pipeline,
-            delete.snapshot.clone(),
-            MutationKind::Delete,
-        )?;
+        if delete.parts.is_lazy {
+            table.chain_mutation_aggregator(
+                &ctx,
+                &mut self.main_pipeline,
+                delete.snapshot.clone(),
+                MutationKind::Delete,
+            )?;
+        }
         Ok(())
     }
 
