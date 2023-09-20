@@ -213,7 +213,7 @@ impl FuseTable {
         let ops = vec![BlockOperator::Project { projection }];
 
         let max_threads = (ctx.get_settings().get_max_threads()? as usize)
-            .min(total_tasks)
+            .min(ctx.partition_num())
             .max(1);
         // Add source pipe.
         pipeline.add_source(
