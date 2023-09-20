@@ -219,7 +219,7 @@ impl HashMethod for HashMethodSerializer {
         group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState> {
-        let mut approx_size = 0;
+        let mut approx_size = group_columns.len() * rows * 10;
 
         for (column, _data_type) in group_columns {
             approx_size += column.memory_size();
