@@ -103,7 +103,7 @@ if __name__ == '__main__':
     server.serve()
 ```
 
-In Databend, you can register UDF using the following SQL statement.
+In Databend, you can register the UDF using the following SQL statement.
 
 ```SQL
 CREATE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
@@ -129,7 +129,7 @@ We have also made these improvements to Databend that we hope you will find help
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Providing Cache Support for Parquet Files in Stage
+### Caching Staged Parquet Files
 
 Databend offers different types of caching to enhance query performance. These include Query Cache, File Metadata Cache, and Data Cache.
 
@@ -147,8 +147,8 @@ Please let us know if you're interested in contributing to this feature, or pick
 
 We always open arms to everyone and can't wait to see how you'll help our community grow and thrive.
 
-* [@nagarajatantry](https://github.com/nagarajatantry) made their first contribution in [#12836](https://github.com/datafuselabs/databend/pull/12836). Fixed the broken hyperlink in the document.
-* [@ct20000901](https://github.com/ct20000901) made their first contribution in [#12827](https://github.com/datafuselabs/databend/pull/12827). Fixed the issue with `array_sort` not correctly handling empty arrays and `NULL`.
+* [@nagarajatantry](https://github.com/nagarajatantry) fixed a broken link in the documentation in [#12836](https://github.com/datafuselabs/databend/pull/12836).
+* [@ct20000901](https://github.com/ct20000901) fixed an issue where `array_sort` couldn't correctly handle empty arrays and `NULL` in [#12827](https://github.com/datafuselabs/databend/pull/12827).
 
 ## Changelog
 
