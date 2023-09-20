@@ -123,8 +123,11 @@ use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationBlockPruningContext;
 use common_storages_fuse::operations::TransformSerializeBlock;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::SegmentLocation;
 use common_storages_stage::StageTable;
 use log::info;
 use parking_lot::RwLock;
@@ -803,8 +806,21 @@ impl PipelineBuilder {
         let projection = Projection::Columns(delete.col_indices.clone());
         let filter = delete.filters.filter.clone();
         let inverted_filter = delete.filters.inverted_filter.clone();
-        let snapshot = delete.snapshot.clone();
         let table_clone = table.clone();
+        let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
+        for part in &delete.parts.partitions {
+            // Safe to downcast because we know the type of the partition
+            let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+            segment_locations.push(SegmentLocation {
+                segment_idx: part.segment_index,
+                location: part.segment_location.clone(),
+                snapshot_loc: None,
+            });
+        }
+        let prune_ctx = MutationBlockPruningContext {
+            segment_locations,
+            block_count: None,
+        };
         self.main_pipeline.set_on_init(move || {
             let ctx_clone = ctx.clone();
             let (partitions, info) =
@@ -815,7 +831,7 @@ impl PipelineBuilder {
                             Some(filter),
                             Some(inverted_filter),
                             projection,
-                            &snapshot,
+                            prune_ctx,
                             true,
                             true,
                         )

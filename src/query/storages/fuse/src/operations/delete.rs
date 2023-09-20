@@ -56,9 +56,9 @@ use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
-use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
+use crate::SegmentLocation;
 
 pub struct MutationTaskInfo {
     pub total_tasks: usize,
@@ -263,17 +263,20 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         inverted_filter: Option<RemoteExpr<String>>,
         projection: Projection,
-        base_snapshot: &TableSnapshot,
+        prune_ctx: MutationBlockPruningContext,
         with_origin: bool,
         is_delete: bool,
     ) -> Result<(Partitions, MutationTaskInfo)> {
+        let MutationBlockPruningContext {
+            segment_locations,
+            block_count,
+        } = prune_ctx;
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter: filter.clone(),
             ..PushDownInfo::default()
         });
 
-        let segment_locations = base_snapshot.segments.clone();
         let mut pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
@@ -281,8 +284,6 @@ impl FuseTable {
             &push_down,
             self.bloom_index_cols(),
         )?;
-
-        let segment_locations = create_segment_location_vector(segment_locations, None);
 
         if let Some(inverse) = inverted_filter {
             // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
@@ -337,7 +338,7 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &range_block_metas,
-            base_snapshot.summary.block_count as usize,
+            block_count.unwrap_or_default(),
             PruningStatistics::default(),
         )?;
 
@@ -380,8 +381,9 @@ impl FuseTable {
                 ))));
         }
 
-        let block_nums = base_snapshot.summary.block_count;
-        metrics_inc_deletion_block_range_pruned_nums(block_nums - part_num as u64);
+        if let Some(block_count) = block_count {
+            metrics_inc_deletion_block_range_pruned_nums(block_count as u64 - part_num as u64);
+        }
         metrics_inc_deletion_block_range_pruned_whole_block_nums(num_whole_block_mutation as u64);
         metrics_inc_deletion_segment_range_purned_whole_segment_nums(segment_num as u64);
         Ok((parts, MutationTaskInfo {
@@ -389,4 +391,9 @@ impl FuseTable {
             num_whole_block_mutation,
         }))
     }
+}
+
+pub struct MutationBlockPruningContext {
+    pub segment_locations: Vec<SegmentLocation>,
+    pub block_count: Option<usize>,
 }
