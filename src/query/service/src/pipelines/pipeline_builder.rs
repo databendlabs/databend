@@ -844,6 +844,8 @@ impl PipelineBuilder {
                 ctx.set_partitions(partitions)?;
                 Ok(())
             });
+        } else {
+            ctx.set_partitions(delete.parts.clone())?;
         }
         table.add_deletion_source(
             self.ctx.clone(),
