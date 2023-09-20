@@ -168,11 +168,9 @@ impl FuseTable {
         col_indices: Vec<usize>,
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
-        parts: Partitions,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
         let total_tasks = parts.len();
-        ctx.set_partitions(parts)?;
 
         // Status.
         ctx.set_status_info(&format!(
