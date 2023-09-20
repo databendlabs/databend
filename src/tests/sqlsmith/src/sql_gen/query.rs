@@ -296,21 +296,34 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_from(&mut self) -> Vec<TableReference> {
-        match self.rng.gen_range(0..=9) {
+        let mut table_refs = vec![];
+        let table_ref_num = self.rng.gen_range(1..=3);
+        match self.rng.gen_range(0..=10) {
             0..=7 => {
-                let i = self.rng.gen_range(0..self.tables.len());
-                let table_ref = self.gen_table_ref(self.tables[i].clone());
-                vec![table_ref]
+                for _ in 0..table_ref_num {
+                    let i = self.rng.gen_range(0..self.tables.len());
+                    let table_ref = self.gen_table_ref(self.tables[i].clone());
+                    table_refs.push(table_ref);
+                }
             }
             // join
             8..=9 => {
                 self.is_join = true;
-                let join = self.gen_join_table_ref();
-                vec![join]
+                for _ in 0..table_ref_num {
+                    let join = self.gen_join_table_ref();
+                    table_refs.push(join);
+                }
+            }
+            10 => {
+                for _ in 0..table_ref_num {
+                    let table_func = self.gen_table_func();
+                    table_refs.push(table_func);
+                }
             }
             // TODO
             _ => unreachable!(),
         }
+        table_refs
     }
 
     fn gen_table_ref(&mut self, table: Table) -> TableReference {
@@ -336,6 +349,27 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    // Only test:
+    // [numbers, numbers_mt, numbers_local]
+    // No need to test:
+    // [fuse_snapshot,fuse_segment, fuse_block, fuse_column, fuse_statistic, clustering_information,
+    // sync_crash_me, async_crash_me ,infer_schema ,list_stage ,generate_series, range,
+    // ai_to_sql, execute_background_job, license_info, suggested_background_tasks ,tenant_quota]
+    fn gen_table_func(&mut self) -> TableReference {
+        let tbl_func = ["numbers", "numbers_mt", "numbers_local"];
+        let name = tbl_func[self.rng.gen_range(0..=2)].to_string();
+
+        TableReference::TableFunction {
+            span: None,
+            name: Identifier::from_name(name),
+            params: vec![Expr::Literal {
+                span: None,
+                lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+            }],
+            named_params: vec![],
+            alias: None,
+        }
+    }
     fn gen_join_table_ref(&mut self) -> TableReference {
         let i = self.rng.gen_range(0..self.tables.len());
         let j = if i == self.tables.len() - 1 { 0 } else { i + 1 };
