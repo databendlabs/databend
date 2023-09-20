@@ -157,4 +157,4 @@ Please let us know if you're interested in contributing to this feature, or pick
 
 You can check the changelog of Databend Nightly for details about our latest developments.
 
-**Full Changelog**: <https://github.com/datafuselabs/databend/compare/v1.2.87-nightly...v1.2.96-nightly>
+**Full Changelog**: <https://github.com/datafuselabs/databend/compare/v1.2.96-nightly...v1.2.109-nightly>

@@ -490,8 +490,7 @@ impl SubqueryRewriter {
                         aggregate_functions: vec![],
                         from_distinct: false,
                         limit: None,
-                        grouping_id_index: 0,
-                        grouping_sets: vec![],
+                        grouping_sets: None,
                     }
                     .into(),
                 ),
@@ -707,7 +706,6 @@ impl SubqueryRewriter {
                             aggregate_functions: agg_items,
                             from_distinct: aggregate.from_distinct,
                             limit: aggregate.limit,
-                            grouping_id_index: aggregate.grouping_id_index,
                             grouping_sets: aggregate.grouping_sets.clone(),
                         }
                         .into(),

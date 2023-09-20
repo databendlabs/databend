@@ -41,7 +41,6 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MetricsLayer;
 use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
@@ -106,12 +105,11 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
-        // Add metrics
-        .layer(MetricsLayer)
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(MinitraceLayer)
+        // TODO(liyz): add PrometheusClientLayer
         .finish();
 
     Ok(op)
