@@ -35,8 +35,6 @@ enum HashJoinBuildStep {
     // The fast return step indicates there is no data in build side,
     // so we can directly finish the following steps for hash join and return empty result.
     FastReturn,
-    // Wait to spill
-    WaitSpill,
     // Start the first spill
     FirstSpill,
     // Following spill after the first spill
@@ -58,7 +56,7 @@ pub struct TransformHashJoinBuild {
     finalize_finished: bool,
     // The flag indicates whether data is from spilled data.
     from_spill: bool,
-    _processor_id: usize,
+    processor_id: usize,
 }
 
 impl TransformHashJoinBuild {
@@ -77,7 +75,7 @@ impl TransformHashJoinBuild {
             spill_data: None,
             finalize_finished: false,
             from_spill: false,
-            _processor_id: processor_id,
+            processor_id,
         }))
     }
 
@@ -89,7 +87,7 @@ impl TransformHashJoinBuild {
         };
         self.input_data = Some(data_block);
         if wait {
-            self.step = HashJoinBuildStep::WaitSpill;
+            spill_state.barrier.read().wait();
         } else {
             let mut spill_coordinator = spill_state.spill_coordinator.write();
             // Make `need_spill` to false for `SpillCoordinator`
@@ -103,9 +101,15 @@ impl TransformHashJoinBuild {
                 spill_coordinator.total_builder_count - spill_coordinator.non_spill_processors;
             let spill_tasks = &mut spill_coordinator.spill_tasks;
             spill_state.split_spill_tasks(active_processors_num, spill_tasks)?;
-            spill_state.notify_spill();
-            self.step = HashJoinBuildStep::FirstSpill;
+            drop(spill_coordinator);
+            spill_state.barrier.read().wait();
+            // Update barrier, it's possible into next round wait spill.
+            *spill_state.barrier.write() = Barrier::new(
+                self.build_state._processor_count
+                    - spill_state.spill_coordinator.read().non_spill_processors,
+            );
         }
+        self.step = HashJoinBuildStep::FirstSpill;
         Ok(())
     }
 
@@ -159,8 +163,14 @@ impl Processor for TransformHashJoinBuild {
                             let active_processors_num = spill_coordinator.total_builder_count
                                 - non_spill_processors;
                             spill_state.split_spill_tasks(active_processors_num, &mut spill_coordinator.spill_tasks)?;
-                            spill_state.notify_spill();
                             spill_coordinator.waiting_spill_count = 0;
+                            drop(spill_coordinator);
+                            spill_state.barrier.read().wait();
+                            // Update barrier, it's possible into next round wait spill.
+                            *spill_state.barrier.write()= Barrier::new(self.build_state._processor_count - non_spill_processors);
+                        } else {
+                            drop(spill_coordinator);
+                            spill_state.barrier.read().wait();
                         }
                     }
                     self.build_state.row_space_build_done()?;
@@ -208,8 +218,7 @@ impl Processor for TransformHashJoinBuild {
                 }
             },
             HashJoinBuildStep::FastReturn | HashJoinBuildStep::Finished => Ok(Event::Finished),
-            HashJoinBuildStep::WaitSpill
-            | HashJoinBuildStep::FirstSpill
+            HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
             | HashJoinBuildStep::WaitProbe => Ok(Event::Async),
         }
@@ -267,8 +276,7 @@ impl Processor for TransformHashJoinBuild {
                 }
             }
             HashJoinBuildStep::FastReturn => Ok(()),
-            HashJoinBuildStep::WaitSpill
-            | HashJoinBuildStep::FirstSpill
+            HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
             | HashJoinBuildStep::WaitProbe
             | HashJoinBuildStep::Finished => unreachable!(),
@@ -277,12 +285,12 @@ impl Processor for TransformHashJoinBuild {
 
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
-            HashJoinBuildStep::WaitSpill => {
-                self.spill_state.as_ref().unwrap().wait_spill_notify().await;
-                self.step = HashJoinBuildStep::FirstSpill
-            }
             HashJoinBuildStep::FirstSpill => {
-                self.spill_state.as_mut().unwrap().spill().await?;
+                self.spill_state
+                    .as_mut()
+                    .unwrap()
+                    .spill(self.processor_id)
+                    .await?;
                 // After spill, the processor should continue to run, and process incoming data.
                 // FIXME: We should wait all processors finish spill, and then continue to run.
                 self.step = HashJoinBuildStep::Running;
@@ -292,7 +300,10 @@ impl Processor for TransformHashJoinBuild {
                     let spill_state = self.spill_state.as_mut().unwrap();
                     let mut hashes = Vec::with_capacity(data.num_rows());
                     spill_state.get_hashes(&data, &mut hashes)?;
-                    let unspilled_data = spill_state.spiller.spill_input(data, &hashes).await?;
+                    let unspilled_data = spill_state
+                        .spiller
+                        .spill_input(data, &hashes, self.processor_id)
+                        .await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;
                     }

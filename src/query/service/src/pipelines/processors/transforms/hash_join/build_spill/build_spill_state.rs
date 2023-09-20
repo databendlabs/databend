@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
+use std::sync::Barrier;
 
-use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -44,8 +44,9 @@ pub struct BuildSpillState {
     pub spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
     /// Spiller, responsible for specific spill work
     pub spiller: Spiller,
-    /// Notify all waiting spilling processors to start spill.
-    pub(crate) notify_spill: Arc<Notify>,
+    /// Wait util all active spill processor into `WaitSpill`, then start to spill
+    /// The `num_threads` of barrier needs to be changed if `non_spill_processors` is changed.
+    pub barrier: Arc<RwLock<Barrier>>,
 }
 
 impl BuildSpillState {
@@ -53,7 +54,7 @@ impl BuildSpillState {
         ctx: Arc<QueryContext>,
         spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
         build_state: Arc<HashJoinBuildState>,
-        notify_spill: Arc<Notify>,
+        barrier: Arc<RwLock<Barrier>>,
     ) -> Self {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -63,19 +64,8 @@ impl BuildSpillState {
             build_state,
             spill_coordinator,
             spiller,
-            notify_spill,
+            barrier,
         }
-    }
-
-    // Start to spill.
-    pub(crate) fn notify_spill(&self) {
-        self.notify_spill.notify_waiters();
-    }
-
-    // Wait for notify to spill
-    #[async_backtrace::framed]
-    pub async fn wait_spill_notify(&self) {
-        self.notify_spill.notified().await
     }
 
     // Get all hashes for build input data.
@@ -136,12 +126,12 @@ impl BuildSpillState {
 impl BuildSpillState {
     #[async_backtrace::framed]
     // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
-    pub(crate) async fn spill(&mut self) -> Result<()> {
+    pub(crate) async fn spill(&mut self, p_id: usize) -> Result<()> {
         let spill_partitions = {
             let mut spill_coordinator = self.spill_coordinator.write();
             spill_coordinator.spill_tasks.pop_back().unwrap()
         };
-        self.spiller.spill(&spill_partitions).await
+        self.spiller.spill(&spill_partitions, p_id).await
     }
 
     // Check if need to spill.
@@ -161,37 +151,23 @@ impl BuildSpillState {
 
         let mut total_bytes = 0;
 
-        {
-            let _lock = self
-                .build_state
-                .hash_join_state
-                .row_space
-                .write_lock
-                .write();
-            for block in self
-                .build_state
-                .hash_join_state
-                .row_space
-                .buffer
-                .read()
-                .iter()
-            {
-                total_bytes += block.memory_size();
-            }
+        let buffer = self.build_state.hash_join_state.row_space.buffer.read();
+        for block in buffer.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
-            for block in chunks.iter() {
-                total_bytes += block.memory_size();
-            }
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        for block in chunks.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            info!(
-                "check if need to spill: total_bytes: {}, spill_threshold: {}",
-                total_bytes, spill_threshold
-            );
+        info!(
+            "check if need to spill: total_bytes: {}, spill_threshold: {}",
+            total_bytes, spill_threshold
+        );
 
-            if total_bytes > spill_threshold {
-                return Ok(true);
-            }
+        if total_bytes > spill_threshold {
+            return Ok(true);
         }
         Ok(false)
     }
