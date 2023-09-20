@@ -8283,7 +8283,6 @@ dependencies = [
  "hyper",
  "log",
  "md-5",
- "metrics",
  "minitrace",
  "moka",
  "once_cell",

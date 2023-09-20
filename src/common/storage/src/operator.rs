@@ -106,12 +106,11 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
-        // Add metrics
-        .layer(MetricsLayer)
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(MinitraceLayer)
+        // TODO(liyz): add PrometheusClientLayer
         .finish();
 
     Ok(op)
