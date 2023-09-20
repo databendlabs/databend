@@ -3,6 +3,9 @@ title: ALTER FUNCTION
 description:
   Modifies the properties for an existing user-defined function.
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced or updated: v1.2.116"/>
 
 ## Syntax
 

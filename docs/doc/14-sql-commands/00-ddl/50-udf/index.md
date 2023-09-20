@@ -5,7 +5,7 @@ import IndexOverviewList from '@site/src/components/IndexOverviewList';
 
 ## What are UDFs?
 
-User-Defined Functions (UDFs) enable users to define their own custom operations to process data within Databend. They are typically written using lambda expressions or implemented via a UDF server with programming languages such as Python and are executed as part of Databend's query processing pipeline. Advantages of using UDFs include:
+User-Defined Functions (UDFs) enable you to define their own custom operations to process data within Databend. They are typically written using lambda expressions or implemented via a UDF server with programming languages such as Python and are executed as part of Databend's query processing pipeline. Advantages of using UDFs include:
 
 - Customized Data Transformations: UDFs empower you to perform data transformations that may not be achievable through built-in Databend functions alone. This customization is particularly valuable for handling unique data formats or business logic.
 
@@ -23,7 +23,7 @@ To manage UDFs in Databend, use the following commands:
 
 This section demonstrates two UDF implementation methods within Databend: one by creating UDFs with lambda expressions and the other by utilizing UDF servers in conjunction with Python. For additional examples of defining UDFs in various programming languages, see [CREATE FUNCTION](ddl-create-function.md).
 
-### UDF Implementation with Lambda Expressions
+### UDF Implementation with Lambda Expression
 
 This example implements a UDF named *a_plus_3* using a lambda expression:
 
@@ -40,7 +40,7 @@ SELECT a_plus_3(2);
 
 ### UDF Implementation via UDF Server
 
-This example demonstrates how to enable and configure a UDF server in Databend:
+This example demonstrates how to enable and configure a UDF server in Python:
 
 1. Enable UDF server support by adding the following parameters to the [query] section in the [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml) configuration file.
 
@@ -56,8 +56,11 @@ udf_server_allow_list = ['http://0.0.0.0:8815']
 
 2. Define your function. This code defines and runs a UDF server in Python, which exposes a custom function *gcd* for calculating the greatest common divisor of two integers and allows remote execution of this function:
 
+:::note
+The SDK package is not yet available. Prior to its release, please download the 'udf.py' file from https://github.com/datafuselabs/databend/blob/main/tests/udf-server/udf.py and ensure it is saved in the same directory as this Python script. This step is essential for the code to function correctly.
+:::
+
 ```python title='udf_server.py'
-##  The SDK package is not yet available. Prior to its release, please download the 'udf.py' file from https://github.com/datafuselabs/databend/blob/main/tests/udf-server/udf.py and ensure it is saved in the same directory as this Python script. This step is essential for the code to function correctly.
 from udf import *
 
 @udf(
@@ -79,7 +82,7 @@ if __name__ == '__main__':
     server.serve()
 ```
 
-`@udf` is an annotation for creating a UDF. It supports following parameters:
+`@udf` is a decorator used for defining UDFs in Databend, supporting the following parameters:
 
 | Parameter    | Description                                                                                         |
 |--------------|-----------------------------------------------------------------------------------------------------|
@@ -118,5 +121,5 @@ python3 udf_server.py
 4. Register the function *gcd* with the [CREATE FUNCTION](ddl-create-function.md) in Databend:
 
 ```sql
-CREATE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815';
+CREATE FUNCTION gcd (INT, INT) RETURNS INT LANGUAGE python HANDLER = 'gcd' ADDRESS = 'http://0.0.0.0:8815'；
 ```
