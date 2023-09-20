@@ -170,7 +170,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let total_tasks = parts.len();
+        let total_tasks = ctx.get_partitions(usize::MAX).len();
 
         // Status.
         ctx.set_status_info(&format!(

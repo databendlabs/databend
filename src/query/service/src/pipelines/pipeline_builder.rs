@@ -845,7 +845,7 @@ impl PipelineBuilder {
                 Ok(())
             });
         } else {
-            ctx.set_partitions(delete.parts.clone())?;
+            self.ctx.set_partitions(delete.parts.clone())?;
         }
         table.add_deletion_source(
             self.ctx.clone(),
