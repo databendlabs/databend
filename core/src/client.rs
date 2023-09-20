@@ -159,6 +159,29 @@ impl APIClient {
         guard.clone()
     }
 
+    pub async fn handle_session(&self, session: &Option<SessionConfig>) {
+        let mut session_settings = self.session_settings.lock().await;
+        if let Some(session) = &session {
+            if session.database.is_some() {
+                let mut database = self.database.lock().await;
+                *database = session.database.clone();
+            }
+            if let Some(settings) = &session.settings {
+                for (k, v) in settings {
+                    match k.as_str() {
+                        "warehouse" => {
+                            let mut warehouse = self.warehouse.lock().await;
+                            *warehouse = Some(v.clone());
+                        }
+                        _ => {
+                            session_settings.insert(k.clone(), v.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
         let session_settings = self.make_session().await;
         let req = QueryRequest::new(sql)
@@ -201,26 +224,7 @@ impl APIClient {
         if let Some(err) = resp.error {
             return Err(Error::InvalidResponse(err));
         }
-        let mut session_settings = self.session_settings.lock().await;
-        if let Some(session) = &resp.session {
-            if session.database.is_some() {
-                let mut database = self.database.lock().await;
-                *database = session.database.clone();
-            }
-            if let Some(settings) = &session.settings {
-                for (k, v) in settings {
-                    match k.as_str() {
-                        "warehouse" => {
-                            let mut warehouse = self.warehouse.lock().await;
-                            *warehouse = Some(v.clone());
-                        }
-                        _ => {
-                            session_settings.insert(k.clone(), v.clone());
-                        }
-                    }
-                }
-            }
-        }
+        self.handle_session(&resp.session).await;
         Ok(resp)
     }
 
@@ -245,6 +249,7 @@ impl APIClient {
             return Err(Error::InvalidResponse(resp_err));
         }
         let resp: QueryResponse = resp.json().await?;
+        self.handle_session(&resp.session).await;
         match resp.error {
             Some(err) => Err(Error::InvalidPage(err)),
             None => Ok(resp),
