@@ -821,30 +821,31 @@ impl PipelineBuilder {
             segment_locations,
             block_count: None,
         };
-        self.main_pipeline.set_on_init(move || {
-            let ctx_clone = ctx.clone();
-            let (partitions, info) =
-                Runtime::with_worker_threads(1, None)?.block_on(async move {
-                    table_clone
-                        .do_mutation_block_pruning(
-                            ctx_clone,
-                            Some(filter),
-                            Some(inverted_filter),
-                            projection,
-                            prune_ctx,
-                            true,
-                            true,
-                        )
-                        .await
-                })?;
-            info!(
-                "delete pruning done, number of whole block deletion detected in pruning phase: {}",
-                info.num_whole_block_mutation
-            );
-            ctx.set_partitions(partitions)?;
-            Ok(())
-        });
-
+        if delete.parts.is_lazy {
+            self.main_pipeline.set_on_init(move || {
+                let ctx_clone = ctx.clone();
+                let (partitions, info) =
+                    Runtime::with_worker_threads(1, None)?.block_on(async move {
+                        table_clone
+                            .do_mutation_block_pruning(
+                                ctx_clone,
+                                Some(filter),
+                                Some(inverted_filter),
+                                projection,
+                                prune_ctx,
+                                true,
+                                true,
+                            )
+                            .await
+                    })?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                ctx.set_partitions(partitions)?;
+                Ok(())
+            });
+        }
         table.add_deletion_source(
             self.ctx.clone(),
             &delete.filters.filter,

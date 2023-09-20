@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -54,10 +55,13 @@ use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 use common_storages_factory::Table;
+use common_storages_fuse::operations::MutationBlockPruningContext;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
+use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
@@ -235,13 +239,42 @@ impl Interpreter for DeleteInterpreter {
             )
             .await?
         {
-            let mut segments = Vec::with_capacity(snapshot.segments.len());
-            for (idx, segment_location) in snapshot.segments.iter().enumerate() {
-                segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
-            }
-            let partitions = Partitions::create(PartitionsShuffleKind::Mod, segments, true);
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
             let filters = filters.unwrap();
+            let cluster = self.ctx.get_cluster();
+            let partitions = if cluster.is_empty() || snapshot.segments.len() < cluster.nodes.len()
+            {
+                let projection = Projection::Columns(col_indices.clone());
+                let prune_ctx = MutationBlockPruningContext {
+                    segment_locations: create_segment_location_vector(
+                        snapshot.segments.clone(),
+                        None,
+                    ),
+                    block_count: Some(snapshot.summary.block_count as usize),
+                };
+                let (partitions, info) = fuse_table
+                    .do_mutation_block_pruning(
+                        self.ctx.clone(),
+                        Some(filters.filter.clone()),
+                        Some(filters.inverted_filter.clone()),
+                        projection,
+                        prune_ctx,
+                        true,
+                        true,
+                    )
+                    .await?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                partitions
+            } else {
+                let mut segments = Vec::with_capacity(snapshot.segments.len());
+                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                    segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+                }
+                Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+            };
             let physical_plan = Self::build_physical_plan(
                 filters,
                 partitions,
@@ -287,6 +320,7 @@ impl DeleteInterpreter {
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
+        let merge_meta = partitions.is_lazy;
         let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
             parts: partitions,
             filters,
@@ -313,7 +347,7 @@ impl DeleteInterpreter {
             table_info,
             catalog_info,
             mutation_kind: MutationKind::Delete,
-            merge_meta: true,
+            merge_meta,
         }))
     }
 }
