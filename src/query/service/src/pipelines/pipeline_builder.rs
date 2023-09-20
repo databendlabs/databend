@@ -23,7 +23,6 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::Runtime;
-use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
