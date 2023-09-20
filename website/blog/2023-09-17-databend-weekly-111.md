@@ -44,7 +44,7 @@ Stay connected with the latest news about Databend.
 
 ### Understanding SHARE ENDPOINT
 
-SHARE ENDPOINT is an important concept in Databend data sharing, used to specify the endpoint and tenant name of a data sharing instance. The accessors and users of the data need to define SHARE POINT to help the Databend instance access the shared data.
+"SHARE ENDPOINT" is a concept in Databend data sharing, as it defines the endpoint and tenant name of a data sharing instance. Consumers of the shared data must define a "SHARE ENDPOINT" in order to access the shared data.
 
 For example, if Tenant A shares data with Tenant B, then Tenant B needs to create a corresponding SHARE ENDPOINT so that the instance where Tenant B is located can access the shared data.
 
@@ -122,7 +122,7 @@ We have also made these improvements to Databend that we hope you will find help
 
 - Added support for infer filter.
 - Added support for idempotent deletion.
-- Supported the generation of aggregate functions, scalar functions, and expressions for SQLSmith testing.
+- Added capability of generating aggregate functions, scalar functions, and expressions for SQLSmith testing.
 - Read the documentation [Docs | INSERT INTO](https://databend.rs/doc/sql-commands/dml/dml-insert) and [Docs | REPLACE INTO](https://databend.rs/doc/sql-commands/dml/dml-replace) to learn how to use SQL statements to insert data from Stage into a table.
 
 ## What's Up Next
@@ -133,7 +133,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 Databend offers different types of caching to enhance query performance. These include Query Cache, File Metadata Cache, and Data Cache.
 
-However, there is currently a lack of effective cache support for files located in Stage. If metadata cache or object cache can be provided for Parquet files in Stage, it will help enhance the performance of querying external data.
+Currently, there exists an insufficient cache support mechanism for files residing in a stage. Introducing metadata caching or object caching for Parquet files within a stage could significantly boost query performance when working with external data.
 
 ```SQL
 select * from 's3://aa/bb/cc/' (pattern => '.*.parquet')
