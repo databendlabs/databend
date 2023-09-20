@@ -15,13 +15,13 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::sync::Arc;
-use std::sync::Barrier;
 use std::sync::Mutex;
 use std::time::Instant;
 
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_base::base::tokio::sync::Barrier;
 use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
@@ -963,7 +963,7 @@ impl PipelineBuilder {
             barrier,
         )?;
 
-        let spill_barrier = Arc::new(RwLock::new(Barrier::new(output_len)));
+        let spill_barrier = Arc::new(Barrier::new(output_len));
         let create_sink_processor = |input| {
             let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
                 Some(Box::new(BuildSpillState::create(

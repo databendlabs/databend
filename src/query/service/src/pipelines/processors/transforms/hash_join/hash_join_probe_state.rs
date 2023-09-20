@@ -17,10 +17,10 @@ use std::collections::VecDeque;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Barrier;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -60,7 +60,7 @@ pub struct HashJoinProbeState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) active_processor_count: AtomicUsize,
+    pub(crate) processor_count: usize,
     /// It will be increased by 1 when a new hash join probe processor is created.
     /// After the processor finish probe hash table, it will be decreased by 1.
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
@@ -71,7 +71,7 @@ pub struct HashJoinProbeState {
     /// Record final probe workers
     pub(crate) final_probe_workers: Mutex<usize>,
     /// Wait all `probe_workers` finish
-    pub(crate) barrier: RwLock<Barrier>,
+    pub(crate) barrier: Barrier,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -113,11 +113,11 @@ impl HashJoinProbeState {
         Ok(HashJoinProbeState {
             ctx,
             hash_join_state,
-            active_processor_count: AtomicUsize::new(processor_count),
+            processor_count,
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
             final_probe_workers: Default::default(),
-            barrier: RwLock::new(barrier),
+            barrier,
             probe_schema,
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),

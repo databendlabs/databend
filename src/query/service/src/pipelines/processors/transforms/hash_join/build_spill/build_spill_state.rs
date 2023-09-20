@@ -15,8 +15,8 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::sync::Barrier;
 
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -45,8 +45,11 @@ pub struct BuildSpillState {
     /// Spiller, responsible for specific spill work
     pub spiller: Spiller,
     /// Wait util all active spill processor into `WaitSpill`, then start to spill
-    /// The `num_threads` of barrier needs to be changed if `non_spill_processors` is changed.
-    pub barrier: Arc<RwLock<Barrier>>,
+    pub barrier: Arc<Barrier>,
+    /// If the processor doesn't need to spill, set it to false
+    pub need_spill: bool,
+    /// If the processor is the last processor to wait spill
+    pub is_leader: bool,
 }
 
 impl BuildSpillState {
@@ -54,7 +57,7 @@ impl BuildSpillState {
         ctx: Arc<QueryContext>,
         spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
         build_state: Arc<HashJoinBuildState>,
-        barrier: Arc<RwLock<Barrier>>,
+        barrier: Arc<Barrier>,
     ) -> Self {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -65,6 +68,8 @@ impl BuildSpillState {
             spill_coordinator,
             spiller,
             barrier,
+            need_spill: true,
+            is_leader: false,
         }
     }
 
