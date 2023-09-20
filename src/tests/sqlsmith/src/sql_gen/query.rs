@@ -28,6 +28,10 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableReference;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
 use rand::Rng;
 
 use crate::sql_gen::Column;
@@ -296,21 +300,29 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_from(&mut self) -> Vec<TableReference> {
-        match self.rng.gen_range(0..=9) {
+        let mut table_refs = vec![];
+        // TODO: generate more table reference
+        // let table_ref_num = self.rng.gen_range(1..=3);
+        match self.rng.gen_range(0..=10) {
             0..=7 => {
                 let i = self.rng.gen_range(0..self.tables.len());
                 let table_ref = self.gen_table_ref(self.tables[i].clone());
-                vec![table_ref]
+                table_refs.push(table_ref);
             }
             // join
             8..=9 => {
                 self.is_join = true;
                 let join = self.gen_join_table_ref();
-                vec![join]
+                table_refs.push(join);
+            }
+            10 => {
+                let table_func = self.gen_table_func();
+                table_refs.push(table_func);
             }
             // TODO
             _ => unreachable!(),
         }
+        table_refs
     }
 
     fn gen_table_ref(&mut self, table: Table) -> TableReference {
@@ -336,6 +348,111 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    // Only test:
+    // [numbers, numbers_mt, numbers_local, generate_series, range]
+    // No need to test:
+    // [fuse_snapshot,fuse_segment, fuse_block, fuse_column, fuse_statistic, clustering_information,
+    // sync_crash_me, async_crash_me ,infer_schema ,list_stage,
+    // ai_to_sql, execute_background_job, license_info, suggested_background_tasks ,tenant_quota]
+    fn gen_table_func(&mut self) -> TableReference {
+        let tbl_func = [
+            "numbers",
+            "numbers_mt",
+            "numbers_local",
+            "generate_series",
+            "range",
+        ];
+        let name = tbl_func[self.rng.gen_range(0..=4)];
+
+        match name {
+            "numbers" | "numbers_mt" | "numbers_local" => {
+                let table = Table {
+                    name: name.to_string(),
+                    schema: TableSchemaRefExt::create(vec![TableField::new(
+                        "number",
+                        TableDataType::Number(NumberDataType::UInt64),
+                    )]),
+                };
+                self.bound_table(table);
+                TableReference::TableFunction {
+                    span: None,
+                    name: Identifier::from_name(name),
+                    params: vec![Expr::Literal {
+                        span: None,
+                        lit: Literal::UInt64(self.rng.gen_range(0..=10)),
+                    }],
+                    named_params: vec![],
+                    alias: None,
+                }
+            }
+            "generate_series" | "range" => {
+                let mut gen_expr = || -> (TableDataType, Expr) {
+                    let idx = self.rng.gen_range(0..=2);
+                    match idx {
+                        0 => {
+                            let arg = Expr::Literal {
+                                span: None,
+                                lit: Literal::UInt64(self.rng.gen_range(0..=1000000)),
+                            };
+                            (TableDataType::Timestamp, Expr::FunctionCall {
+                                span: None,
+                                distinct: false,
+                                name: Identifier::from_name("to_date".to_string()),
+                                args: vec![arg],
+                                params: vec![],
+                                window: None,
+                                lambda: None,
+                            })
+                        }
+                        1 => {
+                            let arg = Expr::Literal {
+                                span: None,
+                                lit: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
+                            };
+                            (TableDataType::Date, Expr::FunctionCall {
+                                span: None,
+                                distinct: false,
+                                name: Identifier::from_name("to_timestamp".to_string()),
+                                args: vec![arg],
+                                params: vec![],
+                                window: None,
+                                lambda: None,
+                            })
+                        }
+                        2 => (
+                            TableDataType::Number(NumberDataType::Int64),
+                            Expr::Literal {
+                                span: None,
+                                lit: Literal::UInt64(self.rng.gen_range(0..=1000)),
+                            },
+                        ),
+                        _ => unreachable!(),
+                    }
+                };
+                let (ty1, param1) = gen_expr();
+                let (_, param2) = gen_expr();
+                let table = Table {
+                    name: name.to_string(),
+                    schema: TableSchemaRefExt::create(vec![TableField::new(name, ty1)]),
+                };
+                let (_, param3) = gen_expr();
+                self.bound_table(table);
+
+                TableReference::TableFunction {
+                    span: None,
+                    name: Identifier::from_name(name),
+                    params: if self.rng.gen_bool(0.5) {
+                        vec![param1, param2]
+                    } else {
+                        vec![param1, param2, param3]
+                    },
+                    named_params: vec![],
+                    alias: None,
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
     fn gen_join_table_ref(&mut self) -> TableReference {
         let i = self.rng.gen_range(0..self.tables.len());
         let j = if i == self.tables.len() - 1 { 0 } else { i + 1 };
