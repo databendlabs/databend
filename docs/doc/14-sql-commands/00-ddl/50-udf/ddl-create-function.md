@@ -33,7 +33,7 @@ CREATE FUNCTION [IF NOT EXISTS] <function_name> AS (<input_param_types>) RETURNS
 
 ## Examples
 
-### Creating with Lambda Expression
+### Creating UDF with Lambda Expression
 
 ```sql
 CREATE FUNCTION a_plus_3 AS (a) -> a+3;
@@ -72,7 +72,7 @@ DROP FUNCTION get_v2;
 DROP TABLE json_table;
 ```
 
-### Creating with UDF Server (Python)
+### Creating UDF with UDF Server (Python)
 
 This example demonstrates how to enable and configure a UDF server in Python:
 
