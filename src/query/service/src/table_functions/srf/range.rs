@@ -67,17 +67,7 @@ impl RangeTable {
     ) -> Result<Arc<dyn TableFunction>> {
         validate_args(&table_args.positioned, table_func_name)?;
 
-        let data_type = match &table_args.positioned[0] {
-            Scalar::Number(_) => Int64Type::data_type(),
-            Scalar::Timestamp(_) => TimestampType::data_type(),
-            Scalar::Date(_) => DateType::data_type(),
-            other => {
-                return Err(ErrorCode::BadArguments(format!(
-                    "Unsupported data type for generate_series: {:?}",
-                    other
-                )));
-            }
-        };
+        let data_type = table_args.positioned[0].as_ref().infer_data_type();
 
         let table_type = infer_schema_type(&data_type)?;
 
