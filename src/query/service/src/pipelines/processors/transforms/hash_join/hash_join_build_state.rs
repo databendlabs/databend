@@ -17,10 +17,10 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Barrier;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -67,14 +67,14 @@ pub struct HashJoinBuildState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) _processor_count: usize,
+    pub(crate) processor_count: usize,
     /// When build side input data is coming, we will put it into `RowSpace`'s chunks.
     /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
     /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
     pub(crate) chunk_size_limit: Arc<usize>,
     /// Wait util all processors finish row space build, then go to next phase.
-    pub(crate) barrier: RwLock<Barrier>,
+    pub(crate) barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
@@ -111,9 +111,9 @@ impl HashJoinBuildState {
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             hash_join_state,
-            _processor_count: processor_count,
+            processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
-            barrier: RwLock::new(barrier),
+            barrier,
             row_space_builders: Default::default(),
             method: Arc::new(method),
             entry_size: Arc::new(Default::default()),
