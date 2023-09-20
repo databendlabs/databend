@@ -170,13 +170,6 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let total_tasks = ctx.get_partitions(usize::MAX).len();
-
-        // Status.
-        ctx.set_status_info(&format!(
-            "delete: begin to run delete tasks, total tasks: {}",
-            total_tasks
-        ));
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let mut schema = block_reader.schema().as_ref().clone();
