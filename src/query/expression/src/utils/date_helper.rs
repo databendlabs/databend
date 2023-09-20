@@ -417,6 +417,7 @@ pub struct ToYYYYMMDD;
 pub struct ToYYYYMMDDHH;
 pub struct ToYYYYMMDDHHMMSS;
 pub struct ToYear;
+pub struct ToQuarter;
 pub struct ToMonth;
 pub struct ToDayOfYear;
 pub struct ToDayOfMonth;
@@ -461,6 +462,12 @@ impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
 impl ToNumber<u16> for ToYear {
     fn to_number(dt: &DateTime<Tz>) -> u16 {
         dt.year() as u16
+    }
+}
+
+impl ToNumber<u8> for ToQuarter {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        (dt.month0() / 3 + 1) as u8
     }
 }
 
