@@ -108,10 +108,14 @@ fn test_date_add_subtract(file: &mut impl Write) {
     run_ast(file, "add_years(to_date(0), 100)", &[]);
     run_ast(file, "add_months(to_date(0), 100)", &[]);
     run_ast(file, "add_days(to_date(0), 100)", &[]);
+    run_ast(file, "add(to_date(0), 100)", &[]);
+    run_ast(file, "add(to_date(0), 10000000)", &[]);
     run_ast(file, "subtract_years(to_date(0), 100)", &[]);
     run_ast(file, "subtract_quarters(to_date(0), 100)", &[]);
     run_ast(file, "subtract_months(to_date(0), 100)", &[]);
     run_ast(file, "subtract_days(to_date(0), 100)", &[]);
+    run_ast(file, "subtract(to_date(0), 100)", &[]);
+    run_ast(file, "subtract(to_date(0), 10000000)", &[]);
     run_ast(file, "add_years(a, b)", &[
         ("a", DateType::from_data(vec![-100, 0, 100])),
         ("b", Int32Type::from_data(vec![1, 2, 3])),
@@ -155,6 +159,8 @@ fn test_timestamp_add_subtract(file: &mut impl Write) {
     run_ast(file, "add_hours(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_minutes(to_timestamp(0), 100)", &[]);
     run_ast(file, "add_seconds(to_timestamp(0), 100)", &[]);
+    run_ast(file, "add(to_timestamp(0), 100000000000000)", &[]);
+    run_ast(file, "add(to_timestamp(0), 1000000000000000000)", &[]);
     run_ast(file, "subtract_years(to_timestamp(0), 100)", &[]);
     run_ast(file, "subtract_quarters(to_timestamp(0), 100)", &[]);
     run_ast(file, "subtract_months(to_timestamp(0), 100)", &[]);
@@ -162,6 +168,8 @@ fn test_timestamp_add_subtract(file: &mut impl Write) {
     run_ast(file, "subtract_hours(to_timestamp(0), 100)", &[]);
     run_ast(file, "subtract_minutes(to_timestamp(0), 100)", &[]);
     run_ast(file, "subtract_seconds(to_timestamp(0), 100)", &[]);
+    run_ast(file, "subtract(to_timestamp(0), 100000000000000)", &[]);
+    run_ast(file, "subtract(to_timestamp(0), 1000000000000000000)", &[]);
     run_ast(file, "add_years(a, b)", &[
         ("a", TimestampType::from_data(vec![-100, 0, 100])),
         ("b", Int32Type::from_data(vec![1, 2, 3])),
@@ -462,6 +470,7 @@ fn test_to_number(file: &mut impl Write) {
     run_ast(file, "to_yyyymmdd(to_date(18875))", &[]);
     run_ast(file, "to_yyyymmddhhmmss(to_date(18875))", &[]);
     run_ast(file, "to_year(to_date(18875))", &[]);
+    run_ast(file, "to_quarter(to_date(18875))", &[]);
     run_ast(file, "to_month(to_date(18875))", &[]);
     run_ast(file, "to_day_of_year(to_date(18875))", &[]);
     run_ast(file, "to_day_of_month(to_date(18875))", &[]);
@@ -479,6 +488,10 @@ fn test_to_number(file: &mut impl Write) {
         DateType::from_data(vec![-100, 0, 100]),
     )]);
     run_ast(file, "to_year(a)", &[(
+        "a",
+        DateType::from_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_quarter(a)", &[(
         "a",
         DateType::from_data(vec![-100, 0, 100]),
     )]);
@@ -504,6 +517,7 @@ fn test_to_number(file: &mut impl Write) {
     run_ast(file, "to_yyyymmdd(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_yyyymmddhhmmss(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_year(to_timestamp(1630812366))", &[]);
+    run_ast(file, "to_quarter(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_month(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_day_of_year(to_timestamp(1630812366))", &[]);
     run_ast(file, "to_day_of_month(to_timestamp(1630812366))", &[]);
@@ -524,6 +538,10 @@ fn test_to_number(file: &mut impl Write) {
         TimestampType::from_data(vec![-100, 0, 100]),
     )]);
     run_ast(file, "to_year(a)", &[(
+        "a",
+        TimestampType::from_data(vec![-100, 0, 100]),
+    )]);
+    run_ast(file, "to_quarter(a)", &[(
         "a",
         TimestampType::from_data(vec![-100, 0, 100]),
     )]);
