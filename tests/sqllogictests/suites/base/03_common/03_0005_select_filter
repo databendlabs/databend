@@ -1,6 +1,9 @@
 statement ok
 set max_threads = 16
 
+statement error 1065
+SELECT * FROM numbers_mt (3) where count(*) > 5
+
 statement ok
 SELECT * FROM numbers_mt (3) where number > 5
 
