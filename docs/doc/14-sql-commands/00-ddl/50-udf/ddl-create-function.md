@@ -13,10 +13,16 @@ Creates a user-defined function.
 
 ```sql
 -- Create with lambda expression
-CREATE FUNCTION [IF NOT EXISTS] <function_name> AS (<input_param_names>) -> <lambda_expression> [DESC='<description>']
+CREATE FUNCTION [IF NOT EXISTS] <function_name> 
+    AS (<input_param_names>) -> <lambda_expression> 
+    [DESC='<description>']
+
 
 -- Create with UDF server
-CREATE FUNCTION [IF NOT EXISTS] <function_name> AS (<input_param_types>) RETURNS <return_type> LANGUAGE <language_name> HANDLER = '<handler_name>' ADDRESS = '<udf_server_address>' [DESC='<description>']
+CREATE FUNCTION [IF NOT EXISTS] <function_name> 
+    AS (<input_param_types>) RETURNS <return_type> LANGUAGE <language_name> 
+    HANDLER = '<handler_name>' ADDRESS = '<udf_server_address>' 
+    [DESC='<description>']
 ```
 
 | Parameter             | Description                                                                                       |

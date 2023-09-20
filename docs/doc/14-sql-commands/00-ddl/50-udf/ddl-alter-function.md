@@ -13,10 +13,15 @@ Alters a user-defined function.
 
 ```sql
 -- Alter UDF created with lambda expression
-ALTER FUNCTION [IF NOT EXISTS] <function_name> AS (<input_param_names>) -> <lambda_expression> [DESC='<description>']
+ALTER FUNCTION [IF NOT EXISTS] <function_name> 
+    AS (<input_param_names>) -> <lambda_expression> 
+    [DESC='<description>']
 
 -- Alter UDF created with UDF server
-ALTER FUNCTION [IF NOT EXISTS] <function_name> AS (<input_param_types>) RETURNS <return_type> LANGUAGE <language_name> HANDLER = '<handler_name>' ADDRESS = '<udf_server_address>' [DESC='<description>']
+ALTER FUNCTION [IF NOT EXISTS] <function_name> 
+    AS (<input_param_types>) RETURNS <return_type> LANGUAGE <language_name> 
+    HANDLER = '<handler_name>' ADDRESS = '<udf_server_address>' 
+    [DESC='<description>']
 ```
 
 ## Examples
