@@ -16,17 +16,17 @@ use std::{env, error::Error};
 use vergen::EmitBuilder;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    match env::var("BENDSQL_BUILD_INFO") {
-        Ok(info) => {
+    EmitBuilder::builder()
+        .fail_on_error()
+        .build_timestamp()
+        .git_sha(true)
+        .emit()
+        .unwrap_or_else(|_| {
+            let info = match env::var("BENDSQL_BUILD_INFO") {
+                Ok(info) => info,
+                Err(_) => "unknown".to_string(),
+            };
             println!("cargo:rustc-env=BENDSQL_BUILD_INFO={}", info);
-        }
-        Err(_) => {
-            EmitBuilder::builder()
-                .fail_on_error()
-                .build_timestamp()
-                .git_sha(true)
-                .emit()?;
-        }
-    }
+        });
     Ok(())
 }
