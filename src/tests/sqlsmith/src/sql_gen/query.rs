@@ -26,12 +26,18 @@ use common_ast::ast::Query;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
+use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
+use common_ast::ast::With;
+use common_ast::ast::CTE;
+use common_expression::infer_schema_type;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use rand::distributions::Alphanumeric;
 use rand::Rng;
 
 use crate::sql_gen::Column;
@@ -40,10 +46,12 @@ use crate::sql_gen::Table;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_query(&mut self) -> Query {
-        self.bound_columns.clear();
+        self.cte_tables.clear();
         self.bound_tables.clear();
+        self.bound_columns.clear();
         self.is_join = false;
 
+        let with = self.gen_with();
         let body = self.gen_set_expr();
         let limit = self.gen_limit();
         let offset = self.gen_offset(limit.len());
@@ -51,8 +59,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         Query {
             span: None,
-            // TODO
-            with: None,
+            with,
             body,
             order_by,
             limit,
@@ -61,7 +68,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_subquery(&mut self) -> Query {
+    // Scalar, IN / NOT IN, ANY / SOME / ALL Subquery must return only one column
+    // EXISTS / NOT EXISTS Subquery can return any columns
+    pub(crate) fn gen_subquery(&mut self, one_column: bool) -> (Query, TableSchemaRef) {
+        let current_cte_tables = mem::take(&mut self.cte_tables);
         let current_bound_tables = mem::take(&mut self.bound_tables);
         let current_bound_columns = mem::take(&mut self.bound_columns);
         let current_is_join = self.is_join;
@@ -70,13 +80,101 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         self.bound_columns = vec![];
         self.is_join = false;
 
-        let query = self.gen_query();
+        // Only generate simple subquery
+        // TODO: complex subquery
+        let from = self.gen_from();
 
+        let len = if one_column {
+            1
+        } else {
+            self.rng.gen_range(1..=5)
+        };
+
+        let name: String = (0..3)
+            .map(|_| self.rng.sample(Alphanumeric) as char)
+            .collect();
+        let mut fields = Vec::with_capacity(len);
+        let mut select_list = Vec::with_capacity(len);
+        for i in 0..len {
+            let ty = self.gen_simple_data_type();
+            let expr = self.gen_simple_expr(&ty);
+            let col_name = format!("c{}{}", name, i);
+            let table_type = infer_schema_type(&ty).unwrap();
+            let field = TableField::new(&col_name, table_type);
+            fields.push(field);
+            let alias = Identifier::from_name(col_name);
+            let target = SelectTarget::AliasedExpr {
+                expr: Box::new(expr),
+                alias: Some(alias),
+            };
+            select_list.push(target);
+        }
+        let schema = TableSchemaRefExt::create(fields);
+
+        let select = SelectStmt {
+            span: None,
+            hints: None,
+            distinct: false,
+            select_list,
+            from,
+            selection: None,
+            group_by: None,
+            having: None,
+            window_list: None,
+        };
+        let body = SetExpr::Select(Box::new(select));
+
+        let query = Query {
+            span: None,
+            with: None,
+            body,
+            order_by: vec![],
+            limit: vec![],
+            offset: None,
+            ignore_result: false,
+        };
+
+        self.cte_tables = current_cte_tables;
         self.bound_tables = current_bound_tables;
         self.bound_columns = current_bound_columns;
         self.is_join = current_is_join;
 
-        query
+        (query, schema)
+    }
+
+    fn gen_with(&mut self) -> Option<With> {
+        if self.rng.gen_bool(0.8) {
+            return None;
+        }
+
+        let len = self.rng.gen_range(1..=3);
+        let mut ctes = Vec::with_capacity(len);
+        for _ in 0..len {
+            let cte = self.gen_cte();
+            ctes.push(cte);
+        }
+
+        Some(With {
+            span: None,
+            recursive: false,
+            ctes,
+        })
+    }
+
+    fn gen_cte(&mut self) -> CTE {
+        let (subquery, schema) = self.gen_subquery(false);
+
+        let (table, alias) = self.gen_subquery_table(schema);
+        self.cte_tables.push(table);
+
+        let materialized = self.rng.gen_bool(0.5);
+
+        CTE {
+            span: None,
+            alias,
+            materialized,
+            query: Box::new(subquery),
+        }
     }
 
     fn gen_set_expr(&mut self) -> SetExpr {
@@ -304,16 +402,20 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         // TODO: generate more table reference
         // let table_ref_num = self.rng.gen_range(1..=3);
         match self.rng.gen_range(0..=10) {
-            0..=7 => {
-                let i = self.rng.gen_range(0..self.tables.len());
-                let table_ref = self.gen_table_ref(self.tables[i].clone());
+            0..=6 => {
+                let (table_ref, _) = self.gen_table_ref();
                 table_refs.push(table_ref);
             }
             // join
-            8..=9 => {
+            7..=8 => {
                 self.is_join = true;
                 let join = self.gen_join_table_ref();
                 table_refs.push(join);
+            }
+            // subquery
+            9 => {
+                let subquery = self.gen_subquery_table_ref();
+                table_refs.push(subquery);
             }
             10 => {
                 let table_func = self.gen_table_func();
@@ -325,12 +427,21 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         table_refs
     }
 
-    fn gen_table_ref(&mut self, table: Table) -> TableReference {
+    fn gen_table_ref(&mut self) -> (TableReference, TableSchemaRef) {
+        let len = self.tables.len() + self.cte_tables.len();
+        let i = self.rng.gen_range(0..len);
+
+        let table = if i < self.tables.len() {
+            self.tables[i].clone()
+        } else {
+            self.cte_tables[len - i - 1].clone()
+        };
+        let schema = table.schema.clone();
         let table_name = Identifier::from_name(table.name.clone());
 
         self.bound_table(table);
 
-        TableReference::Table {
+        let table_ref = TableReference::Table {
             span: None,
             // TODO
             catalog: None,
@@ -345,7 +456,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             pivot: None,
             // TODO
             unpivot: None,
-        }
+        };
+        (table_ref, schema)
     }
 
     // Only test:
@@ -453,11 +565,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             _ => unreachable!(),
         }
     }
+
     fn gen_join_table_ref(&mut self) -> TableReference {
-        let i = self.rng.gen_range(0..self.tables.len());
-        let j = if i == self.tables.len() - 1 { 0 } else { i + 1 };
-        let left_table = self.gen_table_ref(self.tables[i].clone());
-        let right_table = self.gen_table_ref(self.tables[j].clone());
+        let (left_table, left_schema) = self.gen_table_ref();
+        let (right_table, right_schema) = self.gen_table_ref();
 
         let op = match self.rng.gen_range(0..=8) {
             0 => JoinOperator::Inner,
@@ -479,8 +590,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 JoinCondition::On(Box::new(expr))
             }
             1 => {
-                let left_fields = self.tables[i].schema.fields();
-                let right_fields = self.tables[j].schema.fields();
+                let left_fields = left_schema.fields();
+                let right_fields = right_schema.fields();
 
                 let mut names = Vec::new();
                 for left_field in left_fields {
@@ -534,6 +645,19 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         TableReference::Join { span: None, join }
     }
 
+    fn gen_subquery_table_ref(&mut self) -> TableReference {
+        let (subquery, schema) = self.gen_subquery(false);
+
+        let (table, alias) = self.gen_subquery_table(schema);
+        self.bound_table(table);
+
+        TableReference::Subquery {
+            span: None,
+            subquery: Box::new(subquery),
+            alias: Some(alias),
+        }
+    }
+
     fn gen_selection(&mut self) -> Option<Expr> {
         match self.rng.gen_range(0..=9) {
             0..=5 => Some(self.gen_expr(&DataType::Boolean)),
@@ -543,6 +667,25 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             }
             _ => None,
         }
+    }
+
+    fn gen_subquery_table(&mut self, schema: TableSchemaRef) -> (Table, TableAlias) {
+        let name: String = (0..4)
+            .map(|_| self.rng.sample(Alphanumeric) as char)
+            .collect();
+        let table_name = format!("t{}", name);
+        let mut columns = Vec::with_capacity(schema.num_fields());
+        for field in schema.fields() {
+            let column = Identifier::from_name(field.name.clone());
+            columns.push(column);
+        }
+        let alias = TableAlias {
+            name: Identifier::from_name(table_name.clone()),
+            columns,
+        };
+        let table = Table::new(table_name, schema);
+
+        (table, alias)
     }
 
     fn bound_table(&mut self, table: Table) {
