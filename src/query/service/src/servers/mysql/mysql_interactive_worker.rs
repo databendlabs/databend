@@ -35,7 +35,6 @@ use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use log::error;
 use log::info;
-use metrics::histogram;
 use minitrace::prelude::*;
 use opensrv_mysql::AsyncMysqlShim;
 use opensrv_mysql::ErrorKind;
@@ -48,6 +47,7 @@ use rand::RngCore;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
+use crate::servers::mysql::mysql_metrics;
 use crate::servers::mysql::writers::DFInitResultWriter;
 use crate::servers::mysql::writers::DFQueryResultWriter;
 use crate::servers::mysql::writers::ProgressReporter;
@@ -217,11 +217,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             let suffix = format!("(while in query {})", query);
             write_result = Err(cause.add_message_back(suffix));
         }
-
-        histogram!(
-            super::mysql_metrics::METRIC_MYSQL_PROCESSOR_REQUEST_DURATION,
-            instant.elapsed()
-        );
+        mysql_metrics::observe_mysql_process_request_duration(instant.elapsed());
 
         write_result
     }
@@ -397,10 +393,7 @@ impl InteractiveWorkerBase {
                 let ctx = context.clone();
                 async move {
                     let mut data_stream = interpreter.execute(ctx.clone()).await?;
-                    histogram!(
-                        super::mysql_metrics::METRIC_INTERPRETER_USEDTIME,
-                        instant.elapsed()
-                    );
+                    mysql_metrics::observe_mysql_interpreter_used_time(instant.elapsed());
 
                     // Wrap the data stream, log finish event at the end of stream
                     let intercepted_stream = async_stream::stream! {
