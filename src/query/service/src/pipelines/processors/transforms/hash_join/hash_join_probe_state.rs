@@ -88,6 +88,7 @@ pub struct HashJoinProbeState {
 }
 
 impl HashJoinProbeState {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<QueryContext>,
         hash_join_state: Arc<HashJoinState>,
@@ -254,18 +255,22 @@ impl HashJoinProbeState {
         })
     }
 
-    pub fn probe_attach(&self) -> Result<()> {
+    pub fn probe_attach(&self) -> Result<usize> {
+        let mut res = 0;
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
             let mut count = self.probe_workers.lock();
             *count += 1;
+            res = *count;
         }
         if self.ctx.get_settings().get_enable_join_spill()? {
             let mut count = self.final_probe_workers.lock();
             *count += 1;
             let mut count = self.spill_workers.lock();
             *count += 1;
+            res = *count;
         }
-        Ok(())
+
+        Ok(res)
     }
 
     pub fn finish_final_probe(&self) {

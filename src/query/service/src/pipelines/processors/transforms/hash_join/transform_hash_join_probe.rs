@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Barrier;
 
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -69,6 +70,7 @@ pub struct TransformHashJoinProbe {
     spill_done: bool,
 
     spill_state: Option<Box<ProbeSpillState>>,
+    processor_id: usize,
 }
 
 impl TransformHashJoinProbe {
@@ -84,7 +86,7 @@ impl TransformHashJoinProbe {
         join_type: &JoinType,
         with_conjunct: bool,
     ) -> Result<Box<dyn Processor>> {
-        join_probe_state.probe_attach()?;
+        let id = join_probe_state.probe_attach()?;
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -99,6 +101,7 @@ impl TransformHashJoinProbe {
             first_round: true,
             spill_done: false,
             spill_state: probe_spill_state,
+            processor_id: id,
         }))
     }
 
@@ -221,12 +224,15 @@ impl TransformHashJoinProbe {
         if self.join_probe_state.hash_join_state.need_outer_scan()
             || self.join_probe_state.hash_join_state.need_mark_scan()
         {
+            let active_processor_count = self
+                .join_probe_state
+                .active_processor_count
+                .load(Ordering::Relaxed);
             let mut count = self.join_probe_state.probe_workers.lock();
             if *count == 0 {
-                *count = self
-                    .join_probe_state
-                    .active_processor_count
-                    .load(Ordering::Relaxed);
+                *count = active_processor_count;
+                let mut barrier = self.join_probe_state.barrier.write();
+                *barrier = Barrier::new(active_processor_count);
             }
         }
 
@@ -267,6 +273,7 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
+                    info!("{:?} finished", self.processor_id);
                     // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
                     let spilled_partition_set = &self
                         .spill_state
@@ -460,7 +467,10 @@ impl Processor for TransformHashJoinProbe {
                     let mut hashes = Vec::with_capacity(data.num_rows());
                     spill_state.get_hashes(&data, &mut hashes)?;
                     // FIXME: we can directly discard `_non_matched_data`, because there is no matched data with build side.
-                    let _non_matched_data = spill_state.spiller.spill_input(data, &hashes).await?;
+                    let _non_matched_data = spill_state
+                        .spiller
+                        .spill_input(data, &hashes, self.processor_id)
+                        .await?;
                 }
             }
             HashJoinProbeStep::AsyncRunning => {

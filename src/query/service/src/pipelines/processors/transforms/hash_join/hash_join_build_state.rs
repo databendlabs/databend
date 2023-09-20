@@ -212,8 +212,9 @@ impl HashJoinBuildState {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {
                     let data_block = DataBlock::concat(&buffer)?;
-                    self.add_build_block(data_block)?;
                     buffer.clear();
+                    drop(buffer);
+                    self.add_build_block(data_block)?;
                 }
             }
 
