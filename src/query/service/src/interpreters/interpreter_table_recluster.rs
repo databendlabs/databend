@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,6 +32,8 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::cast_expr_to_non_null_boolean;
+use crate::sql::plans::FunctionCall;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -73,8 +76,37 @@ impl Interpreter for ReclusterTableInterpreter {
                 .project_column_ref(|col| col.column_name.clone())
                 .as_remote_expr();
 
+            // prepare the filter expression
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?
+            .as_remote_expr();
+
+            // prepare the inverse filter expression
+            let inverted_filter = {
+                let inverse = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "not".to_string(),
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                });
+                cast_expr_to_non_null_boolean(
+                    inverse
+                        .as_expr()?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )?
+                .as_remote_expr()
+            };
+
+            let filters = Filters {
+                filter,
+                inverted_filter,
+            };
+
             Some(PushDownInfo {
-                filter: Some(filter),
+                filters: Some(filters),
                 ..PushDownInfo::default()
             })
         } else {

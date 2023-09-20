@@ -172,7 +172,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filter: Some(parse_to_remote_string_expr(
+        filters: Some(parse_to_remote_string_expr(
             ctx.clone(),
             table.clone(),
             "a > 3",

@@ -14,10 +14,16 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::Filters;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_kvapi::kvapi::KVApi;
 use common_users::UserApiProvider;
+
+use crate::executor::cast_expr_to_non_null_boolean;
+use crate::sql::ScalarExpr;
 
 /// Checks if a duplicate label exists in the meta store.
 ///
@@ -40,4 +46,34 @@ pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool>
             }
         }
     }
+}
+
+pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
+    let filter = cast_expr_to_non_null_boolean(
+        scalar
+            .as_expr()?
+            .project_column_ref(|col| col.column_name.clone()),
+    )?
+    .as_remote_expr();
+
+    // prepare the inverse filter expression
+    let inverted_filter = {
+        let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
+            span: None,
+            func_name: "not".to_string(),
+            params: vec![],
+            arguments: vec![scalar.clone()],
+        });
+        cast_expr_to_non_null_boolean(
+            inverse
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone()),
+        )?
+        .as_remote_expr()
+    };
+
+    Ok(Filters {
+        filter,
+        inverted_filter,
+    })
 }

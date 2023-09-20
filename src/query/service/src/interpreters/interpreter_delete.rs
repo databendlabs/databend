@@ -60,6 +60,7 @@ use log::debug;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
+use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -171,28 +172,14 @@ impl Interpreter for DeleteInterpreter {
             )?
             .as_remote_expr();
 
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            let filters = create_push_down_filters(&scalar)?;
+
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::Unimplemented(
                     "Delete must have deterministic predicate",
                 ));
             }
-
-            // prepare the inverse filter expression
-            let inverted_filter = {
-                let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
-                    span: None,
-                    func_name: "not".to_string(),
-                    params: vec![],
-                    arguments: vec![scalar.clone()],
-                });
-                cast_expr_to_non_null_boolean(
-                    inverse
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone()),
-                )?
-                .as_remote_expr()
-            };
 
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
                 let mut col_indices = HashSet::new();
@@ -203,13 +190,7 @@ impl Interpreter for DeleteInterpreter {
             } else {
                 scalar.used_columns().into_iter().collect()
             };
-            (
-                Some(DeletionFilters {
-                    filter,
-                    inverted_filter,
-                }),
-                col_indices,
-            )
+            (Some(filters), col_indices)
         } else {
             (None, vec![])
         };

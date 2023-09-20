@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+use common_catalog::plan::Filters;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -72,7 +73,7 @@ impl FuseTable {
     pub async fn fast_delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filters: Option<DeletionFilters>,
+        filters: Option<Filters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {

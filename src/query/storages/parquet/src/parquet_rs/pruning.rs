@@ -57,14 +57,14 @@ impl ParquetRSPruner {
         // Build `RangePruner` by `filter`.
         let filter = push_down
             .as_ref()
-            .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+            .and_then(|p| p.filters.as_ref().map(|f| f));
 
         let mut predicate_columns = vec![];
         let range_pruner =
             if filter.is_some() && (options.prune_row_groups() || options.prune_pages()) {
+                let filter_expr = filter.as_ref().unwrap().filter.as_expr(&BUILTIN_FUNCTIONS);
+
                 predicate_columns = filter
-                    .as_ref()
-                    .unwrap()
                     .column_refs()
                     .into_keys()
                     .map(|name| {
