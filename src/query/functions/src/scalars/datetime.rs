@@ -1043,7 +1043,20 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
 fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "plus",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, lhs, rhs| {
+            (|| {
+                let lm: i64 = num_traits::cast::cast(lhs.max)?;
+                let ln: i64 = num_traits::cast::cast(lhs.min)?;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: check_date(ln + rn).ok()?,
+                    max: check_date(lm + rm).ok()?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::MayThrow)
+        },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
             match check_date((a as i64) + b) {
                 Ok(v) => output.push(v),
@@ -1076,7 +1089,19 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "plus",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: check_timestamp(ln + rn).ok()?,
+                    max: check_timestamp(lm + rm).ok()?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::MayThrow)
+        },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, ctx| match check_timestamp(a + b) {
                 Ok(v) => output.push(v),
@@ -1108,7 +1133,20 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<DateType, Int64Type, DateType, _, _>(
         "minus",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, lhs, rhs| {
+            (|| {
+                let lm: i64 = num_traits::cast::cast(lhs.max)?;
+                let ln: i64 = num_traits::cast::cast(lhs.min)?;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i32> {
+                    min: check_date(ln - rn).ok()?,
+                    max: check_date(lm - rm).ok()?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::MayThrow)
+        },
         vectorize_with_builder_2_arg::<DateType, Int64Type, DateType>(|a, b, output, ctx| {
             match check_date((a as i64) - b) {
                 Ok(v) => output.push(v),
@@ -1141,7 +1179,20 @@ fn register_timestamp_add_sub(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<TimestampType, Int64Type, TimestampType, _, _>(
         "minus",
-        |_, _, _| FunctionDomain::MayThrow,
+        |_, lhs, rhs| {
+            (|| {
+                let lm = lhs.max;
+                let ln = lhs.min;
+                let rm = rhs.max;
+                let rn = rhs.min;
+
+                Some(FunctionDomain::Domain(SimpleDomain::<i64> {
+                    min: check_timestamp(ln - rn).ok()?,
+                    max: check_timestamp(lm - rm).ok()?,
+                }))
+            })()
+            .unwrap_or(FunctionDomain::MayThrow)
+        },
         vectorize_with_builder_2_arg::<TimestampType, Int64Type, TimestampType>(
             |a, b, output, ctx| match check_timestamp(a - b) {
                 Ok(v) => output.push(v),
