@@ -66,13 +66,15 @@ pub fn make_kill_uri(query_id: &str) -> String {
 pub struct QueryError {
     pub code: u16,
     pub message: String,
+    pub detail: String,
 }
 
 impl QueryError {
     fn from_error_code(e: &ErrorCode) -> Self {
         QueryError {
             code: e.code(),
-            message: e.message(),
+            message: e.display_text(),
+            detail: e.detail(),
         }
     }
 }

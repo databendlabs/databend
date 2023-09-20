@@ -696,6 +696,22 @@ impl<'a> TypeChecker<'a> {
                     }
                 }
 
+                // check window function legal
+                {
+                    let supported_window_funcs = AggregateFunctionFactory::instance()
+                        .registered_names()
+                        .into_iter()
+                        .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
+                        .collect::<Vec<String>>();
+                    let name = func_name.to_lowercase();
+                    if window.is_some() && !supported_window_funcs.contains(&name) {
+                        return Err(ErrorCode::SemanticError(
+                            "only general and aggregate functions allowed in window syntax",
+                        )
+                        .set_span(*span));
+                    }
+                }
+
                 let args: Vec<&Expr> = args.iter().collect();
 
                 // Check assumptions if it is a set returning function
@@ -2471,7 +2487,7 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_map(
         &mut self,
         span: Span,
-        kvs: &[(Literal, Literal)],
+        kvs: &[(Literal, Expr)],
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         let mut keys = Vec::with_capacity(kvs.len());
         let mut vals = Vec::with_capacity(kvs.len());
@@ -2484,14 +2500,8 @@ impl<'a> TypeChecker<'a> {
                 }
                 .into(),
             );
-            let box (val_arg, _data_type) = self.resolve_literal(val_expr)?;
-            vals.push(
-                ConstantExpr {
-                    span,
-                    value: val_arg,
-                }
-                .into(),
-            );
+            let box (val_arg, _data_type) = self.resolve(val_expr).await?;
+            vals.push(val_arg);
         }
         let box (key_arg, _data_type) = self
             .resolve_scalar_function_call(span, "array", vec![], keys)

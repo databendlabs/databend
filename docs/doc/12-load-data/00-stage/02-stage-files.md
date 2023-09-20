@@ -13,7 +13,7 @@ The PRESIGN method generates a time-limited URL with a signature, which clients 
 If you're using [BendSQL](../../13-sql-clients/01-bendsql.md) to manage files in a stage, you can use the PUT command for uploading files and the GET command for downloading files.
 
 - The GET command currently can only download all files in a stage, not individual ones.
-- These commands are exclusive to BendSQL and do not function when Databend uses the file system as the storage backend.
+- These commands are exclusive to BendSQL and the GET command will not function when Databend uses the file system as the storage backend.
 
 ## Examples
 

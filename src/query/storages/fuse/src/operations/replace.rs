@@ -176,12 +176,40 @@ impl FuseTable {
         })
     }
 
-    pub fn chain_commit_sink(
+    pub fn chain_mutation_pipes(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
+        merge_meta: bool,
     ) -> Result<()> {
+        let cluster_key_id = self.cluster_key_id();
+        pipeline.try_resize(1)?;
+        if merge_meta {
+            pipeline.add_transform(|input, output| {
+                let merger = TransformMergeCommitMeta::create(cluster_key_id);
+                Ok(ProcessorPtr::create(AccumulatingTransformer::create(
+                    input, output, merger,
+                )))
+            })?;
+        } else {
+            pipeline.add_transform(|input, output| {
+                let base_segments = if matches!(mutation_kind, MutationKind::Compact) {
+                    vec![]
+                } else {
+                    base_snapshot.segments.clone()
+                };
+                let mutation_aggregator =
+                    TableMutationAggregator::new(self, ctx.clone(), base_segments, mutation_kind);
+                Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                    input,
+                    output,
+                    mutation_aggregator,
+                )))
+            })?;
+        }
+
         let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
             CommitSink::try_create(
@@ -194,31 +222,6 @@ impl FuseTable {
                 false,
                 None,
             )
-        })
-    }
-
-    pub fn chain_mutation_pipes(
-        &self,
-        ctx: &Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
-        base_snapshot: Arc<TableSnapshot>,
-        mutation_kind: MutationKind,
-    ) -> Result<()> {
-        self.chain_mutation_aggregator(ctx, pipeline, base_snapshot.clone(), mutation_kind)?;
-        self.chain_commit_sink(ctx, pipeline, base_snapshot)
-    }
-
-    pub fn chain_commit_meta_merger(
-        &self,
-        pipeline: &mut Pipeline,
-        default_cluster_key_id: Option<u32>,
-    ) -> Result<()> {
-        pipeline.try_resize(1)?;
-        pipeline.add_transform(|input, output| {
-            let merger = TransformMergeCommitMeta::create(default_cluster_key_id);
-            Ok(ProcessorPtr::create(AccumulatingTransformer::create(
-                input, output, merger,
-            )))
         })
     }
 

@@ -14,8 +14,10 @@
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
@@ -871,7 +873,7 @@ pub struct DeletePartial {
     pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
-    pub snapshot: TableSnapshot,
+    pub snapshot: Arc<TableSnapshot>,
 }
 
 impl DeletePartial {
@@ -880,7 +882,7 @@ impl DeletePartial {
     }
 }
 
-impl MutationAggregate {
+impl CommitSink {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
@@ -888,22 +890,23 @@ impl MutationAggregate {
 
 // TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MutationAggregate {
+pub struct CommitSink {
     pub input: Box<PhysicalPlan>,
-    pub snapshot: TableSnapshot,
+    pub snapshot: Arc<TableSnapshot>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
+    pub merge_meta: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize, Copy)]
-/// This is used by TableMutationAggregator, so no compact here.
 pub enum MutationKind {
     Delete,
     Update,
     Replace,
     Recluster,
     Insert,
+    Compact,
 }
 
 impl Display for MutationKind {
@@ -914,6 +917,7 @@ impl Display for MutationKind {
             MutationKind::Recluster => write!(f, "Recluster"),
             MutationKind::Update => write!(f, "Update"),
             MutationKind::Replace => write!(f, "Replace"),
+            MutationKind::Compact => write!(f, "Compact"),
         }
     }
 }
@@ -964,11 +968,11 @@ pub struct ReplaceInto {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct FinalCommit {
-    pub input: Box<PhysicalPlan>,
-    pub catalog_info: CatalogInfo,
+pub struct CompactPartial {
+    pub parts: Partitions,
     pub table_info: TableInfo,
-    pub snapshot: TableSnapshot,
+    pub catalog_info: CatalogInfo,
+    pub column_ids: HashSet<ColumnId>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -1027,17 +1031,18 @@ pub enum PhysicalPlan {
 
     /// Delete
     DeletePartial(Box<DeletePartial>),
-    MutationAggregate(Box<MutationAggregate>),
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTable>),
     /// Replace
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Deduplicate),
     ReplaceInto(ReplaceInto),
-    FinalCommit(Box<FinalCommit>),
     // MergeInto
     MergeIntoSource(MergeIntoSource),
     MergeInto(MergeInto),
+    /// Compact
+    CompactPartial(CompactPartial),
+    CommitSink(CommitSink),
 }
 
 impl PhysicalPlan {
@@ -1079,12 +1084,12 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSource(_)
-            | PhysicalPlan::MutationAggregate(_)
+            | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::FinalCommit(_) => {
+            | PhysicalPlan::CompactPartial(_) => {
                 unreachable!()
             }
         }
@@ -1113,7 +1118,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
-            PhysicalPlan::MutationAggregate(plan) => plan.output_schema(),
+            PhysicalPlan::CommitSink(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
             PhysicalPlan::CopyIntoTable(plan) => plan.output_schema(),
             PhysicalPlan::CteScan(plan) => plan.output_schema(),
@@ -1123,8 +1128,8 @@ impl PhysicalPlan {
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
-            | PhysicalPlan::FinalCommit(_)
-            | PhysicalPlan::ReplaceInto(_) => Ok(DataSchemaRef::default()),
+            | PhysicalPlan::ReplaceInto(_)
+            | PhysicalPlan::CompactPartial(_) => Ok(DataSchemaRef::default()),
         }
     }
 
@@ -1150,8 +1155,9 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::CompactPartial(_) => "CompactBlock".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
-            PhysicalPlan::MutationAggregate(_) => "MutationAggregate".to_string(),
+            PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
             PhysicalPlan::AsyncSourcer(_) => "AsyncSourcer".to_string(),
@@ -1162,7 +1168,6 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
-            PhysicalPlan::FinalCommit(_) => "FinalCommit".to_string(),
         }
     }
 
@@ -1194,8 +1199,9 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::CompactPartial(_) => Box::new(std::iter::empty()),
             PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
-            PhysicalPlan::MutationAggregate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::CommitSink(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
@@ -1213,7 +1219,6 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
-            PhysicalPlan::FinalCommit(plan) => Box::new(std::iter::once(plan.input.as_ref())),
         }
     }
 
@@ -1242,8 +1247,9 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
+            | PhysicalPlan::CompactPartial(_)
             | PhysicalPlan::DeletePartial(_)
-            | PhysicalPlan::MutationAggregate(_)
+            | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
@@ -1251,7 +1257,6 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
-            | PhysicalPlan::FinalCommit(_)
             | PhysicalPlan::CteScan(_) => None,
         }
     }

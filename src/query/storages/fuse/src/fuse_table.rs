@@ -27,7 +27,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatisticsProvider;
-use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -681,14 +680,21 @@ impl Table for FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn compact(
+    async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        target: CompactTarget,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_compact(ctx, target, limit, pipeline).await
+        self.do_compact_segments(ctx, limit).await
+    }
+
+    #[async_backtrace::framed]
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        limit: Option<usize>,
+    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.do_compact_blocks(ctx, limit).await
     }
 
     #[async_backtrace::framed]
@@ -786,5 +792,9 @@ impl FuseTableColumnStatisticsProvider {
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
         self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+
+    fn num_rows(&self) -> Option<u64> {
+        None
     }
 }

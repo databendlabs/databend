@@ -21,6 +21,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+
 #[async_trait::async_trait]
 pub trait AsyncAccumulatingTransform: Send {
     const NAME: &'static str;

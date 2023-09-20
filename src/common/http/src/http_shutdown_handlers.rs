@@ -16,6 +16,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use anyerror::AnyError;
+use common_base::base::tokio;
 use common_base::base::tokio::sync::broadcast;
 use common_base::base::tokio::sync::oneshot;
 use common_base::base::tokio::task::JoinHandle;
@@ -154,6 +155,12 @@ impl HttpShutdownHandler {
                         "Unexpected error during shutdown Http Server {}. cause {}",
                         self.service_name, error
                     );
+                }
+            }
+
+            if let Some(join_handle) = self.join_handle.take() {
+                if let Err(_err) = tokio::time::timeout(Duration::from_secs(5), join_handle).await {
+                    error!("Timeout during shutdown Http Server {}", self.service_name);
                 }
             }
         } else if let Some(join_handle) = self.join_handle.take() {

@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
 use tonic::Status;
 
+use crate::api::rpc::packets::KillQueryPacket;
 use crate::api::rpc::packets::TruncateTablePacket;
 use crate::api::InitNodesChannelPacket;
 use crate::api::QueryFragmentsPlanPacket;
@@ -104,12 +105,40 @@ impl TryInto<Vec<u8>> for TruncateTable {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct KillQuery {
+    pub packet: KillQueryPacket,
+}
+
+impl TryInto<KillQuery> for Vec<u8> {
+    type Error = Status;
+
+    fn try_into(self) -> Result<KillQuery, Self::Error> {
+        match serde_json::from_slice::<KillQuery>(&self) {
+            Err(cause) => Err(Status::invalid_argument(cause.to_string())),
+            Ok(action) => Ok(action),
+        }
+    }
+}
+
+impl TryInto<Vec<u8>> for KillQuery {
+    type Error = ErrorCode;
+
+    fn try_into(self) -> Result<Vec<u8>, Self::Error> {
+        serde_json::to_vec(&self).map_err_to_code(
+            ErrorCode::Internal,
+            || "Logical error: cannot serialize KillPacket.",
+        )
+    }
+}
+
 #[derive(Clone, Debug)]
 pub enum FlightAction {
     InitQueryFragmentsPlan(InitQueryFragmentsPlan),
     InitNodesChannel(InitNodesChannel),
     ExecutePartialQuery(String),
     TruncateTable(TruncateTable),
+    KillQuery(KillQuery),
 }
 
 impl TryInto<FlightAction> for Action {
@@ -128,6 +157,7 @@ impl TryInto<FlightAction> for Action {
                 )))
             },
             "TruncateTable" => Ok(FlightAction::TruncateTable(self.body.try_into()?)),
+            "KillQuery" => Ok(FlightAction::KillQuery(self.body.try_into()?)),
             un_implemented => Err(Status::unimplemented(format!(
                 "UnImplement action {}",
                 un_implemented
@@ -156,6 +186,10 @@ impl TryInto<Action> for FlightAction {
             FlightAction::TruncateTable(truncate_table) => Ok(Action {
                 r#type: String::from("TruncateTable"),
                 body: truncate_table.try_into()?,
+            }),
+            FlightAction::KillQuery(kill_query) => Ok(Action {
+                r#type: String::from("KillQuery"),
+                body: kill_query.try_into()?,
             }),
         }
     }

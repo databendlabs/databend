@@ -25,6 +25,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_storage::FileParseError;
 
+use crate::input_formats::error_utils::truncate_column_data;
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
@@ -78,6 +79,7 @@ impl InputFormatNDJson {
                         column_name: field.name().to_owned(),
                         column_type: field.data_type.to_string(),
                         decode_error: e.to_string(),
+                        column_data: truncate_column_data(value.to_string()),
                     }
                 })?;
             }
@@ -125,16 +127,13 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    builder
-                        .ctx
-                        .on_error(
-                            e,
-                            Some((columns, builder.num_rows)),
-                            &mut builder.file_status,
-                            &batch.split_info.file.path,
-                            batch.start_row_in_split + i,
-                        )
-                        .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                    builder.ctx.on_error(
+                        e,
+                        Some((columns, builder.num_rows)),
+                        &mut builder.file_status,
+                        &batch.split_info.file.path,
+                        batch.start_row_in_split + i,
+                    )?
                 } else {
                     builder.num_rows += 1;
                     builder.file_status.num_rows_loaded += 1;

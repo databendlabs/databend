@@ -1,0 +1,6 @@
+null
+{
+  "code": 1046,
+  "message": "Number of columns in file (2) does not match that of the corresponding table (3)",
+  "detail": "at file 'select.csv', line 1"
+}

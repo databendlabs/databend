@@ -15,22 +15,19 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::ops::Bound;
-use std::ops::RangeBounds;
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 pub struct Range {
-    pub start: usize,
-    pub end: usize,
+    pub start: u32,
+    pub end: u32,
 }
 
-impl RangeBounds<usize> for Range {
-    fn start_bound(&self) -> Bound<&usize> {
-        Bound::Included(&self.start)
+impl Range {
+    pub fn start(&self) -> usize {
+        self.start as usize
     }
-
-    fn end_bound(&self) -> Bound<&usize> {
-        Bound::Excluded(&self.end)
+    pub fn end(&self) -> usize {
+        self.end as usize
     }
 }
 
@@ -50,15 +47,15 @@ impl Display for Range {
 
 impl From<Range> for std::ops::Range<usize> {
     fn from(range: Range) -> std::ops::Range<usize> {
-        range.start..range.end
+        (range.start as usize)..(range.end as usize)
     }
 }
 
 impl From<std::ops::Range<usize>> for Range {
     fn from(range: std::ops::Range<usize>) -> Range {
         Range {
-            start: range.start,
-            end: range.end,
+            start: range.start as u32,
+            end: range.end as u32,
         }
     }
 }

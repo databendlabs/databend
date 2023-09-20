@@ -160,7 +160,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     Some(NullableConstraint::NotNull),
                 )
             } else if i <= 35 {
-                (SIMPLE_COLUMN_TYPES[i - 18].clone(), None)
+                (
+                    SIMPLE_COLUMN_TYPES[i - 18].clone(),
+                    Some(NullableConstraint::Null),
+                )
             } else {
                 // TODO: add nested data types
                 let depth = self.rng.gen_range(1..=3);

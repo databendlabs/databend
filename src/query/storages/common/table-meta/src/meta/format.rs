@@ -39,7 +39,7 @@ pub const NUM_BLOCK_ID_BITS: usize = 11;
 pub const MAX_SEGMENT_BLOCK_NUMBER: usize = 1 << NUM_BLOCK_ID_BITS;
 
 #[repr(u8)]
-#[derive(Default, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone, PartialEq)]
 pub enum MetaCompression {
     None = 0,
     #[default]
@@ -107,7 +107,7 @@ pub fn decompress(compression: &MetaCompression, data: Vec<u8>) -> Result<Vec<u8
 }
 
 #[repr(u8)]
-#[derive(Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq)]
 pub enum MetaEncoding {
     Bincode = 1,
     MessagePack = 2,

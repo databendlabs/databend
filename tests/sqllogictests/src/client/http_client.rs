@@ -41,6 +41,22 @@ struct QueryResponse {
     error: Option<serde_json::Value>,
 }
 
+// make error message the same with ErrorCode::display
+fn format_error(value: serde_json::Value) -> String {
+    let value = value.as_object().unwrap();
+    let detail = value["detail"].as_str().unwrap();
+    let code = value["code"].as_u64().unwrap();
+    let message = value["message"].as_str().unwrap();
+    if detail.is_empty() {
+        format!("http query error: code: {}, Text: {}", code, message)
+    } else {
+        format!(
+            "http query error: code: {}, Text: {}\n{}",
+            code, message, detail
+        )
+    }
+}
+
 impl HttpClient {
     pub fn create() -> Result<Self> {
         let mut header = HeaderMap::new();
@@ -70,7 +86,7 @@ impl HttpClient {
         }
 
         if let Some(error) = response.error {
-            return Err(format!("http query error: {error}").into());
+            return Err(format_error(error).into());
         }
 
         let rows = response.data;
@@ -80,7 +96,7 @@ impl HttpClient {
             url.push_str(&next_uri);
             response = self.response(sql, &url, false).await?;
             if let Some(error) = response.error {
-                return Err(format!("http query error: {error}").into());
+                return Err(format_error(error).into());
             }
             let rows = response.data;
             parsed_rows.append(&mut parser_rows(&rows)?);

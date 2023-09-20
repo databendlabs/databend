@@ -249,7 +249,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_variable = map(
         rule! {
-            SET ~ (GLOBAL)? ~ #ident ~ "=" ~ #subexpr(0)
+            SET ~ GLOBAL? ~ #ident ~ "=" ~ #subexpr(0)
         },
         |(_, opt_is_global, variable, _, value)| Statement::SetVariable {
             is_global: opt_is_global.is_some(),
@@ -271,7 +271,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let set_role = map(
         rule! {
-            SET ~ (DEFAULT)? ~ ROLE ~ #role_name
+            SET ~ DEFAULT? ~ ROLE ~ #role_name
         },
         |(_, opt_is_default, _, role_name)| Statement::SetRole {
             is_default: opt_is_default.is_some(),
@@ -296,7 +296,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // TODO: use a more specific option struct instead of BTreeMap
     let create_catalog = map(
         rule! {
-            CREATE ~ CATALOG ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ CATALOG ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #catalog_type
             ~ CONNECTION ~ "=" ~ #options
@@ -312,7 +312,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_catalog = map(
         rule! {
-            DROP ~ CATALOG ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ CATALOG ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, catalog)| {
             Statement::DropCatalog(DropCatalogStmt {
@@ -324,7 +324,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_databases = map(
         rule! {
-            SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN) ~ ^#ident )? ~ #show_limit?
+            SHOW ~ FULL? ~ ( DATABASES | SCHEMAS ) ~ ( ( FROM | IN ) ~ ^#ident )? ~ #show_limit?
         },
         |(_, opt_full, _, opt_catalog, limit)| {
             Statement::ShowDatabases(ShowDatabasesStmt {
@@ -344,7 +344,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_database = map(
         rule! {
-            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ NOT ~ EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
+            CREATE ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #create_database_option?
         },
         |(_, _, opt_if_not_exists, (catalog, database), create_database_option)| {
             match create_database_option {
@@ -381,7 +381,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_database = map(
         rule! {
-            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_2
+            DROP ~ ( DATABASE | SCHEMA ) ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2
         },
         |(_, _, opt_if_exists, (catalog, database))| {
             Statement::DropDatabase(DropDatabaseStmt {
@@ -403,7 +403,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let alter_database = map(
         rule! {
-            ALTER ~ DATABASE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #alter_database_action
+            ALTER ~ DATABASE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_2 ~ #alter_database_action
         },
         |(_, _, opt_if_exists, (catalog, database), action)| {
             Statement::AlterDatabase(AlterDatabaseStmt {
@@ -441,7 +441,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let show_columns = map(
         rule! {
-            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ ((FROM | IN) ~ #dot_separated_idents_1_to_2)? ~ #show_limit?
+            SHOW ~ FULL? ~ COLUMNS ~ ( FROM | IN ) ~ #ident ~ (( FROM | IN ) ~ ^#dot_separated_idents_1_to_2)? ~ #show_limit?
         },
         |(_, opt_full, _, _, table, ctl_db, limit)| {
             let (catalog, database) = match ctl_db {
@@ -534,7 +534,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_table = map(
         rule! {
-            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -575,7 +575,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ( ALL )?
+            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ALL?
         },
         |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
             Statement::DropTable(DropTableStmt {
@@ -601,7 +601,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let alter_table = map(
         rule! {
-            ALTER ~ TABLE ~ ( IF ~ EXISTS )? ~ #table_reference_only ~ #alter_table_action
+            ALTER ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #table_reference_only ~ #alter_table_action
         },
         |(_, _, opt_if_exists, table_reference, action)| {
             Statement::AlterTable(AlterTableStmt {
@@ -613,7 +613,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let rename_table = map(
         rule! {
-            RENAME ~ TABLE ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
+            RENAME ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ TO ~ #dot_separated_idents_1_to_3
         },
         |(
             _,
@@ -676,7 +676,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let vacuum_drop_table = map(
         rule! {
-            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #dot_separated_idents_1_to_2)? ~ #vacuum_table_option
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ ^#dot_separated_idents_1_to_2)? ~ #vacuum_table_option
         },
         |(_, _, _, database_option, option)| {
             let (catalog, database) = database_option.map_or_else(
@@ -716,7 +716,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_view = map(
         rule! {
-            CREATE ~ VIEW ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ VIEW ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ AS ~ #query
@@ -736,7 +736,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_view = map(
         rule! {
-            DROP ~ VIEW ~ ( IF ~ EXISTS )? ~ #dot_separated_idents_1_to_3
+            DROP ~ VIEW ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
         },
         |(_, _, opt_if_exists, (catalog, database, view))| {
             Statement::DropView(DropViewStmt {
@@ -769,7 +769,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_index = map(
         rule! {
-            CREATE ~ (SYNC)? ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ SYNC? ~ AGGREGATING ~ INDEX ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ AS ~ #query
         },
@@ -786,7 +786,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_index = map(
         rule! {
-            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, _, opt_if_exists, index)| {
             Statement::DropIndex(DropIndexStmt {
@@ -865,7 +865,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
-            CREATE ~ USER ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ USER ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #user_identity
             ~ IDENTIFIED ~ ( WITH ~ ^#auth_type )? ~ ( BY ~ ^#literal_string )?
             ~ ( WITH ~ ^#comma_separated_list1(user_option))?
@@ -905,7 +905,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_user = map(
         rule! {
-            DROP ~ USER ~ ( IF ~ EXISTS )? ~ #user_identity
+            DROP ~ USER ~ ( IF ~ ^EXISTS )? ~ #user_identity
         },
         |(_, _, opt_if_exists, user)| Statement::DropUser {
             if_exists: opt_if_exists.is_some(),
@@ -915,7 +915,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_roles = value(Statement::ShowRoles, rule! { SHOW ~ ROLES });
     let create_role = map(
         rule! {
-            CREATE ~ ROLE ~ ( IF ~ NOT ~ EXISTS )? ~ #role_name
+            CREATE ~ ROLE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #role_name
         },
         |(_, _, opt_if_not_exists, role_name)| Statement::CreateRole {
             if_not_exists: opt_if_not_exists.is_some(),
@@ -924,7 +924,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_role = map(
         rule! {
-            DROP ~ ROLE ~ ( IF ~ EXISTS )? ~ #role_name
+            DROP ~ ROLE ~ ( IF ~ ^EXISTS )? ~ #role_name
         },
         |(_, _, opt_if_exists, role_name)| Statement::DropRole {
             if_exists: opt_if_exists.is_some(),
@@ -972,7 +972,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_udf = map(
         rule! {
-            CREATE ~ FUNCTION ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ FUNCTION ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #udf_definition
             ~ ( DESC ~ ^"=" ~ ^#literal_string )?
         },
@@ -987,7 +987,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_udf = map(
         rule! {
-            DROP ~ FUNCTION ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ FUNCTION ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, udf_name)| Statement::DropUDF {
             if_exists: opt_if_exists.is_some(),
@@ -1012,14 +1012,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // stages
     let create_stage = map_res(
         rule! {
-            CREATE ~ STAGE ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
-            ~ ( URL ~ "=" ~ #uri_location)?
+            ~ ( URL ~ ^"=" ~ ^#uri_location)?
             ~ ( #file_format_clause )?
-            ~ ( ON_ERROR ~ "=" ~ #ident)?
-            ~ ( SIZE_LIMIT ~ "=" ~ #literal_u64)?
-            ~ ( VALIDATION_MODE ~ "=" ~ #ident)?
-            ~ ( (COMMENT | COMMENTS) ~ "=" ~ #literal_string)?
+            ~ ( ON_ERROR ~ ^"=" ~ ^#ident)?
+            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64)?
+            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string)?
         },
         |(
             _,
@@ -1070,7 +1070,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_stage = map(
         rule! {
-            DROP ~ STAGE ~ ( IF ~ EXISTS )? ~ #stage_name
+            DROP ~ STAGE ~ ( IF ~ ^EXISTS )? ~ #stage_name
         },
         |(_, _, opt_if_exists, stage_name)| Statement::DropStage {
             if_exists: opt_if_exists.is_some(),
@@ -1156,12 +1156,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // share statements
     let create_share_endpoint = map(
         rule! {
-            CREATE ~ SHARE ~ ENDPOINT ~ (IF ~ NOT ~ EXISTS )?
+            CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
              ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
-             ~ ( ARGS ~ "=" ~ #options)?
-             ~ ( COMMENT ~ "=" ~ #literal_string)?
+             ~ ( ARGS ~ ^"=" ~ ^#options)?
+             ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
         |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
             Statement::CreateShareEndpoint(CreateShareEndpointStmt {
@@ -1188,7 +1188,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_share_endpoint = map(
         rule! {
-            DROP ~ SHARE ~ ENDPOINT ~ (IF ~ EXISTS)? ~ #ident
+            DROP ~ SHARE ~ ENDPOINT ~ ( IF ~ EXISTS)? ~ #ident
         },
         |(_, _, _, opt_if_exists, endpoint)| {
             Statement::DropShareEndpoint(DropShareEndpointStmt {
@@ -1199,7 +1199,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_share = map(
         rule! {
-            CREATE ~ SHARE ~ (IF ~ NOT ~ EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
+            CREATE ~ SHARE ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ ( COMMENT ~ "=" ~ #literal_string)?
         },
         |(_, _, opt_if_not_exists, share, comment_opt)| {
             Statement::CreateShare(CreateShareStmt {
@@ -1214,7 +1214,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_share = map(
         rule! {
-            DROP ~ SHARE ~ (IF ~ EXISTS)? ~ #ident
+            DROP ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, opt_if_exists, share)| {
             Statement::DropShare(DropShareStmt {
@@ -1249,7 +1249,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let alter_share_tenants = map(
         rule! {
-            ALTER ~ SHARE ~ (IF ~ EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
+            ALTER ~ SHARE ~ ( IF ~ ^EXISTS )? ~ #ident ~ #alter_add_share_accounts ~ TENANTS ~ Eq ~ #comma_separated_list1(ident)
         },
         |(_, _, opt_if_exists, share, is_add, _, _, tenants)| {
             Statement::AlterShareTenants(AlterShareTenantsStmt {
@@ -1275,7 +1275,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_file_format = map_res(
         rule! {
-            CREATE ~ FILE ~ FORMAT ~ ( IF ~ NOT ~ EXISTS )?
+            CREATE ~ FILE ~ FORMAT ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident ~ #format_options
         },
         |(_, _, _, opt_if_not_exists, name, options)| {
@@ -1303,7 +1303,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     // data mark policy
     let create_data_mask_policy = map(
         rule! {
-            CREATE ~ MASKING ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #data_mask_policy
+            CREATE ~ MASKING ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident ~ #data_mask_policy
         },
         |(_, _, _, opt_if_not_exists, name, policy)| {
             let stmt = CreateDatamaskPolicyStmt {
@@ -1316,7 +1316,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_data_mask_policy = map(
         rule! {
-            DROP ~ MASKING ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ MASKING ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropDatamaskPolicyStmt {
@@ -1339,7 +1339,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let create_network_policy = map(
         rule! {
-            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident
+            CREATE ~ NETWORK ~ POLICY ~ ( IF ~ ^NOT ~ ^EXISTS )? ~ #ident
              ~ ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")"
              ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
              ~ ( COMMENT ~ Eq ~ #literal_string)?
@@ -1376,7 +1376,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let alter_network_policy = map(
         rule! {
-            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident ~ SET
+            ALTER ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident ~ SET
              ~ ( ALLOWED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
              ~ ( BLOCKED_IP_LIST ~ Eq ~ "(" ~ ^#comma_separated_list0(literal_string) ~ ")" ) ?
              ~ ( COMMENT ~ Eq ~ #literal_string)?
@@ -1413,7 +1413,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_network_policy = map(
         rule! {
-            DROP ~ NETWORK ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+            DROP ~ NETWORK ~ POLICY ~ ( IF ~ ^EXISTS )? ~ #ident
         },
         |(_, _, _, opt_if_exists, name)| {
             let stmt = DropNetworkPolicyStmt {
@@ -1595,7 +1595,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     map(
         rule! {
-            #statement_body ~ (FORMAT ~ #ident)? ~ ";"? ~ &EOI
+            #statement_body ~ ( FORMAT ~ ^#ident )? ~ ";"? ~ &EOI
         },
         |(stmt, opt_format, _, _)| StatementMsg {
             stmt,
@@ -1611,7 +1611,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 pub fn insert_source(i: Input) -> IResult<InsertSource> {
     let streaming = map(
         rule! {
-                 FORMAT ~ #ident ~ #rest_str
+            FORMAT ~ #ident ~ #rest_str
         },
         |(_, format, (rest_str, start))| InsertSource::Streaming {
             format: format.name,
@@ -1621,7 +1621,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+           #file_format_clause ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
         },
         |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
             settings: options,
@@ -1650,7 +1650,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
 pub fn merge_source(i: Input) -> IResult<MergeSource> {
     let streaming_v2 = map(
         rule! {
-           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
+           #file_format_clause  ~ (ON_ERROR ~ ^"=" ~ ^#ident)? ~  #rest_str
         },
         |(options, on_error_opt, (_, start))| MergeSource::StreamingV2 {
             settings: options,
@@ -1722,8 +1722,8 @@ pub fn rest_str(i: Input) -> IResult<(String, usize)> {
     Ok((
         i.slice((i.len() - 1)..),
         (
-            first_token.source[first_token.span.start..last_token.span.end].to_string(),
-            first_token.span.start,
+            first_token.source[first_token.span.start()..last_token.span.end()].to_string(),
+            first_token.span.start(),
         ),
     ))
 }
@@ -1750,13 +1750,13 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         ),
         map(
             rule! {
-                (GENERATED ~ ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
             },
             |(_, _, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
         ),
         map(
             rule! {
-                (GENERATED ~ ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
             },
             |(_, _, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
         ),
@@ -2245,7 +2245,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 pub fn match_clause(i: Input) -> IResult<MergeOption> {
     map(
         rule! {
-            WHEN ~ MATCHED ~ (AND ~ #expr)? ~ THEN ~ #match_operation
+            WHEN ~ MATCHED ~ (AND ~ ^#expr)? ~ THEN ~ #match_operation
         },
         |(_, _, expr_op, _, match_operation)| match expr_op {
             Some(expr) => MergeOption::Match(MatchedClause {
@@ -2275,7 +2275,7 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
 pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
     map(
         rule! {
-            WHEN ~ NOT ~ MATCHED ~ (AND ~ #expr)?  ~ THEN ~ INSERT ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            WHEN ~ NOT ~ MATCHED ~ (AND ~ ^#expr)?  ~ THEN ~ INSERT ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
             ~ VALUES ~ ^#row_values
         },
         |(_, _, _, expr_op, _, _, columns_op, _, values)| {
@@ -2316,12 +2316,12 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     alt((
         value(OptimizeTableAction::All, rule! { ALL }),
         map(
-            rule! { PURGE ~ (BEFORE ~ #travel_point)?},
+            rule! { PURGE ~ (BEFORE ~ ^#travel_point)? },
             |(_, opt_travel_point)| OptimizeTableAction::Purge {
                 before: opt_travel_point.map(|(_, p)| p),
             },
         ),
-        map(rule! { COMPACT ~ (SEGMENT)?}, |(_, opt_segment)| {
+        map(rule! { COMPACT ~ SEGMENT? }, |(_, opt_segment)| {
             OptimizeTableAction::Compact {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
             }
@@ -2332,7 +2332,7 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
 pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
-            (RETAIN ~ #expr ~ HOURS)? ~ (DRY ~ RUN)?
+            (RETAIN ~ ^#expr ~ ^HOURS)? ~ (DRY ~ ^RUN)?
         },
         |(retain_hours_opt, dry_run_opt)| {
             let retain_hours = match retain_hours_opt {

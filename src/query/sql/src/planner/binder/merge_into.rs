@@ -102,14 +102,7 @@ impl Binder {
             .await?;
         let table_id = table.get_id();
         let table_schema = table.schema();
-        // Todo: (JackTan25) support computed expr
-        for field in table.schema().fields() {
-            if field.computed_expr().is_some() {
-                return Err(ErrorCode::Unimplemented(
-                    "merge into doesn't support computed expr for now",
-                ));
-            }
-        }
+
         // get target_table_reference
         let target_table = TableReference::Table {
             span: None,
@@ -211,7 +204,7 @@ impl Binder {
                 field_index_map.insert(idx, used_idx.to_string());
             }
         }
-        // bind clause column
+        // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
             matched_evaluators.push(
                 self.bind_matched_clause(
@@ -224,7 +217,7 @@ impl Binder {
             );
         }
 
-        // add eval exprs for not match
+        // bind not matched clause columns and add insert exprs
         for clause in &unmatched_clauses {
             unmatched_evaluators.push(
                 self.bind_unmatched_clause(
@@ -237,7 +230,6 @@ impl Binder {
             );
         }
 
-        // at last, add update table field index
         Ok(Plan::MergeInto(Box::new(MergeInto {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),

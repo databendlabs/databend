@@ -57,7 +57,12 @@ impl InputFormatTSV {
         } else {
             let mut reader = Cursor::new(col_data);
             if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
-                return Err(get_decode_error_by_pos(column_index, schema, &e.message()));
+                return Err(get_decode_error_by_pos(
+                    column_index,
+                    schema,
+                    &e.message(),
+                    col_data,
+                ));
             };
             check_column_end(&mut reader, schema, column_index)
         }
@@ -134,13 +139,13 @@ impl InputFormatTSV {
                 // expect: field_end > buf_len && column_index == num_columns
                 if column_index < num_columns {
                     error = Some(FileParseError::NumberOfColumnsMismatch {
-                        expected: num_columns,
-                        found: column_index,
+                        table: num_columns,
+                        file: column_index,
                     });
                 } else if field_end <= buf_len {
                     error = Some(FileParseError::NumberOfColumnsMismatch {
-                        expected: num_columns,
-                        found: num_columns + 1,
+                        table: num_columns,
+                        file: num_columns + 1,
                     });
                 }
             }
@@ -212,16 +217,13 @@ impl InputFormatTextBase for InputFormatTSV {
                 schema,
                 &builder.projection,
             ) {
-                builder
-                    .ctx
-                    .on_error(
-                        e,
-                        Some((columns, builder.num_rows)),
-                        &mut builder.file_status,
-                        &batch.split_info.file.path,
-                        i + batch.start_row_in_split,
-                    )
-                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                builder.ctx.on_error(
+                    e,
+                    Some((columns, builder.num_rows)),
+                    &mut builder.file_status,
+                    &batch.split_info.file.path,
+                    i + batch.start_row_in_split,
+                )?
             } else {
                 builder.num_rows += 1;
                 builder.file_status.num_rows_loaded += 1;

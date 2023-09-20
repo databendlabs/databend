@@ -102,38 +102,45 @@ pub struct FileErrorInfo {
 
 #[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum FileParseError {
-    #[error("wrong number of columns (expected {expected}, found {found})")]
-    NumberOfColumnsMismatch { expected: usize, found: usize },
-    #[error("fail todo decode JSON: {message}")]
+    #[error(
+        "Number of columns in file ({file}) does not match that of the corresponding table ({table})"
+    )]
+    NumberOfColumnsMismatch { table: usize, file: usize },
+    #[error("Invalid JSON row: {message}")]
     InvalidNDJsonRow { message: String },
-    #[error("fail to decode column {column_index} ({column_name} {column_type}): {decode_error}")]
+    #[error(
+        "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {decode_error}"
+    )]
     ColumnDecodeError {
         column_index: usize,
         column_name: String,
         column_type: String,
         decode_error: String,
+        column_data: String,
     },
     #[error(
-        "fail to decode column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char is {next_char}"
+        "Invalid value '{column_data}' for column {column_index} ({column_name} {column_type}): {size_remained} bytes remained, next_char at {error_pos} is {next_char}"
     )]
     ColumnDataNotDrained {
-        column_index: usize,
+        column_index: u32,
+        error_pos: u32,
+        size_remained: u32,
         column_name: String,
         column_type: String,
-        size_remained: usize,
         next_char: String,
+        column_data: String,
     },
 }
 
 impl FileParseError {
     pub fn to_error_code(&self, mode: &OnErrorMode, file_path: &str, line: usize) -> ErrorCode {
-        let pos: String = format!("at {}:{}", file_path, line);
+        let pos: String = format!("at file '{}', line {}", file_path, line);
         let message = match mode {
             OnErrorMode::AbortNum(n) if *n > 1u64 => {
-                format!("meat {n} errors, abort! the last error: {self}, {pos}",)
+                format!("abort after {n} errors! the last error: {self}",)
             }
-            _ => format!("{self}, {pos}"),
+            _ => format!("{self}"),
         };
-        ErrorCode::BadBytes(message)
+        ErrorCode::BadBytes(message).add_detail_back(pos)
     }
 }
