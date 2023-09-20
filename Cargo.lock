@@ -2920,7 +2920,6 @@ dependencies = [
  "common-pipeline-sources",
  "common-sql",
  "common-storage",
- "databend-query",
  "ethnum",
  "futures",
  "log",

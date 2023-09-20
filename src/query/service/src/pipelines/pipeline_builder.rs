@@ -852,7 +852,7 @@ impl PipelineBuilder {
             delete.col_indices.clone(),
             delete.query_row_id_col,
             &mut self.main_pipeline,
-            Partitions::default(), // will be set in on_init
+            delete.parts.clone(),
         )?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
