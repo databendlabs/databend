@@ -748,13 +748,14 @@ impl Column {
 
         let mut data_size = 0;
         for (i, row_ptr) in indices.iter().enumerate() {
-            let item =
-                unsafe { col[row_ptr.chunk_index as usize].index_ptr(row_ptr.row_index as usize) };
-            data_size += item.1 as u64;
+            let item = unsafe {
+                col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize)
+            };
+            data_size += item.len() as u64;
             // # Safety
             // `i` must be less than the capacity of Vec.
             unsafe {
-                std::ptr::write(items_ptr.add(i), item);
+                std::ptr::write(items_ptr.add(i), (item.as_ptr() as u64, item.len()));
                 std::ptr::write(offsets_ptr.add(i), data_size);
             }
         }

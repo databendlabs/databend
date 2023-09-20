@@ -212,17 +212,6 @@ impl StringColumn {
         &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
 
-    /// # Safety
-    ///
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
-    pub unsafe fn index_ptr(&self, index: usize) -> (u64, usize) {
-        let start = self.offsets[index] as usize;
-        (
-            &self.data[start] as *const u8 as u64,
-            self.offsets[index + 1] as usize - start,
-        )
-    }
-
     pub fn slice(&self, range: Range<usize>) -> Self {
         let offsets = self
             .offsets

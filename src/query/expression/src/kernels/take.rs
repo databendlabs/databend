@@ -230,12 +230,12 @@ impl Column {
 
         let mut data_size = 0;
         for (i, index) in indices.iter().enumerate() {
-            let item = unsafe { col.index_ptr(index.to_usize()) };
-            data_size += item.1 as u64;
+            let item = unsafe { col.index_unchecked(index.to_usize()) };
+            data_size += item.len() as u64;
             // # Safety
             // `i` must be less than the capacity of Vec.
             unsafe {
-                std::ptr::write(items_ptr.add(i), item);
+                std::ptr::write(items_ptr.add(i), (item.as_ptr() as u64, item.len()));
                 std::ptr::write(offsets_ptr.add(i), data_size);
             }
         }
