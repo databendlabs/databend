@@ -28,7 +28,7 @@ use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
 
 lazy_static! {
-    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::default());
+    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::with_prefix("databend"));
 }
 
 pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
