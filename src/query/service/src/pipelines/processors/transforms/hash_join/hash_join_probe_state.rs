@@ -379,6 +379,7 @@ impl HashJoinProbeState {
         let max_block_size = state.max_block_size;
         let true_validity = &state.true_validity;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -445,6 +446,7 @@ impl HashJoinProbeState {
                     build_columns,
                     build_columns_data_type,
                     &build_num_rows,
+                    string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -490,6 +492,7 @@ impl HashJoinProbeState {
     ) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -530,6 +533,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?);
             build_indexes_occupied = 0;
         }
@@ -543,6 +547,7 @@ impl HashJoinProbeState {
     ) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -583,6 +588,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?);
             build_indexes_occupied = 0;
         }
@@ -592,6 +598,7 @@ impl HashJoinProbeState {
     pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -661,6 +668,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),

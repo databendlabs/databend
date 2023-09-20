@@ -1874,6 +1874,10 @@ impl PipelineBuilder {
             &join.join_type,
             self.main_pipeline.output_len(),
         )?);
+        let mut has_string_column = false;
+        for filed in join.output_schema()?.fields() {
+            has_string_column |= filed.data_type().is_string_column();
+        }
 
         self.main_pipeline.add_transform(|input, output| {
             let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
@@ -1894,6 +1898,7 @@ impl PipelineBuilder {
                 func_ctx.clone(),
                 &join.join_type,
                 !join.non_equi_conditions.is_empty(),
+                has_string_column,
             )?;
 
             if self.enable_profiling {

@@ -115,6 +115,7 @@ impl HashJoinProbeState {
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -157,7 +158,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes)?)
+                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
                     } else {
                         None
                     };
@@ -167,6 +168,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
@@ -219,7 +221,11 @@ impl HashJoinProbeState {
 
         if matched_num > 0 {
             let probe_block = if is_probe_projected {
-                Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+                Some(DataBlock::take(
+                    input,
+                    &probe_indexes[0..matched_num],
+                    string_items_buf,
+                )?)
             } else {
                 None
             };
@@ -229,6 +235,7 @@ impl HashJoinProbeState {
                     build_columns,
                     build_columns_data_type,
                     build_num_rows,
+                    string_items_buf,
                 )?)
             } else {
                 None

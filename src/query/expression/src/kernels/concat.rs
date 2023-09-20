@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
@@ -132,7 +136,13 @@ impl Column {
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
-            Column::Boolean(_) => Self::concat_arg_types::<BooleanType>(columns),
+            Column::Boolean(_) => {
+                let columns = columns
+                    .iter()
+                    .map(|col| BooleanType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                Column::Boolean(Self::concat_boolean_types(&columns, capacity))
+            }
             Column::String(_) => {
                 let columns = columns
                     .iter()
@@ -214,7 +224,11 @@ impl Column {
                 }
 
                 let column = Self::concat(&inners);
-                let validity = Self::concat_arg_types::<BooleanType>(&bitmaps);
+                let bitmaps = bitmaps
+                    .iter()
+                    .map(|col| BooleanType::try_downcast_column(col).unwrap())
+                    .collect_vec();
+                let validity = Column::Boolean(Self::concat_boolean_types(&bitmaps, capacity));
                 let validity = BooleanType::try_downcast_column(&validity).unwrap();
 
                 Column::Nullable(Box::new(NullableColumn { column, validity }))
@@ -302,6 +316,48 @@ impl Column {
         }
         unsafe { data.set_len(offset) };
         StringColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn concat_boolean_types(cols: &[Bitmap], num_rows: usize) -> Bitmap {
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let ptr = builder.as_mut_ptr();
+
+        let mut pos = 0;
+        let mut unset_bits = 0;
+        let mut i = 0;
+        let mut value = 0;
+
+        for col in cols {
+            for item in col.iter() {
+                if item {
+                    value |= BIT_MASK[i % 8];
+                } else {
+                    unset_bits += 1;
+                }
+                i += 1;
+                if i % 8 == 0 {
+                    // # Safety
+                    // `pos` must be less than the capacity of builder.
+                    unsafe { std::ptr::write(ptr.add(pos), value) };
+                    pos += 1;
+                    value = 0;
+                }
+            }
+        }
+        if i % 8 != 0 {
+            // # Safety
+            // `pos` must be less than the capacity of builder.
+            unsafe { std::ptr::write(ptr.add(pos), value) };
+        }
+        // # Safety
+        // offset(0) + length(num_rows) <= builder.len() * 8.
+        unsafe {
+            builder.set_len(capacity);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 
     fn concat_arg_types<T: ArgType>(columns: &[Column]) -> Column {

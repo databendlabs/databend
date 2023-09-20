@@ -50,6 +50,7 @@ impl HashJoinProbeState {
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
         // Safe to unwrap.
         let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
 
@@ -117,6 +118,7 @@ impl HashJoinProbeState {
                         probe_unmatched_indexes_occupied,
                         is_probe_projected,
                         is_build_projected,
+                        string_items_buf,
                     )?);
                     probe_unmatched_indexes_occupied = 0;
                 }
@@ -130,8 +132,11 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let mut probe_block =
-                            DataBlock::take(input, &probe_indexes[0..matched_num])?;
+                        let mut probe_block = DataBlock::take(
+                            input,
+                            &probe_indexes[0..matched_num],
+                            string_items_buf,
+                        )?;
                         // For full join, wrap nullable for probe block
                         if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = if matched_num == max_block_size {
@@ -162,6 +167,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             &build_num_rows,
+                            string_items_buf,
                         )?;
                         // For left join, wrap nullable for build block
                         let (nullable_columns, num_rows) = if build_num_rows == 0 {
@@ -256,6 +262,7 @@ impl HashJoinProbeState {
             probe_unmatched_indexes_occupied,
             is_probe_projected,
             is_build_projected,
+            string_items_buf,
         )?);
         Ok(result_blocks)
     }
@@ -279,6 +286,7 @@ impl HashJoinProbeState {
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
         if input_num_rows > probe_state.row_state.as_ref().unwrap().len() {
             probe_state.row_state = Some(vec![0; input_num_rows]);
         }
@@ -351,8 +359,11 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let mut probe_block =
-                            DataBlock::take(input, &probe_indexes[0..matched_num])?;
+                        let mut probe_block = DataBlock::take(
+                            input,
+                            &probe_indexes[0..matched_num],
+                            string_items_buf,
+                        )?;
                         // For full join, wrap nullable for probe block
                         if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                             let nullable_probe_columns = if matched_num == max_block_size {
@@ -383,6 +394,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             &build_num_rows,
+                            string_items_buf,
                         )?;
                         // For left join, wrap nullable for build block
                         let (nullable_columns, num_rows) = if build_num_rows == 0 {
@@ -530,6 +542,7 @@ impl HashJoinProbeState {
                         matched_num,
                         is_probe_projected,
                         is_build_projected,
+                        string_items_buf,
                     )?);
                     matched_num = 0;
                 }
@@ -547,6 +560,7 @@ impl HashJoinProbeState {
             matched_num,
             is_probe_projected,
             is_build_projected,
+            string_items_buf,
         )?);
         Ok(result_blocks)
     }
@@ -558,9 +572,11 @@ impl HashJoinProbeState {
         matched_num: usize,
         is_probe_projected: bool,
         is_build_projected: bool,
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Result<DataBlock> {
         let probe_block = if is_probe_projected {
-            let mut probe_block = DataBlock::take(input, &indexes[0..matched_num])?;
+            let mut probe_block =
+                DataBlock::take(input, &indexes[0..matched_num], string_items_buf)?;
             // For full join, wrap nullable for probe block
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                 let nullable_probe_columns = probe_block

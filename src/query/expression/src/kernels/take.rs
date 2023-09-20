@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
@@ -40,9 +43,17 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
 
+pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+
 impl DataBlock {
-    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
-    where I: common_arrow::arrow::types::Index {
+    pub fn take<I>(
+        &self,
+        indices: &[I],
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
+    ) -> Result<Self>
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -56,7 +67,7 @@ impl DataBlock {
                 }
                 Value::Column(c) => BlockEntry::new(
                     entry.data_type.clone(),
-                    Value::Column(Column::take(c, indices)),
+                    Value::Column(Column::take(c, indices, string_items_buf)),
                 ),
             })
             .collect();
@@ -70,7 +81,7 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn take<I>(&self, indices: &[I]) -> Self
+    pub fn take<I>(&self, indices: &[I], string_items_buf: &mut Option<Vec<(u64, usize)>>) -> Self
     where I: common_arrow::arrow::types::Index {
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
@@ -91,10 +102,12 @@ impl Column {
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
-            Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
-            Column::String(column) => {
-                StringType::upcast_column(Self::take_string_types(column, indices))
-            }
+            Column::Boolean(bm) => Column::Boolean(Self::take_boolean_types(bm, indices)),
+            Column::String(column) => StringType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
             Column::Timestamp(column) => {
                 let builder = Self::take_primitive_types(column, indices);
                 let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
@@ -144,24 +157,31 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
-            Column::Bitmap(column) => {
-                BitmapType::upcast_column(Self::take_string_types(column, indices))
-            }
+            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
             Column::Nullable(c) => {
-                let column = c.column.take(indices);
-                let validity = Self::take_arg_types::<BooleanType, _>(&c.validity, indices);
+                let column = c.column.take(indices, string_items_buf);
+                let validity = Column::Boolean(Self::take_boolean_types(&c.validity, indices));
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
                 }))
             }
             Column::Tuple(fields) => {
-                let fields = fields.iter().map(|c| c.take(indices)).collect();
+                let fields = fields
+                    .iter()
+                    .map(|c| c.take(indices, string_items_buf))
+                    .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => {
-                VariantType::upcast_column(Self::take_string_types(column, indices))
-            }
+            Column::Variant(column) => VariantType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
         }
     }
 
@@ -184,10 +204,25 @@ impl Column {
         builder
     }
 
-    pub fn take_string_types<'a, I>(col: &'a StringColumn, indices: &[I]) -> StringColumn
-    where I: common_arrow::arrow::types::Index {
+    pub fn take_string_types<'a, I>(
+        col: &'a StringColumn,
+        indices: &[I],
+        string_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> StringColumn
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         let num_rows = indices.len();
-        let mut items: Vec<&[u8]> = Vec::with_capacity(num_rows);
+
+        let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
+            Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
+            _ => Some(Vec::with_capacity(num_rows)),
+        };
+        let items = match items.is_some() {
+            true => items.as_mut().unwrap(),
+            false => string_items_buf.unwrap(),
+        };
+
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         offsets.push(0);
         let items_ptr = items.as_mut_ptr();
@@ -195,8 +230,8 @@ impl Column {
 
         let mut data_size = 0;
         for (i, index) in indices.iter().enumerate() {
-            let item = unsafe { col.index_unchecked(index.to_usize()) };
-            data_size += item.len() as u64;
+            let item = unsafe { col.index_ptr(index.to_usize()) };
+            data_size += item.1 as u64;
             // # Safety
             // `i` must be less than the capacity of Vec.
             unsafe {
@@ -212,12 +247,11 @@ impl Column {
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
         let data_ptr = data.as_mut_ptr();
         let mut offset = 0;
-        for item in items {
-            let len = item.len();
+        for (str_ptr, len) in items.iter() {
             // # Safety
             // `offset` + `len` < `data_size`.
             unsafe {
-                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+                std::ptr::copy_nonoverlapping(*str_ptr as *const u8, data_ptr.add(offset), *len);
             }
             offset += len;
         }
@@ -225,16 +259,45 @@ impl Column {
         StringColumn::new(data.into(), offsets.into())
     }
 
-    fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
+    pub fn take_boolean_types<I>(col: &Bitmap, indices: &[I]) -> Bitmap
     where I: common_arrow::arrow::types::Index {
-        let mut builder = T::create_builder(indices.len(), &[]);
-        for index in indices {
-            T::push_item(&mut builder, unsafe {
-                T::index_column_unchecked(col, index.to_usize())
-            });
+        let num_rows = indices.len();
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let ptr = builder.as_mut_ptr();
+
+        let mut pos = 0;
+        let mut unset_bits = 0;
+        let mut i = 0;
+        let mut value = 0;
+        for index in indices.iter() {
+            if unsafe { col.get_bit_unchecked(index.to_usize()) } {
+                value |= BIT_MASK[i % 8];
+            } else {
+                unset_bits += 1;
+            }
+            i += 1;
+            if i % 8 == 0 {
+                // # Safety
+                // `pos` must be less than the capacity of builder.
+                unsafe { std::ptr::write(ptr.add(pos), value) };
+                pos += 1;
+                value = 0;
+            }
         }
-        let column = T::build_column(builder);
-        T::upcast_column(column)
+        if i % 8 != 0 {
+            // # Safety
+            // `pos` must be less than the capacity of builder.
+            unsafe { std::ptr::write(ptr.add(pos), value) };
+        }
+        // # Safety
+        // offset(0) + length(num_rows) <= builder.len() * 8.
+        unsafe {
+            builder.set_len(capacity);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 
     fn take_value_types<T: ValueType, I>(
