@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -41,12 +42,16 @@ pub enum AggregateMode {
     Initial,
 }
 
+/// Information for `GROUPING SETS`.
+/// See the comment of [`crate::planner::binder::aggregate::GroupingSetsInfo`].
 #[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct GroupingSets {
     /// The index of the virtual column `_grouping_id`. It's valid only if `grouping_sets` is not empty.
     pub grouping_id_index: IndexType,
-    /// The grouping sets, each grouping set is a list of `group_items` indices.
+    /// See the comment in `GroupingSetsInfo`.
     pub sets: Vec<Vec<IndexType>>,
+    /// See the comment in `GroupingSetsInfo`.
+    pub dup_group_items: Vec<(IndexType, DataType)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

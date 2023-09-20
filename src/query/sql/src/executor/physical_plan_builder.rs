@@ -334,7 +334,7 @@ impl PhysicalPlanBuilder {
 
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
-                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                        let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
@@ -351,15 +351,6 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg.args.iter().map(|arg| {
-                                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -377,6 +368,23 @@ impl PhysicalPlanBuilder {
 
                         let settings = self.ctx.get_settings();
                         let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
+
+                        if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
+                            assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
+                            // If the aggregation function argument if a group item,
+                            // we cannot use the group item directly.
+                            // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
+                            // which will cause panic while executing aggregation function.
+                            // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
+                            // we should use these columns instead.
+                            for func in agg_funcs.iter_mut() {
+                                for arg in func.arg_indices.iter_mut() {
+                                    if let Some(pos) = group_items.iter().position(|g| g == arg) {
+                                        *arg = grouping_sets.dup_group_items[pos].0;
+                                    }
+                                }
+                            }
+                        }
 
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. })
@@ -486,7 +494,7 @@ impl PhysicalPlanBuilder {
                             }
                         };
 
-                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                        let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
@@ -503,15 +511,6 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg.args.iter().map(|arg| {
-                                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -526,6 +525,21 @@ impl PhysicalPlanBuilder {
                                 Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                             }
                         }).collect::<Result<_>>()?;
+
+                        if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
+                            // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
+                            assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
+                            for func in agg_funcs.iter_mut() {
+                                for (arg, ty) in
+                                    func.arg_indices.iter_mut().zip(func.sig.args.iter_mut())
+                                {
+                                    if let Some(pos) = group_items.iter().position(|g| g == arg) {
+                                        *arg = grouping_sets.dup_group_items[pos].0;
+                                        *ty = grouping_sets.dup_group_items[pos].1.clone();
+                                    }
+                                }
+                            }
+                        }
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref partial) => {
@@ -1269,20 +1283,6 @@ impl PhysicalPlanBuilder {
                     params: agg.params.clone(),
                 },
                 output_column: w.index,
-                args: agg
-                    .args
-                    .iter()
-                    .map(|arg| {
-                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                            Ok(col.column.index)
-                        } else {
-                            Err(ErrorCode::Internal(
-                                "Window's aggregate function argument must be a BoundColumnRef"
-                                    .to_string(),
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?,
                 arg_indices: agg
                     .args
                     .iter()

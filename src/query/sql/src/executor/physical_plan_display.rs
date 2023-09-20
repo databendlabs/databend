@@ -243,7 +243,7 @@ impl Display for AggregateFinal {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()
@@ -276,7 +276,7 @@ impl Display for AggregatePartial {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()

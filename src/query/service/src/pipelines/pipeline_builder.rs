@@ -1298,11 +1298,7 @@ impl PipelineBuilder {
             .group_bys
             .iter()
             .take(expand.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
-            .map(|i| {
-                let index = input_schema.index_of(&i.to_string())?;
-                let ty = input_schema.field(index).data_type();
-                Ok((index, ty.clone()))
-            })
+            .map(|i| input_schema.index_of(&i.to_string()))
             .collect::<Result<Vec<_>>>()?;
         let grouping_sets = expand
             .grouping_sets
@@ -1312,7 +1308,7 @@ impl PipelineBuilder {
                 sets.iter()
                     .map(|i| {
                         let i = input_schema.index_of(&i.to_string())?;
-                        let offset = group_bys.iter().position(|(j, _)| *j == i).unwrap();
+                        let offset = group_bys.iter().position(|j| *j == i).unwrap();
                         Ok(offset)
                     })
                     .collect::<Result<Vec<_>>>()
@@ -1584,7 +1580,15 @@ impl PipelineBuilder {
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {
-                agg_args.push(agg_func.args.clone());
+                let args = agg_func
+                    .arg_indices
+                    .iter()
+                    .map(|i| {
+                        let index = input_schema.index_of(&i.to_string())?;
+                        Ok(index)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                agg_args.push(args);
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
                     agg_func.sig.params.clone(),

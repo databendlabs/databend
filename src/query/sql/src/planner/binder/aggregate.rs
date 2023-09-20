@@ -58,12 +58,71 @@ use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
 
+/// Information for `GROUPING SETS`.
+///
+/// `GROUPING SETS` will generate several `GROUP BY` sets, and union their results. For example:
+///
+/// ```sql
+/// SELECT min(a), b, c FROM t GROUP BY GROUPING SETS (b, c);
+/// ```
+///
+/// is equal to:
+///
+/// ```sql
+/// (SELECT min(a), b, NULL FROM t GROUP BY b) UNION (SELECT min(a), NULL, c FROM t GROUP BY c);
+/// ```
+///
+/// In Databend, we do not really rewrite the plan to a `UNION` plan.
+/// We will add a new virtual column `_grouping_id` to the group by items,
+/// where `_grouping_id` is the result value of function [grouping](https://databend.rs/doc/sql-functions/other-functions/grouping).
+///
+/// For example, we will rewrite the SQL above to:
+///
+/// ```sql
+/// SELECT min(a), b, c FROM t GROUP BY (b, c, _grouping_id);
+/// ```
+///
+/// To get the right result, we also need to fill dummy data for each grouping set.
+///
+/// The above SQL again, if the columns' data is:
+///
+///  a  |  b  |  c
+/// --- | --- | ---
+///  1  |  2  |  3
+///  4  |  5  |  6
+///
+/// We will expand the data to:
+///
+/// - Grouping sets (b):
+///
+///  a  |  b  |   c    | grouping(b,c)
+/// --- | --- |  ---   |    ---
+///  1  |  2  |  NULL  |     2 (0b10)
+///  4  |  5  |  NULL  |     2 (0b10)
+///
+/// - Grouping sets (c):
+///
+///  a  |   b    |  c  | grouping(b,c)
+/// --- |  ---   | --- |   ---
+///  1  |  NULL  |  3  |    1 (0b01)
+///  4  |  NULL  |  6  |    1 (0b01)
+///    
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GroupingSetsInfo {
     /// Index for virtual column `grouping_id`.
     pub grouping_id_column: ColumnBinding,
     /// Each grouping set is a list of column indices in `group_items`.
     pub sets: Vec<Vec<IndexType>>,
+    /// The indices generated to identify the duplicate group items in the execution of the `GROUPING SETS` plan (not including `_grouping_id`).
+    ///
+    /// If the aggregation function argument is an item in the grouping set, for example:
+    ///
+    /// ```sql
+    /// SELECT min(a) FROM t GROUP BY GROUPING SETS (a, ...);
+    /// ```
+    ///
+    /// we should use the original column `a` data instead of the column data after filling dummy NULLs.
+    pub dup_group_items: Vec<(IndexType, DataType)>,
 }
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
@@ -505,13 +564,14 @@ impl Binder {
 
         let aggregate_plan = Aggregate {
             mode: AggregateMode::Initial,
-            group_items: bind_context.aggregate_info.group_items.clone(),
-            aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
+            group_items: agg_info.group_items.clone(),
+            aggregate_functions: agg_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
             grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
                 grouping_id_index: g.grouping_id_column.index,
                 sets: g.sets.clone(),
+                dup_group_items: g.dup_group_items.clone(),
             }),
         };
         new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
@@ -557,6 +617,15 @@ impl Binder {
             })
             .collect::<Vec<_>>();
         let grouping_sets = grouping_sets.into_iter().unique().collect();
+        let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
+        for (i, item) in agg_info.group_items.iter().enumerate() {
+            // We just generate a new bound index.
+            let dummy = self.create_derived_column_binding(
+                format!("_dup_group_item_{i}"),
+                item.scalar.data_type()?,
+            );
+            dup_group_items.push((dummy.index, *dummy.data_type));
+        }
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
@@ -580,6 +649,7 @@ impl Binder {
         let grouping_sets_info = GroupingSetsInfo {
             grouping_id_column,
             sets: grouping_sets,
+            dup_group_items,
         };
 
         agg_info.grouping_sets = Some(grouping_sets_info);
