@@ -17,6 +17,8 @@ use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
 use common_expression::types::map::KvPair;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::NumberColumnBuilder;
@@ -198,7 +200,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
-        if args_type.len() < 6 {
+        // The input parameters must be 2+4*n, where n is the number of ellipses.
+        if args_type.len() < 6 || (args_type.len() - 2) % 4 != 0 {
             return None;
         }
         Some(Arc::new(Function {
@@ -315,7 +318,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             _ => return None,
         };
 
-        (0..args_type.len() - 1)
+        (1..args_type.len())
             .for_each(|_| args.push(DataType::Array(Box::new(DataType::Tuple(arg2.clone())))));
 
         Some(Arc::new(Function {
@@ -344,7 +347,7 @@ fn get_coord(fields: &[ScalarRef]) -> Coord {
     Coord { x: v[0], y: v[1] }
 }
 
-fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
+fn point_in_polygon_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
     let len = args.iter().find_map(|arg| match arg {
         ValueRef::Column(col) => Some(col.len()),
         _ => None,
@@ -353,80 +356,100 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
     let input_rows = len.unwrap_or(1);
     let mut builder = NumberColumnBuilder::with_capacity(&NumberDataType::UInt8, input_rows);
     for idx in 0..input_rows {
-        let arg0: Vec<f64> = match &args[0] {
-            ValueRef::Scalar(ScalarRef::Tuple(fields)) => fields
-                .iter()
-                .cloned()
-                .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
-                .map(|x: ValueRef<Float64Type>| match x {
-                    ValueRef::Scalar(v) => *v,
-                    _ => unreachable!(),
-                })
-                .collect(),
-            ValueRef::Column(Column::Tuple(fields)) => fields
-                .iter()
-                .cloned()
-                .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
-                .map(|x: ValueRef<Float64Type>| match x {
-                    ValueRef::Column(c) => unsafe {
-                        Float64Type::index_column_unchecked(&c, idx).0
-                    },
-                    _ => unreachable!(),
-                })
-                .collect(),
+        let arg0: Result<Vec<f64>> = match &args[0] {
+            ValueRef::Scalar(ScalarRef::Tuple(fields)) => check_coordinate(fields).map(|_| {
+                fields
+                    .iter()
+                    .cloned()
+                    .map(|s| ValueRef::Scalar(Float64Type::try_downcast_scalar(&s).unwrap()))
+                    .map(|x: ValueRef<Float64Type>| match x {
+                        ValueRef::Scalar(v) => *v,
+                        _ => unreachable!(),
+                    })
+                    .collect()
+            }),
+            ValueRef::Column(Column::Tuple(fields)) => check_coordinate(fields).map(|_| {
+                fields
+                    .iter()
+                    .cloned()
+                    .map(|c| ValueRef::Column(Float64Type::try_downcast_column(&c).unwrap()))
+                    .map(|x: ValueRef<Float64Type>| match x {
+                        ValueRef::Column(c) => unsafe {
+                            Float64Type::index_column_unchecked(&c, idx).0
+                        },
+                        _ => unreachable!(),
+                    })
+                    .collect()
+            }),
             _ => unreachable!(),
         };
 
+        if let Err(e) = arg0 {
+            ctx.set_error(idx, e.to_string());
+            return Value::Scalar(Scalar::Number(NumberScalar::UInt8(0)));
+        }
+
+        let arg0 = arg0.unwrap();
         let point = coord! {x:arg0[0], y:arg0[1]};
 
         let polys = if args.len() == 2 {
-            let polys: Vec<Vec<Coord>> = match &args[1] {
-                ValueRef::Scalar(ScalarRef::Array(c)) => c
-                    .iter()
-                    .map(|s| match s {
-                        // form type 1: ((x, y), [(x1, y1), (x2, y2), ...])
-                        // match arm return value type should be equal, so we wrap to a vec here.
-                        ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
-                        // form type 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
-                        ScalarRef::Array(inner_c) => inner_c
-                            .iter()
-                            .map(|s| match s {
-                                ScalarRef::Tuple(fields) => get_coord(&fields),
-                                _ => unreachable!(),
-                            })
-                            .collect(),
-                        _ => unreachable!(),
-                    })
-                    .collect(),
-                ValueRef::Column(Column::Array(c)) => unsafe {
-                    c.index_unchecked(idx)
-                        .iter()
+            let polys: Result<Vec<Vec<Coord>>> = match &args[1] {
+                ValueRef::Scalar(ScalarRef::Array(c)) => {
+                    c.iter()
                         .map(|s| match s {
-                            ScalarRef::Tuple(fields) => vec![get_coord(&fields)],
+                            // form type 1: ((x, y), [(x1, y1), (x2, y2), ...])
+                            // match arm return value type should be equal, so we wrap to a vec here.
+                            ScalarRef::Tuple(fields) => {
+                                check_coordinate(&fields).map(|_| vec![get_coord(&fields)])
+                            }
+                            // form type 2: ((x, y), [[(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...])
                             ScalarRef::Array(inner_c) => inner_c
                                 .iter()
                                 .map(|s| match s {
-                                    ScalarRef::Tuple(fields) => get_coord(&fields),
+                                    ScalarRef::Tuple(fields) => {
+                                        check_coordinate(&fields).map(|_| get_coord(&fields))
+                                    }
                                     _ => unreachable!(),
                                 })
                                 .collect(),
                             _ => unreachable!(),
                         })
-                        .collect::<Vec<_>>()
+                        .collect()
+                }
+                ValueRef::Column(Column::Array(c)) => unsafe {
+                    c.index_unchecked(idx)
+                        .iter()
+                        .map(|s| match s {
+                            ScalarRef::Tuple(fields) => {
+                                check_coordinate(&fields).map(|_| vec![get_coord(&fields)])
+                            }
+                            ScalarRef::Array(inner_c) => inner_c
+                                .iter()
+                                .map(|s| match s {
+                                    ScalarRef::Tuple(fields) => {
+                                        check_coordinate(&fields).map(|_| get_coord(&fields))
+                                    }
+                                    _ => unreachable!(),
+                                })
+                                .collect(),
+                            _ => unreachable!(),
+                        })
+                        .collect()
                 },
                 _ => unreachable!(),
             };
             polys
         } else {
             // form type 3: ((x, y), [(x1, y1), (x2, y2), ...], [(x21, y21), (x22, y22), ...], ...)
-            let mut polys: Vec<Vec<Coord>> = Vec::new();
+            let mut polys: Vec<Result<Vec<Coord>>> = Vec::new();
             for arg in &args[1..] {
-                let hole: Vec<Coord> = match arg {
+                let hole: Result<Vec<Coord>> = match arg {
                     ValueRef::Scalar(ScalarRef::Array(c)) => c
                         .iter()
                         .map(|s| match s {
-                            ScalarRef::Tuple(fields) => get_coord(&fields),
-
+                            ScalarRef::Tuple(fields) => {
+                                check_coordinate(&fields).map(|_| get_coord(&fields))
+                            }
                             _ => unreachable!(),
                         })
                         .collect(),
@@ -434,7 +457,9 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                         c.index_unchecked(idx)
                             .iter()
                             .map(|s| match s {
-                                ScalarRef::Tuple(fields) => get_coord(&fields),
+                                ScalarRef::Tuple(fields) => {
+                                    check_coordinate(&fields).map(|_| get_coord(&fields))
+                                }
                                 _ => unreachable!(),
                             })
                             .collect()
@@ -443,11 +468,19 @@ fn point_in_polygon_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value
                 };
                 polys.push(hole);
             }
+            let polys: Result<Vec<Vec<Coord>>> = polys.into_iter().collect();
             polys
         };
 
+        // check polys has error
+        if let Err(e) = polys {
+            ctx.set_error(idx, e.to_string());
+            return Value::Scalar(Scalar::Number(NumberScalar::UInt8(0)));
+        }
+
         // since we wrapped form type 1 to a vec before, we should flatten here.
         // form type 1 [[coord1], [coord2], ...]  -> [coord1, coord2, ...]
+        let polys = polys.unwrap();
         let polys = if polys[0].len() == 1 {
             vec![polys.into_iter().flatten().collect()]
         } else {
@@ -563,6 +596,15 @@ fn is_point_in_ellipses(
         }
     }
     false
+}
+
+fn check_coordinate<T>(point: &[T]) -> Result<()> {
+    if point.len() != 2 {
+        return Err(ErrorCode::SemanticError(
+            "Coordinate must be a tuple of two numbers",
+        ));
+    }
+    Ok(())
 }
 
 pub fn geo_dist_init() {
