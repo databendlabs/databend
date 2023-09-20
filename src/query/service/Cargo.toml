@@ -130,6 +130,7 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
+lazy_static = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = "0.0.1"

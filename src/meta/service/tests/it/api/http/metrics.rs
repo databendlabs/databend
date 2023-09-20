@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_metrics::init_default_metrics_recorder;
 use databend_meta::api::http::v1::metrics::metrics_handler;
 use databend_meta::metrics::network_metrics;
 use databend_meta::metrics::raft_metrics;
@@ -36,8 +35,6 @@ use crate::tests::meta_node::start_meta_node_cluster;
 #[test(harness = meta_service_test_harness)]
 #[minitrace::trace]
 async fn test_metrics() -> anyhow::Result<()> {
-    init_default_metrics_recorder();
-
     let (_, tcs) = start_meta_node_cluster(btreeset! {0,1,2}, btreeset! {}).await?;
 
     let leader = tcs[0].meta_node.clone().unwrap();
