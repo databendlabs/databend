@@ -97,8 +97,13 @@ pub fn dump_metric_samples(registry: &Registry) -> Result<Vec<MetricSample>> {
         .into_iter()
         .map(|s| {
             let value: MetricValue = s.value.into();
+            let metric_name = s
+                .metric
+                .strip_prefix("databend_")
+                .map(|s| s.to_string())
+                .unwrap_or(s.metric);
             MetricSample {
-                name: s.metric.strip_prefix("databend_"),
+                name: metric_name,
                 value,
                 labels: (*s.labels).clone(),
             }
