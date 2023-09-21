@@ -96,7 +96,7 @@ const LABEL_CODE: &str = "code";
 impl InterpreterMetrics {
     fn common_labels(ctx: &QueryContext) -> Vec<(&'static str, String)> {
         let handler_type = ctx.get_current_session().get_type().to_string();
-        let query_kind = ctx.get_query_kind();
+        let query_kind = ctx.get_query_kind().to_string();
         let tenant_id = ctx.get_tenant();
         let cluster_id = GlobalConfig::instance().query.cluster_id.clone();
 

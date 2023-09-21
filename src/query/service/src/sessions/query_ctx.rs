@@ -36,6 +36,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
@@ -406,7 +407,7 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    fn attach_query_str(&self, kind: String, query: String) {
+    fn attach_query_str(&self, kind: QueryKind, query: String) {
         self.shared.attach_query_str(kind, query);
     }
 
@@ -485,7 +486,7 @@ impl TableContext for QueryContext {
         self.shared.get_tenant()
     }
 
-    fn get_query_kind(&self) -> String {
+    fn get_query_kind(&self) -> QueryKind {
         self.shared.get_query_kind()
     }
 
@@ -726,7 +727,7 @@ impl TableContext for QueryContext {
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        if self.get_query_kind() == "Copy" {
+        if self.get_query_kind() == QueryKind::Copy {
             self.shared.copy_status.add_chunk(file_path, file_status);
         }
         Ok(())
