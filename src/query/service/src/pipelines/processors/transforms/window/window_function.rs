@@ -188,7 +188,7 @@ impl WindowFunctionInfo {
                     agg.sig.args.clone(),
                 )?;
                 let args = agg
-                    .args
+                    .arg_indices
                     .iter()
                     .map(|p| {
                         let offset = schema.index_of(&p.to_string())?;

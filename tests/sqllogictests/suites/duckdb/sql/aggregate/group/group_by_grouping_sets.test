@@ -148,8 +148,107 @@ a NULL 7 1 0 1 2
 b NULL 11 1 0 1 2
 NULL NULL 18 1 1 3 3
 
+# ISSUE-12852. Aggregation function argument is in grouping sets.
+query TT
+SELECT arg_min(c, 10), c FROM t GROUP BY CUBE (c) ORDER BY c;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+1 NULL
+
+query TT
+SELECT min(c), c FROM t GROUP BY CUBE (c) ORDER BY c;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+1 NULL
+
+query TT
+SELECT min(c + 1), c + 1 FROM t GROUP BY CUBE (c + 1) ORDER BY c + 1;
+----
+2 2
+3 3
+4 4
+5 5
+6 6
+2 NULL
+
+query TTTTTT
+SELECT min(a), min(b), min(c), max(c), a, b FROM t GROUP BY CUBE (a, b) ORDER BY a, b;
+----
+a A 1 2 a A
+a B 1 3 a B
+a A 1 3 a NULL
+b A 1 4 b A
+b B 1 5 b B
+b A 1 5 b NULL
+a A 1 4 NULL A
+a B 1 5 NULL B
+a A 1 5 NULL NULL
+
+statement ok
+drop table if exists tt;
+
+statement ok
+create table tt (a string not null, b string not null, c int not null);
+
+statement ok
+insert into tt select *  from t;
+
+query TT
+SELECT arg_min(c, 10), c FROM tt GROUP BY CUBE (c) ORDER BY c;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+1 NULL
+
+query TT
+SELECT min(c), c FROM tt GROUP BY CUBE (c) ORDER BY c;
+----
+1 1
+2 2
+3 3
+4 4
+5 5
+1 NULL
+
+query TT
+SELECT min(c + 1), c + 1 FROM tt GROUP BY CUBE (c + 1) ORDER BY c + 1;
+----
+2 2
+3 3
+4 4
+5 5
+6 6
+2 NULL
+
+query TTTTTT
+SELECT min(a), min(b), min(c), max(c), a, b FROM tt GROUP BY CUBE (a, b) ORDER BY a, b;
+----
+a A 1 2 a A
+a B 1 3 a B
+a A 1 3 a NULL
+b A 1 4 b A
+b B 1 5 b B
+b A 1 5 b NULL
+a A 1 4 NULL A
+a B 1 5 NULL B
+a A 1 5 NULL NULL
+
 statement ok
 drop table t all;
+
+statement ok
+drop table tt all;
 
 statement ok
 drop database grouping_sets;

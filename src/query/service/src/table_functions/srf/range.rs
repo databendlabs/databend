@@ -68,9 +68,9 @@ impl RangeTable {
         validate_args(&table_args.positioned, table_func_name)?;
 
         let data_type = match &table_args.positioned[0] {
-            Scalar::Number(_) => Int64Type::data_type(),
-            Scalar::Timestamp(_) => TimestampType::data_type(),
-            Scalar::Date(_) => DateType::data_type(),
+            Scalar::Number(_) => DataType::Number(NumberDataType::Int64),
+            Scalar::Timestamp(_) => DataType::Timestamp,
+            Scalar::Date(_) => DataType::Date,
             other => {
                 return Err(ErrorCode::BadArguments(format!(
                     "Unsupported data type for generate_series: {:?}",

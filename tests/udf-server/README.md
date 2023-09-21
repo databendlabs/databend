@@ -89,7 +89,7 @@ python3 udf_server.py
 #### 3. Update Databend query node config
 Now, udf server is disabled by default in databend. You can enable it by setting 'enable_udf_server = true' in query node config.
 
-In addition, for security reasons, only the address specified in the config can be accessed by databend. The list of allowed udf server addresses are specified through the `udf_server_allowlist` variable in the query node config. 
+In addition, for security reasons, only the address specified in the config can be accessed by databend. The list of allowed udf server addresses are specified through the `udf_server_allowlist` variable in the query node config.
 
 Here is an example config:
 ```

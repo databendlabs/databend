@@ -186,7 +186,7 @@ pub enum Statement {
     },
     ListStage {
         location: String,
-        pattern: String,
+        pattern: Option<String>,
     },
 
     // UserDefinedFileFormat
@@ -452,7 +452,7 @@ impl Display for Statement {
             Statement::AlterUDF(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
-                if !pattern.is_empty() {
+                if let Some(pattern) = pattern {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }

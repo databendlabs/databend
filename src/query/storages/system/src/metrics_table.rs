@@ -29,7 +29,7 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_metrics::reset_metrics;
+use common_metrics::reset_global_prometheus_registry;
 use common_metrics::MetricSample;
 use common_metrics::MetricValue;
 
@@ -53,11 +53,10 @@ impl SyncSystemTable for MetricsTable {
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
         let local_id = ctx.get_cluster().local_id.clone();
 
-        let prometheus_handle = common_metrics::try_handle().ok_or_else(|| {
-            ErrorCode::InitPrometheusFailure("Prometheus recorder is not initialized yet.")
-        })?;
-
-        let mut samples = common_metrics::dump_metric_samples(prometheus_handle)?;
+        let mut samples = {
+            let registry = common_metrics::load_global_prometheus_registry();
+            common_metrics::dump_metric_samples(&registry)?
+        };
         samples.extend(self.custom_metric_samples()?);
 
         let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(samples.len());
@@ -83,7 +82,7 @@ impl SyncSystemTable for MetricsTable {
     }
 
     fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
-        reset_metrics()?;
+        reset_global_prometheus_registry();
         Ok(())
     }
 }

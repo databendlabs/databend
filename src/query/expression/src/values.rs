@@ -829,7 +829,9 @@ impl Column {
     }
 
     pub fn domain(&self) -> Domain {
-        assert!(self.len() > 0);
+        if !matches!(self, Column::Array(_) | Column::Map(_)) {
+            assert!(self.len() > 0);
+        }
         match self {
             Column::Null { .. } => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -865,7 +867,7 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                if col.len() == 0 {
+                if col.len() == 0 || col.values.len() == 0 {
                     Domain::Array(None)
                 } else {
                     let inner_domain = col.values.domain();
@@ -873,7 +875,7 @@ impl Column {
                 }
             }
             Column::Map(col) => {
-                if col.len() == 0 {
+                if col.len() == 0 || col.values.len() == 0 {
                     Domain::Map(None)
                 } else {
                     let inner_domain = col.values.domain();
