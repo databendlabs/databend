@@ -33,10 +33,7 @@ use crate::types::ArrayType;
 use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DateType;
-use crate::types::EmptyArrayType;
-use crate::types::EmptyMapType;
 use crate::types::MapType;
-use crate::types::NullType;
 use crate::types::NullableType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -107,9 +104,9 @@ impl Column {
         let capacity = columns.iter().map(|c| c.len()).sum();
 
         match &columns[0] {
-            Column::Null { .. } => Self::concat_arg_types::<NullType>(columns),
-            Column::EmptyArray { .. } => Self::concat_arg_types::<EmptyArrayType>(columns),
-            Column::EmptyMap { .. } => Self::concat_arg_types::<EmptyMapType>(columns),
+            Column::Null { .. } => Column::Null { len: capacity },
+            Column::EmptyArray { .. } => Column::EmptyArray { len: capacity },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: capacity },
             Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
                 NumberColumn::NUM_TYPE(_) => {
                     let columns = columns
@@ -258,16 +255,14 @@ impl Column {
     pub fn concat_primitive_types<T>(cols: &[Buffer<T>], num_rows: usize) -> Vec<T>
     where T: Copy {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let ptr = builder.as_mut_ptr();
-        let mut i = 0;
+        let mut ptr = builder.as_mut_ptr();
         for col in cols {
-            for item in col.iter() {
-                // # Safety
-                // `i` must be less than `num_rows`.
-                unsafe {
-                    std::ptr::write(ptr.add(i), *item);
-                }
-                i += 1;
+            let len = col.len();
+            // # Safety
+            // `num_rows` must be greater than the sum of cols len.
+            unsafe {
+                std::ptr::copy_nonoverlapping(col.as_slice().as_ptr(), ptr, len);
+                ptr = ptr.add(len);
             }
         }
         // # Safety
@@ -277,44 +272,42 @@ impl Column {
     }
 
     pub fn concat_string_types<'a>(cols: &'a [StringColumn], num_rows: usize) -> StringColumn {
-        let mut items: Vec<&[u8]> = Vec::with_capacity(num_rows);
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         offsets.push(0);
-        let items_ptr = items.as_mut_ptr();
-        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
-
-        let mut i = 0;
+        let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
         let mut data_size = 0;
-        for col in cols {
-            for item in col.iter() {
-                data_size += item.len() as u64;
-                // # Safety
-                // `i` must be less than the capacity of Vec.
-                unsafe {
-                    std::ptr::write(items_ptr.add(i), item);
-                    std::ptr::write(offsets_ptr.add(i), data_size);
-                    i += 1;
-                }
-            }
+        for col in cols.iter() {
+            let col_offsets = col.offsets().as_slice();
+            col_offsets
+                .iter()
+                .zip(col_offsets.iter().skip(1))
+                .for_each(|(start, end)| {
+                    data_size += end - start;
+                    // # Safety
+                    // ptr must be less than the capacity of Vec.
+                    unsafe {
+                        std::ptr::write(offsets_ptr, data_size);
+                        offsets_ptr = offsets_ptr.add(1);
+                    }
+                });
         }
         unsafe {
-            items.set_len(num_rows);
             offsets.set_len(num_rows + 1);
         }
 
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let data_ptr = data.as_mut_ptr();
-        let mut offset = 0;
-        for item in items {
-            let len = item.len();
+        let mut data_ptr = data.as_mut_ptr();
+        for col in cols.iter() {
+            let col_data = col.data().as_slice();
+            let len = col_data.len();
             // # Safety
-            // `offset` + `len` < `data_size`.
+            // ptr must be less than the capacity of Vec.
             unsafe {
-                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+                std::ptr::copy_nonoverlapping(col_data.as_ptr(), data_ptr, len);
+                data_ptr = data_ptr.add(len);
             }
-            offset += len;
         }
-        unsafe { data.set_len(offset) };
+        unsafe { data.set_len(data_size as usize) };
         StringColumn::new(data.into(), offsets.into())
     }
 
@@ -358,16 +351,6 @@ impl Column {
                 .ok()
                 .unwrap()
         }
-    }
-
-    fn concat_arg_types<T: ArgType>(columns: &[Column]) -> Column {
-        let columns: Vec<T::Column> = columns
-            .iter()
-            .map(|c| T::try_downcast_column(c).unwrap())
-            .collect();
-        let iter = columns.iter().flat_map(|c| T::iter_column(c));
-        let result = T::column_from_ref_iter(iter, &[]);
-        T::upcast_column(result)
     }
 
     fn concat_value_types<T: ValueType>(
