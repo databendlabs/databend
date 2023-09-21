@@ -67,7 +67,7 @@ pub struct HashJoinBuildState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) processor_count: usize,
+    pub(crate) _processor_count: usize,
     /// When build side input data is coming, we will put it into `RowSpace`'s chunks.
     /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
@@ -75,6 +75,8 @@ pub struct HashJoinBuildState {
     pub(crate) chunk_size_limit: Arc<usize>,
     /// Wait util all processors finish row space build, then go to next phase.
     pub(crate) barrier: Barrier,
+    /// Wait all processors finish read spilled data, then go to new round build
+    pub(crate) restore_barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
@@ -102,6 +104,7 @@ impl HashJoinBuildState {
         hash_join_state: Arc<HashJoinState>,
         processor_count: usize,
         barrier: Barrier,
+        restore_barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -111,9 +114,10 @@ impl HashJoinBuildState {
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
             hash_join_state,
-            processor_count,
+            _processor_count: processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
             barrier,
+            restore_barrier,
             row_space_builders: Default::default(),
             method: Arc::new(method),
             entry_size: Arc::new(Default::default()),
@@ -212,9 +216,8 @@ impl HashJoinBuildState {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {
                     let data_block = DataBlock::concat(&buffer)?;
-                    buffer.clear();
-                    drop(buffer);
                     self.add_build_block(data_block)?;
+                    buffer.clear();
                 }
             }
 

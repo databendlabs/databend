@@ -14,7 +14,6 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -72,6 +71,8 @@ pub struct HashJoinProbeState {
     pub(crate) final_probe_workers: Mutex<usize>,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
+    /// Wait all processors to restore spilled data, then go to new probe
+    pub(crate) restore_barrier: Barrier,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -98,6 +99,7 @@ impl HashJoinProbeState {
         join_type: &JoinType,
         processor_count: usize,
         barrier: Barrier,
+        restore_barrier: Barrier,
     ) -> Result<Self> {
         if matches!(join_type, &JoinType::Right | &JoinType::RightSingle) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
@@ -118,6 +120,7 @@ impl HashJoinProbeState {
             spill_workers: Mutex::new(0),
             final_probe_workers: Default::default(),
             barrier,
+            restore_barrier,
             probe_schema,
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
@@ -290,7 +293,12 @@ impl HashJoinProbeState {
             } else {
                 *partition_id = -1;
             }
-            info!("next partition to read: {:?}", *partition_id);
+            info!(
+                "next partition to read: {:?}, final probe done",
+                *partition_id
+            );
+            let mut continue_build = self.hash_join_state.continue_build.lock();
+            *continue_build = true;
             self.hash_join_state
                 .notify_build_processors
                 .notify_waiters();
@@ -325,7 +333,12 @@ impl HashJoinProbeState {
             } else {
                 *partition_id = -1;
             };
-            info!("next partition to read: {:?}", *partition_id);
+            info!(
+                "next partition to read: {:?}, probe spill done",
+                *partition_id
+            );
+            let mut continue_build = self.hash_join_state.continue_build.lock();
+            *continue_build = true;
             // All probe processors have finished spill, notify build processors to work
             self.hash_join_state
                 .notify_build_processors
