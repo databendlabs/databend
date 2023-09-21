@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -25,7 +24,6 @@ use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
 use log::info;
-use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
@@ -41,23 +39,16 @@ pub struct BuildSpillState {
     /// Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
     /// Hash join build spilling coordinator
-    pub spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
+    pub spill_coordinator: Arc<BuildSpillCoordinator>,
     /// Spiller, responsible for specific spill work
     pub spiller: Spiller,
-    /// Wait util all active spill processor into `WaitSpill`, then start to spill
-    pub barrier: Arc<Barrier>,
-    /// If the processor doesn't need to spill, set it to false
-    pub need_spill: bool,
-    /// If the processor is the last processor to wait spill
-    pub is_leader: bool,
 }
 
 impl BuildSpillState {
     pub fn create(
         ctx: Arc<QueryContext>,
-        spill_coordinator: Arc<RwLock<BuildSpillCoordinator>>,
+        spill_coordinator: Arc<BuildSpillCoordinator>,
         build_state: Arc<HashJoinBuildState>,
-        barrier: Arc<Barrier>,
     ) -> Self {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
@@ -67,9 +58,6 @@ impl BuildSpillState {
             build_state,
             spill_coordinator,
             spiller,
-            barrier,
-            need_spill: true,
-            is_leader: false,
         }
     }
 
@@ -133,8 +121,8 @@ impl BuildSpillState {
     // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
     pub(crate) async fn spill(&mut self, p_id: usize) -> Result<()> {
         let spill_partitions = {
-            let mut spill_coordinator = self.spill_coordinator.write();
-            spill_coordinator.spill_tasks.pop_back().unwrap()
+            let mut spill_tasks = self.spill_coordinator.spill_tasks.lock();
+            spill_tasks.pop_back().unwrap()
         };
         self.spiller.spill(&spill_partitions, p_id).await
     }

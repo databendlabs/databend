@@ -933,6 +933,7 @@ impl PipelineBuilder {
         let output_len = build_res.main_pipeline.output_len();
         let spill_coordinator = BuildSpillCoordinator::create(output_len);
         let barrier = Barrier::new(output_len);
+        let restore_barrier = Barrier::new(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
@@ -940,16 +941,15 @@ impl PipelineBuilder {
             join_state,
             output_len,
             barrier,
+            restore_barrier,
         )?;
 
-        let spill_barrier = Arc::new(Barrier::new(output_len));
         let create_sink_processor = |input| {
             let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
                     build_state.clone(),
-                    spill_barrier.clone(),
                 )))
             } else {
                 None
@@ -1851,6 +1851,7 @@ impl PipelineBuilder {
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
         let barrier = Barrier::new(self.main_pipeline.output_len());
+        let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             state,
@@ -1860,6 +1861,7 @@ impl PipelineBuilder {
             &join.join_type,
             self.main_pipeline.output_len(),
             barrier,
+            restore_barrier,
         )?);
 
         self.main_pipeline.add_transform(|input, output| {

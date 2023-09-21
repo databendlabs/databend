@@ -23,6 +23,7 @@ drop table t3;
 statement ok
 create table t3 as select number as a from numbers(10);
 
+# flaky test
 query I
 select a from t3 inner join numbers(100000) on t3.a = number order by a;
 ----

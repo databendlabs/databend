@@ -107,6 +107,8 @@ pub struct HashJoinState {
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     /// Spill partition set
     pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
+    /// Continue to run build side
+    pub(crate) continue_build: Mutex<bool>,
     /// Notify build workers to go to next phase.
     pub(crate) notify_build_processors: Arc<Notify>,
     /// After all build processors finish spill, will pick a partition
@@ -150,8 +152,9 @@ impl HashJoinState {
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             spill_partition: Default::default(),
+            continue_build: Default::default(),
             notify_build_processors: Arc::new(Default::default()),
-            partition_id: Arc::new(Default::default()),
+            partition_id: Arc::new(RwLock::new(-2)),
         }))
     }
 
@@ -202,7 +205,16 @@ impl HashJoinState {
 
     #[async_backtrace::framed]
     pub(crate) async fn wait_probe_notify(&self) {
-        self.notify_build_processors.notified().await;
+        let notified = {
+            let continue_build = self.continue_build.lock();
+            match *continue_build {
+                true => None,
+                false => Some(self.notify_build_processors.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
+        }
     }
 
     // Reset the state for next round run.

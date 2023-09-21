@@ -15,9 +15,7 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::collections::VecDeque;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Barrier;
 
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -207,6 +205,7 @@ impl TransformHashJoinProbe {
     }
 
     fn reset(&mut self) {
+        self.step = HashJoinProbeStep::Running;
         self.probe_state.reset();
         if self.join_probe_state.hash_join_state.need_outer_scan()
             || self.join_probe_state.hash_join_state.need_mark_scan()
@@ -406,12 +405,6 @@ impl Processor for TransformHashJoinProbe {
                     .ctx
                     .get_settings()
                     .get_enable_join_spill()?
-                    && // If there is no spilled partition, we can skip the spill phase
-                        !self.join_probe_state
-                        .hash_join_state
-                        .spill_partition
-                        .read()
-                        .is_empty()
                 {
                     if !self.spill_done {
                         self.step = HashJoinProbeStep::Spill;
@@ -469,22 +462,22 @@ impl Processor for TransformHashJoinProbe {
                     return Ok(());
                 }
                 let p_id = *self.join_probe_state.hash_join_state.partition_id.read();
-                if !spill_state
+                if p_id == -1 {
+                    self.step = HashJoinProbeStep::FastReturn;
+                    return Ok(());
+                }
+                if spill_state
                     .spiller
                     .spilled_partition_set
                     .contains(&(p_id as u8))
                 {
-                    self.step = HashJoinProbeStep::Running;
-                    return Ok(());
+                    let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
+                    if !spilled_data.is_empty() {
+                        self.input_data.extend(spilled_data);
+                    }
                 }
-                let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
-                if !spilled_data.is_empty() {
-                    // Reset `ProbeState`
-                    self.reset();
-                    self.input_data.extend(spilled_data);
-                } else {
-                    self.step = HashJoinProbeStep::Running;
-                }
+                self.join_probe_state.restore_barrier.wait().await;
+                self.reset();
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };

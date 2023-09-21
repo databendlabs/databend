@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::DataBlock;
-use parking_lot::RwLock;
+use log::info;
+use parking_lot::Mutex;
 
 /// Coordinate all hash join build processors to spill.
 /// It's shared by all hash join build processors.
@@ -25,45 +30,59 @@ use parking_lot::RwLock;
 /// The last one will be as the coordinator to spill all processors and then wake up all processors to continue executing.
 pub struct BuildSpillCoordinator {
     /// Need to spill, if one of the builders need to spill, this flag will be set to true.
-    need_spill: bool,
+    need_spill: AtomicBool,
     /// Current waiting spilling processor count.
-    pub(crate) waiting_spill_count: usize,
+    pub(crate) waiting_spill_count: AtomicUsize,
     /// Total processor count.
     pub(crate) total_builder_count: usize,
     /// Spill tasks, the size is the same as the total active processor count.
-    pub(crate) spill_tasks: VecDeque<Vec<(u8, DataBlock)>>,
+    pub(crate) spill_tasks: Mutex<VecDeque<Vec<(u8, DataBlock)>>>,
     /// If send partition set to probe
-    pub send_partition_set: bool,
+    pub(crate) send_partition_set: AtomicBool,
     /// When a build processor won't trigger spill, the field will plus one
-    pub non_spill_processors: usize,
+    pub(crate) non_spill_processors: AtomicUsize,
+    /// If there is the last processor, set `ready_spill` to true and notify other processors
+    pub(crate) ready_spill: Mutex<bool>,
+    pub(crate) notify_spill: Arc<Notify>,
 }
 
 impl BuildSpillCoordinator {
-    pub fn create(total_builder_count: usize) -> Arc<RwLock<Self>> {
-        Arc::new(RwLock::new(Self {
-            need_spill: false,
-            waiting_spill_count: 0,
+    pub fn create(total_builder_count: usize) -> Arc<Self> {
+        Arc::new(Self {
+            need_spill: Default::default(),
+            waiting_spill_count: Default::default(),
             total_builder_count,
             spill_tasks: Default::default(),
             send_partition_set: Default::default(),
             non_spill_processors: Default::default(),
-        }))
+            ready_spill: Default::default(),
+            notify_spill: Arc::new(Default::default()),
+        })
     }
 
     // Called by hash join build processor, if current processor need to spill, then set `need_spill` to true.
-    pub fn need_spill(&mut self) -> Result<()> {
-        self.need_spill = true;
+    pub fn need_spill(&self) -> Result<()> {
+        self.need_spill.store(true, Ordering::Relaxed);
         Ok(())
     }
 
     // If current waiting spilling builder is the last one, then spill all builders.
-    pub(crate) fn wait_spill(&mut self) -> Result<bool> {
-        let non_spill_processors = self.non_spill_processors;
-        let waiting_spill_count = &mut self.waiting_spill_count;
-        *waiting_spill_count += 1;
-        if *waiting_spill_count == (self.total_builder_count - non_spill_processors) {
+    pub(crate) fn wait_spill(&self) -> Result<bool> {
+        // Before the processor into wait spill, need to ensure `ready_spill` is false.
+        self.check_ready_spill()?;
+        self.waiting_spill_count.fetch_add(1, Ordering::SeqCst);
+        info!(
+            "waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}",
+            self.waiting_spill_count.load(Ordering::Relaxed),
+            self.non_spill_processors.load(Ordering::Relaxed),
+            self.total_builder_count
+        );
+        if self.waiting_spill_count.load(Ordering::Relaxed)
+            + self.non_spill_processors.load(Ordering::Relaxed)
+            == self.total_builder_count
+        {
             // Reset waiting_spill_count
-            *waiting_spill_count = 0;
+            self.waiting_spill_count.store(0, Ordering::Relaxed);
             // No need to wait spill, the processor is the last one
             return Ok(false);
         }
@@ -72,11 +91,46 @@ impl BuildSpillCoordinator {
 
     // Get the need_spill flag.
     pub fn get_need_spill(&self) -> bool {
-        self.need_spill
+        self.need_spill.load(Ordering::Relaxed)
     }
 
     // Set the need_spill flag to false.
-    pub fn no_need_spill(&mut self) {
-        self.need_spill = false;
+    pub fn no_need_spill(&self) {
+        self.need_spill.store(false, Ordering::Relaxed);
+    }
+
+    // Wait the last processor to notify spill
+    pub async fn wait_spill_notify(&self) {
+        let notified = {
+            let ready_spill = self.ready_spill.lock();
+            match *ready_spill {
+                true => None,
+                false => Some(self.notify_spill.notified()),
+            }
+        };
+        if let Some(notified) = notified {
+            notified.await;
+        }
+    }
+
+    // Get active processor count
+    pub fn active_processor_num(&self) -> usize {
+        self.total_builder_count - self.non_spill_processors.load(Ordering::Relaxed)
+    }
+
+    // Add one to `non_spill_processors`
+    // Return value after adding
+    pub fn increase_non_spill_processors(&self) -> usize {
+        let old = self.non_spill_processors.fetch_add(1, Ordering::SeqCst);
+        old + 1
+    }
+
+    // Check if `ready_spill` is false, if not, make it false
+    pub fn check_ready_spill(&self) -> Result<()> {
+        let mut ready_spill = self.ready_spill.lock();
+        if *ready_spill {
+            *ready_spill = false;
+        }
+        Ok(())
     }
 }
