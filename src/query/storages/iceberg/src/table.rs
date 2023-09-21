@@ -81,7 +81,7 @@ impl IcebergTable {
         dop: DataOperator,
     ) -> Result<IcebergTable> {
         let op = dop.operator();
-        let table = icelake::Table::open_with_op(op.clone())
+        let table = icelake::catalog::StorageCatalog::load_table(&path)
             .await
             .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}")))?;
 

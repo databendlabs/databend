@@ -28,11 +28,9 @@ use opendal::raw::oio::Streamer;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
-use opendal::raw::OpAppend;
 use opendal::raw::OpList;
 use opendal::raw::OpRead;
 use opendal::raw::OpWrite;
-use opendal::raw::RpAppend;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
@@ -175,7 +173,6 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
     type BlockingWriter = StorageMetricsWrapper<A::BlockingWriter>;
     type Pager = A::Pager;
     type BlockingPager = A::BlockingPager;
-    type Appender = A::Appender;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -216,10 +213,6 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
         self.inner.blocking_list(path, args)
-    }
-
-    async fn append(&self, path: &str, args: OpAppend) -> Result<(RpAppend, Self::Appender)> {
-        self.inner.append(path, args).await
     }
 }
 
@@ -281,20 +274,17 @@ impl<R: oio::BlockingRead> oio::BlockingRead for StorageMetricsWrapper<R> {
         self.inner.seek(pos)
     }
 
-    fn next(&mut self) -> Option<Result<bytes::Bytes>> {
+    fn next(&mut self) -> Option<Result<Bytes>> {
         self.inner.next()
     }
 }
 
-#[async_trait]
 impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
-    #[async_backtrace::framed]
-    async fn write(&mut self, bs: Bytes) -> Result<()> {
-        let size = bs.len();
+    fn poll_write(&mut self, cx: &mut Context<'_>, bs: &dyn oio::WriteBuf) -> Poll<Result<usize>> {
         let start = Instant::now();
 
-        let result = self.inner.write(bs).await;
-        if result.is_ok() {
+        let result = self.inner.poll_write(cx, bs);
+        if let Poll::Ready(Ok(size)) = result {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);
@@ -302,30 +292,21 @@ impl<R: oio::Write> oio::Write for StorageMetricsWrapper<R> {
         result
     }
 
-    #[async_backtrace::framed]
-    async fn abort(&mut self) -> Result<()> {
-        self.inner.abort().await
+    fn poll_close(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        self.inner.poll_close(cx)
     }
 
-    #[async_backtrace::framed]
-    async fn sink(&mut self, size: u64, s: Streamer) -> Result<()> {
-        self.inner.sink(size, s).await
-    }
-
-    #[async_backtrace::framed]
-    async fn close(&mut self) -> Result<()> {
-        self.inner.close().await
+    fn poll_abort(&mut self, cx: &mut Context<'_>) -> Poll<Result<()>> {
+        self.inner.poll_abort(cx)
     }
 }
 
-#[async_trait]
 impl<R: oio::BlockingWrite> oio::BlockingWrite for StorageMetricsWrapper<R> {
-    fn write(&mut self, bs: Bytes) -> Result<()> {
-        let size = bs.len();
+    fn write(&mut self, bs: &dyn oio::WriteBuf) -> Result<usize> {
         let start = Instant::now();
 
         let result = self.inner.write(bs);
-        if result.is_ok() {
+        if let Ok(size) = result {
             self.metrics.inc_write_bytes(size);
             self.metrics
                 .inc_write_bytes_cost(start.elapsed().as_millis() as u64);

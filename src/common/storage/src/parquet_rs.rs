@@ -99,7 +99,8 @@ pub async fn read_metadata_async(
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
     let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
     let buffer = operator
-        .range_read(path, (file_size - default_end_len)..file_size)
+        .read_with(path)
+        .range((file_size - default_end_len)..file_size)
         .await?;
     let buffer_len = buffer.len();
     let metadata_len = decode_footer(
@@ -120,29 +121,12 @@ pub async fn read_metadata_async(
         // 1. Read the whole footer data again. (file_size - footer_len)..file_size
         // 2. Read the remain data only and concat with the previous read data. (file_size - footer_len)..(file_size - buffer.len()
         let mut metadata = operator
-            .range_read(
-                path,
-                (file_size - footer_len)..(file_size - buffer_len as u64),
-            )
+            .read_with(path)
+            .range((file_size - footer_len)..(file_size - buffer_len as u64))
             .await?;
         metadata.extend(buffer);
         Ok(decode_metadata(&metadata)?)
     }
-}
-
-#[allow(dead_code)]
-pub fn read_metadata(
-    path: &str,
-    operator: &BlockingOperator,
-    file_size: u64,
-) -> Result<ParquetMetaData> {
-    check_footer_size(file_size)?;
-    let footer = operator.range_read(path, (file_size - FOOTER_SIZE)..file_size)?;
-    let metadata_len = decode_footer(&footer[0..8].try_into().unwrap())? as u64;
-    check_meta_size(file_size, metadata_len)?;
-    let metadata =
-        operator.range_read(path, (file_size - FOOTER_SIZE - metadata_len)..file_size)?;
-    Ok(decode_metadata(&metadata)?)
 }
 
 /// check file is large enough to hold footer

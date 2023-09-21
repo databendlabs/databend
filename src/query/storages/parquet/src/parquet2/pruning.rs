@@ -108,7 +108,7 @@ impl PartitionPruner {
         let mut stats = PartStatistics::default();
         let mut partitions = vec![];
 
-        let is_blocking_io = operator.info().can_blocking();
+        let is_blocking_io = operator.info().native_capability().blocking;
         let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
         let no_stats = file_meta.row_groups.iter().any(|r| {

@@ -1448,18 +1448,17 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "chrono"
-version = "0.4.26"
+version = "0.4.31"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec837a71355b28f6556dbd569b37b3f363091c0bd4b2e735674521b4c5fd9bc5"
+checksum = "7f2c685bad3eb3d45a01354cedb7d5faa66194d1d58ba6e267a8de788f79db38"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
  "js-sys",
  "num-traits",
  "serde",
- "time 0.1.43",
  "wasm-bindgen",
- "winapi",
+ "windows-targets 0.48.0",
 ]
 
 [[package]]
@@ -2669,7 +2668,7 @@ dependencies = [
  "serde",
  "simsearch",
  "storages-common-table-meta",
- "time 0.3.28",
+ "time",
  "url",
  "z3",
 ]
@@ -3287,6 +3286,12 @@ checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32fast"
@@ -3917,7 +3922,7 @@ dependencies = [
  "table-lock",
  "temp-env",
  "tempfile",
- "time 0.3.28",
+ "time",
  "tokio-stream",
  "toml 0.7.6",
  "tonic 0.9.2",
@@ -5361,7 +5366,7 @@ dependencies = [
  "bstr 1.6.2",
  "itoa",
  "thiserror",
- "time 0.3.28",
+ "time",
 ]
 
 [[package]]
@@ -6803,13 +6808,14 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.10"
-source = "git+https://github.com/icelake-io/icelake?rev=eb3251f#eb3251fdb4c72b5849610efe695b6c0a74ecb5da"
+source = "git+https://github.com/icelake-io/icelake?rev=4dfd604#4dfd604fee5532fb210112277e06e04d769c4e59"
 dependencies = [
  "anyhow",
  "apache-avro",
  "arrow-arith 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-array",
  "arrow-buffer",
+ "arrow-cast",
  "arrow-row 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-schema",
  "arrow-select 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6821,6 +6827,7 @@ dependencies = [
  "enum-display",
  "faster-hex",
  "futures",
+ "itertools 0.11.0",
  "log",
  "murmur3",
  "once_cell",
@@ -8011,7 +8018,7 @@ dependencies = [
  "smallvec",
  "subprocess",
  "thiserror",
- "time 0.3.28",
+ "time",
  "uuid",
 ]
 
@@ -8279,8 +8286,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.39.0"
-source = "git+https://github.com/apache/incubator-opendal?rev=f02d627#f02d627a582d1f68af048e4f0db84eb1102f271d"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddba7299bab261d3ae2f37617fb7f45b19ed872752bb4e22cf93a69d979366c5"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -9668,11 +9676,14 @@ dependencies = [
  "async-trait",
  "bytes",
  "combine",
+ "crc16",
  "futures",
  "futures-util",
  "itoa",
+ "log",
  "percent-encoding",
  "pin-project-lite",
+ "rand 0.8.5",
  "ryu",
  "sha1_smol",
  "socket2 0.4.9",
@@ -10439,7 +10450,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "time 0.3.28",
+ "time",
  "url",
  "uuid",
 ]
@@ -10578,7 +10589,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_with_macros",
- "time 0.3.28",
+ "time",
 ]
 
 [[package]]
@@ -10665,7 +10676,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serfig",
- "time 0.3.28",
+ "time",
  "uuid",
 ]
 
@@ -10760,7 +10771,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "thiserror",
- "time 0.3.28",
+ "time",
 ]
 
 [[package]]
@@ -11555,16 +11566,6 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.1.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca8a50ef2360fbd1eeb0ecd46795a87a19024eb4b53c5dc916ca1fd95fe62438"
-dependencies = [
- "libc",
- "winapi",
-]
-
-[[package]]
-name = "time"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "17f6bb557fd245c28e6411aa56b6403c689ad95061f50e4be16c274e70a17e48"
@@ -11899,7 +11900,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09d48f71a791638519505cefafe162606f706c25592e4bde4d97600c0195312e"
 dependencies = [
  "crossbeam-channel",
- "time 0.3.28",
+ "time",
  "tracing-subscriber",
 ]
 
@@ -12333,7 +12334,7 @@ dependencies = [
  "gix 0.48.0",
  "rustc_version",
  "rustversion",
- "time 0.3.28",
+ "time",
 ]
 
 [[package]]
