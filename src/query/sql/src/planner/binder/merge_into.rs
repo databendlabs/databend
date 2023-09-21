@@ -156,18 +156,18 @@ impl Binder {
                             format!("can't find {} in source output", field.name).to_string(),
                         ));
                     }
-                    Some(indexs) => {
-                        if indexs.len() != 1 {
+                    Some(indices) => {
+                        if indices.len() != 1 {
                             return Err(ErrorCode::SemanticError(
                                 format!(
                                     "there should be only one {} in source output,but we get {}",
                                     field.name,
-                                    indexs.len()
+                                    indices.len()
                                 )
                                 .to_string(),
                             ));
                         } else {
-                            indexs[0]
+                            indices[0]
                         }
                     }
                 };
@@ -187,7 +187,7 @@ impl Binder {
         };
 
         // Todo: (JackTan25) Maybe we can remove bind target_table
-        // when the target table has beed binded in bind_merge_into_source
+        // when the target table has been binded in bind_merge_into_source
         // bind table for target table
         let (mut target_expr, mut right_context) = self
             .bind_single_table(&mut left_context, &target_table)
@@ -486,7 +486,7 @@ impl Binder {
         false
     }
 
-    fn has_star_cluase(
+    fn has_star_clause(
         &self,
         matched_clauses: &Vec<MatchedClause>,
         unmatched_clauses: &Vec<UnmatchedClause>,
