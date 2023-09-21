@@ -30,6 +30,7 @@ use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::Table;
@@ -135,7 +136,7 @@ impl ParquetRSTable {
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let need_stats_provider = ctx.get_query_kind() != QueryKind::Copy;
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;

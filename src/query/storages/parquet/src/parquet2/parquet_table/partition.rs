@@ -18,6 +18,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -171,7 +172,7 @@ impl Parquet2Table {
                 &file_locations,
                 ctx.get_settings().get_max_threads()? as usize,
                 &ctx.get_copy_status(),
-                ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+                ctx.get_query_kind() == QueryKind::Copy,
             )
             .await
     }
