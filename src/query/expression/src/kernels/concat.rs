@@ -278,18 +278,18 @@ impl Column {
         let mut data_size = 0;
         for col in cols.iter() {
             let col_offsets = col.offsets().as_slice();
-            col_offsets
-                .iter()
-                .zip(col_offsets.iter().skip(1))
-                .for_each(|(start, end)| {
-                    data_size += end - start;
-                    // # Safety
-                    // ptr must be less than the capacity of Vec.
-                    unsafe {
-                        std::ptr::write(offsets_ptr, data_size);
-                        offsets_ptr = offsets_ptr.add(1);
-                    }
-                });
+            let col_offsets = &col_offsets[1..];
+            let mut start = 0;
+            for end in col_offsets.iter() {
+                data_size += end - start;
+                start = *end;
+                // # Safety
+                // ptr must be less than the capacity of Vec.
+                unsafe {
+                    std::ptr::write(offsets_ptr, data_size);
+                    offsets_ptr = offsets_ptr.add(1);
+                }
+            }
         }
         unsafe {
             offsets.set_len(num_rows + 1);
