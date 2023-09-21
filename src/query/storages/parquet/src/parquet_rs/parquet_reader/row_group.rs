@@ -96,7 +96,7 @@ pub struct InMemoryRowGroup<'a> {
     metadata: &'a RowGroupMetaData,
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
-    pub row_count: usize,
+    row_count: usize,
 }
 
 impl<'a> InMemoryRowGroup<'a> {
@@ -107,6 +107,10 @@ impl<'a> InMemoryRowGroup<'a> {
             column_chunks: vec![None; rg.num_columns()],
             row_count: rg.num_rows() as usize,
         }
+    }
+
+    pub fn row_count(&self) -> usize {
+        self.row_count
     }
 
     /// Fetches the necessary column data into memory

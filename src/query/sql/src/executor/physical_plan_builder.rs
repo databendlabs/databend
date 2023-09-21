@@ -1975,12 +1975,7 @@ impl PhysicalPlanBuilder {
                         .as_expr()?
                         .project_column_ref(|col| col.column_name.clone()),
                 )?;
-                let inverted_filter =
-                    check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
-
                 let filter = filter.as_remote_expr();
-                let inverted_filter = inverted_filter.as_remote_expr();
-
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
@@ -1988,7 +1983,6 @@ impl PhysicalPlanBuilder {
                     prewhere_columns,
                     remain_columns,
                     filter,
-                    inverted_filter,
                     virtual_columns,
                 })
             })

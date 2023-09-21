@@ -422,7 +422,7 @@ impl ParquetRSReader {
             selection = None;
 
             metrics_inc_omit_filter_rowgroups(1);
-            metrics_inc_omit_filter_rows(row_group.row_count as u64);
+            metrics_inc_omit_filter_rows(row_group.row_count() as u64);
         }
 
         if let Some(predicate) = predicate {

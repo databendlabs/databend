@@ -139,7 +139,7 @@ pub fn parse_exprs(
     Ok(exprs)
 }
 
-pub fn parse_to_remote_string_expr(
+pub fn parse_to_filters(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
