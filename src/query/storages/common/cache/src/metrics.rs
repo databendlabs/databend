@@ -18,12 +18,7 @@ use common_metrics::Counter;
 use common_metrics::Family;
 use common_metrics::Histogram;
 use lazy_static::lazy_static;
-use metrics::increment_gauge;
 use prometheus_client::encoding::EncodeLabelSet;
-
-fn key_str(cache_name: &str, action: &str) -> String {
-    format!("cache_{cache_name}_{action}")
-}
 
 #[derive(Clone, Debug, EncodeLabelSet, Hash, PartialEq, Eq)]
 struct CacheLabels {
@@ -46,7 +41,6 @@ lazy_static! {
 }
 
 pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
-    increment_gauge!(key_str(cache_name, "access_count"), c as f64);
     CACHE_ACCESS_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
@@ -56,7 +50,6 @@ pub fn metrics_inc_cache_access_count(c: u64, cache_name: &str) {
 
 pub fn metrics_inc_cache_miss_count(c: u64, cache_name: &str) {
     // increment_gauge!(key!("memory_miss_count"), c as f64);
-    increment_gauge!(key_str(cache_name, "miss_count"), c as f64);
     CACHE_MISS_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
@@ -66,7 +59,6 @@ pub fn metrics_inc_cache_miss_count(c: u64, cache_name: &str) {
 
 // When cache miss, load time cost.
 pub fn metrics_inc_cache_miss_load_millisecond(c: u64, cache_name: &str) {
-    increment_gauge!(key_str(cache_name, "miss_load_millisecond"), c as f64);
     CACHE_MISS_LOAD_MILLISECOND
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
@@ -75,7 +67,6 @@ pub fn metrics_inc_cache_miss_load_millisecond(c: u64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_hit_count(c: u64, cache_name: &str) {
-    increment_gauge!(key_str(cache_name, "hit_count"), c as f64);
     CACHE_HIT_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
@@ -84,7 +75,6 @@ pub fn metrics_inc_cache_hit_count(c: u64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_population_pending_count(c: i64, cache_name: &str) {
-    increment_gauge!(key_str(cache_name, "population_pending_count"), c as f64);
     CACHE_POPULATION_PENDING_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),
@@ -93,7 +83,6 @@ pub fn metrics_inc_cache_population_pending_count(c: i64, cache_name: &str) {
 }
 
 pub fn metrics_inc_cache_population_overflow_count(c: i64, cache_name: &str) {
-    increment_gauge!(key_str(cache_name, "population_overflow_count"), c as f64);
     CACHE_POPULATION_OVERFLOW_COUNT
         .get_or_create(&CacheLabels {
             cache_name: cache_name.to_string(),

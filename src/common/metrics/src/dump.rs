@@ -16,7 +16,9 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use metrics_exporter_prometheus::PrometheusHandle;
+use prometheus_client::registry::Registry;
+
+use crate::render_prometheus_metrics;
 
 #[derive(Debug)]
 pub struct MetricSample {
@@ -86,8 +88,8 @@ pub struct SummaryCount {
     pub count: f64,
 }
 
-pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>> {
-    let text = handle.render();
+pub fn dump_metric_samples(registry: &Registry) -> Result<Vec<MetricSample>> {
+    let text = render_prometheus_metrics(registry);
     let lines = text.lines().map(|s| Ok(s.to_owned()));
     let mut samples = prometheus_parse::Scrape::parse(lines)
         .map_err(|err| ErrorCode::Internal(format!("Dump prometheus metrics failed: {:?}", err)))?
@@ -95,8 +97,13 @@ pub fn dump_metric_samples(handle: PrometheusHandle) -> Result<Vec<MetricSample>
         .into_iter()
         .map(|s| {
             let value: MetricValue = s.value.into();
+            let metric_name = s
+                .metric
+                .strip_prefix("databend_")
+                .map(|s| s.to_string())
+                .unwrap_or(s.metric);
             MetricSample {
-                name: s.metric,
+                name: metric_name,
                 value,
                 labels: (*s.labels).clone(),
             }

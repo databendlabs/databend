@@ -697,14 +697,14 @@ impl<'a> TypeChecker<'a> {
                 }
 
                 // check window function legal
-                {
+                if window.is_some() {
                     let supported_window_funcs = AggregateFunctionFactory::instance()
                         .registered_names()
                         .into_iter()
                         .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                         .collect::<Vec<String>>();
                     let name = func_name.to_lowercase();
-                    if window.is_some() && !supported_window_funcs.contains(&name) {
+                    if !supported_window_funcs.contains(&name) {
                         return Err(ErrorCode::SemanticError(
                             "only general and aggregate functions allowed in window syntax",
                         )

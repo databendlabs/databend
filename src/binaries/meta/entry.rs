@@ -31,7 +31,6 @@ use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaAPIError;
 use common_meta_types::Node;
-use common_metrics::init_default_metrics_recorder;
 use common_tracing::init_logging;
 use common_tracing::set_panic_hook;
 use databend_meta::api::GrpcServer;
@@ -91,7 +90,6 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     }
 
     init_sled_db(conf.raft_config.raft_dir.clone());
-    init_default_metrics_recorder();
 
     let single_or_join = if conf.raft_config.single {
         "single".to_string()
