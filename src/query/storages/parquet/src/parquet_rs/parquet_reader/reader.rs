@@ -251,12 +251,6 @@ impl ParquetRSReader {
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
             let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
-
-            println!(
-                "selected_row_groups {:?} / {:?}",
-                selected_row_groups, omits
-            );
-
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
@@ -341,21 +335,8 @@ impl ParquetRSReader {
         let file_meta = builder.metadata().clone();
 
         let mut full_match = false;
-
-        log::info!(
-            "self.pruner {:?} / {}",
-            self.pruner.is_some(),
-            self.predicate.is_some()
-        );
-
         if let Some(pruner) = &self.pruner {
             let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
-
-            log::info!(
-                "read_blocks_from_binary selected_row_groups {:?} / {:?}",
-                selected_row_groups,
-                omits
-            );
 
             full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
