@@ -90,8 +90,23 @@ pub fn register(registry: &mut FunctionRegistry) {
                     return;
                 }
             }
-            let data = std::str::from_utf8(data).unwrap();
 
+            let data = match std::str::from_utf8(data) {
+                Ok(data) => data,
+                Err(_) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
+                    );
+                    output.push(vec![F32::from(0.0)].into());
+                    return;
+                }
+            };
+            if ctx.func_ctx.openai_api_key.is_empty() {
+                ctx.set_error(output.len(), "openai_api_key is empty".to_string());
+                output.push(vec![F32::from(0.0)].into());
+                return;
+            }
             let api_base = ctx.func_ctx.openai_api_embedding_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
             let api_version = ctx.func_ctx.openai_api_version.clone();
@@ -140,7 +155,24 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }
             }
 
-            let data = std::str::from_utf8(data).unwrap();
+            let data = match std::str::from_utf8(data) {
+                Ok(data) => data,
+                Err(_) => {
+                    ctx.set_error(
+                        output.len(),
+                        format!("Invalid data: {:?}", String::from_utf8_lossy(data)),
+                    );
+                    output.put_str("");
+                    output.commit_row();
+                    return;
+                }
+            };
+            if ctx.func_ctx.openai_api_key.is_empty() {
+                ctx.set_error(output.len(), "openai_api_key is empty".to_string());
+                output.put_str("");
+                output.commit_row();
+                return;
+            }
             let api_base = ctx.func_ctx.openai_api_chat_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
             let api_version = ctx.func_ctx.openai_api_version.clone();
