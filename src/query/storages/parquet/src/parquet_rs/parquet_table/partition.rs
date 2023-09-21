@@ -98,7 +98,7 @@ impl ParquetRSTable {
             self.read_options,
         )?);
 
-        let copy_status = if ctx.get_query_kind() == QueryKind::Copy {
+        let copy_status = if matches!(ctx.get_query_kind(), QueryKind::Copy) {
             Some(ctx.get_copy_status())
         } else {
             None
