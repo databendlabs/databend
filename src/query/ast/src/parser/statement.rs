@@ -2267,40 +2267,75 @@ fn match_operation(i: Input) -> IResult<MatchOperation> {
             rule! {
                 UPDATE ~ SET ~ ^#comma_separated_list1(merge_update_expr)
             },
-            |(_, _, update_list)| MatchOperation::Update { update_list },
+            |(_, _, update_list)| MatchOperation::Update {
+                update_list,
+                is_star: false,
+            },
+        ),
+        map(
+            rule! {
+                UPDATE ~ "*"
+            },
+            |(_, _)| MatchOperation::Update {
+                update_list: Vec::new(),
+                is_star: true,
+            },
         ),
     ))(i)
 }
 
 pub fn unmatch_clause(i: Input) -> IResult<MergeOption> {
-    map(
-        rule! {
-            WHEN ~ NOT ~ MATCHED ~ (AND ~ ^#expr)?  ~ THEN ~ INSERT ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
-            ~ VALUES ~ ^#row_values
-        },
-        |(_, _, _, expr_op, _, _, columns_op, _, values)| {
-            let selection = match expr_op {
-                Some(e) => Some(e.1),
-                None => None,
-            };
-            match columns_op {
-                Some(columns) => MergeOption::Unmatch(UnmatchedClause {
-                    insert_operation: InsertOperation {
-                        columns: Some(columns.1),
-                        values,
-                    },
-                    selection,
-                }),
-                None => MergeOption::Unmatch(UnmatchedClause {
+    alt((
+        map(
+            rule! {
+                WHEN ~ NOT ~ MATCHED ~ (AND ~ ^#expr)?  ~ THEN ~ INSERT ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )?
+                ~ VALUES ~ ^#row_values
+            },
+            |(_, _, _, expr_op, _, _, columns_op, _, values)| {
+                let selection = match expr_op {
+                    Some(e) => Some(e.1),
+                    None => None,
+                };
+                match columns_op {
+                    Some(columns) => MergeOption::Unmatch(UnmatchedClause {
+                        insert_operation: InsertOperation {
+                            columns: Some(columns.1),
+                            values,
+                            is_star: false,
+                        },
+                        selection,
+                    }),
+                    None => MergeOption::Unmatch(UnmatchedClause {
+                        insert_operation: InsertOperation {
+                            columns: None,
+                            values,
+                            is_star: false,
+                        },
+                        selection,
+                    }),
+                }
+            },
+        ),
+        map(
+            rule! {
+                WHEN ~ NOT ~ MATCHED ~ (AND ~ ^#expr)?  ~ THEN ~ INSERT ~ "*"
+            },
+            |(_, _, _, expr_op, _, _, _)| {
+                let selection = match expr_op {
+                    Some(e) => Some(e.1),
+                    None => None,
+                };
+                MergeOption::Unmatch(UnmatchedClause {
                     insert_operation: InsertOperation {
                         columns: None,
-                        values,
+                        values: Vec::new(),
+                        is_star: true,
                     },
                     selection,
-                }),
-            }
-        },
-    )(i)
+                })
+            },
+        ),
+    ))(i)
 }
 
 pub fn add_column_option(i: Input) -> IResult<AddColumnOption> {

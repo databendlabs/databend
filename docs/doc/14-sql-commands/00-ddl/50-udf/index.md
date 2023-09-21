@@ -1,45 +1,31 @@
 ---
-title: CREATE FUNCTION
-description:
-  Create a new user-defined scalar function.
+title: User-Defined Function
 ---
-import FunctionDescription from '@site/src/components/FunctionDescription';
+import IndexOverviewList from '@site/src/components/IndexOverviewList';
 
-<FunctionDescription description="Introduced or updated: v1.2.116"/>
+## What are UDFs?
 
-Creates a user-defined function.
+User-Defined Functions (UDFs) enable you to define their own custom operations to process data within Databend. They are typically written using lambda expressions or implemented via a UDF server with programming languages such as Python and are executed as part of Databend's query processing pipeline. Advantages of using UDFs include:
 
-## Syntax
+- Customized Data Transformations: UDFs empower you to perform data transformations that may not be achievable through built-in Databend functions alone. This customization is particularly valuable for handling unique data formats or business logic.
 
-```sql
--- Create with lambda expression
-CREATE FUNCTION [IF NOT EXISTS] <function_name> 
-    AS (<input_param_names>) -> <lambda_expression> 
-    [DESC='<description>']
+- Performance Optimization: UDFs provide the flexibility to define and fine-tune your own custom functions, enabling you to optimize data processing to meet precise performance requirements. This means you can tailor the code for maximum efficiency, ensuring that your data processing tasks run as efficiently as possible.
 
+- Code Reusability: UDFs can be reused across multiple queries, saving time and effort in coding and maintaining data processing logic.
 
--- Create with UDF server
-CREATE FUNCTION [IF NOT EXISTS] <function_name> 
-    AS (<input_param_types>) RETURNS <return_type> LANGUAGE <language_name> 
-    HANDLER = '<handler_name>' ADDRESS = '<udf_server_address>' 
-    [DESC='<description>']
-```
+## Managing UDFs
 
-| Parameter             | Description                                                                                       |
-|-----------------------|---------------------------------------------------------------------------------------------------|
-| `<function_name>`     | The name of the function.                                                                        |
-| `<lambda_expression>` | The lambda expression or code snippet defining the function's behavior.                          |
-| `DESC='<description>'`  | Description of the UDF.|
-| `<<input_param_names>`| A list of input parameter names. Separated by comma.|
-| `<<input_param_types>`| A list of input parameter types. Separated by comma.|
-| `<return_type>`       | The return type of the function.                                                                  |
-| `LANGUAGE`            | Specifies the language used to write the function. Available values: `python`.                    |
-| `HANDLER = '<handler_name>'` | Specifies the name of the function's handler.                                               |
-| `ADDRESS = '<udf_server_address>'` | Specifies the address of the UDF server.                                             |
+To manage UDFs in Databend, use the following commands:
 
-## Examples
+<IndexOverviewList />
 
-### Creating UDF with Lambda Expression
+## Usage Examples
+
+This section demonstrates two UDF implementation methods within Databend: one by creating UDFs with lambda expressions and the other by utilizing UDF servers in conjunction with Python. For additional examples of defining UDFs in various programming languages, see [CREATE FUNCTION](ddl-create-function.md).
+
+### UDF Implementation with Lambda Expression
+
+This example implements a UDF named *a_plus_3* using a lambda expression:
 
 ```sql
 CREATE FUNCTION a_plus_3 AS (a) -> a+3;
@@ -52,33 +38,7 @@ SELECT a_plus_3(2);
 +---------+
 ```
 
-```sql
--- Define lambda-style UDF
-CREATE FUNCTION get_v1 AS (json) -> json["v1"];
-CREATE FUNCTION get_v2 AS (json) -> json["v2"];
-
--- Create a time series table
-CREATE TABLE json_table(time TIMESTAMP, data JSON);
-
--- Insert a time event
-INSERT INTO json_table VALUES('2022-06-01 00:00:00.00000', PARSE_JSON('{"v1":1.5, "v2":20.5}'));
-
--- Get v1 and v2 value from the event
-SELECT get_v1(data), get_v2(data) FROM json_table;
-+------------+------------+
-| data['v1'] | data['v2'] |
-+------------+------------+
-| 1.5        | 20.5       |
-+------------+------------+
-
-DROP FUNCTION get_v1;
-
-DROP FUNCTION get_v2;
-
-DROP TABLE json_table;
-```
-
-### Creating UDF with UDF Server (Python)
+### UDF Implementation via UDF Server
 
 This example demonstrates how to enable and configure a UDF server in Python:
 
