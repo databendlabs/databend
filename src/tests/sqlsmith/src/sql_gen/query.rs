@@ -207,7 +207,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             selection,
             group_by,
             // TODO
-            having: None,
+            having: self.gen_selection(),
             // TODO
             window_list: None,
         }
