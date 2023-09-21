@@ -516,6 +516,6 @@ impl Binder {
                 return true;
             }
         }
-        return false;
+        false
     }
 }
