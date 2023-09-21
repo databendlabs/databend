@@ -198,7 +198,8 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     // point in ellipses
     registry.register_function_factory("point_in_ellipses", |_, args_type| {
-        if args_type.len() < 6 {
+        // The input parameters must be 2+4*n, where n is the number of ellipses.
+        if args_type.len() < 6 || (args_type.len() - 2) % 4 != 0 {
             return None;
         }
         Some(Arc::new(Function {
@@ -221,20 +222,28 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let (arg1, arg2) = if args_type.len() == 2 {
+        let (arg1, arg2) = {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
+                DataType::Tuple(tys) => {
+                    if tys.len() == 2 {
+                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    } else {
+                        return None;
+                    }
+                }
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
                 DataType::Array(box DataType::Tuple(tys)) => {
-                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    if tys.len() == 2 {
+                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    } else {
+                        return None;
+                    }
                 }
                 _ => return None,
             };
             (arg1, arg2)
-        } else {
-            (vec![], vec![])
         };
 
         Some(Arc::new(Function {
@@ -260,20 +269,28 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let (arg1, arg2) = if args_type.len() == 2 {
+        let (arg1, arg2) = {
             let arg1 = match args_type.get(0)? {
-                DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
+                DataType::Tuple(tys) => {
+                    if tys.len() == 2 {
+                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    } else {
+                        return None;
+                    }
+                }
                 _ => return None,
             };
             let arg2 = match args_type.get(1)? {
                 DataType::Array(box DataType::Array(box DataType::Tuple(tys))) => {
-                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    if tys.len() == 2 {
+                        vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                    } else {
+                        return None;
+                    }
                 }
                 _ => return None,
             };
             (arg1, arg2)
-        } else {
-            (vec![], vec![])
         };
 
         Some(Arc::new(Function {
@@ -302,20 +319,30 @@ pub fn register(registry: &mut FunctionRegistry) {
         let mut args = vec![];
 
         let arg1 = match args_type.get(0)? {
-            DataType::Tuple(tys) => vec![DataType::Number(NumberDataType::Float64); tys.len()],
+            DataType::Tuple(tys) => {
+                if tys.len() == 2 {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                } else {
+                    return None;
+                }
+            }
             _ => return None,
         };
         args.push(DataType::Tuple(arg1));
 
         let arg2: Vec<DataType> = match args_type.get(1)? {
             DataType::Array(box DataType::Tuple(tys)) => {
-                vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                if tys.len() == 2 {
+                    vec![DataType::Number(NumberDataType::Float64); tys.len()]
+                } else {
+                    return None;
+                }
             }
 
             _ => return None,
         };
 
-        (0..args_type.len() - 1)
+        (1..args_type.len())
             .for_each(|_| args.push(DataType::Array(Box::new(DataType::Tuple(arg2.clone())))));
 
         Some(Arc::new(Function {
