@@ -34,10 +34,19 @@ In this tutorial, we will guide you through the process of uploading the sample 
 CREATE STAGE my_internal_stage;
 ```
 
-2. Use cURL to make a request to the File Upload API:
+2. Stage the sample file using [BendSQL](../../13-sql-clients/01-bendsql.md):
 
-```shell title='Put books.parquet to stage'
-curl -u root: -H "x-databend-stage-name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+```sql
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @my_internal_stage
+
+PUT fs:///Users/eric/Documents/books.parquet @my_internal_stage
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
 ```
 
 3. Query the column definitions from the staged sample file:

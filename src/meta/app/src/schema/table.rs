@@ -243,22 +243,14 @@ pub struct TableMeta {
 }
 
 impl TableMeta {
-    pub fn add_columns(&mut self, fields: &[TableField], field_comments: &[String]) -> Result<()> {
-        let mut new_schema = self.schema.as_ref().to_owned();
-        new_schema.add_columns(fields)?;
-        self.schema = Arc::new(new_schema);
-        field_comments.iter().for_each(|c| {
-            self.field_comments.push(c.to_owned());
-        });
-        Ok(())
-    }
-
     pub fn add_column(
         &mut self,
         field: &TableField,
         comment: &str,
         index: FieldIndex,
     ) -> Result<()> {
+        self.fill_field_comments();
+
         let mut new_schema = self.schema.as_ref().to_owned();
         new_schema.add_column(field, index)?;
         self.schema = Arc::new(new_schema);
@@ -267,11 +259,22 @@ impl TableMeta {
     }
 
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
+        self.fill_field_comments();
+
         let mut new_schema = self.schema.as_ref().to_owned();
         let index = new_schema.drop_column(column)?;
         self.field_comments.remove(index);
         self.schema = Arc::new(new_schema);
         Ok(())
+    }
+
+    /// To fix the field comments panic.
+    pub fn fill_field_comments(&mut self) {
+        let num_fields = self.schema.num_fields();
+        // If the field comments is confused, fill it with empty string.
+        if self.field_comments.len() < num_fields {
+            self.field_comments = vec!["".to_string(); num_fields];
+        }
     }
 }
 

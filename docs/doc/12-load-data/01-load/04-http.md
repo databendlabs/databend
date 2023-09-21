@@ -10,7 +10,7 @@ To load data from remote files into Databend, the [COPY INTO](/14-sql-commands/1
 
 Download and save the sample file [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv) to a local folder. The file contains two records:
 
-```text
+```text title='books.csv'
 Transaction Processing,Jim Gray,1992
 Readings in Database Systems,Michael Stonebraker,2004
 ```

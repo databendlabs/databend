@@ -205,6 +205,7 @@ fn flatten_plan_node_profile(
                 attribute: OperatorAttribute::AggregateExpand(AggregateExpandAttribute {
                     group_keys: expand
                         .grouping_sets
+                        .sets
                         .iter()
                         .map(|columns| {
                             format!(

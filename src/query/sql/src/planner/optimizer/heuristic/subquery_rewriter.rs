@@ -407,8 +407,7 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
-                    grouping_id_index: 0,
-                    grouping_sets: vec![],
+                    grouping_sets: None,
                 };
 
                 let compare = FunctionCall {
@@ -610,8 +609,7 @@ impl SubqueryRewriter {
                     ],
                     from_distinct: false,
                     limit: None,
-                    grouping_id_index: 0,
-                    grouping_sets: vec![],
+                    grouping_sets: None,
                 }
                 .into(),
             ),

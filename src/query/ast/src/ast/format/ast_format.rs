@@ -565,12 +565,12 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Literal)]) {
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Expr)]) {
         let mut children = Vec::with_capacity(kvs.len());
         for (key_expr, val_expr) in kvs.iter() {
             self.visit_literal(_span, key_expr);
             children.push(self.children.pop().unwrap());
-            self.visit_literal(_span, val_expr);
+            self.visit_expr(val_expr);
             children.push(self.children.pop().unwrap());
         }
         let name = "Literal Map".to_string();
@@ -2179,10 +2179,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast str) {
+    fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast Option<String>) {
         let location_format_ctx = AstFormatContext::new(format!("Location {}", location));
         let location_child = FormatTreeNode::new(location_format_ctx);
-        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {}", pattern));
+        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {:?}", pattern));
         let pattern_child = FormatTreeNode::new(pattern_format_ctx);
 
         let name = "ListStage".to_string();

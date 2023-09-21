@@ -24,7 +24,22 @@ This section provides several brief tutorials that offer practical guidance on h
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.org/employees.parquet) and then upload it to your user stage with [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.org/employees.parquet) and then upload it to your user stage using [BendSQL](../../13-sql-clients/01-bendsql.md). For example,
+
+```sql
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @~
+
+PUT fs:///Users/eric/Documents/books.parquet @~
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
+```
+
+If you query the file, you will find that it contains these records:
 
 ```sql
 -- Query remote sample file directly

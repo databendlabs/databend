@@ -1832,6 +1832,8 @@ Functions overloads:
 0 json_object FACTORY
 0 json_object_keep_null FACTORY
 0 json_object_keys(Variant NULL) :: Variant NULL
+0 json_path_exists(Variant, String) :: Boolean
+1 json_path_exists(Variant NULL, String NULL) :: Boolean NULL
 0 json_path_query FACTORY
 0 json_path_query_array(Variant, String) :: Variant NULL
 1 json_path_query_array(Variant NULL, String NULL) :: Variant NULL
@@ -3360,6 +3362,10 @@ Functions overloads:
 3 to_month(Timestamp NULL) :: UInt8 NULL
 0 to_nullable(NULL) :: NULL
 1 to_nullable(T0 NULL) :: T0 NULL
+0 to_quarter(Date) :: UInt8
+1 to_quarter(Date NULL) :: UInt8 NULL
+2 to_quarter(Timestamp) :: UInt8
+3 to_quarter(Timestamp NULL) :: UInt8 NULL
 0 to_second(Timestamp) :: UInt8
 1 to_second(Timestamp NULL) :: UInt8 NULL
 0 to_start_of_day(Timestamp) :: Timestamp

@@ -1054,7 +1054,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(_, location, opt_pattern)| Statement::ListStage {
             location,
-            pattern: opt_pattern.map(|v| v.2).unwrap_or_default(),
+            pattern: opt_pattern.map(|v| v.2),
         },
     );
 

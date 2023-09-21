@@ -12,9 +12,13 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
+use std::collections::HashMap;
 use std::ops::Add;
 
 use common_expression::TableSchema;
+use storages_common_table_meta::meta::testing::StatisticsV0;
+use storages_common_table_meta::meta::testing::TableSnapshotV1;
+use storages_common_table_meta::meta::testing::TableSnapshotV2;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
@@ -73,4 +77,33 @@ fn snapshot_timestamp_time_skew_tolerance() {
     let current_ts = current.timestamp.unwrap();
     let prev_ts = prev.timestamp.unwrap();
     assert!(current_ts > prev_ts)
+}
+
+#[test]
+fn test_snapshot_v1_to_v4() {
+    let summary = StatisticsV0 {
+        row_count: 0,
+        block_count: 0,
+        perfect_block_count: 0,
+        uncompressed_byte_size: 0,
+        compressed_byte_size: 0,
+        index_size: 0,
+        col_stats: HashMap::new(),
+    };
+    let v1 = TableSnapshotV1::new(
+        Uuid::new_v4(),
+        &None,
+        None,
+        Default::default(),
+        summary,
+        vec![],
+        None,
+        None,
+    );
+    assert!(v1.timestamp.is_some());
+
+    let v4: TableSnapshot = TableSnapshotV2::from(v1.clone()).into();
+    assert_eq!(v4.format_version, v1.format_version());
+    assert_eq!(v4.snapshot_id, v1.snapshot_id);
+    assert_eq!(v4.timestamp, v1.timestamp);
 }

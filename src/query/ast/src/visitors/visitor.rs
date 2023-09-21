@@ -319,10 +319,10 @@ pub trait Visitor<'ast>: Sized {
         }
     }
 
-    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Literal)]) {
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Expr)]) {
         for (key_expr, val_expr) in kvs {
             self.visit_literal(_span, key_expr);
-            self.visit_literal(_span, val_expr);
+            walk_expr(self, val_expr);
         }
     }
 
@@ -531,7 +531,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_remove_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
 
-    fn visit_list_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
+    fn visit_list_stage(&mut self, _location: &'ast str, _pattern: &'ast Option<String>) {}
 
     fn visit_create_file_format(
         &mut self,
