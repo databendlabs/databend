@@ -109,7 +109,7 @@ where
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
         let index = key_ref.hash() as usize & self.hash_mask;
-        let mut raw_entry_ptr = self.pointers[index];
+        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
         loop {
             if raw_entry_ptr == 0 {
                 break;
@@ -132,7 +132,7 @@ where
     ) -> (usize, u64) {
         let index = key_ref.hash() as usize & self.hash_mask;
         let origin = occupied;
-        let mut raw_entry_ptr = self.pointers[index];
+        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
         loop {
             if raw_entry_ptr == 0 || occupied >= capacity {
                 break;

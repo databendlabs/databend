@@ -193,11 +193,12 @@ impl Column {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
         let ptr = builder.as_mut_ptr();
+        let col_ptr = col.as_slice().as_ptr();
         // # Safety
         // `i` must be less than `num_rows` and the capacity of builder is `num_rows`.
         unsafe {
             for (i, index) in indices.iter().enumerate() {
-                std::ptr::write(ptr.add(i), col[index.to_usize()]);
+                std::ptr::copy_nonoverlapping(col_ptr.add(index.to_usize()), ptr.add(i), 1);
             }
             builder.set_len(num_rows);
         }
@@ -227,15 +228,17 @@ impl Column {
         offsets.push(0);
         let items_ptr = items.as_mut_ptr();
         let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
-
+        let col_offset = col.offsets().as_slice();
+        let col_data_ptr = col.data().as_slice().as_ptr();
         let mut data_size = 0;
         for (i, index) in indices.iter().enumerate() {
-            let item = unsafe { col.index_unchecked(index.to_usize()) };
-            data_size += item.len() as u64;
+            let start = unsafe { *col_offset.get_unchecked(index.to_usize()) } as usize;
+            let len = unsafe { *col_offset.get_unchecked(index.to_usize() + 1) as usize } - start;
+            data_size += len as u64;
             // # Safety
             // `i` must be less than the capacity of Vec.
             unsafe {
-                std::ptr::write(items_ptr.add(i), (item.as_ptr() as u64, item.len()));
+                std::ptr::write(items_ptr.add(i), (col_data_ptr.add(start) as u64, len));
                 std::ptr::write(offsets_ptr.add(i), data_size);
             }
         }

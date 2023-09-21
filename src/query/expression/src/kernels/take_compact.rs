@@ -191,11 +191,14 @@ impl Column {
         let ptr = builder.as_mut_ptr();
         let mut offset = 0;
         let mut remain;
-        for (index, cnt) in indices {
+        let col_ptr = col.as_slice().as_ptr();
+        for (index, cnt) in indices.iter() {
             if *cnt == 1 {
                 // # Safety
                 // offset + 1 <= num_rows
-                unsafe { std::ptr::write(ptr.add(offset), col[*index as usize]) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(col_ptr.add(*index as usize), ptr.add(offset), 1)
+                };
                 offset += 1;
                 continue;
             }
@@ -204,7 +207,9 @@ impl Column {
             let base_offset = offset;
             // # Safety
             // base_offset + 1 <= num_rows
-            unsafe { std::ptr::write(ptr.add(offset), col[*index as usize]) };
+            unsafe {
+                std::ptr::copy_nonoverlapping(col_ptr.add(*index as usize), ptr.add(offset), 1)
+            };
             remain = *cnt as usize;
             // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
             let max_segment = 1 << (31 - cnt.leading_zeros());
