@@ -1527,7 +1527,7 @@ impl<'a> TypeChecker<'a> {
                     )?,
                     _ => {
                         return Err(ErrorCode::InvalidArgument(
-                            "The count of `nth_value` must be constant",
+                            "The count of `nth_value` must be constant positive integer",
                         ));
                     }
                 };
