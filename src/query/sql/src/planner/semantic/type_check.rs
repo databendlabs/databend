@@ -54,6 +54,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
+use common_expression::Expr as EExpr;
 use common_expression::FunctionContext;
 use common_expression::FunctionKind;
 use common_expression::RawExpr;
@@ -1410,19 +1411,28 @@ impl<'a> TypeChecker<'a> {
         arg_types: &[DataType],
     ) -> Result<WindowFuncType> {
         if args.is_empty() || args.len() > 3 {
-            return Err(ErrorCode::InvalidArgument(
-                "Argument number is invalid".to_string(),
-            ));
+            return Err(ErrorCode::InvalidArgument(format!(
+                "Function {:?} only support 1 to 3 arguments",
+                func_name
+            )));
         }
 
         let offset = if args.len() >= 2 {
             let off = args[1].as_expr()?;
-            Some(check_number::<_, i64>(
-                off.span(),
-                &self.func_ctx,
-                &off,
-                &BUILTIN_FUNCTIONS,
-            )?)
+            match off {
+                EExpr::Constant { .. } => Some(check_number::<_, i64>(
+                    off.span(),
+                    &self.func_ctx,
+                    &off,
+                    &BUILTIN_FUNCTIONS,
+                )?),
+                _ => {
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "The second argument to the function {:?} must be a constant",
+                        func_name
+                    )));
+                }
+            }
         } else {
             None
         };
@@ -1473,9 +1483,10 @@ impl<'a> TypeChecker<'a> {
         Ok(match func_name {
             "first_value" | "first" => {
                 if args.len() != 1 {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Argument number is invalid".to_string(),
-                    ));
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "The function {:?} must take one argument",
+                        func_name
+                    )));
                 }
                 let return_type = arg_types[0].wrap_nullable();
                 WindowFuncType::NthValue(NthValueFunction {
@@ -1486,9 +1497,10 @@ impl<'a> TypeChecker<'a> {
             }
             "last_value" | "last" => {
                 if args.len() != 1 {
-                    return Err(ErrorCode::InvalidArgument(
-                        "Argument number is invalid".to_string(),
-                    ));
+                    return Err(ErrorCode::InvalidArgument(format!(
+                        "The function {:?} must take one argument",
+                        func_name
+                    )));
                 }
                 let return_type = arg_types[0].wrap_nullable();
                 WindowFuncType::NthValue(NthValueFunction {
@@ -1501,17 +1513,24 @@ impl<'a> TypeChecker<'a> {
                 // nth_value
                 if args.len() != 2 {
                     return Err(ErrorCode::InvalidArgument(
-                        "Argument number is invalid".to_string(),
+                        "The function nth_value must take two arguments".to_string(),
                     ));
                 }
                 let return_type = arg_types[0].wrap_nullable();
                 let n_expr = args[1].as_expr()?;
-                let n = check_number::<_, u64>(
-                    n_expr.span(),
-                    &self.func_ctx,
-                    &n_expr,
-                    &BUILTIN_FUNCTIONS,
-                )?;
+                let n = match n_expr {
+                    EExpr::Constant { .. } => check_number::<_, u64>(
+                        n_expr.span(),
+                        &self.func_ctx,
+                        &n_expr,
+                        &BUILTIN_FUNCTIONS,
+                    )?,
+                    _ => {
+                        return Err(ErrorCode::InvalidArgument(
+                            "The count of `nth_value` must be constant positive integer",
+                        ));
+                    }
+                };
                 if n == 0 {
                     return Err(ErrorCode::InvalidArgument(
                         "nth_value should count from 1".to_string(),
@@ -1534,12 +1553,21 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<WindowFuncType> {
         if args.len() != 1 {
             return Err(ErrorCode::InvalidArgument(
-                "Argument number is invalid".to_string(),
+                "Function ntile can only take one argument".to_string(),
             ));
         }
         let n_expr = args[0].as_expr()?;
         let return_type = DataType::Number(NumberDataType::UInt64);
-        let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
+        let n = match n_expr {
+            EExpr::Constant { .. } => {
+                check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?
+            }
+            _ => {
+                return Err(ErrorCode::InvalidArgument(
+                    "The argument of `ntile` must be constant".to_string(),
+                ));
+            }
+        };
         if n == 0 {
             return Err(ErrorCode::InvalidArgument(
                 "ntile buckets must be greater than 0".to_string(),
@@ -1981,7 +2009,7 @@ impl<'a> TypeChecker<'a> {
                 )
                     .await
             }
-            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, month, day, hour, minute, second]".to_string()).set_span(span)),
+            _ => Err(ErrorCode::SemanticError("Only these interval types are currently supported: [year, quarter, month, day, hour, minute, second]".to_string()).set_span(span)),
         }
     }
 
@@ -2247,7 +2275,20 @@ impl<'a> TypeChecker<'a> {
                         let box (scalar, _) = self.resolve(args[0]).await?;
 
                         let expr = scalar.as_expr()?;
-                        check_number::<_, i64>(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
+                        match expr {
+                            EExpr::Constant { .. } => check_number::<_, i64>(
+                                span,
+                                &self.func_ctx,
+                                &expr,
+                                &BUILTIN_FUNCTIONS,
+                            )?,
+                            _ => {
+                                return Some(Err(ErrorCode::BadArguments(
+                                    "last_query_id argument only support constant",
+                                )
+                                .set_span(span)));
+                            }
+                        }
                     }
                 };
 
