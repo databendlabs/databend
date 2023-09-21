@@ -95,6 +95,9 @@ impl HttpClient {
             let mut url = "http://127.0.0.1:8000".to_string();
             url.push_str(&next_uri);
             response = self.response(sql, &url, false).await?;
+            if response.session.is_some() {
+                self.session = response.session.clone();
+            }
             if let Some(error) = response.error {
                 return Err(format_error(error).into());
             }
@@ -122,12 +125,12 @@ impl HttpClient {
 
     // Send request and get response by json format
     async fn response(&mut self, sql: &str, url: &str, post: bool) -> Result<QueryResponse> {
-        let mut query = HashMap::new();
-        query.insert("sql", serde_json::to_value(sql)?);
-        if let Some(session) = &self.session {
-            query.insert("session", serde_json::to_value(session)?);
-        }
         if post {
+            let mut query = HashMap::new();
+            query.insert("sql", serde_json::to_value(sql)?);
+            if let Some(session) = &self.session {
+                query.insert("session", serde_json::to_value(session)?);
+            }
             return Ok(self
                 .client
                 .post(url)
@@ -141,7 +144,6 @@ impl HttpClient {
         Ok(self
             .client
             .get(url)
-            .json(&query)
             .basic_auth("root", Some(""))
             .send()
             .await?
