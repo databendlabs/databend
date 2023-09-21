@@ -35,4 +35,6 @@ mod spillers;
 mod sql;
 mod storages;
 mod table_functions;
+
+mod parquet_rs;
 mod tests;
