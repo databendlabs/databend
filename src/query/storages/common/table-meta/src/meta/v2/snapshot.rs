@@ -127,7 +127,7 @@ impl From<v1::TableSnapshot> for TableSnapshot {
             // carries the format_version of snapshot being converted.
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
-            timestamp: None,
+            timestamp: s.timestamp,
             prev_snapshot_id: s.prev_snapshot_id,
             schema,
             summary,

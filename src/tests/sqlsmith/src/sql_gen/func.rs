@@ -283,7 +283,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (name, vec![], args_type)
             }
             DataType::Decimal(_) => {
-                let decimal = vec!["to_float64", "to_folat32", "to_decimal", "try_to_decimal"];
+                let decimal = vec!["to_float64", "to_float32", "to_decimal", "try_to_decimal"];
                 let name = decimal[self.rng.gen_range(0..=3)].to_string();
                 if name == "to_decimal" || name == "try_to_decimal" {
                     let args_type = vec![self.gen_data_type(); 1];
