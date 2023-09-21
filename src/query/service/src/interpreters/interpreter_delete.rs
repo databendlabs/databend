@@ -29,7 +29,6 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
