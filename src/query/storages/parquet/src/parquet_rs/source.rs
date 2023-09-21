@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::TopK;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -71,7 +72,7 @@ impl ParquetSource {
         topk: Arc<Option<TopK>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let is_copy = ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let is_copy = ctx.get_query_kind() == QueryKind::Copy;
         let copy_status = ctx.get_copy_status();
 
         let topk_sorter = topk

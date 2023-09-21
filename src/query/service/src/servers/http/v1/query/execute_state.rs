@@ -228,7 +228,7 @@ impl ExecuteState {
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<()> {
-        ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
+        ctx.attach_query_str(plan.kind(), extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
             session,

@@ -22,6 +22,7 @@ use common_arrow::parquet::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::filter_helper::FilterHelpers;
@@ -127,7 +128,7 @@ impl Parquet2DeserializeTransform {
                 remain_reader,
                 partition_pruner,
 
-                is_copy: ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+                is_copy: ctx.get_query_kind() == QueryKind::Copy,
                 copy_status: ctx.get_copy_status(),
             },
         )))
