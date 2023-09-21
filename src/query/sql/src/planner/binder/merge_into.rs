@@ -131,7 +131,7 @@ impl Binder {
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
         let mut columns_set = left_context.column_set();
 
-        let update_columns_star = if self.has_star_cluase(&matched_clauses, &unmatched_clauses) {
+        let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
             // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
             let default_target_table_schema = table.schema().remove_computed_fields();
             let mut update_columns = HashMap::with_capacity(
