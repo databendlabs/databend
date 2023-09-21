@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_catalog::plan::Filters;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::type_check::check_function;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_kvapi::kvapi::KVApi;
 use common_users::UserApiProvider;
 
@@ -51,27 +53,16 @@ pub fn create_push_down_filters(scalar: &ScalarExpr) -> Result<Filters> {
         scalar
             .as_expr()?
             .project_column_ref(|col| col.column_name.clone()),
-    )?
-    .as_remote_expr();
+    )?;
+
+    let remote_filter = filter.as_remote_expr();
 
     // prepare the inverse filter expression
-    let inverted_filter = {
-        let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
-            span: None,
-            func_name: "not".to_string(),
-            params: vec![],
-            arguments: vec![scalar.clone()],
-        });
-        cast_expr_to_non_null_boolean(
-            inverse
-                .as_expr()?
-                .project_column_ref(|col| col.column_name.clone()),
-        )?
-        .as_remote_expr()
-    };
+    let remote_inverted_filter =
+        check_function(None, "not", &[], &[filter], &BUILTIN_FUNCTIONS)?.as_remote_expr();
 
     Ok(Filters {
-        filter,
-        inverted_filter,
+        filter: remote_filter,
+        inverted_filter: remote_inverted_filter,
     })
 }

@@ -101,35 +101,36 @@ impl ParquetRSPruner {
 
     /// Prune row groups of a parquet file.
     ///
-    /// Return the selected row groups' indices in the meta.
+    /// Return the selected row groups' indices in the meta and omit filter flags.
     ///
     /// If `stats` is not [None], we use this statistics to prune but not collect again.
     pub fn prune_row_groups(
         &self,
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
-    ) -> Result<(Vec<usize>, bool)> {
+    ) -> Result<(Vec<usize>, Vec<bool>)> {
         let default_selection = (0..meta.num_row_groups()).collect();
+        let default_omits = vec![false; meta.num_row_groups()];
         if !self.prune_row_groups {
-            return Ok((default_selection, false));
+            return Ok((default_selection, default_omits));
         }
 
-        let mut is_full_match = true;
         match &self.range_pruner {
-            None => Ok((default_selection, false)),
+            None => Ok((default_selection, default_omits)),
+
             Some((pruner, inverted_pruner)) => {
                 let mut selection = Vec::with_capacity(meta.num_row_groups());
+                let mut omits = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep(row_group, None) {
                             selection.push(i);
 
-                            if is_full_match && inverted_pruner.should_keep(row_group, None) {
-                                is_full_match = false;
-                            }
+                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            omits.push(omit);
                         }
                     }
-                    Ok((selection, is_full_match))
+                    Ok((selection, omits))
                 } else if let Some(row_group_stats) = collect_row_group_stats(
                     meta.row_groups(),
                     &self.leaf_fields,
@@ -139,14 +140,13 @@ impl ParquetRSPruner {
                         if pruner.should_keep(row_group, None) {
                             selection.push(i);
 
-                            if is_full_match && inverted_pruner.should_keep(row_group, None) {
-                                is_full_match = false;
-                            }
+                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            omits.push(omit);
                         }
                     }
-                    Ok((selection, is_full_match))
+                    Ok((selection, omits))
                 } else {
-                    Ok((default_selection, false))
+                    Ok((default_selection, default_omits))
                 }
             }
         }

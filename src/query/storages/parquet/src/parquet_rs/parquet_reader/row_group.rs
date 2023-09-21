@@ -96,7 +96,7 @@ pub struct InMemoryRowGroup<'a> {
     metadata: &'a RowGroupMetaData,
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
-    row_count: usize,
+    pub row_count: usize,
 }
 
 impl<'a> InMemoryRowGroup<'a> {

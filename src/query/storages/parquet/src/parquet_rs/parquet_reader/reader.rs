@@ -33,6 +33,8 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::TopKSorter;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_storage::metrics::common::metrics_inc_omit_filter_rowgroups;
+use common_storage::metrics::common::metrics_inc_omit_filter_rows;
 use futures::StreamExt;
 use opendal::Operator;
 use opendal::Reader;
@@ -248,10 +250,14 @@ impl ParquetRSReader {
 
         // Prune row groups.
         if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, rowgroup_full_match) =
-                pruner.prune_row_groups(&file_meta, None)?;
+            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
 
-            full_match = rowgroup_full_match;
+            println!(
+                "selected_row_groups {:?} / {:?}",
+                selected_row_groups, omits
+            );
+
+            full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !full_match {
@@ -260,6 +266,9 @@ impl ParquetRSReader {
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
                 }
+            } else {
+                metrics_inc_omit_filter_rowgroups(file_meta.num_row_groups() as u64);
+                metrics_inc_omit_filter_rows(file_meta.file_metadata().num_rows() as u64);
             }
         }
 
@@ -332,11 +341,23 @@ impl ParquetRSReader {
         let file_meta = builder.metadata().clone();
 
         let mut full_match = false;
-        if let Some(pruner) = &self.pruner {
-            let (selected_row_groups, rowgroup_full_match) =
-                pruner.prune_row_groups(&file_meta, None)?;
 
-            full_match = rowgroup_full_match;
+        log::info!(
+            "self.pruner {:?} / {}",
+            self.pruner.is_some(),
+            self.predicate.is_some()
+        );
+
+        if let Some(pruner) = &self.pruner {
+            let (selected_row_groups, omits) = pruner.prune_row_groups(&file_meta, None)?;
+
+            log::info!(
+                "read_blocks_from_binary selected_row_groups {:?} / {:?}",
+                selected_row_groups,
+                omits
+            );
+
+            full_match = omits.iter().all(|x| *x);
             builder = builder.with_row_groups(selected_row_groups.clone());
 
             if !full_match {
@@ -345,6 +366,9 @@ impl ParquetRSReader {
                 if let Some(row_selection) = row_selection {
                     builder = builder.with_row_selection(row_selection);
                 }
+            } else {
+                metrics_inc_omit_filter_rowgroups(file_meta.num_row_groups() as u64);
+                metrics_inc_omit_filter_rows(file_meta.file_metadata().num_rows() as u64);
             }
         }
 
@@ -404,13 +428,23 @@ impl ParquetRSReader {
         });
         // TODO(parquet): cache deserilaized columns to avoid deserialize multiple times.
         let mut row_group = InMemoryRowGroup::new(&part.meta, page_locations.as_deref());
+
         let mut selection = part
             .selectors
             .as_ref()
             .map(|x| x.iter().map(RowSelector::from).collect::<Vec<_>>())
             .map(RowSelection::from);
 
-        if let Some(predicate) = &self.predicate {
+        let mut predicate = self.predicate.as_ref();
+        if part.omit_filter {
+            predicate = None;
+            selection = None;
+
+            metrics_inc_omit_filter_rowgroups(1);
+            metrics_inc_omit_filter_rows(row_group.row_count as u64);
+        }
+
+        if let Some(predicate) = predicate {
             // Fetch columns used for eval predicate (prewhere).
             row_group
                 .fetch(

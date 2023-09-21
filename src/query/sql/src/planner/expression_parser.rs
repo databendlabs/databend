@@ -22,12 +22,14 @@ use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
 use common_catalog::catalog::CATALOG_DEFAULT;
+use common_catalog::plan::Filters;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
+use common_expression::type_check::check_function;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
@@ -141,7 +143,7 @@ pub fn parse_to_remote_string_expr(
     ctx: Arc<dyn TableContext>,
     table_meta: Arc<dyn Table>,
     sql: &str,
-) -> Result<RemoteExpr<String>> {
+) -> Result<Filters> {
     let schema = table_meta.schema();
     let exprs = parse_exprs(ctx, table_meta, sql)?;
     let exprs: Vec<RemoteExpr<String>> = exprs
@@ -153,7 +155,20 @@ pub fn parse_to_remote_string_expr(
         .collect();
 
     if exprs.len() == 1 {
-        Ok(exprs[0].clone())
+        let filter = exprs[0].clone();
+
+        let inverted_filter = check_function(
+            None,
+            "not",
+            &[],
+            &[filter.as_expr(&BUILTIN_FUNCTIONS)],
+            &BUILTIN_FUNCTIONS,
+        )?;
+
+        Ok(Filters {
+            filter,
+            inverted_filter: inverted_filter.as_remote_expr(),
+        })
     } else {
         Err(ErrorCode::BadDataValueType(format!(
             "Expected single expr, but got {}",

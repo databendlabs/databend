@@ -356,11 +356,11 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let (rgs, _) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
+        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
         let mut row_selections = pruner.prune_pages(meta, &rgs)?;
         let mut rows_read = 0; // Rows read in current file.
 
-        for rg in rgs {
+        for (rg, omit) in rgs.into_iter().zip(omits.into_iter()) {
             let rg_meta = meta.row_group(rg);
             let num_rows = rg_meta.num_rows() as usize;
             // Split rows belonging to current row group.
@@ -412,6 +412,7 @@ fn prune_and_generate_partitions(
                 compressed_size,
                 uncompressed_size,
                 sort_min_max,
+                omit_filter: omit,
             });
         }
 

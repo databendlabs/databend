@@ -184,7 +184,7 @@ async fn test_block_pruner() -> Result<()> {
     let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
 
-    e2.filter = Some(parse_to_remote_string_expr(
+    e2.filters = Some(parse_to_remote_string_expr(
         ctx.clone(),
         table.clone(),
         "a > 0 and b > 6",

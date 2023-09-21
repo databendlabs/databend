@@ -300,6 +300,8 @@ impl FuseTable {
             self.bloom_index_cols(),
         )?;
 
+        println!("filters {:?}", filters);
+
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
         if let Some(inverse) = filters.map(|f| f.inverted_filter) {
