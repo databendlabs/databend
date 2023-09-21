@@ -304,11 +304,13 @@ impl HiveTable {
     ) -> Result<Arc<HiveBlockReader>> {
         match (
             prewhere_all_partitions,
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs),
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
         ) {
             (true, _) | (_, None) => {
-                let projection =
-                    PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
+                let projection = PushDownInfo::projection_of_push_downs(
+                    &plan.schema(),
+                    plan.push_downs.as_ref(),
+                );
                 HiveBlockReader::create(
                     self.dal.clone(),
                     self.table_info.schema(),
@@ -334,7 +336,7 @@ impl HiveTable {
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|name| schema.index_of(name).unwrap())
@@ -352,7 +354,7 @@ impl HiveTable {
         Ok(
             match (
                 prewhere_all_partitions,
-                PushDownInfo::prewhere_of_push_downs(&plan.push_downs),
+                PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
             ) {
                 (true, _) | (_, None) => Arc::new(None),
                 (false, Some(v)) => {

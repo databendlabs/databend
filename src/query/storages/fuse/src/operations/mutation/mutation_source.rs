@@ -35,6 +35,7 @@ use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 
+use super::mutation_meta::SerializeBlock;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
@@ -239,10 +240,12 @@ impl Processor for MutationSource {
                             MutationAction::Deletion => {
                                 if affect_rows == num_rows {
                                     // all the rows should be removed.
-                                    let meta = SerializeDataMeta::create(
-                                        self.index.clone(),
-                                        self.stats_type.clone(),
-                                    );
+                                    let meta = Box::new(SerializeDataMeta::SerializeBlock(
+                                        SerializeBlock::create(
+                                            self.index.clone(),
+                                            self.stats_type.clone(),
+                                        ),
+                                    ));
                                     self.state = State::Output(
                                         self.ctx.get_partition(),
                                         DataBlock::empty_with_meta(meta),
@@ -329,7 +332,10 @@ impl Processor for MutationSource {
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                let meta = SerializeDataMeta::create(self.index.clone(), self.stats_type.clone());
+                let meta = Box::new(SerializeDataMeta::SerializeBlock(SerializeBlock::create(
+                    self.index.clone(),
+                    self.stats_type.clone(),
+                )));
                 self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -345,17 +351,15 @@ impl Processor for MutationSource {
                 match Mutation::from_part(&part)? {
                     Mutation::MutationDeletedSegment(deleted_segment) => {
                         let progress_values = ProgressValues {
-                            rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
+                            rows: deleted_segment.summary.row_count as usize,
                             bytes: 0,
                         };
                         self.ctx.get_write_progress().incr(&progress_values);
                         self.state = State::Output(
                             self.ctx.get_partition(),
-                            DataBlock::empty_with_meta(
-                                SerializeDataMeta::create_with_deleted_segment(
-                                    deleted_segment.clone(),
-                                ),
-                            ),
+                            DataBlock::empty_with_meta(Box::new(
+                                SerializeDataMeta::DeletedSegment(deleted_segment.clone()),
+                            )),
                         )
                     }
                     Mutation::MutationPartInfo(part) => {
@@ -380,10 +384,9 @@ impl Processor for MutationSource {
                                 bytes: 0,
                             };
                             self.ctx.get_write_progress().incr(&progress_values);
-                            let meta = SerializeDataMeta::create(
-                                self.index.clone(),
-                                self.stats_type.clone(),
-                            );
+                            let meta = Box::new(SerializeDataMeta::SerializeBlock(
+                                SerializeBlock::create(self.index.clone(), self.stats_type.clone()),
+                            ));
                             self.state = State::Output(
                                 self.ctx.get_partition(),
                                 DataBlock::empty_with_meta(meta),

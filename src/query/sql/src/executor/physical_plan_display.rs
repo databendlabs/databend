@@ -18,23 +18,18 @@ use std::fmt::Formatter;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
-use super::AggregateExpand;
-use super::AsyncSourcerPlan;
-use super::CopyIntoTable;
-use super::Deduplicate;
-use super::DeletePartial;
-use super::DistributedInsertSelect;
-use super::FinalCommit;
-use super::MergeInto;
-use super::MergeIntoSource;
-use super::MutationAggregate;
-use super::ProjectSet;
-use super::ReplaceInto;
-use super::RowFetch;
+use crate::executor::AggregateExpand;
 use crate::executor::AggregateFinal;
 use crate::executor::AggregatePartial;
+use crate::executor::AsyncSourcerPlan;
+use crate::executor::CommitSink;
+use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
+use crate::executor::CopyIntoTable;
 use crate::executor::CteScan;
+use crate::executor::Deduplicate;
+use crate::executor::DeletePartial;
+use crate::executor::DistributedInsertSelect;
 use crate::executor::EvalScalar;
 use crate::executor::Exchange;
 use crate::executor::ExchangeSink;
@@ -44,9 +39,14 @@ use crate::executor::HashJoin;
 use crate::executor::Lambda;
 use crate::executor::Limit;
 use crate::executor::MaterializedCte;
+use crate::executor::MergeInto;
+use crate::executor::MergeIntoSource;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::ProjectSet;
 use crate::executor::RangeJoin;
+use crate::executor::ReplaceInto;
+use crate::executor::RowFetch;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
@@ -87,8 +87,9 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
+            PhysicalPlan::CompactPartial(compact_partial) => write!(f, "{}", compact_partial)?,
             PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
-            PhysicalPlan::MutationAggregate(mutation) => write!(f, "{}", mutation)?,
+            PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
@@ -102,7 +103,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::CteScan(cte_scan) => write!(f, "{}", cte_scan)?,
             PhysicalPlan::MaterializedCte(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::ConstantTableScan(scan) => write!(f, "{}", scan)?,
-            PhysicalPlan::FinalCommit(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -212,6 +212,7 @@ impl Display for AggregateExpand {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let sets = self
             .grouping_sets
+            .sets
             .iter()
             .map(|set| {
                 set.iter()
@@ -242,7 +243,7 @@ impl Display for AggregateFinal {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()
@@ -275,7 +276,7 @@ impl Display for AggregatePartial {
                 format!(
                     "{}({})",
                     item.sig.name,
-                    item.args
+                    item.arg_indices
                         .iter()
                         .map(|index| index.to_string())
                         .collect::<Vec<String>>()
@@ -400,15 +401,21 @@ impl Display for DistributedInsertSelect {
     }
 }
 
+impl Display for CompactPartial {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CompactPartial")
+    }
+}
+
 impl Display for DeletePartial {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DeletePartial")
     }
 }
 
-impl Display for MutationAggregate {
+impl Display for CommitSink {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MutationAggregate")
+        write!(f, "CommitSink")
     }
 }
 impl Display for CopyIntoTable {
@@ -466,12 +473,6 @@ impl Display for MergeInto {
 impl Display for MergeIntoSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "MergeIntoSource")
-    }
-}
-
-impl Display for FinalCommit {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "FinalCommit")
     }
 }
 

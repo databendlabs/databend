@@ -106,19 +106,15 @@ pub struct TopK {
     pub column_id: u32,
 }
 
+pub const TOPK_PUSHDOWN_THRESHOLD: usize = 1000;
+
 impl PushDownInfo {
-    pub fn top_k(
-        &self,
-        schema: &TableSchema,
-        cluster_key: Option<&String>,
-        support: fn(&DataType) -> bool,
-    ) -> Option<TopK> {
+    pub fn top_k(&self, schema: &TableSchema, support: fn(&DataType) -> bool) -> Option<TopK> {
         if !self.order_by.is_empty() && self.limit.is_some() {
             let order = &self.order_by[0];
             let limit = self.limit.unwrap();
 
-            const MAX_TOPK_LIMIT: usize = 1000;
-            if limit > MAX_TOPK_LIMIT {
+            if limit > TOPK_PUSHDOWN_THRESHOLD {
                 return None;
             }
 
@@ -126,15 +122,6 @@ impl PushDownInfo {
                 // TODO: support sub column of nested type.
                 let field = schema.field_with_name(id).ok()?;
                 if !support(&field.data_type().into()) {
-                    return None;
-                }
-
-                // Only do topk in storage for cluster key.
-                if let Some(cluster_key) = cluster_key.as_ref() {
-                    if !cluster_key.contains(id) {
-                        return None;
-                    }
-                } else {
                     return None;
                 }
 
@@ -160,7 +147,7 @@ impl PushDownInfo {
         }
     }
 
-    pub fn prewhere_of_push_downs(push_downs: &Option<PushDownInfo>) -> Option<PrewhereInfo> {
+    pub fn prewhere_of_push_downs(push_downs: Option<&PushDownInfo>) -> Option<PrewhereInfo> {
         if let Some(PushDownInfo { prewhere, .. }) = push_downs {
             prewhere.clone()
         } else {
@@ -170,7 +157,7 @@ impl PushDownInfo {
 
     pub fn projection_of_push_downs(
         schema: &TableSchema,
-        push_downs: &Option<PushDownInfo>,
+        push_downs: Option<&PushDownInfo>,
     ) -> Projection {
         if let Some(PushDownInfo {
             projection: Some(prj),

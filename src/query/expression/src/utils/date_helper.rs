@@ -417,6 +417,7 @@ pub struct ToYYYYMMDD;
 pub struct ToYYYYMMDDHH;
 pub struct ToYYYYMMDDHHMMSS;
 pub struct ToYear;
+pub struct ToQuarter;
 pub struct ToMonth;
 pub struct ToDayOfYear;
 pub struct ToDayOfMonth;
@@ -461,6 +462,12 @@ impl ToNumber<u64> for ToYYYYMMDDHHMMSS {
 impl ToNumber<u16> for ToYear {
     fn to_number(dt: &DateTime<Tz>) -> u16 {
         dt.year() as u16
+    }
+}
+
+impl ToNumber<u8> for ToQuarter {
+    fn to_number(dt: &DateTime<Tz>) -> u8 {
+        (dt.month0() / 3 + 1) as u8
     }
 }
 
@@ -568,13 +575,13 @@ impl ToNumber<i32> for ToStartOfMonth {
 impl ToNumber<i32> for ToStartOfQuarter {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
         let new_month = dt.month0() / 3 * 3 + 1;
-        datetime_to_date_inner_number(&dt.with_month(new_month).unwrap().with_day(1).unwrap())
+        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(new_month).unwrap())
     }
 }
 
 impl ToNumber<i32> for ToStartOfYear {
     fn to_number(dt: &DateTime<Tz>) -> i32 {
-        datetime_to_date_inner_number(&dt.with_month(1).unwrap().with_day(1).unwrap())
+        datetime_to_date_inner_number(&dt.with_day(1).unwrap().with_month(1).unwrap())
     }
 }
 

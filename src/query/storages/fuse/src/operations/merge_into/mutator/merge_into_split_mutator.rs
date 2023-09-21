@@ -15,7 +15,6 @@
 use std::ops::Not;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -42,13 +41,12 @@ impl MergeIntoSplitMutator {
         // get row_id do check duplicate and get filter
         let filter: Bitmap = match &row_id_column.value {
             common_expression::Value::Scalar(scalar) => {
-                let mut mutable_bitmap = MutableBitmap::new();
+                // fast judge
                 if scalar.is_null() {
-                    mutable_bitmap.push(false)
+                    return Ok((DataBlock::empty(), block.clone()));
                 } else {
-                    mutable_bitmap.push(true);
+                    return Ok((block.clone(), DataBlock::empty()));
                 }
-                mutable_bitmap.into()
             }
             common_expression::Value::Column(column) => match column {
                 common_expression::Column::Nullable(nullable_column) => {

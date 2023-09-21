@@ -286,7 +286,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
             let mut vals = Vec::with_capacity(kvs.len());
             for (key, val) in kvs {
                 keys.push(transform_expr(AExpr::Literal { span, lit: key }, columns));
-                vals.push(transform_expr(AExpr::Literal { span, lit: val }, columns));
+                vals.push(transform_expr(val, columns));
             }
             let keys = RawExpr::FunctionCall {
                 span,

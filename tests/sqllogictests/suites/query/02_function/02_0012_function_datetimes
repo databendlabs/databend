@@ -212,6 +212,21 @@ select today() + 1 = tomorrow()
 ----
 1
 
+query B
+select to_date('2023-01-01') + 100 = to_date('2023-04-11')
+----
+1
+
+query B
+select to_date('2023-01-01') - 100 = to_date('2022-09-23')
+----
+1
+
+statement error 1001
+select to_date('2023-01-01') + 100000000
+
+statement error 1001
+select to_date('2023-01-01') - 100000000
 
 
 query B
@@ -378,6 +393,11 @@ query T
 select to_start_of_quarter(to_date(18762))
 ----
 2021-04-01
+
+query T
+select to_start_of_quarter(to_date('2023-05-31'))
+----
+2023-04-01
 
 query T
 select to_start_of_month(to_date(18885))
@@ -638,6 +658,21 @@ select add_seconds(to_datetime(1582970400000000), cast(61, INT32))
 ----
 2020-02-29 10:01:01.000000
 
+query T
+select to_datetime('2023-01-01 00:00:00') + 10000000000
+----
+2023-01-01 02:46:40.000000
+
+query t
+select to_datetime('2023-01-01 00:00:00') - 10000000000
+----
+2022-12-31 21:13:20.000000
+
+statement error 1001
+select to_datetime('2023-01-01 00:00:00') + 1000000000000000000
+
+statement error 1001
+select to_datetime('2023-01-01 00:00:00') - 1000000000000000000
 
 query I
 select to_month(to_datetime(1633081817000000))
@@ -773,6 +808,11 @@ SELECT to_datetime(1651017600000) = to_date('2022-04-27')
 
 query B
 select to_year(to_datetime(1646404329000000)) = 2022
+----
+1
+
+query B
+select to_quarter(to_datetime(1646404329000000)) = 1
 ----
 1
 

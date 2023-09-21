@@ -87,7 +87,7 @@ impl VirtualColumnReader {
         compression: TableCompression,
     ) -> Result<Self> {
         let prewhere_schema =
-            if let Some(v) = PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+            if let Some(v) = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) {
                 let prewhere_schema = v
                     .prewhere_columns
                     .project_schema(plan.source_info.schema().as_ref());

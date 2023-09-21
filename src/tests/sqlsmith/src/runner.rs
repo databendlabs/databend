@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
 use common_ast::ast::DropTableStmt;
+use common_ast::ast::NullableConstraint;
 use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
@@ -29,7 +32,7 @@ use rand::SeedableRng;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 19] = [
+const KNOWN_ERRORS: [&str; 30] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -49,8 +52,19 @@ const KNOWN_ERRORS: [&str; 19] = [
     "invalid cell index",
     "invalid directed edge index",
     "invalid coordinate range",
+    "window function calls cannot be nested",
     // Unsupported features
     "Row format is not yet support for",
+    "to_decimal not support this DataType",
+    "AggregateSumFunction does not support type",
+    "AggregateArrayMovingAvgFunction does not support type",
+    "AggregateArrayMovingSumFunction does not support type",
+    "The arguments of AggregateRetention should be an expression which returns a Boolean result",
+    "AggregateWindowFunnelFunction does not support type",
+    "nth_value should count from 1",
+    "start must be less than or equal to end when step is positive vice versa",
+    "Expected Number, Date or Timestamp type, but got",
+    "Unsupported data type for generate_series",
 ];
 
 pub struct Runner {
@@ -96,7 +110,12 @@ impl Runner {
             let mut fields = Vec::new();
             if let CreateTableSource::Columns(columns) = create_table_stmt.source.unwrap() {
                 for column in columns {
-                    let data_type = resolve_type_name(&column.data_type, true)?;
+                    let not_null = match column.nullable_constraint {
+                        Some(NullableConstraint::NotNull) => true,
+                        Some(NullableConstraint::Null) => false,
+                        None => true,
+                    };
+                    let data_type = resolve_type_name(&column.data_type, not_null)?;
                     let field = TableField::new(&column.name.name, data_type);
                     fields.push(field);
                 }
@@ -127,18 +146,30 @@ impl Runner {
         for _ in 0..self.count {
             let query = generater.gen_query();
             let query_sql = query.to_string();
-            tracing::info!("query_sql: {}", query_sql);
-            if let Err(e) = conn.exec(&query_sql).await {
-                if let Error::Api(ClientError::InvalidResponse(err)) = &e {
-                    if KNOWN_ERRORS
-                        .iter()
-                        .any(|known_err| err.message.starts_with(known_err))
-                    {
-                        continue;
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
+                if let Err(e) = conn.exec(&query_sql).await {
+                    if let Error::Api(ClientError::InvalidResponse(err)) = &e {
+                        // TODO: handle Syntax and Semantic errors
+                        if err.code == 1005 || err.code == 1065 {
+                            return;
+                        }
+                        if KNOWN_ERRORS
+                            .iter()
+                            .any(|known_err| err.message.starts_with(known_err))
+                        {
+                            return;
+                        }
                     }
-                }
 
-                let err = format!("error: {}", e);
+                    tracing::info!("query_sql: {}", query_sql);
+                    let err = format!("error: {}", e);
+                    tracing::error!(err);
+                }
+            })
+            .await
+            {
+                tracing::info!("query_sql: {}", query_sql);
+                let err = format!("query timeout: {}", e);
                 tracing::error!(err);
             }
         }

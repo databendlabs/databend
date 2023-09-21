@@ -132,7 +132,7 @@ impl NativeDeserializeDataTransform {
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
         let mut prewhere_columns: Vec<usize> =
-            match PushDownInfo::prewhere_of_push_downs(&plan.push_downs) {
+            match PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) {
                 None => (0..src_schema.num_fields()).collect(),
                 Some(v) => {
                     let projected_schema = v
@@ -254,7 +254,7 @@ impl NativeDeserializeDataTransform {
         schema: &DataSchema,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|name| schema.column_with_name(name).unwrap().0)
@@ -577,11 +577,11 @@ impl Processor for NativeDeserializeDataTransform {
                     self.offset_in_part = fuse_part.page_size() * range.start;
                 }
 
-                if let Some((_top_k, sorter, _index)) = self.top_k.as_mut() {
-                    if let Some(sort_min_max) = &fuse_part.sort_min_max {
-                        if sorter.never_match(sort_min_max) {
-                            return self.finish_process();
-                        }
+                if let Some(((_top_k, sorter, _index), min_max)) =
+                    self.top_k.as_mut().zip(fuse_part.sort_min_max.as_ref())
+                {
+                    if sorter.never_match(min_max) {
+                        return self.finish_process();
                     }
                 }
 

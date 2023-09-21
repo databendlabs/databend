@@ -73,6 +73,8 @@ use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CommitSink;
+use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
@@ -84,14 +86,12 @@ use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
-use common_sql::executor::FinalCommit;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -127,6 +127,7 @@ use common_storages_stage::StageTable;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
+use super::processors::transforms::TransformAddComputedColumns;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use super::processors::TransformResortAddOnWithoutSourceSchema;
@@ -259,7 +260,10 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
+            PhysicalPlan::CompactPartial(compact_partial) => {
+                self.build_compact_partial(compact_partial)
+            }
+            PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
@@ -272,25 +276,7 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::FinalCommit(final_commit) => self.build_final_commit(final_commit),
         }
-    }
-
-    fn build_final_commit(&mut self, final_commit: &FinalCommit) -> Result<()> {
-        self.build_pipeline(&final_commit.input)?;
-        let tbl = self.ctx.build_table_by_table_info(
-            &final_commit.catalog_info,
-            &final_commit.table_info,
-            None,
-        )?;
-        let table = FuseTable::try_from_table(tbl.as_ref())?;
-        table.chain_commit_meta_merger(&mut self.main_pipeline, table.cluster_key_id())?;
-        let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_commit_sink(
-            &ctx,
-            &mut self.main_pipeline,
-            Arc::new(final_commit.snapshot.clone()),
-        )
     }
 
     fn check_schema_cast(
@@ -502,20 +488,43 @@ impl PipelineBuilder {
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
         // fill default columns
+        let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
                 TransformResortAddOnWithoutSourceSchema::try_create(
                     self.ctx.clone(),
                     transform_input_port,
                     transform_output_port,
-                    Arc::new(DataSchema::from(tbl.schema())),
+                    Arc::new(DataSchema::from(table_default_schema)),
                     tbl.clone(),
                 )
             },
             1,
         )?;
+
         builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
+
+        // fill computed columns
+        let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+        if default_schema != computed_schema {
+            builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    TransformAddComputedColumns::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        default_schema.clone(),
+                        computed_schema.clone(),
+                    )
+                },
+                1,
+            )?;
+            builder.add_items_prepend(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+        }
 
         let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
@@ -758,6 +767,21 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+        let table = self.ctx.build_table_by_table_info(
+            &compact_block.catalog_info,
+            &compact_block.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.build_compact_partial(
+            self.ctx.clone(),
+            compact_block.parts.clone(),
+            compact_block.column_ids.clone(),
+            &mut self.main_pipeline,
+        )
+    }
+
     /// The flow of Pipeline is as follows:
     ///
     /// +---------------+      +-----------------------+
@@ -796,29 +820,26 @@ impl PipelineBuilder {
         table.chain_mutation_aggregator(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(delete.snapshot.clone()),
+            delete.snapshot.clone(),
             MutationKind::Delete,
         )?;
         Ok(())
     }
 
-    /// The flow of Pipeline is as follows:
-    ///
-    /// +-----------------------+      +----------+
-    /// |TableMutationAggregator| ---> |CommitSink|
-    /// +-----------------------+      +----------+
-    fn build_mutation_aggregate(&mut self, plan: &MutationAggregate) -> Result<()> {
+    fn build_commit_sink(&mut self, plan: &CommitSink) -> Result<()> {
         self.build_pipeline(&plan.input)?;
         let table =
             self.ctx
                 .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
+
         table.chain_mutation_pipes(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(plan.snapshot.clone()),
+            plan.snapshot.clone(),
             plan.mutation_kind,
+            plan.merge_meta,
         )?;
         Ok(())
     }
@@ -1308,20 +1329,17 @@ impl PipelineBuilder {
             .group_bys
             .iter()
             .take(expand.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
-            .map(|i| {
-                let index = input_schema.index_of(&i.to_string())?;
-                let ty = input_schema.field(index).data_type();
-                Ok((index, ty.clone()))
-            })
+            .map(|i| input_schema.index_of(&i.to_string()))
             .collect::<Result<Vec<_>>>()?;
         let grouping_sets = expand
             .grouping_sets
+            .sets
             .iter()
             .map(|sets| {
                 sets.iter()
                     .map(|i| {
                         let i = input_schema.index_of(&i.to_string())?;
-                        let offset = group_bys.iter().position(|(j, _)| *j == i).unwrap();
+                        let offset = group_bys.iter().position(|j| *j == i).unwrap();
                         Ok(offset)
                     })
                     .collect::<Result<Vec<_>>>()
@@ -1593,7 +1611,15 @@ impl PipelineBuilder {
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {
-                agg_args.push(agg_func.args.clone());
+                let args = agg_func
+                    .arg_indices
+                    .iter()
+                    .map(|i| {
+                        let index = input_schema.index_of(&i.to_string())?;
+                        Ok(index)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                agg_args.push(args);
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
                     agg_func.sig.params.clone(),

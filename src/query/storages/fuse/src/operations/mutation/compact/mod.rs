@@ -13,14 +13,15 @@
 // limitations under the License.
 
 mod block_compact_mutator;
-mod compact_aggregator;
 mod compact_part;
 mod compact_source;
 mod segment_compact_mutator;
 
 pub use block_compact_mutator::BlockCompactMutator;
-pub use compact_aggregator::CompactAggregator;
+pub use compact_part::CompactExtraInfo;
+pub use compact_part::CompactLazyPartInfo;
 pub use compact_part::CompactPartInfo;
+pub use compact_part::CompactTaskInfo;
 pub use compact_source::CompactSource;
 pub use segment_compact_mutator::SegmentCompactMutator;
 pub use segment_compact_mutator::SegmentCompactionState;

@@ -117,7 +117,7 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
 pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
-        rule! { FILE_FORMAT ~ "=" ~ "(" ~ #format_options ~ ")" },
+        rule! { FILE_FORMAT ~ ^"=" ~ ^"(" ~ ^#format_options ~ ^")" },
         |(_, _, _, opts, _)| opts,
     )(i)
 }
@@ -126,7 +126,7 @@ pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-        "(" ~ ( #ident ~ "=" ~ #parameter_to_string )* ~ ")"
+        "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string )* ~ ^")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(
@@ -162,9 +162,9 @@ pub fn string_location(i: Input) -> IResult<FileLocation> {
     map_res(
         rule! {
             #literal_string
-            ~ (CONNECTION ~ "=" ~ #connection_options ~ ","?)?
-            ~ (CREDENTIALS ~ "=" ~ #connection_options ~ ","?)?
-            ~ (LOCATION_PREFIX ~ "=" ~ #literal_string ~ ","?)?
+            ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
+            ~ (CREDENTIALS ~ ^"=" ~ ^#connection_options ~ ","?)?
+            ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
         |(location, connection_opts, credentials_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {

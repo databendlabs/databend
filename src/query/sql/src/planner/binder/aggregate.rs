@@ -44,6 +44,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::GroupingSets;
 use crate::plans::LagLeadFunction;
 use crate::plans::LambdaFunc;
 use crate::plans::NthValueFunction;
@@ -56,6 +57,73 @@ use crate::plans::WindowOrderBy;
 use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
+
+/// Information for `GROUPING SETS`.
+///
+/// `GROUPING SETS` will generate several `GROUP BY` sets, and union their results. For example:
+///
+/// ```sql
+/// SELECT min(a), b, c FROM t GROUP BY GROUPING SETS (b, c);
+/// ```
+///
+/// is equal to:
+///
+/// ```sql
+/// (SELECT min(a), b, NULL FROM t GROUP BY b) UNION (SELECT min(a), NULL, c FROM t GROUP BY c);
+/// ```
+///
+/// In Databend, we do not really rewrite the plan to a `UNION` plan.
+/// We will add a new virtual column `_grouping_id` to the group by items,
+/// where `_grouping_id` is the result value of function [grouping](https://databend.rs/doc/sql-functions/other-functions/grouping).
+///
+/// For example, we will rewrite the SQL above to:
+///
+/// ```sql
+/// SELECT min(a), b, c FROM t GROUP BY (b, c, _grouping_id);
+/// ```
+///
+/// To get the right result, we also need to fill dummy data for each grouping set.
+///
+/// The above SQL again, if the columns' data is:
+///
+///  a  |  b  |  c
+/// --- | --- | ---
+///  1  |  2  |  3
+///  4  |  5  |  6
+///
+/// We will expand the data to:
+///
+/// - Grouping sets (b):
+///
+///  a  |  b  |   c    | grouping(b,c)
+/// --- | --- |  ---   |    ---
+///  1  |  2  |  NULL  |     2 (0b10)
+///  4  |  5  |  NULL  |     2 (0b10)
+///
+/// - Grouping sets (c):
+///
+///  a  |   b    |  c  | grouping(b,c)
+/// --- |  ---   | --- |   ---
+///  1  |  NULL  |  3  |    1 (0b01)
+///  4  |  NULL  |  6  |    1 (0b01)
+///    
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct GroupingSetsInfo {
+    /// Index for virtual column `grouping_id`.
+    pub grouping_id_column: ColumnBinding,
+    /// Each grouping set is a list of column indices in `group_items`.
+    pub sets: Vec<Vec<IndexType>>,
+    /// The indices generated to identify the duplicate group items in the execution of the `GROUPING SETS` plan (not including `_grouping_id`).
+    ///
+    /// If the aggregation function argument is an item in the grouping set, for example:
+    ///
+    /// ```sql
+    /// SELECT min(a) FROM t GROUP BY GROUPING SETS (a, ...);
+    /// ```
+    ///
+    /// we should use the original column `a` data instead of the column data after filling dummy NULLs.
+    pub dup_group_items: Vec<(IndexType, DataType)>,
+}
 
 #[derive(Default, Clone, PartialEq, Eq, Debug)]
 pub struct AggregateInfo {
@@ -82,10 +150,8 @@ pub struct AggregateInfo {
     /// We will check the validity by lookup this map with display name.
     pub group_items_map: HashMap<ScalarExpr, usize>,
 
-    /// Index for virtual column `grouping_id`. It's valid only if `grouping_sets` is not empty.
-    pub grouping_id_column: Option<ColumnBinding>,
-    /// Each grouping set is a list of column indices in `group_items`.
-    pub grouping_sets: Vec<Vec<IndexType>>,
+    /// Information of grouping sets
+    pub grouping_sets: Option<GroupingSetsInfo>,
 }
 
 pub(super) struct AggregateRewriter<'a> {
@@ -320,13 +386,17 @@ impl<'a> AggregateRewriter<'a> {
 
     fn replace_grouping(&mut self, function: &FunctionCall) -> Result<ScalarExpr> {
         let agg_info = &mut self.bind_context.aggregate_info;
-        if agg_info.grouping_id_column.is_none() {
+        if agg_info.grouping_sets.is_none() {
             return Err(ErrorCode::SemanticError(
                 "grouping can only be called in GROUP BY GROUPING SETS clauses",
             ));
         }
-        let grouping_id_column = agg_info.grouping_id_column.clone().unwrap();
-
+        let grouping_id_column = agg_info
+            .grouping_sets
+            .as_ref()
+            .unwrap()
+            .grouping_id_column
+            .clone();
         // Rewrite the args to params.
         // The params are the index offset in `grouping_id`.
         // Here is an example:
@@ -494,16 +564,15 @@ impl Binder {
 
         let aggregate_plan = Aggregate {
             mode: AggregateMode::Initial,
-            group_items: bind_context.aggregate_info.group_items.clone(),
-            aggregate_functions: bind_context.aggregate_info.aggregate_functions.clone(),
+            group_items: agg_info.group_items.clone(),
+            aggregate_functions: agg_info.aggregate_functions.clone(),
             from_distinct: false,
             limit: None,
-            grouping_sets: agg_info.grouping_sets.clone(),
-            grouping_id_index: agg_info
-                .grouping_id_column
-                .as_ref()
-                .map(|g| g.index)
-                .unwrap_or(0),
+            grouping_sets: agg_info.grouping_sets.as_ref().map(|g| GroupingSets {
+                grouping_id_index: g.grouping_id_column.index,
+                sets: g.sets.clone(),
+                dup_group_items: g.dup_group_items.clone(),
+            }),
         };
         new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
 
@@ -548,28 +617,43 @@ impl Binder {
             })
             .collect::<Vec<_>>();
         let grouping_sets = grouping_sets.into_iter().unique().collect();
-        agg_info.grouping_sets = grouping_sets;
+        let mut dup_group_items = Vec::with_capacity(agg_info.group_items.len());
+        for (i, item) in agg_info.group_items.iter().enumerate() {
+            // We just generate a new bound index.
+            let dummy = self.create_derived_column_binding(
+                format!("_dup_group_item_{i}"),
+                item.scalar.data_type()?,
+            );
+            dup_group_items.push((dummy.index, *dummy.data_type));
+        }
         // Add a virtual column `_grouping_id` to group items.
         let grouping_id_column = self.create_derived_column_binding(
             "_grouping_id".to_string(),
             DataType::Number(NumberDataType::UInt32),
         );
-        let index = grouping_id_column.index;
-        agg_info.grouping_id_column = Some(grouping_id_column.clone());
+
+        let bound_grouping_id_col = BoundColumnRef {
+            span: None,
+            column: grouping_id_column.clone(),
+        };
+
         agg_info.group_items_map.insert(
-            ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: grouping_id_column.clone(),
-            }),
+            bound_grouping_id_col.clone().into(),
             agg_info.group_items.len(),
         );
         agg_info.group_items.push(ScalarItem {
-            index,
-            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: grouping_id_column,
-            }),
+            index: grouping_id_column.index,
+            scalar: bound_grouping_id_col.into(),
         });
+
+        let grouping_sets_info = GroupingSetsInfo {
+            grouping_id_column,
+            sets: grouping_sets,
+            dup_group_items,
+        };
+
+        agg_info.grouping_sets = Some(grouping_sets_info);
+
         Ok(())
     }
 
@@ -690,6 +774,26 @@ impl Binder {
                 scalar_expr,
                 bind_context.aggregate_info.group_items.len() - 1,
             );
+        }
+
+        // Check group by contains aggregate functions or not
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+            )
+        };
+        for item in bind_context.aggregate_info.group_items.iter() {
+            let finder = Finder::new(&f);
+            let finder = item.scalar.accept(finder)?;
+
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "GROUP BY items can't contain aggregate functions or window functions"
+                        .to_string(),
+                )
+                .set_span(item.scalar.span()));
+            }
         }
 
         // If it's `GROUP BY GROUPING SETS`, ignore the optimization below.

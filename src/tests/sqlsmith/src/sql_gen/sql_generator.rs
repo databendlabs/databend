@@ -41,6 +41,7 @@ pub(crate) struct Column {
 
 pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) tables: Vec<Table>,
+    pub(crate) cte_tables: Vec<Table>,
     pub(crate) bound_tables: Vec<Table>,
     pub(crate) bound_columns: Vec<Column>,
     pub(crate) is_join: bool,
@@ -54,6 +55,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let mut scalar_func_sigs = Vec::new();
         for (name, func_list) in BUILTIN_FUNCTIONS.funcs.iter() {
             // Ignore unsupported binary functions, avoid parse binary operator failure
+            // Ignore ai functions, avoid timeouts on http calls
             if name == "div"
                 || name == "and"
                 || name == "or"
@@ -61,6 +63,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 || name == "like"
                 || name == "regexp"
                 || name == "rlike"
+                || name == "ai_embedding_vector"
+                || name == "ai_text_completion"
             {
                 continue;
             }
@@ -71,6 +75,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
 
         SqlGenerator {
             tables: vec![],
+            cte_tables: vec![],
             bound_tables: vec![],
             bound_columns: vec![],
             is_join: false,

@@ -315,6 +315,10 @@ SELECT factorial(5)
 120
 
 statement error 1001
+SELECT factorial(30)
+
+
+statement error 1001
 SELECT pow('a', 2)
 
 

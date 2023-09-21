@@ -505,4 +505,12 @@ impl Settings {
     pub fn set_ddl_column_type_nullable(&self, val: bool) -> Result<()> {
         self.try_set_u64("ddl_column_type_nullable", u64::from(val))
     }
+
+    pub fn get_enable_query_profiling(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_query_profiling")? != 0)
+    }
+
+    pub fn set_enable_query_profiling(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_query_profiling", u64::from(val))
+    }
 }

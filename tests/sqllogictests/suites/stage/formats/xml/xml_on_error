@@ -7,8 +7,8 @@ create table wrong_xml (id  INT, name VARCHAR, data VARCHAR, create_time TIMESTA
 query 
 copy /*+ set_var(max_threads=1) */into wrong_xml from @data/xml/ pattern = 'wrong_sample.*[.]xml' file_format = (type = XML) ON_ERROR=continue
 ----
-xml/wrong_sample.xml 2 1 fail to decode column 0 (id Int32 NULL): invalid text for number 2
-xml/wrong_sample2.xml 2 1 fail to decode column 0 (id Int32 NULL): invalid text for number 2
+xml/wrong_sample.xml 2 1 Invalid value '"b"' for column 0 (id Int32 NULL): invalid text for number 2
+xml/wrong_sample2.xml 2 1 Invalid value '"b"' for column 0 (id Int32 NULL): invalid text for number 2
 
 query 
 select * from wrong_xml order by id

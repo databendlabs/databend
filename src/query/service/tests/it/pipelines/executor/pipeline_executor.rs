@@ -76,7 +76,7 @@ async fn test_always_call_on_finished() -> Result<()> {
                 assert_eq!(error.code(), 1001);
                 assert_eq!(
                     error.message().as_str(),
-                    "test failure(while in query pipeline init)"
+                    "test failure\n(while in query pipeline init)"
                 );
                 assert!(!called_finished.load(Ordering::SeqCst));
                 drop(executor);

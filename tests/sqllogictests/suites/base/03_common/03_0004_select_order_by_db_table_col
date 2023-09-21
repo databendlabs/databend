@@ -37,13 +37,13 @@ SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id
 1
 2
 
-statement error 1065
+statement error (?s)1065.* for SELECT DISTINCT, ORDER BY expressions must appear in select list
 SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2
 
 statement error
 SELECT SUM(id) as id2 FROM a.t ORDER BY a.t.id2
 
-statement error 1065
+statement error (?s)1065.* for SELECT DISTINCT, ORDER BY expressions must appear in select list
 SELECT DISTINCT(id) as id2 FROM a.t ORDER BY a.t.id2
 
 query II
@@ -52,7 +52,7 @@ SELECT * FROM a.t ORDER BY a.t.id ASC
 1 1
 2 2
 
-statement error 1065
+statement error (?s)1065.* column id doesn't exist
 SELECT * FROM a.t ORDER BY B.T.id ASC
 
 query II
@@ -61,7 +61,7 @@ SELECT * FROM a.t ORDER BY a.t.id DESC
 2 2
 1 1
 
-statement error 1065
+statement error (?s)1065.* column id doesn't exist
 SELECT * FROM a.t ORDER BY B.T.id DESC
 
 statement ok

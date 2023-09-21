@@ -45,6 +45,7 @@ use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadO
 #[derive(Clone, Debug)]
 pub struct FullParquetMeta {
     pub location: String,
+    pub size: u64,
 
     pub meta: Arc<ParquetMetaData>,
     /// Row group level statistics.

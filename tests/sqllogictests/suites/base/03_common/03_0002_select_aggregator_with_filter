@@ -7,4 +7,3 @@ query I
 SELECT max(number) FROM numbers_mt (10) where number > 2
 ----
 9
-

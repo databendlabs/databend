@@ -15,7 +15,6 @@
 use common_metrics::register_counter;
 use common_metrics::Counter;
 use lazy_static::lazy_static;
-use metrics::increment_gauge;
 
 macro_rules! key {
     ($key: literal) => {
@@ -34,21 +33,17 @@ lazy_static! {
 }
 
 pub fn metrics_inc_merge_into_replace_blocks_counter(c: u32) {
-    increment_gauge!(key!("merge_into_replace_blocks_counter"), c as f64);
     MERGE_INTO_REPLACE_BLOCKS_COUNTER.inc_by(c as u64);
 }
 
 pub fn metrics_inc_merge_into_append_blocks_counter(c: u32) {
-    increment_gauge!(key!("merge_into_append_blocks_counter"), c as f64);
     MERGE_INTO_APPEND_BLOCKS_COUNTER.inc_by(c as u64);
 }
 
 pub fn metrics_inc_merge_into_matched_rows(c: u32) {
-    increment_gauge!(key!("merge_into_matched_rows"), c as f64);
     MERGE_INTO_MATCHED_ROWS.inc_by(c as u64);
 }
 
 pub fn metrics_inc_merge_into_unmatched_rows(c: u32) {
-    increment_gauge!(key!("merge_into_unmatched_rows"), c as f64);
     MERGE_INTO_UNMATCHED_ROWS.inc_by(c as u64);
 }
