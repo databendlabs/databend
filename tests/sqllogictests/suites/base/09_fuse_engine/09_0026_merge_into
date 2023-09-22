@@ -289,23 +289,10 @@ statement ok
 create stage s5 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
-create stage s4 FILE_FORMAT = (TYPE = PARQUET);
-
-statement ok
 copy into @s5 from (select a,b,c from test_stage order by a,b,c);
-
-statement ok
-copy into @s4 from (select a,b,c from test_stage order by a,b,c);
 
 query TTT
 select $1,$2,$3 from @s5 order by $1,$2,$3;
-----
-1 a1 b1
-2 a2 b2
-3 a3 b3
-
-query TTT
-select $1,$2,$3 from @s4 order by $1,$2,$3;
 ----
 1 a1 b1
 2 a2 b2
@@ -328,6 +315,19 @@ query I
 select count(*) from target_table;
 ----
 0
+
+statement ok
+create stage s4 FILE_FORMAT = (TYPE = PARQUET);
+
+statement ok
+copy into @s4 from (select a,b,c from test_stage order by a,b,c);
+
+query TTT
+select $1,$2,$3 from @s4 order by $1,$2,$3;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
 
 statement ok
 insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
