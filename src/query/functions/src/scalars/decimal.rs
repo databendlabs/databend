@@ -1244,15 +1244,16 @@ macro_rules! m_decimal_to_decimal {
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
-                        match x.checked_mul(factor) {
-                            Some(x) if x <= max && x >= min => x as $dest_type_name,
-                            _ => {
-                                $ctx.set_error(
-                                    row,
-                                    concat!("Decimal overflow at line : ", line!()),
-                                );
-                                <$dest_type_name>::one()
-                            }
+                        let (x, overflow) = x.overflowing_mul(factor);
+
+                        if !overflow && x <= max && x >= min {
+                            x as $dest_type_name
+                        } else {
+                            $ctx.set_error(
+                                row,
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
+                            <$dest_type_name>::one()
                         }
                     })
                     .collect()
