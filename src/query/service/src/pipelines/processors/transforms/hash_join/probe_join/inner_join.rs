@@ -17,7 +17,6 @@ use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -225,9 +224,7 @@ impl HashJoinProbeState {
                 let other_predicate = cast_expr_to_non_null_boolean(other_predicate.clone())?;
                 assert_eq!(other_predicate.data_type(), &DataType::Boolean);
 
-                let func_ctx = self.ctx.get_function_context()?;
                 let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
-
                 for result_block in result_blocks {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -235,7 +232,8 @@ impl HashJoinProbeState {
                         ));
                     }
 
-                    let evaluator = Evaluator::new(&result_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator =
+                        Evaluator::new(&result_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator
                         .run(&other_predicate)?
                         .try_downcast::<BooleanType>()

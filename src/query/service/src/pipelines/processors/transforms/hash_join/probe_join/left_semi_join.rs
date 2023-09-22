@@ -196,7 +196,11 @@ impl HashJoinProbeState {
                     let result_block =
                         self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
-                    let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
+                    let mut bm = match self.get_other_filters(
+                        &result_block,
+                        other_predicate,
+                        &self.func_ctx,
+                    )? {
                         (Some(b), _, _) => b.make_mut(),
                         (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
                         (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
@@ -279,7 +283,7 @@ impl HashJoinProbeState {
         };
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
-        let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
+        let mut bm = match self.get_other_filters(&result_block, other_predicate, &self.func_ctx)? {
             (Some(b), _, _) => b.make_mut(),
             (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
             (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),

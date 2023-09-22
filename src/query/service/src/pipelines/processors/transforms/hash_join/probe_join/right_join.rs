@@ -160,6 +160,7 @@ impl HashJoinProbeState {
                                     .other_predicate
                                     .as_ref()
                                     .unwrap(),
+                                &self.func_ctx,
                             )?;
 
                             if all_true {
@@ -301,6 +302,7 @@ impl HashJoinProbeState {
                         .other_predicate
                         .as_ref()
                         .unwrap(),
+                    &self.func_ctx,
                 )?;
 
                 if all_true {

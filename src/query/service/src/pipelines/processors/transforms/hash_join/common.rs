@@ -14,7 +14,6 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
@@ -27,6 +26,7 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -134,11 +134,10 @@ impl HashJoinProbeState {
         &self,
         merged_block: &DataBlock,
         filter: &Expr,
+        func_ctx: &FunctionContext,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let filter = cast_expr_to_non_null_boolean(filter.clone())?;
-
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
             .run(&filter)?
             .try_downcast::<BooleanType>()
@@ -158,10 +157,9 @@ impl HashJoinProbeState {
         &self,
         merged_block: &DataBlock,
         filter: &Expr,
+        func_ctx: &FunctionContext,
     ) -> Result<Column> {
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
-
+        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
         let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());

@@ -30,6 +30,7 @@ use common_expression::ColumnBuilder;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
@@ -64,6 +65,7 @@ use crate::sessions::QueryContext;
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) func_ctx: FunctionContext,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
@@ -100,6 +102,7 @@ pub struct HashJoinBuildState {
 impl HashJoinBuildState {
     pub fn try_create(
         ctx: Arc<QueryContext>,
+        func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
@@ -112,6 +115,7 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
+            func_ctx,
             hash_join_state,
             _processor_count: processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
@@ -474,7 +478,6 @@ impl HashJoinBuildState {
             }};
         }
 
-        let func_ctx = self.ctx.get_function_context()?;
         let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
         let mut has_null = false;
         let interrupt = self.hash_join_state.interrupt.clone();
@@ -487,7 +490,7 @@ impl HashJoinBuildState {
 
             let chunk = &mut chunks[chunk_index];
 
-            let evaluator = Evaluator::new(chunk, &func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let columns: Vec<(Column, DataType)> = self
                 .hash_join_state
                 .hash_join_desc

@@ -175,7 +175,11 @@ impl HashJoinProbeState {
                     };
                     let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-                    let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+                    let filter = self.get_nullable_filter_column(
+                        &result_block,
+                        other_predicate,
+                        &self.func_ctx,
+                    )?;
                     let filter_viewer =
                         NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                     let validity = &filter_viewer.validity;
@@ -242,7 +246,8 @@ impl HashJoinProbeState {
             };
             let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-            let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+            let filter =
+                self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
             let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
             let validity = &filter_viewer.validity;
             let data = &filter_viewer.column;
