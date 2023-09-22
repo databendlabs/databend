@@ -28,6 +28,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
+use common_ast::ast::WindowDefinition;
 use common_ast::ast::With;
 use common_ast::ast::CTE;
 use common_expression::infer_schema_type;
@@ -289,26 +290,50 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_select(&mut self) -> SelectStmt {
+        self.windows_name.clear();
         let from = self.gen_from();
         let group_by = self.gen_group_by();
         self.group_by = group_by.clone();
+        let window_list = self.gen_window_list();
+        if let Some(window_list) = window_list {
+            for window in window_list {
+                self.windows_name.push(window.name.name)
+            }
+        }
         let select_list = self.gen_select_list(&group_by);
         let selection = self.gen_selection();
         SelectStmt {
             span: None,
             // TODO
             hints: None,
-            // TODO
-            distinct: false,
+            distinct: self.rng.gen_bool(0.7),
             select_list,
             from,
             selection,
             group_by,
-            // TODO
-            having: None,
-            // TODO
-            window_list: None,
+            having: self.gen_selection(),
+            window_list: self.gen_window_list(),
         }
+    }
+
+    fn gen_window_list(&mut self) -> Option<Vec<WindowDefinition>> {
+        if self.rng.gen_bool(0.1) {
+            let mut res = vec![];
+            for _ in 0..self.rng.gen_range(1..3) {
+                let name: String = (0..4)
+                    .map(|_| self.rng.sample(Alphanumeric) as char)
+                    .collect();
+                let window_name = format!("w_{}", name);
+                let spec = self.gen_window_spec();
+                let window_def = WindowDefinition {
+                    name: Identifier::from_name(window_name),
+                    spec,
+                };
+                res.push(window_def);
+            }
+            return Some(res);
+        }
+        None
     }
 
     fn gen_group_by(&mut self) -> Option<GroupBy> {

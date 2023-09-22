@@ -16,9 +16,12 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::check_function;
+use common_functions::BUILTIN_FUNCTIONS;
 use log::error;
 use log::info;
 use log::warn;
@@ -31,6 +34,7 @@ use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+use crate::sql::executor::cast_expr_to_non_null_boolean;
 use crate::sql::plans::ReclusterTablePlan;
 
 pub struct ReclusterTableInterpreter {
@@ -68,13 +72,23 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let filter = scalar
-                .as_expr()?
-                .project_column_ref(|col| col.column_name.clone())
-                .as_remote_expr();
+            // prepare the filter expression
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?;
+            // prepare the inverse filter expression
+            let inverted_filter =
+                check_function(None, "not", &[], &[filter.clone()], &BUILTIN_FUNCTIONS)?;
+
+            let filters = Filters {
+                filter: filter.as_remote_expr(),
+                inverted_filter: inverted_filter.as_remote_expr(),
+            };
 
             Some(PushDownInfo {
-                filter: Some(filter),
+                filters: Some(filters),
                 ..PushDownInfo::default()
             })
         } else {

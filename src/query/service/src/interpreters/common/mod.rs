@@ -25,5 +25,6 @@ pub use refresh_aggregating_index::hook_refresh_agg_index;
 pub use refresh_aggregating_index::RefreshAggIndexDesc;
 pub use table::check_referenced_computed_columns;
 pub use util::check_deduplicate_label;
+pub use util::create_push_down_filters;
 
 pub use self::metrics::*;
