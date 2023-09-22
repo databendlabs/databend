@@ -114,9 +114,9 @@ impl HiveTable {
 
         let filter_expression = push_downs.as_ref().and_then(|extra| {
             extra
-                .filter
+                .filters
                 .as_ref()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
         let range_filter = match filter_expression {
@@ -242,7 +242,7 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filter,
+            filters,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -253,10 +253,10 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = filter
+            let columns = filters
                 .as_ref()
                 .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
+                    let expr = f.filter.as_expr(&BUILTIN_FUNCTIONS);
                     expr.column_refs().keys().cloned().collect::<HashSet<_>>()
                 })
                 .unwrap_or_default();
@@ -460,9 +460,9 @@ impl HiveTable {
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
                 let filter_expression = push_downs.as_ref().and_then(|p| {
-                    p.filter
+                    p.filters
                         .as_ref()
-                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                        .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
                 });
 
                 return self
