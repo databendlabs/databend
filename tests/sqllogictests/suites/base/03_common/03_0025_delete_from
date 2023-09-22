@@ -114,6 +114,17 @@ select count(*) = 0 from t
 ----
 1
 
+statement ok
+insert into t values (1), (NULL)
+
+statement ok
+delete from t where c >= 1
+
+
+query T
+select * from t
+----
+NULL
 
 
 statement ok

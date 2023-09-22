@@ -243,6 +243,7 @@ impl Processor for MatchedSplitProcessor {
                         let (stage_block, mut row_ids) = delete_mutation
                             .delete_mutator
                             .delete_by_expr(current_block)?;
+
                         if stage_block.is_empty() {
                             // delete all
                             if !row_ids.is_empty() {

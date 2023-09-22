@@ -465,14 +465,6 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
-#[derive(Debug, Clone)]
-pub struct DeletionFilters {
-    // the filter expression for the deletion
-    pub filter: RemoteExpr<String>,
-    // just "not(filter)"
-    pub inverted_filter: RemoteExpr<String>,
-}
-
 use std::collections::HashMap;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]

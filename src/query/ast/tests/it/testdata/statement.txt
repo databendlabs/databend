@@ -7120,7 +7120,7 @@ LIST @stage_a
 ---------- AST ------------
 ListStage {
     location: "stage_a",
-    pattern: "",
+    pattern: None,
 }
 
 
@@ -7131,7 +7131,7 @@ LIST @~
 ---------- AST ------------
 ListStage {
     location: "~",
-    pattern: "",
+    pattern: None,
 }
 
 

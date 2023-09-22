@@ -179,6 +179,7 @@ impl MergeIntoInterpreter {
             } else {
                 None
             };
+
             let mut values_exprs = Vec::<RemoteExpr>::with_capacity(item.values.len());
 
             for scalar_expr in &item.values {
@@ -208,6 +209,7 @@ impl MergeIntoInterpreter {
             } else {
                 None
             };
+
             // update
             let update_list = if let Some(update_list) = &item.update {
                 // use update_plan to get exprs
@@ -224,7 +226,7 @@ impl MergeIntoInterpreter {
                 let col_indices = if item.condition.is_none() {
                     vec![]
                 } else {
-                    // we don't need to real col_indices here, just give a
+                    // we don't need real col_indices here, just give a
                     // dummy index, that's ok.
                     vec![DUMMY_COL_INDEX]
                 };
@@ -235,7 +237,6 @@ impl MergeIntoInterpreter {
                         col_indices,
                         Some(join_output_schema.num_fields()),
                     )?;
-
                 let update_list = update_list
                     .iter()
                     .map(|(idx, remote_expr)| {
