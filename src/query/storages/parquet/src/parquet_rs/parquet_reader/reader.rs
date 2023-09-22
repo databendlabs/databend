@@ -115,16 +115,20 @@ impl<'a> ParquetRSReaderBuilder<'a> {
                     projection.clone(),
                     None,
                 )?;
-                let field_paths = compute_output_field_paths(&schema, &batch_schema)?;
                 let field_levels =
                     parquet_to_arrow_field_levels(&self.schema_desc, projection.clone(), None)?;
+                let field_paths =
+                    if matches!(prewhere.prewhere_columns, Projection::InnerColumns(_)) {
+                        Some(compute_output_field_paths(&schema, &batch_schema)?)
+                    } else {
+                        None
+                    };
                 Ok::<_, ErrorCode>(Arc::new(ParquetPredicate::new(
                     self.ctx.get_function_context()?,
                     projection,
                     field_levels,
                     filter,
                     field_paths,
-                    matches!(prewhere.prewhere_columns, Projection::InnerColumns(_)),
                 )))
             })
             .transpose()?;
@@ -146,17 +150,21 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         let batch_schema =
             parquet_to_arrow_schema_by_columns(&self.schema_desc, projection.clone(), None)?;
         let output_schema = to_arrow_schema(&output_projection.project_schema(&self.table_schema));
-        let field_paths = compute_output_field_paths(&output_schema, &batch_schema)?;
 
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let field_levels =
             parquet_to_arrow_field_levels(&self.schema_desc, projection.clone(), None)?;
 
+        let field_paths = if matches!(output_projection, Projection::InnerColumns(_)) {
+            Some(compute_output_field_paths(&output_schema, &batch_schema)?)
+        } else {
+            None
+        };
+
         Ok(ParquetRSReader {
             op: self.op,
             predicate,
             projection,
-            is_inner_project: matches!(output_projection, Projection::InnerColumns(_)),
             field_paths,
             pruner: self.pruner,
             need_page_index: self.options.prune_pages(),
@@ -173,15 +181,15 @@ pub struct ParquetRSReader {
 
     /// Columns to output.
     projection: ProjectionMask,
+    /// Field paths helping to traverse columns.
+    ///
     /// If we use [`ProjectionMask`] to get inner columns of a struct,
     /// the columns will be contains in a struct array in the read [`RecordBatch`].
     ///
-    /// Therefore, if `is_inner_project`, we should extract inner columns from the struct manually by traversing the nested column.
-    ///
-    /// If `is_inner_project` is false, we can skip the traversing.
-    is_inner_project: bool,
-    /// Field paths helping to traverse columns.
-    field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
+    /// Therefore, if `field_paths` is [Some],
+    /// we should extract inner columns from the struct manually by traversing the nested column;
+    /// if `field_paths` is [None], we can skip the traversing.
+    field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
     /// Projected field levels.
     field_levels: FieldLevels,
 
@@ -292,12 +300,7 @@ impl ParquetRSReader {
         let record_batch = stream.next().await.transpose()?;
 
         if let Some(batch) = record_batch {
-            let blocks = if self.is_inner_project {
-                transform_record_batch(&batch, &self.field_paths)?
-            } else {
-                let (block, _) = DataBlock::from_record_batch(&batch)?;
-                block
-            };
+            let blocks = transform_record_batch(&batch, &self.field_paths)?;
             Ok(Some(blocks))
         } else {
             Ok(None)
@@ -309,12 +312,7 @@ impl ParquetRSReader {
         let record_batch = reader.next().transpose()?;
 
         if let Some(batch) = record_batch {
-            let blocks = if self.is_inner_project {
-                transform_record_batch(&batch, &self.field_paths)?
-            } else {
-                let (block, _) = DataBlock::from_record_batch(&batch)?;
-                block
-            };
+            let blocks = transform_record_batch(&batch, &self.field_paths)?;
             Ok(Some(blocks))
         } else {
             Ok(None)
@@ -370,12 +368,12 @@ impl ParquetRSReader {
 
         let reader = builder.build()?;
         // Write `if` outside iteration to reduce branches.
-        if self.is_inner_project {
+        if let Some(field_paths) = self.field_paths.as_ref() {
             reader
                 .into_iter()
                 .map(|batch| {
                     let batch = batch?;
-                    transform_record_batch(&batch, &self.field_paths)
+                    transform_record_batch_by_field_paths(&batch, field_paths)
                 })
                 .collect()
         } else {
@@ -436,20 +434,17 @@ impl ParquetRSReader {
                 )
                 .await?;
 
-            let reader = ParquetRecordBatchReader::try_new_with_row_groups(
+            let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
                 predicate.field_levels(),
                 &row_group,
-                self.batch_size,
+                part.meta.num_rows() as usize, // Read all rows at one time.
                 selection.clone(),
             )?;
 
-            let mut filters = vec![];
-            for batch in reader {
-                let batch = batch?;
-                let filter = predicate.evaluate(&batch)?;
-                filters.push(filter);
-            }
-            let sel = RowSelection::from_filters(&filters);
+            let batch = reader.next().transpose()?.unwrap();
+            debug_assert!(reader.next().is_none());
+            let filter = predicate.evaluate(&batch)?;
+            let sel = RowSelection::from_filters(&[filter]);
             if !sel.selects_any() {
                 // All rows in current row group are filtered out.
                 return Ok(None);
@@ -610,6 +605,18 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
 ///
 /// `field_paths` is used to traverse nested columns in `batch`.
 pub fn transform_record_batch(
+    batch: &RecordBatch,
+    field_paths: &Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
+) -> Result<DataBlock> {
+    if let Some(field_paths) = field_paths {
+        transform_record_batch_by_field_paths(batch, field_paths)
+    } else {
+        let (block, _) = DataBlock::from_record_batch(batch)?;
+        Ok(block)
+    }
+}
+
+pub fn transform_record_batch_by_field_paths(
     batch: &RecordBatch,
     field_paths: &[(FieldRef, Vec<FieldIndex>)],
 ) -> Result<DataBlock> {

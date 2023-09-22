@@ -16,6 +16,7 @@
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(let_chains)]
+#![feature(core_intrinsics)]
 
 mod parquet2;
 mod parquet_part;

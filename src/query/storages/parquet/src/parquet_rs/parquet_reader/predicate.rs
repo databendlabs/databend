@@ -15,6 +15,8 @@
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_schema::FieldRef;
+use common_arrow::arrow::array::Arrow2Arrow;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
@@ -38,9 +40,7 @@ pub struct ParquetPredicate {
 
     /// Predicate filter expression.
     filter: Expr,
-    field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
-
-    inner_projected: bool,
+    field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
 }
 
 impl ParquetPredicate {
@@ -49,8 +49,7 @@ impl ParquetPredicate {
         projection: ProjectionMask,
         field_levels: FieldLevels,
         filter: Expr,
-        field_paths: Vec<(FieldRef, Vec<FieldIndex>)>,
-        inner_projected: bool,
+        field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
     ) -> Self {
         Self {
             func_ctx,
@@ -58,7 +57,6 @@ impl ParquetPredicate {
             field_levels,
             filter,
             field_paths,
-            inner_projected,
         }
     }
 
@@ -70,18 +68,28 @@ impl ParquetPredicate {
         &self.field_levels
     }
 
-    pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
-        let block = if self.inner_projected {
-            transform_record_batch(batch, &self.field_paths)?
-        } else {
-            let (block, _) = DataBlock::from_record_batch(batch)?;
-            block
-        };
+    pub fn evaluate_block(&self, block: &DataBlock) -> Result<Bitmap> {
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let res = evaluator
             .run(&self.filter)?
-            .convert_to_full_column(&DataType::Boolean, batch.num_rows())
-            .into_arrow_rs()?;
+            .convert_to_full_column(&DataType::Boolean, block.num_rows())
+            .as_boolean()
+            .cloned()
+            .unwrap();
+        Ok(res)
+    }
+
+    pub fn evaluate(&self, batch: &RecordBatch) -> Result<BooleanArray> {
+        let block = transform_record_batch(batch, &self.field_paths)?;
+        let res = Box::new(
+            common_arrow::arrow::array::BooleanArray::try_new(
+                common_arrow::arrow::datatypes::DataType::Boolean,
+                self.evaluate_block(&block)?,
+                None,
+            )
+            .unwrap(),
+        );
+
         Ok(BooleanArray::from(res.to_data()))
     }
 }
