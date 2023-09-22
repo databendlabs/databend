@@ -292,13 +292,13 @@ statement ok
 create stage s4 FILE_FORMAT = (TYPE = PARQUET);
 
 statement ok
-copy into @s3 from (select a,b,c from test_stage order by a,b,c);
+copy into @s5 from (select a,b,c from test_stage order by a,b,c);
 
 statement ok
 copy into @s4 from (select a,b,c from test_stage order by a,b,c);
 
 query TTT
-select $1,$2,$3 from @s3 order by $1,$2,$3;
+select $1,$2,$3 from @s5 order by $1,$2,$3;
 ----
 1 a1 b1
 2 a2 b2
@@ -313,7 +313,7 @@ select $1,$2,$3 from @s4 order by $1,$2,$3;
 
 ## test CSV
 statement ok
-merge into target_table using (select $1,$2,$3 from @s3) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+merge into target_table using (select $1,$2,$3 from @s5) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
 
 query TTT
 select * from target_table order by a,b,c;
