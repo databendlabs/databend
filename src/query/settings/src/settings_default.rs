@@ -41,6 +41,7 @@ impl DefaultSettings {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
+            let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
 
             let default_settings = HashMap::from([
@@ -426,7 +427,13 @@ impl DefaultSettings {
                         desc: "Enables recording query profile",
                         possible_values: None,
                         display_in_show_settings: true,
-                    }),
+                }),
+                ("recluster_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(recluster_block_size),
+                    desc: "Sets the maximum byte size of blocks for recluster",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
@@ -486,6 +493,14 @@ impl DefaultSettings {
                 max_server_memory_usage => max_server_memory_usage,
             },
         })
+    }
+
+    fn recluster_block_size() -> Result<u64> {
+        let max_memory_usage = Self::max_memory_usage()?;
+        // The sort merge consumes more than twice as much memory,
+        // so the block size is set relatively conservatively here.
+        let recluster_block_size = max_memory_usage * 35 / 100;
+        Ok(recluster_block_size)
     }
 
     pub fn has_setting(key: &str) -> Result<bool> {
