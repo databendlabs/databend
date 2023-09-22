@@ -326,8 +326,8 @@ select * from target_table order by a,b,c;
 ----
 3 a3 b3
 
-## null test, for join, if join_expr result is
-## null, it will be treated as not macthed.
+## NULL test, for join, if join_expr result is
+## NULL, it will be treated as not macthed.
 statement ok
 truncate table t1;
 
@@ -345,22 +345,22 @@ select count(*) from t2;
 0
 
 statement ok
-insert into t1 values(null,'b_1','c_1');
+insert into t1 values(NULL,'b_1','c_1');
 
 query TTT
 select * from t1 order by a,b,c;
 ----
-null b_1 c_1
+NULL b_1 c_1
 
 statement ok
-insert into t2 values(1,'b_4','c_4'),(2,'b_2','c_2'),(null,'b_3','c_3');
+insert into t2 values(1,'b_4','c_4'),(2,'b_2','c_2'),(NULL,'b_3','c_3');
 
 query TTT
 select * from t2 order by a,b,c;
 ----
 1 b_4 c_4
 2 b_2 c_2
-null b_3 c_3
+NULL b_3 c_3
 
 statement ok
 merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete when not matched then insert *;
@@ -370,8 +370,8 @@ select * from t1 order by a,b,c;
 ----
 1 b_4 c_4
 2 b_2 c_2
-null b_1 c_1
-null b_3 c_3
+NULL b_1 c_1
+NULL b_3 c_3
 
 statement ok
 merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete;
@@ -379,8 +379,8 @@ merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete;
 query TTT
 select * from t1 order by a,b,c;
 ----
-null b_1 c_1
-null b_3 c_3
+NULL b_1 c_1
+NULL b_3 c_3
 
 statement ok
 set enable_experimental_merge_into = 0;
