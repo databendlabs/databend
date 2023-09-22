@@ -768,7 +768,22 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
                 return_type: DataType::Number(T::data_type()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_ctx, d| {
+                    let res_fn = move || match d[0].as_decimal().unwrap() {
+                        DecimalDomain::Decimal128(d, size) => Some(SimpleDomain::<T> {
+                            min: d.min.to_int(size.scale)?,
+                            max: d.max.to_int(size.scale)?,
+                        }),
+                        DecimalDomain::Decimal256(d, size) => Some(SimpleDomain::<T> {
+                            min: d.min.to_int(size.scale)?,
+                            max: d.max.to_int(size.scale)?,
+                        }),
+                    };
+
+                    res_fn()
+                        .map(|d| FunctionDomain::Domain(Domain::Number(T::upcast_domain(d))))
+                        .unwrap_or(FunctionDomain::MayThrow)
+                }),
                 eval: Box::new(move |args, tx| decimal_to_int::<T>(&args[0], arg_type.clone(), tx)),
             },
         };

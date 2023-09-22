@@ -101,9 +101,8 @@ impl ReclusterMutator {
         }
 
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let max_memory_usage = self.ctx.get_settings().get_max_memory_usage()? as usize;
-        let memory_threshold =
-            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 45 / 100;
+        let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
+        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 40 / 100);
 
         let mut remained_blocks = Vec::new();
         let mut selected = false;

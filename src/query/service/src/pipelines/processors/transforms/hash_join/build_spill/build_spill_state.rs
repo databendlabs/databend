@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -22,6 +23,7 @@ use common_hashtable::hash2bucket;
 use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
+use log::info;
 
 use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
@@ -32,6 +34,7 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
 /// Define some states for hash join build spilling
+/// Each processor owns its `BuildSpillState`
 pub struct BuildSpillState {
     /// Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
@@ -116,12 +119,12 @@ impl BuildSpillState {
 impl BuildSpillState {
     #[async_backtrace::framed]
     // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
-    pub(crate) async fn spill(&mut self) -> Result<()> {
+    pub(crate) async fn spill(&mut self, p_id: usize) -> Result<()> {
         let spill_partitions = {
-            let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+            let mut spill_tasks = self.spill_coordinator.spill_tasks.lock();
             spill_tasks.pop_back().unwrap()
         };
-        self.spiller.spill(&spill_partitions).await
+        self.spiller.spill(&spill_partitions, p_id).await
     }
 
     // Check if need to spill.
@@ -141,42 +144,34 @@ impl BuildSpillState {
 
         let mut total_bytes = 0;
 
-        {
-            let _lock = self
-                .build_state
-                .hash_join_state
-                .row_space
-                .write_lock
-                .write();
-            for block in self
-                .build_state
-                .hash_join_state
-                .row_space
-                .buffer
-                .read()
-                .iter()
-            {
-                total_bytes += block.memory_size();
-            }
+        let buffer = self.build_state.hash_join_state.row_space.buffer.read();
+        for block in buffer.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
-            for block in chunks.iter() {
-                total_bytes += block.memory_size();
-            }
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        for block in chunks.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            if total_bytes > spill_threshold {
-                return Ok(true);
-            }
+        info!(
+            "check if need to spill: total_bytes: {}, spill_threshold: {}",
+            total_bytes, spill_threshold
+        );
+
+        if total_bytes > spill_threshold {
+            return Ok(true);
         }
         Ok(false)
     }
 
     // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
-    pub(crate) fn split_spill_tasks(&self) -> Result<()> {
-        let active_processors_num = self.spill_coordinator.total_builder_count
-            - *self.spill_coordinator.non_spill_processors.read();
-        let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+    pub(crate) fn split_spill_tasks(
+        &self,
+        active_processors_num: usize,
+        spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
+    ) -> Result<()> {
         let blocks = self.collect_rows()?;
         let partition_blocks = self.partition_input_blocks(&blocks)?;
         let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());

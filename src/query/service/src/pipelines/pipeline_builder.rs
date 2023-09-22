@@ -21,6 +21,7 @@ use std::time::Instant;
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_base::base::tokio::sync::Barrier;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::Runtime;
 use common_catalog::plan::Projection;
@@ -1001,14 +1002,20 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
+        let output_len = build_res.main_pipeline.output_len();
+        let spill_coordinator = BuildSpillCoordinator::create(output_len);
+        let barrier = Barrier::new(output_len);
+        let restore_barrier = Barrier::new(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
-            build_res.main_pipeline.output_len(),
+            output_len,
+            barrier,
+            restore_barrier,
         )?;
+
         let create_sink_processor = |input| {
             let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
                 Some(Box::new(BuildSpillState::create(
@@ -1920,7 +1927,8 @@ impl PipelineBuilder {
 
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
-
+        let barrier = Barrier::new(self.main_pipeline.output_len());
+        let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             state,
@@ -1929,6 +1937,8 @@ impl PipelineBuilder {
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
+            barrier,
+            restore_barrier,
         )?);
 
         self.main_pipeline.add_transform(|input, output| {
