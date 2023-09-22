@@ -77,8 +77,8 @@ impl Binder {
             database,
             table_ident,
             source,
-            alias_source,
-            alias_target,
+            source_alias,
+            target_alias,
             join_expr,
             merge_options,
             ..
@@ -114,14 +114,14 @@ impl Binder {
             catalog: catalog.clone(),
             database: database.clone(),
             table: table_ident.clone(),
-            alias: alias_target.clone(),
+            alias: target_alias.clone(),
             travel_point: None,
             pivot: None,
             unpivot: None,
         };
 
         // get_source_table_reference
-        let source_data = source.transform_table_reference(alias_source.clone());
+        let source_data = source.transform_table_reference(source_alias.clone());
 
         // bind source data
         let (source_expr, mut left_context) =

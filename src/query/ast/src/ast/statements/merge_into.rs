@@ -91,9 +91,9 @@ pub struct MergeIntoStmt {
     pub database: Option<Identifier>,
     pub table_ident: Identifier,
     pub source: MergeSource,
-    pub alias_source: Option<TableAlias>,
-    // alias_target is belong to target
-    pub alias_target: Option<TableAlias>,
+    pub source_alias: Option<TableAlias>,
+    // target_alias is belong to target
+    pub target_alias: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
