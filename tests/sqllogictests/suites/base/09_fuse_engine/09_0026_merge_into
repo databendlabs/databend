@@ -280,6 +280,12 @@ select * from test_stage order by a,b,c;
 3 a3 b3
 
 statement ok
+drop stage if exists s3;
+
+statement ok
+drop stage if exists s4;
+
+statement ok
 create stage s3 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
