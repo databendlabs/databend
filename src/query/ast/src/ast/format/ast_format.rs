@@ -2179,10 +2179,10 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast str) {
+    fn visit_list_stage(&mut self, location: &'ast str, pattern: &'ast Option<String>) {
         let location_format_ctx = AstFormatContext::new(format!("Location {}", location));
         let location_child = FormatTreeNode::new(location_format_ctx);
-        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {}", pattern));
+        let pattern_format_ctx = AstFormatContext::new(format!("Pattern {:?}", pattern));
         let pattern_child = FormatTreeNode::new(pattern_format_ctx);
 
         let name = "ListStage".to_string();

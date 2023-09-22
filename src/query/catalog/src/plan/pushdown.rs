@@ -77,9 +77,9 @@ pub struct PushDownInfo {
     /// The difference with `projection` is the removal of the source columns
     /// which were only used to generate virtual columns.
     pub output_columns: Option<Projection>,
-    /// Optional filter expression plan
+    /// Optional filter and reverse filter expression plan
     /// Assumption: expression's data type must be `DataType::Boolean`.
-    pub filter: Option<RemoteExpr<String>>,
+    pub filters: Option<Filters>,
     pub is_deterministic: bool,
     /// Optional prewhere information
     /// used for prewhere optimization
@@ -94,6 +94,12 @@ pub struct PushDownInfo {
     pub lazy_materialization: bool,
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Filters {
+    pub filter: RemoteExpr<String>,
+    pub inverted_filter: RemoteExpr<String>,
 }
 
 /// TopK is a wrapper for topk push down items.

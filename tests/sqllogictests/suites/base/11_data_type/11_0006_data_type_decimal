@@ -943,4 +943,15 @@ select sum(-b) as s from t group by a order by s;
 0.01683589
 
 statement ok
+truncate table t;
+
+statement ok
+insert into t values(1, 355327908309);
+
+query TTT
+select to_uint64(b), b::uint64, b  from t;
+----
+355327908309 355327908309 355327908309.00000000
+
+statement ok
 drop table t

@@ -63,6 +63,12 @@ impl FuseTable {
             }
         }
         let root_snapshot_info = root_snapshot_info_op.unwrap();
+        if root_snapshot_info.snapshot_lite.timestamp.is_none() {
+            return Err(ErrorCode::StorageOther(format!(
+                "gc: snapshot timestamp is none, snapshot location: {}",
+                root_snapshot_info.snapshot_location
+            )));
+        }
 
         let snapshots_io = SnapshotsIO::create(ctx.clone(), self.operator.clone());
         let location_gen = self.meta_location_generator();
@@ -116,7 +122,7 @@ impl FuseTable {
             let mut segments_to_be_purged = HashSet::new();
             let mut ts_to_be_purged = HashSet::new();
             for s in snapshots.into_iter() {
-                if s.timestamp >= base_timestamp {
+                if s.timestamp.is_some() && s.timestamp >= base_timestamp {
                     remain_snapshots.push(s);
                     continue;
                 }

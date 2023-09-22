@@ -12,15 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use common_metrics::register_counter;
+use common_metrics::Counter;
+use lazy_static::lazy_static;
 
-use crate::recorder::try_get_record;
+lazy_static! {
+    static ref OMIT_FILTER_ROWGROUPS: Counter = register_counter("omit_filter_rowgroups");
+    static ref OMIT_FILTER_ROWS: Counter = register_counter("omit_filter_rows");
+}
 
-/// Reset gauge metrics to 0.
-pub fn reset_metrics() -> Result<()> {
-    if let Some(recorder) = try_get_record() {
-        recorder.clear();
-    }
+pub fn metrics_inc_omit_filter_rowgroups(c: u64) {
+    OMIT_FILTER_ROWGROUPS.inc_by(c);
+}
 
-    Ok(())
+pub fn metrics_inc_omit_filter_rows(c: u64) {
+    OMIT_FILTER_ROWS.inc_by(c);
 }

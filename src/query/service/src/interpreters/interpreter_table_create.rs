@@ -243,6 +243,11 @@ impl CreateTableInterpreter {
             }
             is_valid_column(field.name())?;
         }
+        let field_comments = if self.plan.field_comments.is_empty() {
+            vec!["".to_string(); fields.len()]
+        } else {
+            self.plan.field_comments.clone()
+        };
         let schema = TableSchemaRefExt::create(fields);
 
         let mut table_meta = TableMeta {
@@ -252,7 +257,7 @@ impl CreateTableInterpreter {
             part_prefix: self.plan.part_prefix.clone(),
             options: self.plan.options.clone(),
             default_cluster_key: None,
-            field_comments: self.plan.field_comments.clone(),
+            field_comments,
             drop_on: None,
             statistics: if let Some(stat) = statistics {
                 stat
@@ -325,6 +330,8 @@ impl CreateTableInterpreter {
             number_of_segments: Some(snapshot.segments.len() as u64),
             number_of_blocks: Some(snapshot.summary.block_count),
         };
+
+        let field_comments = vec!["".to_string(); snapshot.schema.num_fields()];
         let table_meta = TableMeta {
             schema: Arc::new(snapshot.schema.clone()),
             engine: self.plan.engine.to_string(),
@@ -332,7 +339,7 @@ impl CreateTableInterpreter {
             part_prefix: self.plan.part_prefix.clone(),
             options,
             default_cluster_key: None,
-            field_comments: self.plan.field_comments.clone(),
+            field_comments,
             drop_on: None,
             statistics: stat,
             ..Default::default()

@@ -82,8 +82,7 @@ impl Binder {
             aggregate_functions: vec![],
             from_distinct: true,
             limit: None,
-            grouping_id_index: 0,
-            grouping_sets: vec![],
+            grouping_sets: None,
         };
 
         Ok(SExpr::create_unary(

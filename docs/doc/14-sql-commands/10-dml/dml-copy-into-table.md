@@ -184,9 +184,13 @@ externalLocation ::=
 
 Specify a list of one or more files names (separated by commas) to be loaded.
 
-### PATTERN = 'regex_pattern'
+### PATTERN = '<regex_pattern>'
 
 A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
+
+:::note
+Suppose there is a file `@<stage_name>/<path>/<sub_path>`, to include it, `<sub_path>` needs to match `^<regex_pattern>$`.
+:::
 
 ### FILE_FORMAT
 

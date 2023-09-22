@@ -57,7 +57,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
     )
     .unwrap();
 
-    let rgs = pruner.prune_row_groups(&parquet_meta, None).unwrap();
+    let (rgs, _) = pruner.prune_row_groups(&parquet_meta, None).unwrap();
 
     assert_eq!(
         expected_rgs, rgs,

@@ -29,7 +29,7 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
 pub struct TransformExpandGroupingSets {
-    group_bys: Vec<(usize, DataType)>,
+    group_bys: Vec<usize>,
     grouping_ids: Vec<usize>,
 }
 
@@ -37,7 +37,7 @@ impl TransformExpandGroupingSets {
     pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        group_bys: Vec<(usize, DataType)>,
+        group_bys: Vec<usize>,
         grouping_ids: Vec<usize>,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Transformer::create(
@@ -58,10 +58,15 @@ impl Transform for TransformExpandGroupingSets {
         let num_rows = data.num_rows();
         let num_group_bys = self.group_bys.len();
         let mut output_blocks = Vec::with_capacity(self.grouping_ids.len());
+        let dup_group_by_cols = self
+            .group_bys
+            .iter()
+            .map(|i| data.columns()[*i].clone())
+            .collect::<Vec<_>>();
 
         for &id in &self.grouping_ids {
             // Repeat data for each grouping set.
-            let grouping_column = BlockEntry::new(
+            let grouping_id_column = BlockEntry::new(
                 DataType::Number(NumberDataType::UInt32),
                 Value::Scalar(Scalar::Number(NumberScalar::UInt32(id as u32))),
             );
@@ -69,13 +74,14 @@ impl Transform for TransformExpandGroupingSets {
                 .columns()
                 .iter()
                 .cloned()
-                .chain(vec![grouping_column])
+                .chain(dup_group_by_cols.iter().cloned())
+                .chain(vec![grouping_id_column])
                 .collect::<Vec<_>>();
             let bits = !id;
             for i in 0..num_group_bys {
                 let entry = unsafe {
-                    let offset = self.group_bys.get_unchecked(i).0;
-                    columns.get_unchecked_mut(offset)
+                    let offset = self.group_bys.get_unchecked(i);
+                    columns.get_unchecked_mut(*offset)
                 };
                 if bits & (1 << i) == 0 {
                     // This column should be set to NULLs.

@@ -21,6 +21,7 @@ use common_ast::ast::Window;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
+use common_ast::ast::WindowRef;
 use common_ast::ast::WindowSpec;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType::Decimal128;
@@ -283,7 +284,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (name, vec![], args_type)
             }
             DataType::Decimal(_) => {
-                let decimal = vec!["to_float64", "to_folat32", "to_decimal", "try_to_decimal"];
+                let decimal = vec!["to_float64", "to_float32", "to_decimal", "try_to_decimal"];
                 let name = decimal[self.rng.gen_range(0..=3)].to_string();
                 if name == "to_decimal" || name == "try_to_decimal" {
                     let args_type = vec![self.gen_data_type(); 1];
@@ -615,6 +616,27 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_window(&mut self) -> Option<Window> {
+        if self.rng.gen_bool(0.2) && !self.windows_name.is_empty() {
+            let len = self.windows_name.len();
+            let name = if len == 1 {
+                self.windows_name[0].to_string()
+            } else {
+                self.windows_name[self.rng.gen_range(0..=len - 1)].to_string()
+            };
+            Some(Window::WindowReference(WindowRef {
+                window_name: Identifier {
+                    name,
+                    quote: None,
+                    span: None,
+                },
+            }))
+        } else {
+            let window_spec = self.gen_window_spec();
+            Some(Window::WindowSpec(window_spec))
+        }
+    }
+
+    pub(crate) fn gen_window_spec(&mut self) -> WindowSpec {
         let ty = self.gen_data_type();
         let expr1 = self.gen_scalar_value(&ty);
         let expr2 = self.gen_scalar_value(&ty);
@@ -633,7 +655,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 nulls_first: Some(true),
             },
         ];
-        Some(Window::WindowSpec(WindowSpec {
+        WindowSpec {
             existing_window_name: None,
             partition_by: vec![expr3, expr4],
             order_by,
@@ -646,7 +668,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     end_bound: WindowFrameBound::CurrentRow,
                 })
             },
-        }))
+        }
     }
 
     fn gen_func(
