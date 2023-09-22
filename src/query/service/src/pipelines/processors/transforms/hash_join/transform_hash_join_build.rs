@@ -292,7 +292,6 @@ impl Processor for TransformHashJoinBuild {
             HashJoinBuildStep::WaitSpill => {
                 let spill_state = self.spill_state.as_ref().unwrap();
                 spill_state.spill_coordinator.wait_spill_notify().await?;
-                dbg!("ready to spill");
                 self.step = HashJoinBuildStep::FirstSpill
             }
             HashJoinBuildStep::FirstSpill => {
