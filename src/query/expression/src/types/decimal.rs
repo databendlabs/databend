@@ -22,6 +22,7 @@ use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 use itertools::Itertools;
+use num_traits::NumCast;
 use num_traits::ToPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
@@ -285,6 +286,8 @@ pub trait Decimal:
     fn to_float32(self, scale: u8) -> f32;
     fn to_float64(self, scale: u8) -> f64;
 
+    fn to_int<U: NumCast>(self, scale: u8) -> Option<U>;
+
     fn try_downcast_column(column: &Column) -> Option<(Buffer<Self>, DecimalSize)>;
     fn try_downcast_builder<'a>(builder: &'a mut ColumnBuilder) -> Option<&'a mut Vec<Self>>;
 
@@ -412,6 +415,11 @@ impl Decimal for i128 {
     fn to_float64(self, scale: u8) -> f64 {
         let div = 10_f64.powi(scale as i32);
         self as f64 / div
+    }
+
+    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
+        let div = 10i128.checked_pow(scale as u32)?;
+        num_traits::cast(self / div)
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
@@ -561,6 +569,12 @@ impl Decimal for i256 {
     fn to_float64(self, scale: u8) -> f64 {
         let div = 10_f64.powi(scale as i32);
         self.as_f64() / div
+    }
+
+    fn to_int<U: NumCast>(self, scale: u8) -> Option<U> {
+        let div = i256::from(10).checked_pow(scale as u32)?;
+        let (h, l) = (self / div).into_words();
+        if h > 0 { None } else { l.to_int(scale) }
     }
 
     fn to_scalar(self, size: DecimalSize) -> DecimalScalar {
