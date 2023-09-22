@@ -310,6 +310,12 @@ fn parse_hdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
             })?
             .to_string(),
         root: l.path.clone(),
+        kerberos_ticket_cache_path: l
+            .connection
+            .get("kerberos_ticket_cache_path")
+            .cloned()
+            .unwrap_or_default(),
+        user: l.connection.get("user").cloned().unwrap_or_default(),
     });
 
     l.connection.check()?;
