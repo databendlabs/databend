@@ -14,13 +14,14 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -73,16 +74,15 @@ pub struct HashJoinBuildState {
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
     /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
     pub(crate) chunk_size_limit: Arc<usize>,
+    /// Wait util all processors finish row space build, then go to next phase.
+    pub(crate) barrier: Barrier,
+    /// Wait all processors finish read spilled data, then go to new round build
+    pub(crate) restore_barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
     /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
     pub(crate) row_space_builders: Mutex<usize>,
-    /// After `row_space_builders` is 0, it will be set as true.
-    /// It works with notify to make sure processors go to next phase's work.
-    pub(crate) row_space_build_done: Mutex<bool>,
-    /// Notify processors `RowSpace` build is done. They can go to next phase.
-    pub(crate) row_space_build_done_notify: Arc<Notify>,
     /// Hash method for hash join keys.
     pub(crate) method: Arc<HashMethodKind>,
     /// The size of each entry in HashTable.
@@ -95,6 +95,7 @@ pub struct HashJoinBuildState {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) send_val: AtomicU8,
 }
 
 impl HashJoinBuildState {
@@ -104,6 +105,8 @@ impl HashJoinBuildState {
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
         processor_count: usize,
+        barrier: Barrier,
+        restore_barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -115,15 +118,16 @@ impl HashJoinBuildState {
             hash_join_state,
             _processor_count: processor_count,
             chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            barrier,
+            restore_barrier,
             row_space_builders: Default::default(),
-            row_space_build_done: Default::default(),
-            row_space_build_done_notify: Arc::new(Default::default()),
             method: Arc::new(method),
             entry_size: Arc::new(Default::default()),
             raw_entry_spaces: Default::default(),
             build_projections: Arc::new(build_projections.clone()),
             build_worker_num: Arc::new(Default::default()),
             build_hash_table_tasks: Arc::new(Default::default()),
+            send_val: AtomicU8::new(1),
         }))
     }
 
@@ -196,12 +200,13 @@ impl HashJoinBuildState {
     }
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
-    pub fn build_attach(&self) {
+    pub fn build_attach(&self) -> usize {
         let mut count = self.row_space_builders.lock();
         *count += 1;
         let mut count = self.hash_join_state.hash_table_builders.lock();
         *count += 1;
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
+        *count
     }
 
     /// Detach to state: `row_space_builders`,
@@ -210,13 +215,6 @@ impl HashJoinBuildState {
         let mut count = self.row_space_builders.lock();
         *count -= 1;
         if *count == 0 {
-            // Need to reset `final_probe_done` before processor into `WaitProbe`
-            {
-                let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
-                if *final_probe_done {
-                    *final_probe_done = false;
-                }
-            }
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {
@@ -230,9 +228,6 @@ impl HashJoinBuildState {
             let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
                 return Ok(());
             }
 
@@ -252,13 +247,11 @@ impl HashJoinBuildState {
                     let mut fast_return = self.hash_join_state.fast_return.write();
                     *fast_return = true;
                 }
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
 
-                let mut build_done = self.hash_join_state.build_done.lock();
-                *build_done = true;
-                self.hash_join_state.build_done_notify.notify_waiters();
+                self.hash_join_state
+                    .build_done_watcher
+                    .send(self.send_val.load(Ordering::Relaxed))
+                    .unwrap();
                 return Ok(());
             }
 
@@ -332,10 +325,6 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
-
-            let mut row_space_build_done = self.row_space_build_done.lock();
-            *row_space_build_done = true;
-            self.row_space_build_done_notify.notify_waiters();
         }
         Ok(())
     }
@@ -635,26 +624,10 @@ impl HashJoinBuildState {
                 *build_columns_data_type = columns_data_type;
                 *build_columns = columns;
             }
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = true;
-            self.hash_join_state.build_done_notify.notify_waiters();
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn wait_row_space_build_finish(&self) -> Result<()> {
-        let notified = {
-            let built_guard = self.row_space_build_done.lock();
-
-            match *built_guard {
-                true => None,
-                false => Some(self.row_space_build_done_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
+            self.hash_join_state
+                .build_done_watcher
+                .send(self.send_val.load(Ordering::Relaxed))
+                .unwrap();
         }
         Ok(())
     }
