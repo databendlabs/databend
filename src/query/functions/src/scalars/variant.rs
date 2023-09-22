@@ -1102,8 +1102,8 @@ fn json_object_impl_fn(
     let cap = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
-        ctx.set_error(0, "The number of keys and values must be equal");
-        for _ in 0..cap {
+        for i in 0..cap {
+            ctx.set_error(i, "The number of keys and values must be equal");
             builder.commit_row();
         }
     } else {
@@ -1112,6 +1112,7 @@ fn json_object_impl_fn(
         for idx in 0..cap {
             set.clear();
             kvs.clear();
+            let mut has_err = false;
             for i in (0..columns.len()).step_by(2) {
                 let k = unsafe { columns[i].index_unchecked(idx) };
                 if k == ScalarRef::Null {
@@ -1124,11 +1125,13 @@ fn json_object_impl_fn(
                 let key = match k {
                     ScalarRef::String(v) => unsafe { String::from_utf8_unchecked(v.to_vec()) },
                     _ => {
+                        has_err = true;
                         ctx.set_error(builder.len(), "Key must be a string value");
                         break;
                     }
                 };
                 if set.contains(&key) {
+                    has_err = true;
                     ctx.set_error(builder.len(), "Keys have to be unique");
                     break;
                 }
@@ -1137,9 +1140,12 @@ fn json_object_impl_fn(
                 cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
                 kvs.push((key, val));
             }
-            if let Err(err) = build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut builder.data)
-            {
-                ctx.set_error(builder.len(), err.to_string());
+            if !has_err {
+                if let Err(err) =
+                    build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut builder.data)
+                {
+                    ctx.set_error(builder.len(), err.to_string());
+                }
             }
             builder.commit_row();
         }
