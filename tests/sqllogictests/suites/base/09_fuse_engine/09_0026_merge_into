@@ -298,14 +298,14 @@ statement ok
 copy into @s4 from (select a,b,c from test_stage order by a,b,c);
 
 query TTT
-select $1,$2,$3 from @s3;
+select $1,$2,$3 from @s3 order by $1,$2,$3;
 ----
 1 a1 b1
 2 a2 b2
 3 a3 b3
 
 query TTT
-select $1,$2,$3 from @s4;
+select $1,$2,$3 from @s4 order by $1,$2,$3;
 ----
 1 a1 b1
 2 a2 b2
