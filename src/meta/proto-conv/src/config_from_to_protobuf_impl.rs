@@ -346,6 +346,7 @@ impl FromToProto for StorageHdfsConfig {
         Ok(StorageHdfsConfig {
             root: p.root,
             name_node: p.name_node,
+            kerberos_ticket_cache_path: p.kerberos_ticket_cache_path,
         })
     }
 
@@ -355,6 +356,7 @@ impl FromToProto for StorageHdfsConfig {
             min_reader_ver: MIN_READER_VER,
             root: self.root.clone(),
             name_node: self.name_node.clone(),
+            kerberos_ticket_cache_path: self.kerberos_ticket_cache_path.clone(),
         })
     }
 }

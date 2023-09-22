@@ -172,6 +172,9 @@ fn init_hdfs_operator(cfg: &StorageHdfsConfig) -> Result<impl Builder> {
     // Root
     builder.root(&cfg.root);
 
+    // Root
+    builder.kerberos_ticket_cache_path(&cfg.kerberos_ticket_cache_path);
+
     Ok(builder)
 }
 
