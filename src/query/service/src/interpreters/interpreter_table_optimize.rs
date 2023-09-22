@@ -151,7 +151,9 @@ impl OptimizeTableInterpreter {
             .compact_blocks(self.ctx.clone(), self.plan.limit)
             .await?;
 
-        let is_distributed = !self.ctx.get_cluster().is_empty();
+        let is_distributed = (!self.ctx.get_cluster().is_empty())
+            && self.ctx.get_settings().get_enable_distributed_compact()?;
+
         let catalog_info = catalog.info();
         let mut compact_pipeline = if let Some((parts, snapshot)) = res {
             let physical_plan = Self::build_physical_plan(
