@@ -857,6 +857,8 @@ pub struct HdfsConfig {
     pub hdfs_root: String,
     #[clap(long = "storage-hdfs-kerberos-ticket-cache-path", default_value_t)]
     pub kerberos_ticket_cache_path: String,
+    #[clap(long = "storage-hdfs-user", default_value_t)]
+    pub user: String,
 }
 
 impl Default for HdfsConfig {
@@ -871,6 +873,7 @@ impl From<InnerStorageHdfsConfig> for HdfsConfig {
             name_node: inner.name_node,
             hdfs_root: inner.root,
             kerberos_ticket_cache_path: inner.kerberos_ticket_cache_path,
+            user: inner.user,
         }
     }
 }
@@ -883,6 +886,7 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
             name_node: self.name_node,
             root: self.hdfs_root,
             kerberos_ticket_cache_path: self.kerberos_ticket_cache_path,
+            user: self.user,
         })
     }
 }

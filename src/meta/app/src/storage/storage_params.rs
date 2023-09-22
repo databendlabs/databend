@@ -286,6 +286,7 @@ pub struct StorageHdfsConfig {
     pub name_node: String,
     pub root: String,
     pub kerberos_ticket_cache_path: String,
+    pub user: String,
 }
 
 pub static STORAGE_S3_DEFAULT_ENDPOINT: &str = "https://s3.amazonaws.com";

@@ -117,4 +117,5 @@ message HdfsStorageConfig {
   string root = 1;
   string name_node = 2;
   string kerberos_ticket_cache_path = 3;
+  string user = 4;
 }

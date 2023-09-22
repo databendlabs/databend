@@ -347,6 +347,7 @@ impl FromToProto for StorageHdfsConfig {
             root: p.root,
             name_node: p.name_node,
             kerberos_ticket_cache_path: p.kerberos_ticket_cache_path,
+            user: p.user,
         })
     }
 
