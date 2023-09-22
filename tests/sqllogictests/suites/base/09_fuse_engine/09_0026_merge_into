@@ -289,6 +289,9 @@ statement ok
 create stage s5_merge_into FILE_FORMAT = (TYPE = CSV);
 
 statement ok
+remove @s5_merge_into;
+
+statement ok
 copy into @s5_merge_into from (select a,b,c from test_stage order by a,b,c);
 
 query TTT
@@ -318,6 +321,9 @@ select count(*) from target_table;
 
 statement ok
 create stage s4_merge_into FILE_FORMAT = (TYPE = PARQUET);
+
+statement ok
+remove @s4_merge_into;
 
 statement ok
 copy into @s4_merge_into from (select a,b,c from test_stage order by a,b,c);
