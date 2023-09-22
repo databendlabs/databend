@@ -58,7 +58,7 @@ impl Interpreter for UnSettingInterpreter {
                         .try_drop_global_setting(setting)
                         .await?;
 
-                    // TODO(liyz): do not need load default value from the resetted settings
+                    // TODO(liyz): do not need load default value when UNSET settings
                     let default_val = {
                         if setting == "max_memory_usage" {
                             let conf = GlobalConfig::instance();
