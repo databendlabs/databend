@@ -79,7 +79,8 @@ fn make_timestamp_batch(offset: Duration) -> RecordBatch {
                 offset_nanos
                     + t.parse::<chrono::NaiveDateTime>()
                         .unwrap()
-                        .timestamp_nanos()
+                        .timestamp_nanos_opt()
+                        .unwrap()
             })
         })
         .collect::<Vec<_>>();

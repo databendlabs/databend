@@ -389,7 +389,7 @@ pub(crate) fn test_stage_file() -> mt::principal::StageFile {
         path: "/path/to/stage".to_string(),
         size: 233,
         md5: None,
-        last_modified: DateTime::from_utc(dt, Utc),
+        last_modified: DateTime::from_naive_utc_and_offset(dt, Utc),
         creator: Some(user_id),
         etag: None,
     }
@@ -780,7 +780,7 @@ fn test_old_stage_file() -> anyhow::Result<()> {
             path: "/path/to/stage".to_string(),
             size: 233,
             md5: None,
-            last_modified: DateTime::from_utc(dt, Utc),
+            last_modified: DateTime::from_naive_utc_and_offset(dt, Utc),
             creator: Some(user_id),
             ..Default::default()
         };
