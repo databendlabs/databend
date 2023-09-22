@@ -129,7 +129,7 @@ impl HashJoinProbeState {
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
-    // return an (option bitmap, all_true, all_false)
+    // return an (option bitmap, all_true, all_false).
     pub(crate) fn get_other_filters(
         &self,
         merged_block: &DataBlock,
