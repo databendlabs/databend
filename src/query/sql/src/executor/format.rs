@@ -269,9 +269,9 @@ fn table_scan_to_format_tree(
         .as_ref()
         .and_then(|extras| {
             extras
-                .filter
+                .filters
                 .as_ref()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                .map(|filters| filters.filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
         })
         .unwrap_or_default();
 
@@ -507,6 +507,7 @@ fn aggregate_expand_to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     let sets = plan
         .grouping_sets
+        .sets
         .iter()
         .map(|set| {
             set.iter()

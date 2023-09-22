@@ -77,29 +77,13 @@ impl HttpClient {
         let start = Instant::now();
 
         let url = "http://127.0.0.1:8000/v1/query".to_string();
-        let mut response = self.response(sql, &url, true).await?;
-        // Set session from response to client
-        // Then client will same session for different queries.
-
-        if response.session.is_some() {
-            self.session = response.session.clone();
-        }
-
-        if let Some(error) = response.error {
-            return Err(format_error(error).into());
-        }
-
-        let rows = response.data;
-        let mut parsed_rows = parser_rows(&rows)?;
+        let mut parsed_rows = vec![];
+        let mut response =
+            self.handle_response(self.post_query(sql, &url).await?, &mut parsed_rows)?;
         while let Some(next_uri) = response.next_uri {
-            let mut url = "http://127.0.0.1:8000".to_string();
-            url.push_str(&next_uri);
-            response = self.response(sql, &url, false).await?;
-            if let Some(error) = response.error {
-                return Err(format_error(error).into());
-            }
-            let rows = response.data;
-            parsed_rows.append(&mut parser_rows(&rows)?);
+            let url = format!("http://127.0.0.1:8000{next_uri}");
+            response =
+                self.handle_response(self.poll_query_result(&url).await?, &mut parsed_rows)?;
         }
         // Todo: add types to compare
         let mut types = vec![];
@@ -120,28 +104,44 @@ impl HttpClient {
         })
     }
 
+    fn handle_response(
+        &mut self,
+        response: QueryResponse,
+        parsed_rows: &mut Vec<Vec<String>>,
+    ) -> Result<QueryResponse> {
+        if response.session.is_some() {
+            self.session = response.session.clone();
+        }
+        if let Some(error) = response.error {
+            Err(format_error(error).into())
+        } else {
+            parsed_rows.append(&mut parser_rows(&response.data)?);
+            Ok(response)
+        }
+    }
+
     // Send request and get response by json format
-    async fn response(&mut self, sql: &str, url: &str, post: bool) -> Result<QueryResponse> {
+    async fn post_query(&self, sql: &str, url: &str) -> Result<QueryResponse> {
         let mut query = HashMap::new();
         query.insert("sql", serde_json::to_value(sql)?);
         if let Some(session) = &self.session {
             query.insert("session", serde_json::to_value(session)?);
         }
-        if post {
-            return Ok(self
-                .client
-                .post(url)
-                .json(&query)
-                .basic_auth("root", Some(""))
-                .send()
-                .await?
-                .json::<QueryResponse>()
-                .await?);
-        }
+        Ok(self
+            .client
+            .post(url)
+            .json(&query)
+            .basic_auth("root", Some(""))
+            .send()
+            .await?
+            .json::<QueryResponse>()
+            .await?)
+    }
+
+    async fn poll_query_result(&self, url: &str) -> Result<QueryResponse> {
         Ok(self
             .client
             .get(url)
-            .json(&query)
             .basic_auth("root", Some(""))
             .send()
             .await?

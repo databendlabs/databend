@@ -52,7 +52,10 @@ impl Display for MergeUpdateExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchOperation {
-    Update { update_list: Vec<MergeUpdateExpr> },
+    Update {
+        update_list: Vec<MergeUpdateExpr>,
+        is_star: bool,
+    },
     Delete,
 }
 
@@ -66,6 +69,7 @@ pub struct MatchedClause {
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
+    pub is_star: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -116,9 +120,16 @@ impl Display for MergeIntoStmt {
                     write!(f, " THEN ")?;
 
                     match &match_clause.operation {
-                        MatchOperation::Update { update_list } => {
-                            write!(f, " UPDATE SET ")?;
-                            write_comma_separated_list(f, update_list)?;
+                        MatchOperation::Update {
+                            update_list,
+                            is_star,
+                        } => {
+                            if *is_star {
+                                write!(f, " UPDATE * ")?;
+                            } else {
+                                write!(f, " UPDATE SET ")?;
+                                write_comma_separated_list(f, update_list)?;
+                            }
                         }
                         MatchOperation::Delete => {
                             write!(f, " DELETE ")?;

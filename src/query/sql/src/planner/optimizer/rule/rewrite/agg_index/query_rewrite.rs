@@ -624,7 +624,7 @@ impl RewriteInfomartion<'_> {
 
     fn can_apply_index(&self) -> bool {
         if let Some((agg, _)) = self.aggregation {
-            if !agg.grouping_sets.is_empty() {
+            if agg.grouping_sets.is_some() {
                 // Grouping sets is not supported.
                 return false;
             }

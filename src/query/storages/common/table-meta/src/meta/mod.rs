@@ -50,6 +50,8 @@ pub use versions::Versioned;
 // - export meta encoding to benchmarking tests
 pub mod testing {
     pub use super::format::MetaEncoding;
+    pub use super::v0::statistics::Statistics as StatisticsV0;
+    pub use super::v1::TableSnapshot as TableSnapshotV1;
     pub use super::v2::SegmentInfo as SegmentInfoV2;
     pub use super::v2::TableSnapshot as TableSnapshotV2;
     pub use super::v3::SegmentInfo as SegmentInfoV3;

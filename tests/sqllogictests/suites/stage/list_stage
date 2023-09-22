@@ -8,12 +8,12 @@ parquet/multi_page/multi_page_3.parquet 4020 NULL
 parquet/multi_page/multi_page_4.parquet 6636 NULL
 
 query 
-select name, size, creator from list_stage(location => '@data/parquet/', pattern => 'complex[.]*')
+select name, size, creator from list_stage(location => '@data/parquet/', pattern => 'complex[.].*')
 ----
 parquet/complex.parquet 92762 NULL
 
 query 
-select name, size, creator from list_stage(location => '@data/', pattern => 'parquet/complex[.]*')
+select name, size, creator from list_stage(location => '@data/', pattern => 'parquet/complex[.].*')
 ----
 parquet/complex.parquet 92762 NULL
 

@@ -92,7 +92,7 @@ pub struct StageFilesInfo {
 impl StageFilesInfo {
     fn get_pattern(&self) -> Result<Option<Regex>> {
         match &self.pattern {
-            Some(pattern) => match Regex::new(pattern) {
+            Some(pattern) => match Regex::new(&format!("^{pattern}$")) {
                 Ok(r) => Ok(Some(r)),
                 Err(e) => Err(ErrorCode::SyntaxException(format!(
                     "Pattern format invalid, got:{}, error:{:?}",
@@ -206,6 +206,7 @@ impl StageFilesInfo {
         first_only: bool,
         max_files: usize,
     ) -> Result<Vec<StageFileInfo>> {
+        let prefix_len = if path == "/" { 0 } else { path.len() };
         let root_meta = operator.stat(path).await;
         match root_meta {
             Ok(meta) => match meta.mode() {
@@ -233,7 +234,7 @@ impl StageFilesInfo {
         let mut limit: usize = 0;
         while let Some(obj) = list.try_next().await? {
             let meta = operator.metadata(&obj, StageFileInfo::meta_query()).await?;
-            if check_file(obj.path(), meta.mode(), &pattern) {
+            if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
                 files.push(StageFileInfo::new(obj.path().to_string(), &meta));
                 if first_only {
                     return Ok(files);
@@ -263,6 +264,7 @@ fn blocking_list_files_with_pattern(
     first_only: bool,
     max_files: usize,
 ) -> Result<Vec<StageFileInfo>> {
+    let prefix_len = if path == "/" { 0 } else { path.len() };
     let operator = operator.blocking();
 
     let root_meta = operator.stat(path);
@@ -293,7 +295,7 @@ fn blocking_list_files_with_pattern(
     for obj in list {
         let obj = obj?;
         let meta = operator.metadata(&obj, StageFileInfo::meta_query())?;
-        if check_file(obj.path(), meta.mode(), &pattern) {
+        if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
             files.push(StageFileInfo::new(obj.path().to_string(), &meta));
             if first_only {
                 return Ok(files);
