@@ -124,7 +124,7 @@ where TablesTable<T>: HistoryAware
             let mut dbs = Vec::new();
             if let Some(push_downs) = &push_downs {
                 let mut db_name = Vec::new();
-                if let Some(filter) = &push_downs.filter {
+                if let Some(filter) = push_downs.filters.as_ref().map(|f| &f.filter) {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
                     find_eq_filter(&expr, &mut |col_name, scalar| {
                         if col_name == "database" {

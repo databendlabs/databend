@@ -627,7 +627,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("to_float64", |_params, args_type| {
+    let factory = |_params: &[usize], args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -638,7 +638,7 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        Some(Arc::new(Function {
+        let function = Function {
             signature: FunctionSignature {
                 name: "to_float64".to_string(),
                 args_type: vec![arg_type.clone()],
@@ -661,12 +661,32 @@ pub(crate) fn register_decimal_to_float64(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(move |args, tx| decimal_to_float64(&args[0], arg_type.clone(), tx)),
             },
-        }))
+        };
+
+        Some(function)
+    };
+
+    registry.register_function_factory("to_float64", move |params, args_type| {
+        Some(Arc::new(factory(params, args_type)?))
+    });
+    registry.register_function_factory("to_float64", move |params, args_type| {
+        let f = factory(params, args_type)?;
+        Some(Arc::new(f.passthrough_nullable()))
+    });
+    registry.register_function_factory("try_to_float64", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_float64".to_string();
+        Some(Arc::new(f.error_to_null()))
+    });
+    registry.register_function_factory("try_to_float64", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_float64".to_string();
+        Some(Arc::new(f.error_to_null().passthrough_nullable()))
     });
 }
 
 pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
-    registry.register_function_factory("to_float32", |_params, args_type| {
+    let factory = |_params: &[usize], args_type: &[DataType]| {
         if args_type.len() != 1 {
             return None;
         }
@@ -676,7 +696,7 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        Some(Arc::new(Function {
+        let function = Function {
             signature: FunctionSignature {
                 name: "to_float32".to_string(),
                 args_type: vec![arg_type.clone()],
@@ -699,7 +719,79 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
                 }),
                 eval: Box::new(move |args, tx| decimal_to_float32(&args[0], arg_type.clone(), tx)),
             },
-        }))
+        };
+
+        Some(function)
+    };
+
+    registry.register_function_factory("to_float32", move |params, args_type| {
+        Some(Arc::new(factory(params, args_type)?))
+    });
+    registry.register_function_factory("to_float32", move |params, args_type| {
+        let f = factory(params, args_type)?;
+        Some(Arc::new(f.passthrough_nullable()))
+    });
+    registry.register_function_factory("try_to_float32", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_float32".to_string();
+        Some(Arc::new(f.error_to_null()))
+    });
+    registry.register_function_factory("try_to_float32", move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = "try_to_float32".to_string();
+        Some(Arc::new(f.error_to_null().passthrough_nullable()))
+    });
+}
+
+pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry) {
+    if T::data_type().is_float() {
+        return;
+    }
+    let name = format!("to_{}", T::data_type().to_string().to_lowercase());
+    let try_name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
+
+    let factory = |_params: &[usize], args_type: &[DataType]| {
+        if args_type.len() != 1 {
+            return None;
+        }
+
+        let name = format!("to_{}", T::data_type().to_string().to_lowercase());
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
+            return None;
+        }
+
+        let function = Function {
+            signature: FunctionSignature {
+                name,
+                args_type: vec![arg_type.clone()],
+                return_type: DataType::Number(T::data_type()),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, tx| decimal_to_int::<T>(&args[0], arg_type.clone(), tx)),
+            },
+        };
+
+        Some(function)
+    };
+
+    registry.register_function_factory(&name, move |params, args_type| {
+        Some(Arc::new(factory(params, args_type)?))
+    });
+    registry.register_function_factory(&name, move |params, args_type| {
+        let f = factory(params, args_type)?;
+        Some(Arc::new(f.passthrough_nullable()))
+    });
+    registry.register_function_factory(&try_name, move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
+        Some(Arc::new(f.error_to_null()))
+    });
+    registry.register_function_factory(&try_name, move |params, args_type| {
+        let mut f = factory(params, args_type)?;
+        f.signature.name = format!("try_to_{}", T::data_type().to_string().to_lowercase());
+        Some(Arc::new(f.error_to_null().passthrough_nullable()))
     });
 }
 
@@ -1299,6 +1391,69 @@ fn decimal_to_float32(
                 .map(|x| (f32::from(*x) / div).into())
                 .collect();
             Float32Type::upcast_column(values)
+        }
+    };
+
+    if is_scalar {
+        let scalar = result.index(0).unwrap();
+        Value::Scalar(scalar.to_owned())
+    } else {
+        Value::Column(result)
+    }
+}
+
+fn decimal_to_int<T: Number>(
+    arg: &ValueRef<AnyType>,
+    from_type: DataType,
+    ctx: &mut EvalContext,
+) -> Value<AnyType> {
+    let mut is_scalar = false;
+    let column = match arg {
+        ValueRef::Column(column) => column.clone(),
+        ValueRef::Scalar(s) => {
+            is_scalar = true;
+            let builder = ColumnBuilder::repeat(s, 1, &from_type);
+            builder.build()
+        }
+    };
+
+    let from_type = from_type.as_decimal().unwrap();
+
+    let result = match from_type {
+        DecimalDataType::Decimal128(_) => {
+            let (buffer, from_size) = i128::try_downcast_column(&column).unwrap();
+
+            let mut values = Vec::with_capacity(ctx.num_rows);
+
+            for (i, x) in buffer.iter().enumerate() {
+                let x = x.to_int(from_size.scale);
+                match x {
+                    Some(x) => values.push(x),
+                    None => {
+                        ctx.set_error(i, "decimal cast to int overflow");
+                        values.push(T::default())
+                    }
+                }
+            }
+
+            NumberType::<T>::upcast_column(Buffer::from(values))
+        }
+
+        DecimalDataType::Decimal256(_) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+            let mut values = Vec::with_capacity(ctx.num_rows);
+
+            for (i, x) in buffer.iter().enumerate() {
+                let x = x.to_int(from_size.scale);
+                match x {
+                    Some(x) => values.push(x),
+                    None => {
+                        ctx.set_error(i, "decimal cast to int overflow");
+                        values.push(T::default())
+                    }
+                }
+            }
+            NumberType::<T>::upcast_column(Buffer::from(values))
         }
     };
 

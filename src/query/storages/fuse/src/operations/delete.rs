@@ -15,13 +15,13 @@
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+use common_catalog::plan::Filters;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::table::DeletionFilters;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -71,7 +71,7 @@ impl FuseTable {
     pub async fn fast_delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filters: Option<DeletionFilters>,
+        filters: Option<Filters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
     ) -> Result<Option<Arc<TableSnapshot>>> {
@@ -251,8 +251,7 @@ impl FuseTable {
     pub async fn do_mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
-        inverted_filter: Option<RemoteExpr<String>>,
+        filters: Option<Filters>,
         projection: Projection,
         prune_ctx: MutationBlockPruningContext,
         with_origin: bool,
@@ -264,7 +263,7 @@ impl FuseTable {
         } = prune_ctx;
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
-            filter: filter.clone(),
+            filters: filters.clone(),
             ..PushDownInfo::default()
         });
 
