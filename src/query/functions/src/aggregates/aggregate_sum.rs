@@ -194,7 +194,8 @@ where T: Decimal
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
         let buffer = T::try_downcast_column(column).unwrap().0;
         self.value += buffer[row];
-        self.check_over_flow()
+        Ok(())
+        // self.check_over_flow()
     }
 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
@@ -213,7 +214,8 @@ where T: Decimal
                 }
             }
         }
-        self.check_over_flow()
+        Ok(())
+        // self.check_over_flow()
     }
 
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
@@ -221,7 +223,7 @@ where T: Decimal
         for (i, place) in places.iter().enumerate() {
             let state = place.next(offset).get::<DecimalSumState<T>>();
             state.value += buffer[i];
-            state.check_over_flow()?;
+            // state.check_over_flow()?;
         }
         Ok(())
     }
@@ -229,7 +231,8 @@ where T: Decimal
     #[inline(always)]
     fn merge(&mut self, other: &mut Self) -> Result<()> {
         self.value += other.value;
-        self.check_over_flow()
+        Ok(())
+        // self.check_over_flow()
     }
 
     fn merge_result(
