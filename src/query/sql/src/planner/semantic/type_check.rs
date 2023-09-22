@@ -516,6 +516,15 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let box (scalar, data_type) = self.resolve(expr).await?;
+                if target_type == &TypeName::Variant {
+                    if let Some(result) = self
+                        .resolve_cast_to_variant(expr.span(), &data_type, &scalar, false)
+                        .await
+                    {
+                        return result;
+                    }
+                }
+
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -550,7 +559,16 @@ impl<'a> TypeChecker<'a> {
             Expr::TryCast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr).await?;
+                let box (scalar, data_type) = self.resolve(expr).await?;
+                if target_type == &TypeName::Variant {
+                    if let Some(result) = self
+                        .resolve_cast_to_variant(expr.span(), &data_type, &scalar, true)
+                        .await
+                    {
+                        return result;
+                    }
+                }
+
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: true,
@@ -2108,6 +2126,8 @@ impl<'a> TypeChecker<'a> {
             "array_sort",
             "array_aggregate",
             "array_reduce",
+            "to_variant",
+            "try_to_variant",
         ]
     }
 
@@ -2449,6 +2469,22 @@ impl<'a> TypeChecker<'a> {
                     "Array aggregate function name be must a constant string",
                 )))
             }
+            ("to_variant", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
+                self.resolve_cast_to_variant(span, &data_type, &scalar, false)
+                    .await
+            }
+            ("try_to_variant", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
+                self.resolve_cast_to_variant(span, &data_type, &scalar, true)
+                    .await
+            }
             _ => None,
         }
     }
@@ -2755,6 +2791,110 @@ impl<'a> TypeChecker<'a> {
             .map_err(|e| e.set_span(span))?;
 
         self.resolve(&udf_expr).await
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn resolve_cast_to_variant(
+        &mut self,
+        span: Span,
+        source_type: &DataType,
+        scalar: &ScalarExpr,
+        is_try: bool,
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        if !matches!(source_type.remove_nullable(), DataType::Tuple(_)) {
+            return None;
+        }
+        // If the type of source column is a tuple, rewrite to json_object_keep_null function,
+        // using the name of tuple inner fields as the object name.
+        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+            let column_entry = self.metadata.read().column(column.index).clone();
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
+                let new_scalar = self
+                    .rewrite_cast_to_variant(span, scalar, &data_type, is_try)
+                    .await;
+                let return_type = if is_try || source_type.is_nullable() {
+                    DataType::Nullable(Box::new(DataType::Variant))
+                } else {
+                    DataType::Variant
+                };
+                return Some(Ok(Box::new((new_scalar, return_type))));
+            }
+        }
+        None
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn rewrite_cast_to_variant(
+        &mut self,
+        span: Span,
+        scalar: &ScalarExpr,
+        data_type: &TableDataType,
+        is_try: bool,
+    ) -> ScalarExpr {
+        match data_type.remove_nullable() {
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut args = Vec::with_capacity(fields_name.len() * 2);
+                for ((idx, field_name), field_type) in
+                    fields_name.iter().enumerate().zip(fields_type.iter())
+                {
+                    let key = ConstantExpr {
+                        span,
+                        value: Scalar::String(field_name.clone().into_bytes()),
+                    }
+                    .into();
+
+                    let value = FunctionCall {
+                        span,
+                        params: vec![idx + 1],
+                        arguments: vec![scalar.clone()],
+                        func_name: "get".to_string(),
+                    }
+                    .into();
+
+                    let value =
+                        if matches!(field_type.remove_nullable(), TableDataType::Tuple { .. }) {
+                            self.rewrite_cast_to_variant(span, &value, field_type, is_try)
+                                .await
+                        } else {
+                            value
+                        };
+
+                    args.push(key);
+                    args.push(value);
+                }
+                let func_name = if is_try {
+                    "try_json_object_keep_null".to_string()
+                } else {
+                    "json_object_keep_null".to_string()
+                };
+                FunctionCall {
+                    span,
+                    params: vec![],
+                    arguments: args,
+                    func_name,
+                }
+                .into()
+            }
+            _ => {
+                let func_name = if is_try {
+                    "try_to_variant".to_string()
+                } else {
+                    "to_variant".to_string()
+                };
+                FunctionCall {
+                    span,
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                    func_name,
+                }
+                .into()
+            }
+        }
     }
 
     #[async_recursion::async_recursion]
