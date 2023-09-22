@@ -358,6 +358,7 @@ impl FromToProto for StorageHdfsConfig {
             root: self.root.clone(),
             name_node: self.name_node.clone(),
             kerberos_ticket_cache_path: self.kerberos_ticket_cache_path.clone(),
+            user: self.user.clone(),
         })
     }
 }
