@@ -804,8 +804,7 @@ impl PipelineBuilder {
         if delete.parts.is_lazy {
             let ctx = self.ctx.clone();
             let projection = Projection::Columns(delete.col_indices.clone());
-            let filter = delete.filters.filter.clone();
-            let inverted_filter = delete.filters.inverted_filter.clone();
+            let filters = delete.filters.clone();
             let table_clone = table.clone();
             let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
             for part in &delete.parts.partitions {
@@ -828,8 +827,7 @@ impl PipelineBuilder {
                         table_clone
                             .do_mutation_block_pruning(
                                 ctx_clone,
-                                Some(filter),
-                                Some(inverted_filter),
+                                Some(filters),
                                 projection,
                                 prune_ctx,
                                 true,

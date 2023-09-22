@@ -17,10 +17,10 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
-use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -228,8 +228,7 @@ impl Interpreter for DeleteInterpreter {
                 let (partitions, info) = fuse_table
                     .do_mutation_block_pruning(
                         self.ctx.clone(),
-                        Some(filters.filter.clone()),
-                        Some(filters.inverted_filter.clone()),
+                        Some(filters.clone()),
                         projection,
                         prune_ctx,
                         true,
@@ -284,7 +283,7 @@ impl Interpreter for DeleteInterpreter {
 impl DeleteInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
-        filters: DeletionFilters,
+        filters: Filters,
         partitions: Partitions,
         table_info: TableInfo,
         col_indices: Vec<usize>,
