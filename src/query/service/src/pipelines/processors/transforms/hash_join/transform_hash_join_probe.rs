@@ -218,6 +218,11 @@ impl TransformHashJoinProbe {
 
         let mut count = self.join_probe_state.final_probe_workers.lock();
         if *count == 0 {
+            self.join_probe_state
+                .hash_join_state
+                .build_done_watcher
+                .send(1)
+                .unwrap();
             *count = self.join_probe_state.processor_count;
         }
 
@@ -364,10 +369,18 @@ impl Processor for TransformHashJoinProbe {
     async fn async_process(&mut self) -> Result<()> {
         match self.step {
             HashJoinProbeStep::WaitBuild => {
-                self.join_probe_state
-                    .hash_join_state
-                    .wait_build_hash_table_finish()
-                    .await?;
+                if !self.spill_done {
+                    self.join_probe_state
+                        .hash_join_state
+                        .wait_build_hash_table_finish()
+                        .await?;
+                } else {
+                    self.join_probe_state
+                        .hash_join_state
+                        .wait_build_finish()
+                        .await?;
+                }
+
                 let join_type = self
                     .join_probe_state
                     .hash_join_state
@@ -457,6 +470,11 @@ impl Processor for TransformHashJoinProbe {
                         "The first round, probe spilled partitions: {:?}, build spilled partitions: {:?}, diff: {:?}",
                         probe_spilled_partitions, build_spilled_partitions, partitions_diff
                     );
+                    let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+                    *spill_partitions = spill_partitions
+                        .difference(&partitions_diff)
+                        .cloned()
+                        .collect();
                     self.input_data.extend(spilled_data);
                     self.first_round = false;
                     return Ok(());

@@ -100,10 +100,11 @@ impl TransformHashJoinBuild {
                 spill_state.spill_coordinator.active_processor_num(),
                 &mut spill_tasks,
             )?;
-            info!("notify all processors to spill");
-            let mut ready_spill = spill_state.spill_coordinator.ready_spill.lock();
-            *ready_spill = true;
-            spill_state.spill_coordinator.notify_spill.notify_waiters();
+            spill_state
+                .spill_coordinator
+                .ready_spill_watcher
+                .send(true)
+                .unwrap();
             self.step = HashJoinBuildStep::FirstSpill;
         }
         Ok(())
@@ -117,11 +118,12 @@ impl TransformHashJoinBuild {
         // Only need to reset the following variables once
         let mut count = self.build_state.row_space_builders.lock();
         if *count == 0 {
-            // Before into `WaitProbe`, to ensure `continue_build` is false
-            {
-                let mut continue_build = self.build_state.hash_join_state.continue_build.lock();
-                *continue_build = false;
-            }
+            self.build_state.send_val.store(2, Ordering::Relaxed);
+            self.build_state
+                .hash_join_state
+                .continue_build_watcher
+                .send(false)
+                .unwrap();
             let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
             *count = worker_num;
             let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
@@ -163,11 +165,7 @@ impl Processor for TransformHashJoinBuild {
                             let mut spill_task = spill_coordinator.spill_tasks.lock();
                             spill_state.split_spill_tasks(spill_coordinator.active_processor_num(), &mut spill_task)?;
                             spill_coordinator.waiting_spill_count.store(0, Ordering::Relaxed);
-                            // Last processor, notify to spill
-                            info!("notify all processors to spill");
-                            let mut ready_spill = spill_coordinator.ready_spill.lock();
-                            *ready_spill = true;
-                            spill_coordinator.notify_spill.notify_waiters();
+                            spill_coordinator.ready_spill_watcher.send(true).unwrap();
                         }
                     }
                     self.build_state.row_space_build_done()?;
@@ -293,7 +291,8 @@ impl Processor for TransformHashJoinBuild {
             }
             HashJoinBuildStep::WaitSpill => {
                 let spill_state = self.spill_state.as_ref().unwrap();
-                spill_state.spill_coordinator.wait_spill_notify().await;
+                spill_state.spill_coordinator.wait_spill_notify().await?;
+                dbg!("ready to spill");
                 self.step = HashJoinBuildStep::FirstSpill
             }
             HashJoinBuildStep::FirstSpill => {
@@ -319,7 +318,7 @@ impl Processor for TransformHashJoinBuild {
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::WaitProbe => {
-                self.build_state.hash_join_state.wait_probe_notify().await;
+                self.build_state.hash_join_state.wait_probe_notify().await?;
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
@@ -327,14 +326,11 @@ impl Processor for TransformHashJoinBuild {
                 // If there is no partition to restore, probe will send `-1` to build
                 // Which means it's time to finish.
                 if partition_id == -1 {
-                    let mut build_done = self.build_state.hash_join_state.build_done.lock();
-                    if !*build_done {
-                        *build_done = true;
-                        self.build_state
-                            .hash_join_state
-                            .build_done_notify
-                            .notify_waiters();
-                    }
+                    self.build_state
+                        .hash_join_state
+                        .build_done_watcher
+                        .send(2)
+                        .unwrap();
                     self.step = HashJoinBuildStep::Finished;
                     return Ok(());
                 }

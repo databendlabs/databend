@@ -277,9 +277,6 @@ impl HashJoinProbeState {
     }
 
     pub fn finish_final_probe(&self) {
-        // Reset build done to false
-        let mut build_done = self.hash_join_state.build_done.lock();
-        *build_done = false;
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
@@ -297,11 +294,10 @@ impl HashJoinProbeState {
                 "next partition to read: {:?}, final probe done",
                 *partition_id
             );
-            let mut continue_build = self.hash_join_state.continue_build.lock();
-            *continue_build = true;
             self.hash_join_state
-                .notify_build_processors
-                .notify_waiters();
+                .continue_build_watcher
+                .send(true)
+                .unwrap();
         }
     }
 
@@ -316,9 +312,6 @@ impl HashJoinProbeState {
     }
 
     pub fn finish_spill(&self) {
-        // Reset build done to false
-        let mut build_done = self.hash_join_state.build_done.lock();
-        *build_done = false;
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         let mut count = self.spill_workers.lock();
@@ -337,12 +330,10 @@ impl HashJoinProbeState {
                 "next partition to read: {:?}, probe spill done",
                 *partition_id
             );
-            let mut continue_build = self.hash_join_state.continue_build.lock();
-            *continue_build = true;
-            // All probe processors have finished spill, notify build processors to work
             self.hash_join_state
-                .notify_build_processors
-                .notify_waiters();
+                .continue_build_watcher
+                .send(true)
+                .unwrap();
         }
     }
 

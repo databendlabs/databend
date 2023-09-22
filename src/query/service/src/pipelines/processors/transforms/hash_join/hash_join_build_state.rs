@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -94,6 +95,7 @@ pub struct HashJoinBuildState {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) send_val: AtomicU8,
 }
 
 impl HashJoinBuildState {
@@ -125,6 +127,7 @@ impl HashJoinBuildState {
             build_projections: Arc::new(build_projections.clone()),
             build_worker_num: Arc::new(Default::default()),
             build_hash_table_tasks: Arc::new(Default::default()),
+            send_val: AtomicU8::new(1),
         }))
     }
 
@@ -245,9 +248,10 @@ impl HashJoinBuildState {
                     *fast_return = true;
                 }
 
-                let mut build_done = self.hash_join_state.build_done.lock();
-                *build_done = true;
-                self.hash_join_state.build_done_notify.notify_waiters();
+                self.hash_join_state
+                    .build_done_watcher
+                    .send(self.send_val.load(Ordering::Relaxed))
+                    .unwrap();
                 return Ok(());
             }
 
@@ -620,9 +624,10 @@ impl HashJoinBuildState {
                 *build_columns_data_type = columns_data_type;
                 *build_columns = columns;
             }
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = true;
-            self.hash_join_state.build_done_notify.notify_waiters();
+            self.hash_join_state
+                .build_done_watcher
+                .send(self.send_val.load(Ordering::Relaxed))
+                .unwrap();
         }
         Ok(())
     }

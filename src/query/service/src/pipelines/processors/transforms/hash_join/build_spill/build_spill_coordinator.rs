@@ -18,7 +18,9 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::watch;
+use common_base::base::tokio::sync::watch::Receiver;
+use common_base::base::tokio::sync::watch::Sender;
 use common_exception::Result;
 use common_expression::DataBlock;
 use log::info;
@@ -41,13 +43,14 @@ pub struct BuildSpillCoordinator {
     pub(crate) send_partition_set: AtomicBool,
     /// When a build processor won't trigger spill, the field will plus one
     pub(crate) non_spill_processors: AtomicUsize,
-    /// If there is the last processor, set `ready_spill` to true and notify other processors
-    pub(crate) ready_spill: Mutex<bool>,
-    pub(crate) notify_spill: Arc<Notify>,
+    /// If there is the last active processor, send true to watcher channel
+    pub(crate) ready_spill_watcher: Sender<bool>,
+    pub(crate) dummy_ready_spill_receiver: Receiver<bool>,
 }
 
 impl BuildSpillCoordinator {
     pub fn create(total_builder_count: usize) -> Arc<Self> {
+        let (ready_spill_watcher, dummy_ready_spill_receiver) = watch::channel(false);
         Arc::new(Self {
             need_spill: Default::default(),
             waiting_spill_count: Default::default(),
@@ -55,8 +58,8 @@ impl BuildSpillCoordinator {
             spill_tasks: Default::default(),
             send_partition_set: Default::default(),
             non_spill_processors: Default::default(),
-            ready_spill: Default::default(),
-            notify_spill: Arc::new(Default::default()),
+            ready_spill_watcher,
+            dummy_ready_spill_receiver,
         })
     }
 
@@ -68,19 +71,18 @@ impl BuildSpillCoordinator {
 
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
-        // Before the processor into wait spill, need to ensure `ready_spill` is false.
-        self.check_ready_spill()?;
+        if *self.dummy_ready_spill_receiver.borrow() {
+            self.ready_spill_watcher.send(false).unwrap();
+        }
         self.waiting_spill_count.fetch_add(1, Ordering::SeqCst);
+        let waiting_spill_count = self.waiting_spill_count.load(Ordering::Relaxed);
+        let non_spill_processors = self.non_spill_processors.load(Ordering::Relaxed);
         info!(
             "waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}",
-            self.waiting_spill_count.load(Ordering::Relaxed),
-            self.non_spill_processors.load(Ordering::Relaxed),
-            self.total_builder_count
+            waiting_spill_count, non_spill_processors, self.total_builder_count
         );
-        if self.waiting_spill_count.load(Ordering::Relaxed)
-            + self.non_spill_processors.load(Ordering::Relaxed)
-            == self.total_builder_count
-        {
+
+        if waiting_spill_count + non_spill_processors == self.total_builder_count {
             // Reset waiting_spill_count
             self.waiting_spill_count.store(0, Ordering::Relaxed);
             // No need to wait spill, the processor is the last one
@@ -100,17 +102,14 @@ impl BuildSpillCoordinator {
     }
 
     // Wait the last processor to notify spill
-    pub async fn wait_spill_notify(&self) {
-        let notified = {
-            let ready_spill = self.ready_spill.lock();
-            match *ready_spill {
-                true => None,
-                false => Some(self.notify_spill.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
+    pub async fn wait_spill_notify(&self) -> Result<()> {
+        let mut rx = self.ready_spill_watcher.subscribe();
+        if *rx.borrow() {
+            return Ok(());
         }
+        rx.changed().await.unwrap();
+        debug_assert!(*rx.borrow());
+        Ok(())
     }
 
     // Get active processor count
@@ -123,14 +122,5 @@ impl BuildSpillCoordinator {
     pub fn increase_non_spill_processors(&self) -> usize {
         let old = self.non_spill_processors.fetch_add(1, Ordering::SeqCst);
         old + 1
-    }
-
-    // Check if `ready_spill` is false, if not, make it false
-    pub fn check_ready_spill(&self) -> Result<()> {
-        let mut ready_spill = self.ready_spill.lock();
-        if *ready_spill {
-            *ready_spill = false;
-        }
-        Ok(())
     }
 }
