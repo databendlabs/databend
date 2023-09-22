@@ -83,7 +83,8 @@ async fn run_table_tests(
         actual_lines.retain(|&item| {
             !(item.contains("max_threads")
                 || item.contains("max_memory_usage")
-                || item.contains("max_storage_io_requests"))
+                || item.contains("max_storage_io_requests")
+                || item.contains("recluster_block_size"))
         });
     }
     for line in actual_lines {
