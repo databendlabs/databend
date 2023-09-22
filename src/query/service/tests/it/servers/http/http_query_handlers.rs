@@ -1198,6 +1198,7 @@ async fn test_affect() -> Result<()> {
                 keys: vec!["max_threads".to_string()],
                 values: vec!["1".to_string()],
                 is_globals: vec![false],
+                is_unset: false,
             }),
             Some(HttpSessionConf {
                 database: None,

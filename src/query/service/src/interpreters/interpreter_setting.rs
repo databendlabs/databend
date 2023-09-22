@@ -96,6 +96,7 @@ impl Interpreter for SettingInterpreter {
             keys,
             values,
             is_globals,
+            is_unset: false,
         });
 
         Ok(PipelineBuildResult::create())

@@ -15,6 +15,17 @@
 use serde::Deserialize;
 use serde::Serialize;
 
+/// We take a client side approach to handle session state during the query execution.
+/// Each query is actually stateless. The client should apply the query affects itself,
+/// and send the affects back to the server on reconnect.
+///
+/// For example, a user might switch the current database during a SQL script, like:
+///
+/// ```sql
+/// SELECT * FROM mytable1;
+/// USE mydb2;  -- switch to another database
+/// SELECT * FROM mytable2;
+/// ```
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(tag = "type")]
 pub enum QueryAffect {
@@ -28,8 +39,13 @@ pub enum QueryAffect {
         name: String,
     },
     ChangeSettings {
+        // The new settings' keys & values after each `SET key=value, key=value` statement.
+        // The client could save this query affect and restore the settings when reconnect.
         keys: Vec<String>,
         values: Vec<String>,
+        // Reset is set as true when `UNSET <settings>` is executed. The client could
+        // forget about this settings on `is_reset` is set as true.
+        is_unset: bool,
         is_globals: Vec<bool>,
     },
 }

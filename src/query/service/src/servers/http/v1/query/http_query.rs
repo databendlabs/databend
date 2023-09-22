@@ -139,25 +139,35 @@ pub struct HttpSessionConf {
 }
 
 impl HttpSessionConf {
+    // TODO(liyz): this function is not needed? Client side should apply the affect itself,
+    // and pass the db and settings parameters in the "session" field like:
+    // session: {database: "default", settings: {max_threads: "4"}}.
+    // do not actually need to apply these affect again on the server side.
     fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
         let mut ret = self.clone();
         match affect {
             QueryAffect::UseDB { name } => {
                 ret.database = Some(name.to_string());
+                ret
             }
             QueryAffect::ChangeSettings {
                 keys,
                 values,
+                is_unset,
                 is_globals: _,
             } => {
+                // do not change the current settings if reset is true
+                if *is_unset {
+                    return ret;
+                }
                 let settings = ret.settings.get_or_insert_default();
                 for (key, value) in keys.iter().zip(values) {
                     settings.insert(key.to_string(), value.to_string());
                 }
+                ret
             }
-            _ => {}
+            _ => ret,
         }
-        ret
     }
 }
 

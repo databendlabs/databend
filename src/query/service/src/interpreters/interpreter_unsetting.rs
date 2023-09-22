@@ -58,6 +58,7 @@ impl Interpreter for UnSettingInterpreter {
                         .try_drop_global_setting(setting)
                         .await?;
 
+                    // TODO(liyz): do not need load default value from the resetted settings
                     let default_val = {
                         if setting == "max_memory_usage" {
                             let conf = GlobalConfig::instance();
@@ -92,9 +93,10 @@ impl Interpreter for UnSettingInterpreter {
             }
         }
         self.ctx.set_affect(QueryAffect::ChangeSettings {
-            keys,
+            keys: keys,
             values,
             is_globals,
+            is_unset: true,
         });
 
         Ok(PipelineBuildResult::create())
