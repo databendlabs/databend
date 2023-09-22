@@ -759,7 +759,9 @@ impl<'a> TypeChecker<'a> {
                             "window function {name} can only be used in window clause"
                         )));
                     }
-                    let func = self.resolve_general_window_function(&name, &args).await?;
+                    let func = self
+                        .resolve_general_window_function(*span, &name, &args)
+                        .await?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)
@@ -1369,12 +1371,21 @@ impl<'a> TypeChecker<'a> {
     #[async_backtrace::framed]
     async fn resolve_general_window_function(
         &mut self,
+        span: Span,
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
         // try to resolve window function without arguments first
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
             return Ok(window_func);
+        }
+
+        if self.in_window_function {
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
         }
 
         self.in_window_function = true;
