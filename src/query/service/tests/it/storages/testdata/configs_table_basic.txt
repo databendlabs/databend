@@ -125,8 +125,10 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 'gcs.credential'                           | ''                                                             | ''       |
 | 'storage' | 'gcs.endpoint_url'                         | 'https://storage.googleapis.com'                               | ''       |
 | 'storage' | 'gcs.root'                                 | ''                                                             | ''       |
+| 'storage' | 'hdfs.kerberos_ticket_cache_path'          | ''                                                             | ''       |
 | 'storage' | 'hdfs.name_node'                           | ''                                                             | ''       |
 | 'storage' | 'hdfs.root'                                | ''                                                             | ''       |
+| 'storage' | 'hdfs.user'                                | ''                                                             | ''       |
 | 'storage' | 'num_cpus'                                 | '0'                                                            | ''       |
 | 'storage' | 'obs.access_key_id'                        | ''                                                             | ''       |
 | 'storage' | 'obs.bucket'                               | ''                                                             | ''       |
