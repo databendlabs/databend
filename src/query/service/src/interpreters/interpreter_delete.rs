@@ -18,7 +18,6 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
-use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -30,7 +29,6 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
@@ -60,6 +58,7 @@ use log::debug;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
+use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -164,35 +163,14 @@ impl Interpreter for DeleteInterpreter {
 
         let (filters, col_indices) = if let Some(scalar) = selection {
             // prepare the filter expression
-            let filter = cast_expr_to_non_null_boolean(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone()),
-            )?
-            .as_remote_expr();
+            let filters = create_push_down_filters(&scalar)?;
 
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::Unimplemented(
                     "Delete must have deterministic predicate",
                 ));
             }
-
-            // prepare the inverse filter expression
-            let inverted_filter = {
-                let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
-                    span: None,
-                    func_name: "not".to_string(),
-                    params: vec![],
-                    arguments: vec![scalar.clone()],
-                });
-                cast_expr_to_non_null_boolean(
-                    inverse
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone()),
-                )?
-                .as_remote_expr()
-            };
 
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
                 let mut col_indices = HashSet::new();
@@ -203,13 +181,7 @@ impl Interpreter for DeleteInterpreter {
             } else {
                 scalar.used_columns().into_iter().collect()
             };
-            (
-                Some(DeletionFilters {
-                    filter,
-                    inverted_filter,
-                }),
-                col_indices,
-            )
+            (Some(filters), col_indices)
         } else {
             (None, vec![])
         };

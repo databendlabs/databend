@@ -34,7 +34,7 @@ use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_co
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
-
+// (source_schema,condition,values_exprs)
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {

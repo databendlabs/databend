@@ -109,6 +109,10 @@ impl<'a> InMemoryRowGroup<'a> {
         }
     }
 
+    pub fn row_count(&self) -> usize {
+        self.row_count
+    }
+
     /// Fetches the necessary column data into memory
     ///
     /// If call `fetch` multiple times, it will only fetch the data that has not been fetched.

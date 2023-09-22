@@ -48,6 +48,7 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) rng: &'a mut R,
     pub(crate) group_by: Option<GroupBy>,
+    pub(crate) windows_name: Vec<String>,
 }
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -82,6 +83,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             scalar_func_sigs,
             rng,
             group_by: None,
+            windows_name: vec![],
         }
     }
 }

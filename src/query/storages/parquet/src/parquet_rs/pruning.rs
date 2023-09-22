@@ -38,7 +38,10 @@ use crate::parquet_rs::statistics::convert_index_to_column_statistics;
 /// We can use this pruner to compute row groups and pages to skip.
 pub struct ParquetRSPruner {
     leaf_fields: Arc<Vec<TableField>>,
-    range_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
+    range_pruner: Option<(
+        Arc<dyn RangePruner + Send + Sync>,
+        Arc<dyn RangePruner + Send + Sync>,
+    )>,
     prune_row_groups: bool,
     prune_pages: bool,
 
@@ -55,16 +58,19 @@ impl ParquetRSPruner {
         options: ParquetReadOptions,
     ) -> Result<Self> {
         // Build `RangePruner` by `filter`.
-        let filter = push_down
-            .as_ref()
-            .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter = push_down.as_ref().and_then(|p| p.filters.as_ref());
 
         let mut predicate_columns = vec![];
         let range_pruner =
             if filter.is_some() && (options.prune_row_groups() || options.prune_pages()) {
-                predicate_columns = filter
+                let filter_expr = filter.as_ref().unwrap().filter.as_expr(&BUILTIN_FUNCTIONS);
+                let inverted_filter_expr = filter
                     .as_ref()
                     .unwrap()
+                    .inverted_filter
+                    .as_expr(&BUILTIN_FUNCTIONS);
+
+                predicate_columns = filter_expr
                     .column_refs()
                     .into_keys()
                     .map(|name| {
@@ -75,8 +81,11 @@ impl ParquetRSPruner {
                     })
                     .collect::<Vec<_>>();
                 predicate_columns.sort();
-                let pruner = RangePrunerCreator::try_create(func_ctx, &schema, filter.as_ref())?;
-                Some(pruner)
+                let pruner =
+                    RangePrunerCreator::try_create(func_ctx.clone(), &schema, Some(&filter_expr))?;
+                let inverted_pruner =
+                    RangePrunerCreator::try_create(func_ctx, &schema, Some(&inverted_filter_expr))?;
+                Some((pruner, inverted_pruner))
             } else {
                 None
             };
@@ -92,28 +101,36 @@ impl ParquetRSPruner {
 
     /// Prune row groups of a parquet file.
     ///
-    /// Return the selected row groups' indices in the meta.
+    /// Return the selected row groups' indices in the meta and omit filter flags.
     ///
     /// If `stats` is not [None], we use this statistics to prune but not collect again.
     pub fn prune_row_groups(
         &self,
         meta: &ParquetMetaData,
         stats: Option<&[StatisticsOfColumns]>,
-    ) -> Result<Vec<usize>> {
+    ) -> Result<(Vec<usize>, Vec<bool>)> {
+        let default_selection = (0..meta.num_row_groups()).collect();
+        let default_omits = vec![false; meta.num_row_groups()];
         if !self.prune_row_groups {
-            return Ok((0..meta.num_row_groups()).collect());
+            return Ok((default_selection, default_omits));
         }
+
         match &self.range_pruner {
-            None => Ok((0..meta.num_row_groups()).collect()),
-            Some(pruner) => {
+            None => Ok((default_selection, default_omits)),
+
+            Some((pruner, inverted_pruner)) => {
                 let mut selection = Vec::with_capacity(meta.num_row_groups());
+                let mut omits = Vec::with_capacity(meta.num_row_groups());
                 if let Some(row_group_stats) = stats {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep(row_group, None) {
                             selection.push(i);
+
+                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            omits.push(omit);
                         }
                     }
-                    Ok(selection)
+                    Ok((selection, omits))
                 } else if let Some(row_group_stats) = collect_row_group_stats(
                     meta.row_groups(),
                     &self.leaf_fields,
@@ -122,11 +139,14 @@ impl ParquetRSPruner {
                     for (i, row_group) in row_group_stats.iter().enumerate() {
                         if pruner.should_keep(row_group, None) {
                             selection.push(i);
+
+                            let omit = !inverted_pruner.should_keep(row_group, None);
+                            omits.push(omit);
                         }
                     }
-                    Ok(selection)
+                    Ok((selection, omits))
                 } else {
-                    Ok((0..meta.num_row_groups()).collect())
+                    Ok((default_selection, default_omits))
                 }
             }
         }
@@ -145,7 +165,7 @@ impl ParquetRSPruner {
         }
         match &self.range_pruner {
             None => Ok(None),
-            Some(pruner) => {
+            Some((pruner, _)) => {
                 // Only if the file has page level statistics, we can use them to prune.
                 if meta.column_index().is_none() || meta.offset_index().is_none() {
                     return Ok(None);
