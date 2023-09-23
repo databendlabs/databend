@@ -65,14 +65,8 @@ pub struct HashJoinProbeState {
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
     /// When the counter is 0, processors will go to next phase's work
     pub(crate) probe_workers: Mutex<usize>,
-    /// Record spill workers
-    pub(crate) spill_workers: Mutex<usize>,
-    /// Record final probe workers
-    pub(crate) final_probe_workers: Mutex<usize>,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
-    /// Wait all processors to restore spilled data, then go to new probe
-    pub(crate) restore_barrier: Barrier,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -84,8 +78,16 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<bool>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
-    /// Spilled partitions set
+
+    /// Spill related states
+    /// Record spill workers
+    pub(crate) spill_workers: Mutex<usize>,
+    /// Record final probe workers
+    pub(crate) final_probe_workers: Mutex<usize>,
+    /// Probe spilled partitions set
     pub(crate) spill_partitions: Arc<RwLock<HashSet<u8>>>,
+    /// Wait all processors to restore spilled data, then go to new probe
+    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinProbeState {
@@ -276,7 +278,7 @@ impl HashJoinProbeState {
         Ok(res)
     }
 
-    pub fn finish_final_probe(&self) {
+    pub fn finish_final_probe(&self) -> Result<()> {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
@@ -297,8 +299,9 @@ impl HashJoinProbeState {
             self.hash_join_state
                 .continue_build_watcher
                 .send(true)
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
+        Ok(())
     }
 
     pub fn probe_done(&self) -> Result<()> {
@@ -311,7 +314,7 @@ impl HashJoinProbeState {
         Ok(())
     }
 
-    pub fn finish_spill(&self) {
+    pub fn finish_spill(&self) -> Result<()> {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         let mut count = self.spill_workers.lock();
@@ -333,8 +336,9 @@ impl HashJoinProbeState {
             self.hash_join_state
                 .continue_build_watcher
                 .send(true)
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
+        Ok(())
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
