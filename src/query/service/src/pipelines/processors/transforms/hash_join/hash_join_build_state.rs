@@ -104,6 +104,7 @@ pub struct HashJoinBuildState {
 }
 
 impl HashJoinBuildState {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
         func_ctx: FunctionContext,
