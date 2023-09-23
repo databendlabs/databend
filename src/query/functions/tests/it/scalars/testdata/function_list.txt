@@ -3641,6 +3641,8 @@ Functions overloads:
 1 try_inet_aton(String NULL) :: UInt32 NULL
 0 try_inet_ntoa(Int64) :: String NULL
 1 try_inet_ntoa(Int64 NULL) :: String NULL
+0 try_json_object FACTORY
+0 try_json_object_keep_null FACTORY
 0 try_parse_json(Variant) :: Variant NULL
 1 try_parse_json(Variant NULL) :: Variant NULL
 2 try_parse_json(String) :: Variant NULL
