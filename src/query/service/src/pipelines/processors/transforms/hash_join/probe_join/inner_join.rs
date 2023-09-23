@@ -112,7 +112,7 @@ impl HashJoinProbeState {
                     };
                     let mut result_block =
                         self.merge_eq_block(probe_block, build_block, matched_num);
-                    if self.hash_join_state.probe_to_build.len() > 0 {
+                    if !self.hash_join_state.probe_to_build.is_empty() {
                         for (index, (is_probe_nullable, is_build_nullable)) in
                             self.hash_join_state.probe_to_build.iter()
                         {
@@ -184,7 +184,7 @@ impl HashJoinProbeState {
                 None
             };
             let mut result_block = self.merge_eq_block(probe_block, build_block, matched_num);
-            if self.hash_join_state.probe_to_build.len() > 0 {
+            if !self.hash_join_state.probe_to_build.is_empty() {
                 for (index, (is_probe_nullable, is_build_nullable)) in
                     self.hash_join_state.probe_to_build.iter()
                 {
