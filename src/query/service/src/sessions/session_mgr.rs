@@ -158,6 +158,8 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
+        // NOTE: order and scope of lock are very important. It's will cause deadlock
+
         // stop tracking session
         {
             // Make sure this write lock has been released before dropping.
@@ -176,12 +178,12 @@ impl SessionManager {
             }
         }
 
-        let sessions_count = {
-            let sessions = self.active_sessions.read();
-            sessions.len()
-        };
-        session_metrics::incr_session_close_numbers();
-        session_metrics::set_session_active_connections(sessions_count);
+        {
+            let sessions_count = { self.active_sessions.read().len() };
+
+            session_metrics::incr_session_close_numbers();
+            session_metrics::set_session_active_connections(sessions_count);
+        }
     }
 
     pub fn graceful_shutdown(
