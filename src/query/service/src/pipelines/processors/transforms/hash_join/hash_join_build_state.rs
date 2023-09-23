@@ -76,8 +76,6 @@ pub struct HashJoinBuildState {
     pub(crate) chunk_size_limit: Arc<usize>,
     /// Wait util all processors finish row space build, then go to next phase.
     pub(crate) barrier: Barrier,
-    /// Wait all processors finish read spilled data, then go to new round build
-    pub(crate) restore_barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
@@ -95,7 +93,12 @@ pub struct HashJoinBuildState {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+
+    /// Spill related states
+    /// `send_val` is the message which will be send into `build_done_watcher` channel.
     pub(crate) send_val: AtomicU8,
+    /// Wait all processors finish read spilled data, then go to new round build
+    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinBuildState {
@@ -251,7 +254,7 @@ impl HashJoinBuildState {
                 self.hash_join_state
                     .build_done_watcher
                     .send(self.send_val.load(Ordering::Relaxed))
-                    .unwrap();
+                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
                 return Ok(());
             }
 
@@ -627,7 +630,7 @@ impl HashJoinBuildState {
             self.hash_join_state
                 .build_done_watcher
                 .send(self.send_val.load(Ordering::Relaxed))
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
         }
         Ok(())
     }

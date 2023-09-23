@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::Receiver;
 use common_base::base::tokio::sync::watch::Sender;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ColumnVec;
@@ -82,6 +83,10 @@ pub struct HashJoinState {
     /// And the build phase is finished. Probe phase will start.
     pub(crate) hash_table_builders: Mutex<usize>,
     /// After `hash_table_builders` is 0, send message to notify all probe processors.
+    /// There are three types' messages:
+    /// 1. **0**: it's the initial message used by creating the watch channel
+    /// 2. **1**: when build side finish (the first round), the last build processor will send 1 to channel, and wake up all probe processors.
+    /// 3. **2**: if spill is enabled, after the first round, probe needs to wait build again, the last build processor will send 2 to channel.
     pub(crate) build_done_watcher: Sender<u8>,
     /// A dummy receiver to make build done watcher channel open
     pub(crate) _build_done_dummy_receiver: Receiver<u8>,
@@ -106,9 +111,12 @@ pub struct HashJoinState {
     pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+
+    /// Spill related states
     /// Spill partition set
-    pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
+    pub(crate) build_spilled_partitions: Arc<RwLock<HashSet<u8>>>,
     /// Send message to notify all build processors to next round.
+    /// Initial message is false, send true to wake up all build processors.
     pub(crate) continue_build_watcher: Sender<bool>,
     /// A dummy receiver to make continue build watcher channel open
     pub(crate) _continue_build_dummy_receiver: Receiver<bool>,
@@ -154,7 +162,7 @@ impl HashJoinState {
             is_build_projected: Arc::new(AtomicBool::new(true)),
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            spill_partition: Default::default(),
+            build_spilled_partitions: Default::default(),
             continue_build_watcher,
             _continue_build_dummy_receiver,
             partition_id: Arc::new(RwLock::new(-2)),
@@ -165,25 +173,31 @@ impl HashJoinState {
         self.interrupt.store(true, Ordering::Release);
     }
 
-    /// Used by hash join probe processors, wait for build phase finished.
+    /// Used by hash join probe processors, wait for the first round build phase finished.
     #[async_backtrace::framed]
-    pub async fn wait_build_hash_table_finish(&self) -> Result<()> {
+    pub async fn wait_first_round_build_done(&self) -> Result<()> {
         let mut rx = self.build_done_watcher.subscribe();
         if *rx.borrow() == 1_u8 {
             return Ok(());
         }
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
         debug_assert!(*rx.borrow() == 1_u8);
         Ok(())
     }
 
+    /// Used by hash join probe processors, wait for build phase finished with spilled data
+    /// It's only be used when spilling is enabled.
     #[async_backtrace::framed]
     pub async fn wait_build_finish(&self) -> Result<()> {
         let mut rx = self.build_done_watcher.subscribe();
         if *rx.borrow() == 2_u8 {
             return Ok(());
         }
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
         debug_assert!(*rx.borrow() == 2_u8);
         Ok(())
     }
@@ -209,7 +223,7 @@ impl HashJoinState {
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
-        let mut spill_partition = self.spill_partition.write();
+        let mut spill_partition = self.build_spilled_partitions.write();
         *spill_partition = partitions.clone();
     }
 
@@ -219,7 +233,9 @@ impl HashJoinState {
         if *rx.borrow() {
             return Ok(());
         }
-        rx.changed().await.unwrap();
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("continue_build_watcher's sender is dropped"))?;
         debug_assert!(*rx.borrow());
         Ok(())
     }
