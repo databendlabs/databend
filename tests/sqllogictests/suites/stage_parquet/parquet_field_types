@@ -149,3 +149,21 @@ select * from t order by id
 100051133 0 1.0 2.002 2021-09-21 16:00:00.000000 2021-09-22 [4,3,1,2,0,0]
 100051134 1 1.1 2.2 2021-10-09 16:00:00.000000 2021-10-10 [6,6,6]
 100051135 NULL NULL NULL NULL NULL [10]
+
+statement ok
+drop table if exists t1
+
+statement ok
+create table t1(id string null, t variant null)
+
+query 
+copy into t1 from @data/parquet/tuple.parquet
+----
+parquet/tuple.parquet 3 0 NULL NULL
+
+query 
+select * from t1 order by id
+----
+1 {"a":1,"b":"a"}
+2 {"a":3,"b":"b"}
+3 {"a":3,"b":"c"}

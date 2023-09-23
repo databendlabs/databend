@@ -92,25 +92,32 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill partition set
-    pub async fn spill(&mut self, partitions: &[(u8, DataBlock)]) -> Result<()> {
+    pub async fn spill(&mut self, partitions: &[(u8, DataBlock)], worker_id: usize) -> Result<()> {
         for (partition_id, partition) in partitions.iter() {
-            self.spill_with_partition(partition_id, partition).await?;
+            self.spill_with_partition(partition_id, partition, worker_id)
+                .await?;
         }
         Ok(())
     }
 
     #[async_backtrace::framed]
     /// Spill data block with location
-    pub async fn spill_with_partition(&mut self, p_id: &u8, data: &DataBlock) -> Result<()> {
+    pub async fn spill_with_partition(
+        &mut self,
+        p_id: &u8,
+        data: &DataBlock,
+        worker_id: usize,
+    ) -> Result<()> {
         self.spilled_partition_set.insert(*p_id);
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         info!(
-            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}",
+            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
             self.spiller_type,
             data.num_rows(),
             location,
-            p_id
+            p_id,
+            worker_id
         );
         self.partition_location
             .entry(*p_id)
@@ -191,6 +198,7 @@ impl Spiller {
         &mut self,
         data_block: DataBlock,
         hashes: &[u64],
+        worker_id: usize,
     ) -> Result<DataBlock> {
         // Save the row index which is not spilled.
         let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
@@ -222,7 +230,7 @@ impl Spiller {
                 row_indexes.len(),
             );
             // Spill block with partition id
-            self.spill_with_partition(p_id, &block).await?;
+            self.spill_with_partition(p_id, &block, worker_id).await?;
         }
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index

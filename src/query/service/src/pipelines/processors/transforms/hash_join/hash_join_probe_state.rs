@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -61,20 +61,14 @@ pub struct HashJoinProbeState {
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
-    pub(crate) _processor_count: usize,
+    pub(crate) processor_count: usize,
     /// It will be increased by 1 when a new hash join probe processor is created.
     /// After the processor finish probe hash table, it will be decreased by 1.
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
     /// When the counter is 0, processors will go to next phase's work
     pub(crate) probe_workers: Mutex<usize>,
-    /// Record spill workers
-    pub(crate) spill_workers: Mutex<usize>,
-    /// Record final probe workers
-    pub(crate) final_probe_workers: Mutex<usize>,
-    /// After `probe_workers` is 0, it will be set as true.
-    pub(crate) probe_done: Mutex<bool>,
-    /// Notify processors `probe hash table` is done. They can go to next phase.
-    pub(crate) probe_done_notify: Arc<Notify>,
+    /// Wait all `probe_workers` finish
+    pub(crate) barrier: Barrier,
     /// The schema of probe side.
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
@@ -86,8 +80,16 @@ pub struct HashJoinProbeState {
     pub(crate) mark_scan_map_lock: Mutex<bool>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
-    /// Spilled partitions set
+
+    /// Spill related states
+    /// Record spill workers
+    pub(crate) spill_workers: Mutex<usize>,
+    /// Record final probe workers
+    pub(crate) final_probe_workers: Mutex<usize>,
+    /// Probe spilled partitions set
     pub(crate) spill_partitions: Arc<RwLock<HashSet<u8>>>,
+    /// Wait all processors to restore spilled data, then go to new probe
+    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinProbeState {
@@ -101,6 +103,8 @@ impl HashJoinProbeState {
         mut probe_schema: DataSchemaRef,
         join_type: &JoinType,
         processor_count: usize,
+        barrier: Barrier,
+        restore_barrier: Barrier,
     ) -> Result<Self> {
         if matches!(join_type, &JoinType::Right | &JoinType::RightSingle) {
             probe_schema = probe_schema_wrap_nullable(&probe_schema);
@@ -117,12 +121,12 @@ impl HashJoinProbeState {
             ctx,
             func_ctx,
             hash_join_state,
-            _processor_count: processor_count,
+            processor_count,
             probe_workers: Mutex::new(0),
             spill_workers: Mutex::new(0),
             final_probe_workers: Default::default(),
-            probe_done: Mutex::new(false),
-            probe_done_notify: Arc::new(Notify::new()),
+            barrier,
+            restore_barrier,
             probe_schema,
             probe_projections: Arc::new(probe_projections.clone()),
             final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
@@ -260,29 +264,28 @@ impl HashJoinProbeState {
         })
     }
 
-    pub fn probe_attach(&self) -> Result<()> {
+    pub fn probe_attach(&self) -> Result<usize> {
+        let mut res = 0;
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
             let mut count = self.probe_workers.lock();
             *count += 1;
+            res = *count;
         }
         if self.ctx.get_settings().get_enable_join_spill()? {
-            let mut count = self.spill_workers.lock();
-            *count += 1;
             let mut count = self.final_probe_workers.lock();
             *count += 1;
+            let mut count = self.spill_workers.lock();
+            *count += 1;
+            res = *count;
         }
-        Ok(())
+
+        Ok(res)
     }
 
-    pub fn finish_final_probe(&self) {
-        // Reset build done to false
-        let mut build_done = self.hash_join_state.build_done.lock();
-        *build_done = false;
+    pub fn finish_final_probe(&self) -> Result<()> {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         if *count == 0 {
-            let mut probe_done = self.probe_done.lock();
-            *probe_done = false;
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
             let mut partition_id = self.hash_join_state.partition_id.write();
@@ -293,13 +296,16 @@ impl HashJoinProbeState {
             } else {
                 *partition_id = -1;
             }
-            info!("next partition to read: {:?}", *partition_id);
-            let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
-            *final_probe_done = true;
+            info!(
+                "next partition to read: {:?}, final probe done",
+                *partition_id
+            );
             self.hash_join_state
-                .final_probe_done_notify
-                .notify_waiters();
+                .continue_build_watcher
+                .send(true)
+                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
+        Ok(())
     }
 
     pub fn probe_done(&self) -> Result<()> {
@@ -308,43 +314,35 @@ impl HashJoinProbeState {
         if *count == 0 {
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
-
-            let mut probe_done = self.probe_done.lock();
-            *probe_done = true;
-            self.probe_done_notify.notify_waiters();
         }
         Ok(())
     }
 
-    pub fn finish_spill(&self, need_p_id: bool) {
-        // Reset build done to false
-        let mut build_done = self.hash_join_state.build_done.lock();
-        *build_done = false;
+    pub fn finish_spill(&self) -> Result<()> {
         let mut count = self.final_probe_workers.lock();
         *count -= 1;
         let mut count = self.spill_workers.lock();
         *count -= 1;
         if *count == 0 {
-            if need_p_id {
-                // Set partition id to `HashJoinState`
-                let mut partition_id = self.hash_join_state.partition_id.write();
-                let mut spill_partitions = self.spill_partitions.write();
-                if let Some(id) = spill_partitions.iter().next().cloned() {
-                    spill_partitions.remove(&id);
-                    *partition_id = id as i8;
-                } else {
-                    *partition_id = -1;
-                };
-                info!("next partition to read: {:?}", *partition_id);
-            }
-            // Set spill done
-            let mut spill_done = self.hash_join_state.probe_spill_done.lock();
-            *spill_done = true;
-            // All probe processors have finished spill, notify build processors to work
+            // Set partition id to `HashJoinState`
+            let mut partition_id = self.hash_join_state.partition_id.write();
+            let mut spill_partitions = self.spill_partitions.write();
+            if let Some(id) = spill_partitions.iter().next().cloned() {
+                spill_partitions.remove(&id);
+                *partition_id = id as i8;
+            } else {
+                *partition_id = -1;
+            };
+            info!(
+                "next partition to read: {:?}, probe spill done",
+                *partition_id
+            );
             self.hash_join_state
-                .probe_spill_done_notify
-                .notify_waiters();
+                .continue_build_watcher
+                .send(true)
+                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
         }
+        Ok(())
     }
 
     pub fn generate_final_scan_task(&self) -> Result<()> {
@@ -684,22 +682,5 @@ impl HashJoinProbeState {
             build_indexes_occupied = 0;
         }
         Ok(result_blocks)
-    }
-
-    #[async_backtrace::framed]
-    pub async fn wait_probe_finish(&self) -> Result<()> {
-        let notified = {
-            let finalized_guard = self.probe_done.lock();
-
-            match *finalized_guard {
-                true => None,
-                false => Some(self.probe_done_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
-        }
-        Ok(())
     }
 }

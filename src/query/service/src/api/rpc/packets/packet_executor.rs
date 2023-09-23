@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::query_kind::QueryKind;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,7 +31,7 @@ use crate::api::FlightAction;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct QueryFragmentsPlanPacket {
     pub query_id: String,
-    pub query_kind: String,
+    pub query_kind: QueryKind,
     pub executor: String,
     pub request_executor: String,
     pub fragments: Vec<FragmentPlanPacket>,
@@ -45,7 +46,7 @@ impl QueryFragmentsPlanPacket {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         query_id: String,
-        query_kind: String,
+        query_kind: QueryKind,
         executor: String,
         fragments: Vec<FragmentPlanPacket>,
         executors_info: HashMap<String, Arc<NodeInfo>>,
