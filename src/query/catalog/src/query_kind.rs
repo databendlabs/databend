@@ -12,16 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod plan;
-pub mod query_kind;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+use serde::Deserialize;
+use serde::Serialize;
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum QueryKind {
+    Unknown,
+    Query,
+    Explain,
+    Copy,
+    Update,
+    Insert,
+    Other,
+}
+
+impl Display for QueryKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}

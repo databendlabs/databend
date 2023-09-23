@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use log::info;
@@ -49,16 +50,16 @@ enum HashJoinBuildStep {
 
 pub struct TransformHashJoinBuild {
     input_port: Arc<InputPort>,
-
     input_data: Option<DataBlock>,
     step: HashJoinBuildStep,
     build_state: Arc<HashJoinBuildState>,
-    spill_state: Option<Box<BuildSpillState>>,
-    spill_data: Option<DataBlock>,
     finalize_finished: bool,
+    processor_id: usize,
+
     // The flag indicates whether data is from spilled data.
     from_spill: bool,
-    processor_id: usize,
+    spill_state: Option<Box<BuildSpillState>>,
+    spill_data: Option<DataBlock>,
 }
 
 impl TransformHashJoinBuild {
@@ -104,7 +105,7 @@ impl TransformHashJoinBuild {
                 .spill_coordinator
                 .ready_spill_watcher
                 .send(true)
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("ready_spill_watcher channel is closed"))?;
             self.step = HashJoinBuildStep::FirstSpill;
         }
         Ok(())
@@ -119,11 +120,13 @@ impl TransformHashJoinBuild {
         let mut count = self.build_state.row_space_builders.lock();
         if *count == 0 {
             self.build_state.send_val.store(2, Ordering::Relaxed);
+            // Before build processors into `WaitProbe` state, set the channel message to false.
+            // Then after all probe processors are ready, the last one will send true to channel and wake up all build processors.
             self.build_state
                 .hash_join_state
                 .continue_build_watcher
                 .send(false)
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
             let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
             *count = worker_num;
             let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
@@ -165,7 +168,11 @@ impl Processor for TransformHashJoinBuild {
                             let mut spill_task = spill_coordinator.spill_tasks.lock();
                             spill_state.split_spill_tasks(spill_coordinator.active_processor_num(), &mut spill_task)?;
                             spill_coordinator.waiting_spill_count.store(0, Ordering::Relaxed);
-                            spill_coordinator.ready_spill_watcher.send(true).unwrap();
+                            spill_coordinator.ready_spill_watcher.send(true).map_err(|_| {
+                                ErrorCode::TokioError(
+                                    "ready_spill_watcher channel is closed",
+                                )
+                            })?;
                         }
                     }
                     self.build_state.row_space_build_done()?;
@@ -329,7 +336,9 @@ impl Processor for TransformHashJoinBuild {
                         .hash_join_state
                         .build_done_watcher
                         .send(2)
-                        .unwrap();
+                        .map_err(|_| {
+                            ErrorCode::TokioError("build_done_watcher channel is closed")
+                        })?;
                     self.step = HashJoinBuildStep::Finished;
                     return Ok(());
                 }
