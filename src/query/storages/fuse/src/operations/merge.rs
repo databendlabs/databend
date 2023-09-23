@@ -28,7 +28,6 @@ use crate::FuseTable;
 
 impl FuseTable {
     // todo: (JackTan25) add pipeline picture
-    #[allow(clippy::too_many_arguments)]
     pub fn matched_mutator(
         &self,
         ctx: Arc<dyn TableContext>,

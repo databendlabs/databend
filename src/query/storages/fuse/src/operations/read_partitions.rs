@@ -123,7 +123,6 @@ impl FuseTable {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[minitrace::trace(name = "prune_snapshot_blocks")]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
