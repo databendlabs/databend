@@ -145,6 +145,7 @@ impl InputFormatTextBase for InputFormatCSV {
         } + MAX_CSV_COLUMNS;
         Ok(CsvReaderState {
             common: AligningStateCommon::create(split_info, false, csv_params.headers as usize),
+            error_on_column_count_mismatch: csv_params.error_on_column_count_mismatch,
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             reader,
@@ -196,6 +197,7 @@ impl InputFormatTextBase for InputFormatCSV {
 
 pub struct CsvReaderState {
     common: AligningStateCommon,
+    error_on_column_count_mismatch: bool,
     #[allow(unused)]
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
@@ -234,6 +236,21 @@ impl CsvReaderState {
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
                 if self.projection.is_none() {
+                    if !self.error_on_column_count_mismatch && self.n_end < self.num_fields {
+                        // support we expect 4 fields but got row with only 2 columns : "1,2\n"
+                        // here we pretend we read "1,2,,\n"
+                        debug_assert!(self.n_end > 0);
+                        let end = self.field_ends[n_end - 1];
+                        for i in self.n_end..self.num_fields {
+                            self.field_ends[i] = end;
+                        }
+                        self.n_end = self.num_fields;
+
+                        self.common.rows += 1;
+                        self.common.offset += n_in;
+                        self.n_end = 0;
+                        return Ok((Some(self.num_fields), n_in, n_out));
+                    }
                     if let Err(e) = self.check_num_field() {
                         self.ctx.on_error(
                             e,
@@ -248,7 +265,6 @@ impl CsvReaderState {
                         return Ok((Some(0), n_in, n_out));
                     }
                 }
-
                 self.common.rows += 1;
                 self.common.offset += n_in;
                 let n_end = self.n_end;
