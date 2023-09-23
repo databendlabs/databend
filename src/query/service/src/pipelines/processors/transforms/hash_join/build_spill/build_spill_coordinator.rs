@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::watch;
 use common_base::base::tokio::sync::watch::Receiver;
 use common_base::base::tokio::sync::watch::Sender;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use log::info;
@@ -72,7 +73,9 @@ impl BuildSpillCoordinator {
     // If current waiting spilling builder is the last one, then spill all builders.
     pub(crate) fn wait_spill(&self) -> Result<bool> {
         if *self.dummy_ready_spill_receiver.borrow() {
-            self.ready_spill_watcher.send(false).unwrap();
+            self.ready_spill_watcher
+                .send(false)
+                .map_err(|_| ErrorCode::TokioError("ready_spill_watcher channel is closed"))?;
         }
         self.waiting_spill_count.fetch_add(1, Ordering::SeqCst);
         let waiting_spill_count = self.waiting_spill_count.load(Ordering::Relaxed);
@@ -107,7 +110,9 @@ impl BuildSpillCoordinator {
         if *rx.borrow() {
             return Ok(());
         }
-        rx.changed().await.unwrap();
+        rx.changed().await.map_err(|_| {
+            ErrorCode::TokioError("ready_spill_watcher channel's sender is dropped")
+        })?;
         debug_assert!(*rx.borrow());
         Ok(())
     }
