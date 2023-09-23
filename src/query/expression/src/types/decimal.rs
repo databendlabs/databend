@@ -359,11 +359,11 @@ impl Decimal for i128 {
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
-        MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize]
+        MIN_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn max_for_precision(to_precision: u8) -> Self {
-        MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize]
+        MAX_DECIMAL_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn default_decimal_size() -> DecimalSize {
@@ -508,11 +508,11 @@ impl Decimal for i256 {
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
-        MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize]
+        MIN_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn max_for_precision(to_precision: u8) -> Self {
-        MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize]
+        MAX_DECIMAL256_BYTES_FOR_EACH_PRECISION[to_precision as usize - 1]
     }
 
     fn default_decimal_size() -> DecimalSize {

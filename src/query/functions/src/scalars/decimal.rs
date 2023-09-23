@@ -113,33 +113,76 @@ macro_rules! compare_decimal {
     }};
 }
 
-trait DecimalOverflowCheck {
-    fn empty_check() -> bool {
-        true
-    }
-    fn overflow<T: Decimal>(_value: T, _min: T, _max: T) -> bool {
-        false
-    }
-}
-
-pub struct DecimalEmptyCheck;
-
-impl DecimalOverflowCheck for DecimalEmptyCheck {}
-
-pub struct DecimalChecker;
-
-impl DecimalOverflowCheck for DecimalChecker {
-    fn empty_check() -> bool {
-        false
-    }
-    fn overflow<T: Decimal>(value: T, min: T, max: T) -> bool {
-        value < min || value > max
-    }
-}
-
 macro_rules! binary_decimal {
     ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
-        let zero = <$type_name>::zero();
+        let overflow = $size.precision == <$type_name>::default_decimal_size().precision;
+
+        if $is_divide {
+            binary_decimal_div!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+        } else if overflow {
+            binary_decimal_check_overflow!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+        } else {
+            binary_decimal_no_overflow!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+        }
+    }};
+}
+
+macro_rules! binary_decimal_no_overflow {
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
+        match ($a, $b) {
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_b, _))),
+            ) => {
+                let result: Vec<_> = buffer_a
+                    .iter()
+                    .zip(buffer_b.iter())
+                    .map(|(a, b)| a.$op(b))
+                    .collect();
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let result: Vec<_> = buffer.iter().map(|a| a.$op(b)).collect();
+
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+            ) => {
+                let result: Vec<_> = buffer.iter().map(|b| a.$op(b)).collect();
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(
+                a.$op(b),
+                $size,
+            ))),
+
+            _ => unreachable!("arg type of binary op is not required decimal"),
+        }
+    }};
+}
+
+macro_rules! binary_decimal_check_overflow {
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
         let one = <$type_name>::one();
         let min_for_precision = <$type_name>::min_for_precision($size.precision);
         let max_for_precision = <$type_name>::max_for_precision($size.precision);
@@ -152,20 +195,15 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer_a.len());
 
                 for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
-                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
-                        $ctx.set_error(result.len(), "divided by zero");
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
                         result.push(one);
                     } else {
-                        let t = a.$op(b);
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                        result.push(t);
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -180,21 +218,16 @@ macro_rules! binary_decimal {
             ) => {
                 let mut result = Vec::with_capacity(buffer.len());
 
-                if $is_divide && std::intrinsics::unlikely(*b == zero) {
-                    $ctx.set_error(result.len(), "divided by zero");
-                    result.push(one);
-                } else {
-                    for a in buffer.iter() {
-                        let t = a.$op(b);
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                for a in buffer.iter() {
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    } else {
+                        result.push(t);
                     }
                 }
 
@@ -211,20 +244,98 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer.len());
 
                 for b in buffer.iter() {
-                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    } else {
+                        result.push(t);
+                    }
+                }
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let t = a.$op(b);
+                if t < min_for_precision || t > max_for_precision {
+                    $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
+                }
+                Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
+            }
+
+            _ => unreachable!("arg type of binary op is not required decimal"),
+        }
+    }};
+}
+
+macro_rules! binary_decimal_div {
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
+        let zero = <$type_name>::zero();
+        let one = <$type_name>::one();
+
+        match ($a, $b) {
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_b, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer_a.len());
+
+                for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
+                    if std::intrinsics::unlikely(*b == zero) {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        let t = a.$op(b);
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                        result.push(a.$op(b));
+                    }
+                }
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer.len());
+
+                for a in buffer.iter() {
+                    if std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
+                        result.push(one);
+                    } else {
+                        result.push(a.$op(b));
+                    }
+                }
+
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer.len());
+
+                for b in buffer.iter() {
+                    if std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
+                        result.push(one);
+                    } else {
+                        result.push(a.$op(b));
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -238,13 +349,10 @@ macro_rules! binary_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => {
                 let mut t = zero;
-                if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                if std::intrinsics::unlikely(*b == zero) {
                     $ctx.set_error(0, "divided by zero");
                 } else {
                     t = a.$op(b);
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
-                    }
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
