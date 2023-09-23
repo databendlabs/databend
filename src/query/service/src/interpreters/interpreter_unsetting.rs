@@ -93,7 +93,7 @@ impl Interpreter for UnSettingInterpreter {
             }
         }
         self.ctx.set_affect(QueryAffect::ChangeSettings {
-            keys: keys,
+            keys,
             values,
             is_globals,
             is_unset: true,
