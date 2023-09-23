@@ -475,6 +475,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
+    ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
     ESCAPE,
     #[token("EXISTS", ignore(ascii_case))]
