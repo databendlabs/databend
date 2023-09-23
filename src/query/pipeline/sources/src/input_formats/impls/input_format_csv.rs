@@ -382,26 +382,28 @@ impl AligningStateTextBased for CsvReaderState {
             let (num_fields, _, n_out) =
                 self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
             if let Some(num_fields) = num_fields {
-                let data = mem::take(&mut self.out);
+                if num_fields > 0 {
+                    let data = mem::take(&mut self.out);
 
-                let row_batch = RowBatch {
-                    data,
-                    row_ends: vec![last_batch_remain_len + n_out],
-                    field_ends: self.field_ends[..num_fields].to_vec(),
-                    num_fields: vec![num_fields],
-                    split_info: self.split_info.clone(),
-                    batch_id: self.common.batch_id,
-                    start_offset_in_split: self.common.offset,
-                    start_row_in_split: self.common.rows,
-                    start_row_of_split: Some(0),
-                };
-                res.push(row_batch);
+                    let row_batch = RowBatch {
+                        data,
+                        row_ends: vec![last_batch_remain_len + n_out],
+                        field_ends: self.field_ends[..num_fields].to_vec(),
+                        num_fields: vec![num_fields],
+                        split_info: self.split_info.clone(),
+                        batch_id: self.common.batch_id,
+                        start_offset_in_split: self.common.offset,
+                        start_row_in_split: self.common.rows,
+                        start_row_of_split: Some(0),
+                    };
+                    res.push(row_batch);
 
-                self.common.batch_id += 1;
-                debug!(
-                    "csv aligner flush last row of {} bytes",
-                    last_batch_remain_len,
-                );
+                    self.common.batch_id += 1;
+                    debug!(
+                        "csv aligner flush last row of {} bytes",
+                        last_batch_remain_len,
+                    );
+                }
             }
         }
         if file_status.error.is_some() {
