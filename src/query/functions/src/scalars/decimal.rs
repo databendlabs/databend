@@ -47,17 +47,13 @@ use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
+    ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $is_divide: expr) => {
         match $common_type {
             DecimalDataType::Decimal128(size) => {
-                binary_decimal!(
-                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i128, Decimal128, $is_divide
-                )
+                binary_decimal!($a, $b, $ctx, $op, size, i128, Decimal128, $is_divide)
             }
             DecimalDataType::Decimal256(size) => {
-                binary_decimal!(
-                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i256, Decimal256, $is_divide
-                )
+                binary_decimal!($a, $b, $ctx, $op, size, i256, Decimal256, $is_divide)
             }
         }
     };
@@ -142,10 +138,7 @@ impl DecimalOverflowCheck for DecimalChecker {
 }
 
 macro_rules! binary_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $scale_a: expr, $scale_b: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
-        let scale_a = <$type_name>::e($scale_a);
-        let scale_b = <$type_name>::e($scale_b);
-
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
         let zero = <$type_name>::zero();
         let one = <$type_name>::one();
         let min_for_precision = <$type_name>::min_for_precision($size.precision);
@@ -163,7 +156,7 @@ macro_rules! binary_decimal {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        let t = (a * scale_a).$op(b) / scale_b;
+                        let t = a.$op(b);
                         if t < min_for_precision || t > max_for_precision {
                             $ctx.set_error(
                                 result.len(),
@@ -192,7 +185,7 @@ macro_rules! binary_decimal {
                     result.push(one);
                 } else {
                     for a in buffer.iter() {
-                        let t = (a * scale_a).$op(b) / scale_b;
+                        let t = a.$op(b);
                         if t < min_for_precision || t > max_for_precision {
                             $ctx.set_error(
                                 result.len(),
@@ -222,7 +215,7 @@ macro_rules! binary_decimal {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        let t = (a * scale_a).$op(b) / scale_b;
+                        let t = a.$op(b);
                         if t < min_for_precision || t > max_for_precision {
                             $ctx.set_error(
                                 result.len(),
@@ -248,7 +241,7 @@ macro_rules! binary_decimal {
                 if $is_divide && std::intrinsics::unlikely(*b == zero) {
                     $ctx.set_error(0, "divided by zero");
                 } else {
-                    t = (a * scale_a).$op(b) / scale_b;
+                    t = a.$op(b);
                     if t < min_for_precision || t > max_for_precision {
                         $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
                     }
@@ -443,15 +436,6 @@ macro_rules! register_decimal_binary_op {
                 return_decimal_type
             };
 
-            let mut scale_a = 0;
-            let mut scale_b = 0;
-
-            if is_multiply {
-                scale_b = return_decimal_type.scale() as u32;
-            } else if is_divide {
-                scale_a = common_decimal_type.scale() as u32;
-            }
-
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
@@ -509,8 +493,6 @@ macro_rules! register_decimal_binary_op {
                             ctx,
                             common_decimal_type,
                             $op,
-                            scale_a,
-                            scale_b,
                             is_divide
                         );
 
@@ -1230,24 +1212,8 @@ macro_rules! m_decimal_to_decimal {
         } else {
             let values = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
-                $buffer
-                    .iter()
-                    .enumerate()
-                    .map(|(row, x)| {
-                        let x = x * <$dest_type_name>::one();
-                        match x.checked_div(factor) {
-                            Some(x) => x,
-                            None => {
-                                $ctx.set_error(
-                                    row,
-                                    concat!("Decimal overflow at line : ", line!()),
-                                );
-                                <$dest_type_name>::one()
-                            }
-                        }
-                    })
-                    .collect()
-            } else {
+                $buffer.iter().map(|x| x / factor).collect()
+            } else if $from_size.precision > $dest_size.precision {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);
                 let min = <$dest_type_name>::min_for_precision($dest_size.precision);
@@ -1268,6 +1234,9 @@ macro_rules! m_decimal_to_decimal {
                         }
                     })
                     .collect()
+            } else {
+                let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
+                $buffer.iter().map(|x| x * factor).collect()
             };
 
             <$dest_type_name>::to_column(values, $dest_size)
