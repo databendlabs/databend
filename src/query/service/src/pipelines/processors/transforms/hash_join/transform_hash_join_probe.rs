@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -389,7 +390,12 @@ impl Processor for TransformHashJoinProbe {
                     .hash_join_desc
                     .join_type
                     .clone();
-                if self.join_probe_state.hash_join_state.fast_return()? {
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Relaxed)
+                {
                     match join_type {
                         JoinType::Inner
                         | JoinType::Cross
@@ -432,7 +438,12 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::Running => {
                 self.join_probe_state.barrier.wait().await;
-                if self.join_probe_state.hash_join_state.fast_return()? {
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Relaxed)
+                {
                     self.step = HashJoinProbeStep::FastReturn;
                 } else {
                     self.step = HashJoinProbeStep::FinalScan;
@@ -481,7 +492,11 @@ impl Processor for TransformHashJoinProbe {
                     self.first_round = false;
                     return Ok(());
                 }
-                let p_id = *self.join_probe_state.hash_join_state.partition_id.read();
+                let p_id = self
+                    .join_probe_state
+                    .hash_join_state
+                    .partition_id
+                    .load(Ordering::Relaxed);
                 if p_id == -1 {
                     self.step = HashJoinProbeStep::FastReturn;
                     return Ok(());

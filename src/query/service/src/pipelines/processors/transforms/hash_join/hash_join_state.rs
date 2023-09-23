@@ -15,6 +15,7 @@
 use std::cell::SyncUnsafeCell;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicI8;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -76,7 +77,7 @@ pub enum HashJoinHashTable {
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
     /// A shared big hash table stores all the rows from build side
-    pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
+    pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor added its chunks to `HashTable`, it will be decreased by 1.
     /// When the counter is 0, it means all hash join build processors have added their chunks to `HashTable`.
@@ -93,28 +94,28 @@ pub struct HashJoinState {
     /// Some description of hash join. Such as join type, join keys, etc.
     pub(crate) hash_join_desc: HashJoinDesc,
     /// Interrupt the build phase or probe phase.
-    pub(crate) interrupt: Arc<AtomicBool>,
+    pub(crate) interrupt: AtomicBool,
     /// If there is no data in build side, maybe we can fast return.
-    pub(crate) fast_return: Arc<RwLock<bool>>,
+    pub(crate) fast_return: AtomicBool,
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
-    pub(crate) build_num_rows: Arc<SyncUnsafeCell<usize>>,
+    pub(crate) build_num_rows: SyncUnsafeCell<usize>,
     /// Data of the build side.
-    pub(crate) chunks: Arc<SyncUnsafeCell<Vec<DataBlock>>>,
-    pub(crate) build_columns: Arc<SyncUnsafeCell<Vec<ColumnVec>>>,
-    pub(crate) build_columns_data_type: Arc<SyncUnsafeCell<Vec<DataType>>>,
+    pub(crate) chunks: SyncUnsafeCell<Vec<DataBlock>>,
+    pub(crate) build_columns: SyncUnsafeCell<Vec<ColumnVec>>,
+    pub(crate) build_columns_data_type: SyncUnsafeCell<Vec<DataType>>,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
-    pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
-    pub(crate) is_build_projected: Arc<AtomicBool>,
+    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
+    pub(crate) is_build_projected: AtomicBool,
     /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    pub(crate) outer_scan_map: SyncUnsafeCell<Vec<Vec<bool>>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    pub(crate) mark_scan_map: SyncUnsafeCell<Vec<Vec<u8>>>,
 
     /// Spill related states
     /// Spill partition set
-    pub(crate) build_spilled_partitions: Arc<RwLock<HashSet<u8>>>,
+    pub(crate) build_spilled_partitions: RwLock<HashSet<u8>>,
     /// Send message to notify all build processors to next round.
     /// Initial message is false, send true to wake up all build processors.
     pub(crate) continue_build_watcher: Sender<bool>,
@@ -123,7 +124,7 @@ pub struct HashJoinState {
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
-    pub(crate) partition_id: Arc<RwLock<i8>>,
+    pub(crate) partition_id: AtomicI8,
 }
 
 impl HashJoinState {
@@ -146,26 +147,26 @@ impl HashJoinState {
         let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         Ok(Arc::new(HashJoinState {
-            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
+            hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: Mutex::new(0),
             build_done_watcher,
             _build_done_dummy_receiver,
             hash_join_desc,
-            interrupt: Arc::new(AtomicBool::new(false)),
-            fast_return: Arc::new(Default::default()),
+            interrupt: AtomicBool::new(false),
+            fast_return: Default::default(),
             row_space: RowSpace::new(ctx, build_schema, build_projections)?,
-            build_num_rows: Arc::new(SyncUnsafeCell::new(0)),
-            chunks: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            build_columns: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            build_columns_data_type: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            probe_to_build: Arc::new(probe_to_build.to_vec()),
-            is_build_projected: Arc::new(AtomicBool::new(true)),
-            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            build_num_rows: SyncUnsafeCell::new(0),
+            chunks: SyncUnsafeCell::new(Vec::new()),
+            build_columns: SyncUnsafeCell::new(Vec::new()),
+            build_columns_data_type: SyncUnsafeCell::new(Vec::new()),
+            probe_to_build: probe_to_build.to_vec(),
+            is_build_projected: AtomicBool::new(true),
+            outer_scan_map: SyncUnsafeCell::new(Vec::new()),
+            mark_scan_map: SyncUnsafeCell::new(Vec::new()),
             build_spilled_partitions: Default::default(),
             continue_build_watcher,
             _continue_build_dummy_receiver,
-            partition_id: Arc::new(RwLock::new(-2)),
+            partition_id: AtomicI8::new(-2),
         }))
     }
 
@@ -200,11 +201,6 @@ impl HashJoinState {
             .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
         debug_assert!(*rx.borrow() == 2_u8);
         Ok(())
-    }
-
-    pub fn fast_return(&self) -> Result<bool> {
-        let fast_return = self.fast_return.read();
-        Ok(*fast_return)
     }
 
     pub fn need_outer_scan(&self) -> bool {
