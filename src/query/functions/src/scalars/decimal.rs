@@ -282,6 +282,8 @@ macro_rules! binary_decimal_div {
         let zero = <$type_name>::zero();
         let one = <$type_name>::one();
 
+        let multiplier = <$type_name>::e($size.scale as u32);
+
         match ($a, $b) {
             (
                 ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_a, _))),
@@ -294,7 +296,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(a.$op(b));
+                        result.push((a * multiplier).$op(b));
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -314,7 +316,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(a.$op(b));
+                        result.push((a * multiplier).$op(b));
                     }
                 }
 
@@ -335,7 +337,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push(a.$op(b));
+                        result.push((a * multiplier).$op(b));
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -352,7 +354,7 @@ macro_rules! binary_decimal_div {
                 if std::intrinsics::unlikely(*b == zero) {
                     $ctx.set_error(0, "divided by zero");
                 } else {
-                    t = a.$op(b);
+                    t = (a * multiplier).$op(b);
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
@@ -529,7 +531,8 @@ macro_rules! register_decimal_binary_op {
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
 
-            let return_decimal_type = DecimalDataType::binary_result_type(
+            // left, right will unify to same width decimal, both 256 or both 128
+            let (left, right, return_decimal_type) = DecimalDataType::binary_result_type(
                 &decimal_a,
                 &decimal_b,
                 is_multiply,
@@ -538,82 +541,53 @@ macro_rules! register_decimal_binary_op {
             )
             .ok()?;
 
-            let common_decimal_type = if is_divide {
-                DecimalDataType::div_common_type(&decimal_a, &decimal_b).ok()?
-            } else {
-                return_decimal_type
-            };
-
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
                     args_type: vec![
-                        DataType::Decimal(common_decimal_type.clone()),
-                        DataType::Decimal(common_decimal_type.clone()),
+                        DataType::Decimal(left.clone()),
+                        DataType::Decimal(right.clone()),
                     ],
                     return_type: DataType::Decimal(return_decimal_type),
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |ctx, d| {
-                        let lhs = convert_to_decimal_domain(ctx, d[0].clone(), common_decimal_type);
-                        let rhs = convert_to_decimal_domain(ctx, d[1].clone(), common_decimal_type);
+                    calc_domain: Box::new(move |_ctx, d| {
+                        let lhs = d[0].as_decimal();
+                        let rhs = d[1].as_decimal();
+
                         if lhs.is_none() || rhs.is_none() {
                             return FunctionDomain::Full;
                         }
+
                         let lhs = lhs.unwrap();
                         let rhs = rhs.unwrap();
 
-                        let size = common_decimal_type.size();
+                        let size = return_decimal_type.size();
 
                         {
                             match (lhs, rhs) {
                                 (
-                                    DecimalDomain::Decimal128(d1, s1),
-                                    DecimalDomain::Decimal128(d2, s2),
-                                ) if s1 == s2 => $domain_op(&d1, &d2, size.precision)
+                                    DecimalDomain::Decimal128(d1, _),
+                                    DecimalDomain::Decimal128(d2, _),
+                                ) => $domain_op(&d1, &d2, size.precision)
                                     .map(|d| DecimalDomain::Decimal128(d, size)),
                                 (
-                                    DecimalDomain::Decimal256(d1, s1),
-                                    DecimalDomain::Decimal256(d2, s2),
-                                ) if s1 == s2 => $domain_op(&d1, &d2, size.precision)
+                                    DecimalDomain::Decimal256(d1, _),
+                                    DecimalDomain::Decimal256(d2, _),
+                                ) => $domain_op(&d1, &d2, size.precision)
                                     .map(|d| DecimalDomain::Decimal256(d, size)),
-                                _ => unreachable!(),
+                                _ => {
+                                    unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)
+                                }
                             }
                         }
-                        .and_then(|d| {
-                            if common_decimal_type != return_decimal_type {
-                                convert_to_decimal_domain(
-                                    ctx,
-                                    Domain::Decimal(d),
-                                    return_decimal_type,
-                                )
-                            } else {
-                                Some(d)
-                            }
-                        })
                         .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
                         .unwrap_or($default_domain)
                     }),
                     eval: Box::new(move |args, ctx| {
-                        let res = op_decimal!(
-                            &args[0],
-                            &args[1],
-                            ctx,
-                            common_decimal_type,
-                            $op,
-                            is_divide
-                        );
+                        let res = op_decimal!(&args[0], &args[1], ctx, left, $op, is_divide);
 
-                        if common_decimal_type != return_decimal_type {
-                            decimal_to_decimal(
-                                &res.as_ref(),
-                                ctx,
-                                common_decimal_type,
-                                return_decimal_type,
-                            )
-                        } else {
-                            res
-                        }
+                        res
                     }),
                 },
             };
@@ -1343,7 +1317,7 @@ macro_rules! m_decimal_to_decimal {
                     })
                     .collect()
             } else {
-                let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
+                let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
                 $buffer.iter().map(|x| x * factor).collect()
             };
 

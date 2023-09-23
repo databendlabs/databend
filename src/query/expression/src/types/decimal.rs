@@ -705,13 +705,14 @@ impl DecimalDataType {
         Self::from_size(DecimalSize { precision, scale })
     }
 
+    // Returns binded types and result type
     pub fn binary_result_type(
         a: &Self,
         b: &Self,
         is_multiply: bool,
         is_divide: bool,
         is_plus_minus: bool,
-    ) -> Result<Self> {
+    ) -> Result<(Self, Self, Self)> {
         let mut scale = a.scale().max(b.scale());
         let mut precision = a.max_result_precision(b);
 
@@ -739,7 +740,28 @@ impl DecimalDataType {
         }
 
         precision = precision.min(MAX_DECIMAL256_PRECISION);
-        Self::from_size(DecimalSize { precision, scale })
+        let result_type = Self::from_size(DecimalSize { precision, scale })?;
+
+        if is_multiply {
+            Ok((
+                Self::from_size(DecimalSize {
+                    precision,
+                    scale: a.scale(),
+                })?,
+                Self::from_size(DecimalSize {
+                    precision,
+                    scale: b.scale(),
+                })?,
+                result_type,
+            ))
+        } else if is_divide {
+            let common_type = Self::div_common_type(a, b)?;
+            Ok((common_type, common_type, result_type))
+        } else if is_plus_minus {
+            Ok((result_type, result_type, result_type))
+        } else {
+            Ok((result_type, result_type, result_type))
+        }
     }
 }
 
