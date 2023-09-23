@@ -21,30 +21,30 @@ JSON_PATH_EXISTS(<json_data>, <json_path_expression>)
 
 The function returns:
 
-- 1 if the specified JSON path (and conditions if any) exists within the JSON data.
-- 0 if the specified JSON path (and conditions if any) does not exist within the JSON data.
+- `true` if the specified JSON path (and conditions if any) exists within the JSON data.
+- `false` if the specified JSON path (and conditions if any) does not exist within the JSON data.
 - NULL if either the json_data or json_path_expression is NULL or invalid.
 
 ## Examples
 
 ```sql
-SELECT JSON_PATH_EXISTS(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')
+SELECT JSON_PATH_EXISTS(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)');
 
 ----
-1
+true
 
 
-SELECT JSON_PATH_EXISTS(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')
+SELECT JSON_PATH_EXISTS(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)');
 
 ----
-0
+false
 
-SELECT json_path_exists(NULL, '$.a')
+SELECT JSON_PATH_EXISTS(NULL, '$.a');
 
 ----
 NULL
 
-SELECT json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)
+SELECT JSON_PATH_EXISTS(parse_json('{"a": 1, "b": 2}'), NULL);
 
 ----
 NULL
