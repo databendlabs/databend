@@ -61,14 +61,14 @@ pub struct TransformHashJoinProbe {
     probe_state: ProbeState,
     max_block_size: usize,
     outer_scan_finished: bool,
+    processor_id: usize,
+
     // If it's first round, after last processor finish spill
     // We need to read corresponding spilled data to probe with build hash table.
     first_round: bool,
     // If the processor has finished spill, set it to true.
     spill_done: bool,
-
     spill_state: Option<Box<ProbeSpillState>>,
-    processor_id: usize,
 }
 
 impl TransformHashJoinProbe {
@@ -183,7 +183,7 @@ impl TransformHashJoinProbe {
                 Ok(Event::Async)
             } else {
                 if !self.join_probe_state.spill_partitions.read().is_empty() {
-                    self.join_probe_state.finish_final_probe();
+                    self.join_probe_state.finish_final_probe()?;
                     self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
                 }
@@ -194,7 +194,7 @@ impl TransformHashJoinProbe {
                     .get_enable_join_spill()?
                 {
                     // Todo: find a better way to notify build finish.
-                    self.join_probe_state.finish_final_probe();
+                    self.join_probe_state.finish_final_probe()?;
                 }
                 self.output_port.finish();
                 Ok(Event::Finished)
@@ -204,7 +204,7 @@ impl TransformHashJoinProbe {
         Ok(Event::NeedData)
     }
 
-    fn reset(&mut self) {
+    fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
         self.probe_state.reset();
         if self.join_probe_state.hash_join_state.need_outer_scan()
@@ -218,15 +218,17 @@ impl TransformHashJoinProbe {
 
         let mut count = self.join_probe_state.final_probe_workers.lock();
         if *count == 0 {
+            // Before probe processor into `WaitBuild` state, send `1` to channel
+            // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
             self.join_probe_state
                 .hash_join_state
                 .build_done_watcher
                 .send(1)
-                .unwrap();
+                .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
             *count = self.join_probe_state.processor_count;
         }
-
         self.outer_scan_finished = false;
+        Ok(())
     }
 }
 
@@ -280,7 +282,7 @@ impl Processor for TransformHashJoinProbe {
 
                     self.first_round = false;
                     self.spill_done = true;
-                    self.join_probe_state.finish_spill();
+                    self.join_probe_state.finish_spill()?;
                     // Wait build side to build hash table
                     self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
@@ -317,7 +319,7 @@ impl Processor for TransformHashJoinProbe {
                     false => Ok(Event::Sync),
                     true => {
                         if !self.join_probe_state.spill_partitions.read().is_empty() {
-                            self.join_probe_state.finish_final_probe();
+                            self.join_probe_state.finish_final_probe()?;
                             self.step = HashJoinProbeStep::WaitBuild;
                             return Ok(Event::Async);
                         }
@@ -327,7 +329,7 @@ impl Processor for TransformHashJoinProbe {
                             .get_settings()
                             .get_enable_join_spill()?
                         {
-                            self.join_probe_state.finish_final_probe();
+                            self.join_probe_state.finish_final_probe()?;
                         }
                         self.output_port.finish();
                         Ok(Event::Finished)
@@ -372,7 +374,7 @@ impl Processor for TransformHashJoinProbe {
                 if !self.spill_done {
                     self.join_probe_state
                         .hash_join_state
-                        .wait_build_hash_table_finish()
+                        .wait_first_round_build_done()
                         .await?;
                 } else {
                     self.join_probe_state
@@ -455,7 +457,7 @@ impl Processor for TransformHashJoinProbe {
                     let build_spilled_partitions = self
                         .join_probe_state
                         .hash_join_state
-                        .spill_partition
+                        .build_spilled_partitions
                         .read()
                         .clone();
                     let partitions_diff: HashSet<u8> = probe_spilled_partitions
@@ -495,7 +497,7 @@ impl Processor for TransformHashJoinProbe {
                     }
                 }
                 self.join_probe_state.restore_barrier.wait().await;
-                self.reset();
+                self.reset()?;
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };
