@@ -290,7 +290,12 @@ impl Processor for TransformHashJoinBuild {
         match &self.step {
             HashJoinBuildStep::Running => {
                 self.build_state.barrier.wait().await;
-                if self.build_state.hash_join_state.fast_return()? {
+                if self
+                    .build_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Relaxed)
+                {
                     self.step = HashJoinBuildStep::FastReturn;
                     return Ok(());
                 }
@@ -328,7 +333,11 @@ impl Processor for TransformHashJoinBuild {
                 // Currently, each processor will read its own partition
                 // Note: we assume that the partition files will fit into memory
                 // later, will introduce multiple level spill or other way to handle this.
-                let partition_id = *self.build_state.hash_join_state.partition_id.read();
+                let partition_id = self
+                    .build_state
+                    .hash_join_state
+                    .partition_id
+                    .load(Ordering::Relaxed);
                 // If there is no partition to restore, probe will send `-1` to build
                 // Which means it's time to finish.
                 if partition_id == -1 {
