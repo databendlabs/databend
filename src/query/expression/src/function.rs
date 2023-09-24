@@ -651,9 +651,14 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let validity = bitmap.into();
-                        let validity =
-                            common_arrow::arrow::bitmap::and(&nullable_column.validity, &validity);
+                        let mut before_map = bitmap.clone().into();
+                        let mut after_map = nullable_column.validity.clone();
+                        if bitmap.len() > after_map.len() {
+                            after_map = expand_bitmap(&after_map, bitmap.len());
+                        }else if bitmap.len() < after_map.len() {
+                             before_map = expand_bitmap(&before_map, after_map.len());
+                        }
+                        let validity = common_arrow::arrow::bitmap::and(&before_map, &after_map);
                         Column::Nullable(Box::new(NullableColumn {
                             column: nullable_column.column,
                             validity,
