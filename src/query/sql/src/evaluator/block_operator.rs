@@ -91,12 +91,15 @@ impl BlockOperator {
                         None => Ok(input),
                     }
                 } else {
-                    for expr in exprs {
-                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                        let result = evaluator.run(expr)?;
-                        let col = BlockEntry::new(expr.data_type().clone(), result);
-                        input.add_column(col);
-                    }
+                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    let cols = exprs
+                        .iter()
+                        .map(|expr| {
+                            let result = evaluator.run(expr)?;
+                            Ok(BlockEntry::new(expr.data_type().clone(), result))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    input.add_columns(cols);
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
                         None => Ok(input),

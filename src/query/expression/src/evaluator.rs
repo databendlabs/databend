@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Not;
 
@@ -24,6 +25,7 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 use log::error;
+use parking_lot::Mutex;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
@@ -60,6 +62,8 @@ pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
+
+    cached_values: Mutex<HashMap<Expr, Value<AnyType>>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -72,6 +76,7 @@ impl<'a> Evaluator<'a> {
             input_columns,
             func_ctx,
             fn_registry,
+            cached_values: Mutex::new(HashMap::new()),
         }
     }
 
@@ -89,6 +94,21 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    fn cache_expr_value(&self, expr: &Expr, value: Value<AnyType>) {
+        let mut cached_values_ref = self.cached_values.lock();
+        if let Entry::Vacant(v) = cached_values_ref.entry(expr.clone()) {
+            v.insert(value);
+        }
+    }
+
+    fn get_cached_expr_value(&self, expr: &Expr) -> Option<Value<AnyType>> {
+        let found = { self.cached_values.lock().contains_key(expr) };
+        match found {
+            false => None,
+            true => self.cached_values.lock().get(expr).cloned(),
+        }
+    }
+
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None)
     }
@@ -102,7 +122,22 @@ impl<'a> Evaluator<'a> {
 
         #[cfg(debug_assertions)]
         self.check_expr(expr);
+        let cached_result = self.get_cached_expr_value(expr);
+        match cached_result {
+            Some(result) => Ok(result),
+            None => {
+                let result = self.get_expr_evaluated_result(expr, validity)?;
+                self.cache_expr_value(expr, result.clone());
+                Ok(result)
+            }
+        }
+    }
 
+    fn get_expr_evaluated_result(
+        &self,
+        expr: &Expr,
+        validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>, ErrorCode> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
             Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
@@ -194,7 +229,7 @@ impl<'a> Evaluator<'a> {
                             .enumerate()
                             .collect(),
                         self.func_ctx,
-                        self.fn_registry
+                        self.fn_registry,
                     )
                     .1,
                     None,
