@@ -313,6 +313,7 @@ fn test_statement() {
                     field_delimiter = ',',
                     record_delimiter = '\n',
                     skip_header = 1,
+                    error_on_column_count_mismatch = FALSE
                 )
                 size_limit=10;"#,
         r#"COPY INTO 's3://mybucket/data.csv'
@@ -539,6 +540,12 @@ fn test_statement_error() {
         r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
         r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
         r#"COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = CSV,
+                    error_on_column_count_mismatch = 1
+                )"#,
     ];
 
     for case in cases {

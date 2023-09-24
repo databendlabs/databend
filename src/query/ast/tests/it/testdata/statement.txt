@@ -9664,10 +9664,11 @@ COPY INTO mytable
                     field_delimiter = ',',
                     record_delimiter = '\n',
                     skip_header = 1,
+                    error_on_column_count_mismatch = FALSE
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
+COPY INTO mytable FROM @my_stage FILE_FORMAT = ( error_on_column_count_mismatch = 'false' field_delimiter = ',' record_delimiter = '
 ' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
@@ -9693,6 +9694,7 @@ Copy(
         files: None,
         pattern: None,
         file_format: {
+            "error_on_column_count_mismatch": "false",
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",

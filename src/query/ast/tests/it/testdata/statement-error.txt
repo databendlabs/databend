@@ -551,7 +551,7 @@ error:
   --> SQL:1:37
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  | ----                                ^ expected `)`, `TYPE`, `COMPRESSION`, `FORMAT_NAME`, `RECORD_DELIMITER`, `FIELD_DELIMITER`, `QUOTE`, `NAN_DISPLAY`, `NULL_DISPLAY`, `ESCAPE`, `ROW_TAG`, `SKIP_HEADER`, or `NON_DISPLAY`
+  | ----                                ^ expected `)`, `TYPE`, `COMPRESSION`, `FORMAT_NAME`, `RECORD_DELIMITER`, `FIELD_DELIMITER`, `QUOTE`, `NAN_DISPLAY`, `NULL_DISPLAY`, `ESCAPE`, `ROW_TAG`, `SKIP_HEADER`, `ERROR_ON_COLUMN_COUNT_MISMATCH`, or `NON_DISPLAY`
   | |                                   
   | while parsing `COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -627,7 +627,7 @@ error:
   --> SQL:1:92
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
-  | ----                                                                                       ^^^^^^^^^^^^ expected `SKIP_HEADER`, `FIELD_DELIMITER`, `ESCAPE`, `NON_DISPLAY`, `NULL_DISPLAY`, `TYPE`, `NAN_DISPLAY`, `ROW_TAG`, `RECORD_DELIMITER`, `QUOTE`, `COMPRESSION`, `FORMAT_NAME`, `)`, or `,`
+  | ----                                                                                       ^^^^^^^^^^^^ expected `SKIP_HEADER`, `FIELD_DELIMITER`, `ESCAPE`, `NON_DISPLAY`, `NULL_DISPLAY`, `TYPE`, `NAN_DISPLAY`, `ROW_TAG`, `RECORD_DELIMITER`, `QUOTE`, `COMPRESSION`, `FORMAT_NAME`, `ERROR_ON_COLUMN_COUNT_MISMATCH`, `)`, or `,`
   | |                                                                                           
   | while parsing `COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -637,5 +637,32 @@ error:
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
+
+
+---------- Input ----------
+COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = CSV,
+                    error_on_column_count_mismatch = 1
+                )
+---------- Output ---------
+error: 
+  --> SQL:5:54
+  |
+1 | COPY INTO mytable
+  | ---- while parsing `COPY
+                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
+                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
+                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
+                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+                [ PATTERN = '<regex_pattern>' ]
+                [ VALIDATION_MODE = RETURN_ROWS ]
+                [ copyOptions ]`
+2 |                 FROM @my_stage
+3 |                 FILE_FORMAT = (
+4 |                     type = CSV,
+5 |                     error_on_column_count_mismatch = 1
+  |                                                      ^ expected `TRUE` or `FALSE`
 
 
