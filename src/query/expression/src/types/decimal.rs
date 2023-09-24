@@ -542,7 +542,8 @@ impl Decimal for i256 {
     }
 
     fn from_float(value: f64) -> Self {
-        i256::from(value.to_i128().unwrap())
+        let bs = value.to_le_bytes().to_vec();
+        Self::de_binary(&mut bs.as_slice())
     }
 
     fn from_u64(value: u64) -> Self {
