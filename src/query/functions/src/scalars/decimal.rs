@@ -47,13 +47,31 @@ use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $is_divide: expr) => {
-        match $common_type {
-            DecimalDataType::Decimal128(size) => {
-                binary_decimal!($a, $b, $ctx, $op, size, i128, Decimal128, $is_divide)
+    ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $result_type: expr, $op: ident, $is_divide: expr) => {
+        match $left {
+            DecimalDataType::Decimal128(_) => {
+                binary_decimal!(
+                    $a,
+                    $b,
+                    $ctx,
+                    $op,
+                    $result_type.size(),
+                    i128,
+                    Decimal128,
+                    $is_divide
+                )
             }
-            DecimalDataType::Decimal256(size) => {
-                binary_decimal!($a, $b, $ctx, $op, size, i256, Decimal256, $is_divide)
+            DecimalDataType::Decimal256(_) => {
+                binary_decimal!(
+                    $a,
+                    $b,
+                    $ctx,
+                    $op,
+                    $result_type.size(),
+                    i256,
+                    Decimal256,
+                    $is_divide
+                )
             }
         }
     };
@@ -585,7 +603,16 @@ macro_rules! register_decimal_binary_op {
                         .unwrap_or($default_domain)
                     }),
                     eval: Box::new(move |args, ctx| {
-                        let res = op_decimal!(&args[0], &args[1], ctx, left, $op, is_divide);
+                        let res = op_decimal!(
+                            &args[0],
+                            &args[1],
+                            ctx,
+                            left,
+                            right,
+                            return_decimal_type,
+                            $op,
+                            is_divide
+                        );
 
                         res
                     }),
