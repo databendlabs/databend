@@ -145,11 +145,11 @@ where
 }
 
 #[derive(Default)]
-pub struct DecimalSumState<T: Decimal> {
+pub struct DecimalSumState<const OVERFLOW: bool, T: Decimal> {
     pub value: T,
 }
 
-impl<T> DecimalSumState<T>
+impl<const OVERFLOW: bool, T> DecimalSumState<OVERFLOW, T>
 where T: Decimal
         + std::ops::AddAssign
         + Serialize
@@ -160,21 +160,23 @@ where T: Decimal
         + std::cmp::PartialOrd
 {
     #[inline]
-    pub fn check_over_flow(&self) -> Result<()> {
-        if self.value > T::MAX || self.value < T::MIN {
-            return Err(ErrorCode::Overflow(format!(
-                "Decimal overflow: {} not in [{}, {}]",
-                self.value,
-                T::MIN,
-                T::MAX,
-            )));
+    pub fn add(&mut self, value: T) -> Result<()> {
+        self.value += value;
+        if OVERFLOW {
+            if self.value > T::MAX || self.value < T::MIN {
+                return Err(ErrorCode::Overflow(format!(
+                    "Decimal overflow: {} not in [{}, {}]",
+                    self.value,
+                    T::MIN,
+                    T::MAX,
+                )));
+            }
         }
-
         Ok(())
     }
 }
 
-impl<T> SumState for DecimalSumState<T>
+impl<const OVERFLOW: bool, T> SumState for DecimalSumState<OVERFLOW, T>
 where T: Decimal
         + std::ops::AddAssign
         + Serialize
@@ -195,8 +197,7 @@ where T: Decimal
 
     fn accumulate_row(&mut self, column: &Column, row: usize) -> Result<()> {
         let buffer = T::try_downcast_column(column).unwrap().0;
-        self.value += buffer[row];
-        self.check_over_flow()
+        self.add(buffer[row])
     }
 
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()> {
@@ -205,25 +206,24 @@ where T: Decimal
             Some(validity) => {
                 for (i, v) in validity.iter().enumerate() {
                     if v {
-                        self.value += buffer[i];
+                        self.add(buffer[i])?;
                     }
                 }
             }
             None => {
                 for v in buffer.iter() {
-                    self.value += *v;
+                    self.add(*v)?;
                 }
             }
         }
-        self.check_over_flow()
+        Ok(())
     }
 
     fn accumulate_keys(places: &[StateAddr], offset: usize, columns: &Column) -> Result<()> {
         let buffer = T::try_downcast_column(columns).unwrap().0;
         for (i, place) in places.iter().enumerate() {
-            let state = place.next(offset).get::<DecimalSumState<T>>();
-            state.value += buffer[i];
-            state.check_over_flow()?;
+            let state = place.next(offset).get::<DecimalSumState<OVERFLOW, T>>();
+            state.add(buffer[i])?;
         }
         Ok(())
     }
@@ -231,7 +231,7 @@ where T: Decimal
     #[inline(always)]
     fn merge(&mut self, other: &mut Self) -> Result<()> {
         self.value += other.value;
-        self.check_over_flow()
+        self.add(other.value)
     }
 
     fn merge_result(
@@ -401,11 +401,22 @@ pub fn try_create_aggregate_sum_function(
                 scale: s.scale,
             };
 
-            AggregateSumFunction::<DecimalSumState<i128>>::try_create(
-                display_name,
-                arguments,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-            )
+            // DecimalWidth<int64_t> = 18
+            let overflow = s.precision > 18;
+
+            if overflow {
+                AggregateSumFunction::<DecimalSumState<false, i128>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                )
+            } else {
+                AggregateSumFunction::<DecimalSumState<true, i128>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                )
+            }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
             let p = MAX_DECIMAL256_PRECISION;
@@ -414,11 +425,21 @@ pub fn try_create_aggregate_sum_function(
                 scale: s.scale,
             };
 
-            AggregateSumFunction::<DecimalSumState<i256>>::try_create(
-                display_name,
-                arguments,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-            )
+            let overflow = s.precision > 18;
+
+            if overflow {
+                AggregateSumFunction::<DecimalSumState<false, i256>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                )
+            } else {
+                AggregateSumFunction::<DecimalSumState<true, i256>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                )
+            }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "AggregateSumFunction does not support type '{:?}'",

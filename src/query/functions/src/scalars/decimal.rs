@@ -54,6 +54,8 @@ macro_rules! op_decimal {
                     $a,
                     $b,
                     $ctx,
+                    $left,
+                    $right,
                     $op,
                     $result_type.size(),
                     i128,
@@ -66,6 +68,8 @@ macro_rules! op_decimal {
                     $a,
                     $b,
                     $ctx,
+                    $left,
+                    $right,
                     $op,
                     $result_type.size(),
                     i256,
@@ -132,11 +136,23 @@ macro_rules! compare_decimal {
 }
 
 macro_rules! binary_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
+    ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
         let overflow = $size.precision == <$type_name>::default_decimal_size().precision;
 
         if $is_divide {
-            binary_decimal_div!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+            let scale_a = $left.scale();
+            let scale_b = $right.scale();
+            binary_decimal_div!(
+                $a,
+                $b,
+                $ctx,
+                scale_a,
+                scale_b,
+                $op,
+                $size,
+                $type_name,
+                $decimal_type
+            )
         } else if overflow {
             binary_decimal_check_overflow!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
         } else {
@@ -296,11 +312,18 @@ macro_rules! binary_decimal_check_overflow {
 }
 
 macro_rules! binary_decimal_div {
-    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
+    ($a: expr, $b: expr, $ctx: expr, $scale_a: expr, $scale_b: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
         let zero = <$type_name>::zero();
         let one = <$type_name>::one();
 
-        let multiplier = <$type_name>::e($size.scale as u32);
+        let (scale_mul, scale_div) = if $scale_b + $size.scale > $scale_a {
+            ($scale_b + $size.scale - $scale_a, 0)
+        } else {
+            (0, $scale_b + $size.scale - $scale_a)
+        };
+
+        let multiplier = <$type_name>::e(scale_mul as u32);
+        let div = <$type_name>::e(scale_div as u32);
 
         match ($a, $b) {
             (
@@ -314,7 +337,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push((a * multiplier).$op(b));
+                        result.push((a * multiplier).$op(b) / div);
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -334,7 +357,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push((a * multiplier).$op(b));
+                        result.push((a * multiplier).$op(b) / div);
                     }
                 }
 
@@ -355,7 +378,7 @@ macro_rules! binary_decimal_div {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        result.push((a * multiplier).$op(b));
+                        result.push((a * multiplier).$op(b) / div);
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -372,7 +395,7 @@ macro_rules! binary_decimal_div {
                 if std::intrinsics::unlikely(*b == zero) {
                     $ctx.set_error(0, "divided by zero");
                 } else {
-                    t = (a * multiplier).$op(b);
+                    t = (a * multiplier).$op(b) / div;
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }

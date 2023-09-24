@@ -691,7 +691,7 @@ impl DecimalDataType {
     }
 
     // For div ops, we unify types to a super type
-    pub fn div_common_type(a: &Self, b: &Self) -> Result<Self> {
+    pub fn div_common_type(a: &Self, b: &Self) -> Result<(Self, Self)> {
         let l: u8 = (a.leading_digits() + b.scale()).max(b.leading_digits());
         let scale = a.scale().max((a.scale() + 6).min(12));
 
@@ -702,7 +702,22 @@ impl DecimalDataType {
             precision = precision.min(MAX_DECIMAL128_PRECISION);
         }
         precision = precision.min(MAX_DECIMAL256_PRECISION);
-        Self::from_size(DecimalSize { precision, scale })
+
+        let a_type = Self::from_size(DecimalSize { precision, scale })?;
+
+        let mut b_precision = b.precision();
+        if b_precision <= MAX_DECIMAL128_PRECISION && a_type.precision() > MAX_DECIMAL128_PRECISION
+        {
+            b_precision = a_type.precision();
+        }
+
+        Ok((
+            a_type,
+            Self::from_size(DecimalSize {
+                precision: b_precision,
+                scale: b.scale(),
+            })?,
+        ))
     }
 
     // Returns binded types and result type
@@ -755,8 +770,8 @@ impl DecimalDataType {
                 result_type,
             ))
         } else if is_divide {
-            let common_type = Self::div_common_type(a, b)?;
-            Ok((common_type, common_type, result_type))
+            let (a, b) = Self::div_common_type(a, b)?;
+            Ok((a, b, result_type))
         } else {
             Ok((result_type, result_type, result_type))
         }
