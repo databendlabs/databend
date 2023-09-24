@@ -37,6 +37,7 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
+use crate::utils::arrow::expand_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
