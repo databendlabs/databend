@@ -67,20 +67,13 @@ pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
-    /// Processors count
-    pub(crate) _processor_count: usize,
-    /// When build side input data is coming, we will put it into `RowSpace`'s chunks.
-    /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
-    /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
-    /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
-    pub(crate) chunk_size_limit: usize,
     /// Wait util all processors finish row space build, then go to next phase.
     pub(crate) barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
     /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
-    pub(crate) row_space_builders: Mutex<usize>,
+    pub(crate) row_space_builders: AtomicUsize,
     /// Hash method for hash join keys.
     pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
@@ -89,10 +82,10 @@ pub struct HashJoinBuildState {
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
     pub(crate) build_projections: ColumnSet,
-    /// FIXME: the field can be removed later
     pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
     pub(crate) build_hash_table_tasks: RwLock<VecDeque<(usize, usize)>>,
+    pub(crate) mutex: Mutex<()>,
 
     /// Spill related states
     /// `send_val` is the message which will be send into `build_done_watcher` channel.
@@ -107,7 +100,6 @@ impl HashJoinBuildState {
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
-        processor_count: usize,
         barrier: Barrier,
         restore_barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
@@ -117,10 +109,8 @@ impl HashJoinBuildState {
             .collect::<Vec<_>>();
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
-            ctx: ctx.clone(),
+            ctx,
             hash_join_state,
-            _processor_count: processor_count,
-            chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
             barrier,
             restore_barrier,
             row_space_builders: Default::default(),
@@ -130,6 +120,7 @@ impl HashJoinBuildState {
             build_projections: build_projections.clone(),
             build_worker_num: Default::default(),
             build_hash_table_tasks: Default::default(),
+            mutex: Default::default(),
             send_val: AtomicU8::new(1),
         }))
     }
@@ -137,19 +128,30 @@ impl HashJoinBuildState {
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
-        let mut buffer_row_size = self.hash_join_state.row_space.buffer_row_size.write();
-        *buffer_row_size += input.num_rows();
+        let input_rows = input.num_rows();
         buffer.push(input);
-        if *buffer_row_size < self.chunk_size_limit {
-            Ok(())
-        } else {
-            let data_block = DataBlock::concat(buffer.as_slice())?;
-            buffer.clear();
-            *buffer_row_size = 0;
-            drop(buffer);
-            drop(buffer_row_size);
-            self.add_build_block(data_block)
+        let old_size = self
+            .hash_join_state
+            .row_space
+            .buffer_row_size
+            .fetch_add(input_rows, Ordering::Relaxed);
+
+        // When build side input data is coming, will put it into chunks.
+        // To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
+        // Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
+        // After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
+        if old_size + input_rows < self.ctx.get_settings().get_max_block_size()? as usize * 16 {
+            return Ok(());
         }
+
+        let data_block = DataBlock::concat(buffer.as_slice())?;
+        buffer.clear();
+        self.hash_join_state
+            .row_space
+            .buffer_row_size
+            .store(0, Ordering::Relaxed);
+        drop(buffer);
+        self.add_build_block(data_block)
     }
 
     // Add `data_block` for build table to `row_space`
@@ -184,8 +186,8 @@ impl HashJoinBuildState {
         };
 
         {
-            // Acquire write lock in current scope
-            let _write_lock = self.hash_join_state.row_space.write_lock.write();
+            // Acquire lock in current scope
+            let _lock = self.mutex.lock();
             if self.hash_join_state.need_outer_scan() {
                 let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
                 outer_scan_map.push(block_outer_scan_map);
@@ -204,20 +206,19 @@ impl HashJoinBuildState {
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
     pub fn build_attach(&self) -> usize {
-        let mut count = self.row_space_builders.lock();
-        *count += 1;
-        let mut count = self.hash_join_state.hash_table_builders.lock();
-        *count += 1;
+        let worker_id = self.row_space_builders.fetch_add(1, Ordering::Relaxed);
+        self.hash_join_state
+            .hash_table_builders
+            .fetch_add(1, Ordering::Relaxed);
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
-        *count
+        worker_id
     }
 
     /// Detach to state: `row_space_builders`,
     /// create finalize task and initialize the hash table.
     pub(crate) fn row_space_build_done(&self) -> Result<()> {
-        let mut count = self.row_space_builders.lock();
-        *count -= 1;
-        if *count == 0 {
+        let old_count = self.row_space_builders.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {
@@ -581,9 +582,11 @@ impl HashJoinBuildState {
 
     /// Detach to state: `hash_table_builders`.
     pub(crate) fn build_done(&self) -> Result<()> {
-        let mut count = self.hash_join_state.hash_table_builders.lock();
-        *count -= 1;
-        if *count == 0 {
+        let old_count = self
+            .hash_join_state
+            .hash_table_builders
+            .fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             info!("finish build hash table with {} rows", unsafe {
                 *self.hash_join_state.build_num_rows.get()
             });

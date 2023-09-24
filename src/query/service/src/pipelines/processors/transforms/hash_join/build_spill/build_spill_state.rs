@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -75,14 +76,11 @@ impl BuildSpillState {
         // Collect rows in `RowSpace`'s buffer
         let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
         blocks.extend(row_space_buffer.drain(..));
-        let mut buffer_row_size = self
-            .build_state
+        self.build_state
             .hash_join_state
             .row_space
             .buffer_row_size
-            .write();
-        *buffer_row_size = 0;
-
+            .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
         blocks.append(chunks);

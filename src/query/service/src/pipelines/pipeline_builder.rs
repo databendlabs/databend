@@ -960,7 +960,6 @@ impl PipelineBuilder {
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
-            output_len,
             barrier,
             restore_barrier,
         )?;

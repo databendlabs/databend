@@ -208,17 +208,21 @@ impl TransformHashJoinProbe {
     fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
         self.probe_state.reset();
-        if self.join_probe_state.hash_join_state.need_outer_scan()
-            || self.join_probe_state.hash_join_state.need_mark_scan()
+        if (self.join_probe_state.hash_join_state.need_outer_scan()
+            || self.join_probe_state.hash_join_state.need_mark_scan())
+            && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
         {
-            let mut count = self.join_probe_state.probe_workers.lock();
-            if *count == 0 {
-                *count = self.join_probe_state.processor_count;
-            }
+            self.join_probe_state
+                .probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
 
-        let mut count = self.join_probe_state.final_probe_workers.lock();
-        if *count == 0 {
+        if self
+            .join_probe_state
+            .final_probe_workers
+            .load(Ordering::Relaxed)
+            == 0
+        {
             // Before probe processor into `WaitBuild` state, send `1` to channel
             // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
             self.join_probe_state
@@ -226,7 +230,9 @@ impl TransformHashJoinProbe {
                 .build_done_watcher
                 .send(1)
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-            *count = self.join_probe_state.processor_count;
+            self.join_probe_state
+                .final_probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
         self.outer_scan_finished = false;
         Ok(())
