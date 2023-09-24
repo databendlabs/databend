@@ -24,6 +24,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -52,12 +53,15 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub trait FunctionFactory =
     Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
+#[derive(Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct Function {
     pub signature: FunctionSignature,
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub eval: FunctionEval,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FunctionSignature {
     pub name: String,
     pub args_type: Vec<DataType>,
