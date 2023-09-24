@@ -162,15 +162,13 @@ where T: Decimal
     #[inline]
     pub fn add(&mut self, value: T) -> Result<()> {
         self.value += value;
-        if OVERFLOW {
-            if self.value > T::MAX || self.value < T::MIN {
-                return Err(ErrorCode::Overflow(format!(
-                    "Decimal overflow: {} not in [{}, {}]",
-                    self.value,
-                    T::MIN,
-                    T::MAX,
-                )));
-            }
+        if OVERFLOW && (self.value > T::MAX || self.value < T::MIN) {
+            return Err(ErrorCode::Overflow(format!(
+                "Decimal overflow: {} not in [{}, {}]",
+                self.value,
+                T::MIN,
+                T::MAX,
+            )));
         }
         Ok(())
     }
