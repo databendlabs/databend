@@ -48,6 +48,7 @@ fn test_decode_v32_csv_file_format_params() -> anyhow::Result<()> {
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
+            error_on_column_count_mismatch: true,
         })
     };
     common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
