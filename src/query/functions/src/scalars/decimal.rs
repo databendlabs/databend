@@ -1292,10 +1292,10 @@ macro_rules! m_decimal_to_decimal {
                 <$dest_type_name>::to_column(buffer, $dest_size)
             }
         } else {
-            let values = if $from_size.scale > $dest_size.scale {
+            let values: Vec<_> = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
                 $buffer.iter().map(|x| x / factor).collect()
-            } else if $from_size.precision > $dest_size.precision {
+            } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);
                 let min = <$dest_type_name>::min_for_precision($dest_size.precision);
@@ -1316,11 +1316,7 @@ macro_rules! m_decimal_to_decimal {
                         }
                     })
                     .collect()
-            } else {
-                let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
-                $buffer.iter().map(|x| x * factor).collect()
             };
-
             <$dest_type_name>::to_column(values, $dest_size)
         }
     };

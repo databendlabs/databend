@@ -757,8 +757,6 @@ impl DecimalDataType {
         } else if is_divide {
             let common_type = Self::div_common_type(a, b)?;
             Ok((common_type, common_type, result_type))
-        } else if is_plus_minus {
-            Ok((result_type, result_type, result_type))
         } else {
             Ok((result_type, result_type, result_type))
         }
