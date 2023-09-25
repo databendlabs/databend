@@ -526,8 +526,8 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(builder.finalize());
         }
 
-        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         let pipe_items = vec![
             table.matched_mutator(
@@ -606,8 +606,8 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
@@ -687,8 +687,8 @@ impl PipelineBuilder {
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
 
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = table.merge_into_mutators(
