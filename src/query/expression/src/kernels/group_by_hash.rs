@@ -219,7 +219,7 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<KeysState> {
         let mut data_size = 0;
         for (column, _) in group_columns.iter() {
-            data_size += column.memory_size();
+            data_size += column.serialize_size();
         }
         let mut data: Vec<u8> = Vec::with_capacity(data_size);
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -291,7 +291,7 @@ impl HashMethod for HashMethodDictionarySerializer {
         if !other_columns.is_empty() {
             let mut data_size = 0;
             for column in other_columns {
-                data_size += column.memory_size();
+                data_size += column.serialize_size();
             }
             let mut data: Vec<u8> = Vec::with_capacity(data_size);
             let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -680,10 +680,11 @@ pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut
             *row_space = row_space.add(1);
         },
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
-            let (str_ptr, len) = v.index_ptr(row);
-            std::ptr::write(row_space.cast::<usize>(), len);
-            *row_space = row_space.add(std::mem::size_of::<usize>());
-            std::ptr::copy_nonoverlapping(str_ptr, *row_space, len);
+            let value = v.index_unchecked(row);
+            let len = value.len();
+            std::ptr::write(row_space.cast::<u64>(), len as u64);
+            *row_space = row_space.add(std::mem::size_of::<u64>());
+            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, len);
             *row_space = row_space.add(len);
         },
         Column::Timestamp(v) => unsafe {
@@ -697,8 +698,8 @@ pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             unsafe {
-                std::ptr::write(row_space.cast::<usize>(), data.len());
-                *row_space = row_space.add(std::mem::size_of::<usize>());
+                std::ptr::write(row_space.cast::<u64>(), data.len() as u64);
+                *row_space = row_space.add(std::mem::size_of::<u64>());
             }
             for i in 0..data.len() {
                 serialize_column_binary(&data, i, row_space);

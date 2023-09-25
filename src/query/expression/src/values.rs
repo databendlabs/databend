@@ -1819,6 +1819,29 @@ impl Column {
         }
     }
 
+    pub fn serialize_size(&self) -> usize {
+        match self {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => 0,
+            Column::Number(NumberColumn::UInt8(col)) => col.len(),
+            Column::Number(NumberColumn::UInt16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::UInt32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::UInt64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Float32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::Float64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Int8(col)) => col.len(),
+            Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
+            Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Boolean(c) => c.len(),
+            Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Nullable(c) => c.column.serialize_size() + c.len(),
+            Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
+        }
+    }
+
     /// Returns (is_all_null, Option bitmap)
     pub fn validity(&self) -> (bool, Option<&Bitmap>) {
         match self {
@@ -2246,7 +2269,7 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             ColumnBuilder::Array(builder) => {
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 for _ in 0..len {
                     builder.builder.push_binary(reader)?;
                 }
@@ -2255,7 +2278,7 @@ impl ColumnBuilder {
             ColumnBuilder::Map(builder) => {
                 const KEY: usize = 0;
                 const VALUE: usize = 1;
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 let map_builder = builder.builder.as_tuple_mut().unwrap();
                 for _ in 0..len {
                     map_builder[KEY].push_binary(reader)?;
