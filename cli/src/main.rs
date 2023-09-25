@@ -134,7 +134,7 @@ struct Args {
     #[clap(short = 'n', long, help = "Force non-interactive mode")]
     non_interactive: bool,
 
-    #[clap(short = 'q', long, help = "Query to execute")]
+    #[clap(long, require_equals = true, help = "Query to execute")]
     query: Option<String>,
 
     #[clap(short = 'd', long, help = "Data to load, @file or @- for stdin")]
