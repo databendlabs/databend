@@ -221,12 +221,11 @@ impl<'a> TypeChecker<'a> {
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
                 let result = match ident {
                     ColumnID::Name(ident) => {
-                        let column = normalize_identifier(ident, self.name_resolution_ctx).name;
+                        let column = normalize_identifier(ident, self.name_resolution_ctx);
                         self.bind_context.resolve_name(
                             database.as_deref(),
                             table.as_deref(),
-                            column.as_str(),
-                            ident.span,
+                            &column,
                             self.aliases,
                         )?
                     }
@@ -3075,12 +3074,15 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_name = names.join(":");
+        let inner_column_ident = Identifier {
+            name: names.join(":"),
+            quote: None,
+            span,
+        };
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
-            inner_column_name.as_str(),
-            span,
+            &inner_column_ident,
             self.aliases,
         ) {
             Ok(result) => {
