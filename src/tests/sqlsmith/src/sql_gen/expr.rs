@@ -45,6 +45,14 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    pub(crate) fn gen_simple_expr(&mut self, ty: &DataType) -> Expr {
+        if self.rng.gen_bool(0.6) {
+            self.gen_column(ty)
+        } else {
+            self.gen_scalar_value(ty)
+        }
+    }
+
     fn gen_column(&mut self, ty: &DataType) -> Expr {
         for bound_column in &self.bound_columns {
             if bound_column.data_type == *ty {
@@ -389,7 +397,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     7 => {
                         let not = self.rng.gen_bool(0.5);
-                        let subquery = self.gen_subquery();
+                        let (subquery, _) = self.gen_subquery(false);
                         Expr::Exists {
                             span: None,
                             not,
@@ -404,7 +412,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             3 => Some(SubqueryModifier::Some),
                             _ => unreachable!(),
                         };
-                        let subquery = self.gen_subquery();
+                        let (subquery, _) = self.gen_subquery(true);
                         Expr::Subquery {
                             span: None,
                             modifier,
@@ -415,7 +423,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         let expr_ty = self.gen_simple_data_type();
                         let expr = self.gen_expr(&expr_ty);
                         let not = self.rng.gen_bool(0.5);
-                        let subquery = self.gen_subquery();
+                        let (subquery, _) = self.gen_subquery(true);
                         Expr::InSubquery {
                             span: None,
                             expr: Box::new(expr),

@@ -100,6 +100,7 @@ pub struct ParquetRSRowGroupPart {
     pub uncompressed_size: u64,
     pub compressed_size: u64,
     pub sort_min_max: Option<(Scalar, Scalar)>,
+    pub omit_filter: bool,
 }
 
 impl Eq for ParquetRSRowGroupPart {}

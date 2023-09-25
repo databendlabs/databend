@@ -232,9 +232,12 @@ impl IcebergTable {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
-        let filter = push_downs
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter = push_downs.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
 
         let schema = self.schema();
 

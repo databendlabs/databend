@@ -78,9 +78,19 @@ impl Parquet2Table {
             project_parquet_schema(&self.arrow_schema, &self.schema_descr, &projection)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
 
-        let filter = push_down
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
+
+        let inverted_filter = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.inverted_filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
 
         let top_k = top_k.map(|top_k| {
             let offset = projected_column_nodes
@@ -94,11 +104,13 @@ impl Parquet2Table {
         let func_ctx = ctx.get_function_context()?;
 
         let row_group_pruner = if self.read_options.prune_row_groups() {
-            Some(RangePrunerCreator::try_create(
+            let p1 = RangePrunerCreator::try_create(func_ctx.clone(), &schema, filter.as_ref())?;
+            let p2 = RangePrunerCreator::try_create(
                 func_ctx.clone(),
                 &schema,
-                filter.as_ref(),
-            )?)
+                inverted_filter.as_ref(),
+            )?;
+            Some((p1, p2))
         } else {
             None
         };
