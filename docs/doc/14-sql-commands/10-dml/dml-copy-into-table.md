@@ -342,7 +342,7 @@ FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_hea
 
 ### Example 3: Loading Compressed Data
 
-This example loads 10 rows of data from a GZIP-compressed CSV file on Amazon S3 into Databend:
+This example loads a GZIP-compressed CSV file on Amazon S3 into Databend:
 
 ```sql
 COPY INTO mytable
