@@ -104,33 +104,6 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    fn cache_expr_value(&self, expr: &Expr, value: Value<AnyType>) {
-        let mut cached_values_ref = self.cached_values.as_ref().unwrap().write();
-        if let Entry::Vacant(v) = cached_values_ref.entry(expr.clone()) {
-            v.insert(value);
-        }
-    }
-
-    fn get_cached_expr_value(&self, expr: &Expr) -> Option<Value<AnyType>> {
-        let found = {
-            self.cached_values
-                .as_ref()
-                .unwrap()
-                .read()
-                .contains_key(expr)
-        };
-        match found {
-            false => None,
-            true => self
-                .cached_values
-                .as_ref()
-                .unwrap()
-                .read()
-                .get(expr)
-                .cloned(),
-        }
-    }
-
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None)
     }
@@ -146,9 +119,14 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         // try get result from cache
-        if let Some(_) = self.cached_values {
-            if let Some(result) = self.get_cached_expr_value(expr) {
-                return Ok(result);
+        if let Some(cached_values) = &self.cached_values {
+            let found = cached_values.read().contains_key(expr);
+            if found {
+                return cached_values
+                    .read()
+                    .get(expr)
+                    .ok_or_else(|| ErrorCode::Internal("Logical error, it's a bug."))
+                    .cloned();
             }
         }
 
@@ -253,9 +231,14 @@ impl<'a> Evaluator<'a> {
                 RECURSING.store(false, Ordering::SeqCst);
             }
         }
-        if let Some(_) = self.cached_values && let Ok(r) = &result {
-            self.cache_expr_value(expr, r.clone());
-        }
+        self.cached_values.map(|cached_values| {
+            if let Ok(r) = &result {
+                let mut cached_values_ref = cached_values.write();
+                if let Entry::Vacant(v) = cached_values_ref.entry(expr.clone()) {
+                    v.insert(r.clone());
+                }
+            }
+        });
         result
     }
 
