@@ -267,7 +267,7 @@ impl HashJoinProbeState {
             *count += 1;
             res = *count;
         }
-        if self.ctx.get_settings().get_enable_join_spill()? {
+        if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
             let mut count = self.final_probe_workers.lock();
             *count += 1;
             let mut count = self.spill_workers.lock();
