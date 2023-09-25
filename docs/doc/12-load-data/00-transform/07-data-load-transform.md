@@ -10,13 +10,9 @@ COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
             FROM { userStage | internalStage | externalStage } )
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = {PARQUET} [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] ) ]
 [ copyOptions ]
 ```
-
-:::note
-This feature is currently only available for the Parquet file format.
-:::
 
 This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
 
