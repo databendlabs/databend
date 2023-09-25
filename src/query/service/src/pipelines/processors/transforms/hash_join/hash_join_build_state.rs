@@ -244,7 +244,7 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
-                && !self.ctx.get_settings().get_enable_join_spill()?
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
             {
                 self.hash_join_state
                     .fast_return
