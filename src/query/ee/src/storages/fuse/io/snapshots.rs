@@ -49,7 +49,7 @@ where
     }
 
     // 1. Get all the snapshot by chunks, save all the segments location.
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let max_io_requests = ctx.get_settings().get_max_threads()? as usize;
 
     let start = Instant::now();
     let mut count = 1;

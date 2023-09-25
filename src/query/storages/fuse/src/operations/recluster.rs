@@ -328,7 +328,7 @@ impl FuseTable {
         mut segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(SegmentLocation, Arc<CompactSegmentInfo>)>> {
         let max_concurrency = {
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let max_io_requests = ctx.get_settings().get_max_threads()? as usize;
             let v = std::cmp::max(max_io_requests, 10);
             if v > max_io_requests {
                 warn!(

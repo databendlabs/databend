@@ -388,11 +388,10 @@ async fn generage_segments(
     }
 
     let threads_nums = ctx.get_settings().get_max_threads()? as usize;
-    let permit_nums = ctx.get_settings().get_max_storage_io_requests()? as usize;
     execute_futures_in_parallel(
         tasks,
         threads_nums,
-        permit_nums,
+        threads_nums,
         "fuse-write-segments-worker".to_owned(),
     )
     .await?

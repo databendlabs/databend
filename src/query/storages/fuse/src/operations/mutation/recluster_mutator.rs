@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
+use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -265,11 +266,11 @@ impl ReclusterMutator {
         });
 
         let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+
         let blocks = execute_futures_in_parallel(
             tasks,
             thread_nums,
-            permit_nums,
+            thread_nums,
             "convert-segments-worker".to_owned(),
         )
         .await?

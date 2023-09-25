@@ -659,7 +659,7 @@ impl CompactSegmentTestFixture {
 
         let schema = TestFixture::default_table_schema();
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
-        let max_io_requests = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let max_io_requests = self.ctx.get_settings().get_max_threads()? as usize;
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
@@ -705,7 +705,6 @@ impl CompactSegmentTestFixture {
         let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
         let data_accessor = ctx.get_data_operator()?.operator();
         let threads_nums = ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
         let mut tasks = vec![];
         for (num_blocks, rows_per_block) in block_num_of_segments
@@ -788,7 +787,7 @@ impl CompactSegmentTestFixture {
         let res = execute_futures_in_parallel(
             tasks,
             threads_nums,
-            permit_nums,
+            threads_nums,
             "fuse-write-segments-worker".to_owned(),
         )
         .await?
