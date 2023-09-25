@@ -659,13 +659,13 @@ impl CompactSegmentTestFixture {
 
         let schema = TestFixture::default_table_schema();
         let fuse_segment_io = SegmentsIO::create(self.ctx.clone(), data_accessor.clone(), schema);
-        let max_io_requests = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_theads = self.ctx.get_settings().get_max_threads()? as usize;
 
         let segment_writer = SegmentWriter::new(data_accessor, location_gen);
         let seg_acc = SegmentCompactor::new(
             block_per_seg,
             cluster_key_id,
-            max_io_requests,
+            max_theads,
             &fuse_segment_io,
             segment_writer.clone(),
         );
