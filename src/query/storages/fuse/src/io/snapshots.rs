@@ -145,7 +145,7 @@ impl SnapshotsIO {
         execute_futures_in_parallel(
             tasks,
             threads_nums,
-            threads_nums,
+            threads_nums * 4,
             "fuse-req-snapshots-worker".to_owned(),
         )
         .await
@@ -315,7 +315,7 @@ impl SnapshotsIO {
         execute_futures_in_parallel(
             tasks,
             threads_nums,
-            threads_nums,
+            threads_nums * 4,
             "fuse-req-snapshots-worker".to_owned(),
         )
         .await

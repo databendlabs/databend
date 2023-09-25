@@ -606,8 +606,8 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_io_request = self.ctx.get_settings().get_max_threads()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
