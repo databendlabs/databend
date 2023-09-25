@@ -316,7 +316,7 @@ impl SnapshotsIO {
             tasks,
             threads_nums,
             threads_nums,
-            "fuse-req-snsrc/query/storages/fuse/src/io/snapshots.rsmapshots-worker".to_owned(),
+            "fuse-req-snapshots-worker".to_owned(),
         )
         .await
     }
