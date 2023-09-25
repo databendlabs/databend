@@ -228,7 +228,6 @@ where T: Decimal
 
     #[inline(always)]
     fn merge(&mut self, other: &mut Self) -> Result<()> {
-        self.value += other.value;
         self.add(other.value)
     }
 
