@@ -228,9 +228,14 @@ impl<'a> Evaluator<'a> {
         }
         if let Some(cached_values) = &self.cached_values {
             if let Ok(r) = &result {
+                // Prepare data that lock used.
+                let expr_cloned = expr.clone();
+                let result_cloned = r.clone();
+
+                // Acquire the write lock and insert the value.
                 let mut cached_values_ref = cached_values.write();
-                if let Entry::Vacant(v) = cached_values_ref.entry(expr.clone()) {
-                    v.insert(r.clone());
+                if let Entry::Vacant(v) = cached_values_ref.entry(expr_cloned) {
+                    v.insert(result_cloned);
                 }
             }
         }
