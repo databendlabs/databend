@@ -352,7 +352,7 @@ CONNECTION = (
     ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO);
 SIZE_LIMIT = 10;
 ```
 
