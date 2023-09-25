@@ -22,7 +22,7 @@ COPY INTO [<database>.]<table_name>
      FROM { userStage | internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = { CSV | TSV | PARQUET} [ formatTypeOptions ] ) ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] ) ]
 [ copyOptions ]
 ```
 
@@ -30,13 +30,12 @@ COPY INTO [<database>.]<table_name>
 
 The FROM clause specifies the source location (user stage, internal stage, external stage, or external location) from which data will be loaded into the specified table using the COPY INTO command.
 
+:::note
 When you load data from a staged file and the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
 
-```sql
 COPY INTO mytable FROM 's3://mybucket/dataset(databend)/' ...
-
 COPY INTO mytable FROM 's3://mybucket/dataset databend/' ...
-```
+:::
 
 #### userStage
 
@@ -184,11 +183,7 @@ FILES specifies one or more file names (separated by commas) to be loaded.
 
 ### PATTERN
 
-A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
-
-:::note
-Suppose there is a file `@<stage_name>/<path>/<sub_path>`, to include it, `<sub_path>` needs to match `^<regex_pattern>$`.
-:::
+A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html. See [Example 4: Filtering Files with Pattern](#example-4-filtering-files-with-pattern) for examples and useful tips about filtering files with the PATTERN parameter.
 
 ### FILE_FORMAT
 
@@ -250,45 +245,45 @@ SET ENABLE_DISTRIBUTED_COPY_INTO = 1;
 
 ## Examples
 
-### 1. Loading Data from an Internal Stage
+### Example 1: Loading from Stages
+
+These examples showcase data loading into Databend from various types of stages:
+
+<Tabs>
+  <TabItem value="user" label="User Stage" default>
 
 ```sql
-COPY INTO mytable
-FROM @my_internal_s1
-PATTERN = '.*[.]parquet'
-FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable FROM @~ PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
-
-### 2. Loading Data from an External Stage
+  </TabItem>
+  <TabItem value="internal" label="Internal Stage">
 
 ```sql
-COPY INTO mytable
-FROM @my_external_s1
-PATTERN = 'books.*parquet'
-FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable FROM @my_internal_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
+  </TabItem>
+  <TabItem value="external" label="External Stage">
 
 ```sql
-COPY INTO mytable
-FROM @my_external_s1
-PATTERN = '.*[.]parquet'
-FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable FROM @my_external_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
 ```
+  </TabItem>
+</Tabs>
 
-### 3. Loading Data from External Locations
+### Example 2: Loading from External Locations
+
+These examples showcase data loading into Databend from various types of external sources:
 
 <Tabs groupId="external-example">
+<TabItem value="Amazon S3" label="Amazon S3">
 
-<TabItem value="AWS S3-compatible Storage" label="AWS S3-compatible Storage">
-
-This example reads 10 rows from a CSV file and inserts them into a table:
+This example establishes a connection to Amazon S3 using AWS access keys and secrets, and it loads 10 rows from a CSV file:
 
 ```sql
 -- Authenticated by AWS access keys and secrets.
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>'
     ACCESS_KEY_ID = '<your-access-key-ID>'
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
@@ -296,20 +291,26 @@ FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_hea
 SIZE_LIMIT = 10;
 ```
 
-This example loads data from a CSV file without specifying the endpoint URL:
+This example connects to Amazon S3 using AWS IAM role authentication with an external ID and loads CSV files matching the specified pattern from 'mybucket':
 
 ```sql
+-- Authenticated by AWS IAM role and external ID.
 COPY INTO mytable
-FROM 's3://mybucket/data.csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
-SIZE_LIMIT = 10;
+FROM 's3://mybucket/'
+CONNECTION = (
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
+    EXTERNAL_ID = '123456'
+)
+PATTERN = '.*[.]csv'
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 </TabItem>
 
 <TabItem value="Azure Blob Storage" label="Azure Blob Storage">
 
-This example reads data from a CSV file and inserts it into a table:
+This example connects to Azure Blob Storage and loads data from 'data.csv' into Databend:
 
 ```sql
 COPY INTO mytable
@@ -325,7 +326,7 @@ FILE_FORMAT = (type = CSV);
 
 <TabItem value="Remote Files" label="Remote Files">
 
-As shown in this example, data is loaded from three remote CSV files, but a file will be skipped if it contains errors:
+This example loads data from three remote CSV files and skips a file in case of errors.
 
 ```sql
 COPY INTO mytable
@@ -335,9 +336,9 @@ ON_ERROR = continue;
 ```
 </TabItem>
 
-<TabItem value="IPFS Files" label="IPFS Files">
+<TabItem value="IPFS" label="IPFS">
 
-This example reads data from a CSV file on IPFS and inserts it into a table:
+This example loads data from a CSV file on IPFS:
 
 ```sql
 COPY INTO mytable
@@ -346,47 +347,11 @@ CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
 FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 </TabItem>
-
 </Tabs>
 
-### 4. Loading Data with Pattern Matching
+### Example 3: Loading Compressed Data
 
-This example uses pattern matching to only load from CSV files containing `sales` in their names:
-
-```sql
-COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*sales.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
-```
-Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
-
-If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
-```sql
-COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
-```
-
-### 5. Loading Data with AWS IAM Role
-
-```sql
--- Authenticated by AWS IAM role and external ID.
-COPY INTO mytable
-FROM 's3://mybucket/'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
-    EXTERNAL_ID = '123456'
-)
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
-```
-
-### 6. Loading Data with Compression
-
-This example reads 10 rows from a CSV file compressed as GZIP and inserts them into a table:
+This example loads 10 rows of data from a GZIP-compressed CSV file on Amazon S3 into Databend:
 
 ```sql
 COPY INTO mytable
@@ -400,15 +365,96 @@ FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_hea
 SIZE_LIMIT = 10;
 ```
 
-### 7. Loading Parquet Files
+### Example 4: Filtering Files with Pattern
+
+This example demonstrates how to load CSV files from Amazon S3 using pattern matching with the PATTERN parameter. It filters files with 'sales' in their names and '.csv' extensions:
 
 ```sql
 COPY INTO mytable
 FROM 's3://mybucket/'
-CONNECTION = (
-    ACCESS_KEY_ID = '<your-access-key-ID>',
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-)
-PATTERN = '.*[.]parquet'
-FILE_FORMAT = (TYPE = PARQUET);
+PATTERN = '.*sales.*[.]csv'
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
+Where `.*` is interpreted as zero or more occurrences of any character. The square brackets escape the period character `.` that precedes a file extension.
+
+To load from all the CSV files:
+
+```sql
+COPY INTO mytable
+FROM 's3://mybucket/'
+PATTERN = '.*[.]csv'
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+```
+
+When specifying the pattern for a file path including multiple folders, consider your matching criteria:
+
+- If you want to match a specific subpath following a prefix, include the prefix in the pattern (e.g., 'multi_page/') and then specify the pattern you want to match within that subpath (e.g., '_page_1').
+
+```sql
+-- File path: parquet/multi_page/multi_page_1.parquet
+COPY INTO ... FROM @data/parquet/ PATTERN = 'multi_page/.*_page_1.*') ...
+```
+
+- If you want to match any part of the file path that contains the desired pattern, use '.*' before and after the pattern (e.g., '.*multi_page_1.*') to match any occurrences of 'multi_page_1' within the path.
+
+```sql
+-- File path: parquet/multi_page/multi_page_1.parquet
+COPY INTO ... FROM @data/parquet/ PATTERN ='.*multi_page_1.*') ...
+```
+
+### Example 5: Loading to Table with Extra Columns
+
+This section demonstrates data loading into a table with extra columns, using the sample file [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv):
+
+```text title='books.csv'
+Transaction Processing,Jim Gray,1992
+Readings in Database Systems,Michael Stonebraker,2004
+```
+
+![Alt text](../../../public/img/load/load-extra.png)
+
+By default, COPY INTO loads data into a table by matching the order of fields in the file to the corresponding columns in the table. It's essential to ensure that the data aligns correctly between the file and the table. For example,
+
+```sql
+CREATE TABLE books
+(
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR
+);
+
+COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+```
+
+If your table has more columns than the file, you can specify the columns into which you want to load data. For example,
+
+```sql
+CREATE TABLE books_with_language
+(
+    title VARCHAR,
+    language VARCHAR,
+    author VARCHAR,
+    date VARCHAR
+);
+
+COPY INTO books_with_language (title, author, date) FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+```
+
+If your table has more columns than the file, and the additional columns are at the end of the table, you can load data using the [FILE_FORMAT](#file_format) option `ERROR_ON_COLUMN_COUNT_MISMATCH`. This allows you to load data without specifying each column individually. Please note that ERROR_ON_COLUMN_COUNT_MISMATCH currently works for the CSV file format.
+
+```sql
+CREATE TABLE books_with_extra_columns
+(
+    title VARCHAR,
+    author VARCHAR,
+    date VARCHAR,
+    language VARCHAR,
+    region VARCHAR
+);
+
+COPY INTO books_with_extra_columns FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV ERROR_ON_COLUMN_COUNT_MISMATCH = false);
+```
+
+:::note
+Extra columns in a table can have default values specified by [CREATE TABLE](../00-ddl/20-table/10-ddl-create-table.md) or [ALTER TABLE COLUMN](../00-ddl/20-table/90-alter-table-column.md). If a default value is not explicitly set for an extra column, the default value associated with its data type will be applied. For instance, an integer-type column will default to 0 if no other value is specified. 
+:::
