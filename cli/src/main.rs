@@ -239,7 +239,33 @@ pub async fn main() -> Result<()> {
         return Ok(());
     }
     let dsn = match args.dsn {
-        Some(dsn) => dsn,
+        Some(dsn) => {
+            if args.host.is_some() {
+                eprintln!("warning: --host is ignored when --dsn is set");
+            }
+            if args.port.is_some() {
+                eprintln!("warning: --port is ignored when --dsn is set");
+            }
+            if args.user.is_some() {
+                eprintln!("warning: --user is ignored when --dsn is set");
+            }
+            if args.password.is_some() {
+                eprintln!("warning: --password is ignored when --dsn is set");
+            }
+            if args.database.is_some() {
+                eprintln!("warning: --database is ignored when --dsn is set");
+            }
+            if !args.set.is_empty() {
+                eprintln!("warning: --set is ignored when --dsn is set");
+            }
+            if args.tls {
+                eprintln!("warning: --tls is ignored when --dsn is set");
+            }
+            if args.flight {
+                eprintln!("warning: --flight is ignored when --dsn is set");
+            }
+            dsn
+        }
         None => {
             if let Some(host) = args.host {
                 config.connection.host = host;
