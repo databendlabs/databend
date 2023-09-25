@@ -418,6 +418,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             escape: p.escape,
             nan_display: p.nan_display,
             null_display,
+            error_on_column_count_mismatch: !p.allow_column_count_mismatch,
         })
     }
 
@@ -434,6 +435,7 @@ impl FromToProto for mt::principal::CsvFileFormatParams {
             escape: self.escape.clone(),
             nan_display: self.nan_display.clone(),
             null_display: self.null_display.clone(),
+            allow_column_count_mismatch: !self.error_on_column_count_mismatch,
         })
     }
 }

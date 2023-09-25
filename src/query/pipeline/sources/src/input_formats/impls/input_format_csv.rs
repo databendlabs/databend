@@ -145,6 +145,7 @@ impl InputFormatTextBase for InputFormatCSV {
         } + MAX_CSV_COLUMNS;
         Ok(CsvReaderState {
             common: AligningStateCommon::create(split_info, false, csv_params.headers as usize),
+            error_on_column_count_mismatch: csv_params.error_on_column_count_mismatch,
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             reader,
@@ -196,6 +197,7 @@ impl InputFormatTextBase for InputFormatCSV {
 
 pub struct CsvReaderState {
     common: AligningStateCommon,
+    error_on_column_count_mismatch: bool,
     #[allow(unused)]
     ctx: Arc<InputContext>,
     split_info: Arc<SplitInfo>,
@@ -234,6 +236,21 @@ impl CsvReaderState {
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
                 if self.projection.is_none() {
+                    if !self.error_on_column_count_mismatch && self.n_end < self.num_fields {
+                        // support we expect 4 fields but got row with only 2 columns : "1,2\n"
+                        // here we pretend we read "1,2,,\n"
+                        debug_assert!(self.n_end > 0);
+                        let end = self.field_ends[n_end - 1];
+                        for i in self.n_end..self.num_fields {
+                            self.field_ends[i] = end;
+                        }
+                        self.n_end = self.num_fields;
+
+                        self.common.rows += 1;
+                        self.common.offset += n_in;
+                        self.n_end = 0;
+                        return Ok((Some(self.num_fields), n_in, n_out));
+                    }
                     if let Err(e) = self.check_num_field() {
                         self.ctx.on_error(
                             e,
@@ -248,7 +265,6 @@ impl CsvReaderState {
                         return Ok((Some(0), n_in, n_out));
                     }
                 }
-
                 self.common.rows += 1;
                 self.common.offset += n_in;
                 let n_end = self.n_end;
@@ -366,26 +382,28 @@ impl AligningStateTextBased for CsvReaderState {
             let (num_fields, _, n_out) =
                 self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
             if let Some(num_fields) = num_fields {
-                let data = mem::take(&mut self.out);
+                if num_fields > 0 {
+                    let data = mem::take(&mut self.out);
 
-                let row_batch = RowBatch {
-                    data,
-                    row_ends: vec![last_batch_remain_len + n_out],
-                    field_ends: self.field_ends[..num_fields].to_vec(),
-                    num_fields: vec![num_fields],
-                    split_info: self.split_info.clone(),
-                    batch_id: self.common.batch_id,
-                    start_offset_in_split: self.common.offset,
-                    start_row_in_split: self.common.rows,
-                    start_row_of_split: Some(0),
-                };
-                res.push(row_batch);
+                    let row_batch = RowBatch {
+                        data,
+                        row_ends: vec![last_batch_remain_len + n_out],
+                        field_ends: self.field_ends[..num_fields].to_vec(),
+                        num_fields: vec![num_fields],
+                        split_info: self.split_info.clone(),
+                        batch_id: self.common.batch_id,
+                        start_offset_in_split: self.common.offset,
+                        start_row_in_split: self.common.rows,
+                        start_row_of_split: Some(0),
+                    };
+                    res.push(row_batch);
 
-                self.common.batch_id += 1;
-                debug!(
-                    "csv aligner flush last row of {} bytes",
-                    last_batch_remain_len,
-                );
+                    self.common.batch_id += 1;
+                    debug!(
+                        "csv aligner flush last row of {} bytes",
+                        last_batch_remain_len,
+                    );
+                }
             }
         }
         if file_status.error.is_some() {
