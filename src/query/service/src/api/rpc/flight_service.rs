@@ -177,7 +177,7 @@ impl FlightService for DatabendQueryFlightService {
                     // Keep query id
                     ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
                     ctx.attach_query_str(
-                        init_query_fragments_plan.executor_packet.query_kind.clone(),
+                        init_query_fragments_plan.executor_packet.query_kind,
                         "".to_string(),
                     );
 

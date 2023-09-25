@@ -15,10 +15,14 @@
 use std::cell::SyncUnsafeCell;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicI8;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::watch;
+use common_base::base::tokio::sync::watch::Receiver;
+use common_base::base::tokio::sync::watch::Sender;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ColumnVec;
@@ -73,51 +77,54 @@ pub enum HashJoinHashTable {
 /// Such as build side will pass hash table to probe side by it
 pub struct HashJoinState {
     /// A shared big hash table stores all the rows from build side
-    pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
+    pub(crate) hash_table: SyncUnsafeCell<HashJoinHashTable>,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor added its chunks to `HashTable`, it will be decreased by 1.
     /// When the counter is 0, it means all hash join build processors have added their chunks to `HashTable`.
     /// And the build phase is finished. Probe phase will start.
     pub(crate) hash_table_builders: Mutex<usize>,
-    /// After `hash_table_builders` is 0, it will be set as true.
-    /// It works with notify to make HashJoin start the probe phase.
-    pub(crate) build_done: Mutex<bool>,
-    /// Notify probe processors that build phase is finished.
-    pub(crate) build_done_notify: Arc<Notify>,
+    /// After `hash_table_builders` is 0, send message to notify all probe processors.
+    /// There are three types' messages:
+    /// 1. **0**: it's the initial message used by creating the watch channel
+    /// 2. **1**: when build side finish (the first round), the last build processor will send 1 to channel, and wake up all probe processors.
+    /// 3. **2**: if spill is enabled, after the first round, probe needs to wait build again, the last build processor will send 2 to channel.
+    pub(crate) build_done_watcher: Sender<u8>,
+    /// A dummy receiver to make build done watcher channel open
+    pub(crate) _build_done_dummy_receiver: Receiver<u8>,
     /// Some description of hash join. Such as join type, join keys, etc.
     pub(crate) hash_join_desc: HashJoinDesc,
     /// Interrupt the build phase or probe phase.
-    pub(crate) interrupt: Arc<AtomicBool>,
+    pub(crate) interrupt: AtomicBool,
     /// If there is no data in build side, maybe we can fast return.
-    pub(crate) fast_return: Arc<RwLock<bool>>,
+    pub(crate) fast_return: AtomicBool,
     /// `RowSpace` contains all rows from build side.
     pub(crate) row_space: RowSpace,
-    pub(crate) build_num_rows: Arc<SyncUnsafeCell<usize>>,
+    pub(crate) build_num_rows: SyncUnsafeCell<usize>,
     /// Data of the build side.
-    pub(crate) chunks: Arc<SyncUnsafeCell<Vec<DataBlock>>>,
-    pub(crate) build_columns: Arc<SyncUnsafeCell<Vec<ColumnVec>>>,
-    pub(crate) build_columns_data_type: Arc<SyncUnsafeCell<Vec<DataType>>>,
+    pub(crate) chunks: SyncUnsafeCell<Vec<DataBlock>>,
+    pub(crate) build_columns: SyncUnsafeCell<Vec<ColumnVec>>,
+    pub(crate) build_columns_data_type: SyncUnsafeCell<Vec<DataType>>,
     // Use the column of probe side to construct build side column.
     // (probe index, (is probe column nullable, is build column nullable))
-    pub(crate) probe_to_build: Arc<Vec<(usize, (bool, bool))>>,
-    pub(crate) is_build_projected: Arc<AtomicBool>,
+    pub(crate) probe_to_build: Vec<(usize, (bool, bool))>,
+    pub(crate) is_build_projected: AtomicBool,
     /// OuterScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    pub(crate) outer_scan_map: SyncUnsafeCell<Vec<Vec<bool>>>,
     /// LeftMarkScan map, initialized at `HashJoinBuildState`, used in `HashJoinProbeState`
-    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    pub(crate) mark_scan_map: SyncUnsafeCell<Vec<Vec<u8>>>,
+
+    /// Spill related states
     /// Spill partition set
-    pub(crate) spill_partition: Arc<RwLock<HashSet<u8>>>,
-    /// After all probe processors finish spill or probe processors finish a round run, notify build processors.
-    pub(crate) probe_spill_done_notify: Arc<Notify>,
-    pub(crate) probe_spill_done: Mutex<bool>,
-    /// After `final_probe_workers` is 0, it will be set as true
-    pub(crate) final_probe_done: Mutex<bool>,
-    /// Notify build workers `final scan` is done. They can go to next phase.
-    pub(crate) final_probe_done_notify: Arc<Notify>,
+    pub(crate) build_spilled_partitions: RwLock<HashSet<u8>>,
+    /// Send message to notify all build processors to next round.
+    /// Initial message is false, send true to wake up all build processors.
+    pub(crate) continue_build_watcher: Sender<bool>,
+    /// A dummy receiver to make continue build watcher channel open
+    pub(crate) _continue_build_dummy_receiver: Receiver<bool>,
     /// After all build processors finish spill, will pick a partition
     /// tell build processors to restore data in the partition
     /// If partition_id is -1, it means all partitions are spilled.
-    pub(crate) partition_id: Arc<RwLock<i8>>,
+    pub(crate) partition_id: AtomicI8,
 }
 
 impl HashJoinState {
@@ -137,29 +144,29 @@ impl HashJoinState {
         if hash_join_desc.join_type == JoinType::Full {
             build_schema = build_schema_wrap_nullable(&build_schema);
         }
+        let (build_done_watcher, _build_done_dummy_receiver) = watch::channel(0);
+        let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         Ok(Arc::new(HashJoinState {
-            hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
+            hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
             hash_table_builders: Mutex::new(0),
-            build_done: Mutex::new(false),
-            build_done_notify: Arc::new(Default::default()),
+            build_done_watcher,
+            _build_done_dummy_receiver,
             hash_join_desc,
-            interrupt: Arc::new(AtomicBool::new(false)),
-            fast_return: Arc::new(Default::default()),
+            interrupt: AtomicBool::new(false),
+            fast_return: Default::default(),
             row_space: RowSpace::new(ctx, build_schema, build_projections)?,
-            build_num_rows: Arc::new(SyncUnsafeCell::new(0)),
-            chunks: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            build_columns: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            build_columns_data_type: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            probe_to_build: Arc::new(probe_to_build.to_vec()),
-            is_build_projected: Arc::new(AtomicBool::new(true)),
-            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
-            spill_partition: Default::default(),
-            probe_spill_done_notify: Arc::new(Default::default()),
-            probe_spill_done: Default::default(),
-            final_probe_done: Default::default(),
-            final_probe_done_notify: Arc::new(Default::default()),
-            partition_id: Arc::new(Default::default()),
+            build_num_rows: SyncUnsafeCell::new(0),
+            chunks: SyncUnsafeCell::new(Vec::new()),
+            build_columns: SyncUnsafeCell::new(Vec::new()),
+            build_columns_data_type: SyncUnsafeCell::new(Vec::new()),
+            probe_to_build: probe_to_build.to_vec(),
+            is_build_projected: AtomicBool::new(true),
+            outer_scan_map: SyncUnsafeCell::new(Vec::new()),
+            mark_scan_map: SyncUnsafeCell::new(Vec::new()),
+            build_spilled_partitions: Default::default(),
+            continue_build_watcher,
+            _continue_build_dummy_receiver,
+            partition_id: AtomicI8::new(-2),
         }))
     }
 
@@ -167,25 +174,33 @@ impl HashJoinState {
         self.interrupt.store(true, Ordering::Release);
     }
 
-    /// Used by hash join probe processors, wait for build phase finished.
+    /// Used by hash join probe processors, wait for the first round build phase finished.
     #[async_backtrace::framed]
-    pub async fn wait_build_hash_table_finish(&self) -> Result<()> {
-        let notified = {
-            let finalized_guard = self.build_done.lock();
-            match *finalized_guard {
-                true => None,
-                false => Some(self.build_done_notify.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
+    pub async fn wait_first_round_build_done(&self) -> Result<()> {
+        let mut rx = self.build_done_watcher.subscribe();
+        if *rx.borrow() == 1_u8 {
+            return Ok(());
         }
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
+        debug_assert!(*rx.borrow() == 1_u8);
         Ok(())
     }
 
-    pub fn fast_return(&self) -> Result<bool> {
-        let fast_return = self.fast_return.read();
-        Ok(*fast_return)
+    /// Used by hash join probe processors, wait for build phase finished with spilled data
+    /// It's only be used when spilling is enabled.
+    #[async_backtrace::framed]
+    pub async fn wait_build_finish(&self) -> Result<()> {
+        let mut rx = self.build_done_watcher.subscribe();
+        if *rx.borrow() == 2_u8 {
+            return Ok(());
+        }
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("build_done_watcher's sender is dropped"))?;
+        debug_assert!(*rx.borrow() == 2_u8);
+        Ok(())
     }
 
     pub fn need_outer_scan(&self) -> bool {
@@ -204,36 +219,21 @@ impl HashJoinState {
     }
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
-        let mut spill_partition = self.spill_partition.write();
+        let mut spill_partition = self.build_spilled_partitions.write();
         *spill_partition = partitions.clone();
     }
 
     #[async_backtrace::framed]
-    pub(crate) async fn wait_probe_spill(&self) {
-        let notified = {
-            let finalized_guard = self.probe_spill_done.lock();
-            match *finalized_guard {
-                true => None,
-                false => Some(self.probe_spill_done_notify.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
+    pub(crate) async fn wait_probe_notify(&self) -> Result<()> {
+        let mut rx = self.continue_build_watcher.subscribe();
+        if *rx.borrow() {
+            return Ok(());
         }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn wait_final_probe(&self) {
-        let notified = {
-            let finalized_guard = self.final_probe_done.lock();
-            match *finalized_guard {
-                true => None,
-                false => Some(self.final_probe_done_notify.notified()),
-            }
-        };
-        if let Some(notified) = notified {
-            notified.await;
-        }
+        rx.changed()
+            .await
+            .map_err(|_| ErrorCode::TokioError("continue_build_watcher's sender is dropped"))?;
+        debug_assert!(*rx.borrow());
+        Ok(())
     }
 
     // Reset the state for next round run.

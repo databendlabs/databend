@@ -28,10 +28,10 @@ use crate::common;
 // *************************************************************
 //
 #[test]
-fn test_decode_v53_csv_file_format_params() -> anyhow::Result<()> {
-    let file_format_params_v32 = vec![
-        18, 29, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 3, 110, 97, 110, 50, 1, 92, 58,
-        1, 39, 160, 6, 32, 168, 6, 24,
+fn test_decode_v59_csv_file_format_params() -> anyhow::Result<()> {
+    let file_format_params_v59 = vec![
+        18, 35, 8, 1, 16, 1, 26, 2, 102, 100, 34, 2, 114, 100, 42, 3, 110, 97, 110, 50, 1, 92, 58,
+        1, 39, 66, 2, 92, 78, 72, 1, 160, 6, 59, 168, 6, 24,
     ];
     let want = || {
         mt::principal::FileFormatParams::Csv(CsvFileFormatParams {
@@ -43,10 +43,10 @@ fn test_decode_v53_csv_file_format_params() -> anyhow::Result<()> {
             nan_display: "nan".to_string(),
             escape: "\\".to_string(),
             quote: "\'".to_string(),
-            error_on_column_count_mismatch: true,
+            error_on_column_count_mismatch: false,
         })
     };
-    common::test_load_old(func_name!(), file_format_params_v32.as_slice(), 0, want())?;
+    common::test_load_old(func_name!(), file_format_params_v59.as_slice(), 0, want())?;
     common::test_pb_from_to(func_name!(), want())?;
     Ok(())
 }

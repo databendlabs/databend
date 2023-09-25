@@ -26,6 +26,7 @@ use common_catalog::database::Database;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table::Table;
 use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::ProcessInfo;
@@ -421,7 +422,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn attach_query_str(&self, _kind: String, _query: String) {
+    fn attach_query_str(&self, _kind: QueryKind, _query: String) {
         todo!()
     }
 
@@ -485,7 +486,7 @@ impl TableContext for CtxDelegation {
         self.ctx.get_tenant()
     }
 
-    fn get_query_kind(&self) -> String {
+    fn get_query_kind(&self) -> QueryKind {
         todo!()
     }
 

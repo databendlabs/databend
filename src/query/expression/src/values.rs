@@ -1364,6 +1364,23 @@ impl Column {
                     offsets.into(),
                 ))
             }
+
+            ArrowDataType::FixedSizeBinary(size) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
+                    .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
+
+                let offsets = (0..arrow_col.len() as u64 + 1)
+                    .map(|x| x * (*size) as u64)
+                    .collect::<Vec<_>>();
+
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
+            }
+
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
                 let arrow_col = arrow_col
