@@ -81,8 +81,6 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
-use icelake::Namespace;
-use icelake::TableIdentifier;
 use opendal::Metakey;
 
 use crate::database::IcebergDatabase;

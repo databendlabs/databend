@@ -3047,6 +3047,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
+ "futures",
  "itertools 0.10.5",
  "jsonb",
  "log",
@@ -6808,7 +6809,7 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.10"
-source = "git+https://github.com/icelake-io/icelake?rev=4dfd604#4dfd604fee5532fb210112277e06e04d769c4e59"
+source = "git+https://github.com/icelake-io/icelake?rev=9876ff1#9876ff1750e119e7c66913dadc8f1d22312749db"
 dependencies = [
  "anyhow",
  "apache-avro",

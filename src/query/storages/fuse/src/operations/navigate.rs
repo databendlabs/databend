@@ -250,11 +250,12 @@ impl FuseTable {
     where F: FnMut(String, DateTime<Utc>) -> bool {
         let mut file_list = vec![];
         let op = self.operator.clone();
-        let mut ds = op.list(&prefix).await?;
+        let mut ds = op
+            .lister_with(&prefix)
+            .metakey(Metakey::Mode | Metakey::LastModified)
+            .await?;
         while let Some(de) = ds.try_next().await? {
-            let meta = op
-                .metadata(&de, Metakey::Mode | Metakey::LastModified)
-                .await?;
+            let meta = de.metadata();
             match meta.mode() {
                 EntryMode::FILE => {
                     let modified = meta.last_modified();

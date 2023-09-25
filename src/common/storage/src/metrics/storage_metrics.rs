@@ -24,7 +24,6 @@ use std::time::Instant;
 use async_trait::async_trait;
 use bytes::Bytes;
 use opendal::raw::oio;
-use opendal::raw::oio::Streamer;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;

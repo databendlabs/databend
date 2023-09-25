@@ -22,7 +22,6 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
-use opendal::Entry;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::Metakey;
@@ -239,7 +238,7 @@ impl StageFilesInfo {
         while let Some(obj) = lister.try_next().await? {
             let meta = obj.metadata();
             if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-                files.push(StageFileInfo::new(obj.path().to_string(), &meta));
+                files.push(StageFileInfo::new(obj.path().to_string(), meta));
                 if first_only {
                     return Ok(files);
                 }
@@ -304,7 +303,7 @@ fn blocking_list_files_with_pattern(
         let obj = obj?;
         let meta = obj.metadata();
         if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-            files.push(StageFileInfo::new(obj.path().to_string(), &meta));
+            files.push(StageFileInfo::new(obj.path().to_string(), meta));
             if first_only {
                 return Ok(files);
             }

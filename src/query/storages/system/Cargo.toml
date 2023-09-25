@@ -50,6 +50,7 @@ serde_json = { workspace = true }
 serde_repr = "0.1.9"
 snailquote = "0.3.1"
 tikv-jemalloc-ctl = { workspace = true }
+futures = {workspace = true}
 
 typetag = "0.2.3"
 walkdir = "2.3.2"

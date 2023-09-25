@@ -20,7 +20,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::EXTENSION_KEY;
-use opendal::BlockingOperator;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;

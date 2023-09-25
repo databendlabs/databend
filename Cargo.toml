@@ -234,7 +234,7 @@ arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "f609d0c" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-icelake = { git = "https://github.com/icelake-io/icelake", rev = "4dfd604" }
+icelake = { git = "https://github.com/icelake-io/icelake", rev = "9876ff1" }
 # Crates from arrow-rs
 arrow = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
 arrow-schema = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }

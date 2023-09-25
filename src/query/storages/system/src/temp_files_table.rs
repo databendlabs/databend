@@ -37,6 +37,7 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::query_spill_prefix;
 use common_storage::DataOperator;
+use futures::StreamExt;
 use opendal::Metakey;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -68,24 +69,22 @@ impl AsyncSystemTable for TempFilesTable {
         let mut temp_files_last_modified = vec![];
 
         let location_prefix = format!("{}/", query_spill_prefix(&tenant));
-        if let Ok(mut lister) = operator.list(&location_prefix).await {
+        if let Ok(lister) = operator
+            .lister_with(&location_prefix)
+            .metakey(Metakey::LastModified | Metakey::ContentLength)
+            .await
+        {
             let limit = push_downs.and_then(|x| x.limit).unwrap_or(usize::MAX);
+            let mut lister = lister.chunks(limit);
 
-            while let Some(page) = lister.next_page().await? {
-                if temp_files_name.len() >= limit {
-                    break;
-                }
-
+            while let Some(page) = lister.next().await {
                 temp_files_name.reserve(page.len());
                 temp_files_last_modified.reserve(page.len());
                 temp_files_content_length.reserve(page.len());
 
                 for entry in page {
-                    if temp_files_name.len() >= limit {
-                        break;
-                    }
-
-                    let metadata = operator.metadata(&entry, Metakey::Complete).await?;
+                    let entry = entry?;
+                    let metadata = entry.metadata();
 
                     if metadata.is_file() {
                         temp_files_name.push(entry.name().as_bytes().to_vec());
