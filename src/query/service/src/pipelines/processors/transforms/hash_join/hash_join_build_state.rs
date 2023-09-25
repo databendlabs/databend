@@ -75,7 +75,7 @@ pub struct HashJoinBuildState {
     /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
     /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
     /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
-    pub(crate) chunk_size_limit: Arc<usize>,
+    pub(crate) chunk_size_limit: usize,
     /// Wait util all processors finish row space build, then go to next phase.
     pub(crate) barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
@@ -84,17 +84,17 @@ pub struct HashJoinBuildState {
     /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
     pub(crate) row_space_builders: Mutex<usize>,
     /// Hash method for hash join keys.
-    pub(crate) method: Arc<HashMethodKind>,
+    pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
-    pub(crate) entry_size: Arc<AtomicUsize>,
+    pub(crate) entry_size: AtomicUsize,
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
-    pub(crate) build_projections: Arc<ColumnSet>,
+    pub(crate) build_projections: ColumnSet,
     /// FIXME: the field can be removed later
-    pub(crate) build_worker_num: Arc<AtomicU32>,
+    pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
-    pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) build_hash_table_tasks: RwLock<VecDeque<(usize, usize)>>,
 
     /// Spill related states
     /// `send_val` is the message which will be send into `build_done_watcher` channel.
@@ -125,16 +125,16 @@ impl HashJoinBuildState {
             func_ctx,
             hash_join_state,
             _processor_count: processor_count,
-            chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
             barrier,
             restore_barrier,
             row_space_builders: Default::default(),
-            method: Arc::new(method),
-            entry_size: Arc::new(Default::default()),
+            method,
+            entry_size: Default::default(),
             raw_entry_spaces: Default::default(),
-            build_projections: Arc::new(build_projections.clone()),
-            build_worker_num: Arc::new(Default::default()),
-            build_hash_table_tasks: Arc::new(Default::default()),
+            build_projections: build_projections.clone(),
+            build_worker_num: Default::default(),
+            build_hash_table_tasks: Default::default(),
             send_val: AtomicU8::new(1),
         }))
     }
@@ -145,7 +145,7 @@ impl HashJoinBuildState {
         let mut buffer_row_size = self.hash_join_state.row_space.buffer_row_size.write();
         *buffer_row_size += input.num_rows();
         buffer.push(input);
-        if *buffer_row_size < *self.chunk_size_limit {
+        if *buffer_row_size < self.chunk_size_limit {
             Ok(())
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;
@@ -249,13 +249,11 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
-                && !self.ctx.get_settings().get_enable_join_spill()?
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
             {
-                {
-                    let mut fast_return = self.hash_join_state.fast_return.write();
-                    *fast_return = true;
-                }
-
+                self.hash_join_state
+                    .fast_return
+                    .store(true, Ordering::Relaxed);
                 self.hash_join_state
                     .build_done_watcher
                     .send(self.send_val.load(Ordering::Relaxed))
@@ -264,7 +262,7 @@ impl HashJoinBuildState {
             }
 
             // Create a fixed size hash table.
-            let hashjoin_hashtable = match (*self.method).clone() {
+            let hashjoin_hashtable = match self.method.clone() {
                 HashMethodKind::Serializer(_) => {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
@@ -473,9 +471,8 @@ impl HashJoinBuildState {
 
         let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
         let mut has_null = false;
-        let interrupt = self.hash_join_state.interrupt.clone();
         for chunk_index in task.0..task.1 {
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));

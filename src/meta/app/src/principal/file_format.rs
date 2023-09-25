@@ -36,6 +36,7 @@ const OPT_NULL_DISPLAY: &str = "null_display";
 const OPT_ESCAPE: &str = "escape";
 const OPT_QUOTE: &str = "quote";
 const OPT_ROW_TAG: &str = "row_tag";
+const OPT_ERROR_ON_COLUMN_COUNT_MISMATCH: &str = "error_on_column_count_mismatch";
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FileFormatOptionsAst {
@@ -81,6 +82,18 @@ impl FileFormatOptionsAst {
     fn take_u64(&mut self, key: &str, default: u64) -> Result<u64> {
         match self.options.remove(key) {
             Some(v) => Ok(u64::from_str(&v)?),
+            None => Ok(default),
+        }
+    }
+
+    fn take_bool(&mut self, key: &str, default: bool) -> Result<bool> {
+        match self.options.remove(key) {
+            Some(v) => Ok(bool::from_str(&v.to_lowercase()).map_err(|_| {
+                ErrorCode::IllegalFileFormat(format!(
+                    "Invalid boolean value {} for option {}",
+                    v, key
+                ))
+            })?),
             None => Ok(default),
         }
     }
@@ -175,6 +188,10 @@ impl FileFormatParams {
                 let escape = ast.take_string(OPT_ESCAPE, default.escape);
                 let quote = ast.take_string(OPT_QUOTE, default.quote);
                 let null_display = ast.take_string(OPT_NULL_DISPLAY, default.null_display);
+                let error_on_column_count_mismatch = ast.take_bool(
+                    OPT_ERROR_ON_COLUMN_COUNT_MISMATCH,
+                    default.error_on_column_count_mismatch,
+                )?;
                 FileFormatParams::Csv(CsvFileFormatParams {
                     compression,
                     headers,
@@ -184,6 +201,7 @@ impl FileFormatParams {
                     nan_display,
                     escape,
                     quote,
+                    error_on_column_count_mismatch,
                 })
             }
             StageFileFormatType::Tsv => {
@@ -276,6 +294,7 @@ pub struct CsvFileFormatParams {
     pub nan_display: String,
     pub escape: String,
     pub quote: String,
+    pub error_on_column_count_mismatch: bool,
 }
 
 impl Default for CsvFileFormatParams {
@@ -289,6 +308,7 @@ impl Default for CsvFileFormatParams {
             nan_display: "NaN".to_string(),
             escape: "".to_string(),
             quote: "\"".to_string(),
+            error_on_column_count_mismatch: true,
         }
     }
 }

@@ -73,10 +73,10 @@ pub struct HashJoinProbeState {
     pub(crate) probe_schema: DataSchemaRef,
     /// `probe_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in probe schema.
-    pub(crate) probe_projections: Arc<ColumnSet>,
+    pub(crate) probe_projections: ColumnSet,
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
-    pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
@@ -87,7 +87,7 @@ pub struct HashJoinProbeState {
     /// Record final probe workers
     pub(crate) final_probe_workers: Mutex<usize>,
     /// Probe spilled partitions set
-    pub(crate) spill_partitions: Arc<RwLock<HashSet<u8>>>,
+    pub(crate) spill_partitions: RwLock<HashSet<u8>>,
     /// Wait all processors to restore spilled data, then go to new probe
     pub(crate) restore_barrier: Barrier,
 }
@@ -128,11 +128,11 @@ impl HashJoinProbeState {
             barrier,
             restore_barrier,
             probe_schema,
-            probe_projections: Arc::new(probe_projections.clone()),
-            final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            probe_projections: probe_projections.clone(),
+            final_scan_tasks: RwLock::new(VecDeque::new()),
             mark_scan_map_lock: Mutex::new(false),
             hash_method: method,
-            spill_partitions: Arc::new(Default::default()),
+            spill_partitions: Default::default(),
         })
     }
 
@@ -234,7 +234,7 @@ impl HashJoinProbeState {
         let input = input.project(&self.probe_projections);
         let is_probe_projected = input.num_columns() > 0;
 
-        if self.hash_join_state.fast_return()?
+        if self.hash_join_state.fast_return.load(Ordering::Relaxed)
             && matches!(
                 self.hash_join_state.hash_join_desc.join_type,
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
@@ -271,7 +271,7 @@ impl HashJoinProbeState {
             *count += 1;
             res = *count;
         }
-        if self.ctx.get_settings().get_enable_join_spill()? {
+        if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
             let mut count = self.final_probe_workers.lock();
             *count += 1;
             let mut count = self.spill_workers.lock();
@@ -288,17 +288,20 @@ impl HashJoinProbeState {
         if *count == 0 {
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
-            let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partitions = self.spill_partitions.write();
             if let Some(id) = spill_partitions.iter().next().cloned() {
                 spill_partitions.remove(&id);
-                *partition_id = id as i8;
+                self.hash_join_state
+                    .partition_id
+                    .store(id as i8, Ordering::Relaxed);
             } else {
-                *partition_id = -1;
+                self.hash_join_state
+                    .partition_id
+                    .store(-1, Ordering::Relaxed);
             }
             info!(
                 "next partition to read: {:?}, final probe done",
-                *partition_id
+                self.hash_join_state.partition_id.load(Ordering::Relaxed)
             );
             self.hash_join_state
                 .continue_build_watcher
@@ -325,17 +328,20 @@ impl HashJoinProbeState {
         *count -= 1;
         if *count == 0 {
             // Set partition id to `HashJoinState`
-            let mut partition_id = self.hash_join_state.partition_id.write();
             let mut spill_partitions = self.spill_partitions.write();
             if let Some(id) = spill_partitions.iter().next().cloned() {
                 spill_partitions.remove(&id);
-                *partition_id = id as i8;
+                self.hash_join_state
+                    .partition_id
+                    .store(id as i8, Ordering::Relaxed);
             } else {
-                *partition_id = -1;
+                self.hash_join_state
+                    .partition_id
+                    .store(-1, Ordering::Relaxed);
             };
             info!(
                 "next partition to read: {:?}, probe spill done",
-                *partition_id
+                self.hash_join_state.partition_id.load(Ordering::Relaxed)
             );
             self.hash_join_state
                 .continue_build_watcher
@@ -403,9 +409,8 @@ impl HashJoinProbeState {
         }
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
-        if interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
@@ -423,7 +428,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
@@ -505,9 +510,8 @@ impl HashJoinProbeState {
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
-        if interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
@@ -525,7 +529,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
@@ -560,9 +564,8 @@ impl HashJoinProbeState {
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-        let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
-        if interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
@@ -580,7 +583,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
@@ -611,9 +614,8 @@ impl HashJoinProbeState {
         let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
-        let interrupt = self.hash_join_state.interrupt.clone();
         let chunk_index = task;
-        if interrupt.load(Ordering::Relaxed) {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
             return Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
@@ -654,7 +656,7 @@ impl HashJoinProbeState {
                 row_index += 1;
             }
 
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));

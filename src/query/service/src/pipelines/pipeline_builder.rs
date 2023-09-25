@@ -23,6 +23,8 @@ use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
 use common_base::base::tokio::sync::Barrier;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
+use common_catalog::plan::Projection;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -122,9 +124,13 @@ use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationBlockPruningContext;
 use common_storages_fuse::operations::TransformSerializeBlock;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::SegmentLocation;
 use common_storages_stage::StageTable;
+use log::info;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
@@ -532,8 +538,8 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(builder.finalize());
         }
 
-        let max_io_request = self.settings.get_max_storage_io_requests()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        let max_threads = self.settings.get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         let pipe_items = vec![
             table.matched_mutator(
@@ -612,8 +618,8 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_io_request = self.settings.get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.settings.get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
@@ -693,8 +699,8 @@ impl PipelineBuilder {
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
 
-            let max_io_request = self.settings.get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.settings.get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = table.merge_into_mutators(
@@ -801,13 +807,56 @@ impl PipelineBuilder {
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        if delete.parts.is_lazy {
+            let ctx = self.ctx.clone();
+            let projection = Projection::Columns(delete.col_indices.clone());
+            let filters = delete.filters.clone();
+            let table_clone = table.clone();
+            let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
+            for part in &delete.parts.partitions {
+                // Safe to downcast because we know the the partition is lazy
+                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                segment_locations.push(SegmentLocation {
+                    segment_idx: part.segment_index,
+                    location: part.segment_location.clone(),
+                    snapshot_loc: None,
+                });
+            }
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations,
+                block_count: None,
+            };
+            self.main_pipeline.set_on_init(move || {
+                let ctx_clone = ctx.clone();
+                let (partitions, info) =
+                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                        table_clone
+                            .do_mutation_block_pruning(
+                                ctx_clone,
+                                Some(filters),
+                                projection,
+                                prune_ctx,
+                                true,
+                                true,
+                            )
+                            .await
+                    })?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                ctx.set_partitions(partitions)?;
+                Ok(())
+            });
+        } else {
+            self.ctx.set_partitions(delete.parts.clone())?;
+        }
         table.add_deletion_source(
             self.ctx.clone(),
-            &delete.filter,
+            &delete.filters.filter,
             delete.col_indices.clone(),
             delete.query_row_id_col,
             &mut self.main_pipeline,
-            delete.parts.clone(),
         )?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
@@ -822,12 +871,14 @@ impl PipelineBuilder {
             proc.into_processor()
         })?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_mutation_aggregator(
-            &ctx,
-            &mut self.main_pipeline,
-            delete.snapshot.clone(),
-            MutationKind::Delete,
-        )?;
+        if delete.parts.is_lazy {
+            table.chain_mutation_aggregator(
+                &ctx,
+                &mut self.main_pipeline,
+                delete.snapshot.clone(),
+                MutationKind::Delete,
+            )?;
+        }
         Ok(())
     }
 
@@ -976,7 +1027,7 @@ impl PipelineBuilder {
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if self.settings.get_enable_join_spill()? {
+            let spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
