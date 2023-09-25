@@ -427,7 +427,7 @@ impl Binder {
         let finder = scalar.accept(finder)?;
         if !finder.scalars().is_empty() {
             return Err(ErrorCode::SemanticError(
-                "Filter can't contain aggregate or window functions".to_string(),
+                "Where clause can't contain aggregate or window functions".to_string(),
             )
             .set_span(scalar.span()));
         }
