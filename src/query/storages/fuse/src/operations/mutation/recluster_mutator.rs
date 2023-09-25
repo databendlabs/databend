@@ -20,7 +20,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::Runtime;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
