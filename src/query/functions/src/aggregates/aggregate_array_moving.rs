@@ -217,11 +217,12 @@ where T: Decimal
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
-        if value > T::max_of_max_precision() {
+        if value > T::MAX || value < T::MIN {
             return Err(ErrorCode::Overflow(format!(
-                "Decimal overflow: {} > {}",
+                "Decimal overflow: {} not in [{}, {}]",
                 value,
-                T::max_of_max_precision()
+                T::MIN,
+                T::MAX,
             )));
         }
         Ok(())
@@ -376,9 +377,9 @@ where T: Decimal
                 Some(value) => value,
                 None => {
                     return Err(ErrorCode::Overflow(format!(
-                        "Decimal overflow: {} > (precision: {})",
+                        "Decimal overflow: {} mul {}",
                         sum,
-                        T::max_of_max_precision()
+                        T::e(scale_add as u32)
                     )));
                 }
             };
