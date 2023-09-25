@@ -63,10 +63,7 @@ pub fn serialize_block(
             let arrow_schema = schema.to_arrow();
             let leaf_column_ids = schema.to_leaf_column_ids();
 
-            let mut default_compress_ratio = Some(2.10f64);
-            if matches!(write_settings.table_compression, TableCompression::Zstd) {
-                default_compress_ratio = Some(3.72f64);
-            }
+            let mut default_compress_ratio = None;
 
             let mut writer = NativeWriter::new(
                 buf,
