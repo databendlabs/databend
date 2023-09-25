@@ -1951,7 +1951,7 @@ impl PipelineBuilder {
         }
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.settings.get_enable_join_spill()? {
+            let probe_spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
