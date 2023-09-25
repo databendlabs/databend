@@ -20,6 +20,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Filters;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
@@ -875,7 +876,7 @@ impl RuntimeFilterSource {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DeletePartial {
     pub parts: Partitions,
-    pub filter: RemoteExpr<String>,
+    pub filters: Filters,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
     pub col_indices: Vec<usize>,
