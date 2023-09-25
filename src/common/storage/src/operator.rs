@@ -46,6 +46,7 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
+use opendal::services::S3;
 use opendal::Builder;
 use opendal::Operator;
 
@@ -414,7 +415,26 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
-        let operator = init_operator(sp)?;
+        let sp = sp.clone();
+
+        // Polish storage params via detect region.
+        let sp = match sp {
+            StorageParams::S3(mut s3) if s3.region == "" => {
+                let endpoint = s3.endpoint_url.clone();
+                let bucket = s3.bucket.clone();
+                if let Some(region) = GlobalIORuntime::instance()
+                    .spawn(async move { S3::detect_region(&endpoint, &bucket).await })
+                    .await
+                    .expect("join must succeed")
+                {
+                    s3.region = region;
+                }
+                StorageParams::S3(s3)
+            }
+            v => v,
+        };
+
+        let operator = init_operator(&sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.
