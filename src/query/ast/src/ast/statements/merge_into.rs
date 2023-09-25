@@ -91,8 +91,9 @@ pub struct MergeIntoStmt {
     pub database: Option<Identifier>,
     pub table_ident: Identifier,
     pub source: MergeSource,
-    // alias_target is belong to target
-    pub alias_target: Option<TableAlias>,
+    pub source_alias: Option<TableAlias>,
+    // target_alias is belong to target
+    pub target_alias: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
@@ -230,7 +231,7 @@ pub struct StreamingSource {
 }
 
 impl MergeSource {
-    pub fn transform_table_reference(&self) -> TableReference {
+    pub fn transform_table_reference(&self, alias: Option<TableAlias>) -> TableReference {
         match self {
             Self::StreamingV2 {
                 settings: _,
@@ -241,7 +242,7 @@ impl MergeSource {
             Self::Select { query } => TableReference::Subquery {
                 span: None,
                 subquery: query.clone(),
-                alias: None,
+                alias,
             },
         }
     }

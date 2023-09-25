@@ -65,6 +65,7 @@ impl MergeIntoNotMatchedProcessor {
         for (idx, item) in unmatched.iter().enumerate() {
             let eval_projections: HashSet<usize> =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
+
             data_schemas.insert(idx, item.0.clone());
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {
