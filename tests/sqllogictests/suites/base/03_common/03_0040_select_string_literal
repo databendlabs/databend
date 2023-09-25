@@ -11,7 +11,7 @@ statement ok
 CREATE TABLE test.t (t int)
 
 statement ok
-INSERT INTO test.t VALUES(1)
+INSERT INTO test.t VALUES (1)
 
 query I
 SELECT "t"  FROM test.t
