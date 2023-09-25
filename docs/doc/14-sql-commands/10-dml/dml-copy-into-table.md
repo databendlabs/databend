@@ -2,70 +2,68 @@
 title: "COPY INTO <table>"
 sidebar_label: "COPY INTO <table>"
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-The `COPY INTO` command in Databend allows you to load data from files located in multiple locations. This is the recommended method for loading a large amount of data into Databend.
+<FunctionDescription description="Introduced or updated: v1.2.128"/>
 
-One of its key features is that it provides idempotency by keeping track of files that have already been processed for a default period of 7 days, you can customize this behavior using the `load_file_metadata_expire_hours` global setting.
-
-The files must exist in one of the following locations:
+COPY INTO allows you to load data from files located in one of the following locations:
 
 - User / Internal / External stages: See [Understanding Stages](../../12-load-data/00-stage/00-whystage.md) to learn about stages in Databend.
 - Buckets or containers created in a storage service.
 - Remote servers from where you can access the files by their URL (starting with "https://...").
 - [IPFS](https://ipfs.tech).
 
+See also: [`COPY INTO <location>`](dml-copy-into-location.md)
+
 ## Syntax
 
 ```sql
-/* Standard data load */
 COPY INTO [<database>.]<table_name>
-     FROM { internalStage | externalStage | externalLocation }
+     FROM { userStage | internalStage | externalStage | externalLocation }
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
 [ FILE_FORMAT = ( TYPE = { CSV | TSV | PARQUET} [ formatTypeOptions ] ) ]
 [ copyOptions ]
-
-/* Data load with transformation(Only support Parquet format) */
-COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
-     FROM ( SELECT [<file_col> ... ]
-            FROM { internalStage | externalStage } )
-[ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
-[ PATTERN = '<regex_pattern>' ]
-[ FILE_FORMAT = ( TYPE = {PARQUET} [ formatTypeOptions ] ) ]
-[ copyOptions ]
 ```
 
-:::note
-When the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+### FROM ...
+
+The FROM clause specifies the source location (user stage, internal stage, external stage, or external location) from which data will be loaded into the specified table using the COPY INTO command.
+
+When you load data from a staged file and the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+
 ```sql
 COPY INTO mytable FROM 's3://mybucket/dataset(databend)/' ...
 
 COPY INTO mytable FROM 's3://mybucket/dataset databend/' ...
 ```
-:::
 
-### internalStage
+#### userStage
+
+```sql
+userStage ::= @~[/<path>]
+```
+
+#### internalStage
 
 ```sql
 internalStage ::= @<internal_stage_name>[/<path>]
 ```
 
-### externalStage
+#### externalStage
 
 ```sql
 externalStage ::= @<external_stage_name>[/<path>]
 ```
 
-### externalLocation
-
-This allows you to access data stored outside of Databend, such as in cloud storage services like AWS S3 or Azure Blob Storage. By specifying an external location, you can query data stored there directly from Databend without the need to load it into Databend.
+#### externalLocation
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs groupId="externallocation">
 
-<TabItem value="Amazon S3-like Storage Services" label="Amazon S3-like Storage Services">
+<TabItem value="Amazon S3-like Storage" label="Amazon S3-like Storage">
 
 ```sql
 externalLocation ::=
@@ -162,7 +160,7 @@ externalLocation ::=
   'https://<url>'
 ```
 
-You can use glob patterns to specify moran than one file. For example, use
+You can use glob patterns to specify more than one file. For example, use
 
 - `ontime_200{6,7,8}.csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
 - `ontime_200[6-8].csv` to represents `ontime_2006.csv`,`ontime_2007.csv`,`ontime_2008.csv`.
@@ -180,11 +178,11 @@ externalLocation ::=
 </TabItem>
 </Tabs>
 
-### FILES = ( 'file1' [ , 'file2' ... ] )
+### FILES
 
-Specify a list of one or more files names (separated by commas) to be loaded.
+FILES specifies one or more file names (separated by commas) to be loaded.
 
-### PATTERN = '<regex_pattern>'
+### PATTERN
 
 A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
@@ -212,7 +210,7 @@ copyOptions ::=
 |-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
 | SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                                                                                           | Optional |
 | PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                            | Optional |
-| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
+| FORCE                 | COPY INTO ensures idempotence by automatically tracking and preventing the reloading of files for a default period of 7 days. This can be customized using the `load_file_metadata_expire_hours` setting to control the expiration time for file metadata.<br/>This parameter defaults to `False` meaning COPY INTO will skip duplicate files when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
 | DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
 | ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
 | MAX_FILES             | Sets the maximum number of files to load that have not been loaded already. The value can be set up to 500; any value greater than 500 will be treated as 500.                                                                                                                                             | Optional |
@@ -221,11 +219,11 @@ copyOptions ::=
 When importing large volumes of data, such as logs, it is recommended to set both `PURGE` and `FORCE` to True. This ensures efficient data import without the need for interaction with the Meta server (updating the copied-files set). However, it is important to be aware that this may lead to duplicate data imports.
 :::
 
-### Output
+## Output
 
 COPY INTO provides a summary of the data loading results with these columns:
 
-| Column           | DataType | Nullable | Description                                |
+| Column           | Type     | Nullable | Description                                |
 |------------------|----------|----------|--------------------------------------------|
 | FILE             | VARCHAR  | NO       | The relative path to the source file.       |
 | ROWS_LOADED      | INT      | NO       | The number of rows loaded from the source file. |
@@ -233,6 +231,22 @@ COPY INTO provides a summary of the data loading results with these columns:
 | FIRST_ERROR      | VARCHAR  | YES      | The first error found in the source file.             |
 | FIRST_ERROR_LINE | INT      | YES      | Line number of the first error.             |
 
+## Managing Parallel Processing
+
+In Databend, the `max_threads` setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
+
+When loading data into Databend using the COPY INTO command, you can exert control over the parallel processing capabilities by injecting hints into the COPY INTO command and setting the max_threads parameter. For example:
+
+```sql
+COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
+```
+For more detailed information on injecting hints, see [SET_VAR](../80-setting-cmds/03-set-var.md).
+
+COPY INTO also supports distributed execution in cluster environments. You can enable distributed COPY INTO by setting `ENABLE_DISTRIBUTED_COPY_INTO` to 1. This helps enhance data loading performance and scalability in cluster environments.
+
+```sql
+SET ENABLE_DISTRIBUTED_COPY_INTO = 1;
+```
 
 ## Examples
 
@@ -398,15 +412,3 @@ CONNECTION = (
 PATTERN = '.*[.]parquet'
 FILE_FORMAT = (TYPE = PARQUET);
 ```
-
-### 8. Controlling Parallel Processing
-
-In Databend, the *max_threads* setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
-
-When loading data into Databend with COPY INTO, you can control the parallel processing capabilities by injecting hints into the COPY INTO command and setting the *max_threads* parameter. For example:
-
-```sql
-COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
-```
-
-For more information about injecting hints, see [SET_VAR](../80-setting-cmds/03-set-var.md).

@@ -2,7 +2,23 @@
 title: Transforming Data on Load
 ---
 
-Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
+Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command, with this syntax:
+
+```sql
+COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
+     FROM ( SELECT [<file_col> ... ]
+            FROM { userStage | internalStage | externalStage } )
+[ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+[ PATTERN = '<regex_pattern>' ]
+[ FILE_FORMAT = ( TYPE = {PARQUET} [ formatTypeOptions ] ) ]
+[ copyOptions ]
+```
+
+:::note
+This feature is currently only available for the Parquet file format.
+:::
+
+This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
 
 - **Loading a subset of data columns**: Allows you to selectively import specific columns from a dataset, focusing on the data that is relevant to your analysis or application.
 
@@ -13,10 +29,6 @@ Databend offers a powerful feature that enables data transformation during the l
 - **Performing arithmetic operations during load**: Allows you to perform mathematical calculations and operations on specific columns as the data is being loaded, facilitating advanced data transformations or generating new derived data.
 
 - **Loading data to a table with additional columns**: Enables you to load data into a table that already contains additional columns, accommodating the existing structure while mapping and inserting the data into the corresponding columns efficiently.
-
-:::note
-This feature is currently only available for the Parquet file format.
-:::
 
 ## Tutorials
 
