@@ -308,10 +308,6 @@ impl DataBlock {
         self.columns.push(entry);
     }
 
-    pub fn add_columns(&mut self, entry: Vec<BlockEntry>) {
-        self.columns.extend(entry);
-    }
-
     #[inline]
     pub fn pop_columns(self, num: usize) -> Result<Self> {
         let mut columns = self.columns.clone();

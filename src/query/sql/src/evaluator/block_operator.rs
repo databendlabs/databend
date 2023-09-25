@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::collections::HashMap;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
@@ -91,16 +94,15 @@ impl BlockOperator {
                         None => Ok(input),
                     }
                 } else {
-                    let evaluator =
-                        Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS).with_cache();
-                    let cols = exprs
-                        .iter()
-                        .map(|expr| {
-                            let result = evaluator.run(expr)?;
-                            Ok(BlockEntry::new(expr.data_type().clone(), result))
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    input.add_columns(cols);
+                    // Local variable run in single thread, so `Rc` and `RefCell` are enough.
+                    let cached_values = Rc::new(RefCell::new(HashMap::new()));
+                    for expr in exprs {
+                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS)
+                            .with_cache(Rc::clone(&cached_values));
+                        let result = evaluator.run(expr)?;
+                        let col = BlockEntry::new(expr.data_type().clone(), result);
+                        input.add_column(col);
+                    }
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
                         None => Ok(input),

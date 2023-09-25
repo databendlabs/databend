@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Not;
+use std::rc::Rc;
 
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -25,7 +27,6 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 use log::error;
-use parking_lot::RwLock;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
@@ -62,8 +63,8 @@ pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-
-    cached_values: Option<RwLock<HashMap<Expr, Value<AnyType>>>>,
+    #[allow(clippy::type_complexity)]
+    cached_values: Option<Rc<RefCell<HashMap<Expr, Value<AnyType>>>>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -81,12 +82,12 @@ impl<'a> Evaluator<'a> {
     }
 
     /// Only used in `block_operator.rs`
-    pub fn with_cache(self) -> Self {
+    pub fn with_cache(self, cached_values: Rc<RefCell<HashMap<Expr, Value<AnyType>>>>) -> Self {
         Self {
             input_columns: self.input_columns,
             func_ctx: self.func_ctx,
             fn_registry: self.fn_registry,
-            cached_values: Some(RwLock::new(HashMap::new())),
+            cached_values: Some(cached_values),
         }
     }
 
@@ -120,7 +121,7 @@ impl<'a> Evaluator<'a> {
 
         // try get result from cache
         if let Some(cached_values) = &self.cached_values {
-            if let Some(cached_result) = cached_values.read().get(expr) {
+            if let Some(cached_result) = cached_values.borrow().get(expr) {
                 return Ok(cached_result.clone());
             }
         }
@@ -233,8 +234,7 @@ impl<'a> Evaluator<'a> {
                 let result_cloned = r.clone();
 
                 // Acquire the write lock and insert the value.
-                let mut cached_values_ref = cached_values.write();
-                if let Entry::Vacant(v) = cached_values_ref.entry(expr_cloned) {
+                if let Entry::Vacant(v) = cached_values.borrow_mut().entry(expr_cloned) {
                     v.insert(result_cloned);
                 }
             }
