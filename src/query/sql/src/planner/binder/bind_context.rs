@@ -269,8 +269,21 @@ impl BindContext {
         table: Option<&str>,
         column: &Identifier,
         available_aliases: &[(String, ScalarExpr)],
+        name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
         let name = &column.name;
+
+        if name_resolution_ctx.deny_column_reference {
+            let err = if column.is_quoted() {
+                ErrorCode::SemanticError(format!(
+                    "invalid identifier {name}, do you mean '{name}'?"
+                ))
+            } else {
+                ErrorCode::SemanticError(format!("invalid identifier {name}"))
+            };
+            return Err(err.set_span(column.span));
+        }
+
         let mut result = vec![];
         // Lookup parent context to resolve outer reference.
         let mut alias_match_count = 0;
@@ -313,17 +326,14 @@ impl BindContext {
         }
 
         if result.is_empty() {
-            if column.is_quoted() {
-                Err(ErrorCode::SemanticError(format!(
+            let err = if column.is_quoted() {
+                ErrorCode::SemanticError(format!(
                     "column {name} doesn't exist, do you mean '{name}'?"
                 ))
-                .set_span(column.span))
             } else {
-                Err(
-                    ErrorCode::SemanticError(format!("column {name} doesn't exist"))
-                        .set_span(column.span),
-                )
-            }
+                ErrorCode::SemanticError(format!("column {name} doesn't exist"))
+            };
+            Err(err.set_span(column.span))
         } else {
             Ok(result.remove(0))
         }

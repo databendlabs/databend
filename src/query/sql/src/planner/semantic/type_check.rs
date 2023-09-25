@@ -227,6 +227,7 @@ impl<'a> TypeChecker<'a> {
                             table.as_deref(),
                             &column,
                             self.aliases,
+                            &self.name_resolution_ctx,
                         )?
                     }
                     ColumnID::Position(pos) => self.bind_context.search_column_position(
@@ -3084,6 +3085,7 @@ impl<'a> TypeChecker<'a> {
             column.table_name.as_deref(),
             &inner_column_ident,
             self.aliases,
+            &self.name_resolution_ctx,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {

@@ -96,12 +96,12 @@ impl Interpreter for InsertInterpreter {
                 unreachable!()
             }
             InsertInputSource::Values(data) => {
-                let settings = self.ctx.get_settings();
-
                 build_res.main_pipeline.add_source(
                     |output| {
-                        let name_resolution_ctx =
-                            NameResolutionContext::try_from(settings.as_ref())?;
+                        let name_resolution_ctx = NameResolutionContext {
+                            deny_column_reference: true,
+                            ..Default::default()
+                        };
                         let inner = ValueSource::new(
                             data.to_string(),
                             self.ctx.clone(),
