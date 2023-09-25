@@ -526,8 +526,8 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(builder.finalize());
         }
 
-        let max_io_request = self.ctx.get_settings().get_max_threads()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         let pipe_items = vec![
             table.matched_mutator(
