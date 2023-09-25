@@ -24,7 +24,6 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
-use common_io::prelude::BinaryWrite;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
@@ -37,7 +36,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -217,20 +215,38 @@ impl HashMethod for HashMethodSerializer {
     fn build_keys_state(
         &self,
         group_columns: &[(Column, DataType)],
-        rows: usize,
+        num_rows: usize,
     ) -> Result<KeysState> {
-        let approx_size = group_columns.len() * rows * 8;
-        let mut builder = StringColumnBuilder::with_capacity(rows, approx_size);
-
-        for row in 0..rows {
-            for (col, _) in group_columns {
-                serialize_column_binary(col, row, &mut builder.data);
-            }
-            builder.commit_row();
+        let mut data_size = 0;
+        for (column, _) in group_columns.iter() {
+            data_size += column.memory_size();
         }
+        let mut data: Vec<u8> = Vec::with_capacity(data_size);
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        offsets.push(0);
+        let mut data_ptr = data.as_mut_ptr();
+        let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
 
-        let col = builder.build();
-        Ok(KeysState::Column(Column::String(col)))
+        let mut offset = 0;
+        for i in 0..num_rows {
+            let old_ptr = data_ptr;
+            for (col, _) in group_columns {
+                serialize_column_binary(col, i, &mut data_ptr);
+            }
+            offset += data_ptr as u64 - old_ptr as u64;
+            unsafe {
+                std::ptr::write(offsets_ptr, offset);
+                offsets_ptr = offsets_ptr.add(1);
+            }
+        }
+        unsafe {
+            offsets.set_len(num_rows + 1);
+            data.set_len(data_size);
+        }
+        Ok(KeysState::Column(Column::String(StringColumn::new(
+            data.into(),
+            offsets.into(),
+        ))))
     }
 
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
@@ -257,42 +273,55 @@ impl HashMethod for HashMethodDictionarySerializer {
     fn build_keys_state(
         &self,
         group_columns: &[(Column, DataType)],
-        rows: usize,
+        num_rows: usize,
     ) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
         let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-
+        let mut other_columns = Vec::new();
         for (group_column, _) in group_columns {
-            if let Column::String(v) = group_column {
-                debug_assert_eq!(v.len(), rows);
-                dictionary_columns.push(v.clone());
-            } else if let Column::Variant(v) = group_column {
-                debug_assert_eq!(v.len(), rows);
-                dictionary_columns.push(v.clone());
-            }
-        }
-
-        if dictionary_columns.len() != group_columns.len() {
-            let approx_size = group_columns.len() * rows * 8;
-            let mut builder = StringColumnBuilder::with_capacity(rows, approx_size);
-
-            for row in 0..rows {
-                for (group_column, _) in group_columns {
-                    if !matches!(group_column, Column::String(_) | Column::Variant(_)) {
-                        serialize_column_binary(group_column, row, &mut builder.data);
-                    }
+            match group_column {
+                Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
+                    debug_assert_eq!(v.len(), num_rows);
+                    dictionary_columns.push(v.clone());
                 }
-
-                builder.commit_row();
+                _ => other_columns.push(group_column),
             }
-
-            dictionary_columns.push(builder.build());
         }
 
-        let mut keys = Vec::with_capacity(rows * dictionary_columns.len());
-        let mut points = Vec::with_capacity(rows * dictionary_columns.len());
+        if !other_columns.is_empty() {
+            let mut data_size = 0;
+            for column in other_columns {
+                data_size += column.memory_size();
+            }
+            let mut data: Vec<u8> = Vec::with_capacity(data_size);
+            let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+            offsets.push(0);
+            let mut data_ptr = data.as_mut_ptr();
+            let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
 
-        for row in 0..rows {
+            let mut offset = 0;
+            for i in 0..num_rows {
+                let old_ptr = data_ptr;
+                for (col, _) in group_columns {
+                    serialize_column_binary(col, i, &mut data_ptr);
+                }
+                offset += data_ptr as u64 - old_ptr as u64;
+                unsafe {
+                    std::ptr::write(offsets_ptr, offset);
+                    offsets_ptr = offsets_ptr.add(1);
+                }
+            }
+            unsafe {
+                offsets.set_len(num_rows + 1);
+                data.set_len(data_size);
+            }
+            dictionary_columns.push(StringColumn::new(data.into(), offsets.into()));
+        }
+
+        let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
+        let mut points = Vec::with_capacity(num_rows * dictionary_columns.len());
+
+        for row in 0..num_rows {
             let start = points.len();
 
             for dictionary_column in &dictionary_columns {
@@ -624,49 +653,95 @@ fn build(
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
-pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
+pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
-            NumberColumn::NUM_TYPE(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+            NumberColumn::NUM_TYPE(v) => {
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &v[row] as *const NUM_TYPE,
+                        row_space.cast::<NUM_TYPE>(),
+                        1,
+                    );
+                    *row_space = row_space.add(std::mem::size_of::<NUM_TYPE>());
+                }
+            }
         }),
-        Column::Boolean(v) => vec.push(v.get_bit(row) as u8),
-        Column::String(v) => {
-            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
-        }
+        Column::Boolean(v) => unsafe {
+            std::ptr::write(*row_space, v.get_bit(row) as u8);
+            *row_space = row_space.add(1);
+        },
+        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
+            let value = v.index_unchecked(row);
+            std::ptr::copy_nonoverlapping(
+                &value.len().to_le_bytes() as *const u8,
+                *row_space,
+                std::mem::size_of::<usize>(),
+            );
+            *row_space = row_space.add(std::mem::size_of::<usize>());
+            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, value.len());
+            *row_space = row_space.add(value.len());
+        },
         Column::Decimal(_) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
-                Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) =>
-                    vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+                Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) => {
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            &v[row] as *const DECIMAL_TYPE,
+                            row_space.cast::<DECIMAL_TYPE>(),
+                            1,
+                        );
+                        *row_space = row_space.add(std::mem::size_of::<DECIMAL_TYPE>());
+                    }
+                }
                 _ => unreachable!(),
             })
         }
-        Column::Timestamp(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
-        Column::Date(v) => vec.extend_from_slice(v[row].to_le_bytes().as_ref()),
+        Column::Timestamp(v) => unsafe {
+            std::ptr::copy_nonoverlapping(
+                &v[row].to_le_bytes() as *const u8,
+                *row_space,
+                std::mem::size_of::<i64>(),
+            );
+            *row_space = row_space.add(std::mem::size_of::<i64>());
+        },
+        Column::Date(v) => unsafe {
+            std::ptr::copy_nonoverlapping(
+                &v[row].to_le_bytes() as *const u8,
+                *row_space,
+                std::mem::size_of::<i32>(),
+            );
+            *row_space = row_space.add(std::mem::size_of::<i32>());
+        },
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
-            BinaryWrite::write_uvarint(vec, data.len() as u64).unwrap();
-            for i in 0..data.len() {
-                serialize_column_binary(&data, i, vec);
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    &data.len().to_le_bytes() as *const u8,
+                    *row_space,
+                    std::mem::size_of::<usize>(),
+                );
+                *row_space = row_space.add(std::mem::size_of::<usize>());
             }
-        }
-        Column::Bitmap(v) => {
-            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
+            for i in 0..data.len() {
+                serialize_column_binary(&data, i, row_space);
+            }
         }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
-            vec.push(valid as u8);
+            unsafe {
+                std::ptr::write(*row_space, valid as u8);
+                *row_space = row_space.add(1);
+            }
             if valid {
-                serialize_column_binary(&c.column, row, vec);
+                serialize_column_binary(&c.column, row, row_space);
             }
         }
         Column::Tuple(fields) => {
             for inner_col in fields.iter() {
-                serialize_column_binary(inner_col, row, vec);
+                serialize_column_binary(inner_col, row, row_space);
             }
-        }
-        Column::Variant(v) => {
-            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
         }
     }
 }

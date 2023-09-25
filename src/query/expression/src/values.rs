@@ -2230,10 +2230,10 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
-                let offset: u64 = reader.read_uvarint()?;
-                builder.data.resize(offset as usize + builder.data.len(), 0);
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
-                reader.read_exact(&mut builder.data[last..last + offset as usize])?;
+                reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
             }
             ColumnBuilder::Timestamp(builder) => {
