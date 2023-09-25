@@ -208,8 +208,21 @@ impl StringColumn {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
         &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
+    }
+
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline]
+    pub unsafe fn index_ptr(&self, index: usize) -> (*const u8, usize) {
+        let start = self.offsets[index] as usize;
+        (
+            &self.data[start] as *const u8,
+            self.offsets[index + 1] as usize - start,
+        )
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {

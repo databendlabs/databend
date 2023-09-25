@@ -680,11 +680,11 @@ pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut
             *row_space = row_space.add(1);
         },
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
-            let value = v.index_unchecked(row);
-            std::ptr::write(row_space.cast::<usize>(), value.len());
+            let (str_ptr, len) = v.index_ptr(row);
+            std::ptr::write(row_space.cast::<usize>(), len);
             *row_space = row_space.add(std::mem::size_of::<usize>());
-            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, value.len());
-            *row_space = row_space.add(value.len());
+            std::ptr::copy_nonoverlapping(str_ptr, *row_space, len);
+            *row_space = row_space.add(len);
         },
         Column::Timestamp(v) => unsafe {
             std::ptr::write(row_space.cast::<i64>(), v[row]);
