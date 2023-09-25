@@ -25,7 +25,7 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 use log::error;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use crate::block::DataBlock;
 use crate::expression::Expr;
@@ -63,7 +63,7 @@ pub struct Evaluator<'a> {
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 
-    cached_values: Mutex<HashMap<Expr, Value<AnyType>>>,
+    cached_values: Option<RwLock<HashMap<Expr, Value<AnyType>>>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -76,7 +76,17 @@ impl<'a> Evaluator<'a> {
             input_columns,
             func_ctx,
             fn_registry,
-            cached_values: Mutex::new(HashMap::new()),
+            cached_values: None,
+        }
+    }
+
+    /// Only used in `block_operator.rs`
+    pub fn with_cache(self) -> Self {
+        Self {
+            input_columns: self.input_columns,
+            func_ctx: self.func_ctx,
+            fn_registry: self.fn_registry,
+            cached_values: Some(RwLock::new(HashMap::new())),
         }
     }
 
@@ -95,17 +105,29 @@ impl<'a> Evaluator<'a> {
     }
 
     fn cache_expr_value(&self, expr: &Expr, value: Value<AnyType>) {
-        let mut cached_values_ref = self.cached_values.lock();
+        let mut cached_values_ref = self.cached_values.as_ref().unwrap().write();
         if let Entry::Vacant(v) = cached_values_ref.entry(expr.clone()) {
             v.insert(value);
         }
     }
 
     fn get_cached_expr_value(&self, expr: &Expr) -> Option<Value<AnyType>> {
-        let found = { self.cached_values.lock().contains_key(expr) };
+        let found = {
+            self.cached_values
+                .as_ref()
+                .unwrap()
+                .read()
+                .contains_key(expr)
+        };
         match found {
             false => None,
-            true => self.cached_values.lock().get(expr).cloned(),
+            true => self
+                .cached_values
+                .as_ref()
+                .unwrap()
+                .read()
+                .get(expr)
+                .cloned(),
         }
     }
 
@@ -122,22 +144,14 @@ impl<'a> Evaluator<'a> {
 
         #[cfg(debug_assertions)]
         self.check_expr(expr);
-        let cached_result = self.get_cached_expr_value(expr);
-        match cached_result {
-            Some(result) => Ok(result),
-            None => {
-                let result = self.get_expr_evaluated_result(expr, validity)?;
-                self.cache_expr_value(expr, result.clone());
-                Ok(result)
+
+        // try get result from cache
+        if let Some(_) = self.cached_values {
+            if let Some(result) = self.get_cached_expr_value(expr) {
+                return Ok(result);
             }
         }
-    }
 
-    fn get_expr_evaluated_result(
-        &self,
-        expr: &Expr,
-        validity: Option<Bitmap>,
-    ) -> Result<Value<AnyType>, ErrorCode> {
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
             Expr::ColumnRef { id, .. } => Ok(self.input_columns.get_by_offset(*id).value.clone()),
@@ -238,6 +252,9 @@ impl<'a> Evaluator<'a> {
                 );
                 RECURSING.store(false, Ordering::SeqCst);
             }
+        }
+        if let Some(_) = self.cached_values && let Ok(r) = &result {
+            self.cache_expr_value(expr, r.clone());
         }
         result
     }

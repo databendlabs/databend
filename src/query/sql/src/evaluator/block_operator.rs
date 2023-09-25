@@ -91,7 +91,8 @@ impl BlockOperator {
                         None => Ok(input),
                     }
                 } else {
-                    let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator =
+                        Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS).with_cache();
                     let cols = exprs
                         .iter()
                         .map(|expr| {
