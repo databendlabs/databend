@@ -226,18 +226,9 @@ COPY INTO provides a summary of the data loading results with these columns:
 | FIRST_ERROR      | VARCHAR  | YES      | The first error found in the source file.             |
 | FIRST_ERROR_LINE | INT      | YES      | Line number of the first error.             |
 
-## Managing Parallel Processing
+## Distributed COPY INTO
 
-In Databend, the `max_threads` setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
-
-When loading data into Databend using the COPY INTO command, you can exert control over the parallel processing capabilities by injecting hints into the COPY INTO command and setting the max_threads parameter. For example:
-
-```sql
-COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
-```
-For more detailed information on injecting hints, see [SET_VAR](../80-setting-cmds/03-set-var.md).
-
-COPY INTO also supports distributed execution in cluster environments. You can enable distributed COPY INTO by setting `ENABLE_DISTRIBUTED_COPY_INTO` to 1. This helps enhance data loading performance and scalability in cluster environments.
+COPY INTO supports distributed execution in cluster environments. You can enable distributed COPY INTO by setting `ENABLE_DISTRIBUTED_COPY_INTO` to 1. This helps enhance data loading performance and scalability in cluster environments.
 
 ```sql
 SET ENABLE_DISTRIBUTED_COPY_INTO = 1;
