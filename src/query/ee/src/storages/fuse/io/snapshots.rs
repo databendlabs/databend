@@ -49,7 +49,7 @@ where
     }
 
     // 1. Get all the snapshot by chunks, save all the segments location.
-    let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     let start = Instant::now();
     let mut count = 1;
@@ -59,7 +59,7 @@ where
     root_snapshot_lite.segments.iter().for_each(|location| {
         segments.push(location.to_owned());
     });
-    for chunk in snapshot_files.chunks(max_io_requests) {
+    for chunk in snapshot_files.chunks(max_threads) {
         // Since we want to get all the snapshot referenced files, so set `ignore_timestamp` true
         let results = snapshots_io
             .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), true)
