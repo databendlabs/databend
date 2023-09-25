@@ -419,7 +419,7 @@ impl DataOperator {
 
         // Polish storage params via detect region.
         let sp = match sp {
-            StorageParams::S3(mut s3) if s3.region == "" => {
+            StorageParams::S3(mut s3) if s3.region.is_empty() => {
                 let endpoint = s3.endpoint_url.clone();
                 let bucket = s3.bucket.clone();
                 if let Some(region) = GlobalIORuntime::instance()
