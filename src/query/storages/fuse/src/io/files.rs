@@ -54,11 +54,11 @@ impl Files {
             });
 
             let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-            let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+
             execute_futures_in_parallel(
                 tasks,
                 threads_nums,
-                permit_nums,
+                threads_nums * 2,
                 "batch-remove-files-worker".to_owned(),
             )
             .await?;
