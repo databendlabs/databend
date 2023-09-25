@@ -12,14 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod predicate;
-mod read_policy;
-mod reader;
-mod row_group;
-mod topk;
-mod utils;
+mod builder;
+mod full_reader;
+mod row_group_reader;
 
-pub use read_policy::*;
-pub use reader::ParquetFSFullReader;
-pub use reader::ParquetRSReaderBuilder;
-pub use reader::ParquetRSRowGroupReader;
+pub use builder::ParquetRSReaderBuilder;
+pub use full_reader::ParquetFSFullReader;
+pub use row_group_reader::ParquetRSRowGroupReader;

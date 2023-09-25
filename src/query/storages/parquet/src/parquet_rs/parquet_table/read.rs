@@ -28,7 +28,7 @@ use crate::parquet_rs::source::ParquetSource;
 use crate::utils::calc_parallelism;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
-use crate::ParquetRSReader;
+use crate::ParquetRSReaderBuilder;
 
 impl ParquetRSTable {
     #[inline]
@@ -66,7 +66,7 @@ impl ParquetRSTable {
             .as_ref()
             .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
 
-        let builder = ParquetRSReader::builder_with_parquet_schema(
+        let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),
             self.operator.clone(),
             table_schema,
@@ -77,13 +77,22 @@ impl ParquetRSTable {
         .with_pruner(pruner)
         .with_topk(topk.as_ref());
 
-        let reader = Arc::new(builder.build()?);
+        let reader = Arc::new(builder.build_row_group_reader()?);
+        let full_reader = Some(Arc::new(builder.build_full_reader()?));
 
         let topk = Arc::new(topk);
         // TODO(parquet):
         // - introduce Top-K optimization.
         pipeline.add_source(
-            |output| ParquetSource::create(ctx.clone(), output, reader.clone(), topk.clone()),
+            |output| {
+                ParquetSource::create(
+                    ctx.clone(),
+                    output,
+                    reader.clone(),
+                    full_reader.clone(),
+                    topk.clone(),
+                )
+            },
             num_threads,
         )
     }

@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod predicate;
-mod read_policy;
-mod reader;
-mod row_group;
-mod topk;
-mod utils;
+mod no_prefetch;
+mod predicate_and_topk;
+mod topk_only;
 
-pub use read_policy::*;
-pub use reader::ParquetFSFullReader;
-pub use reader::ParquetRSReaderBuilder;
-pub use reader::ParquetRSRowGroupReader;
+pub mod policy;
+pub use no_prefetch::NoPrefetchPolicy;
+pub use no_prefetch::NoPretchPolicyBuilder;
+pub use predicate_and_topk::PredicateAndTopkPolicy;
+pub use predicate_and_topk::PredicateAndTopkPolicyBuilder;
+pub use topk_only::TopkOnlyPolicy;
+pub use topk_only::TopkOnlyPolicyBuilder;

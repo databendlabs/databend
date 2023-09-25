@@ -30,14 +30,15 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::CopyStatus;
 use common_storage::FileStatus;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 
-use super::parquet_reader::ParquetRSReader;
+use super::parquet_reader::policy::ReadPolicyImpl;
+use crate::ParquetFSFullReader;
 use crate::ParquetPart;
+use crate::ParquetRSRowGroupReader;
 
 enum State {
     Init,
-    ReadRowGroup(ParquetRecordBatchReader),
+    ReadRowGroup(ReadPolicyImpl),
     ReadFiles(Vec<(String, Vec<u8>)>),
 }
 
@@ -52,7 +53,8 @@ pub struct ParquetSource {
     is_finished: bool,
 
     // Used to read parquet.
-    reader: Arc<ParquetRSReader>,
+    row_group_reader: Arc<ParquetRSRowGroupReader>,
+    full_file_reader: Option<Arc<ParquetFSFullReader>>,
 
     state: State,
     // If the source is used for a copy pipeline,
@@ -68,7 +70,8 @@ impl ParquetSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        reader: Arc<ParquetRSReader>,
+        row_group_reader: Arc<ParquetRSRowGroupReader>,
+        full_file_reader: Option<Arc<ParquetFSFullReader>>,
         topk: Arc<Option<TopK>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
@@ -84,13 +87,14 @@ impl ParquetSource {
             output,
             scan_progress,
             ctx,
-            reader,
+            row_group_reader,
             generated_data: None,
             is_finished: false,
             state: State::Init,
             is_copy,
             copy_status,
             topk_sorter,
+            full_file_reader,
         })))
     }
 }
@@ -140,7 +144,7 @@ impl Processor for ParquetSource {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
             State::ReadRowGroup(mut reader) => {
-                if let Some(block) = self.reader.read_block(&mut reader)? {
+                if let Some(block) = reader.as_mut().read_block()? {
                     self.generated_data = Some(block);
                     self.state = State::ReadRowGroup(reader);
                 }
@@ -151,7 +155,11 @@ impl Processor for ParquetSource {
                 // Write `if` outside to reduce branches.
                 if self.is_copy {
                     for (path, buffer) in buffers {
-                        let bs = self.reader.read_blocks_from_binary(buffer)?;
+                        let bs = self
+                            .full_file_reader
+                            .as_ref()
+                            .unwrap()
+                            .read_blocks_from_binary(buffer)?;
                         let num_rows = bs.iter().map(|b| b.num_rows()).sum();
                         self.copy_status.add_chunk(path.as_str(), FileStatus {
                             num_rows_loaded: num_rows,
@@ -161,7 +169,12 @@ impl Processor for ParquetSource {
                     }
                 } else {
                     for (_, buffer) in buffers {
-                        blocks.extend(self.reader.read_blocks_from_binary(buffer)?);
+                        blocks.extend(
+                            self.full_file_reader
+                                .as_ref()
+                                .unwrap()
+                                .read_blocks_from_binary(buffer)?,
+                        );
                     }
                 }
 
@@ -183,8 +196,8 @@ impl Processor for ParquetSource {
                     match ParquetPart::from_part(&part)? {
                         ParquetPart::ParquetRSRowGroup(part) => {
                             if let Some(reader) = self
-                                .reader
-                                .prepare_row_group_reader(part, &mut self.topk_sorter)
+                                .row_group_reader
+                                .create_read_policy(part, &mut self.topk_sorter)
                                 .await?
                             {
                                 self.state = State::ReadRowGroup(reader);
@@ -194,7 +207,7 @@ impl Processor for ParquetSource {
                         ParquetPart::ParquetFiles(parts) => {
                             let mut handlers = Vec::with_capacity(parts.files.len());
                             for (path, _) in parts.files.iter() {
-                                let op = self.reader.operator();
+                                let op = self.row_group_reader.operator();
                                 let path = path.clone();
                                 handlers.push(async move {
                                     let data = op.read(&path).await?;
