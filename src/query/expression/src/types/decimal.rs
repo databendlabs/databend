@@ -690,34 +690,35 @@ impl DecimalDataType {
         other.max_precision()
     }
 
-    // For div ops, we unify types to a super type
-    pub fn div_common_type(a: &Self, b: &Self) -> Result<(Self, Self)> {
-        let l: u8 = (a.leading_digits() + b.scale()).max(b.leading_digits());
-        let scale = a.scale().max((a.scale() + 6).min(12));
+    pub fn belong_diff_precision(precision_a: u8, precision_b: u8) -> bool {
+        (precision_a > MAX_DECIMAL128_PRECISION && precision_b <= MAX_DECIMAL128_PRECISION)
+            || (precision_a <= MAX_DECIMAL128_PRECISION && precision_b > MAX_DECIMAL128_PRECISION)
+    }
 
-        let mut precision = l + scale;
+    // For div ops, a,b and return must belong to same width types
+    pub fn div_common_type(a: &Self, b: &Self, return_size: DecimalSize) -> Result<(Self, Self)> {
+        let precision_a = if Self::belong_diff_precision(a.precision(), return_size.precision) {
+            return_size.precision
+        } else {
+            a.precision()
+        };
 
-        // if the args both are Decimal128, we need to clamp the precision to 38
-        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
-            precision = precision.min(MAX_DECIMAL128_PRECISION);
-        }
-        precision = precision.min(MAX_DECIMAL256_PRECISION);
+        let precision_b = if Self::belong_diff_precision(b.precision(), return_size.precision) {
+            return_size.precision
+        } else {
+            b.precision()
+        };
 
-        let a_type = Self::from_size(DecimalSize { precision, scale })?;
+        let a_type = Self::from_size(DecimalSize {
+            precision: precision_a,
+            scale: a.scale(),
+        })?;
+        let b_type = Self::from_size(DecimalSize {
+            precision: precision_b,
+            scale: b.scale(),
+        })?;
 
-        let mut b_precision = b.precision();
-        if b_precision <= MAX_DECIMAL128_PRECISION && a_type.precision() > MAX_DECIMAL128_PRECISION
-        {
-            b_precision = a_type.precision();
-        }
-
-        Ok((
-            a_type,
-            Self::from_size(DecimalSize {
-                precision: b_precision,
-                scale: b.scale(),
-            })?,
-        ))
+        Ok((a_type, b_type))
     }
 
     // Returns binded types and result type
@@ -752,9 +753,14 @@ impl DecimalDataType {
         // if the args both are Decimal128, we need to clamp the precision to 38
         if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
             precision = precision.min(MAX_DECIMAL128_PRECISION);
+        } else if precision <= MAX_DECIMAL128_PRECISION
+            && Self::belong_diff_precision(a.precision(), b.precision())
+        {
+            // lift up to decimal256
+            precision = MAX_DECIMAL128_PRECISION + 1;
         }
-
         precision = precision.min(MAX_DECIMAL256_PRECISION);
+
         let result_type = Self::from_size(DecimalSize { precision, scale })?;
 
         if is_multiply {
@@ -770,7 +776,7 @@ impl DecimalDataType {
                 result_type,
             ))
         } else if is_divide {
-            let (a, b) = Self::div_common_type(a, b)?;
+            let (a, b) = Self::div_common_type(a, b, result_type.size())?;
             Ok((a, b, result_type))
         } else {
             Ok((result_type, result_type, result_type))

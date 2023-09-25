@@ -1035,7 +1035,7 @@ evaluation (internal):
 
 ast            : c / 0.5
 raw expr       : divide(c::UInt32, 0.5)
-checked expr   : divide<Decimal(17, 6), Decimal(1, 1)>(to_decimal<UInt32>(17, 6)(c), 0.5_d128(1,1))
+checked expr   : divide<Decimal(10, 0), Decimal(1, 1)>(to_decimal<UInt32>(10, 0)(c), 0.5_d128(1,1))
 evaluation:
 +--------+-----------+----------------+
 |        | c         | Output         |
@@ -1128,13 +1128,13 @@ error:
   --> SQL:1:5
   |
 1 | 2.0 / 0
-  |     ^ divided by zero while evaluating function `divide(2.0000000, 0)`
+  |     ^ divided by zero while evaluating function `divide(2.0, 0)`
 
 
 
 ast            : c / e
 raw expr       : divide(c::UInt32, e::Decimal(10, 1))
-checked expr   : divide<Decimal(17, 6), Decimal(10, 1)>(to_decimal<UInt32>(17, 6)(c), e)
+checked expr   : divide<Decimal(10, 0), Decimal(10, 1)>(to_decimal<UInt32>(10, 0)(c), e)
 evaluation:
 +--------+-----------+----------------+----------------+
 |        | c         | e              | Output         |
@@ -1180,7 +1180,7 @@ evaluation (internal):
 
 ast            : d2 / e
 raw expr       : divide(d2::UInt8 NULL, e::Decimal(10, 1))
-checked expr   : divide<Decimal(15, 6) NULL, Decimal(10, 1) NULL>(CAST(d2 AS Decimal(15, 6) NULL), CAST(e AS Decimal(10, 1) NULL))
+checked expr   : divide<Decimal(3, 0) NULL, Decimal(10, 1) NULL>(CAST(d2 AS Decimal(3, 0) NULL), CAST(e AS Decimal(10, 1) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | e              | Output              |
@@ -1203,12 +1203,12 @@ evaluation (internal):
 
 ast            : d2 / f
 raw expr       : divide(d2::UInt8 NULL, f::Decimal(76, 2))
-checked expr   : divide<Decimal(76, 6) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(76, 6) NULL), CAST(f AS Decimal(76, 2) NULL))
+checked expr   : divide<Decimal(39, 0) NULL, Decimal(76, 2) NULL>(CAST(d2 AS Decimal(39, 0) NULL), CAST(f AS Decimal(76, 2) NULL))
 evaluation:
 +--------+------------------+----------------+---------------------+
 |        | d2               | f              | Output              |
 +--------+------------------+----------------+---------------------+
-| Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(11, 6) NULL |
+| Type   | UInt8 NULL       | Decimal(76, 2) | Decimal(39, 6) NULL |
 | Domain | {0..=3} ∪ {NULL} | {0.50..=12.34} | Unknown             |
 | Row 0  | 1                | 0.50           | 2.000000            |
 | Row 1  | NULL             | 0.92           | NULL                |
@@ -1226,12 +1226,12 @@ evaluation (internal):
 
 ast            : e / f
 raw expr       : divide(e::Decimal(10, 1), f::Decimal(76, 2))
-checked expr   : divide<Decimal(76, 7), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(76, 7)(e), f)
+checked expr   : divide<Decimal(39, 1), Decimal(76, 2)>(to_decimal<Decimal(10, 1)>(39, 1)(e), f)
 evaluation:
 +--------+----------------+----------------+----------------+
 |        | e              | f              | Output         |
 +--------+----------------+----------------+----------------+
-| Type   | Decimal(10, 1) | Decimal(76, 2) | Decimal(18, 7) |
+| Type   | Decimal(10, 1) | Decimal(76, 2) | Decimal(39, 7) |
 | Domain | {3.1..=188.8}  | {0.50..=12.34} | Unknown        |
 | Row 0  | 3.1            | 0.50           | 6.2000000      |
 | Row 1  | 33.5           | 0.92           | 36.4130434     |
