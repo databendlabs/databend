@@ -215,8 +215,7 @@ impl Binder {
                     if from_context.in_grouping {
                         let group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
-                    }
-                    if !from_context.windows.window_functions.is_empty() {
+                    } else if !from_context.windows.window_functions.is_empty() {
                         let window_checker = WindowChecker::new(from_context);
                         scalar = window_checker.resolve(&scalar)?;
                     }
