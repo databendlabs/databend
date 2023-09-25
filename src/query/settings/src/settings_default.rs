@@ -354,7 +354,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable distributed execution of table compaction.",
                     possible_values: None,
-                    display_in_show_settings: true,
+                    display_in_show_settings: false,
                 }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
