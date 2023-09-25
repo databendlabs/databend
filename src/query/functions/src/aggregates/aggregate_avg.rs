@@ -198,12 +198,23 @@ pub fn try_create_aggregate_avg_function(
                 scale: s.scale.max(4),
             };
 
-            AggregateAvgFunction::<DecimalSumState<i128>>::try_create(
-                display_name,
-                arguments,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                decimal_size.scale - s.scale,
-            )
+            let overflow = s.precision > 18;
+
+            if overflow {
+                AggregateAvgFunction::<DecimalSumState<true, i128>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                    decimal_size.scale - s.scale,
+                )
+            } else {
+                AggregateAvgFunction::<DecimalSumState<false, i128>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                    decimal_size.scale - s.scale,
+                )
+            }
         }
         DataType::Decimal(DecimalDataType::Decimal256(s)) => {
             let p = MAX_DECIMAL256_PRECISION;
@@ -213,12 +224,23 @@ pub fn try_create_aggregate_avg_function(
                 scale: s.scale.max(4),
             };
 
-            AggregateAvgFunction::<DecimalSumState<i256>>::try_create(
-                display_name,
-                arguments,
-                DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
-                decimal_size.scale - s.scale,
-            )
+            let overflow = s.precision > 18;
+
+            if overflow {
+                AggregateAvgFunction::<DecimalSumState<true, i256>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                    decimal_size.scale - s.scale,
+                )
+            } else {
+                AggregateAvgFunction::<DecimalSumState<false, i256>>::try_create(
+                    display_name,
+                    arguments,
+                    DataType::Decimal(DecimalDataType::from_size(decimal_size)?),
+                    decimal_size.scale - s.scale,
+                )
+            }
         }
         _ => Err(ErrorCode::BadDataValueType(format!(
             "AggregateAvgFunction does not support type '{:?}'",

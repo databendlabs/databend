@@ -192,10 +192,6 @@ impl Settings {
         Ok(self.try_get_u64("disable_join_reorder")? != 0)
     }
 
-    pub fn get_enable_join_spill(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_join_spill")? != 0)
-    }
-
     pub fn get_join_spilling_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_threshold")? as usize)
     }
