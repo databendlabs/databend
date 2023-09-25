@@ -213,13 +213,6 @@ impl<'a> Binder {
                     }
                     .into(),
                 );
-                if required_values_schema.fields().len() != select_list.len() {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
-                        select_list.len(),
-                        required_values_schema.fields().len(),
-                    )));
-                }
                 let plan = CopyIntoTablePlan {
                     catalog_info,
                     database_name,
@@ -488,6 +481,15 @@ impl<'a> Binder {
             .await?;
         let (scalar_items, projections) =
             self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+
+        if projections.len() != plan.required_source_schema.num_fields() {
+            return Err(ErrorCode::BadArguments(format!(
+                "Number of columns in select list ({}) does not match that of the corresponding table ({})",
+                projections.len(),
+                plan.required_source_schema.num_fields(),
+            )));
+        }
+
         let s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
