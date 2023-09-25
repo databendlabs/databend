@@ -659,69 +659,45 @@ pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => {
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        &v[row] as *const NUM_TYPE,
-                        row_space.cast::<NUM_TYPE>(),
-                        1,
-                    );
+                    std::ptr::write(row_space.cast::<NUM_TYPE>(), v[row]);
                     *row_space = row_space.add(std::mem::size_of::<NUM_TYPE>());
                 }
             }
         }),
-        Column::Boolean(v) => unsafe {
-            std::ptr::write(*row_space, v.get_bit(row) as u8);
-            *row_space = row_space.add(1);
-        },
-        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
-            let value = v.index_unchecked(row);
-            std::ptr::copy_nonoverlapping(
-                &value.len().to_le_bytes() as *const u8,
-                *row_space,
-                std::mem::size_of::<usize>(),
-            );
-            *row_space = row_space.add(std::mem::size_of::<usize>());
-            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, value.len());
-            *row_space = row_space.add(value.len());
-        },
         Column::Decimal(_) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
                 Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) => {
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &v[row] as *const DECIMAL_TYPE,
-                            row_space.cast::<DECIMAL_TYPE>(),
-                            1,
-                        );
+                        std::ptr::write(row_space.cast::<DECIMAL_TYPE>(), v[row]);
                         *row_space = row_space.add(std::mem::size_of::<DECIMAL_TYPE>());
                     }
                 }
                 _ => unreachable!(),
             })
         }
+        Column::Boolean(v) => unsafe {
+            std::ptr::write(*row_space, v.get_bit(row) as u8);
+            *row_space = row_space.add(1);
+        },
+        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
+            let value = v.index_unchecked(row);
+            std::ptr::write(row_space.cast::<usize>(), value.len());
+            *row_space = row_space.add(std::mem::size_of::<usize>());
+            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, value.len());
+            *row_space = row_space.add(value.len());
+        },
         Column::Timestamp(v) => unsafe {
-            std::ptr::copy_nonoverlapping(
-                &v[row].to_le_bytes() as *const u8,
-                *row_space,
-                std::mem::size_of::<i64>(),
-            );
+            std::ptr::write(row_space.cast::<i64>(), v[row]);
             *row_space = row_space.add(std::mem::size_of::<i64>());
         },
         Column::Date(v) => unsafe {
-            std::ptr::copy_nonoverlapping(
-                &v[row].to_le_bytes() as *const u8,
-                *row_space,
-                std::mem::size_of::<i32>(),
-            );
+            std::ptr::write(row_space.cast::<i32>(), v[row]);
             *row_space = row_space.add(std::mem::size_of::<i32>());
         },
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
             unsafe {
-                std::ptr::copy_nonoverlapping(
-                    &data.len().to_le_bytes() as *const u8,
-                    *row_space,
-                    std::mem::size_of::<usize>(),
-                );
+                std::ptr::write(row_space.cast::<usize>(), data.len());
                 *row_space = row_space.add(std::mem::size_of::<usize>());
             }
             for i in 0..data.len() {
