@@ -265,11 +265,11 @@ impl ReclusterMutator {
         });
 
         let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+
         let blocks = execute_futures_in_parallel(
             tasks,
             thread_nums,
-            permit_nums,
+            thread_nums * 2,
             "convert-segments-worker".to_owned(),
         )
         .await?
