@@ -723,12 +723,10 @@ impl PipelineBuilder {
     }
 
     fn build_async_sourcer(&mut self, async_sourcer: &AsyncSourcerPlan) -> Result<()> {
+        let settings = self.ctx.get_settings();
         self.main_pipeline.add_source(
             |output| {
-                let name_resolution_ctx = NameResolutionContext {
-                    deny_column_reference: true,
-                    ..Default::default()
-                };
+                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
                 let inner = ValueSource::new(
                     async_sourcer.value_data.clone(),
                     self.ctx.clone(),

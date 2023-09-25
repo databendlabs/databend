@@ -39,10 +39,10 @@ SELECT 't'
 ----
 t
 
-statement error (?s)1065.*column 1 doesn't exist, do you mean '1'?
+statement error (?s)1065.*invalid identifier 1, do you mean '1'?
 insert into test.t (t) values ("1")
 
-statement error (?s)1065.*column x doesn't exist, do you mean 'x'?
+statement error (?s)1065.*invalid identifier x, do you mean 'x'?
 insert into test.t (t) values ("x")
 
 statement ok
