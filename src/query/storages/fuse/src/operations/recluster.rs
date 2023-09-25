@@ -138,7 +138,7 @@ impl FuseTable {
             let selected_segs = ReclusterMutator::select_segments(
                 &compact_segments,
                 block_per_seg,
-                max_threads * 4,
+                max_threads * 2,
                 default_cluster_key_id,
             )?;
             // select the blocks with the highest depth.

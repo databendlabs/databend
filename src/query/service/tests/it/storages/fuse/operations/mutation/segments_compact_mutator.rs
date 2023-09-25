@@ -787,7 +787,7 @@ impl CompactSegmentTestFixture {
         let res = execute_futures_in_parallel(
             tasks,
             threads_nums,
-            threads_nums * 4,
+            threads_nums * 2,
             "fuse-write-segments-worker".to_owned(),
         )
         .await?

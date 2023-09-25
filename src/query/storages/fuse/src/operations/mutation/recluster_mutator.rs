@@ -269,7 +269,7 @@ impl ReclusterMutator {
         let blocks = execute_futures_in_parallel(
             tasks,
             thread_nums,
-            thread_nums * 4,
+            thread_nums * 2,
             "convert-segments-worker".to_owned(),
         )
         .await?
