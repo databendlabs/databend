@@ -38,6 +38,7 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::query_spill_prefix;
 use common_storage::DataOperator;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use opendal::Metakey;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -75,24 +76,17 @@ impl AsyncSystemTable for TempFilesTable {
             .await
         {
             let limit = push_downs.and_then(|x| x.limit).unwrap_or(usize::MAX);
-            let mut lister = lister.chunks(limit);
+            let mut lister = lister.take(limit);
 
-            while let Some(page) = lister.next().await {
-                temp_files_name.reserve(page.len());
-                temp_files_last_modified.reserve(page.len());
-                temp_files_content_length.reserve(page.len());
+            while let Some(entry) = lister.try_next().await? {
+                let metadata = entry.metadata();
 
-                for entry in page {
-                    let entry = entry?;
-                    let metadata = entry.metadata();
+                if metadata.is_file() {
+                    temp_files_name.push(entry.name().as_bytes().to_vec());
 
-                    if metadata.is_file() {
-                        temp_files_name.push(entry.name().as_bytes().to_vec());
-
-                        temp_files_last_modified
-                            .push(metadata.last_modified().map(|x| x.timestamp_micros()));
-                        temp_files_content_length.push(metadata.content_length());
-                    }
+                    temp_files_last_modified
+                        .push(metadata.last_modified().map(|x| x.timestamp_micros()));
+                    temp_files_content_length.push(metadata.content_length());
                 }
             }
         }
