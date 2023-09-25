@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::borrow::Cow;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::BitAnd;
 use std::ops::BitOr;
@@ -654,10 +655,14 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                     Column::Nullable(box nullable_column) => {
                         let mut before_map = bitmap.clone().into();
                         let mut after_map = nullable_column.validity.clone();
-                        if bitmap.len() > after_map.len() {
-                            after_map = expand_bitmap(&after_map, bitmap.len());
-                        }else if bitmap.len() < after_map.len() {
-                             before_map = expand_bitmap(&before_map, after_map.len());
+                        match bitmap.len().cmp(&after_map.len()) {
+                            Ordering::Greater => {
+                                after_map = expand_bitmap(&after_map, bitmap.len());
+                            }
+                            Ordering::Less => {
+                                before_map = expand_bitmap(&before_map, after_map.len());
+                            }
+                            _ => {}
                         }
                         let validity = common_arrow::arrow::bitmap::and(&before_map, &after_map);
                         Column::Nullable(Box::new(NullableColumn {

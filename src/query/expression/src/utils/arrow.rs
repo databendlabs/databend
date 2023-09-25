@@ -64,7 +64,7 @@ pub fn expand_bitmap(bitmap: &Bitmap, len: usize) -> Bitmap {
     for i in 0..len {
         if let Some(bit_set) = bitmap.get(i) {
             if bit_set {
-                builder.set(i,true);
+                builder.set(i, true);
             }
         }
     }
