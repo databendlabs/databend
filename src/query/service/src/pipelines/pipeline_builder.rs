@@ -1017,7 +1017,7 @@ impl PipelineBuilder {
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+            let spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -1942,7 +1942,7 @@ impl PipelineBuilder {
         )?);
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+            let probe_spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
