@@ -38,7 +38,6 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
-use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -221,6 +220,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
 
+    // Bucket.
+    builder.bucket(&cfg.bucket);
+
     // Region
     if !cfg.region.is_empty() {
         builder.region(&cfg.region);
@@ -228,9 +230,22 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
-        warn!(
-            "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
-        )
+        // COLD CASE.
+        //
+        // We only running auto detect while users not specify this.
+        let endpoint = cfg.endpoint_url.clone();
+        let bucket = cfg.bucket.clone();
+        if let Some(region) = GlobalIORuntime::instance()
+            .block_on(async move { Ok(S3::detect_region(&endpoint, &bucket).await) })
+            .unwrap()
+        {
+            builder.region(&region);
+        } else {
+            return Err(Error::new(
+                ErrorKind::InvalidInput,
+                "region for s3 storage is not set and failed to auto detect, please check and set it manually",
+            ));
+        }
     }
 
     // Credential.
@@ -239,9 +254,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.security_token(&cfg.security_token);
     builder.role_arn(&cfg.role_arn);
     builder.external_id(&cfg.external_id);
-
-    // Bucket.
-    builder.bucket(&cfg.bucket);
 
     // Root.
     builder.root(&cfg.root);
@@ -416,23 +428,6 @@ impl DataOperator {
     #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
         let sp = sp.clone();
-
-        // Polish storage params via detect region.
-        let sp = match sp {
-            StorageParams::S3(mut s3) if s3.region.is_empty() => {
-                let endpoint = s3.endpoint_url.clone();
-                let bucket = s3.bucket.clone();
-                if let Some(region) = GlobalIORuntime::instance()
-                    .spawn(async move { S3::detect_region(&endpoint, &bucket).await })
-                    .await
-                    .expect("join must succeed")
-                {
-                    s3.region = region;
-                }
-                StorageParams::S3(s3)
-            }
-            v => v,
-        };
 
         let operator = init_operator(&sp)?;
 
