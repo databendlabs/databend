@@ -88,10 +88,7 @@ impl IcebergTable {
             OperatorCreatorWrapper(dop.clone()),
         ));
 
-        let table_id =
-            icelake::TableIdentifier::new(vec![table_name.to_string()]).map_err(|err| {
-                ErrorCode::ReadTableDataError(format!("Iceberg table name is invalid: {err:?}"))
-            })?;
+        let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
         let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
             ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
         })?;
@@ -153,12 +150,7 @@ impl IcebergTable {
                     OperatorCreatorWrapper(self.op.clone()),
                 ));
 
-                let table_id = icelake::TableIdentifier::new(vec![self.info.name.to_string()])
-                    .map_err(|err| {
-                        ErrorCode::ReadTableDataError(format!(
-                            "Iceberg table name is invalid: {err:?}"
-                        ))
-                    })?;
+                let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
                 let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
                     ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
                 })?;
