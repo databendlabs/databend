@@ -15,6 +15,7 @@
 use common_ast::ast::AlterViewStmt;
 use common_ast::ast::CreateViewStmt;
 use common_ast::ast::DropViewStmt;
+use common_ast::VisitorMut;
 use common_exception::Result;
 
 use crate::binder::Binder;
@@ -23,6 +24,7 @@ use crate::plans::AlterViewPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::Plan;
+use crate::ViewRewriter;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -38,7 +40,7 @@ impl Binder {
             columns,
             query,
         } = stmt;
-
+        let mut query = *query.clone();
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
@@ -46,6 +48,10 @@ impl Binder {
             .iter()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .collect::<Vec<_>>();
+        let mut visitor = ViewRewriter {
+            current_database: database.clone(),
+        };
+        visitor.visit_query(&mut query);
         let subquery = format!("{}", query);
 
         let plan = CreateViewPlan {
@@ -57,7 +63,7 @@ impl Binder {
             column_names,
             subquery,
         };
-        Ok(Plan::CreateView(Box::new(plan)))
+        Ok(Plan::CreateView(plan.into()))
     }
 
     #[async_backtrace::framed]
@@ -73,6 +79,7 @@ impl Binder {
             query,
         } = stmt;
 
+        let mut query = *query.clone();
         let tenant = self.ctx.get_tenant();
         let (catalog, database, view_name) =
             self.normalize_object_identifier_triple(catalog, database, view);
@@ -80,6 +87,10 @@ impl Binder {
             .iter()
             .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
             .collect::<Vec<_>>();
+        let mut visitor = ViewRewriter {
+            current_database: database.clone(),
+        };
+        visitor.visit_query(&mut query);
         let subquery = format!("{}", query);
 
         let plan = AlterViewPlan {
@@ -90,7 +101,7 @@ impl Binder {
             column_names,
             subquery,
         };
-        Ok(Plan::AlterView(Box::new(plan)))
+        Ok(Plan::AlterView(plan.into()))
     }
 
     #[async_backtrace::framed]
@@ -115,6 +126,6 @@ impl Binder {
             database,
             view_name,
         };
-        Ok(Plan::DropView(Box::new(plan)))
+        Ok(Plan::DropView(plan.into()))
     }
 }

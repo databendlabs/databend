@@ -165,7 +165,7 @@ impl SuggestedBackgroundTasksSource {
     ) -> Result<Option<RecordBatch>> {
         let mut planner = Planner::new(ctx.clone());
         let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
-        ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
+        ctx.attach_query_str(plan.kind(), plan_extras.statement.to_mask_sql());
         let data_schema = plan.schema();
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream = interpreter.execute(ctx.clone()).await?;

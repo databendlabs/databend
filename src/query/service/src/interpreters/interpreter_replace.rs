@@ -21,9 +21,9 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CommitSink;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::Exchange;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::MutationKind;
 use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
@@ -160,7 +160,7 @@ impl ReplaceInterpreter {
         });
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
-        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values { .. });
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
@@ -238,15 +238,14 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
-        root = Box::new(PhysicalPlan::MutationAggregate(Box::new(
-            MutationAggregate {
-                input: root,
-                snapshot: (*base_snapshot).clone(),
-                table_info: table_info.clone(),
-                catalog_info: catalog.info(),
-                mutation_kind: MutationKind::Replace,
-            },
-        )));
+        root = Box::new(PhysicalPlan::CommitSink(CommitSink {
+            input: root,
+            snapshot: base_snapshot,
+            table_info: table_info.clone(),
+            catalog_info: catalog.info(),
+            mutation_kind: MutationKind::Replace,
+            merge_meta: false,
+        }));
         Ok((root, purge_info))
     }
 
@@ -268,8 +267,8 @@ impl ReplaceInterpreter {
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
     ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
         match source {
-            InsertInputSource::Values(data) => self
-                .connect_value_source(schema.clone(), data)
+            InsertInputSource::Values { data, start } => self
+                .connect_value_source(schema.clone(), data, *start)
                 .map(|x| (x, None)),
 
             InsertInputSource::SelectPlan(plan) => {
@@ -303,9 +302,11 @@ impl ReplaceInterpreter {
         &self,
         schema: DataSchemaRef,
         value_data: &str,
+        span_offset: usize,
     ) -> Result<Box<PhysicalPlan>> {
         Ok(Box::new(PhysicalPlan::AsyncSourcer(AsyncSourcerPlan {
             value_data: value_data.to_string(),
+            start: span_offset,
             schema,
         })))
     }

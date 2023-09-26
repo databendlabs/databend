@@ -57,6 +57,7 @@ enum State {
     SelectLeaf,
     DeleteLeaf,
     ReplaceInto,
+    Compact,
     Other,
 }
 
@@ -179,6 +180,15 @@ impl PhysicalPlanReplacer for Fragmenter {
         }
     }
 
+    fn replace_compact_partial(
+        &mut self,
+        plan: &common_sql::executor::CompactPartial,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::Compact;
+
+        Ok(PhysicalPlan::CompactPartial(plan.clone()))
+    }
+
     fn replace_delete_partial(
         &mut self,
         plan: &common_sql::executor::DeletePartial,
@@ -249,6 +259,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::DeleteLeaf => FragmentType::DeleteLeaf,
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
+            State::Compact => FragmentType::Compact,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

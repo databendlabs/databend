@@ -24,10 +24,13 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
 use storages_common_table_meta::meta::Statistics;
 
-use super::ConflictResolveContext;
-use super::SnapshotChanges;
 use crate::operations::common::AbortOperation;
-use crate::operations::mutation::MutationDeletedSegment;
+use crate::operations::common::ConflictResolveContext;
+use crate::operations::common::SnapshotChanges;
+use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::CompactExtraInfo;
+use crate::operations::mutation::DeletedSegmentInfo;
+use crate::operations::mutation::SegmentIndex;
 use crate::statistics::merge_statistics;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
@@ -47,19 +50,22 @@ pub enum MutationLogEntry {
         index: BlockMetaIndex,
     },
     DeletedSegment {
-        deleted_segment: MutationDeletedSegment,
+        deleted_segment: DeletedSegmentInfo,
     },
     ReplacedBlock {
         index: BlockMetaIndex,
         block_meta: Arc<BlockMeta>,
+    },
+    CompactExtras {
+        extras: CompactExtraInfo,
     },
     DoNothing,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct BlockMetaIndex {
-    pub segment_idx: usize,
-    pub block_idx: usize,
+    pub segment_idx: SegmentIndex,
+    pub block_idx: BlockIndex,
     // range is unused for now.
     // pub range: Option<Range<usize>>,
 }

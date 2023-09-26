@@ -25,6 +25,7 @@ use common_expression::types::StringType;
 use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::types::ALL_NUMERICS_TYPES;
+use common_expression::vectorize_with_builder_1_arg;
 use common_expression::with_number_mapped_type;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
@@ -378,13 +379,24 @@ pub fn register(registry: &mut FunctionRegistry) {
         });
     }
 
+    const MAX_FACTORIAL_NUMBER: i64 = 20;
     for ty in ALL_INTEGER_TYPES {
         with_number_mapped_type!(|NUM_TYPE| match ty {
             NumberDataType::NUM_TYPE => {
-                registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
+                registry.register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
                     "factorial",
-                    |_, _| FunctionDomain::Full,
-                    |val, _| factorial(AsPrimitive::<i64>::as_(val)),
+                    |_, _| FunctionDomain::MayThrow,
+                    vectorize_with_builder_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>>(
+                        |val, output, ctx| {
+                            let n: i64 = AsPrimitive::<i64>::as_(val);
+                            if n > MAX_FACTORIAL_NUMBER {
+                                ctx.set_error(output.len(), format!("factorial number is out of range, max is: {}", MAX_FACTORIAL_NUMBER));
+                                output.push(0);
+                            } else {
+                                output.push(factorial(n));
+                            }
+                        },
+                    ),
                 );
             }
         })

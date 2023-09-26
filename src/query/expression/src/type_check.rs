@@ -126,6 +126,60 @@ pub fn check<Index: ColumnIndex>(
 
             check_function(*span, name, params, &args_expr, fn_registry)
         }
+        RawExpr::UDFServerCall {
+            span,
+            func_name,
+            server_addr,
+            arg_types,
+            return_type,
+            args,
+        } => {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| check(arg, fn_registry))
+                .try_collect()?;
+            if arg_types.len() != args.len() {
+                return Err(ErrorCode::SyntaxException(format!(
+                    "Require {} parameters, but got: {}",
+                    arg_types.len(),
+                    args.len()
+                ))
+                .set_span(*span));
+            }
+
+            let checked_args = args
+                .iter()
+                .zip(arg_types)
+                .map(|(arg, dest_type)| {
+                    let src_type = arg.data_type();
+                    if !can_auto_cast_to(src_type, dest_type, &fn_registry.default_cast_rules) {
+                        return Err(ErrorCode::InvalidArgument(format!(
+                            "Cannot auto cast datatype {} to {}",
+                            src_type, dest_type,
+                        ))
+                        .set_span(arg.span()));
+                    }
+                    let is_try = fn_registry.is_auto_try_cast_rule(src_type, dest_type);
+                    check_cast(arg.span(), is_try, arg.clone(), dest_type, fn_registry)
+                })
+                .collect::<Result<Vec<_>>>()?;
+
+            debug_assert_eq!(
+                &checked_args
+                    .iter()
+                    .map(|arg| arg.data_type().clone())
+                    .collect::<Vec<_>>(),
+                arg_types
+            );
+
+            Ok(Expr::UDFServerCall {
+                span: *span,
+                func_name: func_name.clone(),
+                server_addr: server_addr.clone(),
+                return_type: return_type.clone(),
+                args: checked_args,
+            })
+        }
     }
 }
 
@@ -228,12 +282,7 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
             ErrorCode::InvalidArgument(format!("Expect {}, but got {}", T::data_type(), origin_ty))
                 .set_span(span)
         }),
-        _ => Err(ErrorCode::InvalidArgument(format!(
-            "Expect {}, but got {}",
-            T::data_type(),
-            origin_ty
-        ))
-        .set_span(span)),
+        _ => Err(ErrorCode::InvalidArgument("Need constant number.").set_span(span)),
     }
 }
 

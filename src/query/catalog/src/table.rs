@@ -36,6 +36,7 @@ use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_storage::StorageMetrics;
 use storages_common_table_meta::meta::SnapshotId;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::plan::DataSourceInfo;
 use crate::plan::DataSourcePlan;
@@ -300,16 +301,28 @@ pub trait Table: Sync + Send {
         unimplemented!()
     }
 
-    // return false if the table does not need to be compacted.
     #[async_backtrace::framed]
-    async fn compact(
+    async fn compact_segments(
         &self,
         ctx: Arc<dyn TableContext>,
-        target: CompactTarget,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, target, limit, pipeline);
+        let (_, _) = (ctx, limit);
+
+        Err(ErrorCode::Unimplemented(format!(
+            "table {},  of engine type {}, does not support compact segments",
+            self.name(),
+            self.get_table_info().engine(),
+        )))
+    }
+
+    #[async_backtrace::framed]
+    async fn compact_blocks(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        limit: Option<usize>,
+    ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        let (_, _) = (ctx, limit);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support compact",
@@ -425,7 +438,10 @@ pub enum AppendMode {
 pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
-    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics>;
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics>;
+
+    // returns the num rows of the table, if any.
+    fn num_rows(&self) -> Option<u64>;
 }
 
 pub mod column_stats_provider_impls {
@@ -434,7 +450,11 @@ pub mod column_stats_provider_impls {
     pub struct DummyColumnStatisticsProvider;
 
     impl ColumnStatisticsProvider for DummyColumnStatisticsProvider {
-        fn column_statistics(&self, _column_id: ColumnId) -> Option<BasicColumnStatistics> {
+        fn column_statistics(&self, _column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+            None
+        }
+
+        fn num_rows(&self) -> Option<u64> {
             None
         }
     }
@@ -443,14 +463,6 @@ pub mod column_stats_provider_impls {
 pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
-}
-
-#[derive(Debug, Clone)]
-pub struct DeletionFilters {
-    // the filter expression for the deletion
-    pub filter: RemoteExpr<String>,
-    // just "not(filter)"
-    pub inverted_filter: RemoteExpr<String>,
 }
 
 use std::collections::HashMap;
@@ -472,14 +484,42 @@ impl Parquet2TableColumnStatisticsProvider {
             num_rows,
         }
     }
-
-    pub fn num_rows(&self) -> u64 {
-        self.num_rows
-    }
 }
 
 impl ColumnStatisticsProvider for Parquet2TableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<BasicColumnStatistics> {
-        self.column_stats.get(&column_id).cloned().flatten()
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+
+    fn num_rows(&self) -> Option<u64> {
+        Some(self.num_rows)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default)]
+pub struct ParquetTableColumnStatisticsProvider {
+    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+    num_rows: u64,
+}
+
+impl ParquetTableColumnStatisticsProvider {
+    pub fn new(
+        column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
+        num_rows: u64,
+    ) -> Self {
+        Self {
+            column_stats,
+            num_rows,
+        }
+    }
+}
+
+impl ColumnStatisticsProvider for ParquetTableColumnStatisticsProvider {
+    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
+        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
+    }
+
+    fn num_rows(&self) -> Option<u64> {
+        Some(self.num_rows)
     }
 }

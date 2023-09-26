@@ -13,23 +13,20 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::HashMethod;
-use common_expression::HashMethodKind;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::hash2bucket;
 use common_pipeline_core::query_spill_prefix;
 use common_sql::plans::JoinType;
 use common_storage::DataOperator;
+use log::info;
 
-use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
+use crate::pipelines::processors::transforms::hash_join::spill_common::get_hashes;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::sessions::QueryContext;
@@ -38,6 +35,7 @@ use crate::spillers::SpillerConfig;
 use crate::spillers::SpillerType;
 
 /// Define some states for hash join build spilling
+/// Each processor owns its `BuildSpillState`
 pub struct BuildSpillState {
     /// Hash join build state
     pub build_state: Arc<HashJoinBuildState>,
@@ -56,7 +54,7 @@ impl BuildSpillState {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoin);
+        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoinBuild);
         Self {
             build_state,
             spill_coordinator,
@@ -64,85 +62,11 @@ impl BuildSpillState {
         }
     }
 
-    // Get all hashes for input data.
-    fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
+    // Get all hashes for build input data.
+    pub fn get_hashes(&self, block: &DataBlock, hashes: &mut Vec<u64>) -> Result<()> {
         let func_ctx = self.build_state.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(block, &func_ctx, &BUILTIN_FUNCTIONS);
-        // Use the first column as the key column to generate hash
-        let columns: Vec<(Column, DataType)> = self
-            .build_state
-            .hash_join_state
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, block.num_rows()),
-                    return_type.clone(),
-                ))
-            })
-            .collect::<Result<_>>()?;
-        // Todo: simplify the following code
-        match &*self.build_state.method {
-            HashMethodKind::Serializer(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::DictionarySerializer(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::SingleString(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU8(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU16(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU32(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU64(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU128(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-            HashMethodKind::KeysU256(method) => {
-                let rows_state = method.build_keys_state(&columns, block.num_rows())?;
-                for row in method.build_keys_iter(&rows_state)? {
-                    hashes.push(method.get_hash(row));
-                }
-            }
-        }
-        Ok(())
+        let keys = &self.build_state.hash_join_state.hash_join_desc.build_keys;
+        get_hashes(&func_ctx, block, keys, &self.build_state.method, hashes)
     }
 
     // Collect all buffered data in `RowSpace` and `Chunks`
@@ -152,14 +76,11 @@ impl BuildSpillState {
         // Collect rows in `RowSpace`'s buffer
         let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
         blocks.extend(row_space_buffer.drain(..));
-        let mut buffer_row_size = self
-            .build_state
+        self.build_state
             .hash_join_state
             .row_space
             .buffer_row_size
-            .write();
-        *buffer_row_size = 0;
-
+            .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
         blocks.append(chunks);
@@ -178,7 +99,7 @@ impl BuildSpillState {
             self.get_hashes(block, &mut hashes)?;
             let mut indices = Vec::with_capacity(hashes.len());
             for hash in hashes {
-                indices.push(hash2bucket::<2, true>(hash as usize) as u8);
+                indices.push(hash2bucket::<2, false>(hash as usize) as u8);
             }
             let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 2)?;
             for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {
@@ -196,12 +117,12 @@ impl BuildSpillState {
 impl BuildSpillState {
     #[async_backtrace::framed]
     // Start to spill, get the processor's spill task from `BuildSpillCoordinator`
-    pub(crate) async fn spill(&mut self) -> Result<()> {
+    pub(crate) async fn spill(&mut self, p_id: usize) -> Result<()> {
         let spill_partitions = {
-            let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+            let mut spill_tasks = self.spill_coordinator.spill_tasks.lock();
             spill_tasks.pop_back().unwrap()
         };
-        self.spiller.spill(&spill_partitions).await
+        self.spiller.spill(&spill_partitions, p_id).await
     }
 
     // Check if need to spill.
@@ -210,8 +131,7 @@ impl BuildSpillState {
         let settings = self.build_state.ctx.get_settings();
         let spill_threshold = settings.get_join_spilling_threshold()?;
         // If `spill_threshold` is 0, we won't limit memory.
-        let enable_spill = settings.get_enable_join_spill()?
-            && spill_threshold != 0
+        let enable_spill = spill_threshold != 0
             && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
         if !enable_spill || self.spiller.is_all_spilled() {
             return Ok(false);
@@ -221,91 +141,34 @@ impl BuildSpillState {
 
         let mut total_bytes = 0;
 
-        {
-            let _lock = self
-                .build_state
-                .hash_join_state
-                .row_space
-                .write_lock
-                .write();
-            for block in self
-                .build_state
-                .hash_join_state
-                .row_space
-                .buffer
-                .read()
-                .iter()
-            {
-                total_bytes += block.memory_size();
-            }
+        let buffer = self.build_state.hash_join_state.row_space.buffer.read();
+        for block in buffer.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
-            for block in chunks.iter() {
-                total_bytes += block.memory_size();
-            }
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        for block in chunks.iter() {
+            total_bytes += block.memory_size();
+        }
 
-            if total_bytes > spill_threshold {
-                return Ok(true);
-            }
+        info!(
+            "check if need to spill: total_bytes: {}, spill_threshold: {}",
+            total_bytes, spill_threshold
+        );
+
+        if total_bytes > spill_threshold {
+            return Ok(true);
         }
         Ok(false)
     }
 
-    #[async_backtrace::framed]
-    // Directly spill input data without buffering.
-    // Return unspilled data.
-    pub(crate) async fn spill_input(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        // Save the row index which is not spilled.
-        let mut unspilled_row_index = Vec::with_capacity(data_block.num_rows());
-        // Compute the hash value for each row.
-        let mut hashes = Vec::with_capacity(data_block.num_rows());
-        self.get_hashes(&data_block, &mut hashes)?;
-        // Key is partition, value is row indexes
-        let mut partition_rows = HashMap::new();
-        // Classify rows to spill or not spill.
-        for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0011;
-            if self.spiller.spilled_partition_set.contains(&partition_id) {
-                // the row can be directly spilled to corresponding partition
-                partition_rows
-                    .entry(partition_id)
-                    .and_modify(|v: &mut Vec<usize>| v.push(row_idx))
-                    .or_insert(vec![row_idx]);
-            } else {
-                unspilled_row_index.push(row_idx);
-            }
-        }
-        for (p_id, row_indexes) in partition_rows.iter() {
-            let block_row_indexes = row_indexes
-                .iter()
-                .map(|idx| (0_u32, *idx as u32, 1_usize))
-                .collect::<Vec<_>>();
-            let block = DataBlock::take_blocks(
-                &[data_block.clone()],
-                &block_row_indexes,
-                row_indexes.len(),
-            );
-            // Spill block with partition id
-            self.spiller.spill_with_partition(p_id, &block).await?;
-        }
-        // Return unspilled data
-        let unspilled_block_row_indexes = unspilled_row_index
-            .iter()
-            .map(|idx| (0_u32, *idx as u32, 1_usize))
-            .collect::<Vec<_>>();
-        Ok(DataBlock::take_blocks(
-            &[data_block.clone()],
-            &unspilled_block_row_indexes,
-            unspilled_row_index.len(),
-        ))
-    }
-
     // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
-    pub(crate) fn split_spill_tasks(&self) -> Result<()> {
-        let active_processors_num = self.spill_coordinator.total_builder_count
-            - *self.spill_coordinator.non_spill_processors.read();
-        let mut spill_tasks = self.spill_coordinator.spill_tasks.write();
+    pub(crate) fn split_spill_tasks(
+        &self,
+        active_processors_num: usize,
+        spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
+    ) -> Result<()> {
         let blocks = self.collect_rows()?;
         let partition_blocks = self.partition_input_blocks(&blocks)?;
         let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());

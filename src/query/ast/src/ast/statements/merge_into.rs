@@ -52,7 +52,10 @@ impl Display for MergeUpdateExpr {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchOperation {
-    Update { update_list: Vec<MergeUpdateExpr> },
+    Update {
+        update_list: Vec<MergeUpdateExpr>,
+        is_star: bool,
+    },
     Delete,
 }
 
@@ -66,6 +69,7 @@ pub struct MatchedClause {
 pub struct InsertOperation {
     pub columns: Option<Vec<Identifier>>,
     pub values: Vec<Expr>,
+    pub is_star: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,8 +91,9 @@ pub struct MergeIntoStmt {
     pub database: Option<Identifier>,
     pub table_ident: Identifier,
     pub source: MergeSource,
-    // alias_target is belong to target
-    pub alias_target: Option<TableAlias>,
+    pub source_alias: Option<TableAlias>,
+    // target_alias is belong to target
+    pub target_alias: Option<TableAlias>,
     pub join_expr: Expr,
     pub merge_options: Vec<MergeOption>,
 }
@@ -116,9 +121,16 @@ impl Display for MergeIntoStmt {
                     write!(f, " THEN ")?;
 
                     match &match_clause.operation {
-                        MatchOperation::Update { update_list } => {
-                            write!(f, " UPDATE SET ")?;
-                            write_comma_separated_list(f, update_list)?;
+                        MatchOperation::Update {
+                            update_list,
+                            is_star,
+                        } => {
+                            if *is_star {
+                                write!(f, " UPDATE * ")?;
+                            } else {
+                                write!(f, " UPDATE SET ")?;
+                                write_comma_separated_list(f, update_list)?;
+                            }
                         }
                         MatchOperation::Delete => {
                             write!(f, " DELETE ")?;
@@ -219,7 +231,7 @@ pub struct StreamingSource {
 }
 
 impl MergeSource {
-    pub fn transform_table_reference(&self) -> TableReference {
+    pub fn transform_table_reference(&self, alias: Option<TableAlias>) -> TableReference {
         match self {
             Self::StreamingV2 {
                 settings: _,
@@ -230,7 +242,7 @@ impl MergeSource {
             Self::Select { query } => TableReference::Subquery {
                 span: None,
                 subquery: query.clone(),
-                alias: None,
+                alias,
             },
         }
     }

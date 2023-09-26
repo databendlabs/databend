@@ -71,6 +71,7 @@ impl Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
+        context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(
             &mut context,
             self.ctx.clone(),

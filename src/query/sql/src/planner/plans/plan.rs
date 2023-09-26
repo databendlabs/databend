@@ -13,57 +13,39 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::ops::Deref;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_catalog::query_kind::QueryKind;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
-use super::data_mask::CreateDatamaskPolicyPlan;
-use super::CopyIntoTableMode;
-use super::CreateIndexPlan;
-use super::CreateShareEndpointPlan;
-use super::DescDatamaskPolicyPlan;
-use super::DropDatamaskPolicyPlan;
-use super::DropIndexPlan;
-use super::DropShareEndpointPlan;
-use super::MergeInto;
-use super::ModifyTableColumnPlan;
-use super::RenameTableColumnPlan;
-use super::SetOptionsPlan;
-use super::VacuumDropTablePlan;
-use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
-use crate::plans::copy::CopyPlan;
-use crate::plans::insert::Insert;
-use crate::plans::presign::PresignPlan;
-use crate::plans::recluster_table::ReclusterTablePlan;
-use crate::plans::share::AlterShareTenantsPlan;
-use crate::plans::share::CreateSharePlan;
-use crate::plans::share::DescSharePlan;
-use crate::plans::share::DropSharePlan;
-use crate::plans::share::GrantShareObjectPlan;
-use crate::plans::share::RevokeShareObjectPlan;
-use crate::plans::share::ShowGrantTenantsOfSharePlan;
-use crate::plans::share::ShowObjectGrantPrivilegesPlan;
-use crate::plans::share::ShowSharesPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
+use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::CopyIntoTableMode;
+use crate::plans::CopyPlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
+use crate::plans::CreateDatamaskPolicyPlan;
 use crate::plans::CreateFileFormatPlan;
+use crate::plans::CreateIndexPlan;
 use crate::plans::CreateNetworkPolicyPlan;
 use crate::plans::CreateRolePlan;
+use crate::plans::CreateShareEndpointPlan;
+use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
@@ -71,13 +53,19 @@ use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
 use crate::plans::CreateVirtualColumnPlan;
 use crate::plans::DeletePlan;
+use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
+use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
+use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::DropFileFormatPlan;
+use crate::plans::DropIndexPlan;
 use crate::plans::DropNetworkPolicyPlan;
 use crate::plans::DropRolePlan;
+use crate::plans::DropShareEndpointPlan;
+use crate::plans::DropSharePlan;
 use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
@@ -89,33 +77,47 @@ use crate::plans::DropVirtualColumnPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
+use crate::plans::GrantShareObjectPlan;
+use crate::plans::Insert;
 use crate::plans::KillPlan;
+use crate::plans::MergeInto;
+use crate::plans::ModifyTableColumnPlan;
 use crate::plans::OptimizeTablePlan;
+use crate::plans::PresignPlan;
+use crate::plans::ReclusterTablePlan;
 use crate::plans::RefreshIndexPlan;
 use crate::plans::RefreshVirtualColumnPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
+use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::Replace;
 use crate::plans::RevertTablePlan;
 use crate::plans::RevokePrivilegePlan;
 use crate::plans::RevokeRolePlan;
+use crate::plans::RevokeShareObjectPlan;
+use crate::plans::SetOptionsPlan;
 use crate::plans::SetRolePlan;
 use crate::plans::SettingPlan;
 use crate::plans::ShowCreateCatalogPlan;
 use crate::plans::ShowCreateDatabasePlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::ShowFileFormatsPlan;
+use crate::plans::ShowGrantTenantsOfSharePlan;
 use crate::plans::ShowGrantsPlan;
 use crate::plans::ShowNetworkPoliciesPlan;
+use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
+use crate::plans::ShowSharesPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
 use crate::plans::UndropTablePlan;
 use crate::plans::UpdatePlan;
 use crate::plans::UseDatabasePlan;
+use crate::plans::VacuumDropTablePlan;
+use crate::plans::VacuumTablePlan;
 use crate::BindContext;
 use crate::MetadataRef;
 
@@ -302,120 +304,35 @@ pub enum RewriteKind {
     Call,
 }
 
-impl Display for Plan {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Plan {
+    pub fn kind(&self) -> QueryKind {
         match self {
-            Plan::Query { .. } => write!(f, "Query"),
+            Plan::Query { .. } => QueryKind::Query,
             Plan::Copy(plan) => match plan.deref() {
                 CopyPlan::IntoTable(copy_plan) => match copy_plan.write_mode {
-                    CopyIntoTableMode::Insert { .. } => write!(f, "Insert"),
-                    _ => write!(f, "Copy"),
+                    CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
+                    _ => QueryKind::Copy,
                 },
-                _ => write!(f, "Copy"),
+                _ => QueryKind::Copy,
             },
-            Plan::Explain { .. } => write!(f, "Explain"),
-            Plan::ExplainAnalyze { .. } => write!(f, "ExplainAnalyze"),
-            Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
-            Plan::CreateCatalog(_) => write!(f, "CreateCatalog"),
-            Plan::DropCatalog(_) => write!(f, "DropCatalog"),
-            Plan::ShowCreateDatabase(_) => write!(f, "ShowCreateDatabase"),
-            Plan::CreateDatabase(_) => write!(f, "CreateDatabase"),
-            Plan::DropDatabase(_) => write!(f, "DropDatabase"),
-            Plan::UndropDatabase(_) => write!(f, "UndropDatabase"),
-            Plan::UseDatabase(_) => write!(f, "UseDatabase"),
-            Plan::RenameDatabase(_) => write!(f, "RenameDatabase"),
-            Plan::ShowCreateTable(_) => write!(f, "ShowCreateTable"),
-            Plan::DescribeTable(_) => write!(f, "DescribeTable"),
-            Plan::CreateTable(_) => write!(f, "CreateTable"),
-            Plan::DropTable(_) => write!(f, "DropTable"),
-            Plan::UndropTable(_) => write!(f, "UndropTable"),
-            Plan::RenameTable(_) => write!(f, "RenameTable"),
-            Plan::RenameTableColumn(_) => write!(f, "RenameTableColumn"),
-            Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
-            Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
-            Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
-            Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
-            Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
-            Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
-            Plan::TruncateTable(_) => write!(f, "TruncateTable"),
-            Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
-            Plan::VacuumTable(_) => write!(f, "VacuumTable"),
-            Plan::VacuumDropTable(_) => write!(f, "VacuumDropTable"),
-            Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
-            Plan::ExistsTable(_) => write!(f, "ExistsTable"),
-            Plan::CreateView(_) => write!(f, "CreateView"),
-            Plan::AlterView(_) => write!(f, "AlterView"),
-            Plan::DropView(_) => write!(f, "DropView"),
-            Plan::CreateIndex(_) => write!(f, "CreateIndex"),
-            Plan::DropIndex(_) => write!(f, "DropIndex"),
-            Plan::RefreshIndex(_) => write!(f, "RefreshIndex"),
-            Plan::CreateVirtualColumn(_) => write!(f, "CreateVirtualColumn"),
-            Plan::AlterVirtualColumn(_) => write!(f, "AlterVirtualColumn"),
-            Plan::DropVirtualColumn(_) => write!(f, "DropVirtualColumn"),
-            Plan::RefreshVirtualColumn(_) => write!(f, "RefreshVirtualColumn"),
-            Plan::AlterUser(_) => write!(f, "AlterUser"),
-            Plan::CreateUser(_) => write!(f, "CreateUser"),
-            Plan::DropUser(_) => write!(f, "DropUser"),
-            Plan::CreateRole(_) => write!(f, "CreateRole"),
-            Plan::DropRole(_) => write!(f, "DropRole"),
-            Plan::CreateStage(_) => write!(f, "CreateStage"),
-            Plan::DropStage(_) => write!(f, "DropStage"),
-            Plan::CreateFileFormat(_) => write!(f, "CreateFileFormat"),
-            Plan::DropFileFormat(_) => write!(f, "DropFileFormat"),
-            Plan::ShowFileFormats(_) => write!(f, "ShowFileFormats"),
-            Plan::RemoveStage(_) => write!(f, "RemoveStage"),
-            Plan::GrantRole(_) => write!(f, "GrantRole"),
-            Plan::GrantPriv(_) => write!(f, "GrantPriv"),
-            Plan::ShowGrants(_) => write!(f, "ShowGrants"),
-            Plan::ShowRoles(_) => write!(f, "ShowRoles"),
-            Plan::RevokePriv(_) => write!(f, "RevokePriv"),
-            Plan::RevokeRole(_) => write!(f, "RevokeRole"),
-            Plan::CreateUDF(_) => write!(f, "CreateUDF"),
-            Plan::AlterUDF(_) => write!(f, "AlterUDF"),
-            Plan::DropUDF(_) => write!(f, "DropUDF"),
-            Plan::Insert(_) => write!(f, "Insert"),
-            Plan::Replace(_) => write!(f, "Replace"),
-            Plan::Delete(_) => write!(f, "Delete"),
-            Plan::Update(_) => write!(f, "Update"),
-            Plan::Presign(_) => write!(f, "Presign"),
-            Plan::SetVariable(_) => write!(f, "SetVariable"),
-            Plan::UnSetVariable(_) => write!(f, "UnSetVariable"),
-            Plan::SetRole(_) => write!(f, "SetRole"),
-            Plan::Kill(_) => write!(f, "Kill"),
-            Plan::CreateShareEndpoint(_) => write!(f, "CreateShareEndpoint"),
-            Plan::ShowShareEndpoint(_) => write!(f, "ShowShareEndpoint"),
-            Plan::DropShareEndpoint(_) => write!(f, "DropShareEndpoint"),
-            Plan::CreateShare(_) => write!(f, "CreateShare"),
-            Plan::DropShare(_) => write!(f, "DropShare"),
-            Plan::GrantShareObject(_) => write!(f, "GrantShareObject"),
-            Plan::RevokeShareObject(_) => write!(f, "RevokeShareObject"),
-            Plan::AlterShareTenants(_) => write!(f, "AlterShareTenants"),
-            Plan::DescShare(_) => write!(f, "DescShare"),
-            Plan::ShowShares(_) => write!(f, "ShowShares"),
-            Plan::ShowObjectGrantPrivileges(_) => write!(f, "ShowObjectGrantPrivileges"),
-            Plan::ShowGrantTenantsOfShare(_) => write!(f, "ShowGrantTenantsOfShare"),
-            Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
-            Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
-            Plan::RevertTable(..) => write!(f, "RevertTable"),
-            Plan::CreateDatamaskPolicy(..) => {
-                write!(f, "Create Data Mask Policy")
-            }
-            Plan::DropDatamaskPolicy(..) => {
-                write!(f, "Drop Data Mask Policy")
-            }
-            Plan::DescDatamaskPolicy(..) => {
-                write!(f, "Desc Data Mask Policy")
-            }
-            Plan::SetOptions(..) => {
-                write!(f, "SetOptions")
-            }
-            Plan::CreateNetworkPolicy(_) => write!(f, "CreateNetworkPolicy"),
-            Plan::AlterNetworkPolicy(_) => write!(f, "AlterNetworkPolicy"),
-            Plan::DropNetworkPolicy(_) => write!(f, "DropNetworkPolicy"),
-            Plan::DescNetworkPolicy(_) => write!(f, "DescNetworkPolicy"),
-            Plan::ShowNetworkPolicies(_) => write!(f, "ShowNetworkPolicies"),
-            Plan::MergeInto(_) => write!(f, "MergeInto"),
+            Plan::Explain { .. }
+            | Plan::ExplainAnalyze { .. }
+            | Plan::ExplainAst { .. }
+            | Plan::ExplainSyntax { .. } => QueryKind::Explain,
+            Plan::Insert(_) => QueryKind::Insert,
+            Plan::Replace(_)
+            | Plan::Delete(_)
+            | Plan::MergeInto(_)
+            | Plan::OptimizeTable(_)
+            | Plan::Update(_) => QueryKind::Update,
+            _ => QueryKind::Other,
         }
+    }
+}
+
+impl Display for Plan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.kind())
     }
 }
 

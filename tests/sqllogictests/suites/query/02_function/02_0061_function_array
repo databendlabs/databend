@@ -104,6 +104,21 @@ select array_distinct(col1), array_distinct(col2), array_distinct(col3) from t
 ----
 [1,2,3] ['x','y','z'] ['2022-02-02']
 
+query T
+select array_distinct([array_distinct([NULL, NULL])])
+----
+[[]]
+
+query T
+select array_distinct(array_distinct([NULL, NULL]))
+----
+[]
+
+query T
+select array_distinct([null, null, 1, 1])
+----
+[1]
+
 query I
 select array_sum(col1) from t
 ----
@@ -174,10 +189,10 @@ select array_reduce(col1, 'max'), array_reduce(col1, 'min'), array_reduce(col1, 
 ----
 3 1 9
 
-query TTTTT
-select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5) from t
+query TTTTTTTT
+select array_sort(col1),array_sort(col2),array_sort(col3),array_sort(col4),array_sort(col5), array_sort([NULL, NULL, NULL]), array_sort([[], [], []]), array_sort([{}, {}, {}]) from t
 ----
-[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]]
+[1,2,3,3] ['x','x','y','z'] ['2022-02-02'] ['2023-01-01 02:00:01.000000'] [[],[NULL],[1,2]] [NULL,NULL,NULL] [[],[],[]] [{},{},{}]
 
 query TTTTT
 select array_sort(col1, 'asc', 'NULLS FIRST'),array_sort(col2, 'desc'),array_sort(col3, 'desc', 'nulls last'),array_sort(col4),array_sort(col5, 'DESC', 'NULLS FIRST') from t

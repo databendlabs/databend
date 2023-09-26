@@ -64,11 +64,11 @@ impl UpdatePlan {
         ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
-        use_column_name_index: bool,
+        use_column_name_index: Option<usize>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            schema.num_fields(),
+            use_column_name_index.unwrap_or_else(|| schema.num_fields()),
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
@@ -115,7 +115,7 @@ impl UpdatePlan {
                     })
                 };
                 let expr = scalar.as_expr()?.project_column_ref(|col| {
-                    if use_column_name_index {
+                    if use_column_name_index.is_none() {
                         col.column_name.clone()
                     } else {
                         col.index.to_string()

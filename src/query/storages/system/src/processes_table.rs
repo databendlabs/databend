@@ -45,6 +45,8 @@ pub struct ProcessesTable {
 impl SyncSystemTable for ProcessesTable {
     const NAME: &'static str = "system.processes";
 
+    const IS_LOCAL: bool = false;
+
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
     }

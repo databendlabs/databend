@@ -64,7 +64,10 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
-            PushDownInfo::projection_of_push_downs(&self.table_info.schema(), &plan.push_downs),
+            PushDownInfo::projection_of_push_downs(
+                &self.table_info.schema(),
+                plan.push_downs.as_ref(),
+            ),
             plan.query_internal_columns,
             ctx,
         )
@@ -74,7 +77,7 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
 
-        if !self.operator.info().can_blocking() {
+        if !self.operator.info().native_capability().blocking {
             Ok(std::cmp::max(max_threads, max_io_requests))
         } else {
             // For blocking fs, we don't want this to be too large
@@ -189,13 +192,11 @@ impl FuseTable {
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
-        let topk = plan.push_downs.as_ref().and_then(|x| {
-            x.top_k(
-                plan.schema().as_ref(),
-                self.cluster_key_str(),
-                RangeIndex::supported_type,
-            )
-        });
+        let topk = plan
+            .push_downs
+            .as_ref()
+            .filter(|_| self.is_native()) // Only native format supports topk push down.
+            .and_then(|x| x.top_k(plan.schema().as_ref(), RangeIndex::supported_type));
 
         let index_reader = Arc::new(
             plan.push_downs

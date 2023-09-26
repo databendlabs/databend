@@ -647,6 +647,9 @@ fn test_array_sort(file: &mut impl Write) {
     run_ast(file, "array_sort_asc_null_first([])", &[]);
     run_ast(file, "array_sort_desc_null_first([])", &[]);
     run_ast(file, "array_sort_asc_null_first(NULL)", &[]);
+    run_ast(file, "array_sort_asc_null_first([NULL, NULL, NULL])", &[]);
+    run_ast(file, "array_sort_desc_null_first([[], [], []])", &[]);
+    run_ast(file, "array_sort_asc_null_first([{}, {}, {}])", &[]);
     run_ast(
         file,
         "array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])",

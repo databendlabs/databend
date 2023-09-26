@@ -106,9 +106,8 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.39", features = [
+opendal = { version = "0.40", features = [
     "layers-minitrace",
-    "layers-metrics",
     "services-ipfs",
     "services-moka",
     "services-redis",
@@ -116,7 +115,7 @@ opendal = { version = "0.39", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "54dba06" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3a3c6ef" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -134,6 +133,7 @@ lazy_static = "1.4.0"
 futures = "0.3.24"
 futures-util = "0.3.24"
 stream-more = "0.1.3"
+bytes = "1.5.0"
 
 # error
 anyhow = { version = "1.0.65" }
@@ -156,8 +156,8 @@ serde_json = { version = "1.0.85", default-features = false, features = ["preser
 tonic-build = { version = "0.9.2" }
 
 # chrono
-chrono = { version = "0.4.24", features = ["serde"] }
-chrono-tz = { version = "0.6.3", features = ["serde"] }
+chrono = { version = "0.4.31", features = ["serde"] }
+chrono-tz = { version = "0.8", features = ["serde"] }
 
 # memory
 bumpalo = "3.12.0"
@@ -230,12 +230,12 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "f609d0c" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "231a6fa" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
-parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "693c265" }
+parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }
-opendal = { git = "https://github.com/apache/incubator-opendal", rev = "f02d627" }
-icelake = { git = "https://github.com/icelake-io/icelake", rev = "eb3251f" }
+icelake = { git = "https://github.com/icelake-io/icelake", rev = "9876ff1" }
+opendal = { git = "https://github.com/apache/incubator-opendal", rev = "d5990fe" }
 # Crates from arrow-rs
 arrow = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }
 arrow-schema = { git = "https://github.com/apache/arrow-rs", rev = "587250c" }

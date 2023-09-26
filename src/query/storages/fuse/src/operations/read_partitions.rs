@@ -27,8 +27,10 @@ use common_catalog::plan::TopK;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
+use common_sql::field_default_value;
 use common_storage::ColumnNodes;
 use log::debug;
 use log::info;
@@ -41,6 +43,7 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnStatistics;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
@@ -120,7 +123,6 @@ impl FuseTable {
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[minitrace::trace(name = "prune_snapshot_blocks")]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
@@ -201,6 +203,7 @@ impl FuseTable {
             .collect::<Vec<_>>();
 
         let result = self.read_partitions_with_metas(
+            ctx.clone(),
             table_info.schema(),
             push_downs,
             &block_metas,
@@ -218,6 +221,7 @@ impl FuseTable {
 
     pub fn read_partitions_with_metas(
         &self,
+        ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
@@ -231,14 +235,11 @@ impl FuseTable {
 
         let top_k = push_downs
             .as_ref()
-            .map(|p| {
-                p.top_k(
-                    self.schema().as_ref(),
-                    self.cluster_key_str(),
-                    RangeIndex::supported_type,
-                )
-            })
-            .unwrap_or_default();
+            .filter(|_| self.is_native()) // Only native format supports topk push down.
+            .and_then(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
+            .map(|topk| field_default_value(ctx.clone(), &topk.order_by).map(|d| (topk, d)))
+            .transpose()?;
+
         let (mut statistics, parts) =
             Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
 
@@ -260,27 +261,50 @@ impl FuseTable {
         schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
-        top_k: Option<TopK>,
+        top_k: Option<(TopK, Scalar)>,
         push_downs: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
         let limit = push_downs
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
         let mut block_metas = block_metas.to_vec();
-        if let Some(top_k) = &top_k {
-            block_metas.sort_by(|a, b| {
-                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
-                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
-
-                if top_k.asc {
+        if let Some((top_k, default)) = &top_k {
+            let default_stats = ColumnStatistics {
+                min: default.clone(),
+                max: default.clone(),
+                // These fields will not be used in the following sorting.
+                null_count: 0,
+                in_memory_size: 0,
+                distinct_of_values: None,
+            };
+            if top_k.asc {
+                block_metas.sort_by(|a, b| {
+                    let a =
+                        a.1.col_stats
+                            .get(&top_k.column_id)
+                            .unwrap_or(&default_stats);
+                    let b =
+                        b.1.col_stats
+                            .get(&top_k.column_id)
+                            .unwrap_or(&default_stats);
                     (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
-                } else {
+                });
+            } else {
+                block_metas.sort_by(|a, b| {
+                    let a =
+                        a.1.col_stats
+                            .get(&top_k.column_id)
+                            .unwrap_or(&default_stats);
+                    let b =
+                        b.1.col_stats
+                            .get(&top_k.column_id)
+                            .unwrap_or(&default_stats);
                     (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
-                }
-            });
+                });
+            }
         }
 
         let (mut statistics, mut partitions) = match &push_downs {
@@ -308,13 +332,13 @@ impl FuseTable {
     fn is_exact(push_downs: &Option<PushDownInfo>) -> bool {
         push_downs
             .as_ref()
-            .map_or(true, |extra| extra.filter.is_none())
+            .map_or(true, |extra| extra.filters.is_none())
     }
 
     fn all_columns_partitions(
         schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
-        top_k: Option<TopK>,
+        top_k: Option<(TopK, Scalar)>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
@@ -354,7 +378,7 @@ impl FuseTable {
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         column_nodes: &ColumnNodes,
         projection: &Projection,
-        top_k: Option<TopK>,
+        top_k: Option<(TopK, Scalar)>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
         let mut statistics = PartStatistics::default_exact();
@@ -405,7 +429,7 @@ impl FuseTable {
     fn all_columns_part(
         schema: Option<&TableSchemaRef>,
         block_meta_index: &Option<BlockMetaIndex>,
-        top_k: &Option<TopK>,
+        top_k: &Option<(TopK, Scalar)>,
         meta: &BlockMeta,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
@@ -428,9 +452,11 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let create_on = meta.create_on;
 
-        let sort_min_max = top_k.as_ref().map(|top_k| {
-            let stat = meta.col_stats.get(&top_k.column_id).unwrap();
-            (stat.min().clone(), stat.max().clone())
+        let sort_min_max = top_k.as_ref().map(|(top_k, default)| {
+            meta.col_stats
+                .get(&top_k.column_id)
+                .map(|stat| (stat.min().clone(), stat.max().clone()))
+                .unwrap_or((default.clone(), default.clone()))
         });
 
         FusePartInfo::create(
@@ -448,7 +474,7 @@ impl FuseTable {
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
-        top_k: Option<TopK>,
+        top_k: Option<(TopK, Scalar)>,
         projection: &Projection,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(projection.len());
@@ -467,9 +493,10 @@ impl FuseTable {
         let location = meta.location.0.clone();
         let create_on = meta.create_on;
 
-        let sort_min_max = top_k.and_then(|top_k| {
+        let sort_min_max = top_k.map(|(top_k, default)| {
             let stat = meta.col_stats.get(&top_k.column_id);
             stat.map(|stat| (stat.min().clone(), stat.max().clone()))
+                .unwrap_or((default.clone(), default))
         });
 
         // TODO

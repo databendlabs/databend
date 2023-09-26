@@ -10,7 +10,7 @@ This command unloads data from a table (or query) into one or more files in one 
 * User / Internal / External stages: See [Understanding Stages](../../12-load-data/00-stage/00-whystage.md) to learn about stages in Databend.
 * Buckets or containers created in a storage service.
 
-See Also: [COPY INTO table](dml-copy-into-table.md)
+See also: [`COPY INTO <table>`](dml-copy-into-table.md)
 
 ## Syntax
 

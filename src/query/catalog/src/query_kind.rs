@@ -12,15 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
-use crate::recorder::try_get_record;
+use serde::Deserialize;
+use serde::Serialize;
 
-/// Reset gauge metrics to 0.
-pub fn reset_metrics() -> Result<()> {
-    if let Some(recorder) = try_get_record() {
-        recorder.clear();
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum QueryKind {
+    Unknown,
+    Query,
+    Explain,
+    Copy,
+    Update,
+    Insert,
+    Other,
+}
+
+impl Display for QueryKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
     }
-
-    Ok(())
 }

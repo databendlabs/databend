@@ -124,6 +124,27 @@ fn resolve_column_type<C: LoweringContext>(
             })
         }
         RawExpr::Constant { .. } => Ok(raw_expr.clone()),
+        RawExpr::UDFServerCall {
+            span,
+            func_name,
+            server_addr,
+            arg_types,
+            return_type,
+            args,
+        } => {
+            let args = args
+                .iter()
+                .map(|arg| resolve_column_type(arg, context))
+                .collect::<Result<Vec<_>>>()?;
+            Ok(RawExpr::UDFServerCall {
+                span: *span,
+                func_name: func_name.clone(),
+                server_addr: server_addr.clone(),
+                arg_types: arg_types.clone(),
+                return_type: return_type.clone(),
+                args,
+            })
+        }
     }
 }
 
@@ -245,11 +266,23 @@ impl ScalarExpr {
                 data_type: subquery.data_type(),
                 display_name: "DUMMY".to_string(),
             },
+            ScalarExpr::UDFServerCall(udf) => RawExpr::UDFServerCall {
+                span: udf.span,
+                func_name: udf.func_name.clone(),
+                server_addr: udf.server_addr.clone(),
+                arg_types: udf.arg_types.clone(),
+                return_type: (*udf.return_type).clone(),
+                args: udf.arguments.iter().map(ScalarExpr::as_raw_expr).collect(),
+            },
         }
     }
 
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         self.as_raw_expr().type_check()
+    }
+
+    pub fn is_column_ref(&self) -> bool {
+        matches!(self, ScalarExpr::BoundColumnRef(_))
     }
 }
 

@@ -34,7 +34,7 @@ use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_co
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
-
+// (source_schema,condition,values_exprs)
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {
@@ -65,6 +65,7 @@ impl MergeIntoNotMatchedProcessor {
         for (idx, item) in unmatched.iter().enumerate() {
             let eval_projections: HashSet<usize> =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
+
             data_schemas.insert(idx, item.0.clone());
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {

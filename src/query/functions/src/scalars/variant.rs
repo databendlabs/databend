@@ -72,6 +72,7 @@ use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::object_keys;
 use jsonb::parse_value;
+use jsonb::path_exists;
 use jsonb::strip_nulls;
 use jsonb::to_bool;
 use jsonb::to_f64;
@@ -390,6 +391,34 @@ pub fn register(registry: &mut FunctionRegistry) {
                             format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
                         );
                         output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<VariantType, StringType, BooleanType, _, _>(
+        "json_path_exists",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, StringType, BooleanType>(
+            |val, path, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push(false);
+                        return;
+                    }
+                }
+                match parse_json_path(path) {
+                    Ok(json_path) => {
+                        let res = path_exists(val, json_path);
+                        output.push(res);
+                    }
+                    Err(_) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!("Invalid JSON Path '{}'", &String::from_utf8_lossy(path),),
+                        );
+                        output.push(false);
                     }
                 }
             },
@@ -967,9 +996,24 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| json_object_fn(args, ctx, false)),
+                eval: Box::new(json_object_fn),
             },
         }))
+    });
+
+    registry.register_function_factory("try_json_object", |_, args_type| {
+        let f = Function {
+            signature: FunctionSignature {
+                name: "try_json_object".to_string(),
+                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+                return_type: DataType::Variant,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(json_object_fn),
+            },
+        };
+        Some(Arc::new(f.error_to_null()))
     });
 
     registry.register_function_factory("json_object_keep_null", |_, args_type| {
@@ -981,9 +1025,24 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| json_object_fn(args, ctx, true)),
+                eval: Box::new(json_object_keep_null_fn),
             },
         }))
+    });
+
+    registry.register_function_factory("try_json_object_keep_null", |_, args_type| {
+        let f = Function {
+            signature: FunctionSignature {
+                name: "try_json_object_keep_null".to_string(),
+                args_type: (0..args_type.len()).map(DataType::Generic).collect(),
+                return_type: DataType::Variant,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                eval: Box::new(json_object_keep_null_fn),
+            },
+        };
+        Some(Arc::new(f.error_to_null()))
     });
 
     registry.register_function_factory("json_array", |_, args_type| {
@@ -1026,7 +1085,15 @@ fn json_array_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<Any
     }
 }
 
-fn json_object_fn(
+fn json_object_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    json_object_impl_fn(args, ctx, false)
+}
+
+fn json_object_keep_null_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
+    json_object_impl_fn(args, ctx, true)
+}
+
+fn json_object_impl_fn(
     args: &[ValueRef<AnyType>],
     ctx: &mut EvalContext,
     keep_null: bool,
@@ -1035,15 +1102,17 @@ fn json_object_fn(
     let cap = len.unwrap_or(1);
     let mut builder = StringColumnBuilder::with_capacity(cap, cap * 50);
     if columns.len() % 2 != 0 {
-        ctx.set_error(0, "The number of keys and values must be equal");
-        for _ in 0..cap {
+        for i in 0..cap {
+            ctx.set_error(i, "The number of keys and values must be equal");
             builder.commit_row();
         }
     } else {
         let mut set = HashSet::new();
+        let mut kvs = Vec::with_capacity(columns.len() / 2);
         for idx in 0..cap {
             set.clear();
-            let mut kvs = Vec::with_capacity(columns.len() / 2);
+            kvs.clear();
+            let mut has_err = false;
             for i in (0..columns.len()).step_by(2) {
                 let k = unsafe { columns[i].index_unchecked(idx) };
                 if k == ScalarRef::Null {
@@ -1056,11 +1125,13 @@ fn json_object_fn(
                 let key = match k {
                     ScalarRef::String(v) => unsafe { String::from_utf8_unchecked(v.to_vec()) },
                     _ => {
+                        has_err = true;
                         ctx.set_error(builder.len(), "Key must be a string value");
                         break;
                     }
                 };
                 if set.contains(&key) {
+                    has_err = true;
                     ctx.set_error(builder.len(), "Keys have to be unique");
                     break;
                 }
@@ -1069,9 +1140,12 @@ fn json_object_fn(
                 cast_scalar_to_variant(v, ctx.func_ctx.tz, &mut val);
                 kvs.push((key, val));
             }
-            if let Err(err) = build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut builder.data)
-            {
-                ctx.set_error(builder.len(), err.to_string());
+            if !has_err {
+                if let Err(err) =
+                    build_object(kvs.iter().map(|(k, v)| (k, &v[..])), &mut builder.data)
+                {
+                    ctx.set_error(builder.len(), err.to_string());
+                }
             }
             builder.commit_row();
         }

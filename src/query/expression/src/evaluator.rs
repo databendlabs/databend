@@ -18,6 +18,7 @@ use std::ops::Not;
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::runtime::GlobalQueryRuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -38,13 +39,18 @@ use crate::types::nullable::NullableDomain;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
+use crate::udf_client::UDFFlightClient;
 use crate::utils::arrow::constant_bitmap;
+use crate::utils::variant_transform::contains_variant;
+use crate::utils::variant_transform::transform_variant;
 use crate::values::Column;
 use crate::values::ColumnBuilder;
 use crate::values::Scalar;
 use crate::values::Value;
 use crate::BlockEntry;
 use crate::ColumnIndex;
+use crate::DataField;
+use crate::DataSchema;
 use crate::FunctionContext;
 use crate::FunctionDomain;
 use crate::FunctionEval;
@@ -159,6 +165,13 @@ impl<'a> Evaluator<'a> {
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 Ok(result)
             }
+            Expr::UDFServerCall {
+                func_name,
+                server_addr,
+                return_type,
+                args,
+                ..
+            } => self.run_udf_server_call(func_name, server_addr, return_type, args, validity),
         };
 
         #[cfg(debug_assertions)]
@@ -192,6 +205,100 @@ impl<'a> Evaluator<'a> {
             }
         }
         result
+    }
+
+    fn run_udf_server_call(
+        &self,
+        func_name: &str,
+        server_addr: &str,
+        return_type: &DataType,
+        args: &[Expr],
+        validity: Option<Bitmap>,
+    ) -> Result<Value<AnyType>> {
+        let inputs = args
+            .iter()
+            .map(|expr| self.partial_run(expr, validity.clone()))
+            .collect::<Result<Vec<_>>>()?;
+        assert!(
+            inputs
+                .iter()
+                .filter_map(|val| match val {
+                    Value::Column(col) => Some(col.len()),
+                    Value::Scalar(_) => None,
+                })
+                .all_equal()
+        );
+
+        // construct input record_batch
+        let num_rows = self.input_columns.num_rows();
+        let fields = args
+            .iter()
+            .enumerate()
+            .map(|(idx, arg)| DataField::new(&format!("arg{}", idx + 1), arg.data_type().clone()))
+            .collect_vec();
+        let data_schema = DataSchema::new(fields);
+
+        let block_entries = inputs
+            .into_iter()
+            .zip(args.iter())
+            .map(|(col, arg)| {
+                let arg_type = arg.data_type().clone();
+                let block = if contains_variant(&arg_type) {
+                    BlockEntry::new(arg_type, transform_variant(&col, true)?)
+                } else {
+                    BlockEntry::new(arg_type, col)
+                };
+                Ok(block)
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let input_batch = DataBlock::new(block_entries, num_rows)
+            .to_record_batch_keep_schema(&data_schema)
+            .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
+
+        let func_name = func_name.to_string();
+        let server_addr = server_addr.to_string();
+        let result_batch = GlobalQueryRuntime::instance()
+            .runtime()
+            .block_on(async move {
+                let mut client = UDFFlightClient::connect(&server_addr).await?;
+                client.do_exchange(&func_name, input_batch).await
+            })?;
+
+        let (result_block, result_schema) =
+            DataBlock::from_record_batch(&result_batch).map_err(|err| {
+                ErrorCode::UDFDataError(format!(
+                    "Cannot convert arrow record batch to data block: {err}"
+                ))
+            })?;
+
+        let result_fields = result_schema.fields();
+        if result_fields.is_empty() || result_block.is_empty() {
+            return Err(ErrorCode::EmptyDataFromServer(
+                "Get empty data from UDF Server",
+            ));
+        }
+
+        if result_fields[0].data_type() != return_type {
+            return Err(ErrorCode::UDFSchemaMismatch(format!(
+                "UDF server return incorrect type, expected: {}, but got: {}",
+                return_type,
+                result_fields[0].data_type()
+            )));
+        }
+        if result_block.num_rows() != num_rows {
+            return Err(ErrorCode::UDFDataError(format!(
+                "UDF server should return {} rows, but it returned {} rows",
+                num_rows,
+                result_block.num_rows()
+            )));
+        }
+
+        if contains_variant(return_type) {
+            transform_variant(&result_block.get_by_offset(0).value, false)
+        } else {
+            Ok(result_block.get_by_offset(0).value.clone())
+        }
     }
 
     fn run_cast(
@@ -1228,6 +1335,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
                 (func_expr, func_domain)
             }
+            Expr::UDFServerCall { .. } => (expr.clone(), None),
         };
 
         debug_assert_eq!(expr.data_type(), new_expr.data_type());

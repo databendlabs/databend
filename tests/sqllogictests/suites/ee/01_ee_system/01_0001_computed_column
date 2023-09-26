@@ -192,5 +192,72 @@ statement error 1301
 create table t_virtual3(a json null, b uint32 null as (a['id']::uint32) virtual, c string null as (a['name']::string) virtual) bloom_index_columns = 'b, c'
 
 statement ok
-DROP DATABASE test_computed_column
+set enable_experimental_merge_into = 1;
 
+## test computed columns
+statement ok
+drop table if exists t_stored_merge;
+
+statement ok
+drop table if exists t_source_merge;
+
+statement ok
+create table t_stored_merge(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c');
+
+statement ok
+create table t_source_merge(a string null default 'a',b string null default 'c', c string null default 'c');
+
+statement ok
+insert into t_source_merge values('a1','b1','c1'),('a2','b2','c2');
+
+statement error 1006
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c); 
+
+statement error 1006
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a  when matched then update set t1.b = t2.b  when not matched then insert (a,c) values(t2.a,t2.c);
+
+statement ok
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a when not matched then insert (a,c) values(t2.a,t2.c);
+
+query TTT
+select * from t_stored_merge order by a,b,c;
+----
+a1 a1-c1 c1
+a2 a2-c2 c2
+
+statement ok
+truncate table t_stored_merge;
+
+query I
+select count(*) from t_stored_merge;
+----
+0
+
+statement ok
+insert into t_stored_merge values('a1','c3');
+
+query TTT
+select * from t_stored_merge order by a,b,c;
+----
+a1 a1-c3 c3
+
+query TTT
+select * from t_source_merge order by a,b,c;
+----
+a1 b1 c1
+a2 b2 c2
+
+statement ok
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2)  on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,c) values(t2.a,t2.c);
+
+query TTT
+select * from t_stored_merge order by a,b,c;
+----
+a1 a1-c1 c1
+a2 a2-c2 c2
+
+statement ok
+set enable_experimental_merge_into = 0;
+
+statement ok
+DROP DATABASE test_computed_column

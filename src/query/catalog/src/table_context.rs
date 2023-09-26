@@ -49,6 +49,7 @@ use crate::cluster_info::Cluster;
 use crate::plan::DataSourcePlan;
 use crate::plan::PartInfoPtr;
 use crate::plan::Partitions;
+use crate::query_kind::QueryKind;
 use crate::table::Table;
 
 pub type MaterializedCtesBlocks = Arc<RwLock<HashMap<(usize, usize), Arc<RwLock<Vec<DataBlock>>>>>>;
@@ -119,6 +120,9 @@ pub trait TableContext: Send + Sync {
 
     fn get_partition(&self) -> Option<PartInfoPtr>;
     fn get_partitions(&self, num: usize) -> Vec<PartInfoPtr>;
+    fn partition_num(&self) -> usize {
+        unimplemented!()
+    }
     fn set_partitions(&self, partitions: Partitions) -> Result<()>;
     fn add_partitions_sha(&self, sha: String);
     fn get_partitions_shas(&self) -> Vec<String>;
@@ -127,7 +131,7 @@ pub trait TableContext: Send + Sync {
     fn get_can_scan_from_agg_index(&self) -> bool;
     fn set_can_scan_from_agg_index(&self, enable: bool);
 
-    fn attach_query_str(&self, kind: String, query: String);
+    fn attach_query_str(&self, kind: QueryKind, query: String);
     fn get_query_str(&self) -> String;
 
     fn get_fragment_id(&self) -> usize;
@@ -145,7 +149,7 @@ pub trait TableContext: Send + Sync {
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
     /// Get the kind of session running query.
-    fn get_query_kind(&self) -> String;
+    fn get_query_kind(&self) -> QueryKind;
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;

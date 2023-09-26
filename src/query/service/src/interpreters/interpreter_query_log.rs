@@ -81,7 +81,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = ctx.get_id();
-        let query_kind = ctx.get_query_kind();
+        let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
         // Schema.
         let current_database = ctx.get_current_database();
@@ -187,7 +187,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = ctx.get_id();
-        let query_kind = ctx.get_query_kind();
+        let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
 
         // Stats.

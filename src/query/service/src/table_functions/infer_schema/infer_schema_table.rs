@@ -40,7 +40,7 @@ use common_meta_app::schema::TableMeta;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_sql::binder::parse_stage_location;
+use common_sql::binder::resolve_stage_location;
 use common_storage::init_stage_operator;
 use common_storage::read_parquet_schema_async;
 use common_storage::read_parquet_schema_async_rs;
@@ -179,7 +179,7 @@ impl AsyncSource for InferSchemaSource {
         self.is_finished = true;
 
         let (stage_info, path) =
-            parse_stage_location(&self.ctx, &self.args_parsed.location).await?;
+            resolve_stage_location(&self.ctx, &self.args_parsed.location).await?;
         let files_info = StageFilesInfo {
             path: path.clone(),
             ..self.args_parsed.files_info.clone()

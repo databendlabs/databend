@@ -334,7 +334,7 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::text("]")),
         Expr::Map { kvs, .. } => RcDoc::text("{")
             .append(inline_comma(kvs.into_iter().map(|(k, v)| {
-                pretty_expr(k)
+                RcDoc::text(k.to_string())
                     .append(RcDoc::text(":"))
                     .append(pretty_expr(v))
             })))

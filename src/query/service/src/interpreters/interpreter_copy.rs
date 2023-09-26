@@ -272,7 +272,7 @@ impl CopyInterpreter {
             rows_loaded.push(status.num_rows_loaded as i32);
             if let Some(err) = &status.error {
                 errors_seen.push(err.num_errors as i32);
-                first_error.push(Some(err.first_error.message.as_bytes().to_vec()));
+                first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
             } else {
                 errors_seen.push(0);

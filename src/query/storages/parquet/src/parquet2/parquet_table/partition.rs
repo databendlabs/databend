@@ -18,6 +18,7 @@ use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -58,7 +59,7 @@ impl Parquet2Table {
 
         let top_k = push_down
             .as_ref()
-            .map(|p| p.top_k(&self.table_info.schema(), None, RangeIndex::supported_type))
+            .map(|p| p.top_k(&self.table_info.schema(), RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Currently, arrow2 doesn't support reading stats of a inner column of a nested type.
@@ -78,9 +79,19 @@ impl Parquet2Table {
             project_parquet_schema(&self.arrow_schema, &self.schema_descr, &projection)?;
         let schema = Arc::new(arrow_to_table_schema(projected_arrow_schema));
 
-        let filter = push_down
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
+
+        let inverted_filter = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.inverted_filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
 
         let top_k = top_k.map(|top_k| {
             let offset = projected_column_nodes
@@ -94,11 +105,13 @@ impl Parquet2Table {
         let func_ctx = ctx.get_function_context()?;
 
         let row_group_pruner = if self.read_options.prune_row_groups() {
-            Some(RangePrunerCreator::try_create(
+            let p1 = RangePrunerCreator::try_create(func_ctx.clone(), &schema, filter.as_ref())?;
+            let p2 = RangePrunerCreator::try_create(
                 func_ctx.clone(),
                 &schema,
-                filter.as_ref(),
-            )?)
+                inverted_filter.as_ref(),
+            )?;
+            Some((p1, p2))
         } else {
             None
         };
@@ -143,7 +156,7 @@ impl Parquet2Table {
                 .iter()
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
-            None => if self.operator.info().can_blocking() {
+            None => if self.operator.info().native_capability().blocking {
                 self.files_info.blocking_list(&self.operator, false, None)
             } else {
                 self.files_info.list(&self.operator, false, None).await
@@ -159,7 +172,7 @@ impl Parquet2Table {
                 &file_locations,
                 ctx.get_settings().get_max_threads()? as usize,
                 &ctx.get_copy_status(),
-                ctx.get_query_kind().eq_ignore_ascii_case("copy"),
+                matches!(ctx.get_query_kind(), QueryKind::Copy),
             )
             .await
     }

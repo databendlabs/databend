@@ -41,7 +41,7 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(&(0_u8), &data).await;
+    let res = spiller.spill_with_partition(&(0_u8), &data, 0).await;
 
     assert!(res.is_ok());
     assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_hash_join_build_spill"));
@@ -87,6 +87,6 @@ async fn create_spiller() -> Result<Spiller> {
     Ok(Spiller::create(
         operator,
         spiller_config,
-        SpillerType::HashJoin,
+        SpillerType::HashJoinBuild,
     ))
 }

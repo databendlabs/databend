@@ -159,6 +159,7 @@ fn test_statement() {
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
+        r#"select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');"#,
         r#"select 'stringwith''quote'''"#,
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
@@ -246,14 +247,17 @@ fn test_statement() {
         r#"SET ROLE ROLE1;"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
+                FROM '@~/mybucket/my data.csv'
+                size_limit=10;"#,
+        r#"COPY INTO mytable
                 FROM @~/mybucket/data.csv
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;"#,
+                ),
+                size_limit=10,;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
@@ -262,7 +266,7 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10
+                size_limit=10,
                 max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
@@ -305,10 +309,11 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
+                    type = CSV,
+                    field_delimiter = ',',
+                    record_delimiter = '\n',
+                    skip_header = 1,
+                    error_on_column_count_mismatch = FALSE
                 )
                 size_limit=10;"#,
         r#"COPY INTO 's3://mybucket/data.csv'
@@ -320,6 +325,9 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10;"#,
+        r#"COPY INTO '@my_stage/my data'
+                FROM mytable
+                size_limit=10;"#,
         r#"COPY INTO @my_stage
                 FROM mytable
                 FILE_FORMAT = (
@@ -327,21 +335,21 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
+                ),
                 size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                )
+                ),
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;"#,
+                ),
+                size_limit=10,;"#,
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
@@ -379,6 +387,7 @@ fn test_statement() {
                 )
                 size_limit=10
                 disable_variant_check=true;"#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
@@ -426,6 +435,7 @@ fn test_statement() {
         r#"SET max_threads = 10*2;"#,
         r#"UNSET max_threads;"#,
         r#"UNSET (max_threads, sql_dialect);"#,
+        r#"select $1 FROM '@my_stage/my data/'"#,
         r#"SELECT t.c1 FROM @stage1/dir/file
         ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;"#,
         r#"select table0.c1, table1.c2 from
@@ -522,6 +532,20 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2 offset 2;"#,
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
+        r#"copy into t1 from "" FILE"#,
+        r#"copy into t1 from "" FILE_FORMAT"#,
+        r#"copy into t1 from "" FILE_FORMAT = "#,
+        r#"copy into t1 from "" FILE_FORMAT = ("#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE"#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = CSV,
+                    error_on_column_count_mismatch = 1
+                )"#,
     ];
 
     for case in cases {

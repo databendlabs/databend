@@ -466,18 +466,6 @@ pub struct RowBatch {
     pub start_row_of_split: Option<usize>,
 }
 
-impl RowBatch {
-    pub fn error(&self, msg: &str, ctx: &InputContext, offset: usize, row: usize) -> ErrorCode {
-        ctx.parse_error_row_based(
-            msg,
-            &self.split_info,
-            offset + self.start_offset_in_split,
-            self.start_row_in_split + row,
-            self.start_row_of_split,
-        )
-    }
-}
-
 impl RowBatchTrait for RowBatch {
     fn size(&self) -> usize {
         self.data.len()

@@ -16,6 +16,7 @@ heapsize = ["heapsize_"]
 [dependencies]
 
 # Crates.io dependencies
+bytes = { workspace = true }
 hashbrown = "0.14"
 hashlink = "0.8"
 

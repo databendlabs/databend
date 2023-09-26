@@ -38,8 +38,10 @@ use common_expression::ColumnBuilder;
 use common_io::cursor_ext::BufferReadDateTimeExt;
 use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadNumberExt;
+use common_io::parse_bitmap;
 use lexical_core::FromLexical;
 use num::cast::AsPrimitive;
+use roaring::RoaringTreemap;
 use serde_json::Value;
 
 use crate::FieldDecoder;
@@ -89,6 +91,7 @@ impl FieldJsonAstDecoder {
             ColumnBuilder::Array(c) => self.read_array(c, value),
             ColumnBuilder::Map(c) => self.read_map(c, value),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, value),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, value),
             ColumnBuilder::Variant(c) => self.read_variant(c, value),
             _ => unimplemented!(),
         }
@@ -239,6 +242,30 @@ impl FieldJsonAstDecoder {
                 )),
             },
             _ => Err(ErrorCode::BadBytes("Incorrect timestamp value")),
+        }
+    }
+
+    fn read_bitmap(&self, column: &mut StringColumnBuilder, value: &Value) -> Result<()> {
+        match value {
+            Value::String(v) => {
+                let rb = parse_bitmap(v.as_bytes())?;
+                rb.serialize_into(&mut column.data).unwrap();
+                column.commit_row();
+                Ok(())
+            }
+            Value::Number(number) => match number.as_u64() {
+                Some(n) => {
+                    let mut rb = RoaringTreemap::new();
+                    rb.insert(n);
+                    rb.serialize_into(&mut column.data).unwrap();
+                    column.commit_row();
+                    Ok(())
+                }
+                None => Err(ErrorCode::BadArguments(
+                    "Incorrect Bitmap value, must be u64",
+                )),
+            },
+            _ => Err(ErrorCode::BadBytes("Incorrect Bitmap value")),
         }
     }
 

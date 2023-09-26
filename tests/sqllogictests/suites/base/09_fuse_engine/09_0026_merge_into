@@ -168,4 +168,245 @@ select * from t1 order by a,b,c;
 5 b_9 c_9
 
 statement ok
+insert into t2 values(5,'b_10','c_10');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+2 b_7 c_7
+3 b_6 c_6
+4 b_8 c_8
+5 b_10 c_10
+5 b_9 c_9
+
+statement error 4001
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a when matched and t2.c = 'c_9' then update set t1.b = 'b_11' when matched and t2.c = 'c_10' then delete;
+
+## idempotent delete test
+statement ok
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a when matched then delete;
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c_5
+
+## test star for merge into
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+statement ok
+insert into t1 values(1,'b1','c1'),(2,'b2','c2');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+
+statement ok
+insert into t2 values(1,'b3','c3'),(3,'b4','c4');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b3 c3
+3 b4 c4
+
+## test insert columns mismatch
+statement error 1065
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched then insert values(t2.a,t2.c);
+
+statement ok
+merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update *  when not matched then insert *;
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b3 c3
+2 b2 c2
+3 b4 c4
+
+## test multi same name for star
+statement error 1065
+merge into t1 using (select a,b,c,a from t2 as t2) on t1.a = t2.a  when matched then update *;
+
+statement error 1065
+merge into t1 using (select a,b,c,a,b from t2 as t2) on t1.a = t2.a  when not matched then insert *;
+
+## stage file test
+statement ok
+drop table if exists test_stage;
+
+statement ok
+drop table if exists target_table;
+
+statement ok
+create table target_table(a int,b string,c string);
+
+statement ok
+insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
+
+query TTT
+select * from target_table order by a,b,c;
+----
+1 a_1 b_1
+2 a_2 b_2
+
+statement ok
+create table test_stage(a int,b string,c string);
+
+statement ok
+insert into test_stage values(1,'a1','b1'),(2,'a2','b2'),(3,'a3','b3');
+
+query TTT
+select * from test_stage order by a,b,c;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+statement ok
+drop stage if exists s5_merge_into;
+
+statement ok
+drop stage if exists s4_merge_into;
+
+statement ok
+create stage s5_merge_into FILE_FORMAT = (TYPE = CSV);
+
+statement ok
+remove @s5_merge_into;
+
+statement ok
+copy into @s5_merge_into from (select a,b,c from test_stage order by a,b,c);
+
+query TTT
+select $1,$2,$3 from @s5_merge_into order by $1,$2,$3;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+## test CSV
+statement ok
+merge into target_table using (select $1,$2,$3 from @s5_merge_into) as cdc on cast(cdc.$1 as int) = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+
+query TTT
+select * from target_table order by a,b,c;
+----
+3 a3 b3
+
+## test parquet
+statement ok
+truncate table target_table;
+
+query I
+select count(*) from target_table;
+----
+0
+
+statement ok
+create stage s4_merge_into FILE_FORMAT = (TYPE = PARQUET);
+
+statement ok
+remove @s4_merge_into;
+
+statement ok
+copy into @s4_merge_into from (select a,b,c from test_stage order by a,b,c);
+
+query TTT
+select $1,$2,$3 from @s4_merge_into order by $1,$2,$3;
+----
+1 a1 b1
+2 a2 b2
+3 a3 b3
+
+statement ok
+insert into target_table values(1,'a_1','b_1'),(2,'a_2','b_2');
+
+query TTT
+select * from target_table order by a,b,c;
+----
+1 a_1 b_1
+2 a_2 b_2
+
+statement ok
+merge into target_table using (select $1,$2,$3 from @s4_merge_into) as cdc on cdc.$1 = target_table.a when matched then delete when not matched then insert values(cdc.$1,cdc.$2,cdc.$3);
+
+query TTT
+select * from target_table order by a,b,c;
+----
+3 a3 b3
+
+## NULL test, for join, if join_expr result is
+## NULL, it will be treated as not macthed.
+statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+statement ok
+insert into t1 values(NULL,'b_1','c_1');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+NULL b_1 c_1
+
+statement ok
+insert into t2 values(1,'b_4','c_4'),(2,'b_2','c_2'),(NULL,'b_3','c_3');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+1 b_4 c_4
+2 b_2 c_2
+NULL b_3 c_3
+
+statement ok
+merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete when not matched then insert *;
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b_4 c_4
+2 b_2 c_2
+NULL b_1 c_1
+NULL b_3 c_3
+
+statement ok
+merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete;
+
+query TTT
+select * from t1 order by a,b,c;
+----
+NULL b_1 c_1
+NULL b_3 c_3
+
+statement ok
 set enable_experimental_merge_into = 0;

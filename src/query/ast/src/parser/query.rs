@@ -22,8 +22,8 @@ use pratt::Associativity;
 use pratt::PrattParser;
 use pratt::Precedence;
 
+use super::stage::file_location;
 use super::stage::select_stage_option;
-use super::stage::stage_location;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
@@ -446,7 +446,7 @@ pub fn alias_name(i: Input) -> IResult<Identifier> {
 
 pub fn table_alias(i: Input) -> IResult<TableAlias> {
     map(
-        rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ")")? },
+        rule! { #alias_name ~ ( "(" ~ ^#comma_separated_list1(ident) ~ ^")" )? },
         |(name, opt_columns)| TableAlias {
             name,
             columns: opt_columns.map(|(_, cols, _)| cols).unwrap_or_default(),
@@ -578,7 +578,7 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
     );
     let aliased_table = map(
         rule! {
-            #dot_separated_idents_1_to_3 ~ (AT ~ #travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
+            #dot_separated_idents_1_to_3 ~ (AT ~ ^#travel_point)? ~ #table_alias? ~ #pivot? ~ #unpivot?
         },
         |((catalog, database, table), travel_point_opt, alias, pivot, unpivot)| {
             TableReferenceElement::Table {
@@ -639,17 +639,14 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
-    let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
-    let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(
         rule! {
-            (#stage_location | #uri_location) ~  ("(" ~ ^#comma_separated_list1(select_stage_option) ~")")? ~ #table_alias?
+            #file_location ~  ( "(" ~ (#select_stage_option ~ ","?)* ~ ^")" )? ~ #table_alias?
         },
         |(location, options, alias)| {
-            let options = match options {
-                None => vec![],
-                Some((_, v, _)) => v,
-            };
+            let options = options
+                .map(|(_, options, _)| options.into_iter().map(|(option, _)| option).collect())
+                .unwrap_or_default();
             TableReferenceElement::Stage {
                 location,
                 alias,
@@ -748,7 +745,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, TableReferenceElement>>> PrattParser<I>
                 alias,
             } => {
                 let options = SelectStageOptions::from(options);
-                TableReference::Stage {
+                TableReference::Location {
                     span: transform_span(input.span.0),
                     location,
                     options,
@@ -886,9 +883,10 @@ pub fn window_frame_between(i: Input) -> IResult<(WindowFrameBound, WindowFrameB
 pub fn window_spec(i: Input) -> IResult<WindowSpec> {
     map(
         rule! {
-            (#ident )? ~ (PARTITION ~ ^BY ~ #comma_separated_list1(subexpr(0)))?
+            (#ident )?
+            ~ ( PARTITION ~ ^BY ~ ^#comma_separated_list1(subexpr(0)) )?
             ~ ( ORDER ~ ^BY ~ ^#comma_separated_list1(order_by_expr) )?
-            ~ ((ROWS | RANGE) ~ #window_frame_between)?
+            ~ ( (ROWS | RANGE) ~ ^#window_frame_between )?
         },
         |(existing_window_name, opt_partition, opt_order, between)| WindowSpec {
             existing_window_name,

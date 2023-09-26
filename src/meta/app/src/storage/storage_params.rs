@@ -103,6 +103,22 @@ impl StorageParams {
     pub fn is_fs(&self) -> bool {
         matches!(self, StorageParams::Fs(_))
     }
+
+    /// auto_detect is used to do auto detect for some storage params under async context.
+    ///
+    /// - This action should be taken before storage params been passed out.
+    /// - This action should not return errors, we will return it as is if any error happened.
+    pub async fn auto_detect(self) -> Self {
+        match self {
+            StorageParams::S3(mut s3) if s3.region.is_empty() => {
+                s3.region = opendal::services::S3::detect_region(&s3.endpoint_url, &s3.bucket)
+                    .await
+                    .unwrap_or_default();
+                StorageParams::S3(s3)
+            }
+            v => v,
+        }
+    }
 }
 
 /// StorageParams will be displayed by `{protocol}://{key1=value1},{key2=value2}`

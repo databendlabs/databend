@@ -24,9 +24,9 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use common_sql::executor::CommitSink;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
@@ -92,7 +92,6 @@ impl Interpreter for MergeIntoInterpreter {
     }
 }
 
-// todo:(JackTan25) computed exprs
 impl MergeIntoInterpreter {
     async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
         let MergePlan {
@@ -180,6 +179,7 @@ impl MergeIntoInterpreter {
             } else {
                 None
             };
+
             let mut values_exprs = Vec::<RemoteExpr>::with_capacity(item.values.len());
 
             for scalar_expr in &item.values {
@@ -209,6 +209,7 @@ impl MergeIntoInterpreter {
             } else {
                 None
             };
+
             // update
             let update_list = if let Some(update_list) = &item.update {
                 // use update_plan to get exprs
@@ -225,7 +226,7 @@ impl MergeIntoInterpreter {
                 let col_indices = if item.condition.is_none() {
                     vec![]
                 } else {
-                    // we don't need to real col_indices here, just give a
+                    // we don't need real col_indices here, just give a
                     // dummy index, that's ok.
                     vec![DUMMY_COL_INDEX]
                 };
@@ -234,9 +235,8 @@ impl MergeIntoInterpreter {
                         self.ctx.clone(),
                         fuse_table.schema().into(),
                         col_indices,
-                        false,
+                        Some(join_output_schema.num_fields()),
                     )?;
-
                 let update_list = update_list
                     .iter()
                     .map(|(idx, remote_expr)| {
@@ -245,7 +245,14 @@ impl MergeIntoInterpreter {
                             remote_expr
                                 .as_expr(&BUILTIN_FUNCTIONS)
                                 .project_column_ref(|name| {
-                                    join_output_schema.index_of(name).unwrap()
+                                    // there will add a predicate col when we process matched clauses.
+                                    // so it's not in join_output_schema for now. But it's must be added
+                                    // to the tail, so let do it like below.
+                                    if name == &join_output_schema.num_fields().to_string() {
+                                        join_output_schema.num_fields()
+                                    } else {
+                                        join_output_schema.index_of(name).unwrap()
+                                    }
                                 })
                                 .as_remote_expr(),
                         )
@@ -290,14 +297,15 @@ impl MergeIntoInterpreter {
         });
 
         // build mutation_aggregate
-        let physical_plan = PhysicalPlan::MutationAggregate(Box::new(MutationAggregate {
+        let physical_plan = PhysicalPlan::CommitSink(CommitSink {
             input: Box::new(merge_into),
-            snapshot: (*base_snapshot).clone(),
+            snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
-        }));
+            merge_meta: false,
+        });
 
         Ok((physical_plan, table_info.clone()))
     }

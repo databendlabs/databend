@@ -59,7 +59,7 @@ impl Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
-            let is_grouping_sets_item = agg_info.grouping_id_column.is_some()
+            let is_grouping_sets_item = agg_info.grouping_sets.is_some()
                 && agg_info.group_items_map.contains_key(&item.scalar);
             let mut column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar
             {

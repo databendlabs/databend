@@ -29,6 +29,7 @@ use common_expression::vectorize_with_builder_3_arg;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
+use common_io::parse_bitmap;
 use itertools::join;
 use roaring::RoaringTreemap;
 
@@ -37,22 +38,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         "to_bitmap",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, BitmapType>(|s, builder, ctx| {
-            match std::str::from_utf8(s)
-                .map_err(|e| e.to_string())
-                .and_then(|s| {
-                    let s: String = s.chars().filter(|c| !c.is_whitespace()).collect();
-                    let result: Result<Vec<u64>, String> = s
-                        .split(',')
-                        .map(|v| v.parse::<u64>().map_err(|e| e.to_string()))
-                        .collect();
-                    result
-                }) {
-                Ok(v) => {
-                    let rb = RoaringTreemap::from_iter(v.iter());
+            match parse_bitmap(s) {
+                Ok(rb) => {
                     rb.serialize_into(&mut builder.data).unwrap();
                 }
                 Err(e) => {
-                    ctx.set_error(builder.len(), e);
+                    ctx.set_error(builder.len(), e.to_string());
                 }
             }
             builder.commit_row();
@@ -62,13 +53,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<UInt64Type, BitmapType, _, _>(
         "to_bitmap",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, ctx| {
-            if let Some(validity) = &ctx.validity {
-                if !validity.get_bit(builder.len()) {
-                    builder.commit_row();
-                    return;
-                }
-            }
+        vectorize_with_builder_1_arg::<UInt64Type, BitmapType>(|arg, builder, _| {
             let mut rb = RoaringTreemap::new();
             rb.insert(arg);
 

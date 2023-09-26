@@ -779,9 +779,12 @@ impl TableSchema {
         fn collect_in_field(
             field: &TableField,
             fields: &mut Vec<TableField>,
+            is_nullable: bool,
             next_column_id: &mut ColumnId,
         ) {
-            match field.data_type() {
+            let ty = field.data_type();
+            let is_nullable = ty.is_nullable() || is_nullable;
+            match ty.remove_nullable() {
                 TableDataType::Tuple {
                     fields_type,
                     fields_name,
@@ -794,6 +797,7 @@ impl TableSchema {
                                 *next_column_id,
                             ),
                             fields,
+                            is_nullable,
                             next_column_id,
                         );
                     }
@@ -806,6 +810,7 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
+                        is_nullable,
                         next_column_id,
                     );
                 }
@@ -817,12 +822,17 @@ impl TableSchema {
                             *next_column_id,
                         ),
                         fields,
+                        is_nullable,
                         next_column_id,
                     );
                 }
                 _ => {
                     *next_column_id += 1;
-                    fields.push(field.clone())
+                    let mut field = field.clone();
+                    if is_nullable {
+                        field.data_type = field.data_type.wrap_nullable();
+                    }
+                    fields.push(field)
                 }
             }
         }
@@ -834,7 +844,7 @@ impl TableSchema {
                 continue;
             }
             let mut next_column_id = field.column_id;
-            collect_in_field(field, &mut fields, &mut next_column_id);
+            collect_in_field(field, &mut fields, false, &mut next_column_id);
         }
         fields
     }
@@ -1353,6 +1363,7 @@ impl From<&ArrowField> for TableDataType {
 
             ArrowDataType::Binary
             | ArrowDataType::LargeBinary
+            | ArrowDataType::FixedSizeBinary(_)
             | ArrowDataType::Utf8
             | ArrowDataType::LargeUtf8 => TableDataType::String,
 

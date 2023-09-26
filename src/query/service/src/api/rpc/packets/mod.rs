@@ -18,6 +18,7 @@ mod packet_data_progressinfo;
 mod packet_execute;
 mod packet_executor;
 mod packet_fragment;
+mod packet_kill_query;
 mod packet_publisher;
 mod packet_truncate_table;
 
@@ -28,6 +29,7 @@ pub use packet_data_progressinfo::ProgressInfo;
 pub use packet_execute::ExecutePartialQueryPacket;
 pub use packet_executor::QueryFragmentsPlanPacket;
 pub use packet_fragment::FragmentPlanPacket;
+pub use packet_kill_query::KillQueryPacket;
 pub use packet_publisher::ConnectionInfo;
 pub use packet_publisher::InitNodesChannelPacket;
 pub use packet_truncate_table::TruncateTablePacket;

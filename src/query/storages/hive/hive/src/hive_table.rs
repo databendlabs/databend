@@ -114,9 +114,9 @@ impl HiveTable {
 
         let filter_expression = push_downs.as_ref().and_then(|extra| {
             extra
-                .filter
+                .filters
                 .as_ref()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
         let range_filter = match filter_expression {
@@ -242,7 +242,7 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filter,
+            filters,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -253,10 +253,10 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = filter
+            let columns = filters
                 .as_ref()
                 .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
+                    let expr = f.filter.as_expr(&BUILTIN_FUNCTIONS);
                     expr.column_refs().keys().cloned().collect::<HashSet<_>>()
                 })
                 .unwrap_or_default();
@@ -304,11 +304,13 @@ impl HiveTable {
     ) -> Result<Arc<HiveBlockReader>> {
         match (
             prewhere_all_partitions,
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs),
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
         ) {
             (true, _) | (_, None) => {
-                let projection =
-                    PushDownInfo::projection_of_push_downs(&plan.schema(), &plan.push_downs);
+                let projection = PushDownInfo::projection_of_push_downs(
+                    &plan.schema(),
+                    plan.push_downs.as_ref(),
+                );
                 HiveBlockReader::create(
                     self.dal.clone(),
                     self.table_info.schema(),
@@ -334,7 +336,7 @@ impl HiveTable {
         schema: DataSchemaRef,
     ) -> Result<Arc<Option<Expr>>> {
         Ok(Arc::new(
-            PushDownInfo::prewhere_of_push_downs(&plan.push_downs).map(|v| {
+            PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()).map(|v| {
                 v.filter
                     .as_expr(&BUILTIN_FUNCTIONS)
                     .project_column_ref(|name| schema.index_of(name).unwrap())
@@ -352,7 +354,7 @@ impl HiveTable {
         Ok(
             match (
                 prewhere_all_partitions,
-                PushDownInfo::prewhere_of_push_downs(&plan.push_downs),
+                PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()),
             ) {
                 (true, _) | (_, None) => Arc::new(None),
                 (false, Some(v)) => {
@@ -458,9 +460,9 @@ impl HiveTable {
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
                 let filter_expression = push_downs.as_ref().and_then(|p| {
-                    p.filter
+                    p.filters
                         .as_ref()
-                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                        .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
                 });
 
                 return self
@@ -781,14 +783,15 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let mut m = operator.list(&location).await?;
+    let mut m = operator
+        .lister_with(&location)
+        .metakey(Metakey::Mode | Metakey::ContentLength)
+        .await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
-        let meta = operator
-            .metadata(&de, Metakey::Mode | Metakey::ContentLength)
-            .await?;
+        let meta = de.metadata();
 
         let path = de.path();
         let file_offset = path.rfind('/').unwrap_or_default() + 1;

@@ -21,7 +21,10 @@ use std::time::Instant;
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_base::base::tokio::sync::Barrier;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
+use common_catalog::plan::Projection;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -72,6 +75,8 @@ use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
+use common_sql::executor::CommitSink;
+use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTable;
 use common_sql::executor::CopyIntoTableSource;
@@ -83,14 +88,12 @@ use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
-use common_sql::executor::FinalCommit;
 use common_sql::executor::HashJoin;
 use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
-use common_sql::executor::MutationAggregate;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
@@ -120,12 +123,17 @@ use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationBlockPruningContext;
 use common_storages_fuse::operations::TransformSerializeBlock;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::SegmentLocation;
 use common_storages_stage::StageTable;
+use log::info;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
+use super::processors::transforms::TransformAddComputedColumns;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use super::processors::TransformResortAddOnWithoutSourceSchema;
@@ -138,6 +146,7 @@ use crate::pipelines::processors::transforms::hash_join::BuildSpillCoordinator;
 use crate::pipelines::processors::transforms::hash_join::BuildSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinBuildState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
+use crate::pipelines::processors::transforms::hash_join::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinBuild;
 use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
@@ -257,7 +266,10 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::MutationAggregate(plan) => self.build_mutation_aggregate(plan),
+            PhysicalPlan::CompactPartial(compact_partial) => {
+                self.build_compact_partial(compact_partial)
+            }
+            PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
                 self.build_materialized_cte(materialized_cte)
@@ -270,25 +282,7 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::FinalCommit(final_commit) => self.build_final_commit(final_commit),
         }
-    }
-
-    fn build_final_commit(&mut self, final_commit: &FinalCommit) -> Result<()> {
-        self.build_pipeline(&final_commit.input)?;
-        let tbl = self.ctx.build_table_by_table_info(
-            &final_commit.catalog_info,
-            &final_commit.table_info,
-            None,
-        )?;
-        let table = FuseTable::try_from_table(tbl.as_ref())?;
-        table.chain_commit_meta_merger(&mut self.main_pipeline, table.cluster_key_id())?;
-        let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_commit_sink(
-            &ctx,
-            &mut self.main_pipeline,
-            Arc::new(final_commit.snapshot.clone()),
-        )
     }
 
     fn check_schema_cast(
@@ -500,23 +494,46 @@ impl PipelineBuilder {
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
         // fill default columns
+        let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
             |transform_input_port, transform_output_port| {
                 TransformResortAddOnWithoutSourceSchema::try_create(
                     self.ctx.clone(),
                     transform_input_port,
                     transform_output_port,
-                    Arc::new(DataSchema::from(tbl.schema())),
+                    Arc::new(DataSchema::from(table_default_schema)),
                     tbl.clone(),
                 )
             },
             1,
         )?;
+
         builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
 
-        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        // fill computed columns
+        let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+        if default_schema != computed_schema {
+            builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    TransformAddComputedColumns::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        default_schema.clone(),
+                        computed_schema.clone(),
+                    )
+                },
+                1,
+            )?;
+            builder.add_items_prepend(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+        }
+
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         let pipe_items = vec![
             table.matched_mutator(
@@ -595,8 +612,8 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
@@ -676,8 +693,8 @@ impl PipelineBuilder {
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
 
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = table.merge_into_mutators(
@@ -715,6 +732,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     name_resolution_ctx,
                     async_sourcer.schema.clone(),
+                    async_sourcer.start,
                 );
                 AsyncSourcer::create(self.ctx.clone(), output, inner)
             },
@@ -756,6 +774,21 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+        let table = self.ctx.build_table_by_table_info(
+            &compact_block.catalog_info,
+            &compact_block.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.build_compact_partial(
+            self.ctx.clone(),
+            compact_block.parts.clone(),
+            compact_block.column_ids.clone(),
+            &mut self.main_pipeline,
+        )
+    }
+
     /// The flow of Pipeline is as follows:
     ///
     /// +---------------+      +-----------------------+
@@ -770,13 +803,56 @@ impl PipelineBuilder {
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        if delete.parts.is_lazy {
+            let ctx = self.ctx.clone();
+            let projection = Projection::Columns(delete.col_indices.clone());
+            let filters = delete.filters.clone();
+            let table_clone = table.clone();
+            let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
+            for part in &delete.parts.partitions {
+                // Safe to downcast because we know the the partition is lazy
+                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                segment_locations.push(SegmentLocation {
+                    segment_idx: part.segment_index,
+                    location: part.segment_location.clone(),
+                    snapshot_loc: None,
+                });
+            }
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations,
+                block_count: None,
+            };
+            self.main_pipeline.set_on_init(move || {
+                let ctx_clone = ctx.clone();
+                let (partitions, info) =
+                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                        table_clone
+                            .do_mutation_block_pruning(
+                                ctx_clone,
+                                Some(filters),
+                                projection,
+                                prune_ctx,
+                                true,
+                                true,
+                            )
+                            .await
+                    })?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                ctx.set_partitions(partitions)?;
+                Ok(())
+            });
+        } else {
+            self.ctx.set_partitions(delete.parts.clone())?;
+        }
         table.add_deletion_source(
             self.ctx.clone(),
-            &delete.filter,
+            &delete.filters.filter,
             delete.col_indices.clone(),
             delete.query_row_id_col,
             &mut self.main_pipeline,
-            delete.parts.clone(),
         )?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
@@ -791,32 +867,31 @@ impl PipelineBuilder {
             proc.into_processor()
         })?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_mutation_aggregator(
-            &ctx,
-            &mut self.main_pipeline,
-            Arc::new(delete.snapshot.clone()),
-            MutationKind::Delete,
-        )?;
+        if delete.parts.is_lazy {
+            table.chain_mutation_aggregator(
+                &ctx,
+                &mut self.main_pipeline,
+                delete.snapshot.clone(),
+                MutationKind::Delete,
+            )?;
+        }
         Ok(())
     }
 
-    /// The flow of Pipeline is as follows:
-    ///
-    /// +-----------------------+      +----------+
-    /// |TableMutationAggregator| ---> |CommitSink|
-    /// +-----------------------+      +----------+
-    fn build_mutation_aggregate(&mut self, plan: &MutationAggregate) -> Result<()> {
+    fn build_commit_sink(&mut self, plan: &CommitSink) -> Result<()> {
         self.build_pipeline(&plan.input)?;
         let table =
             self.ctx
                 .build_table_by_table_info(&plan.catalog_info, &plan.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
+
         table.chain_mutation_pipes(
             &ctx,
             &mut self.main_pipeline,
-            Arc::new(plan.snapshot.clone()),
+            plan.snapshot.clone(),
             plan.mutation_kind,
+            plan.merge_meta,
         )?;
         Ok(())
     }
@@ -928,16 +1003,21 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
+        let output_len = build_res.main_pipeline.output_len();
+        let spill_coordinator = BuildSpillCoordinator::create(output_len);
+        let barrier = Barrier::new(output_len);
+        let restore_barrier = Barrier::new(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
-            build_res.main_pipeline.output_len(),
+            barrier,
+            restore_barrier,
         )?;
+
         let create_sink_processor = |input| {
-            let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+            let spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -1300,20 +1380,17 @@ impl PipelineBuilder {
             .group_bys
             .iter()
             .take(expand.group_bys.len() - 1) // The last group-by will be virtual column `_grouping_id`
-            .map(|i| {
-                let index = input_schema.index_of(&i.to_string())?;
-                let ty = input_schema.field(index).data_type();
-                Ok((index, ty.clone()))
-            })
+            .map(|i| input_schema.index_of(&i.to_string()))
             .collect::<Result<Vec<_>>>()?;
         let grouping_sets = expand
             .grouping_sets
+            .sets
             .iter()
             .map(|sets| {
                 sets.iter()
                     .map(|i| {
                         let i = input_schema.index_of(&i.to_string())?;
-                        let offset = group_bys.iter().position(|(j, _)| *j == i).unwrap();
+                        let offset = group_bys.iter().position(|j| *j == i).unwrap();
                         Ok(offset)
                     })
                     .collect::<Result<Vec<_>>>()
@@ -1585,7 +1662,15 @@ impl PipelineBuilder {
         let aggs: Vec<AggregateFunctionRef> = agg_funcs
             .iter()
             .map(|agg_func| {
-                agg_args.push(agg_func.args.clone());
+                let args = agg_func
+                    .arg_indices
+                    .iter()
+                    .map(|i| {
+                        let index = input_schema.index_of(&i.to_string())?;
+                        Ok(index)
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                agg_args.push(args);
                 AggregateFunctionFactory::instance().get(
                     agg_func.sig.name.as_str(),
                     agg_func.sig.params.clone(),
@@ -1842,21 +1927,35 @@ impl PipelineBuilder {
 
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
-
+        let barrier = Barrier::new(self.main_pipeline.output_len());
+        let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             state,
             &join.probe_projections,
+            &join.probe_keys,
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
-        ));
+            barrier,
+            restore_barrier,
+        )?);
+
         self.main_pipeline.add_transform(|input, output| {
+            let probe_spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+                Some(Box::new(ProbeSpillState::create(
+                    self.ctx.clone(),
+                    probe_state.clone(),
+                )))
+            } else {
+                None
+            };
             let transform = TransformHashJoinProbe::create(
                 input,
                 output,
                 join.projections.clone(),
                 probe_state.clone(),
+                probe_spill_state,
                 max_block_size,
                 func_ctx.clone(),
                 &join.join_type,
@@ -2158,6 +2257,7 @@ pub struct ValueSource {
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    start: usize,
     is_finished: bool,
 }
 
@@ -2201,23 +2301,34 @@ impl AsyncSource for ValueSource {
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for ValueSource {
     async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(sql)?;
-        let mut bind_context = self.bind_context.clone();
-        let metadata = self.metadata.clone();
+        let res: Result<Vec<Scalar>> = try {
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(sql)?;
+            let mut bind_context = self.bind_context.clone();
+            let metadata = self.metadata.clone();
 
-        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
-        let values = bind_context
-            .exprs_to_scalar(
-                exprs,
-                &self.schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
-            .await?;
-        Ok(values)
+            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            bind_context
+                .exprs_to_scalar(
+                    exprs,
+                    &self.schema,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    metadata,
+                )
+                .await?
+        };
+        res.map_err(|mut err| {
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
+            if let Some(span) = err.span() {
+                err = err.set_span(Some(
+                    (span.start() + self.start..span.end() + self.start).into(),
+                ));
+            }
+            err
+        })
     }
 }
 
@@ -2227,6 +2338,7 @@ impl ValueSource {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
+        start: usize,
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -2238,6 +2350,7 @@ impl ValueSource {
             schema,
             bind_context,
             metadata,
+            start,
             is_finished: false,
         }
     }

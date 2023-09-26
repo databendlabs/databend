@@ -46,6 +46,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
 
 use super::sort::OrderItem;
+use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
@@ -414,6 +415,23 @@ impl Binder {
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
+
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+            )
+        };
+
+        let finder = Finder::new(&f);
+        let finder = scalar.accept(finder)?;
+        if !finder.scalars().is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Where clause can't contain aggregate or window functions".to_string(),
+            )
+            .set_span(scalar.span()));
+        }
+
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,

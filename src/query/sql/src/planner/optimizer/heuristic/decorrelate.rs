@@ -48,6 +48,7 @@ use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFServerCall;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
@@ -489,8 +490,7 @@ impl SubqueryRewriter {
                         aggregate_functions: vec![],
                         from_distinct: false,
                         limit: None,
-                        grouping_id_index: 0,
-                        grouping_sets: vec![],
+                        grouping_sets: None,
                     }
                     .into(),
                 ),
@@ -706,7 +706,6 @@ impl SubqueryRewriter {
                             aggregate_functions: agg_items,
                             from_distinct: aggregate.from_distinct,
                             limit: aggregate.limit,
-                            grouping_id_index: aggregate.grouping_id_index,
                             grouping_sets: aggregate.grouping_sets.clone(),
                         }
                         .into(),
@@ -835,6 +834,21 @@ impl SubqueryRewriter {
                     is_try: cast_expr.is_try,
                     argument: Box::new(scalar),
                     target_type: cast_expr.target_type.clone(),
+                }))
+            }
+            ScalarExpr::UDFServerCall(udf) => {
+                let arguments = udf
+                    .arguments
+                    .iter()
+                    .map(|arg| self.flatten_scalar(arg, correlated_columns))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(ScalarExpr::UDFServerCall(UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments,
                 }))
             }
             _ => Err(ErrorCode::Internal(

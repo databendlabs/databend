@@ -475,6 +475,8 @@ pub enum TokenKind {
     ENGINES,
     #[token("EPOCH", ignore(ascii_case))]
     EPOCH,
+    #[token("ERROR_ON_COLUMN_COUNT_MISMATCH", ignore(ascii_case))]
+    ERROR_ON_COLUMN_COUNT_MISMATCH,
     #[token("ESCAPE", ignore(ascii_case))]
     ESCAPE,
     #[token("EXISTS", ignore(ascii_case))]
@@ -1002,8 +1004,14 @@ pub enum TokenKind {
     ROLLUP,
     #[token("INDEXES", ignore(ascii_case))]
     INDEXES,
+    #[token("ADDRESS", ignore(ascii_case))]
+    ADDRESS,
     #[token("OWNERSHIP", ignore(ascii_case))]
     OWNERSHIP,
+    #[token("HANDLER", ignore(ascii_case))]
+    HANDLER,
+    #[token("LANGUAGE", ignore(ascii_case))]
+    LANGUAGE,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html

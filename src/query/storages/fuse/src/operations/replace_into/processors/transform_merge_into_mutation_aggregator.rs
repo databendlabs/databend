@@ -18,7 +18,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;

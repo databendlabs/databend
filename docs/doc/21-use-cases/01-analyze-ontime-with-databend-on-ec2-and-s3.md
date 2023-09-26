@@ -4,65 +4,25 @@ sidebar_label: Analyzing OnTime Dataset
 description: Analyzing OnTime Dataset with Databend
 ---
 
-This usecase shows how to analyze the OnTime dataset with Databend.
+This usecase shows how to analyze the [OnTime dataset](https://github.com/datafuselabs/databend/blob/main/tests/data/ontime_200.csv) with Databend. Please note that the dataset used in this example is a subset of the OnTime dataset and does not represent the entire dataset. The use of this smaller-sized dataset is for demonstration purposes and ease of illustration.
 
 ## Step 1. Deploy Databend
 
-Make sure you have installed Databend, if not please see:
+Follow the [Docker and Local Deployments](../10-deploy/05-deploying-local.md) guide to deploy a local Databend.
 
-* [How to Deploy Databend](../01-guides/index.md#deployment)
+## Step 2. Load OnTime Dataset
 
-## Step 2. Load OnTime Datasets
+1. Create a table using the SQL statement provided in the file: [ontime.sql](https://github.com/datafuselabs/databend/blob/main/tests/data/ddl/ontime.sql).
 
-### 2.1 Create a Databend User
+2. Download the [OnTime dataset](https://github.com/datafuselabs/databend/blob/main/tests/data/ontime_200.csv).
 
-Connect to Databend server with MySQL client:
+3. Load data into Databend using [BendSQL](../13-sql-clients/01-bendsql.md):
+
 ```shell
-mysql -h127.0.0.1 -uroot -P3307
+eric@macdeMacBook-Pro Documents % bendsql --query='INSERT INTO default.ontime VALUES;' --format-opt='skip_header=1' --data=@ontime_200.csv
 ```
 
-Create a user:
-```sql
-CREATE USER user1 IDENTIFIED BY 'abc123';
-```
-
-Grant privileges for the user:
-```sql
-GRANT ALL ON *.* TO user1;
-```
-
-See also [How To Create User](../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
-
-### 2.2 Create OnTime Table
-
-[Create SQL](https://github.com/datafuselabs/databend/blob/main/tests/suites/1_stateful/ddl/ontime.sql)
-
-### 2.3 Load Data Into OnTime Table
-
-```shell title='t_ontime.csv.zip'
-wget https://datasets.databend.org/t_ontime/t_ontime.csv.zip
-```
-
-```shell title='Unzip'
-unzip t_ontime.csv.zip
-```
-
-```shell title='Load TSV files into Databend'
-curl -H "insert_sql:insert into ontime file_format = (type = 'TSV' skip_header = 0)" -F "upload=@t_ontime.csv"  -XPUT http://root:@127.0.0.1:8000/v1/streaming_load
-```
-
-:::tip
-
-* `http://username:passowrd@127.0.0.1:8000/v1/streaming_load`
-    * `username` is the user.
-    * `password` is the user password.
-    * `127.0.0.1` is `http_handler_host` value in your *databend-query.toml*
-    * `8000` is `http_handler_port` value in your *databend-query.toml*
-:::
-
-## Step 3. Queries
-
-Execute Queries:
+## Step 3. Run Queries
 
 ```shell
 mysql -h127.0.0.1 -P3307 -uroot
