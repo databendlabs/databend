@@ -88,8 +88,6 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?;
 
-    let mut registry = load_global_prometheus_registry();
-
     let op = ob
         // NOTE
         //
@@ -113,7 +111,9 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(PrometheusClientLayer::new(&mut registry))
+        .layer(PrometheusClientLayer::new(
+            &mut load_global_prometheus_registry(),
+        ))
         .finish();
 
     Ok(op)
