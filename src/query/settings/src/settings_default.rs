@@ -160,15 +160,9 @@ impl DefaultSettings {
                     desc: "Disable join reorder optimization.",
                     possible_values: None,
                     display_in_show_settings: false,}),
-                ("enable_join_spill", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables hash join spill.",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
                 ("join_spilling_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join build or probe, 0 is unlimited.",
+                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -282,7 +276,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(100),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     display_in_show_settings: true,

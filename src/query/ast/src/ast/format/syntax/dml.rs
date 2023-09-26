@@ -112,7 +112,7 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                         .append(RcDoc::text(format!("{:?}", on_error_mode))),
                 ),
         ),
-        InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
+        InsertSource::Values { rest_str, .. } => RcDoc::text("VALUES").append(
             RcDoc::line()
                 .nest(NEST_FACTOR)
                 .append(RcDoc::text(rest_str)),

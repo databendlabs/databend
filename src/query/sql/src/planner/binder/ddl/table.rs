@@ -154,6 +154,7 @@ impl Binder {
                 .with_column("database AS Database")
                 .with_column("catalog AS Catalog")
                 .with_column("engine")
+                .with_column("cluster_by AS Cluster_by")
                 .with_column("created_on AS create_time");
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
@@ -272,7 +273,7 @@ impl Binder {
         NULL AS Row_format, num_rows AS Rows, NULL AS Avg_row_length, data_size AS Data_length, \
         NULL AS Max_data_length, index_size AS Index_length, NULL AS Data_free, NULL AS Auto_increment, \
         created_on AS Create_time, NULL AS Update_time, NULL AS Check_time, NULL AS Collation, \
-        NULL AS Checksum, '' AS Comment"
+        NULL AS Checksum, '' AS Comment, cluster_by as Cluster_by"
             .to_string();
 
         // Use `system.tables` AS the "base" table to construct the result-set of `SHOW TABLE STATUS ..`
@@ -283,8 +284,7 @@ impl Binder {
         // (unlike mysql, alias of derived table is not required in databend).
         let query = match limit {
             None => format!(
-                "SELECT * from (SELECT {} FROM system.tables WHERE database = '{}') \
-                ORDER BY Name",
+                "SELECT {} FROM system.tables WHERE database = '{}' ORDER BY Name",
                 select_cols, database
             ),
             Some(ShowLimit::Like { pattern }) => format!(
@@ -298,6 +298,7 @@ impl Binder {
                 select_cols, database, selection
             ),
         };
+
         let tokens = tokenize_sql(query.as_str())?;
         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
@@ -414,7 +415,7 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri)?;
+                let (sp, _) = parse_uri_location(&mut uri).await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -626,7 +627,7 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri)?;
+        let (sp, _) = parse_uri_location(&mut uri).await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
