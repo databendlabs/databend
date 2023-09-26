@@ -28,4 +28,4 @@ for i in "${ontime_statements[@]}"; do
 done
 
 ## Clean table
-echo "drop table if exists ontime_mini all;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists ontime_mini;" | $MYSQL_CLIENT_CONNECT
