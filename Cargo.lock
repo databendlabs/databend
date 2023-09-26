@@ -2216,6 +2216,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
+ "opendal",
  "serde",
  "serde_json",
  "sha1",
@@ -2694,7 +2695,6 @@ dependencies = [
  "flagset",
  "futures",
  "lazy_static",
- "log",
  "metrics",
  "opendal",
  "ordered-float 3.7.0",
@@ -3046,6 +3046,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
+ "futures",
  "itertools 0.10.5",
  "jsonb",
  "log",
@@ -3285,6 +3286,12 @@ checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32fast"
@@ -6802,13 +6809,14 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.10"
-source = "git+https://github.com/icelake-io/icelake?rev=eb3251f#eb3251fdb4c72b5849610efe695b6c0a74ecb5da"
+source = "git+https://github.com/icelake-io/icelake?rev=9876ff1#9876ff1750e119e7c66913dadc8f1d22312749db"
 dependencies = [
  "anyhow",
  "apache-avro",
  "arrow-arith 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-array",
  "arrow-buffer",
+ "arrow-cast",
  "arrow-row 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-schema",
  "arrow-select 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6820,6 +6828,7 @@ dependencies = [
  "enum-display",
  "faster-hex",
  "futures",
+ "itertools 0.11.0",
  "log",
  "murmur3",
  "once_cell",
@@ -8278,8 +8287,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.39.0"
-source = "git+https://github.com/apache/incubator-opendal?rev=f02d627#f02d627a582d1f68af048e4f0db84eb1102f271d"
+version = "0.40.0"
+source = "git+https://github.com/apache/incubator-opendal?rev=d5990fe#d5990fe28a6023c9c26e1c306d933c778a0c9638"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -9666,11 +9675,14 @@ dependencies = [
  "async-trait",
  "bytes",
  "combine",
+ "crc16",
  "futures",
  "futures-util",
  "itoa",
+ "log",
  "percent-encoding",
  "pin-project-lite",
+ "rand 0.8.5",
  "ryu",
  "sha1_smol",
  "socket2 0.4.9",
