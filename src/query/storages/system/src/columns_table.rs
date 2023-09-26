@@ -161,13 +161,17 @@ impl ColumnsTable {
                     if col_name == "database" {
                         if let Scalar::String(s) = scalar {
                             if let Ok(database) = String::from_utf8(s.clone()) {
-                                databases.push(database);
+                                if !databases.contains(&database) {
+                                    databases.push(database);
+                                }
                             }
                         }
                     } else if col_name == "table" {
                         if let Scalar::String(s) = scalar {
                             if let Ok(table) = String::from_utf8(s.clone()) {
-                                tables.push(table);
+                                if !tables.contains(&table) {
+                                    tables.push(table);
+                                }
                             }
                         }
                     }
