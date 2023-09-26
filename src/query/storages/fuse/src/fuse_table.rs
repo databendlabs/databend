@@ -338,10 +338,6 @@ impl FuseTable {
         })
     }
 
-    pub fn transient(&self) -> bool {
-        self.table_info.meta.options.contains_key("TRANSIENT")
-    }
-
     pub fn cluster_key_str(&self) -> Option<&String> {
         self.cluster_key_meta.as_ref().map(|(_, key)| key)
     }
@@ -553,8 +549,8 @@ impl Table for FuseTable {
 
     #[minitrace::trace(name = "fuse_table_truncate")]
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
-        self.do_truncate(ctx, purge).await
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_truncate(ctx).await
     }
 
     #[minitrace::trace(name = "fuse_table_optimize")]

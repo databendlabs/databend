@@ -131,16 +131,11 @@ pub struct CreateTableStmt {
     pub cluster_by: Vec<Expr>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
-    pub transient: bool,
 }
 
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE ")?;
-        if self.transient {
-            write!(f, "TRANSIENT ")?;
-        }
-        write!(f, "TABLE ")?;
+        write!(f, "CREATE TABLE ")?;
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }
@@ -469,7 +464,6 @@ pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub purge: bool,
 }
 
 impl Display for TruncateTableStmt {
@@ -482,9 +476,6 @@ impl Display for TruncateTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if self.purge {
-            write!(f, " PURGE")?;
-        }
 
         Ok(())
     }

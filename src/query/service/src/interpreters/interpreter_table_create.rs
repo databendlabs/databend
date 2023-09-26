@@ -374,8 +374,6 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_COMMENT);
 
     r.insert(OPT_KEY_ENGINE);
-
-    r.insert("transient");
     r
 });
 

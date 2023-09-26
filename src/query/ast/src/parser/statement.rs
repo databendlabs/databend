@@ -536,7 +536,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let create_table = map(
         rule! {
-            CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            CREATE ~ TABLE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #dot_separated_idents_1_to_3
             ~ #create_table_source?
             ~ ( #engine )?
@@ -547,7 +547,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(
             _,
-            opt_transient,
             _,
             opt_if_not_exists,
             (catalog, database, table),
@@ -571,7 +570,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .unwrap_or_default(),
                 table_options: opt_table_options.unwrap_or_default(),
                 as_query: opt_as_query.map(|(_, query)| Box::new(query)),
-                transient: opt_transient.is_some(),
             })
         },
     );
@@ -638,14 +636,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ PURGE?
+            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, (catalog, database, table), opt_purge)| {
+        |(_, _, (catalog, database, table))| {
             Statement::TruncateTable(TruncateTableStmt {
                 catalog,
                 database,
                 table,
-                purge: opt_purge.is_some(),
             })
         },
     );

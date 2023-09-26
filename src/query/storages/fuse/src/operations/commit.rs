@@ -452,13 +452,6 @@ impl FuseTable {
     }
 
     #[inline]
-    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
-        let code = e.code();
-        code == ErrorCode::TABLE_VERSION_MISMATCHED
-            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
-    }
-
-    #[inline]
     pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
         // currently, the only error that we know,  which indicates there are no side effects
         // is TABLE_VERSION_MISMATCHED

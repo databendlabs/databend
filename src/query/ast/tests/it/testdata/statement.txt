@@ -592,7 +592,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -641,7 +640,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -721,7 +719,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -857,7 +854,6 @@ CreateTable(
                 ignore_result: false,
             },
         ),
-        transient: false,
     },
 )
 
@@ -941,7 +937,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1082,7 +1077,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1203,7 +1197,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1259,7 +1252,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1301,7 +1293,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1370,7 +1361,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1441,7 +1431,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -1462,7 +1451,6 @@ TruncateTable(
                 15..16,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1493,7 +1481,6 @@ TruncateTable(
                 19..20,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1801,7 +1788,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -2359,7 +2345,6 @@ TruncateTable(
                 15..19,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2388,7 +2373,6 @@ TruncateTable(
                 23..27,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2510,7 +2494,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -2588,7 +2571,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -2634,7 +2616,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -2691,7 +2672,6 @@ CreateTable(
         cluster_by: [],
         table_options: {},
         as_query: None,
-        transient: false,
     },
 )
 
@@ -2784,7 +2764,6 @@ CreateTable(
                 ignore_result: false,
             },
         ),
-        transient: false,
     },
 )
 
@@ -8467,7 +8446,6 @@ CreateTable(
             "comment": "table comment",
         },
         as_query: None,
-        transient: false,
     },
 )
 

@@ -29,8 +29,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use log::debug;
 use log::error;
-use log::info;
-use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::SnapshotId;
@@ -85,7 +83,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
     table: Arc<dyn Table>,
     copied_files: Option<UpsertTableCopiedFileReq>,
     snapshot_gen: F,
-    transient: bool,
     retries: u64,
     max_retry_elapsed: Option<Duration>,
     backoff: ExponentialBackoff,
@@ -121,7 +118,6 @@ where F: SnapshotGenerator + Send + 'static
             snapshot_gen,
             abort_operation: AbortOperation::default(),
             heartbeat: TableLockHeartbeat::default(),
-            transient: table.transient(),
             backoff: ExponentialBackoff::default(),
             retries: 0,
             max_retry_elapsed,
@@ -138,7 +134,7 @@ where F: SnapshotGenerator + Send + 'static
         if self.prev_snapshot_id.is_some() && e.code() == ErrorCode::TABLE_VERSION_MISMATCHED {
             return false;
         }
-        FuseTable::is_error_recoverable(e, self.transient)
+        FuseTable::no_side_effects_in_meta_store(e)
     }
 
     fn read_meta(&mut self) -> Result<Event> {
@@ -325,37 +321,6 @@ where F: SnapshotGenerator + Send + 'static
                 .await
                 {
                     Ok(_) => {
-                        if self.transient {
-                            // Removes historical data, if table is transient
-                            let latest = self.table.refresh(self.ctx.as_ref()).await?;
-                            let tbl = FuseTable::try_from_table(latest.as_ref())?;
-
-                            warn!(
-                                "transient table detected, purging historical data. ({})",
-                                tbl.table_info.ident
-                            );
-
-                            let keep_last_snapshot = true;
-                            let snapshot_files = tbl.list_snapshot_files().await?;
-                            if let Err(e) = tbl
-                                .do_purge(
-                                    &self.ctx,
-                                    snapshot_files,
-                                    None,
-                                    keep_last_snapshot,
-                                    false,
-                                )
-                                .await
-                            {
-                                // Errors of GC, if any, are ignored, since GC task can be picked up
-                                warn!(
-                                    "GC of transient table not success (this is not a permanent error). the error : {}",
-                                    e
-                                );
-                            } else {
-                                info!("GC of transient table done");
-                            }
-                        }
                         metrics_inc_commit_mutation_success();
                         let duration = self.start_time.elapsed();
                         if let Some(files) = &self.copied_files {

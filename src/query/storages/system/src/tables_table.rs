@@ -263,16 +263,6 @@ where TablesTable<T>: HistoryAware
             })
             .collect();
         let cluster_bys: Vec<Vec<u8>> = cluster_bys.iter().map(|s| s.as_bytes().to_vec()).collect();
-        let is_transient: Vec<Vec<u8>> = database_tables
-            .iter()
-            .map(|v| {
-                if v.options().contains_key("TRANSIENT") {
-                    "TRANSIENT".as_bytes().to_vec()
-                } else {
-                    vec![]
-                }
-            })
-            .collect();
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(catalogs),
             StringType::from_data(databases),
@@ -281,7 +271,6 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(engines),
             StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
-            StringType::from_data(is_transient),
             StringType::from_data(created_owns),
             StringType::from_data(dropped_owns),
             TimestampType::from_data(updated_on),
@@ -308,7 +297,6 @@ where TablesTable<T>: HistoryAware
             TableField::new("engine", TableDataType::String),
             TableField::new("engine_full", TableDataType::String),
             TableField::new("cluster_by", TableDataType::String),
-            TableField::new("is_transient", TableDataType::String),
             TableField::new("created_on", TableDataType::String),
             TableField::new("dropped_on", TableDataType::String),
             TableField::new("updated_on", TableDataType::Timestamp),
