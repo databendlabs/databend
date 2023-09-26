@@ -74,13 +74,16 @@ impl HttpService {
             )
             .at("/debug/home", get(debug_home_handler))
             .at("/debug/pprof/profile", get(debug_pprof_handler))
-            .at("/debug/async_tasks/dump", get(debug_dump_stack));
-
+            .at("/debug/async_tasks/dump", get(debug_dump_stack))
+            .at(
+                "/v1/background/:tenant/background_tasks",
+                get(super::http::v1::background_tasks::list_background_tasks),
+            );
         if self.config.query.management_mode {
             route = route.at(
                 "/v1/tenants/:tenant/tables",
                 get(super::http::v1::tenant_tables::list_tenant_tables_handler),
-            )
+            );
         }
 
         #[cfg(feature = "memory-profiling")]
