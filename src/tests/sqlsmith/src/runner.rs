@@ -29,10 +29,11 @@ use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
+use crate::reducer::Reducer;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-const KNOWN_ERRORS: [&str; 30] = [
+const KNOWN_ERRORS: [&str; 31] = [
     // Errors caused by illegal parameters
     "Overflow on date YMD",
     "timestamp is out of range",
@@ -65,6 +66,7 @@ const KNOWN_ERRORS: [&str; 30] = [
     "start must be less than or equal to end when step is positive vice versa",
     "Expected Number, Date or Timestamp type, but got",
     "Unsupported data type for generate_series",
+    "Having clause can't contain window functions",
 ];
 
 pub struct Runner {
@@ -130,27 +132,31 @@ impl Runner {
 
     pub async fn run(&self) {
         let mut rng = Self::generate_rng(self.seed);
-        let mut generater = SqlGenerator::new(&mut rng);
-        let table_stmts = generater.gen_base_tables();
+        let mut generator = SqlGenerator::new(&mut rng);
+        let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
 
         for table in &tables {
-            let insert_stmt = generater.gen_insert(table, 50);
+            let insert_stmt = generator.gen_insert(table, 50);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
         }
-        generater.tables = tables;
+        generator.tables = tables;
 
         for _ in 0..self.count {
-            let query = generater.gen_query();
+            let query = generator.gen_query();
             let query_sql = query.to_string();
+            let mut try_reduce = false;
+            let mut err_code = 0;
+            let mut err = String::new();
             if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
                 if let Err(e) = conn.exec(&query_sql).await {
                     if let Error::Api(ClientError::InvalidResponse(err)) = &e {
                         // TODO: handle Syntax and Semantic errors
-                        if err.code == 1005 || err.code == 1065 {
+                        err_code = err.code;
+                        if err_code == 1005 || err_code == 1065 {
                             return;
                         }
                         if KNOWN_ERRORS
@@ -161,15 +167,21 @@ impl Runner {
                         }
                     }
 
-                    tracing::info!("query_sql: {}", query_sql);
-                    let err = format!("error: {}", e);
-                    tracing::error!(err);
+                    err = format!("error: {}", e);
+                    try_reduce = true;
                 }
             })
             .await
             {
                 tracing::info!("query_sql: {}", query_sql);
                 let err = format!("query timeout: {}", e);
+                tracing::error!(err);
+            }
+            if try_reduce {
+                let reduce = Reducer::new(query, err_code);
+                reduce
+                    .try_reduce_query(conn.clone(), &reduce.origin_query)
+                    .await;
                 tracing::error!(err);
             }
         }
