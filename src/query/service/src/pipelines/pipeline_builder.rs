@@ -318,7 +318,7 @@ impl PipelineBuilder {
 //                                    |                       +---+
 //                                    +-----------------------+
 //
-//  Note: here the pipe items of last pipe are arranged in the following order
+//  Note: here the output_port of last pipe are arranged in the following order
 //  (0) -> matched_data
 //  (1) -> unmatched_data
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
@@ -508,7 +508,7 @@ impl PipelineBuilder {
         //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
         //                                    +-----------------------+                    |                             +-+
         //                                                                                 +-----------------------------+
-        // Note: here the pipe items of MatchedSplitProcessor are arranged in the following order
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
         // (0) -> output_port_row_id
         // (1) -> output_port_updated
         // 
