@@ -174,7 +174,7 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
-                    region: "".to_string(),
+                    region: "us-east-2".to_string(),
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
@@ -209,7 +209,7 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
-                    region: "".to_string(),
+                    region: "us-east-2".to_string(),
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
@@ -244,7 +244,7 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
-                    region: "".to_string(),
+                    region: "us-east-2".to_string(),
                     bucket: "test".to_string(),
                     access_key_id: "access_key_id".to_string(),
                     secret_access_key: "secret_access_key".to_string(),
@@ -275,7 +275,7 @@ async fn test_parse_uri_location() -> Result<()> {
             (
                 StorageParams::S3(StorageS3Config {
                     endpoint_url: STORAGE_S3_DEFAULT_ENDPOINT.to_string(),
-                    region: "".to_string(),
+                    region: "us-east-2".to_string(),
                     bucket: "test".to_string(),
                     access_key_id: "".to_string(),
                     secret_access_key: "".to_string(),
