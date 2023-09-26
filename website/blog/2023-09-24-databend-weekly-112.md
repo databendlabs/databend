@@ -58,7 +58,7 @@ If you are interested in learning more, please check out the resources listed be
 
 Discover some fascinating code snippets or projects that showcase our work or learning journey.
 
-### Using Python to create UDF
+### Refactoring Databend Metrics Component with Prometheus
 
 [metrics-rs](https://github.com/metrics-rs/metrics) is a general abstraction layer across different metrics solutions like statsd, prometheus, new-relic, etc. However, metrics-rs is not well-suited for measuring metrics about histogram.
 
