@@ -130,29 +130,4 @@ impl SegmentsIO {
         }
         Ok(())
     }
-
-    // TODO use batch_meta_writer
-    #[async_backtrace::framed]
-    pub async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
-        let mut iter = segments.into_iter();
-        let tasks = std::iter::from_fn(move || {
-            iter.next().map(|segment| {
-                Self::write_segment(self.operator.clone(), segment)
-                    .in_span(Span::enter_with_local_parent("write_segment"))
-            })
-        });
-
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "write-segments-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
-        Ok(())
-    }
 }

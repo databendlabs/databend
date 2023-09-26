@@ -77,8 +77,8 @@ impl BuildSpillCoordinator {
                 .send(false)
                 .map_err(|_| ErrorCode::TokioError("ready_spill_watcher channel is closed"))?;
         }
-        self.waiting_spill_count.fetch_add(1, Ordering::SeqCst);
-        let waiting_spill_count = self.waiting_spill_count.load(Ordering::Relaxed);
+        let old_val = self.waiting_spill_count.fetch_add(1, Ordering::Relaxed);
+        let waiting_spill_count = old_val + 1;
         let non_spill_processors = self.non_spill_processors.load(Ordering::Relaxed);
         info!(
             "waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}",
@@ -125,7 +125,7 @@ impl BuildSpillCoordinator {
     // Add one to `non_spill_processors`
     // Return value after adding
     pub fn increase_non_spill_processors(&self) -> usize {
-        let old = self.non_spill_processors.fetch_add(1, Ordering::SeqCst);
+        let old = self.non_spill_processors.fetch_add(1, Ordering::Relaxed);
         old + 1
     }
 }
