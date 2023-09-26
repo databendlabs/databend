@@ -62,13 +62,13 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 [metrics-rs](https://github.com/metrics-rs/metrics) is a general abstraction layer across different metrics solutions like statsd, prometheus, new-relic, etc. However, metrics-rs is not well-suited for measuring metrics about histogram.
 
-Nowadays prometheus is the de facto standard in the metrics area. When using a raw prometheus client without considering pushing metrics to others like statsd, it have some benefits:
+Nowadays prometheus is the de facto standard in the metrics area. Using a raw Prometheus client without pushing metrics to other systems like StatsD offers several benefits:
 
-- **Better performance**: with proper metrics practise, the memory allocation of metrics should be O(1), no local buffered queue at all
-- **Reducing the abstraction layers**: we can reduce abstraction layer about metrics, to make the code path easier to understand.
-- **Better coding standard**: currently we have different metric practices among different modules, we can learn about the metrics practices in the prometheus community to unify our metrics practices.
+- **Improved Performance**: By adhering to best practices for metric handling, memory allocation for metrics can be optimized to achieve O(1) complexity, eliminating the need for local buffered queues.
+- **Minimizing Abstraction Layers**: Streamlining metric handling helps reduce unnecessary abstraction layers, simplifying the code path for improved clarity and comprehension.
+- **Improved Coding Standards**: Addressing the existing variance in metric practices across different modules by adopting Prometheus community standards can help establish a more consistent and cohesive approach to metrics within our codebase.
 
-Now, Databend's observability metrics have been fully migrated to Prometheus implementation. This migration has resulted in a more comprehensive and reliable observability experience while keeping the original metrics almost unchanged.
+Now, Databend's observability metrics have been fully migrated to Prometheus implementation. This brings you a more comprehensive and reliable observability experience while keeping the original metrics almost unchanged.
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -83,8 +83,8 @@ We have also made these improvements to Databend that we hope you will find help
 - Added support for `COMPACT` distributed execution.
 - Added the `json_path_exists` function.
 - Added the `recluster_block_size` setting to control the block size during re-clustering.
-- Support conversion from `DECIMAL` type to `INT` type.
-- Support inverted filter to reduce filter execution, resulting in a performance improvement of up to 4 times in some scenarios.
+- Added support for conversion from `DECIMAL` type to `INT` type.
+- Added support for an inverted filter to optimize filter execution, leading to a performance boost of up to 4 times in certain scenarios.
 - SQLSmith testing now supports generating table functions, window functions, subqueries, and the `WITH` clause.
 
 ## What's Up Next
