@@ -173,8 +173,9 @@ impl TransformHashJoinProbe {
             if let Some(remain) = remain_block {
                 self.input_data.push_back(remain);
             }
-            if !self.spill_done {
+            if self.spill_state.is_some() {
                 self.need_spill = true;
+                self.step = HashJoinProbeStep::Spill;
                 return Ok(Event::Async);
             }
             return Ok(Event::Sync);
