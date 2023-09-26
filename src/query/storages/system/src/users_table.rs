@@ -63,10 +63,6 @@ impl AsyncSystemTable for UsersTable {
             .iter()
             .map(|x| x.auth_info.get_type().to_str().as_bytes().to_vec())
             .collect();
-        let mut auth_strings: Vec<Vec<u8>> = users
-            .iter()
-            .map(|x| x.auth_info.get_auth_string().as_bytes().to_vec())
-            .collect();
         let mut default_roles: Vec<Vec<u8>> = users
             .iter()
             .map(|x| {
@@ -85,7 +81,6 @@ impl AsyncSystemTable for UsersTable {
             names.push(name.as_bytes().to_vec());
             hostnames.push("%".as_bytes().to_vec());
             auth_types.push(auth_info.get_type().to_str().as_bytes().to_vec());
-            auth_strings.push(auth_info.get_auth_string().as_bytes().to_vec());
             default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.as_bytes().to_vec());
             is_configureds.push("YES".as_bytes().to_vec());
         }
@@ -94,7 +89,6 @@ impl AsyncSystemTable for UsersTable {
             StringType::from_data(names),
             StringType::from_data(hostnames),
             StringType::from_data(auth_types),
-            StringType::from_data(auth_strings),
             StringType::from_data(default_roles),
             StringType::from_data(is_configureds),
         ]))
@@ -107,7 +101,6 @@ impl UsersTable {
             TableField::new("name", TableDataType::String),
             TableField::new("hostname", TableDataType::String),
             TableField::new("auth_type", TableDataType::String),
-            TableField::new("auth_string", TableDataType::String),
             TableField::new("default_role", TableDataType::String),
             TableField::new("is_configured", TableDataType::String),
         ]);
