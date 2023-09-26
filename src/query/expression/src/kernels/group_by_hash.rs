@@ -29,6 +29,10 @@ use ethnum::u256;
 use ethnum::U256;
 use micromarshal::Marshal;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance;
+use crate::kernels::utils::store_advance_aligned;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
@@ -217,49 +221,17 @@ impl HashMethod for HashMethodSerializer {
         group_columns: &[(Column, DataType)],
         num_rows: usize,
     ) -> Result<KeysState> {
-        let mut data_size = 0;
-        for (column, _) in group_columns.iter() {
-            data_size += column.serialize_size();
+        // The serialize_size is equal to the number of bytes required by serialization.
+        let mut serialize_size = 0;
+        let mut serialize_columns = Vec::with_capacity(group_columns.len());
+        for (column, _) in group_columns {
+            serialize_size += column.serialize_size();
+            serialize_columns.push(column.clone());
         }
-        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
-        let mut data: Vec<u8> = Vec::with_capacity(data_size);
-        let mut data_ptr = data.as_mut_ptr();
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        // We have called offsets.push(0), so we start at index 1.
-        // # Safety
-        // The capacity of offsets is greater than or equal to 1.
-        let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
-
-        let mut offset = 0;
-        for i in 0..num_rows {
-            let old_ptr = data_ptr;
-            for (col, _) in group_columns {
-                // # Safety
-                // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-                unsafe {
-                    serialize_column_binary(col, i, &mut data_ptr);
-                }
-            }
-            offset += data_ptr as u64 - old_ptr as u64;
-            // # Safety
-            // The initial offset of `offsets_ptr` is 1 and we will advance `offsets_ptr` by 1 at most `num_rows` times,
-            // `num_rows` + 1 is equal to the capacity of offsets.
-            unsafe {
-                std::ptr::write(offsets_ptr, offset);
-                offsets_ptr = offsets_ptr.add(1);
-            }
-        }
-        // # Safety
-        // `data_size` is equal to the capacity of `data` and `num_rows` + 1 is equal to the capacity of `offsets`.
-        unsafe {
-            offsets.set_len(num_rows + 1);
-            data.set_len(data_size);
-        }
-        Ok(KeysState::Column(Column::String(StringColumn::new(
-            data.into(),
-            offsets.into(),
+        Ok(KeysState::Column(Column::String(serialize_column(
+            &serialize_columns,
+            num_rows,
+            serialize_size,
         ))))
     }
 
@@ -291,59 +263,28 @@ impl HashMethod for HashMethodDictionarySerializer {
     ) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
         let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-        let mut other_columns = Vec::new();
+        let mut serialize_columns = Vec::new();
         for (group_column, _) in group_columns {
             match group_column {
                 Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
                 }
-                _ => other_columns.push(group_column.clone()),
+                _ => serialize_columns.push(group_column.clone()),
             }
         }
 
-        if !other_columns.is_empty() {
-            let mut data_size = 0;
-            for column in other_columns.iter() {
-                data_size += column.serialize_size();
+        if !serialize_columns.is_empty() {
+            // The serialize_size is equal to the number of bytes required by serialization.
+            let mut serialize_size = 0;
+            for column in serialize_columns.iter() {
+                serialize_size += column.serialize_size();
             }
-            // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-            // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
-            let mut data: Vec<u8> = Vec::with_capacity(data_size);
-            let mut data_ptr = data.as_mut_ptr();
-            let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-            offsets.push(0);
-            // We have called offsets.push(0), so we start at index 1.
-            // # Safety
-            // The capacity of offsets is greater than or equal to 1.
-            let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
-
-            let mut offset = 0;
-            for i in 0..num_rows {
-                let old_ptr = data_ptr;
-                for col in other_columns.iter() {
-                    // # Safety
-                    // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-                    unsafe {
-                        serialize_column_binary(col, i, &mut data_ptr);
-                    }
-                }
-                offset += data_ptr as u64 - old_ptr as u64;
-                // # Safety
-                // The initial offset of `offsets_ptr` is 1 and we will advance `offsets_ptr` by 1 at most `num_rows` times,
-                // `num_rows` + 1 is equal to the capacity of offsets.
-                unsafe {
-                    std::ptr::write(offsets_ptr, offset);
-                    offsets_ptr = offsets_ptr.add(1);
-                }
-            }
-            // # Safety
-            // `data_size` is equal to the capacity of `data` and `num_rows` + 1 is equal to the capacity of `offsets`.
-            unsafe {
-                offsets.set_len(num_rows + 1);
-                data.set_len(data_size);
-            }
-            dictionary_columns.push(StringColumn::new(data.into(), offsets.into()));
+            dictionary_columns.push(serialize_column(
+                &serialize_columns,
+                num_rows,
+                serialize_size,
+            ));
         }
 
         let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
@@ -680,59 +621,69 @@ fn build(
     Ok(())
 }
 
+pub fn serialize_column(
+    columns: &[Column],
+    num_rows: usize,
+    serialize_size: usize,
+) -> StringColumn {
+    // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+    // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+    let mut data: Vec<u8> = Vec::with_capacity(serialize_size);
+    let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+    let mut data_ptr = data.as_mut_ptr();
+    let mut offsets_ptr = offsets.as_mut_ptr();
+    let mut offset = 0;
+
+    store_advance_aligned::<u64>(0, &mut offsets_ptr);
+    for i in 0..num_rows {
+        let old_ptr = data_ptr;
+        for col in columns.iter() {
+            serialize_column_binary(col, i, &mut data_ptr);
+        }
+        offset += data_ptr as u64 - old_ptr as u64;
+        store_advance_aligned::<u64>(offset, &mut offsets_ptr);
+    }
+    set_vec_len_by_ptr(&mut data, data_ptr);
+    set_vec_len_by_ptr(&mut offsets, offsets_ptr);
+    StringColumn::new(data.into(), offsets.into())
+}
+
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
-/// # Safety
 /// The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
+pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => {
-                std::ptr::write(row_space.cast::<NUM_TYPE>(), v[row]);
-                *row_space = row_space.add(std::mem::size_of::<NUM_TYPE>());
+                store_advance::<NUM_TYPE>(&v[row], row_space);
             }
         }),
-        Column::Decimal(_) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
-                Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) => {
-                    std::ptr::write(row_space.cast::<DECIMAL_TYPE>(), v[row]);
-                    *row_space = row_space.add(std::mem::size_of::<DECIMAL_TYPE>());
+        Column::Decimal(v) => {
+            with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
+                DecimalColumn::DECIMAL_TYPE(v, _) => {
+                    store_advance::<DECIMAL_TYPE>(&v[row], row_space);
                 }
-                _ => unreachable!(),
             })
         }
-        Column::Boolean(v) => {
-            std::ptr::write(*row_space, v.get_bit(row) as u8);
-            *row_space = row_space.add(1);
-        }
+        Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            let value = v.index_unchecked(row);
+            let value = unsafe { v.index_unchecked(row) };
             let len = value.len();
-            std::ptr::write(row_space.cast::<u64>(), len as u64);
-            *row_space = row_space.add(std::mem::size_of::<u64>());
-            std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, len);
-            *row_space = row_space.add(len);
+            store_advance::<u64>(&(len as u64), row_space);
+            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
         }
-        Column::Timestamp(v) => {
-            std::ptr::write(row_space.cast::<i64>(), v[row]);
-            *row_space = row_space.add(std::mem::size_of::<i64>());
-        }
-        Column::Date(v) => {
-            std::ptr::write(row_space.cast::<i32>(), v[row]);
-            *row_space = row_space.add(std::mem::size_of::<i32>());
-        }
+        Column::Timestamp(v) => store_advance::<i64>(&v[row], row_space),
+        Column::Date(v) => store_advance::<i32>(&v[row], row_space),
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
-            std::ptr::write(row_space.cast::<u64>(), data.len() as u64);
-            *row_space = row_space.add(std::mem::size_of::<u64>());
+            store_advance::<u64>(&(data.len() as u64), row_space);
             for i in 0..data.len() {
                 serialize_column_binary(&data, i, row_space);
             }
         }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
-            std::ptr::write(*row_space, valid as u8);
-            *row_space = row_space.add(1);
+            store_advance::<bool>(&valid, row_space);
             if valid {
                 serialize_column_binary(&c.column, row, row_space);
             }
