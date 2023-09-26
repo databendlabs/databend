@@ -58,10 +58,14 @@ async fn do_vacuum_drop_table(
             Ok(None)
         }
         Some(dry_run_limit) => {
-            let mut ds = operator.list_with(&dir).delimiter("").await?;
+            let mut ds = operator
+                .lister_with(&dir)
+                .delimiter("")
+                .metakey(Metakey::Mode)
+                .await?;
             let mut list_files = Vec::new();
             while let Some(de) = ds.try_next().await? {
-                let meta = operator.metadata(&de, Metakey::Mode).await?;
+                let meta = de.metadata();
                 if EntryMode::FILE == meta.mode() {
                     list_files.push((fuse_table.name().to_string(), de.name().to_string()));
                     if list_files.len() >= dry_run_limit {

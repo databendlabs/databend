@@ -183,7 +183,7 @@ impl FuseTable {
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let default_rows_per_page = if self.operator.info().can_blocking() {
+        let default_rows_per_page = if self.operator.info().native_capability().blocking {
             DEFAULT_ROW_PER_PAGE_FOR_BLOCKING
         } else {
             DEFAULT_ROW_PER_PAGE

@@ -39,6 +39,7 @@ pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;
 pub use common::TransformSerializeBlock;
 pub use compact::CompactOptions;
+pub use delete::MutationBlockPruningContext;
 pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;
 pub use mutation::DeletedSegmentInfo;

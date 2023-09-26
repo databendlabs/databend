@@ -319,8 +319,16 @@ impl TableContext for QueryContext {
         self.shared.write_progress.clone()
     }
 
+    fn get_spill_progress(&self) -> Arc<Progress> {
+        self.shared.spill_progress.clone()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
+    }
+
+    fn get_spill_progress_value(&self) -> ProgressValues {
+        self.shared.spill_progress.as_ref().get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
@@ -375,6 +383,10 @@ impl TableContext for QueryContext {
             partition_queue.push_back(part);
         }
         Ok(())
+    }
+
+    fn partition_num(&self) -> usize {
+        self.partition_queue.read().len()
     }
 
     fn add_partitions_sha(&self, s: String) {

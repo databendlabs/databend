@@ -22,3 +22,6 @@ SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max>7 ORD
 
 statement ok
 SELECT MAX(number) AS max FROM numbers_mt(10) GROUP BY number%3 HAVING max<7
+
+statement error 1065
+SELECT MAX(number) AS max FROM numbers_mt(10) HAVING first_value(max) OVER (PARTITION BY max)

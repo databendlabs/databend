@@ -6750,6 +6750,7 @@ Insert(
         ],
         source: Values {
             rest_str: "(1, 2), (3, 4);",
+            start: 30,
         },
         overwrite: false,
     },
@@ -6791,6 +6792,7 @@ Insert(
         ],
         source: Values {
             rest_str: "(1, 2);   ",
+            start: 30,
         },
         overwrite: false,
     },

@@ -28,8 +28,10 @@ impl Config {
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`Config`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub fn load() -> Result<Self> {
-        let cfg: Self = OuterV0Config::load(true)?.try_into()?;
+    pub async fn load() -> Result<Self> {
+        let mut cfg: Self = OuterV0Config::load(true)?.try_into()?;
+        cfg.storage.params = cfg.storage.params.auto_detect().await;
+
         Ok(cfg)
     }
 
