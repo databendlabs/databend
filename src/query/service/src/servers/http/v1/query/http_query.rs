@@ -156,14 +156,15 @@ impl HttpSessionConf {
                 is_unset,
                 is_globals: _,
             } => {
-                // do not change the current settings if reset is true
+                let settings = ret.settings.get_or_insert_default();
+
                 if *is_unset {
                     for key in keys.iter() {
                         ret.settings.remove(key);
                     }
                     return ret;
                 }
-                let settings = ret.settings.get_or_insert_default();
+
                 for (key, value) in keys.iter().zip(values) {
                     settings.insert(key.to_string(), value.to_string());
                 }
