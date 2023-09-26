@@ -103,3 +103,4 @@ echo "drop database if exists test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table
 echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
+echo "VACUUM DROP TABLE;" | $MYSQL_CLIENT_CONNECT

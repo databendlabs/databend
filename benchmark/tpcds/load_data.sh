@@ -36,8 +36,10 @@ tables=(
 # Clear Data
 for t in ${tables[@]}
 do
-    echo "DROP TABLE IF EXISTS $t ALL" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS $t" | $MYSQL_CLIENT_CONNECT
 done
+
+echo "VACUUM DROP TABLE" | $MYSQL_CLIENT_CONNECT
 
 # Create Tables;
 cat "$CURDIR"/tpcds.sql | $MYSQL_CLIENT_CONNECT

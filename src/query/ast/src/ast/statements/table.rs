@@ -251,7 +251,6 @@ pub struct DropTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub all: bool,
 }
 
 impl Display for DropTableStmt {
@@ -267,9 +266,6 @@ impl Display for DropTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if self.all {
-            write!(f, " ALL")?;
-        }
 
         Ok(())
     }
