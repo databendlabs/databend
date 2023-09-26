@@ -676,6 +676,7 @@ pub async fn do_update(
         table.schema().into(),
         col_indices.clone(),
         None,
+        false,
     )?;
     let computed_list =
         plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
