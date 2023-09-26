@@ -306,6 +306,21 @@ impl PipelineBuilder {
 
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
+// Split the 'merge into source' into two parts: 'matched' and 'unmatched'.
+
+//                                    +-----------------------+
+//                                    |                       +---+
+//                                    |                       |   |
+// +----------------------+           |                       +---+
+// |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+// +----------------------+           |                       +---+
+//                                    |                       |   |
+//                                    |                       +---+
+//                                    +-----------------------+
+//
+//  Note: here the pipe items of last pipe are arranged in the following order
+//  (0) -> matched_data
+//  (1) -> unmatched_data
         let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
 
         self.main_pipeline
@@ -480,6 +495,24 @@ impl PipelineBuilder {
             }
             output_len
         };
+        // Handle matched and unmatched data separately.
+
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the pipe items of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+        // 
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
         let pipe_items = vec![
             matched_split_processor.into_pipe_item(),
             merge_into_not_matched_processor.into_pipe_item(),
@@ -490,7 +523,20 @@ impl PipelineBuilder {
             get_output_len(&pipe_items),
             pipe_items,
         ));
+        // Merge the output of MergeIntoNotMatchedProcessor with output_port_updated of MatchedSplitProcessor
 
+        //                                                        +-------------------+
+        // +-----------------------------+    output_port_row_id  |                   |
+        // |                             +------------------------>-ResizeProcessor(1)|
+        // |    MatchedSplitProcessor    |                        |                   |
+        // |                             +----------+             +-------------------+
+        // +-----------------------------+          |
+        //                                    output_port_updated
+        // +-----------------------------+          |             +-------------------+
+        // |                             |          |             |                   |
+        // | MergeIntoNotMatchedProcessor+----------+------------->-ResizeProcessor(1)|
+        // |                             |                        |                   |
+        // +-----------------------------+                        +-------------------+
         self.main_pipeline
             .resize_partial_one(vec![vec![0], vec![1, 2]])?;
         // fill default columns
