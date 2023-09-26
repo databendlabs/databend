@@ -933,6 +933,7 @@ impl Display for MutationKind {
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AsyncSourcerPlan {
     pub value_data: String,
+    pub start: usize,
     pub schema: DataSchemaRef,
 }
 

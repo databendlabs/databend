@@ -54,7 +54,7 @@ impl BuildSpillState {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoinBuild);
+        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild);
         Self {
             build_state,
             spill_coordinator,

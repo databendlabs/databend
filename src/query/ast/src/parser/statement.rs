@@ -1635,7 +1635,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, _))| InsertSource::Values { rest_str },
+        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),
