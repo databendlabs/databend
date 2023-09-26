@@ -18,12 +18,16 @@ use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
 use common_ast::ast::DropTableStmt;
 use common_ast::ast::NullableConstraint;
+use common_ast::ast::Query;
+use common_ast::ast::SelectStmt;
+use common_ast::ast::SetExpr;
 use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_sql::resolve_type_name;
 use databend_client::error::Error as ClientError;
 use databend_driver::Client;
+use databend_driver::Connection;
 use databend_driver::Error;
 use rand::rngs::SmallRng;
 use rand::Rng;
@@ -128,24 +132,221 @@ impl Runner {
         Ok(tables)
     }
 
+    pub async fn try_reduce_query(&self, conn: Box<dyn Connection>, query: &Query) {
+        // reduce limit and offset
+        let mut may_fail_msg = vec![];
+        let mut query = query.clone();
+        if !query.limit.is_empty() || query.offset.is_some() {
+            let reduce_query = Query {
+                span: None,
+                with: query.with.clone(),
+                body: query.body.clone(),
+                order_by: query.order_by.clone(),
+                limit: vec![],
+                offset: None,
+                ignore_result: false,
+            };
+            if self
+                .execute_reduce_query(conn.clone(), &reduce_query)
+                .await
+                .is_none()
+            {
+                may_fail_msg.push(format!("{:?}", query.limit.clone()));
+                may_fail_msg.push(format!("{:?}", query.offset.clone()));
+            } else {
+                query = reduce_query.clone();
+            }
+        }
+
+        // reduce order by
+        if !query.order_by.is_empty() {
+            let reduce_query = Query {
+                span: None,
+                with: query.with.clone(),
+                body: query.body.clone(),
+                order_by: vec![],
+                limit: query.limit.clone(),
+                offset: query.offset.clone(),
+                ignore_result: false,
+            };
+            if self
+                .execute_reduce_query(conn.clone(), &reduce_query)
+                .await
+                .is_none()
+            {
+                may_fail_msg.push(format!("{:?}", query.order_by.clone()));
+                may_fail_msg.push(format!("{:?}", query.offset.clone()));
+            } else {
+                query = reduce_query.clone();
+            }
+        }
+
+        // reduce select_list
+        if let SetExpr::Select(mut select_stmt) = query.body.clone() {
+            let having = select_stmt.having.take();
+            let selection = select_stmt.selection.take();
+
+            if select_stmt.group_by.is_none() {
+                if select_stmt.select_list.len() != 1 {
+                    let mut may_err_list = vec![];
+                    while let Some(last) = select_stmt.select_list.pop() {
+                        let body = SetExpr::Select(Box::new(SelectStmt {
+                            span: None,
+                            hints: None,
+                            distinct: select_stmt.distinct,
+                            select_list: select_stmt.select_list.clone(),
+                            from: select_stmt.from.clone(),
+                            selection: selection.clone(),
+                            group_by: select_stmt.group_by.clone(),
+                            having: having.clone(),
+                            window_list: select_stmt.window_list.clone(),
+                        }));
+                        let reduce_query = Query {
+                            span: None,
+                            with: query.with.clone(),
+                            body,
+                            order_by: vec![],
+                            limit: vec![],
+                            offset: None,
+                            ignore_result: false,
+                        };
+                        if self
+                            .execute_reduce_query(conn.clone(), &reduce_query)
+                            .await
+                            .is_none()
+                        {
+                            may_fail_msg.push(last.to_string());
+                            may_err_list.push(last);
+                        }
+                    }
+                    let body = SetExpr::Select(Box::new(SelectStmt {
+                        span: None,
+                        hints: None,
+                        distinct: select_stmt.distinct,
+                        select_list: may_err_list,
+                        from: select_stmt.from.clone(),
+                        selection: None,
+                        group_by: None,
+                        having: None,
+                        window_list: select_stmt.window_list.clone(),
+                    }));
+                    let reduce_query = Query {
+                        span: None,
+                        with: query.with.clone(),
+                        body,
+                        order_by: vec![],
+                        limit: vec![],
+                        offset: None,
+                        ignore_result: false,
+                    };
+                    query = reduce_query;
+                }
+                if having.is_some() {
+                    let body = SetExpr::Select(Box::new(SelectStmt {
+                        span: None,
+                        hints: None,
+                        distinct: select_stmt.distinct,
+                        select_list: select_stmt.select_list.clone(),
+                        from: select_stmt.from.clone(),
+                        selection: selection.clone(),
+                        group_by: select_stmt.group_by.clone(),
+                        having: None,
+                        window_list: select_stmt.window_list.clone(),
+                    }));
+                    let reduce_query = Query {
+                        span: None,
+                        with: query.with.clone(),
+                        body,
+                        order_by: vec![],
+                        limit: vec![],
+                        offset: None,
+                        ignore_result: false,
+                    };
+                    if self
+                        .execute_reduce_query(conn.clone(), &reduce_query)
+                        .await
+                        .is_none()
+                    {
+                        may_fail_msg.push(having.clone().unwrap().to_string());
+                    } else {
+                        query = reduce_query;
+                    }
+                }
+            }
+
+            if let Some(selection) = selection {
+                let body = SetExpr::Select(Box::new(SelectStmt {
+                    span: None,
+                    hints: None,
+                    distinct: select_stmt.distinct,
+                    select_list: select_stmt.select_list.clone(),
+                    from: select_stmt.from.clone(),
+                    selection: None,
+                    group_by: select_stmt.group_by.clone(),
+                    having: select_stmt.having.clone(),
+                    window_list: select_stmt.window_list.clone(),
+                }));
+                let reduce_query = Query {
+                    span: None,
+                    with: query.with.clone(),
+                    body,
+                    order_by: vec![],
+                    limit: vec![],
+                    offset: None,
+                    ignore_result: false,
+                };
+                if self
+                    .execute_reduce_query(conn, &reduce_query)
+                    .await
+                    .is_none()
+                {
+                    may_fail_msg.push(selection.to_string());
+                } else {
+                    query = reduce_query;
+                }
+            }
+        }
+
+        tracing::error!(
+            "\x1b[0;31mAfter reduce, check err maybe in : [{:?}]\x1b[0m",
+            may_fail_msg
+        );
+        tracing::error!(
+            "After reduce, the sql is [\x1b[0;31m{:?}\x1b[0m]",
+            query.to_string()
+        );
+    }
+    pub async fn execute_reduce_query(
+        &self,
+        conn: Box<dyn Connection>,
+        query: &Query,
+    ) -> Option<Query> {
+        let sql = query.to_string();
+        if (conn.exec(&sql).await).is_err() {
+            return Some(query.clone());
+        }
+        None
+    }
+
     pub async fn run(&self) {
         let mut rng = Self::generate_rng(self.seed);
-        let mut generater = SqlGenerator::new(&mut rng);
-        let table_stmts = generater.gen_base_tables();
+        let mut generator = SqlGenerator::new(&mut rng);
+        let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
 
         for table in &tables {
-            let insert_stmt = generater.gen_insert(table, 50);
+            let insert_stmt = generator.gen_insert(table, 50);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
         }
-        generater.tables = tables;
+        generator.tables = tables;
 
         for _ in 0..self.count {
-            let query = generater.gen_query();
+            let query = generator.gen_query();
             let query_sql = query.to_string();
+            let mut try_reduce = false;
             if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
                 if let Err(e) = conn.exec(&query_sql).await {
                     if let Error::Api(ClientError::InvalidResponse(err)) = &e {
@@ -164,6 +365,7 @@ impl Runner {
                     tracing::info!("query_sql: {}", query_sql);
                     let err = format!("error: {}", e);
                     tracing::error!(err);
+                    try_reduce = true;
                 }
             })
             .await
@@ -171,6 +373,9 @@ impl Runner {
                 tracing::info!("query_sql: {}", query_sql);
                 let err = format!("query timeout: {}", e);
                 tracing::error!(err);
+            }
+            if try_reduce {
+                self.try_reduce_query(conn.clone(), &query).await
             }
         }
     }

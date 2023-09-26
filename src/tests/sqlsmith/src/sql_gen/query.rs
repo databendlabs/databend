@@ -144,24 +144,27 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_with(&mut self) -> Option<With> {
-        if self.rng.gen_bool(0.8) {
-            return None;
-        }
-
-        let len = self.rng.gen_range(1..=3);
-        let mut ctes = Vec::with_capacity(len);
-        for _ in 0..len {
-            let cte = self.gen_cte();
-            ctes.push(cte);
-        }
-
-        Some(With {
-            span: None,
-            recursive: false,
-            ctes,
-        })
+        None
+        // Deprecated gen with , because of https://github.com/datafuselabs/databend/issues/12962
+        // if self.rng.gen_bool(0.8) {
+        // return None;
+        // }
+        //
+        // let len = self.rng.gen_range(1..=3);
+        // let mut ctes = Vec::with_capacity(len);
+        // for _ in 0..len {
+        // let cte = self.gen_cte();
+        // ctes.push(cte);
+        // }
+        //
+        // Some(With {
+        // span: None,
+        // recursive: false,
+        // ctes,
+        // })
     }
 
+    #[allow(dead_code)]
     fn gen_cte(&mut self) -> CTE {
         let (subquery, schema) = self.gen_subquery(false);
 
