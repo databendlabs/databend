@@ -95,7 +95,7 @@ impl Interpreter for InsertInterpreter {
             InsertInputSource::Stage(_) => {
                 unreachable!()
             }
-            InsertInputSource::Values(data) => {
+            InsertInputSource::Values { data, start } => {
                 build_res.main_pipeline.add_source(
                     |output| {
                         let name_resolution_ctx = NameResolutionContext {
@@ -107,6 +107,7 @@ impl Interpreter for InsertInterpreter {
                             self.ctx.clone(),
                             name_resolution_ctx,
                             self.plan.schema(),
+                            *start,
                         );
                         AsyncSourcer::create(self.ctx.clone(), output, inner)
                     },
