@@ -234,7 +234,9 @@ impl HashMethod for HashMethodSerializer {
         for i in 0..num_rows {
             let old_ptr = data_ptr;
             for (col, _) in group_columns {
-                serialize_column_binary(col, i, &mut data_ptr);
+                unsafe {
+                    serialize_column_binary(col, i, &mut data_ptr);
+                }
             }
             offset += data_ptr as u64 - old_ptr as u64;
             // # Safety
@@ -314,7 +316,9 @@ impl HashMethod for HashMethodDictionarySerializer {
             for i in 0..num_rows {
                 let old_ptr = data_ptr;
                 for (col, _) in group_columns {
-                    serialize_column_binary(col, i, &mut data_ptr);
+                    unsafe {
+                        serialize_column_binary(col, i, &mut data_ptr);
+                    }
                 }
                 offset += data_ptr as u64 - old_ptr as u64;
                 // # Safety
@@ -669,66 +673,58 @@ fn build(
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
-pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
-    // # Safety
-    // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
+/// # Safety
+/// The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
+pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
             NumberColumn::NUM_TYPE(v) => {
-                unsafe {
-                    std::ptr::write(row_space.cast::<NUM_TYPE>(), v[row]);
-                    *row_space = row_space.add(std::mem::size_of::<NUM_TYPE>());
-                }
+                std::ptr::write(row_space.cast::<NUM_TYPE>(), v[row]);
+                *row_space = row_space.add(std::mem::size_of::<NUM_TYPE>());
             }
         }),
         Column::Decimal(_) => {
             with_decimal_mapped_type!(|DECIMAL_TYPE| match column {
                 Column::Decimal(DecimalColumn::DECIMAL_TYPE(v, _)) => {
-                    unsafe {
-                        std::ptr::write(row_space.cast::<DECIMAL_TYPE>(), v[row]);
-                        *row_space = row_space.add(std::mem::size_of::<DECIMAL_TYPE>());
-                    }
+                    std::ptr::write(row_space.cast::<DECIMAL_TYPE>(), v[row]);
+                    *row_space = row_space.add(std::mem::size_of::<DECIMAL_TYPE>());
                 }
                 _ => unreachable!(),
             })
         }
-        Column::Boolean(v) => unsafe {
+        Column::Boolean(v) => {
             std::ptr::write(*row_space, v.get_bit(row) as u8);
             *row_space = row_space.add(1);
-        },
-        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => unsafe {
+        }
+        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             let value = v.index_unchecked(row);
             let len = value.len();
             std::ptr::write(row_space.cast::<u64>(), len as u64);
             *row_space = row_space.add(std::mem::size_of::<u64>());
             std::ptr::copy_nonoverlapping(value.as_ptr(), *row_space, len);
             *row_space = row_space.add(len);
-        },
-        Column::Timestamp(v) => unsafe {
+        }
+        Column::Timestamp(v) => {
             std::ptr::write(row_space.cast::<i64>(), v[row]);
             *row_space = row_space.add(std::mem::size_of::<i64>());
-        },
-        Column::Date(v) => unsafe {
+        }
+        Column::Date(v) => {
             std::ptr::write(row_space.cast::<i32>(), v[row]);
             *row_space = row_space.add(std::mem::size_of::<i32>());
-        },
+        }
         Column::Array(array) | Column::Map(array) => {
             let data = array.index(row).unwrap();
-            unsafe {
-                std::ptr::write(row_space.cast::<u64>(), data.len() as u64);
-                *row_space = row_space.add(std::mem::size_of::<u64>());
-            }
+            std::ptr::write(row_space.cast::<u64>(), data.len() as u64);
+            *row_space = row_space.add(std::mem::size_of::<u64>());
             for i in 0..data.len() {
                 serialize_column_binary(&data, i, row_space);
             }
         }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
-            unsafe {
-                std::ptr::write(*row_space, valid as u8);
-                *row_space = row_space.add(1);
-            }
+            std::ptr::write(*row_space, valid as u8);
+            *row_space = row_space.add(1);
             if valid {
                 serialize_column_binary(&c.column, row, row_space);
             }
