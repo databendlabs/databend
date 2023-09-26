@@ -708,5 +708,11 @@ select last_value(last_value(salary) over ()) over () from empsalary
 statement error 1065
 select sum(sum(salary) over()) over() from empsalary
 
+statement error 1065
+select sum(salary) over(order by unnest([1,2,3])) from empsalary
+
+statement error 1065
+select sum(salary) over(order by (sum(salary) over())) from empsalary
+
 statement ok
 DROP DATABASE test_window_basic
