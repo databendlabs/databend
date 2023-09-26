@@ -108,6 +108,7 @@ members = [
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
 opendal = { version = "0.40", features = [
     "layers-minitrace",
+    "layers-prometheus-client",
     "services-ipfs",
     "services-moka",
     "services-redis",
