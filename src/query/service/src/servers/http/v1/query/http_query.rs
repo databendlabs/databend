@@ -160,7 +160,7 @@ impl HttpSessionConf {
 
                 if *is_unset {
                     for key in keys.iter() {
-                        ret.settings.remove(key);
+                        settings.remove(key);
                     }
                     return ret;
                 }
