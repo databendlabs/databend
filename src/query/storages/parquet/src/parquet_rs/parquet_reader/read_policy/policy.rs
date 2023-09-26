@@ -26,7 +26,7 @@ use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 /// For example, we can fetch predicate columns first and evaluate the predicate to get a filter bitmap,
 /// and we can use this bitmap to reduce IO and deserialization for other columns.
 ///
-/// There are severl cases:
+/// There are several cases:
 ///
 /// 1. predicate is [None] and topk is [None]: (1) read output columns;
 /// 2. predicate is [None] and topk is [Some]: (1) read topk columns;               (2) read other columns (output - topk);

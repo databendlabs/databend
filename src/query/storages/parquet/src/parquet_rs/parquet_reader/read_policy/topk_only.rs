@@ -38,7 +38,6 @@ use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
-use crate::parquet_rs::parquet_reader::utils::to_arrow_schema;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
 use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 
@@ -55,14 +54,21 @@ pub struct TopkOnlyPolicyBuilder {
 
 impl TopkOnlyPolicyBuilder {
     pub fn create(
-        schema: &SchemaDescriptor,
+        schema_desc: &SchemaDescriptor,
         topk: (Arc<ParquetTopK>, TableField),
-        remain_projection: ProjectionMask,
         output_schema: &TableSchema,
+        output_leaves: &[usize],
         inner_projection: bool,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
         let (topk, topk_field) = topk;
-        // Prefetch the topk column.
+
+        // Prefetch the topk column. Compute the remain columns.
+        let remain_leaves = output_leaves
+            .iter()
+            .cloned()
+            .filter(|i| *i != topk_field.column_id as usize)
+            .collect::<Vec<_>>();
+        let remain_projection = ProjectionMask::leaves(schema_desc, remain_leaves);
         let remain_fields = output_schema
             .fields()
             .iter()
@@ -70,13 +76,12 @@ impl TopkOnlyPolicyBuilder {
             .filter(|f| f.name() != topk_field.name())
             .collect::<Vec<_>>();
         let remain_schema = TableSchema::new(remain_fields);
-        let remain_arrow_schema = to_arrow_schema(&remain_schema);
         let remain_field_levels =
-            parquet_to_arrow_field_levels(schema, remain_projection.clone(), None)?;
+            parquet_to_arrow_field_levels(schema_desc, remain_projection.clone(), None)?;
         let remain_field_paths = Arc::new(compute_output_field_paths(
-            schema,
+            schema_desc,
             &remain_projection,
-            &remain_arrow_schema,
+            &remain_schema,
             inner_projection,
         )?);
 
@@ -124,7 +129,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         )?;
         let batch = reader.next().transpose()?.unwrap();
         debug_assert!(reader.next().is_none());
-        // Topk colum **must** not be in a nested column.
+        // Topk column **must** not be in a nested column.
         let prefetched = transform_record_batch(&batch, &None)?;
         debug_assert_eq!(prefetched.num_columns(), 1);
         let topk_col = prefetched.columns()[0]

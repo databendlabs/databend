@@ -110,12 +110,13 @@ pub type FieldPaths = Vec<(FieldRef, Vec<FieldIndex>)>;
 pub fn compute_output_field_paths(
     schema_desc: &SchemaDescriptor,
     projection: &ProjectionMask,
-    expected_schema: &arrow_schema::Schema,
+    expected_schema: &TableSchema,
     inner_projection: bool,
 ) -> Result<Option<FieldPaths>> {
     if !inner_projection {
         return Ok(None);
     }
+    let expected_schema = to_arrow_schema(expected_schema);
     let batch_schema = parquet_to_arrow_schema_by_columns(schema_desc, projection.clone(), None)?;
     let output_fields = expected_schema.fields();
     let parquet_schema_desc = arrow_to_parquet_schema(&batch_schema)?;

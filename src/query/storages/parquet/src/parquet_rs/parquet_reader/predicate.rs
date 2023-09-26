@@ -29,52 +29,33 @@ use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
-use parquet::arrow::parquet_to_arrow_field_levels;
-use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::utils::bitmap_to_boolean_array;
 use super::utils::transform_record_batch;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
-use crate::parquet_rs::parquet_reader::utils::to_arrow_schema;
 
 pub struct ParquetPredicate {
     func_ctx: FunctionContext,
 
     /// Columns used for eval predicate.
     projection: ProjectionMask,
-    /// Projected field levels.
-    field_levels: FieldLevels,
 
     /// Predicate filter expression.
     filter: Expr,
     field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
+
+    schema: TableSchema,
 }
 
 impl ParquetPredicate {
-    pub fn new(
-        func_ctx: FunctionContext,
-        projection: ProjectionMask,
-        field_levels: FieldLevels,
-        filter: Expr,
-        field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
-    ) -> Self {
-        Self {
-            func_ctx,
-            projection,
-            field_levels,
-            filter,
-            field_paths,
-        }
-    }
-
     pub fn projection(&self) -> &ProjectionMask {
         &self.projection
     }
 
-    pub fn field_levels(&self) -> &FieldLevels {
-        &self.field_levels
+    pub fn field_paths(&self) -> &Option<Vec<(FieldRef, Vec<FieldIndex>)>> {
+        &self.field_paths
     }
 
     pub fn evaluate_block(&self, block: &DataBlock) -> Result<Bitmap> {
@@ -93,6 +74,10 @@ impl ParquetPredicate {
         let res = self.evaluate_block(&block)?;
         Ok(bitmap_to_boolean_array(res))
     }
+
+    pub fn schema(&self) -> &TableSchema {
+        &self.schema
+    }
 }
 
 /// Build [`PrewhereInfo`] into [`ParquetPredicate`] and get the leave columnd ids.
@@ -101,7 +86,7 @@ pub fn build_predicate(
     prewhere: &PrewhereInfo,
     table_schema: &TableSchema,
     schema_desc: &SchemaDescriptor,
-) -> Result<(Arc<ParquetPredicate>, Vec<usize>, Projection)> {
+) -> Result<(Arc<ParquetPredicate>, Vec<usize>)> {
     let inner_projection = matches!(prewhere.output_columns, Projection::InnerColumns(_));
     let schema = prewhere.prewhere_columns.project_schema(table_schema);
     let filter = prewhere
@@ -109,20 +94,17 @@ pub fn build_predicate(
         .as_expr(&BUILTIN_FUNCTIONS)
         .project_column_ref(|name| schema.index_of(name).unwrap());
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
-    let schema = to_arrow_schema(&schema);
-    let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
 
     Ok((
-        Arc::new(ParquetPredicate::new(
+        Arc::new(ParquetPredicate {
             func_ctx,
             projection,
-            field_levels,
             filter,
             field_paths,
-        )),
+            schema,
+        }),
         leaves,
-        prewhere.output_columns.clone(),
     ))
 }

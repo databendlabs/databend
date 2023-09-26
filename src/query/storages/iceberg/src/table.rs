@@ -44,6 +44,8 @@ use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSPruner;
 use common_storages_parquet::ParquetRSReaderBuilder;
+use icelake::catalog::Catalog;
+use opendal::Operator;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
@@ -189,7 +191,7 @@ impl IcebergTable {
 
         let mut builder = ParquetRSReaderBuilder::create(
             ctx.clone(),
-            self.op.clone(),
+            self.op.operator(),
             table_schema,
             &arrow_schema,
         )?

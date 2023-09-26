@@ -21,17 +21,14 @@ use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableField;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use parquet::arrow::arrow_to_parquet_schema;
-use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescPtr;
 
 use super::ParquetRSRowGroupReader;
 use crate::parquet_rs::parquet_reader::policy::default_policy_builders;
-use crate::parquet_rs::parquet_reader::policy::PolicyType;
 use crate::parquet_rs::parquet_reader::policy::ReadPolicyBuilder;
 use crate::parquet_rs::parquet_reader::policy::POLICY_NO_PREFETCH;
 use crate::parquet_rs::parquet_reader::policy::POLICY_PREDICATE_AND_TOPK;
@@ -42,9 +39,9 @@ use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::topk::build_topk;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
-use crate::parquet_rs::parquet_reader::utils::to_arrow_schema;
 use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 use crate::parquet_rs::parquet_reader::NoPretchPolicyBuilder;
+use crate::parquet_rs::parquet_reader::PredicateAndTopkPolicyBuilder;
 use crate::parquet_rs::parquet_reader::TopkOnlyPolicyBuilder;
 use crate::ParquetFSFullReader;
 use crate::ParquetRSPruner;
@@ -61,14 +58,14 @@ pub struct ParquetRSReaderBuilder<'a> {
     topk: Option<&'a TopK>,
 
     // Can be reused to build multiple readers.
-    built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>, Projection)>,
+    built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>)>,
     built_topk: Option<(Arc<ParquetTopK>, TableField)>,
     #[allow(clippy::type_complexity)]
     built_output: Option<(
-        ProjectionMask,
-        Vec<usize>,
-        TableSchemaRef,
-        Arc<Option<FieldPaths>>,
+        ProjectionMask,          // The output projection mask.
+        Vec<usize>,              // The column leaves of the projection mask.
+        TableSchemaRef,          // The output table schema.
+        Arc<Option<FieldPaths>>, /* The output field paths. It's `Some` when the reading is an inner projection. */
     )>,
 }
 
@@ -133,7 +130,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         if self.built_predicate.is_some() {
             return Ok(());
         }
-        let predicate = PushDownInfo::prewhere_of_push_downs(self.push_downs)
+        self.built_predicate = PushDownInfo::prewhere_of_push_downs(self.push_downs)
             .map(|prewhere| {
                 build_predicate(
                     self.ctx.get_function_context()?,
@@ -157,25 +154,31 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(())
     }
 
-    fn build_output(&mut self, output_projection: Projection) -> Result<()> {
+    fn build_output(&mut self) -> Result<()> {
         if self.built_output.is_some() {
             return Ok(());
         }
 
+        let mut output_projection =
+            PushDownInfo::projection_of_push_downs(&self.table_schema, self.push_downs);
+        let inner_projection = matches!(output_projection, Projection::InnerColumns(_));
+
+        if let Some(prewhere) = self.push_downs.as_ref().and_then(|p| p.prewhere.as_ref()) {
+            output_projection = prewhere.output_columns.clone();
+            debug_assert_eq!(
+                inner_projection,
+                matches!(output_projection, Projection::InnerColumns(_))
+            );
+        }
+
         // Build projection mask and field paths for transforming `RecordBatch` to output block.
         // The number of columns in `output_projection` may be less than the number of actual read columns.
-        let inner_projection = matches!(output_projection, Projection::InnerColumns(_));
         let (projection, output_leaves) = output_projection.to_arrow_projection(&self.schema_desc);
         let output_table_schema = output_projection.project_schema(&self.table_schema);
-        let output_arrow_schema = to_arrow_schema(&output_table_schema);
-
-        let field_levels =
-            parquet_to_arrow_field_levels(&self.schema_desc, projection.clone(), None)?;
-
         let output_field_paths = Arc::new(compute_output_field_paths(
             &self.schema_desc,
             &projection,
-            &output_arrow_schema,
+            &output_table_schema,
             inner_projection,
         )?);
 
@@ -190,26 +193,12 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     }
 
     pub fn build_full_reader(&mut self) -> Result<ParquetFSFullReader> {
-        let mut output_projection =
-            PushDownInfo::projection_of_push_downs(&self.table_schema, self.push_downs);
-        let inner_projection = matches!(output_projection, Projection::InnerColumns(_));
-
-        self.build_predicate()?;
-        if let Some((_, _, proj)) = self.built_predicate.as_ref() {
-            output_projection = proj.clone();
-            debug_assert_eq!(
-                matches!(output_projection, Projection::InnerColumns(_)),
-                inner_projection
-            )
-        }
-        let predicate = self
-            .built_predicate
-            .as_ref()
-            .map(|(pred, _, _)| pred.clone());
-
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        self.build_output(output_projection)?;
+        self.build_predicate()?;
+        self.build_output()?;
+
+        let predicate = self.built_predicate.as_ref().map(|(pred, _)| pred.clone());
         let (projection, field_paths) = self
             .built_output
             .as_ref()
@@ -228,72 +217,38 @@ impl<'a> ParquetRSReaderBuilder<'a> {
     }
 
     pub fn build_row_group_reader(&mut self) -> Result<ParquetRSRowGroupReader> {
-        let mut output_projection =
-            PushDownInfo::projection_of_push_downs(&self.table_schema, self.push_downs);
-        let inner_projection = matches!(output_projection, Projection::InnerColumns(_));
-
-        self.build_predicate()?;
-        if let Some((_, _, proj)) = self.built_predicate.as_ref() {
-            output_projection = proj.clone();
-            debug_assert_eq!(
-                matches!(output_projection, Projection::InnerColumns(_)),
-                inner_projection
-            )
-        }
-        let predicate = self
-            .built_predicate
-            .as_ref()
-            .map(|(pred, leaves, _)| (pred.clone(), leaves.clone()));
-
-        self.build_topk()?;
-        let topk = self.built_topk.clone();
-
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
-        self.build_output(output_projection)?;
-        let (projection, output_leaves, output_table_schema, output_field_paths) =
-            self.built_output.clone().unwrap();
+        self.build_predicate()?;
+        self.build_topk()?;
+        self.build_output()?;
 
         let mut policy_builders = default_policy_builders();
-        let default_policy = match (predicate, topk) {
-            (Some(pred), Some(topk)) => {
+        let default_policy = match (self.built_predicate.as_ref(), self.built_topk.as_ref()) {
+            (Some(_), Some(_)) => {
                 policy_builders[POLICY_PREDICATE_AND_TOPK as usize] =
-                    self.add_predicate_and_topk_policy_builder(POLICY_PREDICATE_AND_TOPK)?;
+                    self.create_predicate_and_topk_policy_builder()?;
                 // Predicate may be omitted.
-                policy_builders[POLICY_TOPK_ONLY as usize] = self.add_only_topk_policy_builder(
-                    &output_leaves,
-                    &output_table_schema,
-                    topk,
-                    inner_projection,
-                )?;
+                policy_builders[POLICY_TOPK_ONLY as usize] =
+                    self.create_only_topk_policy_builder()?;
                 POLICY_PREDICATE_AND_TOPK
             }
-            (Some(pred), None) => {
+            (Some(_), None) => {
                 policy_builders[POLICY_PREDICATE_ONLY as usize] =
-                    self.add_predicate_and_topk_policy_builder(POLICY_PREDICATE_ONLY)?;
+                    self.create_predicate_and_topk_policy_builder()?;
                 // Predicate may be omitted.
-                policy_builders[POLICY_NO_PREFETCH as usize] = NoPretchPolicyBuilder::create(
-                    &self.schema_desc,
-                    projection,
-                    output_field_paths,
-                )?;
+                policy_builders[POLICY_NO_PREFETCH as usize] =
+                    self.create_no_prefetch_policy_builder()?;
                 POLICY_PREDICATE_ONLY
             }
-            (None, Some(topk)) => {
-                policy_builders[POLICY_TOPK_ONLY as usize] = self.add_only_topk_policy_builder(
-                    &output_leaves,
-                    &output_table_schema,
-                    topk,
-                    inner_projection,
-                )?;
+            (None, Some(_)) => {
+                policy_builders[POLICY_TOPK_ONLY as usize] =
+                    self.create_only_topk_policy_builder()?;
                 POLICY_TOPK_ONLY
             }
             (None, None) => {
-                policy_builders[POLICY_NO_PREFETCH as usize] = NoPretchPolicyBuilder::create(
-                    &self.schema_desc,
-                    projection,
-                    output_field_paths,
-                )?;
+                policy_builders[POLICY_NO_PREFETCH as usize] =
+                    self.create_no_prefetch_policy_builder()?;
                 POLICY_NO_PREFETCH
             }
         };
@@ -306,32 +261,46 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         })
     }
 
-    fn add_only_topk_policy_builder(
-        &self,
-        output_leaves: &[usize],
-        output_schema: &TableSchema,
-        topk: (Arc<ParquetTopK>, TableField),
-        inner_projection: bool,
-    ) -> Result<Box<dyn ReadPolicyBuilder>> {
-        let remain_leaves = output_leaves
-            .iter()
-            .cloned()
-            .filter(|i| *i != topk.1.column_id as usize)
-            .collect::<Vec<_>>();
-        let remain_projection = ProjectionMask::leaves(&self.schema_desc, remain_leaves);
-        TopkOnlyPolicyBuilder::create(
+    fn create_no_prefetch_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
+        let (projection, _, _, output_field_paths) = self.built_output.as_ref().unwrap();
+        NoPretchPolicyBuilder::create(
             &self.schema_desc,
-            topk,
-            remain_projection,
-            output_schema,
-            inner_projection,
+            projection.clone(),
+            output_field_paths.clone(),
         )
     }
 
-    fn add_predicate_and_topk_policy_builder(
-        &self,
-        policy: PolicyType,
-    ) -> Result<Box<dyn ReadPolicyBuilder>> {
-        todo!()
+    fn create_only_topk_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
+        let (_, output_leaves, output_schema, paths) = self.built_output.as_ref().unwrap();
+        TopkOnlyPolicyBuilder::create(
+            &self.schema_desc,
+            self.built_topk.clone().unwrap(),
+            output_schema,
+            output_leaves,
+            paths.is_some(),
+        )
+    }
+
+    fn create_predicate_and_topk_policy_builder(&self) -> Result<Box<dyn ReadPolicyBuilder>> {
+        let (_, output_leaves, output_schema, _) = self.built_output.as_ref().unwrap();
+        let predicate = self.built_predicate.as_ref().unwrap();
+        let topk = self.built_topk.as_ref();
+        let remain_projection = self
+            .push_downs
+            .as_ref()
+            .and_then(|p| p.prewhere.as_ref())
+            .map(|p| &p.remain_columns)
+            .unwrap();
+
+        let remain_schema = remain_projection.project_schema(&self.table_schema);
+
+        PredicateAndTopkPolicyBuilder::create(
+            &self.schema_desc,
+            predicate,
+            topk,
+            output_leaves,
+            &remain_schema,
+            output_schema,
+        )
     }
 }
