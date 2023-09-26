@@ -48,7 +48,7 @@ impl FuseTable {
 //                                                                          |                                              |                                              |   |
 //                                                                          |                                              |                                              |   |
 //      +--------------------------+        +-------------------------+     |      ++---------------------------+          |     +--------------------------------------+ |   |
-//      | TransformSerializeSegment<--------+ TransformSerializeBlock <-----+------+|TransformAddComputedColumns|<---------+-----+TransformResortAddOnWithoutSourceSchem<-+   |
+//      | TransformSerializeSegment<--------+ TransformSerializeBlock <-----+------+|TransformAddComputedColumns|<---------+-----+TransformResortAddOnWithoutSourceSchema<-+   |
 //      +--------------------------+        +-------------------------+     |      ++---------------------------+          |     +--------------------------------------+     |
 //                                                                          |                                              |                                                  |
 //                                                                          |                                              |                                                  |
