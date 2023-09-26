@@ -222,9 +222,12 @@ impl HashMethod for HashMethodSerializer {
             data_size += column.serialize_size();
         }
         let mut data: Vec<u8> = Vec::with_capacity(data_size);
+        let mut data_ptr = data.as_mut_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
         offsets.push(0);
-        let mut data_ptr = data.as_mut_ptr();
+        // We have called offsets.push(0), so we start at index 1.
+        // # Safety
+        // The capacity of offsets is greater than or equal to 1.
         let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
 
         let mut offset = 0;
@@ -234,11 +237,16 @@ impl HashMethod for HashMethodSerializer {
                 serialize_column_binary(col, i, &mut data_ptr);
             }
             offset += data_ptr as u64 - old_ptr as u64;
+            // # Safety
+            // The initial offset of `offsets_ptr` is 1 and we will advance `offsets_ptr` by 1 at most `num_rows` times,
+            // `num_rows` + 1 is equal to the capacity of offsets.
             unsafe {
                 std::ptr::write(offsets_ptr, offset);
                 offsets_ptr = offsets_ptr.add(1);
             }
         }
+        // # Safety
+        // `data_size` is equal to the capacity of `data` and `num_rows` + 1 is equal to the capacity of `offsets`.
         unsafe {
             offsets.set_len(num_rows + 1);
             data.set_len(data_size);
@@ -294,9 +302,12 @@ impl HashMethod for HashMethodDictionarySerializer {
                 data_size += column.serialize_size();
             }
             let mut data: Vec<u8> = Vec::with_capacity(data_size);
+            let mut data_ptr = data.as_mut_ptr();
             let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
             offsets.push(0);
-            let mut data_ptr = data.as_mut_ptr();
+            // We have called offsets.push(0), so we start at index 1.
+            // # Safety
+            // The capacity of offsets is greater than or equal to 1.
             let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
 
             let mut offset = 0;
@@ -306,11 +317,16 @@ impl HashMethod for HashMethodDictionarySerializer {
                     serialize_column_binary(col, i, &mut data_ptr);
                 }
                 offset += data_ptr as u64 - old_ptr as u64;
+                // # Safety
+                // The initial offset of `offsets_ptr` is 1 and we will advance `offsets_ptr` by 1 at most `num_rows` times,
+                // `num_rows` + 1 is equal to the capacity of offsets.
                 unsafe {
                     std::ptr::write(offsets_ptr, offset);
                     offsets_ptr = offsets_ptr.add(1);
                 }
             }
+            // # Safety
+            // `data_size` is equal to the capacity of `data` and `num_rows` + 1 is equal to the capacity of `offsets`.
             unsafe {
                 offsets.set_len(num_rows + 1);
                 data.set_len(data_size);
@@ -654,6 +670,8 @@ fn build(
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
 pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
+    // # Safety
+    // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
