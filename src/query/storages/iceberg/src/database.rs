@@ -87,14 +87,11 @@ impl Database for IcebergDatabase {
             )));
         }
 
-        let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
-        let tbl_root = DataOperator::try_create(&table_sp).await?;
-
         let tbl = IcebergTable::try_create(
             &self.ctl_name,
             &self.info.name_ident.db_name,
             table_name,
-            tbl_root,
+            self.db_root.clone(),
         )
         .await?;
         let tbl = Arc::new(tbl) as Arc<dyn Table>;
