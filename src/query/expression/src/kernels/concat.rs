@@ -259,14 +259,14 @@ impl Column {
         for col in cols {
             let len = col.len();
             // # Safety
-            // `num_rows` must be greater than the sum of cols len.
+            // Copy is safe: the capacity of builder is equal to the sum of cols len.
             unsafe {
                 std::ptr::copy_nonoverlapping(col.as_slice().as_ptr(), ptr, len);
                 ptr = ptr.add(len);
             }
         }
         // # Safety
-        // The capacity of builder is `num_rows`.
+        // The capacity of `builder` is `num_rows` and we have added `num_rows` elements to `builder` by `ptr`.
         unsafe { builder.set_len(num_rows) };
         builder
     }

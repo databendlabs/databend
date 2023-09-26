@@ -712,16 +712,18 @@ impl Column {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
         let ptr = builder.as_mut_ptr();
         // # Safety
-        // `i` must be less than `num_rows` and the capacity of builder is `num_rows`.
-        unsafe {
-            for (i, row_ptr) in indices.iter().enumerate() {
+        // `i` must be less than `num_rows`.
+        for (i, row_ptr) in indices.iter().enumerate() {
+            unsafe {
                 std::ptr::write(
                     ptr.add(i),
                     col[row_ptr.chunk_index as usize][row_ptr.row_index as usize],
                 );
             }
-            builder.set_len(num_rows);
         }
+        // # Safety
+        // The capacity of `builder` is `num_rows` and we have added `num_rows` elements to `builder` by `ptr`.
+        unsafe { builder.set_len(num_rows) };
         builder
     }
 

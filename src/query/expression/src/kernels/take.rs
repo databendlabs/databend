@@ -194,14 +194,16 @@ impl Column {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
         let ptr = builder.as_mut_ptr();
         let col_ptr = col.as_slice().as_ptr();
-        // # Safety
-        // `i` must be less than `num_rows` and the capacity of builder is `num_rows`.
-        unsafe {
-            for (i, index) in indices.iter().enumerate() {
+        for (i, index) in indices.iter().enumerate() {
+            // # Safety
+            // `i` must be less than `num_rows`.
+            unsafe {
                 std::ptr::copy_nonoverlapping(col_ptr.add(index.to_usize()), ptr.add(i), 1);
             }
-            builder.set_len(num_rows);
         }
+        // # Safety
+        // The capacity of `builder` is `num_rows` and we have added `num_rows` elements to `builder` by `ptr`.
+        unsafe { builder.set_len(num_rows) };
         builder
     }
 
