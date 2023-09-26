@@ -81,7 +81,7 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&mut uri)?;
+                let (stage_storage, path) = parse_uri_location(&mut uri).await?;
 
                 if !path.ends_with('/') {
                     return Err(ErrorCode::SyntaxException(

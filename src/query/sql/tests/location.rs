@@ -20,6 +20,7 @@ use std::collections::BTreeMap;
 
 use anyhow::Result;
 use common_ast::ast::UriLocation;
+use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
@@ -37,8 +38,8 @@ use common_meta_app::storage::STORAGE_IPFS_DEFAULT_ENDPOINT;
 use common_meta_app::storage::STORAGE_S3_DEFAULT_ENDPOINT;
 use common_sql::planner::binder::parse_uri_location;
 
-#[test]
-fn test_parse_uri_location() -> Result<()> {
+#[tokio::test]
+async fn test_parse_uri_location() -> Result<()> {
     let thread_name = match std::thread::current().name() {
         None => panic!("thread name is none"),
         Some(thread_name) => thread_name.to_string(),
@@ -415,7 +416,7 @@ fn test_parse_uri_location() -> Result<()> {
     ];
 
     for (name, mut input, expected) in cases {
-        let actual = parse_uri_location(&mut input)?;
+        let actual = parse_uri_location(&mut input).await?;
         assert_eq!(expected, actual, "{}", name);
     }
 

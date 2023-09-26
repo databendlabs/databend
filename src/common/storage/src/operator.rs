@@ -243,7 +243,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         } else {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
-                "region for s3 storage is not set and failed to auto detect, please check and set it manually",
+                anyhow!(
+                    "region for s3 storage is not set and failed to auto detect, please check and set it manually"
+                ),
             ));
         }
     }
