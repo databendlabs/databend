@@ -236,6 +236,8 @@ impl HashMethod for HashMethodSerializer {
         for i in 0..num_rows {
             let old_ptr = data_ptr;
             for (col, _) in group_columns {
+                // # Safety
+                // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
                 unsafe {
                     serialize_column_binary(col, i, &mut data_ptr);
                 }
@@ -320,6 +322,8 @@ impl HashMethod for HashMethodDictionarySerializer {
             for i in 0..num_rows {
                 let old_ptr = data_ptr;
                 for col in other_columns.iter() {
+                    // # Safety
+                    // The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
                     unsafe {
                         serialize_column_binary(col, i, &mut data_ptr);
                     }
