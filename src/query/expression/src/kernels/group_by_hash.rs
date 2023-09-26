@@ -621,6 +621,7 @@ fn build(
     Ok(())
 }
 
+/// The serialize_size is equal to the number of bytes required by serialization.
 pub fn serialize_column(
     columns: &[Column],
     num_rows: usize,
