@@ -2321,8 +2321,8 @@ impl FastValuesDecodeFallback for ValueSource {
                 .await?
         };
         res.map_err(|mut err| {
-            // ValueSource's input is a sub-slice of the original SQL, which makes the span
-            // of the error have an offset, therefore, we pad the span here.
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
             if let Some(span) = err.span() {
                 err = err.set_span(Some(
                     (span.start() + self.start..span.end() + self.start).into(),
