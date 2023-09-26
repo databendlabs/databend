@@ -221,6 +221,8 @@ impl HashMethod for HashMethodSerializer {
         for (column, _) in group_columns.iter() {
             data_size += column.serialize_size();
         }
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively, 
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size);
         let mut data_ptr = data.as_mut_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
@@ -303,6 +305,8 @@ impl HashMethod for HashMethodDictionarySerializer {
             for column in other_columns {
                 data_size += column.serialize_size();
             }
+            // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively, 
+            // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
             let mut data: Vec<u8> = Vec::with_capacity(data_size);
             let mut data_ptr = data.as_mut_ptr();
             let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
