@@ -39,7 +39,7 @@ do
     echo "DROP TABLE IF EXISTS $t" | $MYSQL_CLIENT_CONNECT
 done
 
-echo "VACUUM DROP TABLE" | $MYSQL_CLIENT_CONNECT
+echo "VACUUM DROP TABLE retain 0 hours" | $MYSQL_CLIENT_CONNECT
 
 # Create Tables;
 cat "$CURDIR"/tpcds.sql | $MYSQL_CLIENT_CONNECT

@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS hits;
 SQL
 
 cat <<SQL | bendsql
-VACUUM DROP TABLE;
+VACUUM DROP TABLE retain 0 hours;
 SQL
 
 cat <<SQL | bendsql
