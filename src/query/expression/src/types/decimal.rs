@@ -379,27 +379,26 @@ impl Decimal for i128 {
     }
 
     fn from_float(value: f64) -> Self {
-       //still needs to be optimized.
-       //An implementation similar to float64_as_i256 obtained from the ethnum library
-        const M:u64 = (f64::MANTISSA_DIGITS - 1);
-        const MAN_MASK:u64 = !(!0 << M);
-        const MAN_ONE:u64 = 1 << M;
-        const EXP_MASK:u64  = !0 >> f64::MANTISSA_DIGITS;
-        const EXP_OFFSET:u64 = EXP_MASK / 2;
-        const ABS_MASK:u64= !0 >> 1;
-        const SIG_MASK:u64 = !ABS_MASK;
+        // still needs to be optimized.
+        // An implementation similar to float64_as_i256 obtained from the ethnum library
+        const M: u64 = (f64::MANTISSA_DIGITS - 1) as u64;
+        const MAN_MASK: u64 = !(!0 << M);
+        const MAN_ONE: u64 = 1 << M;
+        const EXP_MASK: u64 = !0 >> f64::MANTISSA_DIGITS;
+        const EXP_OFFSET: u64 = EXP_MASK / 2;
+        const ABS_MASK: u64 = !0 >> 1;
+        const SIG_MASK: u64 = !ABS_MASK;
 
         let abs = f64::from_bits(value.to_bits() & ABS_MASK);
-        let sign = -(((value.to_bits() & SIG_MASK) >> (u64::BITS - 2)) as i128)
-            .wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
+        let sign = -(((value.to_bits() & SIG_MASK) >> (u64::BITS - 2)) as i128).wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
         if abs >= 1.0 {
             let bits = abs.to_bits();
             let exponent = ((bits >> M) & EXP_MASK) - EXP_OFFSET;
             let mantissa = (bits & MAN_MASK) | MAN_ONE;
             if exponent <= M {
-                (i128::from(mantissa >> (M - exponent))) * sign
+                (<i128 as From<u64>>::from(mantissa >> (M - exponent))) * sign
             } else if exponent < 255 {
-                (i128::from(mantissa) << (exponent - M)) * sign
+                (<i128 as From<u64>>::from(mantissa) << (exponent - M)) * sign
             } else if sign > 0 {
                 i128::MAX
             } else {
@@ -552,7 +551,7 @@ impl Decimal for i256 {
     }
 
     fn from_float(value: f64) -> Self {
-         value.as_i256()
+        value.as_i256()
     }
 
     fn from_u64(value: u64) -> Self {
@@ -1037,63 +1036,6 @@ macro_rules! with_decimal_mapped_type {
         }
     }
 }
-
-pub trait as_i128 {
-    /// Perform an `as` conversion to a [`i128`].
-    ///
-    /// [`i128]: struct.i128.html
-    #[allow(clippy::wrong_self_convention)]
-    fn as_i128(self) -> i128;
-}
-
-macro_rules! impl_as_i128_float {
-    ($($t:ty [$b:ty]),* $(,)?) => {$(
-        impl as_i128 for $t {
-            #[inline]
-            fn as_i128(self) -> i128 {
-                // The conversion follows roughly the same rules as converting
-                // `f64` to other primitive integer types:
-                // - `NaN` => `0`
-                // - `(-∞, i128::MIN]` => `i128::MIN`
-                // - `(i128::MIN, i128::MAX]` => `value as i128`
-                // - `(i128::MAX, +∞)` => `i128::MAX`
-
-                const M: $b = (<$t>::MANTISSA_DIGITS - 1) as _;
-                const MAN_MASK: $b = !(!0 << M);
-                const MAN_ONE: $b = 1 << M;
-                const EXP_MASK: $b = !0 >> <$t>::MANTISSA_DIGITS;
-                const EXP_OFFSET: $b = EXP_MASK / 2;
-                const ABS_MASK: $b = !0 >> 1;
-                const SIG_MASK: $b = !ABS_MASK;
-
-                let abs = <$t>::from_bits(self.to_bits() & ABS_MASK);
-                let sign = -(((self.to_bits() & SIG_MASK) >> (<$b>::BITS - 2)) as i128)
-                    .wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
-                if abs >= 1.0 {
-                    let bits = abs.to_bits();
-                    let exponent = ((bits >> M) & EXP_MASK) - EXP_OFFSET;
-                    let mantissa = (bits & MAN_MASK) | MAN_ONE;
-                    if exponent <= M {
-                        (i128::from(mantissa >> (M - exponent))) * sign
-                    } else if exponent < 255 {
-                        (i128::from(mantissa) << (exponent - M)) * sign
-                    } else if sign > 0 {
-                        i128::MAX
-                    } else {
-                        i128::MIN
-                    }
-                } else {
-                    i128::ZERO
-                }
-            }
-        }
-    )*};
-}
-
-impl_as_i128_float! {
-    f32[u32], f64[u64],
-}
-
 // MAX decimal256 value of little-endian format for each precision.
 // Each element is the max value of signed 256-bit integer for the specified precision which
 // is encoded to the 32-byte width format of little-endian.
