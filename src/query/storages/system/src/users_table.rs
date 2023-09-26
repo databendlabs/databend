@@ -85,6 +85,8 @@ impl AsyncSystemTable for UsersTable {
             is_configureds.push("YES".as_bytes().to_vec());
         }
 
+        // please note that do NOT display the auth_string field in the result, because there're risks of
+        // password leak. even though it's been hashed, it's still not a good thing.
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
             StringType::from_data(hostnames),
