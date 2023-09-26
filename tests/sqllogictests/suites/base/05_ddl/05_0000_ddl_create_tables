@@ -195,7 +195,7 @@ map MAP(INT32, STRING) NO {} (empty)
 variant VARIANT NO (empty) (empty)
 
 statement ok
-create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, variant VARIANT not null)
+create table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, variant VARIANT not null)
 
 query TTTTT
 desc db2.test8

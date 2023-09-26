@@ -144,8 +144,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'is_insertable_into'            | 'information_schema' | 'views'               | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                   | 'information_schema' | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                   | 'system'             | 'columns'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_transient'                  | 'system'             | 'tables'              | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'is_transient'                  | 'system'             | 'tables_with_history' | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_trigger_deletable'          | 'information_schema' | 'views'               | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'is_trigger_insertable_into'    | 'information_schema' | 'views'               | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'is_trigger_updatable'          | 'information_schema' | 'views'               | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |

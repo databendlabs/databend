@@ -11,7 +11,7 @@ DROP TABLE IF EXISTS hits ALL;
 SQL
 
 cat <<SQL | bendsql
-  CREATE TRANSIENT TABLE hits (
+  CREATE TABLE hits (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
     Title TEXT NOT NULL,
