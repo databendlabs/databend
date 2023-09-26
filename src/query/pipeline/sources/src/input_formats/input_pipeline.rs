@@ -247,7 +247,8 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         let mut batch_size = ctx.read_batch_size.min(size);
 
         let mut reader = operator
-            .range_reader(&split_info.file.path, offset..offset + size as u64)
+            .reader_with(&split_info.file.path)
+            .range(offset..offset + size as u64)
             .await?;
         let mut total_read = 0;
         loop {

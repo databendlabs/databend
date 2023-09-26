@@ -247,16 +247,15 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
 
     fn calc_date_to_timestamp(val: i32, tz: Tz) -> i64 {
         let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-        let epoch_time_with_ltz = DateTime::<Utc>::from_naive_utc_and_offset(
-            NaiveDate::from_ymd_opt(1970, 1, 1)
-                .unwrap()
-                .and_hms_micro_opt(0, 0, 0, 0)
-                .unwrap(),
-            Utc,
-        )
-        .with_timezone(&tz)
-        .naive_local()
-        .timestamp_micros();
+        let epoch_time_with_ltz = tz
+            .from_utc_datetime(
+                &NaiveDate::from_ymd_opt(1970, 1, 1)
+                    .unwrap()
+                    .and_hms_micro_opt(0, 0, 0, 0)
+                    .unwrap(),
+            )
+            .naive_local()
+            .timestamp_micros();
 
         ts - epoch_time_with_ltz
     }

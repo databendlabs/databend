@@ -139,7 +139,7 @@ impl BlockReader {
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.blocking().range_read(path, start..end)?;
+        let chunk = op.blocking().read_with(path).range(start..end).call()?;
         Ok((index, chunk))
     }
 }
