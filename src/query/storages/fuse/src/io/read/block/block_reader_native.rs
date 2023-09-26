@@ -123,7 +123,7 @@ impl BlockReader {
                 native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
             );
 
-            let reader = op.range_read(path, offset..offset + length).await?;
+            let reader = op.read_with(path).range(offset..offset + length).await?;
             let reader: Reader = Box::new(std::io::Cursor::new(reader));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
@@ -182,7 +182,11 @@ impl BlockReader {
                 native_meta.offset,
                 native_meta.pages.iter().map(|p| p.length).sum::<u64>(),
             );
-            let reader = op.blocking().range_reader(path, offset..offset + length)?;
+            let reader = op
+                .blocking()
+                .reader_with(path)
+                .range(offset..offset + length)
+                .call()?;
             let reader: Reader = Box::new(BufReader::new(reader));
 
             let native_reader = NativeReader::new(reader, native_meta.pages.clone(), vec![]);
