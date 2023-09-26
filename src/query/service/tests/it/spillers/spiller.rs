@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::ScalarRef;
 use common_storage::DataOperator;
+use databend_query::sessions::QueryContext;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerType;
