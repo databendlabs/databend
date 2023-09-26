@@ -296,7 +296,7 @@ impl HashMethod for HashMethodDictionarySerializer {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
                 }
-                _ => other_columns.push(group_column),
+                _ => other_columns.push(group_column.clone()),
             }
         }
 
