@@ -122,7 +122,6 @@ impl HashJoinBuildState {
             func_ctx,
             hash_join_state,
             chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
-            hash_join_state,
             barrier,
             restore_barrier,
             row_space_builders: Default::default(),
