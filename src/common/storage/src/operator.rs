@@ -45,7 +45,6 @@ use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
-use opendal::services::S3;
 use opendal::Builder;
 use opendal::Operator;
 
@@ -230,24 +229,12 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
-        // COLD CASE.
-        //
-        // We only running auto detect while users not specify this.
-        let endpoint = cfg.endpoint_url.clone();
-        let bucket = cfg.bucket.clone();
-        if let Some(region) = GlobalIORuntime::instance()
-            .block_on(async move { Ok(S3::detect_region(&endpoint, &bucket).await) })
-            .unwrap()
-        {
-            builder.region(&region);
-        } else {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                anyhow!(
-                    "region for s3 storage is not set and failed to auto detect, please check and set it manually"
-                ),
-            ));
-        }
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!(
+                "region for s3 storage is not set and failed to auto detect, please check and set it manually"
+            ),
+        ));
     }
 
     // Credential.

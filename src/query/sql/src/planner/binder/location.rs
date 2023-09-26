@@ -71,31 +71,15 @@ fn parse_azure_params(l: &mut UriLocation, root: String) -> Result<StorageParams
     Ok(sp)
 }
 
-async fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
+fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     let endpoint = l
         .connection
         .get("endpoint_url")
         .cloned()
         .unwrap_or_else(|| STORAGE_S3_DEFAULT_ENDPOINT.to_string());
 
-    let bucket = l.name.to_string();
-
     // we split those field out to make borrow checker happy.
-    let mut region = l.connection.get("region").cloned();
-    if region.is_none() {
-        // Try to auto detect it via endpoint and bucket name.
-        region = opendal::services::S3::detect_region(&endpoint, &bucket).await
-    }
-    let region = if let Some(region) = region {
-        region
-    } else {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!(
-                "region for s3 storage is not set and failed to auto detect, please check and set it manually"
-            ),
-        ));
-    };
+    let region = l.connection.get("region").cloned().unwrap_or_default();
 
     let access_key_id = {
         if let Some(id) = l.connection.get("access_key_id") {
@@ -387,7 +371,7 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
         #[cfg(feature = "storage-hdfs")]
         Scheme::Hdfs => parse_hdfs_params(l)?,
         Scheme::Ipfs => parse_ipfs_params(l)?,
-        Scheme::S3 => parse_s3_params(l, root).await?,
+        Scheme::S3 => parse_s3_params(l, root)?,
         Scheme::Obs => parse_obs_params(l, root)?,
         Scheme::Oss => parse_oss_params(l, root)?,
         Scheme::Http => {
@@ -425,6 +409,8 @@ pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, S
             ));
         }
     };
+
+    let sp = sp.auto_detect().await;
 
     Ok((sp, path))
 }
