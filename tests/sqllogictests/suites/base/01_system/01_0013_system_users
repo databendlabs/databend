@@ -1,0 +1,5 @@
+onlyif mysql
+query I
+SELECT * FROM system.users;
+----
+1
