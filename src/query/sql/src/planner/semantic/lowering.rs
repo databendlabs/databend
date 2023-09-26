@@ -76,7 +76,7 @@ where Index: ColumnIndex
     }
 }
 
-fn resolve_column_type<C: TypeProvider>(
+fn update_column_type<C: TypeProvider>(
     raw_expr: &RawExpr<C::ColumnID>,
     type_provider: &C,
 ) -> Result<RawExpr<C::ColumnID>> {
@@ -103,7 +103,7 @@ fn resolve_column_type<C: TypeProvider>(
         } => Ok(RawExpr::Cast {
             span: *span,
             is_try: *is_try,
-            expr: Box::new(resolve_column_type(expr, type_provider)?),
+            expr: Box::new(update_column_type(expr, type_provider)?),
             dest_type: dest_type.clone(),
         }),
         RawExpr::FunctionCall {
@@ -114,7 +114,7 @@ fn resolve_column_type<C: TypeProvider>(
         } => {
             let args = args
                 .iter()
-                .map(|arg| resolve_column_type(arg, type_provider))
+                .map(|arg| update_column_type(arg, type_provider))
                 .collect::<Result<Vec<_>>>()?;
             Ok(RawExpr::FunctionCall {
                 span: *span,
@@ -134,7 +134,7 @@ fn resolve_column_type<C: TypeProvider>(
         } => {
             let args = args
                 .iter()
-                .map(|arg| resolve_column_type(arg, type_provider))
+                .map(|arg| update_column_type(arg, type_provider))
                 .collect::<Result<Vec<_>>>()?;
             Ok(RawExpr::UDFServerCall {
                 span: *span,
@@ -158,7 +158,7 @@ impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
         &self,
         type_provider: &impl TypeProvider<ColumnID = Index>,
     ) -> Result<Expr<Index>> {
-        let raw_expr = resolve_column_type(self, type_provider)?;
+        let raw_expr = update_column_type(self, type_provider)?;
         type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)
     }
 }

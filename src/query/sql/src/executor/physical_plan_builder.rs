@@ -1887,12 +1887,7 @@ impl PhysicalPlanBuilder {
             .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
                 let predicates = predicates
                     .iter()
-                    .map(|p| {
-                        Ok(p.as_expr()?
-                            .project_column_ref(|col| col.column_name.clone()))
-                        // TODO: uncomment to pass the test
-                        // p.type_check(&DataSchema::from(table_schema))
-                    })
+                    .map(|p| p.type_check(&DataSchema::from(table_schema)))
                     .collect::<Result<Vec<_>>>()?;
 
                 let expr = predicates
@@ -1970,14 +1965,8 @@ impl PhysicalPlanBuilder {
                     .expect("there should be at least one predicate in prewhere");
 
                 let filter = cast_expr_to_non_null_boolean(
-                    predicate
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone()),
+                    predicate.type_check(&DataSchema::from(table_schema))?,
                 )?;
-                // TODO: uncomment to pass the test
-                // let filter = cast_expr_to_non_null_boolean(
-                //     predicate.type_check(&DataSchema::from(table_schema))?,
-                // )?;
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
