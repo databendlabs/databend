@@ -80,6 +80,9 @@ pub fn transform_record_batch_by_field_paths(
     batch: &RecordBatch,
     field_paths: &[(FieldRef, Vec<FieldIndex>)],
 ) -> Result<DataBlock> {
+    if batch.num_columns() == 0 {
+        return Ok(DataBlock::new(vec![], batch.num_rows()));
+    }
     let mut columns = Vec::with_capacity(field_paths.len());
     let schema = batch.schema();
     for (field, path) in field_paths.iter() {

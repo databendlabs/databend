@@ -16,7 +16,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
@@ -132,10 +131,8 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         // Topk column **must** not be in a nested column.
         let prefetched = transform_record_batch(&batch, &None)?;
         debug_assert_eq!(prefetched.num_columns(), 1);
-        let topk_col = prefetched.columns()[0]
-            .value
-            .convert_to_full_column(&DataType::Boolean, num_rows);
-        let filter = self.topk.evaluate_column(&topk_col, sorter);
+        let topk_col = prefetched.columns()[0].value.as_column().unwrap();
+        let filter = self.topk.evaluate_column(topk_col, sorter);
         if filter.unset_bits() == num_rows {
             // All rows are filtered out.
             return Ok(None);
@@ -146,7 +143,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         // Update row selection.
         match selection.as_mut() {
             Some(selection) => {
-                selection.and_then(&sel);
+                *selection = selection.and_then(&sel);
             }
             None => {
                 selection = Some(sel);

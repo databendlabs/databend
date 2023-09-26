@@ -44,12 +44,10 @@ use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 pub struct PredicateAndTopkPolicyBuilder {
     // Prefetched columns
     prefetch_projection: ProjectionMask,
-    prefetch_field_levels: FieldLevels,
-    prefetch_field_paths: Arc<Option<FieldPaths>>,
 
     predicate: Arc<ParquetPredicate>,
     // The second element is the topk column offset in the prefetched DataBlock
-    topk: Option<(Arc<ParquetTopK>, usize)>,
+    topk: Option<(Arc<ParquetTopK>, Option<usize>)>,
 
     // Remain columns
     remain_projection: ProjectionMask,
@@ -77,10 +75,13 @@ impl PredicateAndTopkPolicyBuilder {
         if let Some((_, field)) = topk {
             prefetch_leaves.insert(field.column_id as usize);
         }
+        // Remove prefetch columns
+        // TODO(parquet): reuse inner columns of a nested type.
+        // It's a bit complicated now. We just keep all output leaves if it's inner projection.
         let remain_leaves = output_leaves
             .iter()
             .cloned()
-            .filter(|i| !prefetch_leaves.contains(i))
+            .filter(|i| inner_projection || !prefetch_leaves.contains(i))
             .collect::<Vec<_>>();
         let prefetch_leaves = prefetch_leaves.into_iter().collect::<Vec<_>>();
         let prefetch_projection = ProjectionMask::leaves(schema_desc, prefetch_leaves);
@@ -103,42 +104,32 @@ impl PredicateAndTopkPolicyBuilder {
         let topk = topk.map(|(t, tf)| {
             if let Some(pos) = prefetch_fields.iter().position(|f| f.name() == tf.name()) {
                 // TopK column is contained in predicate schema.
-                (t.clone(), pos)
+                (t.clone(), Some(pos))
             } else {
                 // TopK column is not contained in predicate schema, add it to the last.
-                let pos = prefetch_fields.len();
                 prefetch_fields.push(tf.clone());
-                (t.clone(), pos)
+                (t.clone(), None)
             }
         });
-        let prefetch_field_levels =
-            parquet_to_arrow_field_levels(schema_desc, prefetch_projection.clone(), None)?;
-        let prefetch_schema = TableSchema::new(prefetch_fields);
-        let prefetch_field_paths = Arc::new(compute_output_field_paths(
-            schema_desc,
-            &prefetch_projection,
-            &prefetch_schema,
-            inner_projection,
-        )?);
+
         let remain_field_levels =
             parquet_to_arrow_field_levels(schema_desc, remain_projection.clone(), None)?;
+        let remain_schema = TableSchema::new(remain_fields);
         let remain_field_paths = Arc::new(compute_output_field_paths(
             schema_desc,
             &remain_projection,
-            remain_schema,
+            &remain_schema,
             inner_projection,
         )?);
 
-        let mut src_fields = remain_fields;
-        src_fields.extend(prefetch_schema.fields);
+        let mut src_schema = remain_schema;
+        src_schema.fields.extend(prefetch_fields);
 
-        let src_schema = Arc::new(DataSchema::from(&TableSchema::new(src_fields)));
+        let src_schema = Arc::new(DataSchema::from(&src_schema));
         let dst_schema = Arc::new(DataSchema::from(output_schema));
 
         Ok(Box::new(Self {
             prefetch_projection,
-            prefetch_field_levels,
-            prefetch_field_paths,
             predicate: predicate.clone(),
             topk,
             remain_projection,
@@ -167,18 +158,19 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
         row_group
             .fetch(&self.prefetch_projection, selection.as_ref())
             .await?;
-        let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
-            &self.prefetch_field_levels,
-            &row_group,
-            num_rows, // Read all rows at one time.
-            selection.clone(),
-        )?;
-        let batch = reader.next().transpose()?.unwrap();
-        debug_assert!(reader.next().is_none());
-        let mut prefetched = transform_record_batch(&batch, &self.prefetch_field_paths)?;
+        let mut prefetched;
 
         // Evaluate predicate
         {
+            let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
+                self.predicate.field_levels(),
+                &row_group,
+                num_rows, // Read all rows at one time.
+                selection.clone(),
+            )?;
+            let batch = reader.next().transpose()?.unwrap();
+            debug_assert!(reader.next().is_none());
+            prefetched = transform_record_batch(&batch, self.predicate.field_paths())?;
             let filter = self.predicate.evaluate_block(&prefetched)?;
             if filter.unset_bits() == num_rows {
                 // All rows in current row group are filtered out.
@@ -190,7 +182,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
             let sel = RowSelection::from_filters(&[filter]);
             match selection.as_mut() {
                 Some(selection) => {
-                    selection.and_then(&sel);
+                    *selection = selection.and_then(&sel);
                 }
                 None => {
                     selection = Some(sel);
@@ -200,7 +192,23 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
 
         // Evaluate topk
         if let Some(((topk, offset), sorter)) = self.topk.as_ref().zip(sorter.as_mut()) {
-            let topk_col = prefetched.columns()[*offset].value.as_column().unwrap();
+            let offset = if let Some(offset) = offset {
+                *offset
+            } else {
+                let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
+                    topk.field_levels(),
+                    &row_group,
+                    num_rows, // Read all rows at one time.
+                    selection.clone(),
+                )?;
+                let batch = reader.next().transpose()?.unwrap();
+                debug_assert!(reader.next().is_none());
+                let block = transform_record_batch(&batch, &None)?;
+                debug_assert_eq!(block.num_columns(), 1);
+                prefetched.merge_block(block);
+                prefetched.num_columns() - 1
+            };
+            let topk_col = prefetched.columns()[offset].value.as_column().unwrap();
             let filter = topk.evaluate_column(topk_col, sorter);
             if filter.unset_bits() == num_rows {
                 // All rows in current row group are filtered out.
@@ -211,7 +219,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
             let sel = RowSelection::from_filters(&[filter]);
             match selection.as_mut() {
                 Some(selection) => {
-                    selection.and_then(&sel);
+                    *selection = selection.and_then(&sel);
                 }
                 None => {
                     selection = Some(sel);

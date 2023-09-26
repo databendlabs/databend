@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
-use arrow_schema::FieldRef;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
@@ -25,15 +24,17 @@ use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
-use common_expression::FieldIndex;
 use common_expression::FunctionContext;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use parquet::arrow::parquet_to_arrow_field_levels;
+use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
 use super::utils::bitmap_to_boolean_array;
 use super::utils::transform_record_batch;
+use super::utils::FieldPaths;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
 
 pub struct ParquetPredicate {
@@ -41,10 +42,11 @@ pub struct ParquetPredicate {
 
     /// Columns used for eval predicate.
     projection: ProjectionMask,
+    field_levels: FieldLevels,
 
     /// Predicate filter expression.
     filter: Expr,
-    field_paths: Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
+    field_paths: Option<FieldPaths>,
 
     schema: TableSchema,
 }
@@ -54,7 +56,11 @@ impl ParquetPredicate {
         &self.projection
     }
 
-    pub fn field_paths(&self) -> &Option<Vec<(FieldRef, Vec<FieldIndex>)>> {
+    pub fn field_levels(&self) -> &FieldLevels {
+        &self.field_levels
+    }
+
+    pub fn field_paths(&self) -> &Option<FieldPaths> {
         &self.field_paths
     }
 
@@ -96,12 +102,14 @@ pub fn build_predicate(
     let (projection, leaves) = prewhere.prewhere_columns.to_arrow_projection(schema_desc);
     let field_paths =
         compute_output_field_paths(schema_desc, &projection, &schema, inner_projection)?;
+    let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
 
     Ok((
         Arc::new(ParquetPredicate {
             func_ctx,
             projection,
             filter,
+            field_levels,
             field_paths,
             schema,
         }),
