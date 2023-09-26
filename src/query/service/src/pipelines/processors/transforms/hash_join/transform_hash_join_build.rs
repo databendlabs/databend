@@ -321,9 +321,10 @@ impl Processor for TransformHashJoinBuild {
                     let spill_state = self.spill_state.as_mut().unwrap();
                     let mut hashes = Vec::with_capacity(data.num_rows());
                     spill_state.get_hashes(&data, &mut hashes)?;
+                    let spilled_partition_set = spill_state.spiller.spilled_partition_set.clone();
                     let unspilled_data = spill_state
                         .spiller
-                        .spill_input(data, &hashes, self.processor_id)
+                        .spill_input(data, &hashes, &spilled_partition_set, self.processor_id)
                         .await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;
