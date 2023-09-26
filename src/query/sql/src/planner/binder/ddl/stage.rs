@@ -91,14 +91,9 @@ impl Binder {
                 }
 
                 // Check the storage params via init operator.
-                let op = init_operator(&stage_storage).map_err(|err| {
+                let _ = init_operator(&stage_storage).map_err(|err| {
                     ErrorCode::InvalidConfig(format!(
                         "Input storage config for stage is not invalid: {err:?}"
-                    ))
-                })?;
-                op.check().await.map_err(|err| {
-                    ErrorCode::InvalidConfig(format!(
-                        "Input storage config is valid but can't pass the check: {err:?}"
                     ))
                 })?;
 
