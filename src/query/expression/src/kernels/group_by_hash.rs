@@ -302,7 +302,7 @@ impl HashMethod for HashMethodDictionarySerializer {
 
         if !other_columns.is_empty() {
             let mut data_size = 0;
-            for column in other_columns {
+            for column in other_columns.iter() {
                 data_size += column.serialize_size();
             }
             // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively, 
@@ -319,7 +319,7 @@ impl HashMethod for HashMethodDictionarySerializer {
             let mut offset = 0;
             for i in 0..num_rows {
                 let old_ptr = data_ptr;
-                for (col, _) in group_columns {
+                for col in other_columns.iter() {
                     unsafe {
                         serialize_column_binary(col, i, &mut data_ptr);
                     }
