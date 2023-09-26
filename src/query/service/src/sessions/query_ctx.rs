@@ -377,6 +377,10 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
+    fn partition_num(&self) -> usize {
+        self.partition_queue.read().len()
+    }
+
     fn add_partitions_sha(&self, s: String) {
         let mut shas = self.shared.partitions_shas.write();
         shas.push(s);

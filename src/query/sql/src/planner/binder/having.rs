@@ -15,9 +15,11 @@
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
+use super::Finder;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::ExprContext;
@@ -63,6 +65,16 @@ impl Binder {
         child: SExpr,
     ) -> Result<SExpr> {
         bind_context.set_expr_context(ExprContext::HavingClause);
+
+        let f = |scalar: &ScalarExpr| matches!(scalar, ScalarExpr::WindowFunction(_));
+        let finder = Finder::new(&f);
+        let finder = having.accept(finder)?;
+        if !finder.scalars().is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Having clause can't contain window functions".to_string(),
+            )
+            .set_span(having.span()));
+        }
 
         let scalar = if bind_context.in_grouping {
             // If we are in grouping context, we will perform the grouping check

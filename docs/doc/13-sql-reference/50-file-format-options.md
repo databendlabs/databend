@@ -114,6 +114,12 @@ Specifies how NULL values are displayed in query results.
 
 **Default**: `'\N'`
 
+### ERROR_ON_COLUMN_COUNT_MISMATCH
+
+ERROR_ON_COLUMN_COUNT_MISMATCH is a boolean option that, when set to true, specifies that an error should be raised if the number of columns in the data file doesn't match the number of columns in the destination table. Setting it to true helps ensure data integrity and consistency during the loading process.
+
+**Default**: `true`
+
 ### COMPRESSION
 
 Specifies the compression algorithm.

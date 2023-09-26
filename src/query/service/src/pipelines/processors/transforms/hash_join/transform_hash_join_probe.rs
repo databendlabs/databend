@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -66,7 +65,8 @@ pub struct TransformHashJoinProbe {
 
     // If it's first round, after last processor finish spill
     // We need to read corresponding spilled data to probe with build hash table.
-    first_round: bool,
+    // Only need to use diff partitions data to probe first-round's hash table
+    diff_partitions: VecDeque<u8>,
     // If the processor has finished spill, set it to true.
     spill_done: bool,
     spill_state: Option<Box<ProbeSpillState>>,
@@ -97,7 +97,7 @@ impl TransformHashJoinProbe {
             probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
             max_block_size,
             outer_scan_finished: false,
-            first_round: true,
+            diff_partitions: Default::default(),
             spill_done: false,
             spill_state: probe_spill_state,
             processor_id: id,
@@ -183,6 +183,11 @@ impl TransformHashJoinProbe {
                 self.join_probe_state.probe_done()?;
                 Ok(Event::Async)
             } else {
+                if !self.diff_partitions.is_empty() {
+                    // Continue to the first round
+                    self.step = HashJoinProbeStep::AsyncRunning;
+                    return Ok(Event::Async);
+                }
                 if !self.join_probe_state.spill_partitions.read().is_empty() {
                     self.join_probe_state.finish_final_probe()?;
                     self.step = HashJoinProbeStep::WaitBuild;
@@ -192,9 +197,9 @@ impl TransformHashJoinProbe {
                     .join_probe_state
                     .ctx
                     .get_settings()
-                    .get_enable_join_spill()?
+                    .get_join_spilling_threshold()?
+                    != 0
                 {
-                    // Todo: find a better way to notify build finish.
                     self.join_probe_state.finish_final_probe()?;
                 }
                 self.output_port.finish();
@@ -207,18 +212,22 @@ impl TransformHashJoinProbe {
 
     fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
-        self.probe_state.reset();
-        if self.join_probe_state.hash_join_state.need_outer_scan()
-            || self.join_probe_state.hash_join_state.need_mark_scan()
+        // self.probe_state.reset();
+        if (self.join_probe_state.hash_join_state.need_outer_scan()
+            || self.join_probe_state.hash_join_state.need_mark_scan())
+            && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
         {
-            let mut count = self.join_probe_state.probe_workers.lock();
-            if *count == 0 {
-                *count = self.join_probe_state.processor_count;
-            }
+            self.join_probe_state
+                .probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
 
-        let mut count = self.join_probe_state.final_probe_workers.lock();
-        if *count == 0 {
+        if self
+            .join_probe_state
+            .final_probe_workers
+            .load(Ordering::Relaxed)
+            == 0
+        {
             // Before probe processor into `WaitBuild` state, send `1` to channel
             // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
             self.join_probe_state
@@ -226,10 +235,33 @@ impl TransformHashJoinProbe {
                 .build_done_watcher
                 .send(1)
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-            *count = self.join_probe_state.processor_count;
+            self.join_probe_state
+                .final_probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
         self.outer_scan_finished = false;
         Ok(())
+    }
+
+    fn set_diff_partitions(&mut self) {
+        let spill_state = self.spill_state.as_ref().unwrap();
+        let probe_spilled_partitions = &spill_state.spiller.spilled_partition_set;
+        let build_spilled_partitions = self
+            .join_probe_state
+            .hash_join_state
+            .build_spilled_partitions
+            .read()
+            .clone();
+        let partitions_diff = probe_spilled_partitions
+            .difference(&build_spilled_partitions)
+            .cloned()
+            .collect();
+        self.diff_partitions.extend(&partitions_diff);
+        let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+        *spill_partitions = spill_partitions
+            .difference(&partitions_diff)
+            .cloned()
+            .collect();
     }
 }
 
@@ -271,17 +303,17 @@ impl Processor for TransformHashJoinProbe {
                         spill_partitions.extend(spilled_partition_set);
                     }
 
-                    if self.first_round
-                        && !spilled_partition_set.is_empty()
+                    if !spilled_partition_set.is_empty()
                         && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
                             != &(0_usize)
                     {
+                        self.set_diff_partitions();
                         self.spill_done = true;
+                        self.join_probe_state.finish_spill()?;
                         self.step = HashJoinProbeStep::AsyncRunning;
                         return Ok(Event::Async);
                     }
 
-                    self.first_round = false;
                     self.spill_done = true;
                     self.join_probe_state.finish_spill()?;
                     // Wait build side to build hash table
@@ -328,7 +360,8 @@ impl Processor for TransformHashJoinProbe {
                             .join_probe_state
                             .ctx
                             .get_settings()
-                            .get_enable_join_spill()?
+                            .get_join_spilling_threshold()?
+                            != 0
                         {
                             self.join_probe_state.finish_final_probe()?;
                         }
@@ -425,7 +458,8 @@ impl Processor for TransformHashJoinProbe {
                     .join_probe_state
                     .ctx
                     .get_settings()
-                    .get_enable_join_spill()?
+                    .get_join_spilling_threshold()?
+                    != 0
                 {
                     if !self.spill_done {
                         self.step = HashJoinProbeStep::Spill;
@@ -463,33 +497,9 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinProbeStep::AsyncRunning => {
                 let spill_state = self.spill_state.as_ref().unwrap();
-                if self.first_round {
-                    let probe_spilled_partitions = &spill_state.spiller.spilled_partition_set;
-                    let build_spilled_partitions = self
-                        .join_probe_state
-                        .hash_join_state
-                        .build_spilled_partitions
-                        .read()
-                        .clone();
-                    let partitions_diff: HashSet<u8> = probe_spilled_partitions
-                        .difference(&build_spilled_partitions)
-                        .cloned()
-                        .collect();
-                    let spilled_data = spill_state
-                        .spiller
-                        .read_spilled_data_from_partitions(&partitions_diff)
-                        .await?;
-                    info!(
-                        "The first round, probe spilled partitions: {:?}, build spilled partitions: {:?}, diff: {:?}",
-                        probe_spilled_partitions, build_spilled_partitions, partitions_diff
-                    );
-                    let mut spill_partitions = self.join_probe_state.spill_partitions.write();
-                    *spill_partitions = spill_partitions
-                        .difference(&partitions_diff)
-                        .cloned()
-                        .collect();
+                if let Some(p_id) = self.diff_partitions.pop_back() {
+                    let spilled_data = spill_state.spiller.read_spilled_data(&p_id).await?;
                     self.input_data.extend(spilled_data);
-                    self.first_round = false;
                     return Ok(());
                 }
                 let p_id = self
