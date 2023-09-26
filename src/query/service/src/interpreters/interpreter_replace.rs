@@ -18,6 +18,7 @@ use std::time::Instant;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::AsyncSourcerPlan;
@@ -175,6 +176,16 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        if let Some(s) = &select_ctx {
+            let select_schema = s.select_schema.as_ref();
+            let output_schema: Arc<DataSchema> = plan.schema().into();
+            // validate schema
+            if select_schema.fields().len() < output_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
+            }
+        }
         // remove top exchange
         if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
             root = input.clone();
