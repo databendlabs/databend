@@ -282,7 +282,7 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|scalar| {
                             let expr = scalar
-                                .resolve_and_check(input_schema.as_ref())?
+                                .type_check(input_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
@@ -681,7 +681,7 @@ impl PhysicalPlanBuilder {
                     Exchange::Hash(scalars) => {
                         for scalar in scalars {
                             let expr = scalar
-                                .resolve_and_check(input_schema.as_ref())?
+                                .type_check(input_schema.as_ref())?
                                 .project_column_ref(|index| {
                                     input_schema.index_of(&index.to_string()).unwrap()
                                 });
@@ -859,15 +859,15 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .zip(runtime_filter.right_runtime_filters.iter())
                 {
-                    let left_expr = left
-                        .1
-                        .resolve_and_check(left_schema.as_ref())?
-                        .project_column_ref(|index| {
-                            left_schema.index_of(&index.to_string()).unwrap()
-                        });
+                    let left_expr =
+                        left.1
+                            .type_check(left_schema.as_ref())?
+                            .project_column_ref(|index| {
+                                left_schema.index_of(&index.to_string()).unwrap()
+                            });
                     let right_expr = right
                         .1
-                        .resolve_and_check(right_schema.as_ref())?
+                        .type_check(right_schema.as_ref())?
                         .project_column_ref(|index| {
                             right_schema.index_of(&index.to_string()).unwrap()
                         });
@@ -923,7 +923,7 @@ impl PhysicalPlanBuilder {
                     .map(|item| {
                         let expr = item
                             .scalar
-                            .resolve_and_check(input_schema.as_ref())?
+                            .type_check(input_schema.as_ref())?
                             .project_column_ref(|index| {
                                 input_schema.index_of(&index.to_string()).unwrap()
                             });
@@ -1102,7 +1102,7 @@ impl PhysicalPlanBuilder {
 
                             let expr = func
                                 .lambda_expr
-                                .resolve_and_check(&lambda_schema)?
+                                .type_check(&lambda_schema)?
                                 .project_column_ref(|index| {
                                     lambda_schema.index_of(&index.to_string()).unwrap()
                                 });
@@ -1212,10 +1212,7 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by
-                .resolve_and_check(&*input_schema)?
-                .data_type()
-                .clone();
+            let mut common_ty = order_by.type_check(&*input_schema)?.data_type().clone();
             for scalar in start.iter_mut().chain(end.iter_mut()) {
                 let ty = scalar.as_ref().infer_data_type();
                 common_ty = common_super_type(
@@ -1371,7 +1368,7 @@ impl PhysicalPlanBuilder {
             .map(|item| {
                 let expr = item
                     .scalar
-                    .resolve_and_check(input_schema.as_ref())?
+                    .type_check(input_schema.as_ref())?
                     .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 Ok((expr.as_remote_expr(), item.index))
@@ -1893,6 +1890,8 @@ impl PhysicalPlanBuilder {
                     .map(|p| {
                         Ok(p.as_expr()?
                             .project_column_ref(|col| col.column_name.clone()))
+                        // TODO: uncomment to pass the test
+                        // p.type_check(&DataSchema::from(table_schema))
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -1975,6 +1974,10 @@ impl PhysicalPlanBuilder {
                         .as_expr()?
                         .project_column_ref(|col| col.column_name.clone()),
                 )?;
+                // TODO: uncomment to pass the test
+                // let filter = cast_expr_to_non_null_boolean(
+                //     predicate.type_check(&DataSchema::from(table_schema))?,
+                // )?;
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
