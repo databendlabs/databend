@@ -1,0 +1,55 @@
+name: Run Sqlsmith
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: Run Sqlsmith
+        required: false
+        type: string
+
+env:
+  BUILD_PROFILE: debug
+
+jobs:
+  check:
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/check
+        timeout-minutes: 30
+        with:
+          github_token: ${{ github.token }}
+
+  build:
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, libc: gnu }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        timeout-minutes: 30
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          artifacts: all
+
+  test_sqlsmith:
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/test_sqlsmith
+        timeout-minutes: 10
+        continue-on-error: true
