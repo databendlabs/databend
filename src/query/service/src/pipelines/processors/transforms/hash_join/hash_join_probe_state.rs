@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 use std::collections::VecDeque;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -66,7 +67,7 @@ pub struct HashJoinProbeState {
     /// After the processor finish probe hash table, it will be decreased by 1.
     /// (Note: it doesn't mean the processor has finished its work, it just means it has finished probe hash table.)
     /// When the counter is 0, processors will go to next phase's work
-    pub(crate) probe_workers: Mutex<usize>,
+    pub(crate) probe_workers: AtomicUsize,
     /// Wait all `probe_workers` finish
     pub(crate) barrier: Barrier,
     /// The schema of probe side.
@@ -77,15 +78,15 @@ pub struct HashJoinProbeState {
     /// Todo(xudong): add more detailed comments for the following fields.
     /// Final scan tasks
     pub(crate) final_scan_tasks: RwLock<VecDeque<usize>>,
-    pub(crate) mark_scan_map_lock: Mutex<bool>,
+    pub(crate) mark_scan_map_lock: Mutex<()>,
     /// Hash method
     pub(crate) hash_method: HashMethodKind,
 
     /// Spill related states
     /// Record spill workers
-    pub(crate) spill_workers: Mutex<usize>,
+    pub(crate) spill_workers: AtomicUsize,
     /// Record final probe workers
-    pub(crate) final_probe_workers: Mutex<usize>,
+    pub(crate) final_probe_workers: AtomicUsize,
     /// Probe spilled partitions set
     pub(crate) spill_partitions: RwLock<HashSet<u8>>,
     /// Wait all processors to restore spilled data, then go to new probe
@@ -122,15 +123,15 @@ impl HashJoinProbeState {
             func_ctx,
             hash_join_state,
             processor_count,
-            probe_workers: Mutex::new(0),
-            spill_workers: Mutex::new(0),
+            probe_workers: AtomicUsize::new(0),
+            spill_workers: AtomicUsize::new(0),
             final_probe_workers: Default::default(),
             barrier,
             restore_barrier,
             probe_schema,
             probe_projections: probe_projections.clone(),
             final_scan_tasks: RwLock::new(VecDeque::new()),
-            mark_scan_map_lock: Mutex::new(false),
+            mark_scan_map_lock: Mutex::new(()),
             hash_method: method,
             spill_partitions: Default::default(),
         })
@@ -265,27 +266,21 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_attach(&self) -> Result<usize> {
-        let mut res = 0;
+        let mut worker_id = 0;
         if self.hash_join_state.need_outer_scan() || self.hash_join_state.need_mark_scan() {
-            let mut count = self.probe_workers.lock();
-            *count += 1;
-            res = *count;
+            worker_id = self.probe_workers.fetch_add(1, Ordering::Relaxed);
         }
         if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
-            let mut count = self.final_probe_workers.lock();
-            *count += 1;
-            let mut count = self.spill_workers.lock();
-            *count += 1;
-            res = *count;
+            worker_id = self.final_probe_workers.fetch_add(1, Ordering::Relaxed);
+            self.spill_workers.fetch_add(1, Ordering::Relaxed);
         }
 
-        Ok(res)
+        Ok(worker_id)
     }
 
     pub fn finish_final_probe(&self) -> Result<()> {
-        let mut count = self.final_probe_workers.lock();
-        *count -= 1;
-        if *count == 0 {
+        let old_count = self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             // If build side has spilled data, we need to wait build side to next round.
             // Set partition id to `HashJoinState`
             let mut spill_partitions = self.spill_partitions.write();
@@ -312,9 +307,8 @@ impl HashJoinProbeState {
     }
 
     pub fn probe_done(&self) -> Result<()> {
-        let mut count = self.probe_workers.lock();
-        *count -= 1;
-        if *count == 0 {
+        let old_count = self.probe_workers.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             // Divide the final scan phase into multiple tasks.
             self.generate_final_scan_task()?;
         }
@@ -322,11 +316,9 @@ impl HashJoinProbeState {
     }
 
     pub fn finish_spill(&self) -> Result<()> {
-        let mut count = self.final_probe_workers.lock();
-        *count -= 1;
-        let mut count = self.spill_workers.lock();
-        *count -= 1;
-        if *count == 0 {
+        self.final_probe_workers.fetch_sub(1, Ordering::Relaxed);
+        let old_count = self.spill_workers.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             // Set partition id to `HashJoinState`
             let mut spill_partitions = self.spill_partitions.write();
             if let Some(id) = spill_partitions.iter().next().cloned() {

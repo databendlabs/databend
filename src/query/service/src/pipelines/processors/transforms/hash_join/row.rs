@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -29,9 +31,11 @@ use crate::sessions::QueryContext;
 
 pub struct RowSpace {
     pub build_schema: DataSchemaRef,
-    pub write_lock: RwLock<bool>,
     pub buffer: RwLock<Vec<DataBlock>>,
-    pub buffer_row_size: RwLock<usize>,
+    // In `build` method, need to compute how many rows in buffer.
+    // However, computing rows count every time will hurt performance,
+    // so use `buffer_row_size` to record rows count in buffer.
+    pub buffer_row_size: AtomicUsize,
 }
 
 impl RowSpace {
@@ -50,9 +54,8 @@ impl RowSpace {
         let build_schema = DataSchemaRefExt::create(projected_build_fields);
         Ok(Self {
             build_schema,
-            write_lock: RwLock::new(false),
             buffer: RwLock::new(Vec::with_capacity(buffer_size as usize)),
-            buffer_row_size: RwLock::new(0),
+            buffer_row_size: AtomicUsize::new(0),
         })
     }
 
@@ -81,6 +84,6 @@ impl RowSpace {
     pub fn reset(&self) {
         let mut buffer = self.buffer.write();
         buffer.clear();
-        *self.buffer_row_size.write() = 0;
+        self.buffer_row_size.store(0, Ordering::Relaxed);
     }
 }
