@@ -471,6 +471,24 @@ impl PipelineBuilder {
             }
             output_len
         };
+        // Handle matched and unmatched data separately.
+
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
 
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
