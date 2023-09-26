@@ -27,7 +27,7 @@ use sharing_endpoint::services::SharingServices;
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    let config = Config::load().expect("cfgs");
+    let config = Config::load().await.expect("cfgs");
     // Print information to users.
     println!("Databend open-sharing");
     println!();

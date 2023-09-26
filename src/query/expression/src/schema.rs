@@ -1363,6 +1363,7 @@ impl From<&ArrowField> for TableDataType {
 
             ArrowDataType::Binary
             | ArrowDataType::LargeBinary
+            | ArrowDataType::FixedSizeBinary(_)
             | ArrowDataType::Utf8
             | ArrowDataType::LargeUtf8 => TableDataType::String,
 

@@ -28,7 +28,6 @@ dashmap = { version = "5.5.1", features = ["serde"] }
 flagset = "0.4"
 futures = "0.3"
 lazy_static = { workspace = true }
-log = { workspace = true }
 metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }

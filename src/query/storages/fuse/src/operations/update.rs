@@ -35,10 +35,12 @@ use common_sql::plans::PREDICATE_COLUMN_NAME;
 use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::delete::MutationBlockPruningContext;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
+use crate::pruning::create_segment_location_vector;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -272,7 +274,13 @@ impl FuseTable {
                 ctx.clone(),
                 filters,
                 projection,
-                base_snapshot,
+                MutationBlockPruningContext {
+                    segment_locations: create_segment_location_vector(
+                        base_snapshot.segments.clone(),
+                        None,
+                    ),
+                    block_count: Some(base_snapshot.summary.block_count as usize),
+                },
                 false,
                 false, // for update
             )

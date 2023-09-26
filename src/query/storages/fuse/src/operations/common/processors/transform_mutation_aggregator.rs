@@ -229,7 +229,7 @@ impl TableMutationAggregator {
 
                 let mut replaced_segments = HashMap::new();
                 let mut merged_statistics = Statistics::default();
-                let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+                let chunk_size = self.ctx.get_settings().get_max_threads()? as usize;
                 let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
                 for chunk in segment_indices.chunks(chunk_size) {
                     let results = self.partial_apply(chunk.to_vec()).await?;
@@ -373,11 +373,11 @@ impl TableMutationAggregator {
         }
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+
         execute_futures_in_parallel(
             tasks,
             threads_nums,
-            permit_nums,
+            threads_nums * 2,
             "fuse-req-segments-worker".to_owned(),
         )
         .await?

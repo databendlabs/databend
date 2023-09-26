@@ -124,16 +124,18 @@ impl SessionManager {
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
-        let mut sessions = self.active_sessions.write();
-        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-        }
+        {
+            let mut sessions = self.active_sessions.write();
+            if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+                self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+            }
 
-        session_metrics::incr_session_connect_numbers();
-        session_metrics::set_session_active_connections(sessions.len());
+            session_metrics::incr_session_connect_numbers();
+            session_metrics::set_session_active_connections(sessions.len());
 
-        if !matches!(typ, SessionType::FlightRPC) {
-            sessions.insert(session.get_id(), Arc::downgrade(&session));
+            if !matches!(typ, SessionType::FlightRPC) {
+                sessions.insert(session.get_id(), Arc::downgrade(&session));
+            }
         }
 
         if let SessionType::MySQL = typ {
@@ -156,6 +158,8 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
+        // NOTE: order and scope of lock are very important. It's will cause deadlock
+
         // stop tracking session
         {
             // Make sure this write lock has been released before dropping.
@@ -165,19 +169,21 @@ impl SessionManager {
         }
 
         // also need remove mysql_conn_map
-        let mut mysql_conns_map = self.mysql_conn_map.write();
-        for (k, v) in mysql_conns_map.deref_mut().clone() {
-            if &v == session_id {
-                mysql_conns_map.remove(&k);
+        {
+            let mut mysql_conns_map = self.mysql_conn_map.write();
+            for (k, v) in mysql_conns_map.deref_mut().clone() {
+                if &v == session_id {
+                    mysql_conns_map.remove(&k);
+                }
             }
         }
 
-        let sessions_count = {
-            let sessions = self.active_sessions.read();
-            sessions.len()
-        };
-        session_metrics::incr_session_close_numbers();
-        session_metrics::set_session_active_connections(sessions_count);
+        {
+            let sessions_count = { self.active_sessions.read().len() };
+
+            session_metrics::incr_session_close_numbers();
+            session_metrics::set_session_active_connections(sessions_count);
+        }
     }
 
     pub fn graceful_shutdown(

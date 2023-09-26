@@ -48,7 +48,6 @@ pub struct RowBasedFileSink {
 }
 
 impl RowBasedFileSink {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         table_info: StageTableInfo,

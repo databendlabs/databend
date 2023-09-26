@@ -23,6 +23,7 @@ use std::time::SystemTime;
 use common_base::base::Progress;
 use common_base::runtime::Runtime;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
@@ -57,6 +58,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
     pub(in crate::sessions) write_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled.
+    pub(in crate::sessions) spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
@@ -65,7 +68,7 @@ pub struct QueryContextShared {
     pub(in crate::sessions) init_query_id: Arc<RwLock<String>>,
     pub(in crate::sessions) cluster_cache: Arc<Cluster>,
     pub(in crate::sessions) running_query: Arc<RwLock<Option<String>>>,
-    pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<String>>>,
+    pub(in crate::sessions) running_query_kind: Arc<RwLock<Option<QueryKind>>>,
     pub(in crate::sessions) aborting: Arc<AtomicBool>,
     pub(in crate::sessions) tables_refs: Arc<Mutex<HashMap<DatabaseAndTable, Arc<dyn Table>>>>,
     pub(in crate::sessions) affect: Arc<Mutex<Option<QueryAffect>>>,
@@ -128,6 +131,7 @@ impl QueryContextShared {
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
+            spill_progress: Arc::new(Progress::create()),
         }))
     }
 
@@ -324,7 +328,7 @@ impl QueryContextShared {
         (*query_runtime).clone()
     }
 
-    pub fn attach_query_str(&self, kind: String, query: String) {
+    pub fn attach_query_str(&self, kind: QueryKind, query: String) {
         {
             let mut running_query = self.running_query.write();
             *running_query = Some(short_sql(query));
@@ -341,12 +345,12 @@ impl QueryContextShared {
         running_query.as_ref().unwrap_or(&"".to_string()).clone()
     }
 
-    pub fn get_query_kind(&self) -> String {
+    pub fn get_query_kind(&self) -> QueryKind {
         let running_query_kind = self.running_query_kind.read();
         running_query_kind
             .as_ref()
             .cloned()
-            .unwrap_or_else(|| "Unknown".to_string())
+            .unwrap_or(QueryKind::Unknown)
     }
 
     pub fn get_connection_id(&self) -> String {

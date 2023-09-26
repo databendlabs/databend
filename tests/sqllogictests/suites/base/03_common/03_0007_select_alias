@@ -34,7 +34,7 @@ statement ok
 CREATE TABLE test.t (id int)
 
 statement ok
-INSERT INTO test.t VALUES(1)
+INSERT INTO test.t VALUES (1)
 
 query IIII
 SELECT t.`id` AS C, `t`.id AS C1, `id` AS C2, `t`.`id` AS C3  FROM test.t

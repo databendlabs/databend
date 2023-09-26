@@ -138,7 +138,7 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
 
 async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Result<Reader> {
     let reader = if let Some(len) = len_hint {
-        op.range_reader(path, 0..len).await?
+        op.reader_with(path).range(0..len).await?
     } else {
         op.reader(path).await?
     };

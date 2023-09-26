@@ -155,16 +155,17 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let merge = map(
         rule! {
             MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
-            ~ #merge_source  ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            ~ #merge_source  ~ #table_alias? ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
             opt_hints,
             _,
             (catalog, database, table),
-            alias_target,
+            target_alias,
             _,
             source,
+            source_alias,
             _,
             join_expr,
             merge_options,
@@ -175,7 +176,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table_ident: table,
                 source,
-                alias_target,
+                source_alias,
+                target_alias,
                 join_expr,
                 merge_options,
             })
@@ -1633,7 +1635,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, _))| InsertSource::Values { rest_str },
+        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),

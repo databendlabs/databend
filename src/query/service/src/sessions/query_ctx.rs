@@ -36,6 +36,7 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::StageTableInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::MaterializedCtesBlocks;
 use common_catalog::table_context::StageAttachment;
@@ -318,8 +319,16 @@ impl TableContext for QueryContext {
         self.shared.write_progress.clone()
     }
 
+    fn get_spill_progress(&self) -> Arc<Progress> {
+        self.shared.spill_progress.clone()
+    }
+
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
+    }
+
+    fn get_spill_progress_value(&self) -> ProgressValues {
+        self.shared.spill_progress.as_ref().get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {
@@ -376,6 +385,10 @@ impl TableContext for QueryContext {
         Ok(())
     }
 
+    fn partition_num(&self) -> usize {
+        self.partition_queue.read().len()
+    }
+
     fn add_partitions_sha(&self, s: String) {
         let mut shas = self.shared.partitions_shas.write();
         shas.push(s);
@@ -406,7 +419,7 @@ impl TableContext for QueryContext {
             .store(enable, Ordering::Release);
     }
 
-    fn attach_query_str(&self, kind: String, query: String) {
+    fn attach_query_str(&self, kind: QueryKind, query: String) {
         self.shared.attach_query_str(kind, query);
     }
 
@@ -485,7 +498,7 @@ impl TableContext for QueryContext {
         self.shared.get_tenant()
     }
 
-    fn get_query_kind(&self) -> String {
+    fn get_query_kind(&self) -> QueryKind {
         self.shared.get_query_kind()
     }
 
@@ -726,7 +739,7 @@ impl TableContext for QueryContext {
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        if self.get_query_kind() == "Copy" {
+        if matches!(self.get_query_kind(), QueryKind::Copy) {
             self.shared.copy_status.add_chunk(file_path, file_status);
         }
         Ok(())

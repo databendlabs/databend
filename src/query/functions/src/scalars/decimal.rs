@@ -47,16 +47,34 @@ use num_traits::AsPrimitive;
 use ordered_float::OrderedFloat;
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
-        match $common_type {
-            DecimalDataType::Decimal128(size) => {
+    ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $result_type: expr, $op: ident, $is_divide: expr) => {
+        match $left {
+            DecimalDataType::Decimal128(_) => {
                 binary_decimal!(
-                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i128, Decimal128, $is_divide
+                    $a,
+                    $b,
+                    $ctx,
+                    $left,
+                    $right,
+                    $op,
+                    $result_type.size(),
+                    i128,
+                    Decimal128,
+                    $is_divide
                 )
             }
-            DecimalDataType::Decimal256(size) => {
+            DecimalDataType::Decimal256(_) => {
                 binary_decimal!(
-                    $a, $b, $ctx, $op, size, $scale_a, $scale_b, i256, Decimal256, $is_divide
+                    $a,
+                    $b,
+                    $ctx,
+                    $left,
+                    $right,
+                    $op,
+                    $result_type.size(),
+                    i256,
+                    Decimal256,
+                    $is_divide
                 )
             }
         }
@@ -118,11 +136,87 @@ macro_rules! compare_decimal {
 }
 
 macro_rules! binary_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $scale_a: expr, $scale_b: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
-        let scale_a = <$type_name>::e($scale_a);
-        let scale_b = <$type_name>::e($scale_b);
+    ($a: expr, $b: expr, $ctx: expr, $left: expr, $right: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt, $is_divide: expr) => {{
+        let overflow = $size.precision == <$type_name>::default_decimal_size().precision;
 
-        let zero = <$type_name>::zero();
+        if $is_divide {
+            let scale_a = $left.scale();
+            let scale_b = $right.scale();
+            binary_decimal_div!(
+                $a,
+                $b,
+                $ctx,
+                scale_a,
+                scale_b,
+                $op,
+                $size,
+                $type_name,
+                $decimal_type
+            )
+        } else if overflow {
+            binary_decimal_check_overflow!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+        } else {
+            binary_decimal_no_overflow!($a, $b, $ctx, $op, $size, $type_name, $decimal_type)
+        }
+    }};
+}
+
+macro_rules! binary_decimal_no_overflow {
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
+        match ($a, $b) {
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_b, _))),
+            ) => {
+                let result: Vec<_> = buffer_a
+                    .iter()
+                    .zip(buffer_b.iter())
+                    .map(|(a, b)| a.$op(b))
+                    .collect();
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let result: Vec<_> = buffer.iter().map(|a| a.$op(b)).collect();
+
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+            ) => {
+                let result: Vec<_> = buffer.iter().map(|b| a.$op(b)).collect();
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(
+                a.$op(b),
+                $size,
+            ))),
+
+            _ => unreachable!("arg type of binary op is not required decimal"),
+        }
+    }};
+}
+
+macro_rules! binary_decimal_check_overflow {
+    ($a: expr, $b: expr, $ctx: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
         let one = <$type_name>::one();
         let min_for_precision = <$type_name>::min_for_precision($size.precision);
         let max_for_precision = <$type_name>::max_for_precision($size.precision);
@@ -135,20 +229,15 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer_a.len());
 
                 for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
-                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
-                        $ctx.set_error(result.len(), "divided by zero");
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
                         result.push(one);
                     } else {
-                        let t = (a * scale_a).$op(b) / scale_b;
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                        result.push(t);
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -163,21 +252,16 @@ macro_rules! binary_decimal {
             ) => {
                 let mut result = Vec::with_capacity(buffer.len());
 
-                if $is_divide && std::intrinsics::unlikely(*b == zero) {
-                    $ctx.set_error(result.len(), "divided by zero");
-                    result.push(one);
-                } else {
-                    for a in buffer.iter() {
-                        let t = (a * scale_a).$op(b) / scale_b;
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                for a in buffer.iter() {
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    } else {
+                        result.push(t);
                     }
                 }
 
@@ -194,20 +278,107 @@ macro_rules! binary_decimal {
                 let mut result = Vec::with_capacity(buffer.len());
 
                 for b in buffer.iter() {
-                    if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                    let t = a.$op(b);
+                    if t < min_for_precision || t > max_for_precision {
+                        $ctx.set_error(
+                            result.len(),
+                            concat!("Decimal overflow at line : ", line!()),
+                        );
+                        result.push(one);
+                    } else {
+                        result.push(t);
+                    }
+                }
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let t = a.$op(b);
+                if t < min_for_precision || t > max_for_precision {
+                    $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
+                }
+                Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
+            }
+
+            _ => unreachable!("arg type of binary op is not required decimal"),
+        }
+    }};
+}
+
+macro_rules! binary_decimal_div {
+    ($a: expr, $b: expr, $ctx: expr, $scale_a: expr, $scale_b: expr, $op: ident, $size: expr, $type_name: ty, $decimal_type: tt) => {{
+        let zero = <$type_name>::zero();
+        let one = <$type_name>::one();
+
+        let (scale_mul, scale_div) = if $scale_b + $size.scale > $scale_a {
+            ($scale_b + $size.scale - $scale_a, 0)
+        } else {
+            (0, $scale_b + $size.scale - $scale_a)
+        };
+
+        let multiplier = <$type_name>::e(scale_mul as u32);
+        let div = <$type_name>::e(scale_div as u32);
+
+        match ($a, $b) {
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer_b, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer_a.len());
+
+                for (a, b) in buffer_a.iter().zip(buffer_b.iter()) {
+                    if std::intrinsics::unlikely(*b == zero) {
                         $ctx.set_error(result.len(), "divided by zero");
                         result.push(one);
                     } else {
-                        let t = (a * scale_a).$op(b) / scale_b;
-                        if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(
-                                result.len(),
-                                concat!("Decimal overflow at line : ", line!()),
-                            );
-                            result.push(one);
-                        } else {
-                            result.push(t);
-                        }
+                        result.push((a * multiplier).$op(b) / div);
+                    }
+                }
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer.len());
+
+                for a in buffer.iter() {
+                    if std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
+                        result.push(one);
+                    } else {
+                        result.push((a * multiplier).$op(b) / div);
+                    }
+                }
+
+                Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
+                    result.into(),
+                    $size,
+                )))
+            }
+
+            (
+                ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(a, _))),
+                ValueRef::Column(Column::Decimal(DecimalColumn::$decimal_type(buffer, _))),
+            ) => {
+                let mut result = Vec::with_capacity(buffer.len());
+
+                for b in buffer.iter() {
+                    if std::intrinsics::unlikely(*b == zero) {
+                        $ctx.set_error(result.len(), "divided by zero");
+                        result.push(one);
+                    } else {
+                        result.push((a * multiplier).$op(b) / div);
                     }
                 }
                 Value::Column(Column::Decimal(DecimalColumn::$decimal_type(
@@ -221,13 +392,10 @@ macro_rules! binary_decimal {
                 ValueRef::Scalar(ScalarRef::Decimal(DecimalScalar::$decimal_type(b, _))),
             ) => {
                 let mut t = zero;
-                if $is_divide && std::intrinsics::unlikely(*b == zero) {
+                if std::intrinsics::unlikely(*b == zero) {
                     $ctx.set_error(0, "divided by zero");
                 } else {
-                    t = (a * scale_a).$op(b) / scale_b;
-                    if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
-                    }
+                    t = (a * multiplier).$op(b) / div;
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
             }
@@ -298,8 +466,6 @@ macro_rules! register_decimal_compare_op {
 fn domain_plus<T: Decimal>(
     lhs: &SimpleDomain<T>,
     rhs: &SimpleDomain<T>,
-    _lscale: u32,
-    _rscale: u32,
     precision: u8,
 ) -> Option<SimpleDomain<T>> {
     // For plus, the scale of the two operands must be the same.
@@ -321,8 +487,6 @@ fn domain_plus<T: Decimal>(
 fn domain_minus<T: Decimal>(
     lhs: &SimpleDomain<T>,
     rhs: &SimpleDomain<T>,
-    _lscale: u32,
-    _rscale: u32,
     precision: u8,
 ) -> Option<SimpleDomain<T>> {
     // For minus, the scale of the two operands must be the same.
@@ -344,39 +508,26 @@ fn domain_minus<T: Decimal>(
 fn domain_mul<T: Decimal>(
     lhs: &SimpleDomain<T>,
     rhs: &SimpleDomain<T>,
-    lscale: u32,
-    rscale: u32,
     precision: u8,
 ) -> Option<SimpleDomain<T>> {
-    // For mul, the scale of the two operands are not the same.
-    let lscale = T::e(lscale);
-    let rscale = T::e(rscale);
     let min = T::min_for_precision(precision);
     let max = T::max_for_precision(precision);
 
     let a = lhs
         .min
-        .checked_mul(lscale)?
-        .checked_mul(rhs.min)?
-        .checked_div(rscale)
+        .checked_mul(rhs.min)
         .filter(|&m| m >= min && m <= max)?;
     let b = lhs
         .min
-        .checked_mul(lscale)?
-        .checked_mul(rhs.max)?
-        .checked_div(rscale)
+        .checked_mul(rhs.max)
         .filter(|&m| m >= min && m <= max)?;
     let c = lhs
         .max
-        .checked_mul(lscale)?
-        .checked_mul(rhs.min)?
-        .checked_div(rscale)
+        .checked_mul(rhs.min)
         .filter(|&m| m >= min && m <= max)?;
     let d = lhs
         .max
-        .checked_mul(lscale)?
-        .checked_mul(rhs.max)?
-        .checked_div(rscale)
+        .checked_mul(rhs.max)
         .filter(|&m| m >= min && m <= max)?;
 
     Some(SimpleDomain {
@@ -389,8 +540,6 @@ fn domain_mul<T: Decimal>(
 fn domain_div<T: Decimal>(
     _lhs: &SimpleDomain<T>,
     _rhs: &SimpleDomain<T>,
-    _lscale: u32,
-    _rscale: u32,
     _precision: u8,
 ) -> Option<SimpleDomain<T>> {
     // For div, we cannot determine the domain.
@@ -423,7 +572,8 @@ macro_rules! register_decimal_binary_op {
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
 
-            let return_decimal_type = DecimalDataType::binary_result_type(
+            // left, right will unify to same width decimal, both 256 or both 128
+            let (left, right, return_decimal_type) = DecimalDataType::binary_result_type(
                 &decimal_a,
                 &decimal_b,
                 is_multiply,
@@ -432,101 +582,62 @@ macro_rules! register_decimal_binary_op {
             )
             .ok()?;
 
-            let common_decimal_type = if is_divide {
-                DecimalDataType::div_common_type(&decimal_a, &decimal_b).ok()?
-            } else {
-                return_decimal_type
-            };
-
-            let mut scale_a = 0;
-            let mut scale_b = 0;
-
-            if is_multiply {
-                scale_b = return_decimal_type.scale() as u32;
-            } else if is_divide {
-                scale_a = common_decimal_type.scale() as u32;
-            }
-
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: args_type.clone(),
+                    args_type: vec![
+                        DataType::Decimal(left.clone()),
+                        DataType::Decimal(right.clone()),
+                    ],
                     return_type: DataType::Decimal(return_decimal_type),
                 },
                 eval: FunctionEval::Scalar {
-                    calc_domain: Box::new(move |ctx, d| {
-                        let size = common_decimal_type.size();
-                        let lhs = convert_to_decimal_domain(ctx, d[0].clone(), common_decimal_type);
-                        if lhs.is_none() {
+                    calc_domain: Box::new(move |_ctx, d| {
+                        let lhs = d[0].as_decimal();
+                        let rhs = d[1].as_decimal();
+
+                        if lhs.is_none() || rhs.is_none() {
                             return FunctionDomain::Full;
                         }
-                        let rhs = convert_to_decimal_domain(ctx, d[1].clone(), common_decimal_type);
-                        if rhs.is_none() {
-                            return FunctionDomain::Full;
-                        }
+
                         let lhs = lhs.unwrap();
                         let rhs = rhs.unwrap();
+
+                        let size = return_decimal_type.size();
+
                         {
                             match (lhs, rhs) {
                                 (
-                                    DecimalDomain::Decimal128(d1, s1),
-                                    DecimalDomain::Decimal128(d2, s2),
-                                ) if s1 == s2 => {
-                                    $domain_op(&d1, &d2, scale_a, scale_b, size.precision)
-                                        .map(|d| DecimalDomain::Decimal128(d, size))
-                                }
+                                    DecimalDomain::Decimal128(d1, _),
+                                    DecimalDomain::Decimal128(d2, _),
+                                ) => $domain_op(&d1, &d2, size.precision)
+                                    .map(|d| DecimalDomain::Decimal128(d, size)),
                                 (
-                                    DecimalDomain::Decimal256(d1, s1),
-                                    DecimalDomain::Decimal256(d2, s2),
-                                ) if s1 == s2 => {
-                                    $domain_op(&d1, &d2, scale_a, scale_b, size.precision)
-                                        .map(|d| DecimalDomain::Decimal256(d, size))
+                                    DecimalDomain::Decimal256(d1, _),
+                                    DecimalDomain::Decimal256(d2, _),
+                                ) => $domain_op(&d1, &d2, size.precision)
+                                    .map(|d| DecimalDomain::Decimal256(d, size)),
+                                _ => {
+                                    unreachable!("unreachable decimal domain {:?} /{:?}", lhs, rhs)
                                 }
-                                _ => unreachable!(),
                             }
                         }
-                        .and_then(|d| {
-                            if common_decimal_type != return_decimal_type {
-                                convert_to_decimal_domain(
-                                    ctx,
-                                    Domain::Decimal(d),
-                                    return_decimal_type,
-                                )
-                            } else {
-                                Some(d)
-                            }
-                        })
                         .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
                         .unwrap_or($default_domain)
                     }),
                     eval: Box::new(move |args, ctx| {
-                        let lhs =
-                            convert_to_decimal(&args[0], ctx, &args_type[0], common_decimal_type);
-
-                        let rhs =
-                            convert_to_decimal(&args[1], ctx, &args_type[1], common_decimal_type);
-
                         let res = op_decimal!(
-                            &lhs.as_ref(),
-                            &rhs.as_ref(),
+                            &args[0],
+                            &args[1],
                             ctx,
-                            common_decimal_type,
+                            left,
+                            right,
+                            return_decimal_type,
                             $op,
-                            scale_a,
-                            scale_b,
                             is_divide
                         );
 
-                        if common_decimal_type != return_decimal_type {
-                            decimal_to_decimal(
-                                &res.as_ref(),
-                                ctx,
-                                common_decimal_type,
-                                return_decimal_type,
-                            )
-                        } else {
-                            res
-                        }
+                        res
                     }),
                 },
             };
@@ -768,7 +879,22 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
                 return_type: DataType::Number(T::data_type()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_ctx, d| {
+                    let res_fn = move || match d[0].as_decimal().unwrap() {
+                        DecimalDomain::Decimal128(d, size) => Some(SimpleDomain::<T> {
+                            min: d.min.to_int(size.scale)?,
+                            max: d.max.to_int(size.scale)?,
+                        }),
+                        DecimalDomain::Decimal256(d, size) => Some(SimpleDomain::<T> {
+                            min: d.min.to_int(size.scale)?,
+                            max: d.max.to_int(size.scale)?,
+                        }),
+                    };
+
+                    res_fn()
+                        .map(|d| FunctionDomain::Domain(Domain::Number(T::upcast_domain(d))))
+                        .unwrap_or(FunctionDomain::MayThrow)
+                }),
                 eval: Box::new(move |args, tx| decimal_to_int::<T>(&args[0], arg_type.clone(), tx)),
             },
         };
@@ -1216,25 +1342,9 @@ macro_rules! m_decimal_to_decimal {
                 <$dest_type_name>::to_column(buffer, $dest_size)
             }
         } else {
-            let values = if $from_size.scale > $dest_size.scale {
+            let values: Vec<_> = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
-                $buffer
-                    .iter()
-                    .enumerate()
-                    .map(|(row, x)| {
-                        let x = x * <$dest_type_name>::one();
-                        match x.checked_div(factor) {
-                            Some(x) => x,
-                            None => {
-                                $ctx.set_error(
-                                    row,
-                                    concat!("Decimal overflow at line : ", line!()),
-                                );
-                                <$dest_type_name>::one()
-                            }
-                        }
-                    })
-                    .collect()
+                $buffer.iter().map(|x| x / factor).collect()
             } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);
@@ -1257,7 +1367,6 @@ macro_rules! m_decimal_to_decimal {
                     })
                     .collect()
             };
-
             <$dest_type_name>::to_column(values, $dest_size)
         }
     };
