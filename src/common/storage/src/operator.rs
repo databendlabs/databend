@@ -38,9 +38,11 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
+use common_metrics::load_global_prometheus_registry;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
+use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
@@ -86,6 +88,8 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
 pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
     let ob = Operator::new(builder)?;
 
+    let mut registry = load_global_prometheus_registry();
+
     let op = ob
         // NOTE
         //
@@ -108,7 +112,8 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(MinitraceLayer)
-        // TODO(liyz): add PrometheusClientLayer
+        // Add PrometheusClientLayer
+        .layer(PrometheusClientLayer::new(&mut registry))
         .finish();
 
     Ok(op)
