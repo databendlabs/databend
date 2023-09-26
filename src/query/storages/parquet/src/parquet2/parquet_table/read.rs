@@ -147,7 +147,7 @@ impl Parquet2Table {
 
         src_fields.extend_from_slice(remain_reader.output_schema.fields());
         let src_schema = DataSchemaRefExt::create(src_fields);
-        let is_blocking = self.operator.info().can_blocking();
+        let is_blocking = self.operator.info().native_capability().blocking;
 
         let num_deserializer = calc_parallelism(&ctx, plan)?;
         if is_blocking {

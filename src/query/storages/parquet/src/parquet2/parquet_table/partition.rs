@@ -156,7 +156,7 @@ impl Parquet2Table {
                 .iter()
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
-            None => if self.operator.info().can_blocking() {
+            None => if self.operator.info().native_capability().blocking {
                 self.files_info.blocking_list(&self.operator, false, None)
             } else {
                 self.files_info.list(&self.operator, false, None).await

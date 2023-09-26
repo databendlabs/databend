@@ -225,7 +225,10 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         let mut write_bytes = 0;
         if !write_data.is_empty() {
-            let mut writer = operator.writer(&location).await?;
+            let mut writer = operator
+                .writer_with(&location)
+                .buffer(8 * 1024 * 1024)
+                .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
                     write_bytes += data.len();
