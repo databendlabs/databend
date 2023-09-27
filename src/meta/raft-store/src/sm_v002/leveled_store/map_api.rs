@@ -117,6 +117,7 @@ impl MapApiExt {
 
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
+    #[allow(dead_code)]
     pub(in crate::sm_v002) async fn upsert_value<'d, K, T>(
         s: &'d mut T,
         key: K,

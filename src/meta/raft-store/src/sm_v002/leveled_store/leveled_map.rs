@@ -132,14 +132,6 @@ impl<'d> LeveledRefMut<'d> {
         }
     }
 
-    pub(in crate::sm_v002) fn into_leveled_ref(self) -> LeveledRef<'d> {
-        // LeveledRef::new(self.writable, self.frozen)
-        LeveledRef::<'d> {
-            writable: self.writable,
-            frozen: self.frozen,
-        }
-    }
-
     /// Return an iterator of all levels in new-to-old order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ LevelData> + '_ {
         [&*self.writable]
@@ -170,7 +162,23 @@ where
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        self.to_leveled_ref().range(range).await
+        // TODO: remove this dup impl
+
+        let levels = self.iter_levels();
+
+        let mut km = KMerge::by(util::by_key_seq);
+
+        // for api in levels {
+        for api in levels {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
+        }
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let m = km.coalesce(util::choose_greater);
+
+        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
+        x
     }
 }
 
@@ -294,7 +302,23 @@ where
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        self.leveled_ref().range(range).await
+        // TODO: remove this dup impl
+
+        let levels = self.iter_levels();
+
+        let mut km = KMerge::by(util::by_key_seq);
+
+        // for api in levels {
+        for api in levels {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
+        }
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let m = km.coalesce(util::choose_greater);
+
+        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
+        x
     }
 }
 
