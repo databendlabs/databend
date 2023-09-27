@@ -672,21 +672,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compression-issue-150-workaround"
-version = "0.3.15-issue-150"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1c3bfa97a4c664de1effcffe5e3345eb6df10dd4f8ff7f3c12167cc3031690"
+name = "async-compression"
+version = "0.4.3"
+source = "git+https://github.com/youngsofun/async-compression?rev=1568ceafd#1568ceafdcb590a0c28226ee9e4cebf39e26e46c"
 dependencies = [
  "brotli",
  "bzip2",
+ "deflate64",
  "flate2",
  "futures-core",
  "futures-io",
  "memchr",
  "pin-project-lite",
  "xz2",
- "zstd 0.11.2+zstd.1.5.2",
- "zstd-safe 5.0.2+zstd.1.5.2",
+ "zstd 0.12.3+zstd.1.5.2",
+ "zstd-safe 6.0.4+zstd.1.5.4",
 ]
 
 [[package]]
@@ -1859,15 +1859,16 @@ dependencies = [
 name = "common-compress"
 version = "0.1.0"
 dependencies = [
- "async-compression-issue-150-workaround",
+ "async-compression 0.4.3",
+ "brotli",
  "bytes",
+ "common-exception",
  "env_logger",
  "futures",
  "log",
  "pin-project",
  "rand 0.8.5",
  "serde",
- "sha2",
  "tokio",
 ]
 
@@ -4035,6 +4036,12 @@ name = "defer"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "647605a6345d5e89c3950a36a638c56478af9b414c55c6f2477c73b115f9acde"
+
+[[package]]
+name = "deflate64"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30dc5bb425a582de72bb57130320aac133893ea85f6151f79bd9aa9067114f60"
 
 [[package]]
 name = "der"
@@ -8937,7 +8944,7 @@ version = "1.3.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0d92c532a37a9e98c0e9a0411e6852b8acccf9ec07d5e6e450b01cbf947d90b"
 dependencies = [
- "async-compression",
+ "async-compression 0.4.1",
  "async-trait",
  "bytes",
  "futures-util",

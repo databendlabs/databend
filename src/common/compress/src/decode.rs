@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::io::Result;
-use std::path::PathBuf;
 use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
@@ -30,101 +29,15 @@ use async_compression::codec::ZstdDecoder;
 use async_compression::util::PartialBuffer;
 use bytes::Buf;
 use bytes::BytesMut;
+use common_exception::ErrorCode;
 use futures::io::BufReader;
 use futures::ready;
 use futures::AsyncBufRead;
 use futures::AsyncRead;
 use log::trace;
 use pin_project::pin_project;
-use serde::Deserialize;
-use serde::Serialize;
 
-/// CompressAlgorithm represents all compress algorithm that OpenDAL supports.
-#[derive(Serialize, Deserialize, Copy, Clone, Eq, PartialEq, Debug)]
-pub enum CompressAlgorithm {
-    /// [Brotli](https://github.com/google/brotli) compression format.
-    Brotli,
-    /// [bzip2](http://sourceware.org/bzip2/) compression format.
-    Bz2,
-    /// [Deflate](https://datatracker.ietf.org/doc/html/rfc1951) Compressed Data Format.
-    ///
-    /// Similar to [`CompressAlgorithm::Gzip`] and [`CompressAlgorithm::Zlib`]
-    Deflate,
-    /// [Gzip](https://datatracker.ietf.org/doc/html/rfc1952) compress format.
-    ///
-    /// Similar to [`CompressAlgorithm::Deflate`] and [`CompressAlgorithm::Zlib`]
-    Gzip,
-    /// [LZMA](https://www.7-zip.org/sdk.html) compress format.
-    Lzma,
-    /// [Xz](https://tukaani.org/xz/) compress format, the successor of [`CompressAlgorithm::Lzma`].
-    Xz,
-    /// [Zlib](https://datatracker.ietf.org/doc/html/rfc1950) compress format.
-    ///
-    /// Similar to [`CompressAlgorithm::Deflate`] and [`CompressAlgorithm::Gzip`]
-    Zlib,
-    /// [Zstd](https://github.com/facebook/zstd) compression algorithm
-    Zstd,
-}
-
-impl CompressAlgorithm {
-    /// Get the file extension of this compress algorithm.
-    pub fn extension(&self) -> &str {
-        match self {
-            CompressAlgorithm::Brotli => "br",
-            CompressAlgorithm::Bz2 => "bz2",
-            CompressAlgorithm::Deflate => "deflate",
-            CompressAlgorithm::Gzip => "gz",
-            CompressAlgorithm::Lzma => "lzma",
-            CompressAlgorithm::Xz => "xz",
-            CompressAlgorithm::Zlib => "zl",
-            CompressAlgorithm::Zstd => "zstd",
-        }
-    }
-
-    /// Create CompressAlgorithm from file extension.
-    ///
-    /// If the file extension is not supported, `None` will be return instead.
-    pub fn from_extension(ext: &str) -> Option<CompressAlgorithm> {
-        match ext {
-            "br" => Some(CompressAlgorithm::Brotli),
-            "bz2" => Some(CompressAlgorithm::Bz2),
-            "deflate" => Some(CompressAlgorithm::Deflate),
-            "gz" => Some(CompressAlgorithm::Gzip),
-            "lzma" => Some(CompressAlgorithm::Lzma),
-            "xz" => Some(CompressAlgorithm::Xz),
-            "zl" => Some(CompressAlgorithm::Zlib),
-            "zstd" | "zst" => Some(CompressAlgorithm::Zstd),
-            _ => None,
-        }
-    }
-
-    /// Create CompressAlgorithm from file path.
-    ///
-    /// If the extension in file path is not supported, `None` will be return instead.
-    pub fn from_path(path: &str) -> Option<CompressAlgorithm> {
-        let ext = PathBuf::from(path)
-            .extension()
-            .map(|s| s.to_string_lossy())?
-            .to_string();
-
-        CompressAlgorithm::from_extension(&ext)
-    }
-}
-
-impl From<CompressAlgorithm> for DecompressCodec {
-    fn from(v: CompressAlgorithm) -> Self {
-        match v {
-            CompressAlgorithm::Brotli => DecompressCodec::Brotli(Box::new(BrotliDecoder::new())),
-            CompressAlgorithm::Bz2 => DecompressCodec::Bz2(BzDecoder::new()),
-            CompressAlgorithm::Deflate => DecompressCodec::Deflate(DeflateDecoder::new()),
-            CompressAlgorithm::Gzip => DecompressCodec::Gzip(GzipDecoder::new()),
-            CompressAlgorithm::Lzma => DecompressCodec::Lzma(LzmaDecoder::new()),
-            CompressAlgorithm::Xz => DecompressCodec::Xz(XzDecoder::new()),
-            CompressAlgorithm::Zlib => DecompressCodec::Zlib(ZlibDecoder::new()),
-            CompressAlgorithm::Zstd => DecompressCodec::Zstd(ZstdDecoder::new()),
-        }
-    }
-}
+use crate::CompressAlgorithm;
 
 #[derive(Debug)]
 pub enum DecompressCodec {
@@ -147,6 +60,21 @@ pub enum DecompressCodec {
     Zlib(ZlibDecoder),
     /// Decoder for [`CompressAlgorithm::Zstd`]
     Zstd(ZstdDecoder),
+}
+
+impl From<CompressAlgorithm> for DecompressCodec {
+    fn from(v: CompressAlgorithm) -> Self {
+        match v {
+            CompressAlgorithm::Brotli => DecompressCodec::Brotli(Box::new(BrotliDecoder::new())),
+            CompressAlgorithm::Bz2 => DecompressCodec::Bz2(BzDecoder::new()),
+            CompressAlgorithm::Deflate => DecompressCodec::Deflate(DeflateDecoder::new()),
+            CompressAlgorithm::Gzip => DecompressCodec::Gzip(GzipDecoder::new()),
+            CompressAlgorithm::Lzma => DecompressCodec::Lzma(LzmaDecoder::new()),
+            CompressAlgorithm::Xz => DecompressCodec::Xz(XzDecoder::new()),
+            CompressAlgorithm::Zlib => DecompressCodec::Zlib(ZlibDecoder::new()),
+            CompressAlgorithm::Zstd => DecompressCodec::Zstd(ZstdDecoder::new()),
+        }
+    }
 }
 
 impl Decode for DecompressCodec {
@@ -324,7 +252,10 @@ impl DecompressDecoder {
     /// Finish a decompress press, flushing remaining data into output.
     /// Return the data that has been written.
     pub fn finish(&mut self, output: &mut [u8]) -> Result<usize> {
-        debug_assert_eq!(self.state, DecompressState::Flushing);
+        debug_assert!(matches!(
+            self.state,
+            DecompressState::Flushing | DecompressState::Reading
+        ));
 
         let mut output = PartialBuffer::new(output);
         let done = self.decoder.finish(&mut output)?;
@@ -409,9 +340,51 @@ impl<R: AsyncRead> AsyncRead for DecompressReader<R> {
     }
 }
 
+impl DecompressDecoder {
+    pub fn decompress_all(&mut self, compressed: &[u8]) -> common_exception::Result<Vec<u8>> {
+        let mut main = self.decompress_batch(compressed)?;
+        let tail = self.decompress_batch(&[])?;
+        main.extend_from_slice(&tail);
+        Ok(main)
+    }
+    // need to finish the decoding by adding a empty input
+    pub fn decompress_batch(&mut self, compressed: &[u8]) -> common_exception::Result<Vec<u8>> {
+        let mut decompress_bufs = vec![];
+        let mut filled = false;
+        loop {
+            match self.state() {
+                DecompressState::Reading => {
+                    if filled {
+                        break;
+                    }
+                    self.fill(compressed);
+                    filled = true;
+                }
+                DecompressState::Decoding => {
+                    let mut decompress_buf = vec![0u8; 4096];
+                    let written = self.decode(&mut decompress_buf[..]).map_err(|e| {
+                        ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
+                    })?;
+                    decompress_buf.truncate(written);
+                    decompress_bufs.push(decompress_buf);
+                }
+                DecompressState::Flushing => {
+                    let mut decompress_buf = vec![0u8; 4096];
+                    let written = self.finish(&mut decompress_buf).map_err(|e| {
+                        ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
+                    })?;
+                    decompress_buf.truncate(written);
+                    decompress_bufs.push(decompress_buf);
+                }
+                DecompressState::Done => break,
+            }
+        }
+        Ok(decompress_bufs.concat())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::cmp::min;
     use std::env;
     use std::fs;
     use std::io::Result;
@@ -421,10 +394,43 @@ mod tests {
     use futures::io::Cursor;
     use futures::AsyncReadExt;
     use rand::prelude::*;
-    use sha2::Digest;
-    use sha2::Sha256;
 
     use super::*;
+    use crate::encode::CompressCodec;
+
+    fn decode_with_buffer(
+        cr: &mut DecompressDecoder,
+        compressed_content: &[u8],
+        output_buffer_size: usize,
+        input_batch_size: usize,
+    ) -> Result<Vec<u8>> {
+        let mut result = Vec::with_capacity(compressed_content.len());
+        let mut buf = vec![0; output_buffer_size];
+        let mut read = 0;
+        loop {
+            match cr.state {
+                DecompressState::Reading => {
+                    // should not break when read == compressed_content.len()
+                    let size = compressed_content.len().min(read + input_batch_size);
+                    let n = cr.fill(&compressed_content[read..size]);
+                    read += n;
+                }
+                DecompressState::Decoding => {
+                    let n = cr.decode(&mut buf)?;
+                    result.extend_from_slice(&buf[..n])
+                }
+                DecompressState::Flushing => {
+                    let n = cr.finish(&mut buf)?;
+                    result.extend_from_slice(&buf[..n])
+                }
+                DecompressState::Done => {
+                    break;
+                }
+            }
+        }
+        assert_eq!(cr.state, DecompressState::Done);
+        Ok(result)
+    }
 
     #[tokio::test]
     async fn test_decompress_bytes_zlib() -> Result<()> {
@@ -474,7 +480,7 @@ mod tests {
         let _ = env_logger::try_init();
 
         let mut rng = ThreadRng::default();
-        let size = rng.gen_range(1..16 * 1024 * 1024);
+        let size = rng.gen_range(1..16 * 1024);
         let mut content = vec![0; size];
         rng.fill_bytes(&mut content);
 
@@ -482,42 +488,11 @@ mod tests {
         let mut compressed_content = vec![];
         e.read_to_end(&mut compressed_content).await?;
 
-        let mut cr = DecompressDecoder::new(CompressAlgorithm::Zlib);
-
-        let mut result = Vec::with_capacity(content.len());
-        let mut buf = vec![0; 1024 * 1024];
-        let mut read = 0;
-        loop {
-            match cr.state {
-                DecompressState::Reading => {
-                    if read == compressed_content.len() {
-                        break;
-                    }
-
-                    // Simulate read in 4k.
-                    let size = min(read + 4 * 1024 * 1024, compressed_content.len());
-                    let n = cr.fill(&compressed_content[read..size]);
-                    read += n;
-                }
-                DecompressState::Decoding => {
-                    let n = cr.decode(&mut buf)?;
-                    result.extend_from_slice(&buf[..n])
-                }
-                DecompressState::Flushing => {
-                    let n = cr.finish(&mut buf)?;
-                    result.extend_from_slice(&buf[..n])
-                }
-                DecompressState::Done => {
-                    break;
-                }
-            }
+        for input_batch_size in [4 * 1024, size] {
+            let mut cr = DecompressDecoder::new(CompressAlgorithm::Zlib);
+            let result = decode_with_buffer(&mut cr, &compressed_content, 1024, input_batch_size)?;
+            assert_eq!(result, content);
         }
-
-        assert_eq!(result.len(), content.len());
-        assert_eq!(
-            format!("{:x}", Sha256::digest(&result)),
-            format!("{:x}", Sha256::digest(&content))
-        );
 
         Ok(())
     }
@@ -527,7 +502,7 @@ mod tests {
         let _ = env_logger::try_init();
 
         let mut rng = ThreadRng::default();
-        let size = rng.gen_range(1..16 * 1024 * 1024);
+        let size = rng.gen_range(1..16 * 1024);
         let mut content = vec![0; size];
         rng.fill_bytes(&mut content);
 
@@ -535,43 +510,11 @@ mod tests {
         let mut compressed_content = vec![];
         e.read_to_end(&mut compressed_content).await?;
 
-        let mut cr = DecompressDecoder::new(CompressAlgorithm::Gzip);
-
-        let mut result = Vec::with_capacity(content.len());
-        let mut buf = vec![0; 1024 * 1024];
-        let mut read = 0;
-        loop {
-            match cr.state {
-                DecompressState::Reading => {
-                    if read == compressed_content.len() {
-                        break;
-                    }
-
-                    // Simulate read in 4k.
-                    let size = min(read + 4 * 1024 * 1024, compressed_content.len());
-                    let n = cr.fill(&compressed_content[read..size]);
-                    read += n;
-                }
-                DecompressState::Decoding => {
-                    let n = cr.decode(&mut buf)?;
-                    result.extend_from_slice(&buf[..n])
-                }
-                DecompressState::Flushing => {
-                    let n = cr.finish(&mut buf)?;
-                    result.extend_from_slice(&buf[..n])
-                }
-                DecompressState::Done => {
-                    break;
-                }
-            }
+        for input_batch_size in [4 * 1024, size] {
+            let mut cr = DecompressDecoder::new(CompressAlgorithm::Gzip);
+            let result = decode_with_buffer(&mut cr, &compressed_content, 1024, input_batch_size)?;
+            assert_eq!(result, content);
         }
-
-        assert_eq!(result.len(), content.len());
-        assert_eq!(
-            format!("{:x}", Sha256::digest(&result)),
-            format!("{:x}", Sha256::digest(&content))
-        );
-
         Ok(())
     }
 
@@ -580,20 +523,27 @@ mod tests {
         let _ = env_logger::try_init();
 
         let mut rng = ThreadRng::default();
-        let mut content = vec![0; 16 * 1024 * 1024];
+        let mut content = vec![0; 16000];
         rng.fill_bytes(&mut content);
 
         let mut e = ZlibEncoder::new(Cursor::new(content.clone()));
         let mut compressed_content = vec![];
         e.read_to_end(&mut compressed_content).await?;
 
+        let mut encoder = CompressCodec::from(CompressAlgorithm::Zlib);
+        let compressed = encoder.compress_all(&content).unwrap();
+        assert_eq!(compressed_content, compressed);
+
         let mut cr =
             DecompressReader::new(Cursor::new(compressed_content), CompressAlgorithm::Zlib);
 
         let mut result = vec![];
         cr.read_to_end(&mut result).await?;
-
         assert_eq!(result, content);
+
+        let mut decoder = DecompressDecoder::new(CompressAlgorithm::Zlib);
+        let decompressed = decoder.decompress_all(&compressed).unwrap();
+        assert_eq!(result, decompressed);
 
         Ok(())
     }
