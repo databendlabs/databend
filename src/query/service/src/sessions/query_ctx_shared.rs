@@ -58,8 +58,12 @@ pub struct QueryContextShared {
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
     pub(in crate::sessions) write_progress: Arc<Progress>,
-    /// Record how many bytes/rows have been spilled.
-    pub(in crate::sessions) spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in join.
+    pub(in crate::sessions) join_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in agg.
+    pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in group by
+    pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
@@ -131,7 +135,9 @@ impl QueryContextShared {
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
-            spill_progress: Arc::new(Progress::create()),
+            join_spill_progress: Arc::new(Progress::create()),
+            agg_spill_progress: Arc::new(Progress::create()),
+            group_by_spill_progress: Arc::new(Progress::create()),
         }))
     }
 

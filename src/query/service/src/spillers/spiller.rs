@@ -152,7 +152,7 @@ impl Spiller {
                 rows: data.num_rows(),
                 bytes: data.memory_size(),
             };
-            self.ctx.get_spill_progress().incr(&progress_val);
+            self.ctx.get_join_spill_progress().incr(&progress_val);
         }
         info!(
             "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
