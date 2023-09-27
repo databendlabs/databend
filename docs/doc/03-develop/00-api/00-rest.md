@@ -174,7 +174,7 @@ Affect:
 | type  | string | ChangeSetting/UseDB |
 | ...   |        | according to type   |
 
-## Response Status Code
+### Response Status Code
 
 The usage of status code for different kinds of errors:
 
@@ -191,10 +191,10 @@ Check the response body for error reason as a string when status code is not 200
 all field value in `.data` is represented in string,
 client need to interpreter the values with the help of information in the `schema` field.
 
+### client-side session
 
-### session support (Optional)
-
-client can config the session in the `session` field 
+Dur to the stateless nature of HTTP, it is hard to maintain session in server side.
+client need to config the session in the `session` field when starting a new Request.
 
 ```json
 {
@@ -210,39 +210,21 @@ client can config the session in the `session` field
 
 all the values of settings should be string.
 
-By default, each request has its own session inside server which is destroyed right after the SQL execution
-finished, even before the result data is fetched by client.
-To use SQLs like `set` and `use` which change context for the following SQLs, we need session support, there are 2 choices:
+If the SQL is `set` or `use`, the `session` will be change, can carry back to client in side response, 
+client need to record it and put it in the following Request.
 
-#### server-side session
- For the first `QueryRequest` which start a session: set `QueryRequest.session.keep_server_session_secs` to positive int like 10. 
- remember the returned `QueryResponse.session_id`.
+### QueryAffect (Experimental)
 
-```json
-{
-  "sql": "...;", 
-  "session": {
-    "keep_server_session_secs": 100
-  } 
-}
-```
-For the following `QueryRequest` which **use** the session: 
-use the `QueryResponse.session_id ` for `QueryRequest.session.id`.
+For each SQL, client get an optional table-formed `result`.
+Client also get info about `progress` about rows/bytes read/write.
+Due to the limit of them, client may not get all interesting information about the Query.
+So we add `QueryAffect` to carry some extra information about the Query.
 
-```json
-{
-  "sql": "...;", 
-  "session_id": "<QueryResponse.session_id>"
-}
-```
+Note that `QueryAffect` is for advanced user and is not stable. 
+It is not recommended to QueryAffect to maintain session.
 
-#### client-side session
+### Example for Session and QueryAffect: 
 
-The handler will return info about changed setting or current database in the  `affect` field,
-client can remember these changes and put them in the session field in the following requests.
-
-when use client side session,  response will contain `session` field, which is `session` field in request together with the affect applied to it.
-Only use `session` field in next_url, and when the `state` field is "Succeeded"
 
 set statement:
 
@@ -257,6 +239,8 @@ set statement:
   }
 }
 ```
+
+response:
 
 ```json
 {
@@ -288,6 +272,8 @@ use statement:
 }
 ```
 
+response:
+
 ```json
 {
   "affect": {
@@ -303,6 +289,10 @@ use statement:
 }
 ```
 
+## client implementations
 
+The official client [bendsql](https://github.com/datafuselabs/bendsql) is mainly base on HTTP handler.
+
+The most simple example of http handler client implementation is in [sqllogictest](https://github.com/datafuselabs/databend/blob/main/tests/sqllogictests/src/client/http_client.rs) for databend.
 
 

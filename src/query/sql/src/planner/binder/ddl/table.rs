@@ -415,7 +415,7 @@ impl Binder {
                     part_prefix: uri.part_prefix.clone(),
                     connection: uri.connection.clone(),
                 };
-                let (sp, _) = parse_uri_location(&mut uri)?;
+                let (sp, _) = parse_uri_location(&mut uri).await?;
 
                 // create a temporary op to check if params is correct
                 DataOperator::try_create(&sp).await?;
@@ -627,7 +627,7 @@ impl Binder {
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
-        let (sp, _) = parse_uri_location(&mut uri)?;
+        let (sp, _) = parse_uri_location(&mut uri).await?;
 
         // create a temporary op to check if params is correct
         DataOperator::try_create(&sp).await?;
@@ -666,7 +666,6 @@ impl Binder {
             catalog,
             database,
             table,
-            all,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
@@ -679,7 +678,6 @@ impl Binder {
             catalog,
             database,
             table,
-            all: *all,
         })))
     }
 
@@ -971,7 +969,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge,
         } = stmt;
 
         let (catalog, database, table) =
@@ -981,7 +978,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge: *purge,
         })))
     }
 

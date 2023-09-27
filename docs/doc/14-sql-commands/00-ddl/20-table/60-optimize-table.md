@@ -44,7 +44,7 @@ In Databend, it's advisable to aim for an ideal block size of either 100MB (unco
 - Segment & block compactions support distributed execution in cluster environments. You can enable them by setting ENABLE_DISTRIBUTED_COMPACT to 1. This helps enhance data query performance and scalability in cluster environments.
 
   ```sql
-  SET ENABLE_DISTRIBUTED_COMPACT = 1;
+  SET enable_distributed_compact = 1;
   ```
 
 ### Segment Compaction

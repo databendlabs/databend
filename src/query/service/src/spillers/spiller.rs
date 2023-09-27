@@ -16,14 +16,19 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::Arc;
 
 use common_base::base::GlobalUniqName;
+use common_base::base::ProgressValues;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::arrow::deserialize_column;
 use common_expression::arrow::serialize_column;
 use common_expression::DataBlock;
 use log::info;
 use opendal::Operator;
+
+use crate::sessions::QueryContext;
 
 /// Spiller type, currently only supports HashJoin
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -61,6 +66,7 @@ impl SpillerConfig {
 /// 3. Serialization and deserialization input data
 /// 4. Interact with the underlying storage engine to write and read spilled data
 pub struct Spiller {
+    ctx: Arc<QueryContext>,
     operator: Operator,
     config: SpillerConfig,
     spiller_type: SpillerType,
@@ -78,8 +84,14 @@ pub struct Spiller {
 
 impl Spiller {
     /// Create a new spiller
-    pub fn create(operator: Operator, config: SpillerConfig, spiller_type: SpillerType) -> Self {
+    pub fn create(
+        ctx: Arc<QueryContext>,
+        operator: Operator,
+        config: SpillerConfig,
+        spiller_type: SpillerType,
+    ) -> Self {
         Self {
+            ctx,
             operator,
             config,
             spiller_type,
@@ -111,14 +123,6 @@ impl Spiller {
         self.spilled_partition_set.insert(*p_id);
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
-        info!(
-            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
-            self.spiller_type,
-            data.num_rows(),
-            location,
-            p_id,
-            worker_id
-        );
         self.partition_location
             .entry(*p_id)
             .and_modify(|locs| {
@@ -143,6 +147,21 @@ impl Spiller {
             writer.write(data).await?;
         }
         writer.close().await?;
+        {
+            let progress_val = ProgressValues {
+                rows: data.num_rows(),
+                bytes: data.memory_size(),
+            };
+            self.ctx.get_join_spill_progress().incr(&progress_val);
+        }
+        info!(
+            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
+            self.spiller_type,
+            data.num_rows(),
+            location,
+            p_id,
+            worker_id
+        );
         Ok(())
     }
 
@@ -198,6 +217,7 @@ impl Spiller {
         &mut self,
         data_block: DataBlock,
         hashes: &[u64],
+        spilled_partition_set: &HashSet<u8>,
         worker_id: usize,
     ) -> Result<DataBlock> {
         // Save the row index which is not spilled.
@@ -207,9 +227,7 @@ impl Spiller {
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = *hash as u8 & 0b0000_0011;
-            if self.spilled_partition_set.contains(&partition_id)
-                || self.spiller_type == SpillerType::HashJoinProbe
-            {
+            if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
                     .entry(partition_id)

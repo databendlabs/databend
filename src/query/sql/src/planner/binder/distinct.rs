@@ -30,6 +30,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::IndexType;
+use crate::WindowChecker;
 
 impl Binder {
     pub fn bind_distinct(
@@ -43,16 +44,18 @@ impl Binder {
         let scalar_items: Vec<ScalarItem> = scalar_items
             .drain()
             .map(|(_, item)| {
+                let mut scalar = item.scalar;
                 if bind_context.in_grouping {
                     let group_checker = GroupingChecker::new(bind_context);
-                    let scalar = group_checker.resolve(&item.scalar, None)?;
-                    Ok(ScalarItem {
-                        scalar,
-                        index: item.index,
-                    })
-                } else {
-                    Ok(item)
+                    scalar = group_checker.resolve(&scalar, None)?;
+                } else if !bind_context.windows.window_functions.is_empty() {
+                    let window_checker = WindowChecker::new(bind_context);
+                    scalar = window_checker.resolve(&scalar)?;
                 }
+                Ok(ScalarItem {
+                    scalar,
+                    index: item.index,
+                })
             })
             .collect::<Result<_>>()?;
 

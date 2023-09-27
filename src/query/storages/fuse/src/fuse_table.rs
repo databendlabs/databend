@@ -183,7 +183,7 @@ impl FuseTable {
     }
 
     pub fn get_write_settings(&self) -> WriteSettings {
-        let default_rows_per_page = if self.operator.info().can_blocking() {
+        let default_rows_per_page = if self.operator.info().native_capability().blocking {
             DEFAULT_ROW_PER_PAGE_FOR_BLOCKING
         } else {
             DEFAULT_ROW_PER_PAGE
@@ -553,8 +553,8 @@ impl Table for FuseTable {
 
     #[minitrace::trace(name = "fuse_table_truncate")]
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
-        self.do_truncate(ctx, purge).await
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.do_truncate(ctx).await
     }
 
     #[minitrace::trace(name = "fuse_table_optimize")]

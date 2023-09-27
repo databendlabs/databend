@@ -22,3 +22,7 @@ SELECT count(distinct number %3) c FROM numbers(1000) where number > 3;
 ----
 3
 
+query I
+SELECT DISTINCT row_number() OVER (PARTITION BY number) FROM numbers(100)
+----
+1

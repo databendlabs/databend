@@ -33,6 +33,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
+#![feature(try_blocks)]
 
 extern crate core;
 

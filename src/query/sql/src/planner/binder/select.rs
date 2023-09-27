@@ -54,6 +54,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -331,14 +332,20 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
-                let table_name = cte.alias.name.name.clone();
+                let table_name =
+                    normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
                 if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
                 }
                 let cte_info = CteInfo {
-                    columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
+                    columns_alias: cte
+                        .alias
+                        .columns
+                        .iter()
+                        .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
+                        .collect(),
                     query: *cte.query.clone(),
                     materialized: cte.materialized,
                     cte_idx: idx,
