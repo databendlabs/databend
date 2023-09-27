@@ -152,7 +152,7 @@ impl Spiller {
                 rows: data.num_rows(),
                 bytes: data.memory_size(),
             };
-            self.ctx.get_spill_progress().incr(&progress_val);
+            self.ctx.get_join_spill_progress().incr(&progress_val);
         }
         info!(
             "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
@@ -217,6 +217,7 @@ impl Spiller {
         &mut self,
         data_block: DataBlock,
         hashes: &[u64],
+        spilled_partition_set: &HashSet<u8>,
         worker_id: usize,
     ) -> Result<DataBlock> {
         // Save the row index which is not spilled.
@@ -226,9 +227,7 @@ impl Spiller {
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
             let partition_id = *hash as u8 & 0b0000_0011;
-            if self.spilled_partition_set.contains(&partition_id)
-                || self.spiller_type == SpillerType::HashJoinProbe
-            {
+            if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows
                     .entry(partition_id)
