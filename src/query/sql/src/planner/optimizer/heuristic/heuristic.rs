@@ -29,6 +29,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
+        RuleID::NormalizeAggregate,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::InferFilter,
