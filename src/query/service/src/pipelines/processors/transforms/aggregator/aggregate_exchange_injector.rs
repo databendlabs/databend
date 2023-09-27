@@ -16,6 +16,7 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 
 use bumpalo::Bump;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -186,6 +187,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> FlightScatter
 }
 
 pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> {
+    ctx: Arc<QueryContext>,
     method: Method,
     tenant: String,
     aggregator_params: Arc<AggregatorParams>,
@@ -194,11 +196,13 @@ pub struct AggregateInjector<Method: HashMethodBounds, V: Copy + Send + Sync + '
 
 impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> AggregateInjector<Method, V> {
     pub fn create(
-        tenant: String,
+        ctx: Arc<QueryContext>,
         method: Method,
         params: Arc<AggregatorParams>,
     ) -> Arc<dyn ExchangeInjector> {
+        let tenant = ctx.get_tenant();
         Arc::new(AggregateInjector::<Method, V> {
+            ctx,
             method,
             tenant,
             aggregator_params: params,
@@ -249,6 +253,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
                     true => TransformGroupBySpillWriter::create(
+                        self.ctx.clone(),
                         input,
                         output,
                         method.clone(),
@@ -256,6 +261,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         location_prefix.clone(),
                     ),
                     false => TransformAggregateSpillWriter::create(
+                        self.ctx.clone(),
                         input,
                         output,
                         method.clone(),
@@ -302,6 +308,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
             Ok(ProcessorPtr::create(
                 match params.aggregate_functions.is_empty() {
                     true => TransformExchangeGroupBySerializer::create(
+                        self.ctx.clone(),
                         input,
                         output,
                         method.clone(),
@@ -311,6 +318,7 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> ExchangeInjector
                         local_pos,
                     ),
                     false => TransformExchangeAggregateSerializer::create(
+                        self.ctx.clone(),
                         input,
                         output,
                         method.clone(),
