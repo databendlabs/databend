@@ -36,6 +36,7 @@ pub struct BlockMetaIndex {
     pub block_location: String,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
+    pub omit_filter: bool,
 }
 
 #[typetag::serde(name = "block_meta_index")]

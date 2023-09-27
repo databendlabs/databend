@@ -420,7 +420,7 @@ impl NativeDeserializeDataTransform {
         Ok(false)
     }
 
-    /// No more data need to read, finish process.
+    /// No more data need to read, finish current chunk process.
     fn finish_process(&mut self) -> Result<()> {
         let _ = self.chunks.pop_front();
         let _ = self.parts.pop_front().unwrap();
@@ -570,9 +570,21 @@ impl Processor for NativeDeserializeDataTransform {
                 return self.finish_process_with_empty_block();
             }
 
+            let mut prewhere_filter = self.prewhere_filter.as_ref().clone();
+
             // Init array_iters and array_skip_pages to read pages in subsequent processes.
             if !self.inited {
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+
+                if fuse_part
+                    .block_meta_index
+                    .as_ref()
+                    .map(|meta| meta.omit_filter)
+                    .unwrap_or(false)
+                {
+                    prewhere_filter = None;
+                }
+
                 if let Some(range) = fuse_part.range() {
                     self.offset_in_part = fuse_part.page_size() * range.start;
                 }
@@ -690,7 +702,7 @@ impl Processor for NativeDeserializeDataTransform {
                 }
             }
 
-            let filter = match self.prewhere_filter.as_ref() {
+            let filter = match prewhere_filter.as_ref() {
                 Some(filter) => {
                     // Arrays are empty means all prewhere columns are default values,
                     // the filter have checked in the first process, don't need check again.

@@ -71,6 +71,7 @@ impl BlockPruner {
         let pruning_semaphore = &self.pruning_ctx.pruning_semaphore;
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
+        let invert_range_pruner = self.pruning_ctx.invert_range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let segment_block_metas = segment_info.block_metas()?;
@@ -95,8 +96,9 @@ impl BlockPruner {
                 return None;
             }
 
-            type BlockPruningFutureReturn =
-                Pin<Box<dyn Future<Output = (usize, bool, Option<Range<usize>>, String)> + Send>>;
+            type BlockPruningFutureReturn = Pin<
+                Box<dyn Future<Output = (usize, bool, bool, Option<Range<usize>>, String)> + Send>,
+            >;
             type BlockPruningFuture =
                 Box<dyn FnOnce(OwnedSemaphorePermit) -> BlockPruningFutureReturn + Send + 'static>;
 
@@ -123,6 +125,7 @@ impl BlockPruner {
 
                     // not pruned by block zone map index,
                     let bloom_pruner = bloom_pruner.clone();
+                    let invert_range_pruner = invert_range_pruner.clone();
                     let limit_pruner = limit_pruner.clone();
                     let page_pruner = page_pruner.clone();
                     let index_location = block_meta.bloom_filter_index_location.clone();
@@ -158,9 +161,19 @@ impl BlockPruner {
 
                                 let (keep, range) =
                                     page_pruner.should_keep(&block_meta.cluster_stats);
-                                (block_idx, keep, range, block_meta.location.0.clone())
+
+                                let omit = !invert_range_pruner.should_keep(
+                                    &block_meta.col_stats,
+                                    Some(&block_meta.col_metas),
+                                );
+
+                                (block_idx, keep, omit, range, block_meta.location.0.clone())
                             } else {
-                                (block_idx, keep, None, block_meta.location.0.clone())
+                                let omit = !invert_range_pruner.should_keep(
+                                    &block_meta.col_stats,
+                                    Some(&block_meta.col_metas),
+                                );
+                                (block_idx, keep, omit, None, block_meta.location.0.clone())
                             }
                         })
                     });
@@ -169,7 +182,7 @@ impl BlockPruner {
                     let v: BlockPruningFuture = Box::new(move |permit: OwnedSemaphorePermit| {
                         Box::pin(async move {
                             let _permit = permit;
-                            (block_idx, false, None, block_meta.location.0.clone())
+                            (block_idx, false, false, None, block_meta.location.0.clone())
                         })
                     });
                     v
@@ -190,7 +203,7 @@ impl BlockPruner {
         let mut result = Vec::with_capacity(joint.len());
         let block_num = segment_info.summary.block_count as usize;
         for item in joint {
-            let (block_idx, keep, range, block_location) = item;
+            let (block_idx, keep, omit_filter, range, block_location) = item;
             if keep {
                 let block = segment_block_metas[block_idx].clone();
 
@@ -206,6 +219,7 @@ impl BlockPruner {
                         block_location: block_location.clone(),
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
+                        omit_filter,
                     },
                     block,
                 ))
@@ -228,6 +242,7 @@ impl BlockPruner {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
+        let invert_range_pruner = self.pruning_ctx.invert_range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
         let start = Instant::now();
@@ -274,6 +289,8 @@ impl BlockPruner {
 
                 let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
                 if keep {
+                    let omit_filter = !invert_range_pruner
+                        .should_keep(&block_meta.col_stats, Some(&block_meta.col_metas));
                     result.push((
                         BlockMetaIndex {
                             segment_idx: segment_location.segment_idx,
@@ -284,6 +301,7 @@ impl BlockPruner {
                             block_location: block_meta.as_ref().location.0.clone(),
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
+                            omit_filter,
                         },
                         block_meta.clone(),
                     ))

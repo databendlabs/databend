@@ -60,6 +60,7 @@ pub struct PruningContext {
 
     pub limit_pruner: Arc<dyn Limiter + Send + Sync>,
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
+    pub invert_range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
     pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
@@ -86,6 +87,13 @@ impl PruningContext {
                 .filters
                 .as_ref()
                 .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
+
+        let inverted_filter_expr = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.inverted_filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
         // Limit pruner.
@@ -118,6 +126,13 @@ impl PruningContext {
             func_ctx.clone(),
             &table_schema,
             filter_expr.as_ref(),
+            default_stats.clone(),
+        )?;
+
+        let invert_range_pruner = RangePrunerCreator::try_create_with_default_stats(
+            func_ctx.clone(),
+            &table_schema,
+            inverted_filter_expr.as_ref(),
             default_stats,
         )?;
 
@@ -163,6 +178,7 @@ impl PruningContext {
             pruning_semaphore,
             limit_pruner,
             range_pruner,
+            invert_range_pruner,
             bloom_pruner,
             page_pruner,
             internal_column_pruner,
