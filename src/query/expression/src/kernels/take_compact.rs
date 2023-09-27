@@ -15,6 +15,9 @@
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -187,63 +190,39 @@ impl Column {
     where
         T: Copy,
     {
-        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let ptr = builder.as_mut_ptr();
-        let mut offset = 0;
-        let mut remain;
         let col_ptr = col.as_slice().as_ptr();
-        for (index, cnt) in indices.iter() {
-            if *cnt == 1 {
-                // # Safety
-                // offset + 1 <= num_rows
-                unsafe {
-                    std::ptr::copy_nonoverlapping(col_ptr.add(*index as usize), ptr.add(offset), 1)
-                };
-                offset += 1;
-                continue;
-            }
-            // Using the doubling method to copy the max segment memory.
-            // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
-            let base_offset = offset;
-            // # Safety
-            // base_offset + 1 <= num_rows
-            unsafe {
-                std::ptr::copy_nonoverlapping(col_ptr.add(*index as usize), ptr.add(offset), 1)
-            };
-            remain = *cnt as usize;
-            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-            let max_segment = 1 << (31 - cnt.leading_zeros());
-            let mut cur_segment = 1;
-            while cur_segment < max_segment {
-                // # Safety
-                // base_offset + 2 * cur_segment <= num_rows
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        ptr.add(base_offset),
-                        ptr.add(base_offset + cur_segment),
-                        cur_segment,
-                    )
-                };
-                cur_segment <<= 1;
-            }
-            remain -= max_segment;
-            offset += max_segment;
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let mut ptr = builder.as_mut_ptr();
+        let mut remain;
 
-            if remain > 0 {
+        unsafe {
+            for (index, cnt) in indices.iter() {
+                copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                if *cnt == 1 {
+                    continue;
+                }
+
+                // Using the doubling method to copy the max segment memory.
+                // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
+                // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+                let max_segment = 1 << (31 - cnt.leading_zeros());
+                let mut cur_segment = 1;
+                let base_ptr = ptr;
+                while cur_segment < max_segment {
+                    copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
+                    cur_segment <<= 1;
+                }
+
                 // Copy the remaining memory directly.
                 // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
                 //  ^^^^ ---> ^^^^
-                // # Safety
-                // max_segment > remain and offset + remain <= num_rows
-                unsafe {
-                    std::ptr::copy_nonoverlapping(ptr.add(base_offset), ptr.add(offset), remain)
-                };
-                offset += remain;
+                remain = *cnt as usize - max_segment;
+                if remain > 0 {
+                    copy_advance_aligned(base_ptr, &mut ptr, remain);
+                }
             }
+            set_vec_len_by_ptr(&mut builder, ptr);
         }
-        // # Safety
-        // `offset` is equal to `num_rows`
-        unsafe { builder.set_len(offset) };
 
         builder
     }
@@ -253,95 +232,66 @@ impl Column {
         indices: &[(u32, u32)],
         num_rows: usize,
     ) -> StringColumn {
-        let mut items: Vec<(&[u8], u32)> = Vec::with_capacity(indices.len());
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        let items_ptr = items.as_mut_ptr();
-        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+        // Each element of `items` is (string(&[u8]), repeat times).
+        let mut items = Vec::with_capacity(indices.len());
+        let mut items_ptr = items.as_mut_ptr();
 
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        let mut offsets = Vec::with_capacity(num_rows + 1);
+        let mut offsets_ptr = offsets.as_mut_ptr();
         let mut data_size = 0;
-        let mut offset_idx = 0;
-        for (items_idx, (index, cnt)) in indices.iter().enumerate() {
-            let item = unsafe { col.index_unchecked(*index as usize) };
-            // # Safety
-            // items_idx < indices.len() and offset_idx < num_rows + 1
-            unsafe {
-                std::ptr::write(items_ptr.add(items_idx), (item, *cnt));
+
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            for (index, cnt) in indices.iter() {
+                let item = col.index_unchecked(*index as usize);
+                store_advance_aligned((item, *cnt), &mut items_ptr);
                 for _ in 0..*cnt {
                     data_size += item.len() as u64;
-                    std::ptr::write(offsets_ptr.add(offset_idx), data_size);
-                    offset_idx += 1;
+                    store_advance_aligned(data_size, &mut offsets_ptr);
                 }
             }
-        }
-        unsafe {
-            items.set_len(indices.len());
-            offsets.set_len(num_rows + 1);
+            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
+            set_vec_len_by_ptr(&mut items, items_ptr);
         }
 
+        // Build [`data`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let data_ptr = data.as_mut_ptr();
-        let mut offset = 0;
+        let mut data_ptr = data.as_mut_ptr();
         let mut remain;
-        for (item, cnt) in items {
-            let len = item.len();
-            if cnt == 1 {
-                // # Safety
-                // offset + len <= data_capacity
-                unsafe {
-                    std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
+
+        unsafe {
+            for (item, cnt) in items {
+                let len = item.len();
+                copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
+                if cnt == 1 {
+                    continue;
                 }
-                offset += len;
-                continue;
-            }
 
-            // Using the doubling method to copy the max segment memory.
-            // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
-            let base_offset = offset;
-            // # Safety
-            // base_offset + len <= data_capacity
-            unsafe {
-                std::ptr::copy_nonoverlapping(item.as_ptr(), data_ptr.add(offset), len);
-            }
-            remain = cnt as usize;
-            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-            let max_bit_num = 1 << (31 - cnt.leading_zeros());
-            let max_segment = max_bit_num * len;
-            let mut cur_segment = len;
-            while cur_segment < max_segment {
-                unsafe {
-                    // # Safety
-                    // offset + 2 * cur_segment <= data_capacity
-                    std::ptr::copy_nonoverlapping(
-                        data_ptr.add(base_offset),
-                        data_ptr.add(base_offset + cur_segment),
-                        cur_segment,
-                    )
-                };
-                cur_segment <<= 1;
-            }
-            remain -= max_bit_num;
-            offset += max_segment;
+                // Using the doubling method to copy the max segment memory.
+                // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
+                // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
+                let max_bit_num = 1 << (31 - cnt.leading_zeros());
+                let max_segment = max_bit_num * len;
+                let mut cur_segment = len;
+                let base_data_ptr = data_ptr;
+                while cur_segment < max_segment {
+                    copy_advance_aligned(base_data_ptr, &mut data_ptr, cur_segment);
+                    cur_segment <<= 1;
+                }
 
-            if remain > 0 {
                 // Copy the remaining memory directly.
                 // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
                 //  ^^^^ ---> ^^^^
-                // # Safety
-                // max_segment > remain * len and offset + remain * len <= data_capacity
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        data_ptr.add(base_offset),
-                        data_ptr.add(offset),
-                        remain * len,
-                    )
-                };
-                offset += remain * len;
+                remain = cnt as usize - max_bit_num;
+                if remain > 0 {
+                    copy_advance_aligned(base_data_ptr, &mut data_ptr, remain * len);
+                }
             }
+            set_vec_len_by_ptr(&mut data, data_ptr);
         }
-        // # Safety
-        // `offset` is equal to `data_capacity`
-        unsafe { data.set_len(offset) };
+
         StringColumn::new(data.into(), offsets.into())
     }
 
