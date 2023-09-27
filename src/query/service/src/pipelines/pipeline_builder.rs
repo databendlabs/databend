@@ -1504,6 +1504,7 @@ impl PipelineBuilder {
                 let transform = match params.aggregate_functions.is_empty() {
                     true => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1513,6 +1514,7 @@ impl PipelineBuilder {
                     }),
                     false => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1535,15 +1537,14 @@ impl PipelineBuilder {
             })?;
         }
 
-        let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, ()>::create(self.ctx.clone(), method, params.clone()),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, usize>::create(self.ctx.clone(), method, params.clone()),
             }),
         };
 
@@ -1598,7 +1599,6 @@ impl PipelineBuilder {
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
-        let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();
 
         match params.aggregate_functions.is_empty() {
@@ -1606,8 +1606,11 @@ impl PipelineBuilder {
                 HashMethodKind::T(v) => {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector =
-                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                        self.exchange_injector = AggregateInjector::<_, ()>::create(
+                            self.ctx.clone(),
+                            v.clone(),
+                            params.clone(),
+                        );
                     }
 
                     self.build_pipeline(&aggregate.input)?;
@@ -1627,7 +1630,7 @@ impl PipelineBuilder {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                         self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            tenant,
+                            self.ctx.clone(),
                             v.clone(),
                             params.clone(),
                         );

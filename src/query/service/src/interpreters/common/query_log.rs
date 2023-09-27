@@ -107,6 +107,10 @@ impl InterpreterQueryLog {
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
         let join_spilled_rows = 0u64;
         let join_spilled_bytes = 0u64;
+        let agg_spilled_rows = 0u64;
+        let agg_spilled_bytes = 0u64;
+        let group_by_spilled_rows = 0u64;
+        let group_by_spilled_bytes = 0u64;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -165,6 +169,10 @@ impl InterpreterQueryLog {
             memory_usage,
             join_spilled_bytes,
             join_spilled_rows,
+            agg_spilled_bytes,
+            agg_spilled_rows,
+            group_by_spilled_bytes,
+            group_by_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -216,8 +224,14 @@ impl InterpreterQueryLog {
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
 
-        let join_spilled_rows = ctx.get_spill_progress_value().rows as u64;
-        let join_spilled_bytes = ctx.get_spill_progress_value().bytes as u64;
+        let join_spilled_rows = ctx.get_join_spill_progress_value().rows as u64;
+        let join_spilled_bytes = ctx.get_join_spill_progress_value().bytes as u64;
+
+        let agg_spilled_rows = ctx.get_aggregate_spill_progress_value().rows as u64;
+        let agg_spilled_bytes = ctx.get_aggregate_spill_progress_value().bytes as u64;
+
+        let group_by_spilled_rows = ctx.get_group_by_spill_progress_value().rows as u64;
+        let group_by_spilled_bytes = ctx.get_group_by_spill_progress_value().bytes as u64;
 
         // Result.
         let result_rows = ctx.get_result_progress_value().rows as u64;
@@ -284,6 +298,10 @@ impl InterpreterQueryLog {
             memory_usage,
             join_spilled_bytes,
             join_spilled_rows,
+            agg_spilled_bytes,
+            agg_spilled_rows,
+            group_by_spilled_bytes,
+            group_by_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,
