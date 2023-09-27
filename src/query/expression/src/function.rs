@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::borrow::Cow;
-use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::BitAnd;
 use std::ops::BitOr;
