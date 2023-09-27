@@ -250,7 +250,9 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.levels, key).await;
+        let got = MapApiRO::<String>::get(self.levels.leveled_ref(), key).await;
+        // let got = self.levels.leveled_ref().get(key).await;
+        // let got = MapApiRO::<String>::get(&self.levels, key).await;
         Into::<Option<SeqV>>::into(got)
     }
 
@@ -408,9 +410,12 @@ impl SMV002 {
             }
             Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await,
             Operation::AsIs => {
-                self.levels
-                    .update_meta(upsert_kv.key.clone(), upsert_kv.value_meta.clone())
-                    .await
+                MapApiExt::update_meta(
+                    &mut self.levels,
+                    upsert_kv.key.clone(),
+                    upsert_kv.value_meta.clone(),
+                )
+                .await
             }
         };
 

@@ -112,73 +112,22 @@ where K: MapKey
     fn set<'f>(self, key: K, value: Option<(K::V, Option<KVMeta>)>) -> Self::SetFut<'f>;
 }
 
-#[async_trait::async_trait]
-pub(in crate::sm_v002) trait MapApiExt<'d, K>
-where K: MapKey
-{
-    // TODO:
+pub(in crate::sm_v002) struct MapApiExt;
+
+impl MapApiExt {
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
-    async fn update_meta(self, key: K, meta: Option<KVMeta>) -> (Marked<K::V>, Marked<K::V>);
-
-    // TODO:
-    /// Update only the value and keeps the meta unchanged.
-    /// If the entry does not exist, create one.
-    async fn upsert_value(&mut self, key: K, value: K::V) -> (Marked<K::V>, Marked<K::V>);
-}
-
-/// Update only the meta associated to an entry and keeps the value unchanged.
-/// If the entry does not exist, nothing is done.
-async fn update_meta<'d, K, T>(
-    s: &'d mut T,
-    key: K,
-    meta: Option<KVMeta>,
-) -> (Marked<K::V>, Marked<K::V>)
-where
-    K: MapKey,
-    &'d mut T: MapApi<'d, K>,
-{
-    //
-    let got = s.to_ro().get(&key).await;
-    if got.is_tomb_stone() {
-        return (got.clone(), got.clone());
-    }
-
-    // Safe unwrap(), got is Normal
-    let (v, _) = got.unpack_ref().unwrap();
-
-    s.set(key, Some((v.clone(), meta))).await
-}
-
-/// Update only the value and keeps the meta unchanged.
-/// If the entry does not exist, create one.
-async fn upsert_value<'d, K, T>(s: &'d mut T, key: K, value: K::V) -> (Marked<K::V>, Marked<K::V>)
-where
-    K: MapKey,
-    &'d mut T: MapApi<'d, K>,
-{
-    let got = s.to_ro().get(&key).await;
-
-    let meta = if let Some((_, meta)) = got.unpack_ref() {
-        meta
-    } else {
-        None
-    };
-
-    s.set(key, Some((value, meta.cloned()))).await
-}
-
-#[async_trait::async_trait]
-impl<'d, K, T> MapApiExt<'d, K> for &'d mut T
-where
-    &'d mut T: MapApi<'d, K>,
-    K: MapKey,
-{
-    // Not work: it requires MapApiRO::GetFut to be Send, but adding `Send` to MapApiRO::GetFut cause an compilation error:
-    // https://github.com/rust-lang/rust/issues/100013
-    async fn update_meta(self, key: K, meta: Option<KVMeta>) -> (Marked<K::V>, Marked<K::V>) {
+    pub(in crate::sm_v002) async fn update_meta<'d, K, T>(
+        s: &'d mut T,
+        key: K,
+        meta: Option<KVMeta>,
+    ) -> (Marked<K::V>, Marked<K::V>)
+    where
+        K: MapKey,
+        &'d mut T: MapApi<'d, K>,
+    {
         //
-        let got = self.to_ro().get(&key).await;
+        let got = s.to_ro().get(&key).await;
         if got.is_tomb_stone() {
             return (got.clone(), got.clone());
         }
@@ -186,11 +135,21 @@ where
         // Safe unwrap(), got is Normal
         let (v, _) = got.unpack_ref().unwrap();
 
-        self.set(key, Some((v.clone(), meta))).await
+        s.set(key, Some((v.clone(), meta))).await
     }
 
-    async fn upsert_value(&mut self, key: K, value: K::V) -> (Marked<K::V>, Marked<K::V>) {
-        let got = self.get(&key).await;
+    /// Update only the value and keeps the meta unchanged.
+    /// If the entry does not exist, create one.
+    pub(in crate::sm_v002) async fn upsert_value<'d, K, T>(
+        s: &'d mut T,
+        key: K,
+        value: K::V,
+    ) -> (Marked<K::V>, Marked<K::V>)
+    where
+        K: MapKey,
+        &'d mut T: MapApi<'d, K>,
+    {
+        let got = s.to_ro().get(&key).await;
 
         let meta = if let Some((_, meta)) = got.unpack_ref() {
             meta
@@ -198,7 +157,7 @@ where
             None
         };
 
-        self.set(key, Some((value, meta.cloned()))).await
+        s.set(key, Some((value, meta.cloned()))).await
     }
 }
 

@@ -61,6 +61,7 @@ impl<'d> LeveledRef<'d> {
 impl<'d, K> MapApiRO<'d, K> for LeveledRef<'d>
 where
     K: MapKey + fmt::Debug,
+    // &'d LevelData: MapApiRO<'d, K>,
     for<'him> &'him LevelData: MapApiRO<'him, K>,
 {
     type GetFut<'f, Q> = impl Future<Output = Marked<K::V>>  + 'f
@@ -110,12 +111,13 @@ where
     {
         // TODO: &LeveledRef use LeveledRef
 
-        let levels = self.iter_levels();
+        // let levels = self.iter_levels();
 
         async move {
             let mut km = KMerge::by(util::by_key_seq);
 
-            for api in levels {
+            // for api in levels {
+            for api in self.iter_levels() {
                 let a = api.range(range.clone()).await;
                 km = km.merge(a);
             }
