@@ -387,6 +387,7 @@ impl Binder {
             table_options,
             cluster_by,
             as_query,
+            transient,
             engine,
             uri_location,
         } = stmt;
@@ -430,6 +431,11 @@ impl Binder {
             }
             None => (None, "".to_string()),
         };
+
+        // If table is TRANSIENT, set a flag in table option
+        if *transient {
+            options.insert("TRANSIENT".to_owned(), "T".to_owned());
+        }
 
         // Build table schema
         let (schema, field_comments) = match (&source, &as_query) {

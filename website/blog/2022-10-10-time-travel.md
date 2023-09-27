@@ -40,3 +40,9 @@ The saved snapshots are the behind-the-scenes heroes that make the time travel b
 The Time Travel feature makes it possible to create an OLD table, which means you can create a table to hold and move on from a previous version of your data. 
 
 The [CREATE TABLE](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table) statement can include a [SNAPSHOT_LOCATION](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table#create-table--snapshot_location) clause that allows you to specify a snapshot file that holds your old data. This command enables you to insert the data stored in the snapshot file when you create a table. Please note that the table you create must have same column definitions as the data from the snapshot.
+
+## Go without Time Travel
+
+Tables in Databend support Time Travel out-of-the-box. However, you might not need it for some cases, for example, when you're running low of your storage space or the data is big but unimportant. Databend currently does not provide a setting to switch it off, but you can [CREATE TRANSIENT TABLE](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table#create-transient-table).
+
+Transient tables are used to hold transitory data that does not require a data protection or recovery mechanism. Databend does not hold historical data for a transient table so you will not be able to query from a previous version of the transient table with the Time Travel feature, for example, the AT clause in the SELECT statement will not work for transient tables. Please note that you can still drop and undrop a transient table.

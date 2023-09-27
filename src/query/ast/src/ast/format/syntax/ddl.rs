@@ -30,7 +30,13 @@ use crate::ast::CreateViewStmt;
 use crate::ast::TimeTravelPoint;
 
 pub(crate) fn pretty_create_table(stmt: CreateTableStmt) -> RcDoc<'static> {
-    RcDoc::text("CREATE TABLE")
+    RcDoc::text("CREATE")
+        .append(if stmt.transient {
+            RcDoc::space().append(RcDoc::text("TRANSIENT"))
+        } else {
+            RcDoc::nil()
+        })
+        .append(RcDoc::space().append(RcDoc::text("TABLE")))
         .append(if stmt.if_not_exists {
             RcDoc::space().append(RcDoc::text("IF NOT EXISTS"))
         } else {

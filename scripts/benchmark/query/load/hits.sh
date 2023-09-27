@@ -15,7 +15,7 @@ VACUUM DROP TABLE retain 0 hours;
 SQL
 
 cat <<SQL | bendsql
-  CREATE TABLE hits (
+  CREATE TRANSIENT TABLE hits (
     WatchID BIGINT NOT NULL,
     JavaEnable SMALLINT NOT NULL,
     Title TEXT NOT NULL,

@@ -10,7 +10,7 @@ The capability to flash back a table is subject to these conditions:
 
 - The command only existing tables to their prior states. To recover a dropped table, use [UNDROP TABLE](21-ddl-undrop-table.md).
 
-- Flashback a table is part of Databend's time travel feature. Before using the command, make sure the table you want to flashback is eligible for time travel.
+- Flashback a table is part of Databend's time travel feature. Before using the command, make sure the table you want to flashback is eligible for time travel. For example, the command doesn't work for transient tables because Databend does not create or store snapshots for such tables.
 
 - You cannot roll back after flashback a table to a prior state, but you can flash back the table again to an earlier state.
 

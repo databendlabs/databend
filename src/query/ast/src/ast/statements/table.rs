@@ -131,11 +131,16 @@ pub struct CreateTableStmt {
     pub cluster_by: Vec<Expr>,
     pub table_options: BTreeMap<String, String>,
     pub as_query: Option<Box<Query>>,
+    pub transient: bool,
 }
 
 impl Display for CreateTableStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "CREATE TABLE ")?;
+        write!(f, "CREATE ")?;
+        if self.transient {
+            write!(f, "TRANSIENT ")?;
+        }
+        write!(f, "TABLE ")?;
         if self.if_not_exists {
             write!(f, "IF NOT EXISTS ")?;
         }

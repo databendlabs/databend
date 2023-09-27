@@ -78,6 +78,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 cluster_by: vec![],
                 table_options: BTreeMap::new(),
                 as_query: None,
+                transient: false,
             };
             tables.push((drop_table, create_table));
         }
