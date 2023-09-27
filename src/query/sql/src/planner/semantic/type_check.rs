@@ -1011,7 +1011,16 @@ impl<'a> TypeChecker<'a> {
                     let path = match accessor {
                         MapAccessor::Bracket {
                             key: box Expr::Literal { lit, .. },
-                        } => lit.clone(),
+                        } => {
+                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "Unsupported accessor: {:?}",
+                                    lit
+                                ))
+                                .set_span(*span));
+                            }
+                            lit.clone()
+                        }
                         MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
