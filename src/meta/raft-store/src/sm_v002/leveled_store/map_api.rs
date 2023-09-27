@@ -57,13 +57,12 @@ impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 ///
 /// There is no lifetime constraint on the trait,
 /// and it's the implementation's duty to specify a valid lifetime constraint.
-pub(in crate::sm_v002) trait MapApiRO<'d, K>: Send + Sync
+pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
 where K: MapKey
 {
     type GetFut<'f, Q>: Future<Output = Marked<K::V>>
     where
         Self: 'f,
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f;
@@ -78,7 +77,6 @@ where K: MapKey
     type RangeFut<'f, Q, R>: Future<Output = BoxStream<'f, (K, Marked<K::V>)>>
     where
         Self: 'f,
-        'd: 'f,
         K: Borrow<Q>,
         R: RangeBounds<Q> + Send + Sync + Clone,
         R: 'f,
@@ -97,10 +95,10 @@ where K: MapKey
 }
 
 /// Provide a read-write key-value map API set, used to access state machine data.
-pub(in crate::sm_v002) trait MapApi<'d, K>: MapApiRO<'d, K>
+pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K>
 where K: MapKey
 {
-    type RO<'o>: MapApiRO<'o, K>
+    type RO<'o>: MapApiRO<K>
     where Self: 'o;
 
     fn to_ro<'o>(&'o self) -> Self::RO<'o>;
@@ -124,7 +122,7 @@ impl MapApiExt {
     ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: MapKey,
-        &'d mut T: MapApi<'d, K>,
+        &'d mut T: MapApi<K>,
     {
         //
         let got = s.to_ro().get(&key).await;
@@ -147,7 +145,7 @@ impl MapApiExt {
     ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: MapKey,
-        &'d mut T: MapApi<'d, K>,
+        &'d mut T: MapApi<K>,
     {
         let got = s.to_ro().get(&key).await;
 
@@ -161,18 +159,17 @@ impl MapApiExt {
     }
 }
 
-impl<'ro_me, 'ro_d, K, T> MapApiRO<'ro_d, K> for &'ro_me mut T
+impl<'ro_me, K, T> MapApiRO<K> for &'ro_me mut T
 where
     K: MapKey,
-    &'ro_me T: MapApiRO<'ro_d, K>,
+    &'ro_me T: MapApiRO<K>,
     K: Ord + Send + Sync + 'static,
     T: Send + Sync,
 {
-    type GetFut<'f, Q> = <&'ro_me T as MapApiRO<'ro_d, K>>::GetFut<'f, Q>
+    type GetFut<'f, Q> = <&'ro_me T as MapApiRO<K>>::GetFut<'f, Q>
         where
             Self: 'f,
             'ro_me: 'f,
-            'ro_d: 'f,
             K: Borrow<Q>,
             Q: Ord + Send + Sync + ?Sized,
             Q: 'f;
@@ -180,18 +177,16 @@ where
     fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
     where
         'ro_me: 'f,
-        'ro_d: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
         (&*self).get(key)
     }
 
-    type RangeFut<'f, Q, R> = <&'ro_me T as MapApiRO<'ro_d, K>>::RangeFut<'f, Q, R>
+    type RangeFut<'f, Q, R> = <&'ro_me T as MapApiRO<K>>::RangeFut<'f, Q, R>
     where
         Self: 'f,
         'ro_me: 'f,
-        'ro_d: 'f,
         K: Borrow<Q>,
         R: RangeBounds<Q> + Send + Sync + Clone,
     R: 'f,
@@ -201,7 +196,6 @@ where
     fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
     where
         'ro_me: 'f,
-        'ro_d: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,

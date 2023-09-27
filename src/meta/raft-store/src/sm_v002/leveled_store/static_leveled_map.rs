@@ -62,22 +62,20 @@ impl StaticLeveledMap {
     }
 }
 
-impl<'d, K> MapApiRO<'d, K> for &'d StaticLeveledMap
+impl<'d, K> MapApiRO<K> for &'d StaticLeveledMap
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<'him, K>,
+    for<'him> &'him LevelData: MapApiRO<K>,
 {
     type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
         where
             Self: 'f,
-            'd: 'f,
             K: Borrow<Q>,
             Q: Ord + Send + Sync + ?Sized,
             Q: 'f;
 
     fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
     where
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f,

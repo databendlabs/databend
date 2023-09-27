@@ -82,18 +82,16 @@ impl LevelData {
     }
 }
 
-impl<'d> MapApiRO<'d, String> for &'d LevelData {
+impl<'d> MapApiRO<String> for &'d LevelData {
     type GetFut<'f, Q> = impl Future<Output = Marked<<String as MapKey>::V>> + 'f
     where
         Self: 'f,
-        'd: 'f,
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f;
 
     fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
     where
-        // 'd: 'f,
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f,
@@ -101,19 +99,17 @@ impl<'d> MapApiRO<'d, String> for &'d LevelData {
         async move { self.kv.get(key).cloned().unwrap_or(Marked::empty()) }
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (String, Marked<<String as MapKey>::V>)>>
+    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (String, Marked<<String as MapKey>::V>)>> + 'f
     where
         Self: 'f,
-        'd: 'f,
         String: Borrow<Q>,
         R: RangeBounds<Q> + Send + Sync + Clone,
-    R: 'f,
+        R: 'f,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f;
 
     fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
     where
-        'd: 'f,
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
@@ -126,7 +122,7 @@ impl<'d> MapApiRO<'d, String> for &'d LevelData {
     }
 }
 
-impl<'me> MapApi<'me, String> for &'me mut LevelData {
+impl<'me> MapApi<String> for &'me mut LevelData {
     type RO<'o> = &'o LevelData where Self: 'o;
 
     fn to_ro<'o>(&'o self) -> Self::RO<'o> {
@@ -143,7 +139,7 @@ impl<'me> MapApi<'me, String> for &'me mut LevelData {
         value: Option<(<String as MapKey>::V, Option<KVMeta>)>,
     ) -> Self::SetFut<'f>
     where
-        'me: 'f,
+        Self: 'f,
     {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
@@ -167,11 +163,10 @@ impl<'me> MapApi<'me, String> for &'me mut LevelData {
     }
 }
 
-impl<'d> MapApiRO<'d, ExpireKey> for &'d LevelData {
+impl<'d> MapApiRO<ExpireKey> for &'d LevelData {
     type GetFut<'f, Q> = impl Future<Output = Marked<<ExpireKey as MapKey>::V>> + 'f
         where
             Self: 'f,
-            'd: 'f,
             ExpireKey: Borrow<Q>,
             Q: Ord + Send + Sync + ?Sized,
             Q: 'f;
@@ -189,7 +184,6 @@ impl<'d> MapApiRO<'d, ExpireKey> for &'d LevelData {
     type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (ExpireKey, Marked<<ExpireKey as MapKey>::V>)>> + 'f
         where
             Self: 'f,
-            'd: 'f,
             ExpireKey: Borrow<Q>,
             R: RangeBounds<Q> + Send + Sync + Clone,
         R: 'f,
@@ -198,7 +192,6 @@ impl<'d> MapApiRO<'d, ExpireKey> for &'d LevelData {
 
     fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
     where
-        'd: 'f,
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
@@ -215,7 +208,7 @@ impl<'d> MapApiRO<'d, ExpireKey> for &'d LevelData {
     }
 }
 
-impl<'me> MapApi<'me, ExpireKey> for &'me mut LevelData {
+impl<'me> MapApi<ExpireKey> for &'me mut LevelData {
     type RO<'o> = &'o LevelData
     where Self: 'o;
 

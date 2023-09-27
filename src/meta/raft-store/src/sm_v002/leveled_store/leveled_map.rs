@@ -58,23 +58,22 @@ impl<'d> LeveledRef<'d> {
     }
 }
 
-impl<'d, K> MapApiRO<'d, K> for LeveledRef<'d>
+impl<'d, K> MapApiRO<K> for LeveledRef<'d>
 where
     K: MapKey + fmt::Debug,
-    // &'d LevelData: MapApiRO<'d, K>,
-    for<'him> &'him LevelData: MapApiRO<'him, K>,
+    // &'d LevelData: MapApiRO<K>,
+    for<'him> &'him LevelData: MapApiRO<K>,
+    // &'him LevelData: MapApiRO<K>,
 {
     type GetFut<'f, Q> = impl Future<Output = Marked<K::V>>  + 'f
         where
             Self: 'f,
-            'd: 'f,
             K: Borrow<Q>,
             Q: Ord + Send + Sync + ?Sized,
             Q: 'f;
 
     fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
     where
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f,
@@ -90,10 +89,9 @@ where
         }
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>>
+    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>> +  'f
         where
             Self: 'f,
-            'd: 'f,
             K: Borrow<Q>,
             R: RangeBounds<Q> + Send + Sync + Clone,
         R:'f,
@@ -102,7 +100,6 @@ where
 
     fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
     where
-        'd: 'f,
         K: Borrow<Q>,
         R: RangeBounds<Q> + Clone + Send + Sync,
         R: 'f,
@@ -176,15 +173,14 @@ impl<'d> LeveledRefMut<'d> {
 
 // Because `LeveledRefMut` has a mut ref of lifetime 'd,
 // `self` must outlive 'd otherwise there will be two mut ref.
-impl<'d, K> MapApiRO<'d, K> for LeveledRefMut<'d>
+impl<'d, K> MapApiRO<K> for LeveledRefMut<'d>
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<'him, K>,
+    for<'him> &'him LevelData: MapApiRO<K>,
 {
     type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
     where
         Self: 'f,
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         Q: 'f;
@@ -209,7 +205,6 @@ where
     type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>> +'f
     where
         Self: 'f,
-        'd: 'f,
         K: Borrow<Q>,
         R: RangeBounds<Q> + Send + Sync + Clone,
         R: 'f,
@@ -227,11 +222,11 @@ where
     }
 }
 
-impl<'d, K> MapApi<'d, K> for LeveledRefMut<'d>
+impl<'d, K> MapApi<K> for LeveledRefMut<'d>
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<'him, K>,
-    for<'him> &'him mut LevelData: MapApi<'him, K>,
+    for<'him> &'him LevelData: MapApiRO<K>,
+    for<'him> &'him mut LevelData: MapApi<K>,
 {
     type RO<'o> = LeveledRef<'o>
     where Self: 'o;
@@ -342,10 +337,10 @@ impl LeveledMap {
     }
 }
 
-impl<'d, K> MapApiRO<'d, K> for &'d LeveledMap
+impl<'d, K> MapApiRO<K> for &'d LeveledMap
 where
     K: MapKey + fmt::Debug,
-    for<'him> &'him LevelData: MapApiRO<'him, K>,
+    for<'him> &'him LevelData: MapApiRO<K>,
 {
     type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
         where
@@ -386,11 +381,11 @@ where
     }
 }
 
-impl<'me, K> MapApi<'me, K> for &'me mut LeveledMap
+impl<'me, K> MapApi<K> for &'me mut LeveledMap
 where
     K: MapKey,
-    for<'e> &'e LevelData: MapApiRO<'e, K>,
-    for<'him> &'him mut LevelData: MapApi<'him, K>,
+    for<'e> &'e LevelData: MapApiRO<K>,
+    for<'him> &'him mut LevelData: MapApi<K>,
 {
     type RO<'o> = LeveledRef<'o>
     where Self: 'o;
