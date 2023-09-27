@@ -112,6 +112,7 @@ pub struct ExecuteStopped {
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
     pub stop_time: Instant,
+    pub session: Arc<Session>,
 }
 
 pub struct Executor {
@@ -134,6 +135,14 @@ impl Executor {
             Starting(_) => None,
             Running(r) => r.ctx.get_affect(),
             Stopped(r) => r.affect.clone(),
+        }
+    }
+
+    pub fn get_session(&self) -> Arc<Session> {
+        match &self.state {
+            Starting(r) => r.ctx.get_current_session(),
+            Running(r) => r.ctx.get_current_session(),
+            Stopped(r) => r.session.clone(),
         }
     }
 
@@ -179,6 +188,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
+                    session: s.ctx.get_current_session(),
                     stop_time: Instant::now(),
                     affect: Default::default(),
                 }))
@@ -199,6 +209,7 @@ impl Executor {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
+                    session: r.ctx.get_current_session(),
                     affect: r.ctx.get_affect(),
                 }))
             }

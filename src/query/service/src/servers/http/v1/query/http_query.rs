@@ -139,26 +139,6 @@ pub struct HttpSessionConf {
 }
 
 impl HttpSessionConf {
-    fn apply_affect(&self, affect: &QueryAffect) -> HttpSessionConf {
-        let mut ret = self.clone();
-        match affect {
-            QueryAffect::UseDB { name } => {
-                ret.database = Some(name.to_string());
-            }
-            QueryAffect::ChangeSettings {
-                keys,
-                values,
-                is_globals: _,
-            } => {
-                let settings = ret.settings.get_or_insert_default();
-                for (key, value) in keys.iter().zip(values) {
-                    settings.insert(key.to_string(), value.to_string());
-                }
-            }
-            _ => {}
-        }
-        ret
-    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -350,6 +330,7 @@ impl HttpQuery {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
                         stop_time: Instant::now(),
+                        session: ctx_clone.get_current_session(),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(
@@ -387,17 +368,12 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
 
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session,
+            session: Some(session),
             session_id: self.session_id.clone(),
         })
     }
@@ -405,17 +381,13 @@ impl HttpQuery {
     #[async_backtrace::framed]
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
         let state = self.get_state().await;
-        let session = self.request.session.clone().unwrap_or_default();
-        let session = if let Some(affect) = &state.affect {
-            Some(session.apply_affect(affect))
-        } else {
-            Some(session)
-        };
+        let session = self.get_response_session().await;
+
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
             state,
-            session,
+            session: Some(session),
         }
     }
 
@@ -429,6 +401,23 @@ impl HttpQuery {
             state: exe_state,
             error: err,
             affect: state.get_affect(),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn get_response_session(&self) -> HttpSessionConf {
+        let executor = self.state.read().await;
+        let session = executor.get_session();
+        let settings = session.get_changed_settings().iter().map(|(k, v)| {
+            (k, v.value.as_string())
+        }).collect::<BTreeMap<_, _>>();
+        let keep_server_session_secs = self.request.session.unwrap_or_default().keep_server_session_secs;
+
+        // TODO: add current role here
+        HttpSessionConf {
+            database: Some(session.get_current_database()),
+            keep_server_session_secs,
+            settings: Some(settings),
         }
     }
 

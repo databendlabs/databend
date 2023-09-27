@@ -34,7 +34,7 @@ impl Settings {
 
     fn try_get_string(&self, key: &str) -> Result<String> {
         match self.changes.get(key) {
-            Some(v) => v.value.as_string(),
+            Some(v) => Ok(v.value.as_string()),
             None => DefaultSettings::try_get_string(key),
         }
     }
