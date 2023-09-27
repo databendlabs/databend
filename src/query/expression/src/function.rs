@@ -652,7 +652,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             Value::Column(column) => {
                 let result = match column {
                     Column::Nullable(box nullable_column) => {
-                        let mut before_map = bitmap.clone().into();
+                        let mut before_map:Bitmap = bitmap.clone().into();
                         let mut after_map = nullable_column.validity.clone();
                         match bitmap.len().cmp(&after_map.len()) {
                             Ordering::Greater => {
