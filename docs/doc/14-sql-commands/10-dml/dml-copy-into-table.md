@@ -289,8 +289,8 @@ This example connects to Amazon S3 using AWS IAM role authentication with an ext
 COPY INTO mytable
 FROM 's3://mybucket/'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
+    ENDPOINT_URL = 'https://<endpoint-URL>'
+    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role'
     EXTERNAL_ID = '123456'
 )
 PATTERN = '.*[.]csv'
@@ -348,8 +348,8 @@ This example loads a GZIP-compressed CSV file on Amazon S3 into Databend:
 COPY INTO mytable
 FROM 's3://mybucket/data.csv.gz'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ACCESS_KEY_ID = '<your-access-key-ID>',
+    ENDPOINT_URL = 'https://<endpoint-URL>'
+    ACCESS_KEY_ID = '<your-access-key-ID>'
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
 FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO);

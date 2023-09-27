@@ -146,10 +146,10 @@ Let's assume you have a sample file named [books.parquet](https://datafuse-12537
 ```sql
 SELECT *  FROM 's3://databend-toronto' 
 (
- access_key_id => '<your-access-key-id>', 
- secret_access_key => '<your-secret-access-key>',
- endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region => 'us-east-2',
+ access_key_id => '<your-access-key-id>' 
+ secret_access_key => '<your-secret-access-key>'
+ endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com'
+ region => 'us-east-2'
  files => ('books.parquet')
 );  
 ```
