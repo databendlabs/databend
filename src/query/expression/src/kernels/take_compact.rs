@@ -197,8 +197,8 @@ impl Column {
 
         unsafe {
             for (index, cnt) in indices.iter() {
-                copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
                 if *cnt == 1 {
+                    copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
                     continue;
                 }
 
@@ -206,8 +206,9 @@ impl Column {
                 // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
                 // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                 let max_segment = 1 << (31 - cnt.leading_zeros());
-                let mut cur_segment = 1;
                 let base_ptr = ptr;
+                copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                let mut cur_segment = 1;
                 while cur_segment < max_segment {
                     copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
                     cur_segment <<= 1;
@@ -264,8 +265,8 @@ impl Column {
         unsafe {
             for (item, cnt) in items {
                 let len = item.len();
-                copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
                 if cnt == 1 {
+                    copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
                     continue;
                 }
 
@@ -274,8 +275,9 @@ impl Column {
                 // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                 let max_bit_num = 1 << (31 - cnt.leading_zeros());
                 let max_segment = max_bit_num * len;
-                let mut cur_segment = len;
                 let base_data_ptr = data_ptr;
+                copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
+                let mut cur_segment = len;
                 while cur_segment < max_segment {
                     copy_advance_aligned(base_data_ptr, &mut data_ptr, cur_segment);
                     cur_segment <<= 1;
