@@ -60,6 +60,8 @@ pub struct TransformHashJoinBuild {
     from_spill: bool,
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
+    // If send partition set to probe
+    send_partition_set: bool,
 }
 
 impl TransformHashJoinBuild {
@@ -79,6 +81,7 @@ impl TransformHashJoinBuild {
             finalize_finished: false,
             from_spill: false,
             processor_id,
+            send_partition_set: false,
         }))
     }
 
@@ -117,8 +120,7 @@ impl TransformHashJoinBuild {
         self.finalize_finished = false;
         self.from_spill = true;
         // Only need to reset the following variables once
-        let mut count = self.build_state.row_space_builders.lock();
-        if *count == 0 {
+        if self.build_state.row_space_builders.load(Ordering::Relaxed) == 0 {
             self.build_state.send_val.store(2, Ordering::Relaxed);
             // Before build processors into `WaitProbe` state, set the channel message to false.
             // Then after all probe processors are ready, the last one will send true to channel and wake up all build processors.
@@ -128,9 +130,13 @@ impl TransformHashJoinBuild {
                 .send(false)
                 .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
             let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
-            *count = worker_num;
-            let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
-            *count = worker_num;
+            self.build_state
+                .row_space_builders
+                .store(worker_num, Ordering::Relaxed);
+            self.build_state
+                .hash_join_state
+                .hash_table_builders
+                .store(worker_num, Ordering::Relaxed);
             self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;
@@ -198,18 +204,11 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &mut self.spill_state {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         // The method should be called only once.
-                        if !spill_state
-                            .spill_coordinator
-                            .send_partition_set
-                            .load(Ordering::Relaxed)
-                        {
+                        if !self.send_partition_set {
                             self.build_state
                                 .hash_join_state
                                 .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
-                            spill_state
-                                .spill_coordinator
-                                .send_partition_set
-                                .store(true, Ordering::Relaxed);
+                            self.send_partition_set = true;
                         }
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
@@ -318,9 +317,10 @@ impl Processor for TransformHashJoinBuild {
                     let spill_state = self.spill_state.as_mut().unwrap();
                     let mut hashes = Vec::with_capacity(data.num_rows());
                     spill_state.get_hashes(&data, &mut hashes)?;
+                    let spilled_partition_set = spill_state.spiller.spilled_partition_set.clone();
                     let unspilled_data = spill_state
                         .spiller
-                        .spill_input(data, &hashes, self.processor_id)
+                        .spill_input(data, &hashes, &spilled_partition_set, self.processor_id)
                         .await?;
                     if !unspilled_data.is_empty() {
                         self.build_state.build(unspilled_data)?;

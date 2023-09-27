@@ -102,6 +102,7 @@ impl MergeIntoInterpreter {
             catalog,
             database,
             table,
+            target_alias,
             matched_evaluators,
             unmatched_evaluators,
             target_table_idx,
@@ -217,7 +218,10 @@ impl MergeIntoInterpreter {
                     selection: None,
                     subquery_desc: vec![],
                     database: database.clone(),
-                    table: table_name.clone(),
+                    table: match target_alias {
+                        None => table_name.clone(),
+                        Some(alias) => alias.name.to_string(),
+                    },
                     update_list: update_list.clone(),
                     bind_context: bind_context.clone(),
                     metadata: self.plan.meta_data.clone(),
@@ -236,6 +240,7 @@ impl MergeIntoInterpreter {
                         fuse_table.schema().into(),
                         col_indices,
                         Some(join_output_schema.num_fields()),
+                        target_alias.is_some(),
                     )?;
                 let update_list = update_list
                     .iter()

@@ -221,13 +221,13 @@ impl<'a> TypeChecker<'a> {
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
                 let result = match ident {
                     ColumnID::Name(ident) => {
-                        let column = normalize_identifier(ident, self.name_resolution_ctx).name;
+                        let column = normalize_identifier(ident, self.name_resolution_ctx);
                         self.bind_context.resolve_name(
                             database.as_deref(),
                             table.as_deref(),
-                            column.as_str(),
-                            ident.span,
+                            &column,
                             self.aliases,
+                            self.name_resolution_ctx,
                         )?
                     }
                     ColumnID::Position(pos) => self.bind_context.search_column_position(
@@ -749,6 +749,13 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
 
+                    if self.in_window_function {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions cannot be used in window spec",
+                        )
+                        .set_span(*span));
+                    }
+
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
@@ -1004,7 +1011,16 @@ impl<'a> TypeChecker<'a> {
                     let path = match accessor {
                         MapAccessor::Bracket {
                             key: box Expr::Literal { lit, .. },
-                        } => lit.clone(),
+                        } => {
+                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "Unsupported accessor: {:?}",
+                                    lit
+                                ))
+                                .set_span(*span));
+                            }
+                            lit.clone()
+                        }
                         MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
@@ -1145,13 +1161,14 @@ impl<'a> TypeChecker<'a> {
                 .clone(),
         };
 
+        self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in spec.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = Vec::with_capacity(spec.order_by.len());
 
+        let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
@@ -1160,6 +1177,8 @@ impl<'a> TypeChecker<'a> {
                 nulls_first: o.nulls_first,
             })
         }
+        self.in_window_function = false;
+
         let frame = self
             .resolve_window_frame(
                 span,
@@ -3075,13 +3094,17 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_name = names.join(":");
+        let inner_column_ident = Identifier {
+            name: names.join(":"),
+            quote: None,
+            span,
+        };
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
-            inner_column_name.as_str(),
-            span,
+            &inner_column_ident,
             self.aliases,
+            self.name_resolution_ctx,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {

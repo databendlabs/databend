@@ -683,7 +683,7 @@ pub async fn resolve_file_location(
     match location.clone() {
         FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
         FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri)?;
+            let (storage_params, path) = parse_uri_location(&mut uri).await?;
             if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 Err(ErrorCode::StorageInsecure(
                     "copy from insecure storage is not allowed",

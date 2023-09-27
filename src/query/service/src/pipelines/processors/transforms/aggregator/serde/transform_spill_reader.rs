@@ -183,7 +183,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                     let instant = Instant::now();
                     let data = self
                         .operator
-                        .range_read(&payload.location, payload.data_range.clone())
+                        .read_with(&payload.location)
+                        .range(payload.data_range.clone())
                         .await?;
 
                     info!(
@@ -204,7 +205,8 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
                             read_data.push(common_base::base::tokio::spawn(
                                 async_backtrace::frame!(async move {
                                     let instant = Instant::now();
-                                    let data = operator.range_read(&location, data_range).await?;
+                                    let data =
+                                        operator.read_with(&location).range(data_range).await?;
 
                                     // perf
                                     {

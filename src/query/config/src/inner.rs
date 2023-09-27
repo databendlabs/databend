@@ -69,8 +69,11 @@ impl InnerConfig {
     /// As requires by [RFC: Config Backward Compatibility](https://github.com/datafuselabs/databend/pull/5324), we will load user's config via wrapper [`ConfigV0`] and then convert from [`ConfigV0`] to [`InnerConfig`].
     ///
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
-    pub fn load() -> Result<Self> {
-        let cfg: Self = Config::load(true)?.try_into()?;
+    pub async fn load() -> Result<Self> {
+        let mut cfg: Self = Config::load(true)?.try_into()?;
+
+        // Handle auto detect for storage params.
+        cfg.storage.params = cfg.storage.params.auto_detect().await;
 
         // Only check meta config when cmd is empty.
         if cfg.subcommand.is_none() {

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
 
+use common_ast::ast::TableAlias;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_meta_types::MetaId;
@@ -47,6 +48,7 @@ pub struct MergeInto {
     pub catalog: String,
     pub database: String,
     pub table: String,
+    pub target_alias: Option<TableAlias>,
     pub table_id: MetaId,
     pub input: Box<SExpr>,
     pub bind_context: Box<BindContext>,

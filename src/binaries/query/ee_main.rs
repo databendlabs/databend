@@ -46,7 +46,7 @@ fn main() {
 }
 
 pub async fn main_entrypoint() -> Result<()> {
-    let conf: InnerConfig = InnerConfig::load()?;
+    let conf: InnerConfig = InnerConfig::load().await?;
     if run_cmd(&conf).await? {
         return Ok(());
     }

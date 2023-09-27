@@ -672,21 +672,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-compression-issue-150-workaround"
-version = "0.3.15-issue-150"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a1c3bfa97a4c664de1effcffe5e3345eb6df10dd4f8ff7f3c12167cc3031690"
+name = "async-compression"
+version = "0.4.3"
+source = "git+https://github.com/youngsofun/async-compression?rev=1568ceafd#1568ceafdcb590a0c28226ee9e4cebf39e26e46c"
 dependencies = [
  "brotli",
  "bzip2",
+ "deflate64",
  "flate2",
  "futures-core",
  "futures-io",
  "memchr",
  "pin-project-lite",
  "xz2",
- "zstd 0.11.2+zstd.1.5.2",
- "zstd-safe 5.0.2+zstd.1.5.2",
+ "zstd 0.12.3+zstd.1.5.2",
+ "zstd-safe 6.0.4+zstd.1.5.4",
 ]
 
 [[package]]
@@ -1859,15 +1859,16 @@ dependencies = [
 name = "common-compress"
 version = "0.1.0"
 dependencies = [
- "async-compression-issue-150-workaround",
+ "async-compression 0.4.3",
+ "brotli",
  "bytes",
+ "common-exception",
  "env_logger",
  "futures",
  "log",
  "pin-project",
  "rand 0.8.5",
  "serde",
- "sha2",
  "tokio",
 ]
 
@@ -2216,6 +2217,7 @@ dependencies = [
  "maplit",
  "num-derive",
  "num-traits",
+ "opendal",
  "serde",
  "serde_json",
  "sha1",
@@ -2694,7 +2696,6 @@ dependencies = [
  "flagset",
  "futures",
  "lazy_static",
- "log",
  "metrics",
  "opendal",
  "ordered-float 3.7.0",
@@ -3046,6 +3047,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
+ "futures",
  "itertools 0.10.5",
  "jsonb",
  "log",
@@ -3285,6 +3287,12 @@ checksum = "28d997bd5e24a5928dd43e46dc529867e207907fe0b239c3477d924f7f2ca320"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc16"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "338089f42c427b86394a5ee60ff321da23a5c89c9d89514c829687b26359fcff"
 
 [[package]]
 name = "crc32fast"
@@ -4028,6 +4036,12 @@ name = "defer"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "647605a6345d5e89c3950a36a638c56478af9b414c55c6f2477c73b115f9acde"
+
+[[package]]
+name = "deflate64"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "30dc5bb425a582de72bb57130320aac133893ea85f6151f79bd9aa9067114f60"
 
 [[package]]
 name = "der"
@@ -6802,13 +6816,14 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.10"
-source = "git+https://github.com/icelake-io/icelake?rev=eb3251f#eb3251fdb4c72b5849610efe695b6c0a74ecb5da"
+source = "git+https://github.com/icelake-io/icelake?rev=9876ff1#9876ff1750e119e7c66913dadc8f1d22312749db"
 dependencies = [
  "anyhow",
  "apache-avro",
  "arrow-arith 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-array",
  "arrow-buffer",
+ "arrow-cast",
  "arrow-row 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "arrow-schema",
  "arrow-select 46.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -6820,6 +6835,7 @@ dependencies = [
  "enum-display",
  "faster-hex",
  "futures",
+ "itertools 0.11.0",
  "log",
  "murmur3",
  "once_cell",
@@ -8278,8 +8294,8 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.39.0"
-source = "git+https://github.com/apache/incubator-opendal?rev=f02d627#f02d627a582d1f68af048e4f0db84eb1102f271d"
+version = "0.40.0"
+source = "git+https://github.com/apache/incubator-opendal?rev=d5990fe#d5990fe28a6023c9c26e1c306d933c778a0c9638"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8301,6 +8317,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
+ "prometheus-client",
  "prost",
  "quick-xml 0.29.0",
  "redis",
@@ -8927,7 +8944,7 @@ version = "1.3.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0d92c532a37a9e98c0e9a0411e6852b8acccf9ec07d5e6e450b01cbf947d90b"
 dependencies = [
- "async-compression",
+ "async-compression 0.4.1",
  "async-trait",
  "bytes",
  "futures-util",
@@ -9666,11 +9683,14 @@ dependencies = [
  "async-trait",
  "bytes",
  "combine",
+ "crc16",
  "futures",
  "futures-util",
  "itoa",
+ "log",
  "percent-encoding",
  "pin-project-lite",
+ "rand 0.8.5",
  "ryu",
  "sha1_smol",
  "socket2 0.4.9",

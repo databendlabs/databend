@@ -108,6 +108,12 @@ pub struct QueryLogElement {
     pub result_bytes: u64,
     pub cpu_usage: u32,
     pub memory_usage: u64,
+    pub join_spilled_bytes: u64,
+    pub join_spilled_rows: u64,
+    pub agg_spilled_bytes: u64,
+    pub agg_spilled_rows: u64,
+    pub group_by_spilled_bytes: u64,
+    pub group_by_spilled_rows: u64,
 
     // Client.
     pub client_info: String,
@@ -169,6 +175,30 @@ impl SystemLogElement for QueryLogElement {
             ),
             TableField::new(
                 "written_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "join_spilled_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "join_spilled_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "agg_spilled_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "agg_spilled_bytes",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "group_by_spilled_rows",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "group_by_spilled_bytes",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
@@ -321,6 +351,30 @@ impl SystemLogElement for QueryLogElement {
             .next()
             .unwrap()
             .push(Scalar::Number(NumberScalar::UInt64(self.written_bytes)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.join_spilled_rows)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.join_spilled_bytes)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.agg_spilled_rows)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.agg_spilled_bytes)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.group_by_spilled_rows)).as_ref());
+        columns
+            .next()
+            .unwrap()
+            .push(Scalar::Number(NumberScalar::UInt64(self.group_by_spilled_bytes)).as_ref());
         columns
             .next()
             .unwrap()

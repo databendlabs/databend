@@ -602,7 +602,7 @@ impl Table for HiveTable {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
             self.name()
@@ -783,14 +783,15 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let mut m = operator.list(&location).await?;
+    let mut m = operator
+        .lister_with(&location)
+        .metakey(Metakey::Mode | Metakey::ContentLength)
+        .await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
-        let meta = operator
-            .metadata(&de, Metakey::Mode | Metakey::ContentLength)
-            .await?;
+        let meta = de.metadata();
 
         let path = de.path();
         let file_offset = path.rfind('/').unwrap_or_default() + 1;

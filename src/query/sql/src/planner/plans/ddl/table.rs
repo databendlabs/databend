@@ -84,7 +84,6 @@ pub struct DropTablePlan {
     pub database: String,
     /// The table name
     pub table: String,
-    pub all: bool,
 }
 
 impl DropTablePlan {
@@ -324,7 +323,6 @@ pub struct TruncateTablePlan {
     pub database: String,
     /// The table name
     pub table: String,
-    pub purge: bool,
 }
 
 impl TruncateTablePlan {

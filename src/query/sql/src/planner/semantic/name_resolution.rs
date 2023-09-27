@@ -20,6 +20,7 @@ use common_settings::Settings;
 pub struct NameResolutionContext {
     pub unquoted_ident_case_sensitive: bool,
     pub quoted_ident_case_sensitive: bool,
+    pub deny_column_reference: bool,
 }
 
 impl Default for NameResolutionContext {
@@ -27,6 +28,7 @@ impl Default for NameResolutionContext {
         Self {
             unquoted_ident_case_sensitive: false,
             quoted_ident_case_sensitive: true,
+            deny_column_reference: false,
         }
     }
 }
@@ -41,6 +43,7 @@ impl TryFrom<&Settings> for NameResolutionContext {
         Ok(Self {
             unquoted_ident_case_sensitive,
             quoted_ident_case_sensitive,
+            deny_column_reference: false,
         })
     }
 }
