@@ -857,6 +857,7 @@ CreateTable(
                 ignore_result: false,
             },
         ),
+        transient: false,
     },
 )
 
@@ -2775,6 +2776,7 @@ CreateTable(
                 ignore_result: false,
             },
         ),
+        transient: false,
     },
 )
 
@@ -8457,6 +8459,7 @@ CreateTable(
             "comment": "table comment",
         },
         as_query: None,
+        transient: false,
     },
 )
 
