@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::block_debug::box_render;
 use common_expression::block_debug::pretty_format_blocks;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::AuthType;
@@ -284,7 +285,14 @@ async fn test_metrics_table() -> Result<()> {
     assert_eq!(block.num_columns(), 5);
     assert!(block.num_rows() >= 1);
 
-    let output = pretty_format_blocks(result.as_slice())?;
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
     assert!(output.contains("test_metrics_table_count"));
     assert!(output.contains("test_metrics_table_histogram"));
 

@@ -409,4 +409,32 @@ NULL b_1 c_1
 NULL b_3 c_3
 
 statement ok
+truncate table t1;
+
+statement ok
+truncate table t2;
+
+query I
+select count(*) from t1;
+----
+0
+
+query I
+select count(*) from t2;
+----
+0
+
+## test target table alias
+statement ok
+insert into t2 values(1,'a1','b1');
+
+statement ok
+merge into t1 as t3 using (select * from t2 as t2) on t3.a = t2.a  when not matched  then insert (a,b,c) values(t2.a,t2.b,t2.c);
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 a1 b1
+
+statement ok
 set enable_experimental_merge_into = 0;
