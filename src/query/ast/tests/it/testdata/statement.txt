@@ -1462,7 +1462,6 @@ TruncateTable(
                 15..16,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1493,7 +1492,6 @@ TruncateTable(
                 19..20,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1515,7 +1513,6 @@ DropTable(
                 11..12,
             ),
         },
-        all: false,
     },
 )
 
@@ -1547,7 +1544,6 @@ DropTable(
                 23..26,
             ),
         },
-        all: false,
     },
 )
 
@@ -2359,7 +2355,6 @@ TruncateTable(
                 15..19,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2388,7 +2383,6 @@ TruncateTable(
                 23..27,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2410,7 +2404,6 @@ DropTable(
                 11..17,
             ),
         },
-        all: false,
     },
 )
 
@@ -2432,7 +2425,6 @@ DropTable(
                 21..27,
             ),
         },
-        all: false,
     },
 )
 

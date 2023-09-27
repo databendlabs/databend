@@ -66,7 +66,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 catalog: None,
                 database: None,
                 table: Identifier::from_name(table_name.clone()),
-                all: false,
             };
             let create_table = CreateTableStmt {
                 if_not_exists: true,

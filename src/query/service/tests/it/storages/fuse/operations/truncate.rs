@@ -34,7 +34,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
 
     // 1. truncate empty table
     let prev_version = table.get_table_info().ident.seq;
-    let r = table.truncate(ctx.clone(), false).await;
+    let r = table.truncate(ctx.clone()).await;
     let table = fixture.latest_default_table().await?;
     // no side effects
     assert_eq!(prev_version, table.get_table_info().ident.seq);
@@ -66,8 +66,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block));
 
     // truncate
-    let purge = false;
-    let r = table.truncate(ctx.clone(), purge).await;
+    let r = table.truncate(ctx.clone()).await;
     assert!(r.is_ok());
 
     // get the latest tbl
@@ -147,8 +146,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
     let s2_table_to_appended = fixture.latest_default_table().await?;
 
     // 4. perform `truncate purge` operation on s1
-    let purge = true;
-    let r = s1_table_to_be_truncated.truncate(ctx.clone(), purge).await;
+    let r = s1_table_to_be_truncated.truncate(ctx.clone()).await;
     // version mismatched, and `truncate purge` should result in error (but nothing should have been removed)
     assert!(r.is_err());
 
