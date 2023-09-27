@@ -77,6 +77,7 @@ pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
 }
 
 impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
