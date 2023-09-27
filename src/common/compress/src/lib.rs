@@ -16,9 +16,12 @@
 
 //! This mod provides compress support for BytesWrite and decompress support for BytesRead.
 
-mod compress;
-pub use compress::CompressAlgorithm;
-pub use compress::DecompressCodec;
-pub use compress::DecompressDecoder;
-pub use compress::DecompressReader;
-pub use compress::DecompressState;
+mod compress_algorithms;
+mod decode;
+mod encode;
+
+pub use compress_algorithms::CompressAlgorithm;
+pub use decode::DecompressCodec;
+pub use decode::DecompressDecoder;
+pub use decode::DecompressReader;
+pub use decode::DecompressState;
