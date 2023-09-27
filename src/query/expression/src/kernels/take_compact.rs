@@ -245,6 +245,7 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
+            store_advance_aligned::<u64>(0, &mut offsets_ptr);
             for (index, cnt) in indices.iter() {
                 let item = col.index_unchecked(*index as usize);
                 store_advance_aligned((item, *cnt), &mut items_ptr);
