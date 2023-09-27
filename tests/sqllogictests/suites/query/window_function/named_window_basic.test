@@ -289,5 +289,11 @@ SELECT a, sum(a) OVER w FROM t1 WINDOW w AS (PARTITION BY a) ORDER BY count() OV
 5 10
 5 10
 
+statement error 1065
+SELECT sum(a) OVER w FROM t1 WINDOW w AS (ORDER BY unnest([1,2,3]))
+
+statement error 1065
+SELECT sum(a) OVER w FROM t1 WINDOW w AS (PARTITION BY (sum(a) OVER()))
+
 statement ok
 DROP DATABASE test_named_window_basic

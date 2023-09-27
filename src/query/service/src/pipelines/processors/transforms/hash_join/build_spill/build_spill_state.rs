@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -53,7 +54,7 @@ impl BuildSpillState {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoinBuild);
+        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild);
         Self {
             build_state,
             spill_coordinator,
@@ -75,14 +76,11 @@ impl BuildSpillState {
         // Collect rows in `RowSpace`'s buffer
         let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
         blocks.extend(row_space_buffer.drain(..));
-        let mut buffer_row_size = self
-            .build_state
+        self.build_state
             .hash_join_state
             .row_space
             .buffer_row_size
-            .write();
-        *buffer_row_size = 0;
-
+            .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
         blocks.append(chunks);
@@ -133,8 +131,7 @@ impl BuildSpillState {
         let settings = self.build_state.ctx.get_settings();
         let spill_threshold = settings.get_join_spilling_threshold()?;
         // If `spill_threshold` is 0, we won't limit memory.
-        let enable_spill = settings.get_enable_join_spill()?
-            && spill_threshold != 0
+        let enable_spill = spill_threshold != 0
             && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
         if !enable_spill || self.spiller.is_all_spilled() {
             return Ok(false);

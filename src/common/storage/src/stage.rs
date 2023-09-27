@@ -22,7 +22,6 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserIdentity;
 use futures::TryStreamExt;
-use opendal::Entry;
 use opendal::EntryMode;
 use opendal::Metadata;
 use opendal::Metakey;
@@ -230,12 +229,16 @@ impl StageFilesInfo {
 
         // path is a dir
         let mut files = Vec::new();
-        let mut list = operator.scan(path).await?;
+        let mut lister = operator
+            .lister_with(path)
+            .delimiter("")
+            .metakey(StageFileInfo::meta_query())
+            .await?;
         let mut limit: usize = 0;
-        while let Some(obj) = list.try_next().await? {
-            let meta = operator.metadata(&obj, StageFileInfo::meta_query()).await?;
+        while let Some(obj) = lister.try_next().await? {
+            let meta = obj.metadata();
             if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-                files.push(StageFileInfo::new(obj.path().to_string(), &meta));
+                files.push(StageFileInfo::new(obj.path().to_string(), meta));
                 if first_only {
                     return Ok(files);
                 }
@@ -290,13 +293,17 @@ fn blocking_list_files_with_pattern(
 
     // path is a dir
     let mut files = Vec::new();
-    let list = operator.scan(path)?;
+    let list = operator
+        .lister_with(path)
+        .delimiter("")
+        .metakey(StageFileInfo::meta_query())
+        .call()?;
     let mut limit = 0;
     for obj in list {
         let obj = obj?;
-        let meta = operator.metadata(&obj, StageFileInfo::meta_query())?;
+        let meta = obj.metadata();
         if check_file(&obj.path()[prefix_len..], meta.mode(), &pattern) {
-            files.push(StageFileInfo::new(obj.path().to_string(), &meta));
+            files.push(StageFileInfo::new(obj.path().to_string(), meta));
             if first_only {
                 return Ok(files);
             }
@@ -307,32 +314,6 @@ fn blocking_list_files_with_pattern(
         }
     }
     Ok(files)
-}
-
-/// # Behavior
-///
-///
-/// - `Ok(Some(v))` if given object is a file and no error happened.
-/// - `Ok(None)` if given object is not a file.
-/// - `Err(err)` if there is an error happened.
-#[allow(unused)]
-#[async_backtrace::framed]
-pub async fn stat_file(op: Operator, de: Entry) -> Result<Option<StageFileInfo>> {
-    let meta = op
-        .metadata(&de, {
-            Metakey::Mode
-                | Metakey::ContentLength
-                | Metakey::ContentMd5
-                | Metakey::LastModified
-                | Metakey::Etag
-        })
-        .await?;
-
-    if !meta.mode().is_file() {
-        return Ok(None);
-    }
-
-    Ok(Some(StageFileInfo::new(de.path().to_string(), &meta)))
 }
 
 pub const STDIN_FD: &str = "/dev/fd/0";

@@ -117,8 +117,7 @@ impl TransformHashJoinBuild {
         self.finalize_finished = false;
         self.from_spill = true;
         // Only need to reset the following variables once
-        let mut count = self.build_state.row_space_builders.lock();
-        if *count == 0 {
+        if self.build_state.row_space_builders.load(Ordering::Relaxed) == 0 {
             self.build_state.send_val.store(2, Ordering::Relaxed);
             // Before build processors into `WaitProbe` state, set the channel message to false.
             // Then after all probe processors are ready, the last one will send true to channel and wake up all build processors.
@@ -128,9 +127,13 @@ impl TransformHashJoinBuild {
                 .send(false)
                 .map_err(|_| ErrorCode::TokioError("continue_build_watcher channel is closed"))?;
             let worker_num = self.build_state.build_worker_num.load(Ordering::Relaxed) as usize;
-            *count = worker_num;
-            let mut count = self.build_state.hash_join_state.hash_table_builders.lock();
-            *count = worker_num;
+            self.build_state
+                .row_space_builders
+                .store(worker_num, Ordering::Relaxed);
+            self.build_state
+                .hash_join_state
+                .hash_table_builders
+                .store(worker_num, Ordering::Relaxed);
             self.build_state.hash_join_state.reset();
         }
         self.step = HashJoinBuildStep::Running;

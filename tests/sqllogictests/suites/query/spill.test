@@ -4,9 +4,6 @@ statement ok
 set disable_join_reorder = 1;
 
 statement ok
-set enable_join_spill = 1;
-
-statement ok
 set join_spilling_threshold = 1;
 
 statement ok
@@ -23,7 +20,6 @@ drop table t3;
 statement ok
 create table t3 as select number as a from numbers(10);
 
-# flaky test
 query I
 select a from t3 inner join numbers(100000) on t3.a = number order by a;
 ----
@@ -81,9 +77,6 @@ drop table t3;
 
 statement ok
 set disable_join_reorder = 0;
-
-statement ok
-set enable_join_spill = 0;
 
 statement ok
 set join_spilling_threshold = 0;
