@@ -70,7 +70,7 @@ impl SystemDatabase {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
         map.insert("clusters".to_string(), true);
-        // Add 2023-08-01 by BohuTANG
+        // Add 2023-08-01 by BohuTANG, due to it may leak the auth_string in the output.
         map.insert("users".to_string(), true);
         map
     }

@@ -149,7 +149,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, _purge: bool) -> Result<()> {
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.inner_table.truncate(ctx)
     }
 
