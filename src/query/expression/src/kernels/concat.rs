@@ -20,10 +20,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
-use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;

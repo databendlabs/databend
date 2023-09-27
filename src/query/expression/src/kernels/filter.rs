@@ -21,6 +21,7 @@ use common_exception::Result;
 
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -264,7 +265,7 @@ impl Column {
                 slice = &slice[1..];
                 values_ptr = values_ptr.add(8 - offset);
             }
-    
+
             const CHUNK_SIZE: usize = 64;
             let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
             let mut continuous_selected = 0;
@@ -289,13 +290,13 @@ impl Column {
                 copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
                 values_ptr = values_ptr.add(continuous_selected);
             }
-    
+
             for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
                 if is_selected {
                     copy_advance_aligned(values_ptr.add(i), &mut ptr, 1);
                 }
             }
-    
+
             set_vec_len_by_ptr(&mut builder, ptr);
         }
 
@@ -310,148 +311,117 @@ impl Column {
             return values.clone();
         }
 
+        // Each element of `items` is (string pointer(u64), string length).
         let mut items: Vec<(u64, usize)> = Vec::with_capacity(num_rows);
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        let items_ptr = items.as_mut_ptr();
-        let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
-        let mut items_pos = 0;
-
-        let mut data_size = 0;
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let values_offset = values.offsets().as_slice();
-        let col_data_ptr = values.data().as_slice().as_ptr();
-        let mut idx = 0;
-        let (mut slice, offset, mut length) = filter.as_slice();
-        if offset > 0 {
-            let mut mask = slice[0];
-            while mask != 0 {
-                let n = mask.trailing_zeros() as usize;
-                if n >= offset {
-                    let start = unsafe { *values_offset.get_unchecked(n - offset) } as usize;
-                    let len =
-                        unsafe { *values_offset.get_unchecked(n - offset + 1) as usize } - start;
-                    data_size += len as u64;
-                    unsafe {
-                        std::ptr::write(
-                            items_ptr.add(items_pos),
-                            (col_data_ptr.add(start) as u64, len),
-                        );
-                        std::ptr::write(offsets_ptr, data_size);
-                        items_pos += 1;
-                        offsets_ptr = offsets_ptr.add(1);
-                    }
-                }
-                mask = mask & (mask - 1);
-            }
-            length -= 8 - offset;
-            slice = &slice[1..];
-            idx += 8 - offset;
-        }
+        let values_data_ptr = values.data().as_slice().as_ptr();
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        let mut offsets_ptr = offsets.as_mut_ptr();
+        let mut items_ptr = items.as_mut_ptr();
+        let mut data_size = 0;
 
-        const CHUNK_SIZE: usize = 64;
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-        let mut continuous_selected = 0;
-        for mut mask in mask_chunks.by_ref() {
-            if mask == u64::MAX {
-                continuous_selected += CHUNK_SIZE;
-            } else {
-                if continuous_selected > 0 {
-                    let start = unsafe { *values_offset.get_unchecked(idx) } as usize;
-                    let len =
-                        unsafe { *values_offset.get_unchecked(idx + continuous_selected) as usize }
-                            - start;
-                    unsafe {
-                        std::ptr::write(
-                            items_ptr.add(items_pos),
-                            (col_data_ptr.add(start) as u64, len),
-                        );
-                        items_pos += 1;
-                    }
-                    for i in 0..continuous_selected {
-                        unsafe {
-                            data_size += *values_offset.get_unchecked(idx + i + 1)
-                                - *values_offset.get_unchecked(idx + i);
-                            std::ptr::write(offsets_ptr, data_size);
-                            offsets_ptr = offsets_ptr.add(1);
-                        }
-                    }
-                    idx += continuous_selected;
-                    continuous_selected = 0;
-                }
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            let mut idx = 0;
+            let (mut slice, offset, mut length) = filter.as_slice();
+            if offset > 0 {
+                let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    let start = unsafe { *values_offset.get_unchecked(idx + n) } as usize;
-                    let len = unsafe { *values_offset.get_unchecked(idx + n + 1) as usize } - start;
-                    data_size += len as u64;
-                    unsafe {
-                        std::ptr::write(
-                            items_ptr.add(items_pos),
-                            (col_data_ptr.add(start) as u64, len),
+                    if n >= offset {
+                        let start = *values_offset.get_unchecked(n - offset) as usize;
+                        let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
+                        data_size += len as u64;
+                        store_advance_aligned(data_size, &mut offsets_ptr);
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
                         );
-                        std::ptr::write(offsets_ptr, data_size);
-                        items_pos += 1;
-                        offsets_ptr = offsets_ptr.add(1);
                     }
                     mask = mask & (mask - 1);
                 }
-                idx += CHUNK_SIZE;
+                length -= 8 - offset;
+                slice = &slice[1..];
+                idx += 8 - offset;
             }
-        }
-        if continuous_selected > 0 {
-            let start = unsafe { *values_offset.get_unchecked(idx) } as usize;
-            let len =
-                unsafe { *values_offset.get_unchecked(idx + continuous_selected) as usize } - start;
-            unsafe {
-                std::ptr::write(
-                    items_ptr.add(items_pos),
-                    (col_data_ptr.add(start) as u64, len),
-                );
-                items_pos += 1;
-            }
-            for i in 0..continuous_selected {
-                unsafe {
-                    data_size += *values_offset.get_unchecked(idx + i + 1)
-                        - *values_offset.get_unchecked(idx + i);
-                    std::ptr::write(offsets_ptr, data_size);
-                    offsets_ptr = offsets_ptr.add(1);
+
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
+                if mask == u64::MAX {
+                    continuous_selected += CHUNK_SIZE;
+                } else {
+                    if continuous_selected > 0 {
+                        let start = *values_offset.get_unchecked(idx) as usize;
+                        let len = *values_offset.get_unchecked(idx + continuous_selected) as usize
+                            - start;
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
+                        );
+                        for i in 0..continuous_selected {
+                            data_size += *values_offset.get_unchecked(idx + i + 1)
+                                - *values_offset.get_unchecked(idx + i);
+                            store_advance_aligned(data_size, &mut offsets_ptr);
+                        }
+                        idx += continuous_selected;
+                        continuous_selected = 0;
+                    }
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        let start = *values_offset.get_unchecked(idx + n) as usize;
+                        let len = *values_offset.get_unchecked(idx + n + 1) as usize - start;
+                        data_size += len as u64;
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
+                        );
+                        store_advance_aligned(data_size, &mut offsets_ptr);
+                        mask = mask & (mask - 1);
+                    }
+                    idx += CHUNK_SIZE;
                 }
             }
-            idx += continuous_selected;
-        }
+            if continuous_selected > 0 {
+                let start = *values_offset.get_unchecked(idx) as usize;
+                let len = *values_offset.get_unchecked(idx + continuous_selected) as usize - start;
+                store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                for i in 0..continuous_selected {
+                    data_size += *values_offset.get_unchecked(idx + i + 1)
+                        - *values_offset.get_unchecked(idx + i);
+                    store_advance_aligned(data_size, &mut offsets_ptr);
+                }
+                idx += continuous_selected;
+            }
 
-        for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
-            if is_selected {
-                unsafe {
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
+                if is_selected {
                     let start = *values_offset.get_unchecked(idx + i) as usize;
                     let len = *values_offset.get_unchecked(idx + i + 1) as usize - start;
                     data_size += len as u64;
-                    std::ptr::write(
-                        items_ptr.add(items_pos),
-                        (col_data_ptr.add(start) as u64, len),
-                    );
-                    std::ptr::write(offsets_ptr, data_size);
-                    items_pos += 1;
-                    offsets_ptr = offsets_ptr.add(1);
+                    store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                    store_advance_aligned(data_size, &mut offsets_ptr);
                 }
             }
-        }
-        unsafe {
-            items.set_len(items_pos);
-            offsets.set_len(num_rows + 1);
+            set_vec_len_by_ptr(&mut items, items_ptr);
+            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
         }
 
+        // Build [`data`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let data_ptr = data.as_mut_ptr();
-        let mut offset = 0;
-        for (str_ptr, len) in items.iter() {
-            // # Safety
-            // `offset` + `len` < `data_size`.
-            unsafe {
-                std::ptr::copy_nonoverlapping(*str_ptr as *const u8, data_ptr.add(offset), *len);
+        let mut data_ptr = data.as_mut_ptr();
+
+        unsafe {
+            for (str_ptr, len) in items.iter() {
+                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
             }
-            offset += len;
+            set_vec_len_by_ptr(&mut data, data_ptr);
         }
-        unsafe { data.set_len(offset) };
+
         StringColumn::new(data.into(), offsets.into())
     }
 }

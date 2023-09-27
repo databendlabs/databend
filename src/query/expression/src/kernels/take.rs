@@ -218,6 +218,8 @@ impl Column {
     {
         let num_rows = indices.len();
 
+        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
+        // can be reused, we will not re-allocate memory.
         let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
             Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
             _ => Some(Vec::with_capacity(num_rows)),

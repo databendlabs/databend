@@ -20,10 +20,10 @@ use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_hashtable::RowPtr;
 use itertools::Itertools;
 
+use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
-use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
@@ -717,7 +717,10 @@ impl Column {
 
         unsafe {
             for row_ptr in indices.iter() {
-                store_advance_aligned(col[row_ptr.chunk_index as usize][row_ptr.row_index as usize], &mut ptr);
+                store_advance_aligned(
+                    col[row_ptr.chunk_index as usize][row_ptr.row_index as usize],
+                    &mut ptr,
+                );
             }
             set_vec_len_by_ptr(&mut builder, ptr);
         }
@@ -732,6 +735,8 @@ impl Column {
     ) -> StringColumn {
         let num_rows = indices.len();
 
+        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
+        // can be reused, we will not re-allocate memory.
         let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
             Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
             _ => Some(Vec::with_capacity(num_rows)),
@@ -752,7 +757,8 @@ impl Column {
         unsafe {
             store_advance_aligned::<u64>(0, &mut offsets_ptr);
             for row_ptr in indices.iter() {
-                let item = col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize);
+                let item =
+                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize);
                 data_size += item.len() as u64;
                 store_advance_aligned(data_size, &mut offsets_ptr);
                 store_advance_aligned((item.as_ptr() as u64, item.len()), &mut items_ptr);
