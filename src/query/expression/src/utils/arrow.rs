@@ -59,18 +59,6 @@ pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
     builder
 }
 
-pub fn expand_bitmap(bitmap: &Bitmap, len: usize) -> Bitmap {
-    let mut builder = constant_bitmap(false, len);
-    for i in 0..len {
-        if let Some(bit_set) = bitmap.get(i) {
-            if bit_set {
-                builder.set(i, true);
-            }
-        }
-    }
-    builder.into()
-}
-
 pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
     unsafe {
         buffer
