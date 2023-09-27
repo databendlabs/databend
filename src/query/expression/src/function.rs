@@ -38,7 +38,6 @@ use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
 use crate::utils::arrow::constant_bitmap;
-use crate::utils::arrow::expand_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
@@ -657,10 +656,10 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
                         let mut after_map = nullable_column.validity.clone();
                         match bitmap.len().cmp(&after_map.len()) {
                             Ordering::Greater => {
-                                after_map = expand_bitmap(&after_map, bitmap.len());
+                                before_map = before_map.sliced(0, after_map.len());
                             }
                             Ordering::Less => {
-                                before_map = expand_bitmap(&before_map, after_map.len());
+                                after_map = after_map.sliced(0, before_map.len());
                             }
                             _ => {}
                         }
