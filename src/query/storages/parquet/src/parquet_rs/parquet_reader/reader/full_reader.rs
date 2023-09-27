@@ -38,7 +38,7 @@ use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 use crate::ParquetRSPruner;
 
 /// The reader to read a whole parquet file.
-pub struct ParquetFSFullReader {
+pub struct ParquetRSFullReader {
     pub(super) op: Operator,
     pub(super) predicate: Option<Arc<ParquetPredicate>>,
 
@@ -61,7 +61,7 @@ pub struct ParquetFSFullReader {
     pub(super) batch_size: usize,
 }
 
-impl ParquetFSFullReader {
+impl ParquetRSFullReader {
     pub async fn prepare_data_stream(&self, loc: &str) -> Result<ParquetRecordBatchStream<Reader>> {
         let reader: Reader = self.op.reader(loc).await?;
         let mut builder = ParquetRecordBatchStreamBuilder::new_with_options(

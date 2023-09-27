@@ -43,7 +43,7 @@ use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 use crate::parquet_rs::parquet_reader::NoPretchPolicyBuilder;
 use crate::parquet_rs::parquet_reader::PredicateAndTopkPolicyBuilder;
 use crate::parquet_rs::parquet_reader::TopkOnlyPolicyBuilder;
-use crate::ParquetFSFullReader;
+use crate::ParquetRSFullReader;
 use crate::ParquetRSPruner;
 
 pub struct ParquetRSReaderBuilder<'a> {
@@ -192,7 +192,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         Ok(())
     }
 
-    pub fn build_full_reader(&mut self) -> Result<ParquetFSFullReader> {
+    pub fn build_full_reader(&mut self) -> Result<ParquetRSFullReader> {
         let batch_size = self.ctx.get_settings().get_max_block_size()? as usize;
 
         self.build_predicate()?;
@@ -205,7 +205,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
             .map(|(proj, _, _, paths)| (proj.clone(), paths.clone()))
             .unwrap();
 
-        Ok(ParquetFSFullReader {
+        Ok(ParquetRSFullReader {
             op: self.op.clone(),
             predicate,
             projection,

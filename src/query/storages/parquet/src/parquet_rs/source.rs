@@ -32,8 +32,8 @@ use common_storage::CopyStatus;
 use common_storage::FileStatus;
 
 use super::parquet_reader::policy::ReadPolicyImpl;
-use crate::ParquetFSFullReader;
 use crate::ParquetPart;
+use crate::ParquetRSFullReader;
 use crate::ParquetRSRowGroupReader;
 
 enum State {
@@ -54,7 +54,7 @@ pub struct ParquetSource {
 
     // Used to read parquet.
     row_group_reader: Arc<ParquetRSRowGroupReader>,
-    full_file_reader: Option<Arc<ParquetFSFullReader>>,
+    full_file_reader: Option<Arc<ParquetRSFullReader>>,
 
     state: State,
     // If the source is used for a copy pipeline,
@@ -71,7 +71,7 @@ impl ParquetSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         row_group_reader: Arc<ParquetRSRowGroupReader>,
-        full_file_reader: Option<Arc<ParquetFSFullReader>>,
+        full_file_reader: Option<Arc<ParquetRSFullReader>>,
         topk: Arc<Option<TopK>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
