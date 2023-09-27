@@ -109,6 +109,8 @@ where
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
         let index = key_ref.hash() as usize & self.hash_mask;
+        // # Safety
+        // `index` = hash & mask, it is less than the capacity of hash table.
         let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
         loop {
             if raw_entry_ptr == 0 {
@@ -132,6 +134,8 @@ where
     ) -> (usize, u64) {
         let index = key_ref.hash() as usize & self.hash_mask;
         let origin = occupied;
+        // # Safety
+        // `index` = hash & mask, it is less than the capacity of hash table.
         let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
         loop {
             if raw_entry_ptr == 0 || occupied >= capacity {
