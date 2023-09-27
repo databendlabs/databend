@@ -40,8 +40,6 @@ pub struct BuildSpillCoordinator {
     pub(crate) total_builder_count: usize,
     /// Spill tasks, the size is the same as the total active processor count.
     pub(crate) spill_tasks: Mutex<VecDeque<Vec<(u8, DataBlock)>>>,
-    /// If send partition set to probe
-    pub(crate) send_partition_set: AtomicBool,
     /// When a build processor won't trigger spill, the field will plus one
     pub(crate) non_spill_processors: AtomicUsize,
     /// If there is the last active processor, send true to watcher channel
@@ -57,7 +55,6 @@ impl BuildSpillCoordinator {
             waiting_spill_count: Default::default(),
             total_builder_count,
             spill_tasks: Default::default(),
-            send_partition_set: Default::default(),
             non_spill_processors: Default::default(),
             ready_spill_watcher,
             dummy_ready_spill_receiver,

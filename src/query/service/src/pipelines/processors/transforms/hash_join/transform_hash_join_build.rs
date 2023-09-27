@@ -60,6 +60,8 @@ pub struct TransformHashJoinBuild {
     from_spill: bool,
     spill_state: Option<Box<BuildSpillState>>,
     spill_data: Option<DataBlock>,
+    // If send partition set to probe
+    send_partition_set: bool,
 }
 
 impl TransformHashJoinBuild {
@@ -79,6 +81,7 @@ impl TransformHashJoinBuild {
             finalize_finished: false,
             from_spill: false,
             processor_id,
+            send_partition_set: false,
         }))
     }
 
@@ -201,18 +204,11 @@ impl Processor for TransformHashJoinBuild {
                     if let Some(spill_state) = &mut self.spill_state {
                         // Send spilled partition to `HashJoinState`, used by probe spill.
                         // The method should be called only once.
-                        if !spill_state
-                            .spill_coordinator
-                            .send_partition_set
-                            .load(Ordering::Relaxed)
-                        {
+                        if !self.send_partition_set {
                             self.build_state
                                 .hash_join_state
                                 .set_spilled_partition(&spill_state.spiller.spilled_partition_set);
-                            spill_state
-                                .spill_coordinator
-                                .send_partition_set
-                                .store(true, Ordering::Relaxed);
+                            self.send_partition_set = true;
                         }
                         self.step = HashJoinBuildStep::WaitProbe;
                         Ok(Event::Async)
