@@ -15,6 +15,7 @@
 mod no_prefetch;
 mod predicate_and_topk;
 mod topk_only;
+mod utils;
 
 pub mod policy;
 pub use no_prefetch::NoPrefetchPolicy;

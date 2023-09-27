@@ -33,9 +33,9 @@ use parquet::schema::types::SchemaDescriptor;
 use super::policy::ReadPolicy;
 use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
+use super::utils::evaluate_topk;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
-use crate::parquet_rs::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
 use crate::parquet_rs::parquet_reader::utils::FieldPaths;
@@ -120,35 +120,14 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         row_group
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
-        let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
-            self.topk.field_levels(),
-            &row_group,
-            num_rows, // Read all rows at one time.
-            selection.clone(),
-        )?;
-        let batch = reader.next().transpose()?.unwrap();
-        debug_assert!(reader.next().is_none());
-        // Topk column **must** not be in a nested column.
-        let prefetched = transform_record_batch(&batch, &None)?;
-        debug_assert_eq!(prefetched.num_columns(), 1);
-        let topk_col = prefetched.columns()[0].value.as_column().unwrap();
-        let filter = self.topk.evaluate_column(topk_col, sorter);
-        if filter.unset_bits() == num_rows {
+        let prefetched = if let Some(block) =
+            evaluate_topk(&row_group, &self.topk, &mut selection, num_rows, sorter)?
+        {
+            block
+        } else {
             // All rows are filtered out.
             return Ok(None);
-        }
-        let prefetched = prefetched.filter_with_bitmap(&filter)?;
-        let filter = bitmap_to_boolean_array(filter);
-        let sel = RowSelection::from_filters(&[filter]);
-        // Update row selection.
-        match selection.as_mut() {
-            Some(selection) => {
-                *selection = selection.and_then(&sel);
-            }
-            None => {
-                selection = Some(sel);
-            }
-        }
+        };
 
         // Slice the prefetched block by `batch_size`.
         num_rows = prefetched.num_rows();
