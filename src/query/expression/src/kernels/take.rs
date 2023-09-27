@@ -18,6 +18,9 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -192,18 +195,16 @@ impl Column {
     {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let ptr = builder.as_mut_ptr();
+        let mut ptr = builder.as_mut_ptr();
         let col_ptr = col.as_slice().as_ptr();
-        for (i, index) in indices.iter().enumerate() {
-            // # Safety
-            // `i` must be less than `num_rows`.
-            unsafe {
-                std::ptr::copy_nonoverlapping(col_ptr.add(index.to_usize()), ptr.add(i), 1);
+
+        unsafe {
+            for index in indices.iter() {
+                copy_advance_aligned(col_ptr.add(index.to_usize()), &mut ptr, 1)
             }
+            set_vec_len_by_ptr(&mut builder, ptr);
         }
-        // # Safety
-        // The capacity of `builder` is `num_rows` and we have added `num_rows` elements to `builder` by `ptr`.
-        unsafe { builder.set_len(num_rows) };
+
         builder
     }
 
@@ -226,41 +227,40 @@ impl Column {
             false => string_items_buf.unwrap(),
         };
 
-        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        let items_ptr = items.as_mut_ptr();
-        let offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let col_offset = col.offsets().as_slice();
         let col_data_ptr = col.data().as_slice().as_ptr();
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        let mut offsets_ptr = offsets.as_mut_ptr();
+        let mut items_ptr = items.as_mut_ptr();
         let mut data_size = 0;
-        for (i, index) in indices.iter().enumerate() {
-            let start = unsafe { *col_offset.get_unchecked(index.to_usize()) } as usize;
-            let len = unsafe { *col_offset.get_unchecked(index.to_usize() + 1) as usize } - start;
-            data_size += len as u64;
-            // # Safety
-            // `i` must be less than the capacity of Vec.
-            unsafe {
-                std::ptr::write(items_ptr.add(i), (col_data_ptr.add(start) as u64, len));
-                std::ptr::write(offsets_ptr.add(i), data_size);
-            }
-        }
+
+        // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
-            items.set_len(num_rows);
-            offsets.set_len(num_rows + 1);
+            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            for index in indices.iter() {
+                let start = *col_offset.get_unchecked(index.to_usize()) as usize;
+                let len = *col_offset.get_unchecked(index.to_usize() + 1) as usize - start;
+                data_size += len as u64;
+                store_advance_aligned(data_size, &mut offsets_ptr);
+                store_advance_aligned((col_data_ptr.add(start) as u64, len), &mut items_ptr);
+            }
+            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
+            set_vec_len_by_ptr(items, items_ptr);
         }
 
+        // Build [`data`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
-        let data_ptr = data.as_mut_ptr();
-        let mut offset = 0;
-        for (str_ptr, len) in items.iter() {
-            // # Safety
-            // `offset` + `len` < `data_size`.
-            unsafe {
-                std::ptr::copy_nonoverlapping(*str_ptr as *const u8, data_ptr.add(offset), *len);
+        let mut data_ptr = data.as_mut_ptr();
+
+        unsafe {
+            for (str_ptr, len) in items.iter() {
+                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
             }
-            offset += len;
+            set_vec_len_by_ptr(&mut data, data_ptr);
         }
-        unsafe { data.set_len(offset) };
+
         StringColumn::new(data.into(), offsets.into())
     }
 
@@ -269,36 +269,28 @@ impl Column {
         let num_rows = indices.len();
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let ptr = builder.as_mut_ptr();
-
-        let mut pos = 0;
+        let mut ptr = builder.as_mut_ptr();
         let mut unset_bits = 0;
-        let mut i = 0;
         let mut value = 0;
-        for index in indices.iter() {
-            if unsafe { col.get_bit_unchecked(index.to_usize()) } {
-                value |= BIT_MASK[i % 8];
-            } else {
-                unset_bits += 1;
-            }
-            i += 1;
-            if i % 8 == 0 {
-                // # Safety
-                // `pos` must be less than the capacity of builder.
-                unsafe { std::ptr::write(ptr.add(pos), value) };
-                pos += 1;
-                value = 0;
-            }
-        }
-        if i % 8 != 0 {
-            // # Safety
-            // `pos` must be less than the capacity of builder.
-            unsafe { std::ptr::write(ptr.add(pos), value) };
-        }
-        // # Safety
-        // offset(0) + length(num_rows) <= builder.len() * 8.
+        let mut i = 0;
+
         unsafe {
-            builder.set_len(capacity);
+            for index in indices.iter() {
+                if col.get_bit_unchecked(index.to_usize()) {
+                    value |= BIT_MASK[i % 8];
+                } else {
+                    unset_bits += 1;
+                }
+                i += 1;
+                if i % 8 == 0 {
+                    store_advance_aligned(value, &mut ptr);
+                    value = 0;
+                }
+            }
+            if i % 8 != 0 {
+                store_advance_aligned(value, &mut ptr);
+            }
+            set_vec_len_by_ptr(&mut builder, ptr);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()

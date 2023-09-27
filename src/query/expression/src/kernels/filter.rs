@@ -19,6 +19,8 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -246,73 +248,57 @@ impl Column {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
         let mut ptr = builder.as_mut_ptr();
         let mut values_ptr = values.as_slice().as_ptr();
-
         let (mut slice, offset, mut length) = filter.as_slice();
-        if offset > 0 {
-            let mut mask = slice[0];
-            while mask != 0 {
-                let n = mask.trailing_zeros() as usize;
-                if n >= offset {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(values_ptr.add(n - offset), ptr, 1);
-                        ptr = ptr.add(1);
-                    }
-                }
-                mask = mask & (mask - 1);
-            }
-            length -= 8 - offset;
-            slice = &slice[1..];
-            unsafe {
-                values_ptr = values_ptr.add(8 - offset);
-            }
-        }
 
-        const CHUNK_SIZE: usize = 64;
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-        let mut continuous_selected = 0;
-        for mut mask in mask_chunks.by_ref() {
-            if mask == u64::MAX {
-                continuous_selected += CHUNK_SIZE;
-            } else {
-                if continuous_selected > 0 {
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(values_ptr, ptr, continuous_selected);
-                        ptr = ptr.add(continuous_selected);
-                        values_ptr = values_ptr.add(continuous_selected);
-                    }
-                    continuous_selected = 0;
-                }
+        unsafe {
+            if offset > 0 {
+                let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(values_ptr.add(n), ptr, 1);
-                        ptr = ptr.add(1);
+                    if n >= offset {
+                        copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
                     mask = mask & (mask - 1);
                 }
-                unsafe {
+                length -= 8 - offset;
+                slice = &slice[1..];
+                values_ptr = values_ptr.add(8 - offset);
+            }
+    
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
+                if mask == u64::MAX {
+                    continuous_selected += CHUNK_SIZE;
+                } else {
+                    if continuous_selected > 0 {
+                        copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
+                        values_ptr = values_ptr.add(continuous_selected);
+                        continuous_selected = 0;
+                    }
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        copy_advance_aligned(values_ptr.add(n), &mut ptr, 1);
+                        mask = mask & (mask - 1);
+                    }
                     values_ptr = values_ptr.add(CHUNK_SIZE);
                 }
             }
-        }
-        if continuous_selected > 0 {
-            unsafe {
-                std::ptr::copy_nonoverlapping(values_ptr, ptr, continuous_selected);
-                ptr = ptr.add(continuous_selected);
+            if continuous_selected > 0 {
+                copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
                 values_ptr = values_ptr.add(continuous_selected);
             }
-        }
-
-        for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
-            if is_selected {
-                unsafe {
-                    std::ptr::copy_nonoverlapping(values_ptr.add(i), ptr, 1);
-                    ptr = ptr.add(1);
+    
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
+                if is_selected {
+                    copy_advance_aligned(values_ptr.add(i), &mut ptr, 1);
                 }
             }
+    
+            set_vec_len_by_ptr(&mut builder, ptr);
         }
 
-        unsafe { builder.set_len(num_rows) };
         builder.into()
     }
 

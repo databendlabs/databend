@@ -20,6 +20,9 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use itertools::Itertools;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance_aligned;
 use crate::kernels::take::BIT_MASK;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -256,97 +259,83 @@ impl Column {
     where T: Copy {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
         let mut ptr = builder.as_mut_ptr();
-        for col in cols {
-            let len = col.len();
-            // # Safety
-            // Copy is safe: the capacity of builder is equal to the sum of cols len.
-            unsafe {
-                std::ptr::copy_nonoverlapping(col.as_slice().as_ptr(), ptr, len);
-                ptr = ptr.add(len);
+
+        unsafe {
+            for col in cols {
+                copy_advance_aligned(col.as_slice().as_ptr(), &mut ptr, col.len());
             }
+            builder.set_len(num_rows);
         }
-        // # Safety
-        // The capacity of `builder` is `num_rows` and we have added `num_rows` elements to `builder` by `ptr`.
-        unsafe { builder.set_len(num_rows) };
+
         builder
     }
 
     pub fn concat_string_types<'a>(cols: &'a [StringColumn], num_rows: usize) -> StringColumn {
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        offsets.push(0);
-        let mut offsets_ptr = unsafe { offsets.as_mut_ptr().add(1) };
+        let mut offsets_ptr = offsets.as_mut_ptr();
         let mut data_size = 0;
-        for col in cols.iter() {
-            let col_offsets = col.offsets().as_slice();
-            let col_offsets = &col_offsets[1..];
-            let mut start = 0;
-            for end in col_offsets.iter() {
-                data_size += end - start;
-                start = *end;
-                // # Safety
-                // ptr must be less than the capacity of Vec.
-                unsafe {
-                    std::ptr::write(offsets_ptr, data_size);
-                    offsets_ptr = offsets_ptr.add(1);
+
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            for col in cols.iter() {
+                let col_offsets = col.offsets().as_slice();
+                let col_offsets = &col_offsets[1..];
+                let mut start = 0;
+                for end in col_offsets.iter() {
+                    data_size += end - start;
+                    start = *end;
+                    store_advance_aligned(data_size, &mut offsets_ptr);
                 }
             }
-        }
-        unsafe {
-            offsets.set_len(num_rows + 1);
+            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
         }
 
+        // Build [`data`].
         let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
         let mut data_ptr = data.as_mut_ptr();
-        for col in cols.iter() {
-            let col_data = col.data().as_slice();
-            let len = col_data.len();
-            // # Safety
-            // ptr must be less than the capacity of Vec.
-            unsafe {
-                std::ptr::copy_nonoverlapping(col_data.as_ptr(), data_ptr, len);
-                data_ptr = data_ptr.add(len);
+
+        unsafe {
+            for col in cols.iter() {
+                let col_data = col.data().as_slice();
+                let len = col_data.len();
+                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, len);
             }
+            set_vec_len_by_ptr(&mut data, data_ptr);
         }
-        unsafe { data.set_len(data_size as usize) };
+
         StringColumn::new(data.into(), offsets.into())
     }
 
     pub fn concat_boolean_types(cols: &[Bitmap], num_rows: usize) -> Bitmap {
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let ptr = builder.as_mut_ptr();
-
-        let mut pos = 0;
+        let mut ptr = builder.as_mut_ptr();
         let mut unset_bits = 0;
-        let mut i = 0;
         let mut value = 0;
+        let mut i = 0;
 
-        for col in cols {
-            for item in col.iter() {
-                if item {
-                    value |= BIT_MASK[i % 8];
-                } else {
-                    unset_bits += 1;
-                }
-                i += 1;
-                if i % 8 == 0 {
-                    // # Safety
-                    // `pos` must be less than the capacity of builder.
-                    unsafe { std::ptr::write(ptr.add(pos), value) };
-                    pos += 1;
-                    value = 0;
+        unsafe {
+            for col in cols {
+                for item in col.iter() {
+                    if item {
+                        value |= BIT_MASK[i % 8];
+                    } else {
+                        unset_bits += 1;
+                    }
+                    i += 1;
+                    if i % 8 == 0 {
+                        store_advance_aligned(value, &mut ptr);
+                        value = 0;
+                    }
                 }
             }
-        }
-        if i % 8 != 0 {
-            // # Safety
-            // `pos` must be less than the capacity of builder.
-            unsafe { std::ptr::write(ptr.add(pos), value) };
-        }
-        // # Safety
-        // offset(0) + length(num_rows) <= builder.len() * 8.
-        unsafe {
-            builder.set_len(capacity);
+            if i % 8 != 0 {
+                store_advance_aligned(value, &mut ptr);
+            }
+            set_vec_len_by_ptr(&mut builder, ptr);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()
