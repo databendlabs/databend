@@ -47,14 +47,14 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_shard_settings();
+        let settings = self.ctx.get_shared_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
                     self.ctx
-                        .get_shard_settings()
+                        .get_shared_settings()
                         .try_drop_global_setting(setting)
                         .await?;
 
@@ -83,7 +83,7 @@ impl Interpreter for UnSettingInterpreter {
             if ok {
                 // reset the current ctx settings to default val
                 self.ctx
-                    .get_shard_settings()
+                    .get_shared_settings()
                     .set_setting(var.clone(), value.clone())?;
                 // set affect
                 keys.push(var);

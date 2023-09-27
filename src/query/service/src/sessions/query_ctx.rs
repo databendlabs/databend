@@ -534,7 +534,7 @@ impl TableContext for QueryContext {
         self.query_settings.clone()
     }
 
-    fn get_shard_settings(&self) -> Arc<Settings> {
+    fn get_shared_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
