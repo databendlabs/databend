@@ -220,7 +220,7 @@ impl HashJoinState {
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
         let mut spill_partition = self.build_spilled_partitions.write();
-        *spill_partition = partitions.clone();
+        spill_partition.extend(partitions);
     }
 
     #[async_backtrace::framed]
