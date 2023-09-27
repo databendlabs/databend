@@ -342,15 +342,10 @@ impl<R: AsyncRead> AsyncRead for DecompressReader<R> {
 
 impl DecompressDecoder {
     pub fn decompress_all(&mut self, compressed: &[u8]) -> common_exception::Result<Vec<u8>> {
-        let main = self.decompress_batch(compressed)?;
+        let mut main = self.decompress_batch(compressed)?;
         let tail = self.decompress_batch(&[])?;
-        if tail.is_empty() {
-            Ok(main)
-        } else {
-            let mut all = main;
-            all.extend_from_slice(&tail);
-            Ok(all)
-        }
+        main.extend_from_slice(&tail);
+        Ok(main)
     }
     // need to finish the decoding by adding a empty input
     pub fn decompress_batch(&mut self, compressed: &[u8]) -> common_exception::Result<Vec<u8>> {
