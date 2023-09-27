@@ -14,7 +14,6 @@
 
 use std::borrow::Borrow;
 use std::fmt;
-use std::future::Future;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
@@ -58,73 +57,51 @@ impl<'d> LeveledRef<'d> {
     }
 }
 
+#[async_trait::async_trait]
 impl<'d, K> MapApiRO<K> for LeveledRef<'d>
 where
     K: MapKey + fmt::Debug,
     // &'d LevelData: MapApiRO<K>,
-    for<'him> &'him LevelData: MapApiRO<K>,
+    LevelData: MapApiRO<K>,
     // &'him LevelData: MapApiRO<K>,
 {
-    type GetFut<'f, Q> = impl Future<Output = Marked<K::V>>  + 'f
-        where
-            Self: 'f,
-            K: Borrow<Q>,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        Q: 'f,
     {
-        async move {
-            for level_data in self.iter_levels() {
-                let got = level_data.get(key).await;
-                if !got.is_not_found() {
-                    return got;
-                }
+        for level_data in self.iter_levels() {
+            let got = level_data.get(key).await;
+            if !got.is_not_found() {
+                return got;
             }
-            Marked::empty()
         }
+        Marked::empty()
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>> +  'f
-        where
-            Self: 'f,
-            K: Borrow<Q>,
-            R: RangeBounds<Q> + Send + Sync + Clone,
-        R:'f,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
         K: Borrow<Q>,
         R: RangeBounds<Q> + Clone + Send + Sync,
-        R: 'f,
         Q: Ord + Send + Sync + ?Sized,
-        Q: 'f,
     {
         // TODO: &LeveledRef use LeveledRef
 
-        // let levels = self.iter_levels();
+        let levels = self.iter_levels();
 
-        async move {
-            let mut km = KMerge::by(util::by_key_seq);
+        let mut km = KMerge::by(util::by_key_seq);
 
-            // for api in levels {
-            for api in self.iter_levels() {
-                let a = api.range(range.clone()).await;
-                km = km.merge(a);
-            }
-
-            // Merge entries with the same key, keep the one with larger internal-seq
-            let m = km.coalesce(util::choose_greater);
-
-            let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-            x
+        // for api in levels {
+        for api in levels {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
         }
+
+        // Merge entries with the same key, keep the one with larger internal-seq
+        let m = km.coalesce(util::choose_greater);
+
+        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
+        x
     }
 }
 
@@ -173,97 +150,57 @@ impl<'d> LeveledRefMut<'d> {
 
 // Because `LeveledRefMut` has a mut ref of lifetime 'd,
 // `self` must outlive 'd otherwise there will be two mut ref.
+#[async_trait::async_trait]
 impl<'d, K> MapApiRO<K> for LeveledRefMut<'d>
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<K>,
+    LevelData: MapApiRO<K>,
 {
-    type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
-    where
-        Self: 'f,
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
-
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        Q: 'f,
     {
-        self.into_leveled_ref().get(key)
-
-        // for level_data in self.iter_levels() {
-        //     let got = level_data.get(key).await;
-        //     if !got.is_not_found() {
-        //         return got;
-        //     }
-        // }
-        // Marked::empty()
+        self.to_leveled_ref().get(key).await
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>> +'f
-    where
-        Self: 'f,
-        K: Borrow<Q>,
-        R: RangeBounds<Q> + Send + Sync + Clone,
-        R: 'f,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
-
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
-        R: 'f,
     {
-        self.into_leveled_ref().range(range)
+        self.to_leveled_ref().range(range).await
     }
 }
 
+#[async_trait::async_trait]
 impl<'d, K> MapApi<K> for LeveledRefMut<'d>
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<K>,
-    for<'him> &'him mut LevelData: MapApi<K>,
+    LevelData: MapApi<K>,
 {
-    type RO<'o> = LeveledRef<'o>
-    where Self: 'o;
-
-    fn to_ro<'o>(&'o self) -> Self::RO<'o> {
-        LeveledRef {
-            writable: self.writable,
-            frozen: self.frozen,
-        }
-    }
-
-    type SetFut<'f>  = impl Future<Output = (Marked<K::V>, Marked<K::V>)> + 'f
-    where
-        Self: 'f,
-        'd: 'f;
-
-    fn set<'f>(self, key: K, value: Option<(K::V, Option<KVMeta>)>) -> Self::SetFut<'f>
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: Ord,
-        'd: 'f,
-        'd: 'f,
     {
-        async move {
-            // Get from this level or the base level.
-            // let prev = MapApiRO::<'a, String>::get(self, &key).await.clone();
-            let x = self.to_leveled_ref();
-            let prev = x.get(&key).await.clone();
+        // Get from this level or the base level.
+        // let prev = MapApiRO::<'a, String>::get(self, &key).await.clone();
+        let x = self.to_leveled_ref();
+        let prev = x.get(&key).await.clone();
 
-            // No such entry at all, no need to create a tombstone for delete
-            if prev.is_not_found() && value.is_none() {
-                return (prev, Marked::new_tomb_stone(0));
-            }
-
-            // The data is a single level map and the returned `_prev` is only from that level.
-            let (_prev, inserted) = self.writable.set(key, value).await;
-            (prev, inserted)
+        // No such entry at all, no need to create a tombstone for delete
+        if prev.is_not_found() && value.is_none() {
+            return (prev, Marked::new_tomb_stone(0));
         }
+
+        // The data is a single level map and the returned `_prev` is only from that level.
+        let (_prev, inserted) = self.writable.set(key, value).await;
+        (prev, inserted)
     }
 }
 
@@ -337,72 +274,46 @@ impl LeveledMap {
     }
 }
 
-impl<'d, K> MapApiRO<K> for &'d LeveledMap
+#[async_trait::async_trait]
+impl<K> MapApiRO<K> for LeveledMap
 where
     K: MapKey + fmt::Debug,
-    for<'him> &'him LevelData: MapApiRO<K>,
+    LevelData: MapApiRO<K>,
 {
-    type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
-        where
-            Self: 'f,
-            'd: 'f,
-            K: Borrow<Q>,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.leveled_ref().get(key)
+        self.leveled_ref().get(key).await
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>>
-        where
-            Self: 'f,
-            'd: 'f,
-            K: Borrow<Q>,
-            R: RangeBounds<Q> + Send + Sync + Clone,
-        R: 'f,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
-        R: 'f,
     {
-        self.leveled_ref().range(range)
+        self.leveled_ref().range(range).await
     }
 }
 
-impl<'me, K> MapApi<K> for &'me mut LeveledMap
+#[async_trait::async_trait]
+impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
-    for<'e> &'e LevelData: MapApiRO<K>,
-    for<'him> &'him mut LevelData: MapApi<K>,
+    LevelData: MapApi<K>,
 {
-    type RO<'o> = LeveledRef<'o>
-    where Self: 'o;
-
-    fn to_ro<'o>(&'o self) -> Self::RO<'o> {
-        LeveledRef::new(&self.writable, self.frozen.levels())
-    }
-
-    type SetFut<'f>  = impl Future<Output = (Marked<K::V>, Marked<K::V>)> +'f
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>)
     where
-        Self: 'f,
-        'me: 'f;
-
-    fn set<'f>(self, key: K, value: Option<(K::V, Option<KVMeta>)>) -> Self::SetFut<'f>
-    where K: Ord {
-        let l = self.leveled_ref_mut();
-        MapApi::set(l, key, value)
+        K: Ord,
+    {
+        let mut l = self.leveled_ref_mut();
+        MapApi::set(&mut l, key, value).await
 
         // (&mut l).set(key, value).await
     }

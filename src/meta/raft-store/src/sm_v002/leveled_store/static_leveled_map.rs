@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::future::Future;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
@@ -62,69 +61,46 @@ impl StaticLeveledMap {
     }
 }
 
-impl<'d, K> MapApiRO<K> for &'d StaticLeveledMap
+#[async_trait::async_trait]
+impl<K> MapApiRO<K> for StaticLeveledMap
 where
     K: MapKey,
-    for<'him> &'him LevelData: MapApiRO<K>,
+    LevelData: MapApiRO<K>,
 {
-    type GetFut<'f, Q> = impl Future<Output = Marked<K::V>> + 'f
-        where
-            Self: 'f,
-            K: Borrow<Q>,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        Q: 'f,
     {
         // TODO: use LeveledRef
-        async move {
-            for level_data in self.iter_levels() {
-                // let got = <&LevelData as MapApiRO<'_, '_, K>>::get(level_data, key).await;
-                let got = level_data.get(key).await;
-                if !got.is_not_found() {
-                    return got;
-                }
+        for level_data in self.iter_levels() {
+            // let got = <&LevelData as MapApiRO<'_, '_, K>>::get(level_data, key).await;
+            let got = level_data.get(key).await;
+            if !got.is_not_found() {
+                return got;
             }
-            Marked::empty()
         }
+        Marked::empty()
     }
 
-    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (K, Marked<K::V>)>> + 'f
-        where
-            Self: 'f,
-            'd: 'f,
-            K: Borrow<Q>,
-            R: RangeBounds<Q> + Send + Sync + Clone,
-        R:'f,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
-        'd: 'f,
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
-        R: 'f,
     {
         // TODO: use LeveledRef
-        async move {
-            let mut km = KMerge::by(util::by_key_seq::<K, K::V>);
+        let mut km = KMerge::by(util::by_key_seq::<K, K::V>);
 
-            for api in self.iter_levels() {
-                let a = api.range(range.clone()).await;
-                km = km.merge(a);
-            }
-
-            // keep one of the entries with the same key, which has larger internal-seq
-            let m = km.coalesce(util::choose_greater);
-
-            let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-            x
+        for api in self.iter_levels() {
+            let a = api.range(range.clone()).await;
+            km = km.merge(a);
         }
+
+        // keep one of the entries with the same key, which has larger internal-seq
+        let m = km.coalesce(util::choose_greater);
+
+        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
+        x
     }
 }

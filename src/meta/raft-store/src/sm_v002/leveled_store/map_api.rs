@@ -14,7 +14,6 @@
 
 use std::borrow::Borrow;
 use std::fmt;
-use std::future::Future;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
@@ -57,57 +56,37 @@ impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 ///
 /// There is no lifetime constraint on the trait,
 /// and it's the implementation's duty to specify a valid lifetime constraint.
+#[async_trait::async_trait]
 pub(in crate::sm_v002) trait MapApiRO<K>: Send + Sync
 where K: MapKey
 {
-    type GetFut<'f, Q>: Future<Output = Marked<K::V>>
-    where
-        Self: 'f,
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
-
     /// Get an entry by key.
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
-
-    type RangeFut<'f, Q, R>: Future<Output = BoxStream<'f, (K, Marked<K::V>)>>
-    where
-        Self: 'f,
-        K: Borrow<Q>,
-        R: RangeBounds<Q> + Send + Sync + Clone,
-        R: 'f,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
+        Q: Ord + Send + Sync + ?Sized;
 
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Send + Sync + Clone,
-        R: 'f;
+        R: RangeBounds<Q> + Send + Sync + Clone;
 }
 
 /// Provide a read-write key-value map API set, used to access state machine data.
+#[async_trait::async_trait]
 pub(in crate::sm_v002) trait MapApi<K>: MapApiRO<K>
 where K: MapKey
 {
-    type RO<'o>: MapApiRO<K>
-    where Self: 'o;
-
-    fn to_ro<'o>(&'o self) -> Self::RO<'o>;
-
-    type SetFut<'f>: Future<Output = (Marked<K::V>, Marked<K::V>)>
-    where Self: 'f;
-
     /// Set an entry and returns the old value and the new value.
-    fn set<'f>(self, key: K, value: Option<(K::V, Option<KVMeta>)>) -> Self::SetFut<'f>;
+    async fn set(
+        &mut self,
+        key: K,
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>);
 }
 
 pub(in crate::sm_v002) struct MapApiExt;
@@ -122,10 +101,10 @@ impl MapApiExt {
     ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: MapKey,
-        &'d mut T: MapApi<K>,
+        T: MapApi<K>,
     {
         //
-        let got = s.to_ro().get(&key).await;
+        let got = s.get(&key).await;
         if got.is_tomb_stone() {
             return (got.clone(), got.clone());
         }
@@ -145,9 +124,9 @@ impl MapApiExt {
     ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: MapKey,
-        &'d mut T: MapApi<K>,
+        T: MapApi<K>,
     {
-        let got = s.to_ro().get(&key).await;
+        let got = s.get(&key).await;
 
         let meta = if let Some((_, meta)) = got.unpack_ref() {
             meta
@@ -156,51 +135,5 @@ impl MapApiExt {
         };
 
         s.set(key, Some((value, meta.cloned()))).await
-    }
-}
-
-impl<'ro_me, K, T> MapApiRO<K> for &'ro_me mut T
-where
-    K: MapKey,
-    &'ro_me T: MapApiRO<K>,
-    K: Ord + Send + Sync + 'static,
-    T: Send + Sync,
-{
-    type GetFut<'f, Q> = <&'ro_me T as MapApiRO<K>>::GetFut<'f, Q>
-        where
-            Self: 'f,
-            'ro_me: 'f,
-            K: Borrow<Q>,
-            Q: Ord + Send + Sync + ?Sized,
-            Q: 'f;
-
-    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
-    where
-        'ro_me: 'f,
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-    {
-        (&*self).get(key)
-    }
-
-    type RangeFut<'f, Q, R> = <&'ro_me T as MapApiRO<K>>::RangeFut<'f, Q, R>
-    where
-        Self: 'f,
-        'ro_me: 'f,
-        K: Borrow<Q>,
-        R: RangeBounds<Q> + Send + Sync + Clone,
-    R: 'f,
-        Q: Ord + Send + Sync + ?Sized,
-        Q: 'f;
-
-    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
-    where
-        'ro_me: 'f,
-        K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
-        R: RangeBounds<Q> + Clone + Send + Sync,
-        R: 'f,
-    {
-        (&*self).range(range)
     }
 }
