@@ -1,5 +1,5 @@
 statement ok
-drop table if exists objects_test1 all
+drop table if exists objects_test1
 
 statement ok
 CREATE TABLE IF NOT EXISTS objects_test1(id TINYINT, obj VARIANT, var VARIANT) Engine = Fuse
