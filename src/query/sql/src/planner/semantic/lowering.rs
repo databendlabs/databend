@@ -32,16 +32,12 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::Visibility;
 
-pub trait TypeProvider {
-    type ColumnID: ColumnIndex;
-
-    fn get_type(&self, column_id: &Self::ColumnID) -> Result<DataType>;
+pub trait TypeProvider<ColumnID: ColumnIndex> {
+    fn get_type(&self, column_id: &ColumnID) -> Result<DataType>;
 }
 
-impl TypeProvider for Metadata {
-    type ColumnID = IndexType;
-
-    fn get_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl TypeProvider<IndexType> for Metadata {
+    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
         let column_entry = self.column(*column_id);
         match column_entry {
             ColumnEntry::BaseTableColumn(column) => Ok(DataType::from(&column.data_type)),
@@ -52,21 +48,22 @@ impl TypeProvider for Metadata {
     }
 }
 
-impl TypeProvider for DataSchema {
-    type ColumnID = IndexType;
-
-    fn get_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl TypeProvider<IndexType> for DataSchema {
+    fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
         let column = self.field_with_name(&column_id.to_string())?;
         Ok(column.data_type().clone())
     }
 }
 
-impl<Index> TypeProvider for HashMap<Index, DataType>
-where Index: ColumnIndex
-{
-    type ColumnID = Index;
+impl TypeProvider<String> for DataSchema {
+    fn get_type(&self, column_id: &String) -> Result<DataType> {
+        let column = self.field_with_name(column_id)?;
+        Ok(column.data_type().clone())
+    }
+}
 
-    fn get_type(&self, column_id: &Self::ColumnID) -> Result<DataType> {
+impl<ColumnID: ColumnIndex> TypeProvider<ColumnID> for HashMap<ColumnID, DataType> {
+    fn get_type(&self, column_id: &ColumnID) -> Result<DataType> {
         self.get(column_id).cloned().ok_or_else(|| {
             ErrorCode::Internal(format!(
                 "Logical error: can not find column {:?}",
@@ -76,10 +73,10 @@ where Index: ColumnIndex
     }
 }
 
-fn update_column_type<C: TypeProvider>(
-    raw_expr: &RawExpr<C::ColumnID>,
-    type_provider: &C,
-) -> Result<RawExpr<C::ColumnID>> {
+fn update_column_type<ColumnID: ColumnIndex, TP: TypeProvider<ColumnID>>(
+    raw_expr: &RawExpr<ColumnID>,
+    type_provider: &TP,
+) -> Result<RawExpr<ColumnID>> {
     match raw_expr {
         RawExpr::ColumnRef {
             span,
@@ -150,24 +147,18 @@ fn update_column_type<C: TypeProvider>(
 
 pub trait TypeCheck<Index: ColumnIndex> {
     /// Resolve data type with `LoweringContext` and perform type check.
-    fn type_check(&self, ctx: &impl TypeProvider<ColumnID = Index>) -> Result<Expr<Index>>;
+    fn type_check(&self, ctx: &impl TypeProvider<Index>) -> Result<Expr<Index>>;
 }
 
-impl<Index: ColumnIndex> TypeCheck<Index> for RawExpr<Index> {
-    fn type_check(
-        &self,
-        type_provider: &impl TypeProvider<ColumnID = Index>,
-    ) -> Result<Expr<Index>> {
+impl<ColumnID: ColumnIndex> TypeCheck<ColumnID> for RawExpr<ColumnID> {
+    fn type_check(&self, type_provider: &impl TypeProvider<ColumnID>) -> Result<Expr<ColumnID>> {
         let raw_expr = update_column_type(self, type_provider)?;
         type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)
     }
 }
 
 impl TypeCheck<IndexType> for ScalarExpr {
-    fn type_check(
-        &self,
-        type_provider: &impl TypeProvider<ColumnID = IndexType>,
-    ) -> Result<Expr<IndexType>> {
+    fn type_check(&self, type_provider: &impl TypeProvider<IndexType>) -> Result<Expr<IndexType>> {
         let raw_expr = self.as_raw_expr().project_column_ref(|col| col.index);
         raw_expr.type_check(type_provider)
     }
