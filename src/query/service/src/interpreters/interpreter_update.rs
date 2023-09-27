@@ -157,6 +157,7 @@ impl Interpreter for UpdateInterpreter {
             tbl.schema().into(),
             col_indices.clone(),
             None,
+            false,
         )?;
 
         let computed_list = self
