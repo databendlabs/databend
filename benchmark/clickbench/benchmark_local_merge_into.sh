@@ -57,11 +57,10 @@ echo "CREATE DATABASE ${BENCHMARK_DATASET};" | bendsql
 echo "Creating table for benchmark with native storage format..."
 bendsql <"${BENCHMARK_DATASET}/create_local.sql"
 
-# Detect instance type with AWS metadata
-token=$(curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 60")
-instance_type=$(curl -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/instance-type)
+# Detect instance type 
+instance_type=`uname -a`
 echo "Instance type: ${instance_type}"
-
+echo "SystemInfo: $(system_profiler SPHardwareDataType)"
 echo "Loading data..."
 load_start=$(date +%s)
 bendsql <"${BENCHMARK_DATASET}/load.sql"
@@ -70,13 +69,14 @@ load_time=$(python3 -c "print($load_end - $load_start)")
 echo "Data loaded in ${load_time}s."
 
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
-
+format_instance_type=$(fold -w 40 <<< "$instance_type")
 echo '{}' >result.json
 yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
 yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" -o json result.json
-yq -i ".machine = \"${instance_type}\"" -o json result.json
+yq -i ".machine = \"${format_instance_type}\"" -o json result.json
 yq -i '.cluster_size = 1' -o json result.json
 yq -i '.tags = ["gp3"]' -o json result.json
+yq -i ".system = \"${1}\"" -o json result.json
 
 echo "Running queries..."
 
