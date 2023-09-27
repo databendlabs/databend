@@ -635,23 +635,28 @@ pub fn serialize_column(
     let mut offsets_ptr = offsets.as_mut_ptr();
     let mut offset = 0;
 
-    store_advance_aligned::<u64>(0, &mut offsets_ptr);
-    for i in 0..num_rows {
-        let old_ptr = data_ptr;
-        for col in columns.iter() {
-            serialize_column_binary(col, i, &mut data_ptr);
+    unsafe {
+        store_advance_aligned::<u64>(0, &mut offsets_ptr);
+        for i in 0..num_rows {
+            let old_ptr = data_ptr;
+            for col in columns.iter() {
+                serialize_column_binary(col, i, &mut data_ptr);
+            }
+            offset += data_ptr as u64 - old_ptr as u64;
+            store_advance_aligned::<u64>(offset, &mut offsets_ptr);
         }
-        offset += data_ptr as u64 - old_ptr as u64;
-        store_advance_aligned::<u64>(offset, &mut offsets_ptr);
+        set_vec_len_by_ptr(&mut data, data_ptr);
+        set_vec_len_by_ptr(&mut offsets, offsets_ptr);
     }
-    set_vec_len_by_ptr(&mut data, data_ptr);
-    set_vec_len_by_ptr(&mut offsets, offsets_ptr);
+
     StringColumn::new(data.into(), offsets.into())
 }
 
 /// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
-/// The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-pub fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
+/// # Safety
+///
+/// * The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
+pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
