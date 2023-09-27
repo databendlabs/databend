@@ -409,7 +409,7 @@ impl HttpQuery {
         let executor = self.state.read().await;
         let session = executor.get_session();
         let settings = session.get_changed_settings().iter().map(|(k, v)| {
-            (k, v.value.as_string())
+            (k.to_string(), v.value.as_string())
         }).collect::<BTreeMap<_, _>>();
         let keep_server_session_secs = self.request.session.unwrap_or_default().keep_server_session_secs;
 
