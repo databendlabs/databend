@@ -138,8 +138,7 @@ pub struct HttpSessionConf {
     pub settings: Option<BTreeMap<String, String>>,
 }
 
-impl HttpSessionConf {
-}
+impl HttpSessionConf {}
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct StageAttachmentConf {
@@ -408,10 +407,17 @@ impl HttpQuery {
     async fn get_response_session(&self) -> HttpSessionConf {
         let executor = self.state.read().await;
         let session = executor.get_session();
-        let settings = session.get_changed_settings().iter().map(|(k, v)| {
-            (k.to_string(), v.value.as_string())
-        }).collect::<BTreeMap<_, _>>();
-        let keep_server_session_secs = self.request.session.unwrap_or_default().keep_server_session_secs;
+        let settings = session
+            .get_changed_settings()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.value.as_string()))
+            .collect::<BTreeMap<_, _>>();
+        let keep_server_session_secs = self
+            .request
+            .session
+            .clone()
+            .map(|v| v.keep_server_session_secs)
+            .unwrap_or(None);
 
         // TODO: add current role here
         HttpSessionConf {

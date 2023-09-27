@@ -48,7 +48,6 @@ impl Interpreter for UnSettingInterpreter {
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
         let session = self.ctx.get_current_session();
-        let setting_changes = session.get_settings().get_changes();
 
         let settings = self.ctx.get_shared_settings();
         for var in plan.vars {
@@ -66,19 +65,25 @@ impl Interpreter for UnSettingInterpreter {
                         if setting_key == "max_memory_usage" {
                             let conf = GlobalConfig::instance();
                             if conf.query.max_server_memory_usage == 0 {
-                                settings.check_and_get_default_value(setting_key)?.to_string()
+                                settings
+                                    .check_and_get_default_value(setting_key)?
+                                    .to_string()
                             } else {
                                 conf.query.max_server_memory_usage.to_string()
                             }
                         } else if setting_key == "max_threads" {
                             let conf = GlobalConfig::instance();
                             if conf.query.num_cpus == 0 {
-                                settings.check_and_get_default_value(setting_key)?.to_string()
+                                settings
+                                    .check_and_get_default_value(setting_key)?
+                                    .to_string()
                             } else {
                                 conf.query.num_cpus.to_string()
                             }
                         } else {
-                            settings.check_and_get_default_value(setting_key)?.to_string()
+                            settings
+                                .check_and_get_default_value(setting_key)?
+                                .to_string()
                         }
                     };
                     (true, default_val)
@@ -86,9 +91,7 @@ impl Interpreter for UnSettingInterpreter {
             };
             if ok {
                 // reset the current ctx settings, just remove it.
-                self.ctx
-                    .get_shared_settings()
-                    .unset_setting(&var);
+                self.ctx.get_shared_settings().unset_setting(&var);
                 // set effect, this can be considered to be removed in the future.
                 keys.push(var);
                 values.push(value);
