@@ -430,3 +430,18 @@ with t(a,b) as (values(1,1),(2,null),(null,5)) select * from t
 1 1
 2 NULL
 NULL 5
+
+statement ok
+create table test (a int, b string);
+
+statement ok
+insert into test values (1, 'a'), (2, 'b');
+
+query TT
+WITH tTqmc(cC0, cC1) AS (SELECT a AS cC0, b AS cC1 FROM test) SELECT tTqmc.cC1 FROM tTqmc;
+----
+a
+b
+
+statement ok
+drop table test
