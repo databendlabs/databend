@@ -14,6 +14,7 @@
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
+use std::future::Future;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
@@ -22,10 +23,18 @@ use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::sys_data::SysData;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
+
+impl MapKey for String {
+    type V = Vec<u8>;
+}
+impl MapKey for ExpireKey {
+    type V = String;
+}
 
 /// A single level of state machine data.
 ///
@@ -73,116 +82,172 @@ impl LevelData {
     }
 }
 
-#[async_trait::async_trait]
-impl<'me, 'd> MapApiRO<'me, 'd, String> for &'me LevelData
-where 'me: 'd
-{
-    type V = Vec<u8>;
-
-    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
+impl<'d> MapApiRO<'d, String> for &'d LevelData {
+    type GetFut<'f, Q> = impl Future<Output = Marked<<String as MapKey>::V>> + 'f
     where
+        Self: 'f,
+        'd: 'f,
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: 'f;
+
+    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
+    where
+        // 'd: 'f,
+        String: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        Q: 'f,
     {
-        self.kv.get(key).cloned().unwrap_or(Marked::empty())
+        async move { self.kv.get(key).cloned().unwrap_or(Marked::empty()) }
     }
 
-    async fn range<T, R>(self, range: R) -> BoxStream<'d, (String, Marked)>
+    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (String, Marked<<String as MapKey>::V>)>>
     where
-        String: Borrow<T>,
-        T: Ord + ?Sized,
-        R: RangeBounds<T> + Send,
+        Self: 'f,
+        'd: 'f,
+        String: Borrow<Q>,
+        R: RangeBounds<Q> + Send + Sync + Clone,
+    R: 'f,
+        Q: Ord + Send + Sync + ?Sized,
+        Q: 'f;
+
+    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    where
+        'd: 'f,
+        String: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: 'f,
     {
-        futures::stream::iter(self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()))).boxed()
+        async move {
+            let it = self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()));
+            futures::stream::iter(it).boxed()
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl<'me, 'd> MapApi<'me, 'd, String> for &'me mut LevelData
-where 'me: 'd
-{
-    async fn set(
-        mut self,
+impl<'me> MapApi<'me, String> for &'me mut LevelData {
+    type RO<'o> = &'o LevelData where Self: 'o;
+
+    fn to_ro<'o>(&'o self) -> Self::RO<'o> {
+        &**self
+    }
+
+    type SetFut<'f>  = impl Future<Output = (Marked<<String as MapKey>::V>, Marked<<String as MapKey>::V>)> + 'f
+    where
+        Self: 'f;
+
+    fn set<'f>(
+        self,
         key: String,
-        value: Option<(<Self as MapApiRO<'me, 'd, String>>::V, Option<KVMeta>)>,
-    ) -> (
-        Marked<<Self as MapApiRO<'me, 'd, String>>::V>,
-        Marked<<Self as MapApiRO<'me, 'd, String>>::V>,
-    ) {
+        value: Option<(<String as MapKey>::V, Option<KVMeta>)>,
+    ) -> Self::SetFut<'f>
+    where
+        'me: 'f,
+    {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
 
         // dbg!("set kv", &key, &value);
 
-        let marked = if let Some((v, meta)) = value {
-            let seq = self.sys_data_mut().next_seq();
-            Marked::new_normal(seq, v, meta)
-        } else {
-            // Do not increase the sequence number, just use the max seq for all tombstone.
-            let seq = self.curr_seq();
-            Marked::new_tomb_stone(seq)
-        };
+        async move {
+            let marked = if let Some((v, meta)) = value {
+                let seq = self.sys_data_mut().next_seq();
+                Marked::new_normal(seq, v, meta)
+            } else {
+                // Do not increase the sequence number, just use the max seq for all tombstone.
+                let seq = self.curr_seq();
+                Marked::new_tomb_stone(seq)
+            };
 
-        let prev = MapApiRO::<String>::get(&*self, key.as_str()).await;
-        self.kv.insert(key, marked.clone());
-        (prev, marked)
+            let prev = MapApiRO::<String>::get(&*self, key.as_str()).await;
+            self.kv.insert(key, marked.clone());
+            (prev, marked)
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl<'me, 'd> MapApiRO<'me, 'd, ExpireKey> for &'me LevelData
-where 'me: 'd
-{
-    type V = String;
+impl<'d> MapApiRO<'d, ExpireKey> for &'d LevelData {
+    type GetFut<'f, Q> = impl Future<Output = Marked<<ExpireKey as MapKey>::V>> + 'f
+        where
+            Self: 'f,
+            'd: 'f,
+            ExpireKey: Borrow<Q>,
+            Q: Ord + Send + Sync + ?Sized,
+            Q: 'f;
 
-    async fn get<Q>(self, key: &'d Q) -> Marked<Self::V>
+    fn get<'f, Q>(self, key: &'f Q) -> Self::GetFut<'f, Q>
     where
+        // 'd: 'f,
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
+        Q: 'f,
     {
-        self.expire.get(key).cloned().unwrap_or(Marked::empty())
+        async move { self.expire.get(key).cloned().unwrap_or(Marked::empty()) }
     }
 
-    async fn range<T: ?Sized, R>(self, range: R) -> BoxStream<'d, (ExpireKey, Marked<String>)>
-    where
-        ExpireKey: Borrow<T>,
-        T: Ord,
-        R: RangeBounds<T> + Send,
-    {
-        let it = self
-            .expire
-            .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()));
+    type RangeFut<'f, Q, R> = impl Future<Output = BoxStream<'f, (ExpireKey, Marked<<ExpireKey as MapKey>::V>)>> + 'f
+        where
+            Self: 'f,
+            'd: 'f,
+            ExpireKey: Borrow<Q>,
+            R: RangeBounds<Q> + Send + Sync + Clone,
+        R: 'f,
+            Q: Ord + Send + Sync + ?Sized,
+            Q: 'f;
 
-        futures::stream::iter(it).boxed()
+    fn range<'f, Q, R>(self, range: R) -> Self::RangeFut<'f, Q, R>
+    where
+        'd: 'f,
+        ExpireKey: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
+        R: 'f,
+    {
+        async move {
+            let it = self
+                .expire
+                .range(range)
+                .map(|(k, v)| (k.clone(), v.clone()));
+
+            futures::stream::iter(it).boxed()
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl<'me, 'd> MapApi<'me, 'd, ExpireKey> for &'me mut LevelData
-where 'me: 'd
-{
-    async fn set(
-        mut self,
+impl<'me> MapApi<'me, ExpireKey> for &'me mut LevelData {
+    type RO<'o> = &'o LevelData
+    where Self: 'o;
+
+    fn to_ro<'o>(&'o self) -> Self::RO<'o> {
+        &**self
+    }
+
+    type SetFut<'f>  = impl Future<Output = (Marked<<ExpireKey as MapKey>::V>, Marked<<ExpireKey as MapKey>::V>)> +'f
+    where
+        Self: 'f,
+        'me: 'f;
+
+    fn set<'f>(
+        self,
         key: ExpireKey,
-        value: Option<(<Self as MapApiRO<'me, 'd, ExpireKey>>::V, Option<KVMeta>)>,
-    ) -> (
-        Marked<<Self as MapApiRO<'me, 'd, ExpireKey>>::V>,
-        Marked<<Self as MapApiRO<'me, 'd, ExpireKey>>::V>,
-    ) {
+        value: Option<(<ExpireKey as MapKey>::V, Option<KVMeta>)>,
+    ) -> Self::SetFut<'f> {
         // dbg!("set expire", &key, &value);
 
-        let seq = self.curr_seq();
+        async move {
+            let seq = self.curr_seq();
 
-        let marked = if let Some((v, meta)) = value {
-            Marked::from((seq, v, meta))
-        } else {
-            Marked::TombStone { internal_seq: seq }
-        };
+            let marked = if let Some((v, meta)) = value {
+                Marked::from((seq, v, meta))
+            } else {
+                Marked::TombStone { internal_seq: seq }
+            };
 
-        let prev = MapApiRO::<ExpireKey>::get(&*self, &key).await;
-        self.expire.insert(key, marked.clone());
-        (prev, marked)
+            let prev = MapApiRO::<ExpireKey>::get(&*self, &key).await;
+            self.expire.insert(key, marked.clone());
+            (prev, marked)
+        }
     }
 }
 
