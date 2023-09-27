@@ -160,7 +160,7 @@ impl ReplaceInterpreter {
         });
 
         let is_multi_node = !self.ctx.get_cluster().is_empty();
-        let is_value_source = matches!(self.plan.source, InsertInputSource::Values(_));
+        let is_value_source = matches!(self.plan.source, InsertInputSource::Values { .. });
         let is_distributed = is_multi_node
             && !is_value_source
             && self.ctx.get_settings().get_enable_distributed_replace()?;
@@ -267,8 +267,8 @@ impl ReplaceInterpreter {
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
     ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
         match source {
-            InsertInputSource::Values(data) => self
-                .connect_value_source(schema.clone(), data)
+            InsertInputSource::Values { data, start } => self
+                .connect_value_source(schema.clone(), data, *start)
                 .map(|x| (x, None)),
 
             InsertInputSource::SelectPlan(plan) => {
@@ -302,9 +302,11 @@ impl ReplaceInterpreter {
         &self,
         schema: DataSchemaRef,
         value_data: &str,
+        span_offset: usize,
     ) -> Result<Box<PhysicalPlan>> {
         Ok(Box::new(PhysicalPlan::AsyncSourcer(AsyncSourcerPlan {
             value_data: value_data.to_string(),
+            start: span_offset,
             schema,
         })))
     }

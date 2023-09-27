@@ -300,6 +300,7 @@ impl Binder {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
+            target_alias: target_alias.clone(),
             table_id,
             bind_context: Box::new(bind_ctx.clone()),
             meta_data: self.metadata.clone(),

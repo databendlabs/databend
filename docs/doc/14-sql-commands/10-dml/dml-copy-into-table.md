@@ -228,10 +228,10 @@ COPY INTO provides a summary of the data loading results with these columns:
 
 ## Distributed COPY INTO
 
-COPY INTO supports distributed execution in cluster environments. You can enable distributed COPY INTO by setting `ENABLE_DISTRIBUTED_COPY_INTO` to 1. This helps enhance data loading performance and scalability in cluster environments.
+COPY INTO supports distributed execution in cluster environments. You can enable distributed COPY INTO by setting ENABLE_DISTRIBUTED_COPY_INTO to 1. This helps enhance data loading performance and scalability in cluster environments.
 
 ```sql
-SET ENABLE_DISTRIBUTED_COPY_INTO = 1;
+SET enable_distributed_copy_into = 1;
 ```
 
 ## Examples

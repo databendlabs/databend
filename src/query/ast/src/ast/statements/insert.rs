@@ -74,6 +74,7 @@ pub enum InsertSource {
     },
     Values {
         rest_str: String,
+        start: usize,
     },
     Select {
         query: Box<Query>,
@@ -104,7 +105,7 @@ impl Display for InsertSource {
                     on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
                 )
             }
-            InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),
+            InsertSource::Values { rest_str, .. } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),
         }
     }

@@ -105,6 +105,8 @@ impl InterpreterQueryLog {
         let result_bytes = 0u64;
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
+        let join_spilled_rows = 0u64;
+        let join_spilled_bytes = 0u64;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -161,6 +163,8 @@ impl InterpreterQueryLog {
             result_bytes,
             cpu_usage,
             memory_usage,
+            join_spilled_bytes,
+            join_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -211,6 +215,9 @@ impl InterpreterQueryLog {
         let total_partitions = data_metrics.get_partitions_total();
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
+
+        let join_spilled_rows = ctx.get_spill_progress_value().rows as u64;
+        let join_spilled_bytes = ctx.get_spill_progress_value().bytes as u64;
 
         // Result.
         let result_rows = ctx.get_result_progress_value().rows as u64;
@@ -275,6 +282,8 @@ impl InterpreterQueryLog {
             result_bytes,
             cpu_usage,
             memory_usage,
+            join_spilled_bytes,
+            join_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,

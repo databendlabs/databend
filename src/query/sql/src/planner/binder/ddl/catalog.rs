@@ -102,7 +102,9 @@ impl Binder {
 
         let tenant = self.ctx.get_tenant();
 
-        let meta = self.try_create_meta_from_options(*catalog_type, options)?;
+        let meta = self
+            .try_create_meta_from_options(*catalog_type, options)
+            .await?;
 
         Ok(Plan::CreateCatalog(Box::new(CreateCatalogPlan {
             if_not_exists: *if_not_exists,
@@ -127,7 +129,7 @@ impl Binder {
         })))
     }
 
-    fn try_create_meta_from_options(
+    async fn try_create_meta_from_options(
         &self,
         catalog_type: CatalogType,
         options: &BTreeMap<String, String>,
@@ -148,7 +150,7 @@ impl Binder {
                     ErrorCode::InvalidArgument("expected field: METASTORE_ADDRESS")
                 })?;
 
-                let sp = parse_catalog_url(options)?;
+                let sp = parse_catalog_url(options).await?;
 
                 CatalogOption::Hive(HiveCatalogOption {
                     address,
@@ -156,7 +158,7 @@ impl Binder {
                 })
             }
             CatalogType::Iceberg => {
-                let sp = parse_catalog_url(options.clone())?.ok_or_else(|| {
+                let sp = parse_catalog_url(options.clone()).await?.ok_or_else(|| {
                     ErrorCode::InvalidArgument(
                         "expect storage connection but failed to find, seems the url is missing",
                     )
@@ -176,7 +178,7 @@ impl Binder {
     }
 }
 
-fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
+async fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<StorageParams>> {
     // has to be removed, or UriLocation will complain about unknown field
     let uri = if let Some(v) = options.remove("url") {
         v
@@ -229,7 +231,7 @@ fn parse_catalog_url(mut options: BTreeMap<String, String>) -> Result<Option<Sto
         )
     };
 
-    let (sp, _) = parse_uri_location(&mut location)?;
+    let (sp, _) = parse_uri_location(&mut location).await?;
 
     Ok(Some(sp))
 }

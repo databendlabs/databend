@@ -737,6 +737,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     name_resolution_ctx,
                     async_sourcer.schema.clone(),
+                    async_sourcer.start,
                 );
                 AsyncSourcer::create(self.ctx.clone(), output, inner)
             },
@@ -2272,6 +2273,7 @@ pub struct ValueSource {
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    start: usize,
     is_finished: bool,
 }
 
@@ -2315,23 +2317,34 @@ impl AsyncSource for ValueSource {
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for ValueSource {
     async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(sql)?;
-        let mut bind_context = self.bind_context.clone();
-        let metadata = self.metadata.clone();
+        let res: Result<Vec<Scalar>> = try {
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(sql)?;
+            let mut bind_context = self.bind_context.clone();
+            let metadata = self.metadata.clone();
 
-        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
-        let values = bind_context
-            .exprs_to_scalar(
-                exprs,
-                &self.schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
-            .await?;
-        Ok(values)
+            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            bind_context
+                .exprs_to_scalar(
+                    exprs,
+                    &self.schema,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    metadata,
+                )
+                .await?
+        };
+        res.map_err(|mut err| {
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
+            if let Some(span) = err.span() {
+                err = err.set_span(Some(
+                    (span.start() + self.start..span.end() + self.start).into(),
+                ));
+            }
+            err
+        })
     }
 }
 
@@ -2341,6 +2354,7 @@ impl ValueSource {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
+        start: usize,
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -2352,6 +2366,7 @@ impl ValueSource {
             schema,
             bind_context,
             metadata,
+            start,
             is_finished: false,
         }
     }

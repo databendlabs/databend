@@ -23,6 +23,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
+use common_storage::init_operator;
 
 use super::super::copy::resolve_stage_location;
 use crate::binder::location::parse_uri_location;
@@ -81,13 +82,20 @@ impl Binder {
                     connection: uri.connection.clone(),
                 };
 
-                let (stage_storage, path) = parse_uri_location(&mut uri)?;
+                let (stage_storage, path) = parse_uri_location(&mut uri).await?;
 
                 if !path.ends_with('/') {
                     return Err(ErrorCode::SyntaxException(
                         "URL's path must ends with `/` when do CREATE STAGE",
                     ));
                 }
+
+                // Check the storage params via init operator.
+                let _ = init_operator(&stage_storage).map_err(|err| {
+                    ErrorCode::InvalidConfig(format!(
+                        "Input storage config for stage is not invalid: {err:?}"
+                    ))
+                })?;
 
                 StageInfo::new_external_stage(stage_storage, &path).with_stage_name(stage_name)
             }
