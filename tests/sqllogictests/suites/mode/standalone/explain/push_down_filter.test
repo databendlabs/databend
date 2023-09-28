@@ -171,15 +171,15 @@ AggregateFinal
         │                   ├── estimated rows: 0.00
         │                   ├── EvalScalar(Build)
         │                   │   ├── output columns: [t2.sid (#1), de (#6)]
-        │                   │   ├── expressions: [sum(COALESCE(t3.val, 0)) (#5)]
+        │                   │   ├── expressions: [sum(coalesce(t3.val, 0)) (#5)]
         │                   │   ├── estimated rows: 0.00
         │                   │   └── AggregateFinal
-        │                   │       ├── output columns: [sum(COALESCE(t3.val, 0)) (#5), t2.sid (#1)]
+        │                   │       ├── output columns: [sum(coalesce(t3.val, 0)) (#5), t2.sid (#1)]
         │                   │       ├── group by: [sid]
         │                   │       ├── aggregate functions: [sum(sum_arg_0)]
         │                   │       ├── estimated rows: 0.00
         │                   │       └── AggregatePartial
-        │                   │           ├── output columns: [sum(COALESCE(t3.val, 0)) (#5), #_group_by_key]
+        │                   │           ├── output columns: [sum(coalesce(t3.val, 0)) (#5), #_group_by_key]
         │                   │           ├── group by: [sid]
         │                   │           ├── aggregate functions: [sum(sum_arg_0)]
         │                   │           ├── estimated rows: 0.00
