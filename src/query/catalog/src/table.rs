@@ -405,7 +405,7 @@ pub enum NavigationPoint {
     TimePoint(DateTime<Utc>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,

@@ -1,0 +1,77 @@
+# need to run with '-p 0'
+
+statement ok
+drop stage if exists unload;
+
+statement ok
+create stage unload;
+
+statement ok
+remove @unload;
+
+statement ok
+drop table if exists ii;
+
+statement ok
+create table ii (a int, b int);
+
+statement ok
+insert into ii values (1, 2), (3, 4), (5, 6);
+
+statement ok
+create file format if not exists csv_gzip type=csv compression=gzip;
+
+# test csv
+statement ok
+copy into @unload from ii file_format=(type=csv);
+-----
+
+query 
+select right(name, 4), size from list_stage(location=>'@unload');
+----
+.csv 12
+
+query 
+select $1, $2 from @unload(file_format=>'csv');
+----
+1 2
+3 4
+5 6
+
+# test csv_gzip
+statement ok
+remove @unload;
+
+statement ok
+copy into @unload from ii file_format=(format_name='csv_gzip');
+
+query 
+select right(name, 7), size from list_stage(location=>'@unload');
+----
+.csv.gz 32
+
+query 
+select $1, $2 from @unload(file_format => 'csv_gzip');
+----
+1 2
+3 4
+5 6
+
+# test tsv
+statement ok
+remove @unload;
+
+statement ok
+copy into @unload from ii file_format=(format_name='tsv');
+
+query 
+select right(name, 4), size from list_stage(location=>'@unload');
+----
+.tsv 12
+
+query 
+select $1, $2 from @unload(file_format => 'tsv');
+----
+1 2
+3 4
+5 6

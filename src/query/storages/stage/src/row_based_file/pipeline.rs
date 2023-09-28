@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_formats::FileFormatOptionsExt;
 use common_pipeline_core::Pipeline;
+use common_pipeline_sources::input_formats::InputContext;
 use opendal::Operator;
 
 use crate::row_based_file::limit_file_size_processor::LimitFileSizeProcessor;
@@ -44,6 +45,11 @@ pub(crate) fn append_data_to_row_based_files(
         table_info.schema(),
         table_info.stage_info.file_format_params.clone(),
     )?;
+    let compression = table_info
+        .stage_info
+        .file_format_params
+        .clone()
+        .compression();
     let prefix = output_format.serialize_prefix()?;
 
     pipeline.add_transform(|input, output| {
@@ -62,6 +68,9 @@ pub(crate) fn append_data_to_row_based_files(
     if max_file_size != usize::MAX {
         pipeline.try_resize(max_threads)?;
     }
+
+    let compression = InputContext::get_compression_alg_copy(compression, "")?;
+
     pipeline.add_sink(|input| {
         let gid = group_id.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         RowBasedFileSink::try_create(
@@ -71,6 +80,7 @@ pub(crate) fn append_data_to_row_based_files(
             prefix.clone(),
             uuid.clone(),
             gid,
+            compression,
         )
     })?;
     Ok(())
