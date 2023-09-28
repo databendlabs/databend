@@ -35,6 +35,7 @@ use super::HttpQueryContext;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
+use crate::servers::http::v1::query::execute_state::ExecutorSessionState;
 use crate::servers::http::v1::query::execute_state::Progresses;
 use crate::servers::http::v1::query::expirable::Expirable;
 use crate::servers::http::v1::query::expirable::ExpiringState;
@@ -329,7 +330,7 @@ impl HttpQuery {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
                         stop_time: Instant::now(),
-                        session: ctx_clone.get_current_session(),
+                        session_state: ExecutorSessionState::from(ctx_clone.get_current_session()),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(

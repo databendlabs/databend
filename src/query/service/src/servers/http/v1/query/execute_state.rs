@@ -208,7 +208,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
-                    session: s.ctx.get_current_session(),
+                    session_state: ExecutorSessionState::from(s.ctx.get_current_session()),
                     stop_time: Instant::now(),
                     affect: Default::default(),
                 }))
