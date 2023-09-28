@@ -126,6 +126,7 @@ pub struct Executor {
 // ExecutorSessionState is used to record the session state when the query is stopped.
 // The HTTP Query API returns the session state to the client on each request. The client
 // may store these new session state, and pass it to the next http query request.
+#[derive(Debug, Clone)]
 pub struct ExecutorSessionState {
     pub current_database: String,
     pub settings: HashMap<String, ChangeValue>,
@@ -228,7 +229,7 @@ impl Executor {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
-                    session: r.ctx.get_current_session(),
+                    session_state: ExecutorSessionState::from(r.ctx.get_current_session()),
                     affect: r.ctx.get_affect(),
                 }))
             }
