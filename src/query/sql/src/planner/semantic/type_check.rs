@@ -2390,9 +2390,17 @@ impl<'a> TypeChecker<'a> {
                                 ref column, ..
                             }) = scalar
                             {
-                                return self
-                                    .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                                    .await;
+                                let column_entry =
+                                    self.metadata.read().column(column.index).clone();
+                                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+                                    return self
+                                        .resolve_variant_map_access_pushdown(
+                                            column.clone(),
+                                            base_column,
+                                            &mut paths,
+                                        )
+                                        .await;
+                                }
                             }
                         }
                     }
@@ -2930,8 +2938,10 @@ impl<'a> TypeChecker<'a> {
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
-                table_data_type = data_type;
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                column_entry
+            {
+                table_data_type = data_type.clone();
             }
             if self.allow_pushdown {
                 match table_data_type.remove_nullable() {
@@ -2947,11 +2957,17 @@ impl<'a> TypeChecker<'a> {
                         scalar = inner_scalar;
                     }
                     TableDataType::Variant => {
-                        if let Some(result) = self
-                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                            .await
-                        {
-                            return result;
+                        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+                            if let Some(result) = self
+                                .resolve_variant_map_access_pushdown(
+                                    column.clone(),
+                                    base_column,
+                                    &mut paths,
+                                )
+                                .await
+                            {
+                                return result;
+                            }
                         }
                     }
                     _ => {}
@@ -3139,17 +3155,13 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_variant_map_access_pushdown(
         &mut self,
         column: ColumnBinding,
+        base_column: BaseTableColumn,
         paths: &mut VecDeque<(Span, Literal)>,
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        let table_index = self.metadata.read().get_table_index(
-            column.database_name.as_deref(),
-            column.table_name.as_deref().unwrap_or_default(),
-        )?;
-
         if !self
             .metadata
             .read()
-            .table(table_index)
+            .table(base_column.table_index)
             .table()
             .support_virtual_columns()
         {
@@ -3170,7 +3182,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut name = String::new();
-        name.push_str(&column.column_name);
+        name.push_str(&base_column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
             let json_path = match path {
@@ -3195,7 +3207,7 @@ impl<'a> TypeChecker<'a> {
         for table_column in self
             .metadata
             .read()
-            .virtual_columns_by_table_index(table_index)
+            .virtual_columns_by_table_index(base_column.table_index)
         {
             if table_column.name() == name {
                 index = table_column.index();
@@ -3206,9 +3218,9 @@ impl<'a> TypeChecker<'a> {
         if index == 0 {
             let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
             index = self.metadata.write().add_virtual_column(
-                table_index,
-                column.column_name.clone(),
-                column.index,
+                base_column.table_index,
+                base_column.column_name.clone(),
+                base_column.column_index,
                 name.clone(),
                 table_data_type,
                 json_paths,
@@ -3224,7 +3236,7 @@ impl<'a> TypeChecker<'a> {
         )
         .database_name(column.database_name.clone())
         .table_name(column.table_name.clone())
-        .table_index(Some(table_index))
+        .table_index(Some(base_column.table_index))
         .build();
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,

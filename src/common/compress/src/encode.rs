@@ -134,7 +134,6 @@ impl Encode for CompressCodec {
 }
 
 impl CompressCodec {
-    #[allow(unused)]
     pub fn compress_all(&mut self, to_compress: &[u8]) -> common_exception::Result<Vec<u8>> {
         let mut compress_bufs = vec![];
         let mut input = PartialBuffer::new(to_compress);

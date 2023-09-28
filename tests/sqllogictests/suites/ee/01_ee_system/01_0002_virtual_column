@@ -110,6 +110,16 @@ select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t1)t11 join 
 4 44 4 44
 5 55 5 55
 
+query ITT
+SELECT r.id, get(r.val, 'a'), r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t1 AS r) AS r order by id
+----
+1 11 11
+2 22 22
+3 NULL NULL
+4 44 44
+5 55 55
+6 NULL NULL
+
 statement ok
 drop table if exists t2
 
@@ -198,6 +208,16 @@ select t11.id, t11.a, t12.id, t12.a from(select id, val:a as a from t2)t11 join 
 2 22 2 22
 4 44 4 44
 5 55 5 55
+
+query ITT
+SELECT r.id, get(r.val, 'a'), r.nval:a FROM ( SELECT r.id, r.val, r.val as nval FROM t2 AS r) AS r order by id
+----
+1 11 11
+2 22 22
+3 NULL NULL
+4 44 44
+5 55 55
+6 NULL NULL
 
 statement ok
 DROP DATABASE test_virtual_column
