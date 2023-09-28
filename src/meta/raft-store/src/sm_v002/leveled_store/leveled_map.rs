@@ -36,24 +36,21 @@ pub struct LeveledRef<'d> {
     /// The top level is the newest and writable.
     writable: &'d LevelData,
 
-    /// The immutable levels, from the oldest to the newest.
-    /// levels[0] is the bottom and oldest level.
-    frozen: &'d [Arc<LevelData>],
+    /// The immutable levels.
+    frozen: &'d StaticLeveledMap,
 }
 
 impl<'d> LeveledRef<'d> {
     pub(in crate::sm_v002) fn new(
         writable: &'d LevelData,
-        frozen: &'d [Arc<LevelData>],
+        frozen: &'d StaticLeveledMap,
     ) -> LeveledRef<'d> {
         Self { writable, frozen }
     }
 
     /// Return an iterator of all levels in reverse order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d LevelData> + 'd {
-        [self.writable]
-            .into_iter()
-            .chain(self.frozen.iter().map(|x| x.as_ref()).rev())
+        [self.writable].into_iter().chain(self.frozen.iter_levels())
     }
 }
 
@@ -111,15 +108,14 @@ pub struct LeveledRefMut<'d> {
     /// The top level is the newest and writable.
     writable: &'d mut LevelData,
 
-    /// The immutable levels, from the oldest to the newest.
-    /// levels[0] is the bottom and oldest level.
-    frozen: &'d [Arc<LevelData>],
+    /// The immutable levels.
+    frozen: &'d StaticLeveledMap,
 }
 
 impl<'d> LeveledRefMut<'d> {
     pub(in crate::sm_v002) fn new(
         writable: &'d mut LevelData,
-        frozen: &'d [Arc<LevelData>],
+        frozen: &'d StaticLeveledMap,
     ) -> Self {
         Self { writable, frozen }
     }
@@ -136,7 +132,7 @@ impl<'d> LeveledRefMut<'d> {
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ LevelData> + '_ {
         [&*self.writable]
             .into_iter()
-            .chain(self.frozen.iter().map(|x| x.as_ref()).rev())
+            .chain(self.frozen.iter_levels())
     }
 }
 
@@ -274,11 +270,11 @@ impl LeveledMap {
     }
 
     pub(crate) fn leveled_ref_mut<'s>(&'s mut self) -> LeveledRefMut<'s> {
-        LeveledRefMut::new(&mut self.writable, self.frozen.levels())
+        LeveledRefMut::new(&mut self.writable, &self.frozen)
     }
 
     pub(crate) fn leveled_ref(&self) -> LeveledRef {
-        LeveledRef::new(&self.writable, self.frozen.levels())
+        LeveledRef::new(&self.writable, &self.frozen)
     }
 }
 
