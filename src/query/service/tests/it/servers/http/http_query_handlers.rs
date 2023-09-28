@@ -1211,8 +1211,8 @@ async fn test_affect() -> Result<()> {
         (
             serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
             Some(QueryAffect::ChangeSettings {
-                keys: vec![],
-                values: vec![], /* TODO(liyz): consider to return the complete settings after set or unset */
+                keys: vec!["timezone".to_string()],
+                values: vec!["UTC".to_string()], /* TODO(liyz): consider to return the complete settings after set or unset */
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
