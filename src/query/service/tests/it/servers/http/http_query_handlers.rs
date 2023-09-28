@@ -1200,7 +1200,7 @@ async fn test_affect() -> Result<()> {
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
-                database: None,
+                database: Some("default".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([
                     ("max_threads".to_string(), "1".to_string()),
@@ -1212,7 +1212,7 @@ async fn test_affect() -> Result<()> {
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
-                database: None,
+                database: Some("default".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
                     "max_threads".to_string(),
