@@ -110,6 +110,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
                 InsertSource::Values {
                     rest_str: unsafe { String::from_utf8_unchecked(buf) },
+                    start: 0,
                 }
             }
             // TODO

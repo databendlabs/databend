@@ -54,7 +54,7 @@ select count(*) = 0 from t
 
 
 statement ok
-drop table t all
+drop table t
 
 statement ok
 create table t (c Int null)
@@ -114,6 +114,17 @@ select count(*) = 0 from t
 ----
 1
 
+statement ok
+insert into t values (1), (NULL)
+
+statement ok
+delete from t where c >= 1
+
+
+query T
+select * from t
+----
+NULL
 
 
 statement ok
@@ -130,7 +141,7 @@ select count(*) = 0 from t
 
 
 statement ok
-drop table t all
+drop table t
 
 statement ok
 create table t(c Int) CLUSTER BY(c+1)
@@ -150,7 +161,7 @@ select count(*) = 2 from t
 1
 
 statement ok
-drop table t all
+drop table t
 
 statement ok
 create table t(a Int, b Int)
@@ -175,7 +186,7 @@ statement ok
 delete from t where t.a in (select * from numbers(10))
 
 statement ok
-drop table t all
+drop table t
 
 
 ####################################
@@ -234,7 +245,7 @@ select * from t order by c;
 
 
 statement ok
-drop table t all
+drop table t
 
 ####################################
 # delete pruning, whole segments   #
@@ -268,7 +279,7 @@ select * from t order by c;
 9
 
 statement ok
-drop table t all
+drop table t
 
 # test large data
 statement ok
@@ -308,7 +319,7 @@ select count(*) from t where c >= 0 and c < 1500000;
 0
 
 statement ok
-drop table t all
+drop table t
 
 statement ok
 DROP DATABASE db1

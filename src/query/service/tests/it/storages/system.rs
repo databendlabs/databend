@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::block_debug::box_render;
 use common_expression::block_debug::pretty_format_blocks;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::AuthType;
@@ -83,7 +84,8 @@ async fn run_table_tests(
         actual_lines.retain(|&item| {
             !(item.contains("max_threads")
                 || item.contains("max_memory_usage")
-                || item.contains("max_storage_io_requests"))
+                || item.contains("max_storage_io_requests")
+                || item.contains("recluster_block_size"))
         });
     }
     for line in actual_lines {
@@ -283,7 +285,14 @@ async fn test_metrics_table() -> Result<()> {
     assert_eq!(block.num_columns(), 5);
     assert!(block.num_rows() >= 1);
 
-    let output = pretty_format_blocks(result.as_slice())?;
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
     assert!(output.contains("test_metrics_table_count"));
     assert!(output.contains("test_metrics_table_histogram"));
 

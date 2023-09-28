@@ -221,13 +221,13 @@ impl<'a> TypeChecker<'a> {
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
                 let result = match ident {
                     ColumnID::Name(ident) => {
-                        let column = normalize_identifier(ident, self.name_resolution_ctx).name;
+                        let column = normalize_identifier(ident, self.name_resolution_ctx);
                         self.bind_context.resolve_name(
                             database.as_deref(),
                             table.as_deref(),
-                            column.as_str(),
-                            ident.span,
+                            &column,
                             self.aliases,
+                            self.name_resolution_ctx,
                         )?
                     }
                     ColumnID::Position(pos) => self.bind_context.search_column_position(
@@ -516,6 +516,15 @@ impl<'a> TypeChecker<'a> {
                 expr, target_type, ..
             } => {
                 let box (scalar, data_type) = self.resolve(expr).await?;
+                if target_type == &TypeName::Variant {
+                    if let Some(result) = self
+                        .resolve_cast_to_variant(expr.span(), &data_type, &scalar, false)
+                        .await
+                    {
+                        return result;
+                    }
+                }
+
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -550,7 +559,16 @@ impl<'a> TypeChecker<'a> {
             Expr::TryCast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr).await?;
+                let box (scalar, data_type) = self.resolve(expr).await?;
+                if target_type == &TypeName::Variant {
+                    if let Some(result) = self
+                        .resolve_cast_to_variant(expr.span(), &data_type, &scalar, true)
+                        .await
+                    {
+                        return result;
+                    }
+                }
+
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: true,
@@ -731,6 +749,13 @@ impl<'a> TypeChecker<'a> {
                         .set_span(*span));
                     }
 
+                    if self.in_window_function {
+                        return Err(ErrorCode::SemanticError(
+                            "set-returning functions cannot be used in window spec",
+                        )
+                        .set_span(*span));
+                    }
+
                     if !matches!(self.bind_context.expr_context, ExprContext::SelectClause) {
                         return Err(ErrorCode::SemanticError(
                             "set-returning functions can only be used in SELECT".to_string(),
@@ -759,7 +784,9 @@ impl<'a> TypeChecker<'a> {
                             "window function {name} can only be used in window clause"
                         )));
                     }
-                    let func = self.resolve_general_window_function(&name, &args).await?;
+                    let func = self
+                        .resolve_general_window_function(*span, &name, &args)
+                        .await?;
                     let window = window.as_ref().unwrap();
                     let display_name = format!("{:#}", expr);
                     self.resolve_window(*span, display_name, window, func)
@@ -984,7 +1011,16 @@ impl<'a> TypeChecker<'a> {
                     let path = match accessor {
                         MapAccessor::Bracket {
                             key: box Expr::Literal { lit, .. },
-                        } => lit.clone(),
+                        } => {
+                            if !matches!(lit, Literal::UInt64(_) | Literal::String(_)) {
+                                return Err(ErrorCode::SemanticError(format!(
+                                    "Unsupported accessor: {:?}",
+                                    lit
+                                ))
+                                .set_span(*span));
+                            }
+                            lit.clone()
+                        }
                         MapAccessor::Dot { key } | MapAccessor::Colon { key } => {
                             Literal::String(key.name.clone())
                         }
@@ -1125,13 +1161,14 @@ impl<'a> TypeChecker<'a> {
                 .clone(),
         };
 
+        self.in_window_function = true;
         let mut partitions = Vec::with_capacity(spec.partition_by.len());
         for p in spec.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = Vec::with_capacity(spec.order_by.len());
 
+        let mut order_by = Vec::with_capacity(spec.order_by.len());
         for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
@@ -1140,6 +1177,8 @@ impl<'a> TypeChecker<'a> {
                 nulls_first: o.nulls_first,
             })
         }
+        self.in_window_function = false;
+
         let frame = self
             .resolve_window_frame(
                 span,
@@ -1369,12 +1408,21 @@ impl<'a> TypeChecker<'a> {
     #[async_backtrace::framed]
     async fn resolve_general_window_function(
         &mut self,
+        span: Span,
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
         // try to resolve window function without arguments first
         if let Ok(window_func) = WindowFuncType::from_name(func_name) {
             return Ok(window_func);
+        }
+
+        if self.in_window_function {
+            self.in_window_function = false;
+            return Err(ErrorCode::SemanticError(
+                "window function calls cannot be nested".to_string(),
+            )
+            .set_span(span));
         }
 
         self.in_window_function = true;
@@ -2097,6 +2145,8 @@ impl<'a> TypeChecker<'a> {
             "array_sort",
             "array_aggregate",
             "array_reduce",
+            "to_variant",
+            "try_to_variant",
         ]
     }
 
@@ -2340,9 +2390,17 @@ impl<'a> TypeChecker<'a> {
                                 ref column, ..
                             }) = scalar
                             {
-                                return self
-                                    .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                                    .await;
+                                let column_entry =
+                                    self.metadata.read().column(column.index).clone();
+                                if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+                                    return self
+                                        .resolve_variant_map_access_pushdown(
+                                            column.clone(),
+                                            base_column,
+                                            &mut paths,
+                                        )
+                                        .await;
+                                }
                             }
                         }
                     }
@@ -2437,6 +2495,22 @@ impl<'a> TypeChecker<'a> {
                 Some(Err(ErrorCode::SemanticError(
                     "Array aggregate function name be must a constant string",
                 )))
+            }
+            ("to_variant", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
+                self.resolve_cast_to_variant(span, &data_type, &scalar, false)
+                    .await
+            }
+            ("try_to_variant", args) => {
+                if args.len() != 1 {
+                    return None;
+                }
+                let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
+                self.resolve_cast_to_variant(span, &data_type, &scalar, true)
+                    .await
             }
             _ => None,
         }
@@ -2748,6 +2822,110 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
+    async fn resolve_cast_to_variant(
+        &mut self,
+        span: Span,
+        source_type: &DataType,
+        scalar: &ScalarExpr,
+        is_try: bool,
+    ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
+        if !matches!(source_type.remove_nullable(), DataType::Tuple(_)) {
+            return None;
+        }
+        // If the type of source column is a tuple, rewrite to json_object_keep_null function,
+        // using the name of tuple inner fields as the object name.
+        if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
+            let column_entry = self.metadata.read().column(column.index).clone();
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
+                let new_scalar = self
+                    .rewrite_cast_to_variant(span, scalar, &data_type, is_try)
+                    .await;
+                let return_type = if is_try || source_type.is_nullable() {
+                    DataType::Nullable(Box::new(DataType::Variant))
+                } else {
+                    DataType::Variant
+                };
+                return Some(Ok(Box::new((new_scalar, return_type))));
+            }
+        }
+        None
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn rewrite_cast_to_variant(
+        &mut self,
+        span: Span,
+        scalar: &ScalarExpr,
+        data_type: &TableDataType,
+        is_try: bool,
+    ) -> ScalarExpr {
+        match data_type.remove_nullable() {
+            TableDataType::Tuple {
+                fields_name,
+                fields_type,
+            } => {
+                let mut args = Vec::with_capacity(fields_name.len() * 2);
+                for ((idx, field_name), field_type) in
+                    fields_name.iter().enumerate().zip(fields_type.iter())
+                {
+                    let key = ConstantExpr {
+                        span,
+                        value: Scalar::String(field_name.clone().into_bytes()),
+                    }
+                    .into();
+
+                    let value = FunctionCall {
+                        span,
+                        params: vec![idx + 1],
+                        arguments: vec![scalar.clone()],
+                        func_name: "get".to_string(),
+                    }
+                    .into();
+
+                    let value =
+                        if matches!(field_type.remove_nullable(), TableDataType::Tuple { .. }) {
+                            self.rewrite_cast_to_variant(span, &value, field_type, is_try)
+                                .await
+                        } else {
+                            value
+                        };
+
+                    args.push(key);
+                    args.push(value);
+                }
+                let func_name = if is_try {
+                    "try_json_object_keep_null".to_string()
+                } else {
+                    "json_object_keep_null".to_string()
+                };
+                FunctionCall {
+                    span,
+                    params: vec![],
+                    arguments: args,
+                    func_name,
+                }
+                .into()
+            }
+            _ => {
+                let func_name = if is_try {
+                    "try_to_variant".to_string()
+                } else {
+                    "to_variant".to_string()
+                };
+                FunctionCall {
+                    span,
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                    func_name,
+                }
+                .into()
+            }
+        }
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_map_access(
         &mut self,
         expr: &Expr,
@@ -2760,8 +2938,10 @@ impl<'a> TypeChecker<'a> {
         // For other types of columns, convert it to get functions.
         if let ScalarExpr::BoundColumnRef(BoundColumnRef { ref column, .. }) = scalar {
             let column_entry = self.metadata.read().column(column.index).clone();
-            if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
-                table_data_type = data_type;
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { ref data_type, .. }) =
+                column_entry
+            {
+                table_data_type = data_type.clone();
             }
             if self.allow_pushdown {
                 match table_data_type.remove_nullable() {
@@ -2777,11 +2957,17 @@ impl<'a> TypeChecker<'a> {
                         scalar = inner_scalar;
                     }
                     TableDataType::Variant => {
-                        if let Some(result) = self
-                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                            .await
-                        {
-                            return result;
+                        if let ColumnEntry::BaseTableColumn(base_column) = column_entry {
+                            if let Some(result) = self
+                                .resolve_variant_map_access_pushdown(
+                                    column.clone(),
+                                    base_column,
+                                    &mut paths,
+                                )
+                                .await
+                            {
+                                return result;
+                            }
                         }
                     }
                     _ => {}
@@ -2924,13 +3110,17 @@ impl<'a> TypeChecker<'a> {
             };
         }
 
-        let inner_column_name = names.join(":");
+        let inner_column_ident = Identifier {
+            name: names.join(":"),
+            quote: None,
+            span,
+        };
         match self.bind_context.resolve_name(
             column.database_name.as_deref(),
             column.table_name.as_deref(),
-            inner_column_name.as_str(),
-            span,
+            &inner_column_ident,
             self.aliases,
+            self.name_resolution_ctx,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
@@ -2965,17 +3155,13 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_variant_map_access_pushdown(
         &mut self,
         column: ColumnBinding,
+        base_column: BaseTableColumn,
         paths: &mut VecDeque<(Span, Literal)>,
     ) -> Option<Result<Box<(ScalarExpr, DataType)>>> {
-        let table_index = self.metadata.read().get_table_index(
-            column.database_name.as_deref(),
-            column.table_name.as_deref().unwrap_or_default(),
-        )?;
-
         if !self
             .metadata
             .read()
-            .table(table_index)
+            .table(base_column.table_index)
             .table()
             .support_virtual_columns()
         {
@@ -2996,7 +3182,7 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut name = String::new();
-        name.push_str(&column.column_name);
+        name.push_str(&base_column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
             let json_path = match path {
@@ -3021,7 +3207,7 @@ impl<'a> TypeChecker<'a> {
         for table_column in self
             .metadata
             .read()
-            .virtual_columns_by_table_index(table_index)
+            .virtual_columns_by_table_index(base_column.table_index)
         {
             if table_column.name() == name {
                 index = table_column.index();
@@ -3032,9 +3218,9 @@ impl<'a> TypeChecker<'a> {
         if index == 0 {
             let table_data_type = TableDataType::Nullable(Box::new(TableDataType::Variant));
             index = self.metadata.write().add_virtual_column(
-                table_index,
-                column.column_name.clone(),
-                column.index,
+                base_column.table_index,
+                base_column.column_name.clone(),
+                base_column.column_index,
                 name.clone(),
                 table_data_type,
                 json_paths,
@@ -3050,7 +3236,7 @@ impl<'a> TypeChecker<'a> {
         )
         .database_name(column.database_name.clone())
         .table_name(column.table_name.clone())
-        .table_index(Some(table_index))
+        .table_index(Some(base_column.table_index))
         .build();
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,

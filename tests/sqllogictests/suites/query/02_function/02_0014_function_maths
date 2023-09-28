@@ -1,5 +1,5 @@
 statement ok
-drop table if exists math_sample_numbers all
+drop table if exists math_sample_numbers
 
 statement ok
 CREATE TABLE math_sample_numbers (timestamp UInt32, value Int32) Engine = Fuse

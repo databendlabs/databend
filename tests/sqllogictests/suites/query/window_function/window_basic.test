@@ -702,5 +702,17 @@ select max(sum(salary) over(ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)) f
 statement error 1065
 select to_date('2022-02-02') over(order by (to_date('2017-12-04') - to_date('2017-02-02')))
 
+statement error 1065
+select last_value(last_value(salary) over ()) over () from empsalary
+
+statement error 1065
+select sum(sum(salary) over()) over() from empsalary
+
+statement error 1065
+select sum(salary) over(order by unnest([1,2,3])) from empsalary
+
+statement error 1065
+select sum(salary) over(order by (sum(salary) over())) from empsalary
+
 statement ok
 DROP DATABASE test_window_basic

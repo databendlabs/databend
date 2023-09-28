@@ -29,7 +29,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use common_sql::parse_to_remote_string_expr;
+use common_sql::parse_to_filters;
 use common_sql::plans::CreateTablePlan;
 use common_sql::BloomIndexColumns;
 use common_storages_fuse::pruning::create_segment_location_vector;
@@ -172,11 +172,7 @@ async fn test_block_pruner() -> Result<()> {
 
     // nothing is pruned
     let e1 = PushDownInfo {
-        filter: Some(parse_to_remote_string_expr(
-            ctx.clone(),
-            table.clone(),
-            "a > 3",
-        )?),
+        filters: Some(parse_to_filters(ctx.clone(), table.clone(), "a > 3")?),
         ..Default::default()
     };
 
@@ -184,7 +180,7 @@ async fn test_block_pruner() -> Result<()> {
     let mut e2 = PushDownInfo::default();
     let max_val_of_b = 6u64;
 
-    e2.filter = Some(parse_to_remote_string_expr(
+    e2.filters = Some(parse_to_filters(
         ctx.clone(),
         table.clone(),
         "a > 0 and b > 6",

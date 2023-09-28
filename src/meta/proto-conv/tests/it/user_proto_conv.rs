@@ -14,10 +14,10 @@
 
 use std::collections::HashSet;
 
-use chrono::DateTime;
 use chrono::NaiveDate;
 use chrono::NaiveDateTime;
 use chrono::NaiveTime;
+use chrono::TimeZone;
 use chrono::Utc;
 use common_meta_app as mt;
 use common_meta_app::principal::UserIdentity;
@@ -389,7 +389,7 @@ pub(crate) fn test_stage_file() -> mt::principal::StageFile {
         path: "/path/to/stage".to_string(),
         size: 233,
         md5: None,
-        last_modified: DateTime::from_utc(dt, Utc),
+        last_modified: Utc.from_utc_datetime(&dt),
         creator: Some(user_id),
         etag: None,
     }
@@ -780,7 +780,7 @@ fn test_old_stage_file() -> anyhow::Result<()> {
             path: "/path/to/stage".to_string(),
             size: 233,
             md5: None,
-            last_modified: DateTime::from_utc(dt, Utc),
+            last_modified: Utc.from_utc_datetime(&dt),
             creator: Some(user_id),
             ..Default::default()
         };

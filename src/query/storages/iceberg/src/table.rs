@@ -43,7 +43,9 @@ use common_storage::DataOperator;
 use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSPruner;
-use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRSReaderBuilder;
+use icelake::catalog::Catalog;
+use opendal::Operator;
 use storages_common_pruner::RangePrunerCreator;
 use tokio::sync::OnceCell;
 
@@ -56,7 +58,7 @@ use crate::table_source::IcebergTableSource;
 /// TODO: we should use icelake Table instead.
 pub struct IcebergTable {
     info: TableInfo,
-    op: opendal::Operator,
+    op: DataOperator,
 
     table: OnceCell<icelake::Table>,
 }
@@ -67,7 +69,7 @@ impl IcebergTable {
     pub fn try_new(dop: DataOperator, info: TableInfo) -> Result<IcebergTable> {
         Ok(Self {
             info,
-            op: dop.operator(),
+            op: dop,
             table: OnceCell::new(),
         })
     }
@@ -80,10 +82,16 @@ impl IcebergTable {
         table_name: &str,
         dop: DataOperator,
     ) -> Result<IcebergTable> {
-        let op = dop.operator();
-        let table = icelake::Table::open_with_op(op.clone())
-            .await
-            .map_err(|e| ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}")))?;
+        // FIXME: we should implement catalog for icelake.
+        let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
+            "databend",
+            OperatorCreatorWrapper(dop.clone()),
+        ));
+
+        let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
+        let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
+            ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+        })?;
 
         let meta = table.current_table_metadata();
 
@@ -128,19 +136,26 @@ impl IcebergTable {
 
         Ok(Self {
             info,
-            op,
+            op: dop,
             table: OnceCell::new_with(Some(table)),
         })
     }
 
     async fn table(&self) -> Result<&icelake::Table> {
-        let op = self.op.clone();
-
         self.table
             .get_or_try_init(|| async {
-                icelake::Table::open_with_op(op).await.map_err(|e| {
-                    ErrorCode::ReadTableDataError(format!("Cannot load metadata: {e:?}"))
-                })
+                // FIXME: we should implement catalog for icelake.
+                let icelake_catalog = Arc::new(icelake::catalog::StorageCatalog::new(
+                    "databend",
+                    OperatorCreatorWrapper(self.op.clone()),
+                ));
+
+                let table_id = icelake::TableIdentifier::new(vec![""]).unwrap();
+                let table = icelake_catalog.load_table(&table_id).await.map_err(|err| {
+                    ErrorCode::ReadTableDataError(format!("Iceberg catalog load failed: {err:?}"))
+                })?;
+
+                Ok(table)
             })
             .await
     }
@@ -174,12 +189,16 @@ impl IcebergTable {
             options,
         )?;
 
-        let builder =
-            ParquetRSReader::builder(ctx.clone(), self.op.clone(), table_schema, &arrow_schema)?
-                .with_push_downs(plan.push_downs.as_ref())
-                .with_pruner(Some(pruner));
+        let mut builder = ParquetRSReaderBuilder::create(
+            ctx.clone(),
+            self.op.operator(),
+            table_schema,
+            &arrow_schema,
+        )?
+        .with_push_downs(plan.push_downs.as_ref())
+        .with_pruner(Some(pruner));
 
-        let praquet_reader = Arc::new(builder.build()?);
+        let praquet_reader = Arc::new(builder.build_full_reader()?);
 
         // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));
@@ -209,9 +228,12 @@ impl IcebergTable {
             ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
         })?;
 
-        let filter = push_downs
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter = push_downs.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
 
         let schema = self.schema();
 
@@ -312,5 +334,22 @@ impl Table for IcebergTable {
 
     fn support_prewhere(&self) -> bool {
         true
+    }
+}
+
+struct OperatorCreatorWrapper(DataOperator);
+
+impl icelake::catalog::OperatorCreator for OperatorCreatorWrapper {
+    fn create(&self) -> icelake::Result<Operator> {
+        Ok(self.0.operator())
+    }
+
+    fn create_with_subdir(&self, path: &str) -> icelake::Result<Operator> {
+        let params = self.0.params().map_root(|v| format!("{}/{}", v, path));
+
+        // The operator used to be built successfully, change root should never returns error.
+        Ok(DataOperator::try_new(&params)
+            .expect("invalid params")
+            .operator())
     }
 }

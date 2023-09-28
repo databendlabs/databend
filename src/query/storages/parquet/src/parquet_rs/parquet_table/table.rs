@@ -30,9 +30,11 @@ use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::Table;
+use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -135,7 +137,7 @@ impl ParquetRSTable {
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let need_stats_provider = !matches!(ctx.get_query_kind(), QueryKind::Copy);
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
@@ -252,7 +254,8 @@ impl Table for ParquetRSTable {
         }
 
         // This method can only be called once.
-        let mut parquet_metas = self.parquet_metas.lock().await;
+        // Unwrap safety: no other thread will hold this lock.
+        let mut parquet_metas = self.parquet_metas.try_lock().unwrap();
         assert!(parquet_metas.is_empty());
 
         // Lazy read parquet file metas.
@@ -287,6 +290,25 @@ impl Table for ParquetRSTable {
         *parquet_metas = metas;
 
         Ok(Box::new(provider))
+    }
+
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+        // Unwrap safety: no other thread will hold this lock.
+        let parquet_metas = self.parquet_metas.try_lock().unwrap();
+        if parquet_metas.is_empty() {
+            return Ok(None);
+        }
+
+        let num_rows = parquet_metas
+            .iter()
+            .map(|m| m.meta.file_metadata().num_rows() as u64)
+            .sum();
+
+        // Other fields are not needed yet.
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            ..Default::default()
+        }))
     }
 }
 

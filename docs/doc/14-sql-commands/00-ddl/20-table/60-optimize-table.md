@@ -35,17 +35,19 @@ Databend creates a unique ID for each database and table for storing the snapsho
 | Segment  | JSON    | `<32bitUUID>_<version>.json`    | `<bucket_name>/<tenant_id>/<db_id>/<table_id>/_sg/` |
 | Block    | parquet | `<32bitUUID>_<version>.parquet` | `<bucket_name>/<tenant_id>/<db_id>/<table_id>/_b/`  |
 
-## Table Optimization Considerations
+## Table Optimizations
 
-For effective table optimization, understand when and how to apply various optimization techniques, including segment compaction, block compaction, and purging.
+In Databend, it's advisable to aim for an ideal block size of either 100MB (uncompressed) or 1,000,000 rows, with each segment consisting of 1,000 blocks. To maximize table optimization, it's crucial to gain a clear understanding of when and how to apply various optimization techniques, such as [Segment Compaction](#segment-compaction), [Block Compaction](#block-compaction), and [Purging](#purging).
 
-:::note
-When using the COPY INTO or REPLACE INTO command to write data into a table that includes a cluster key, Databend will automatically initiate a re-clustering process, as well as a segment and block compact process.
-:::
+- When using the COPY INTO or REPLACE INTO command to write data into a table that includes a cluster key, Databend will automatically initiate a re-clustering process, as well as a segment and block compact process.
 
-In Databend, the perfect block size is `100MB` (uncompressed size) or `1,000,000` rows, and each segment has `1,000` blocks.
+- Segment & block compactions support distributed execution in cluster environments. You can enable them by setting ENABLE_DISTRIBUTED_COMPACT to 1. This helps enhance data query performance and scalability in cluster environments.
 
-## Segment Compaction
+  ```sql
+  SET enable_distributed_compact = 1;
+  ```
+
+### Segment Compaction
 
 Compact segments when a table has too many small segments (less than `100 blocks` per segment).
 ```sql
@@ -116,7 +118,7 @@ FROM
 +-------------+---------------+---------------------------------------------+
 ```
 
-## Block Compaction
+### Block Compaction
 
 Compact blocks when a table has a large number of small blocks or when the table has a high percentage of inserted, deleted, or updated rows.
 
@@ -161,7 +163,7 @@ Compacts the table data by merging small blocks and segments into larger ones.
 OPTIMIZE TABLE my_database.my_table COMPACT LIMIT 50;
 ```
 
-## Purging
+### Purging
 
 Purging permanently removes historical data, including unused snapshots, segments, and blocks, except for the snapshots within the retention period (including the segments and blocks referenced by this snapshot), which will be retained. This can save storage space but may affect the Time Travel feature. Consider purging when:
 

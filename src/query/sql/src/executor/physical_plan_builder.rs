@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::AggIndexInfo;
+use common_catalog::plan::Filters;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -1886,37 +1887,35 @@ impl PhysicalPlanBuilder {
             .push_down_predicates
             .as_ref()
             .filter(|p| !p.is_empty())
-            .map(
-                |predicates: &Vec<ScalarExpr>| -> Result<RemoteExpr<String>> {
-                    let predicates = predicates
-                        .iter()
-                        .map(|p| {
-                            Ok(p.as_expr()?
-                                .project_column_ref(|col| col.column_name.clone()))
-                        })
-                        .collect::<Result<Vec<_>>>()?;
+            .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
+                let predicates = predicates
+                    .iter()
+                    .map(|p| {
+                        Ok(p.as_expr()?
+                            .project_column_ref(|col| col.column_name.clone()))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
-                    let expr = predicates
-                        .into_iter()
-                        .try_reduce(|lhs, rhs| {
-                            check_function(
-                                None,
-                                "and_filters",
-                                &[],
-                                &[lhs, rhs],
-                                &BUILTIN_FUNCTIONS,
-                            )
-                        })?
-                        .unwrap();
+                let expr = predicates
+                    .into_iter()
+                    .try_reduce(|lhs, rhs| {
+                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    })?
+                    .unwrap();
 
-                    let expr = cast_expr_to_non_null_boolean(expr)?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = cast_expr_to_non_null_boolean(expr)?;
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-                    is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+                is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
 
-                    Ok(expr.as_remote_expr())
-                },
-            )
+                let inverted_filter =
+                    check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
+
+                Ok(Filters {
+                    filter: expr.as_remote_expr(),
+                    inverted_filter: inverted_filter.as_remote_expr(),
+                })
+            })
             .transpose()?;
 
         let prewhere_info = scan
@@ -1970,12 +1969,13 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
+
                 let filter = cast_expr_to_non_null_boolean(
                     predicate
                         .as_expr()?
                         .project_column_ref(|col| col.column_name.clone()),
-                )?
-                .as_remote_expr();
+                )?;
+                let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
@@ -2039,7 +2039,7 @@ impl PhysicalPlanBuilder {
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
-            filter: push_down_filter,
+            filters: push_down_filter,
             is_deterministic,
             prewhere: prewhere_info,
             limit: scan.limit,

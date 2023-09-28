@@ -214,8 +214,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
-        let (_, _) = (ctx, purge);
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
         Ok(())
     }
 
@@ -405,7 +405,7 @@ pub enum NavigationPoint {
     TimePoint(DateTime<Utc>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,
@@ -463,14 +463,6 @@ pub mod column_stats_provider_impls {
 pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
-}
-
-#[derive(Debug, Clone)]
-pub struct DeletionFilters {
-    // the filter expression for the deletion
-    pub filter: RemoteExpr<String>,
-    // just "not(filter)"
-    pub inverted_filter: RemoteExpr<String>,
 }
 
 use std::collections::HashMap;

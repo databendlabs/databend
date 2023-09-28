@@ -114,9 +114,9 @@ impl HiveTable {
 
         let filter_expression = push_downs.as_ref().and_then(|extra| {
             extra
-                .filter
+                .filters
                 .as_ref()
-                .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
         });
 
         let range_filter = match filter_expression {
@@ -242,7 +242,7 @@ impl HiveTable {
     fn is_simple_select_query(&self, plan: &DataSourcePlan) -> bool {
         // couldn't get groupby order by info
         if let Some(PushDownInfo {
-            filter,
+            filters,
             limit: Some(lm),
             ..
         }) = &plan.push_downs
@@ -253,10 +253,10 @@ impl HiveTable {
 
             // filter out the partition column related expressions
             let partition_keys = self.get_partition_key_sets();
-            let columns = filter
+            let columns = filters
                 .as_ref()
                 .map(|f| {
-                    let expr = f.as_expr(&BUILTIN_FUNCTIONS);
+                    let expr = f.filter.as_expr(&BUILTIN_FUNCTIONS);
                     expr.column_refs().keys().cloned().collect::<HashSet<_>>()
                 })
                 .unwrap_or_default();
@@ -460,9 +460,9 @@ impl HiveTable {
         if let Some(partition_keys) = &self.table_options.partition_keys {
             if !partition_keys.is_empty() {
                 let filter_expression = push_downs.as_ref().and_then(|p| {
-                    p.filter
+                    p.filters
                         .as_ref()
-                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS))
+                        .map(|filter| filter.filter.as_expr(&BUILTIN_FUNCTIONS))
                 });
 
                 return self
@@ -602,7 +602,7 @@ impl Table for HiveTable {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
         Err(ErrorCode::Unimplemented(format!(
             "truncate for table {} is not implemented",
             self.name()
@@ -783,14 +783,15 @@ async fn do_list_files_from_dir(
     sem: Arc<Semaphore>,
 ) -> Result<(Vec<HiveFileInfo>, Vec<String>)> {
     let _a = sem.acquire().await.unwrap();
-    let mut m = operator.list(&location).await?;
+    let mut m = operator
+        .lister_with(&location)
+        .metakey(Metakey::Mode | Metakey::ContentLength)
+        .await?;
 
     let mut all_files = vec![];
     let mut all_dirs = vec![];
     while let Some(de) = m.try_next().await? {
-        let meta = operator
-            .metadata(&de, Metakey::Mode | Metakey::ContentLength)
-            .await?;
+        let meta = de.metadata();
 
         let path = de.path();
         let file_offset = path.rfind('/').unwrap_or_default() + 1;

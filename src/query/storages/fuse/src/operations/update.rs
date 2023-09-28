@@ -15,10 +15,12 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_catalog::plan::Filters;
 use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::type_check::check_function;
 use common_expression::types::NumberDataType;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
@@ -33,10 +35,12 @@ use common_sql::plans::PREDICATE_COLUMN_NAME;
 use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::delete::MutationBlockPruningContext;
 use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
+use crate::pruning::create_segment_location_vector;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -241,14 +245,25 @@ impl FuseTable {
             );
         }
         let remain_reader = Arc::new(remain_reader);
-        let (filter_expr, filter) = if let Some(remote_expr) = filter {
+        let (filter_expr, filters) = if let Some(remote_expr) = filter {
+            let reverted_expr = check_function(
+                None,
+                "not",
+                &[],
+                &[remote_expr.as_expr(&BUILTIN_FUNCTIONS)],
+                &BUILTIN_FUNCTIONS,
+            )?;
+
             (
                 Arc::new(Some(
                     remote_expr
                         .as_expr(&BUILTIN_FUNCTIONS)
                         .project_column_ref(|name| schema.index_of(name).unwrap()),
                 )),
-                Some(remote_expr),
+                Some(Filters {
+                    filter: remote_expr,
+                    inverted_filter: reverted_expr.as_remote_expr(),
+                }),
             )
         } else {
             (Arc::new(None), None)
@@ -257,10 +272,15 @@ impl FuseTable {
         let (parts, part_info) = self
             .do_mutation_block_pruning(
                 ctx.clone(),
-                filter,
-                None,
+                filters,
                 projection,
-                base_snapshot,
+                MutationBlockPruningContext {
+                    segment_locations: create_segment_location_vector(
+                        base_snapshot.segments.clone(),
+                        None,
+                    ),
+                    block_count: Some(base_snapshot.summary.block_count as usize),
+                },
                 false,
                 false, // for update
             )

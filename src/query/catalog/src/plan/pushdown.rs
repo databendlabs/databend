@@ -77,9 +77,9 @@ pub struct PushDownInfo {
     /// The difference with `projection` is the removal of the source columns
     /// which were only used to generate virtual columns.
     pub output_columns: Option<Projection>,
-    /// Optional filter expression plan
+    /// Optional filter and reverse filter expression plan
     /// Assumption: expression's data type must be `DataType::Boolean`.
-    pub filter: Option<RemoteExpr<String>>,
+    pub filters: Option<Filters>,
     pub is_deterministic: bool,
     /// Optional prewhere information
     /// used for prewhere optimization
@@ -94,6 +94,12 @@ pub struct PushDownInfo {
     pub lazy_materialization: bool,
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct Filters {
+    pub filter: RemoteExpr<String>,
+    pub inverted_filter: RemoteExpr<String>,
 }
 
 /// TopK is a wrapper for topk push down items.
@@ -126,11 +132,16 @@ impl PushDownInfo {
                 }
 
                 let leaf_fields = schema.leaf_fields();
-                let column_id = leaf_fields
+                let (leaf_id, f) = leaf_fields
                     .iter()
-                    .find(|&p| p == field)
-                    .unwrap()
-                    .column_id();
+                    .enumerate()
+                    .find(|&(_, p)| p == field)
+                    .unwrap();
+                // Databend column id is not equal to parquet leaf id when there is nested type.
+                if f.column_id as usize != leaf_id {
+                    return None;
+                }
+                let column_id = f.column_id;
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),

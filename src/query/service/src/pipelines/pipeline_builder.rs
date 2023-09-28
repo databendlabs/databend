@@ -21,7 +21,10 @@ use std::time::Instant;
 use async_channel::Receiver;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_base::base::tokio::sync::Barrier;
 use common_base::base::tokio::sync::Semaphore;
+use common_base::runtime::Runtime;
+use common_catalog::plan::Projection;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -120,9 +123,13 @@ use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::MutationBlockPruningContext;
 use common_storages_fuse::operations::TransformSerializeBlock;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::SegmentLocation;
 use common_storages_stage::StageTable;
+use log::info;
 use parking_lot::RwLock;
 
 use super::processors::transforms::FrameBound;
@@ -525,8 +532,8 @@ impl PipelineBuilder {
             self.main_pipeline.add_pipe(builder.finalize());
         }
 
-        let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
         let pipe_items = vec![
             table.matched_mutator(
@@ -605,8 +612,8 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
                 self.ctx.clone(),
@@ -686,8 +693,8 @@ impl PipelineBuilder {
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
 
-            let max_io_request = self.ctx.get_settings().get_max_storage_io_requests()?;
-            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = table.merge_into_mutators(
@@ -725,6 +732,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     name_resolution_ctx,
                     async_sourcer.schema.clone(),
+                    async_sourcer.start,
                 );
                 AsyncSourcer::create(self.ctx.clone(), output, inner)
             },
@@ -795,13 +803,56 @@ impl PipelineBuilder {
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+        if delete.parts.is_lazy {
+            let ctx = self.ctx.clone();
+            let projection = Projection::Columns(delete.col_indices.clone());
+            let filters = delete.filters.clone();
+            let table_clone = table.clone();
+            let mut segment_locations = Vec::with_capacity(delete.parts.partitions.len());
+            for part in &delete.parts.partitions {
+                // Safe to downcast because we know the the partition is lazy
+                let part: &FuseLazyPartInfo = part.as_any().downcast_ref().unwrap();
+                segment_locations.push(SegmentLocation {
+                    segment_idx: part.segment_index,
+                    location: part.segment_location.clone(),
+                    snapshot_loc: None,
+                });
+            }
+            let prune_ctx = MutationBlockPruningContext {
+                segment_locations,
+                block_count: None,
+            };
+            self.main_pipeline.set_on_init(move || {
+                let ctx_clone = ctx.clone();
+                let (partitions, info) =
+                    Runtime::with_worker_threads(2, None)?.block_on(async move {
+                        table_clone
+                            .do_mutation_block_pruning(
+                                ctx_clone,
+                                Some(filters),
+                                projection,
+                                prune_ctx,
+                                true,
+                                true,
+                            )
+                            .await
+                    })?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                ctx.set_partitions(partitions)?;
+                Ok(())
+            });
+        } else {
+            self.ctx.set_partitions(delete.parts.clone())?;
+        }
         table.add_deletion_source(
             self.ctx.clone(),
-            &delete.filter,
+            &delete.filters.filter,
             delete.col_indices.clone(),
             delete.query_row_id_col,
             &mut self.main_pipeline,
-            delete.parts.clone(),
         )?;
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
@@ -816,12 +867,14 @@ impl PipelineBuilder {
             proc.into_processor()
         })?;
         let ctx: Arc<dyn TableContext> = self.ctx.clone();
-        table.chain_mutation_aggregator(
-            &ctx,
-            &mut self.main_pipeline,
-            delete.snapshot.clone(),
-            MutationKind::Delete,
-        )?;
+        if delete.parts.is_lazy {
+            table.chain_mutation_aggregator(
+                &ctx,
+                &mut self.main_pipeline,
+                delete.snapshot.clone(),
+                MutationKind::Delete,
+            )?;
+        }
         Ok(())
     }
 
@@ -950,16 +1003,21 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-        let spill_coordinator = BuildSpillCoordinator::create(build_res.main_pipeline.output_len());
+        let output_len = build_res.main_pipeline.output_len();
+        let spill_coordinator = BuildSpillCoordinator::create(output_len);
+        let barrier = Barrier::new(output_len);
+        let restore_barrier = Barrier::new(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
-            build_res.main_pipeline.output_len(),
+            barrier,
+            restore_barrier,
         )?;
+
         let create_sink_processor = |input| {
-            let spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+            let spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -1440,6 +1498,7 @@ impl PipelineBuilder {
                 let transform = match params.aggregate_functions.is_empty() {
                     true => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1449,6 +1508,7 @@ impl PipelineBuilder {
                     }),
                     false => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1471,15 +1531,14 @@ impl PipelineBuilder {
             })?;
         }
 
-        let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, ()>::create(self.ctx.clone(), method, params.clone()),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, usize>::create(self.ctx.clone(), method, params.clone()),
             }),
         };
 
@@ -1535,7 +1594,6 @@ impl PipelineBuilder {
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
-        let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();
 
         match params.aggregate_functions.is_empty() {
@@ -1543,8 +1601,11 @@ impl PipelineBuilder {
                 HashMethodKind::T(v) => {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector =
-                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                        self.exchange_injector = AggregateInjector::<_, ()>::create(
+                            self.ctx.clone(),
+                            v.clone(),
+                            params.clone(),
+                        );
                     }
 
                     self.build_pipeline(&aggregate.input)?;
@@ -1564,7 +1625,7 @@ impl PipelineBuilder {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                         self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            tenant,
+                            self.ctx.clone(),
                             v.clone(),
                             params.clone(),
                         );
@@ -1869,7 +1930,8 @@ impl PipelineBuilder {
 
         let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let func_ctx = self.ctx.get_function_context()?;
-
+        let barrier = Barrier::new(self.main_pipeline.output_len());
+        let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
             state,
@@ -1878,10 +1940,12 @@ impl PipelineBuilder {
             join.probe.output_schema()?,
             &join.join_type,
             self.main_pipeline.output_len(),
+            barrier,
+            restore_barrier,
         )?);
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.ctx.get_settings().get_enable_join_spill()? {
+            let probe_spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
@@ -2196,6 +2260,7 @@ pub struct ValueSource {
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    start: usize,
     is_finished: bool,
 }
 
@@ -2239,23 +2304,34 @@ impl AsyncSource for ValueSource {
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for ValueSource {
     async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(sql)?;
-        let mut bind_context = self.bind_context.clone();
-        let metadata = self.metadata.clone();
+        let res: Result<Vec<Scalar>> = try {
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(sql)?;
+            let mut bind_context = self.bind_context.clone();
+            let metadata = self.metadata.clone();
 
-        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
-        let values = bind_context
-            .exprs_to_scalar(
-                exprs,
-                &self.schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
-            .await?;
-        Ok(values)
+            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            bind_context
+                .exprs_to_scalar(
+                    exprs,
+                    &self.schema,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    metadata,
+                )
+                .await?
+        };
+        res.map_err(|mut err| {
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
+            if let Some(span) = err.span() {
+                err = err.set_span(Some(
+                    (span.start() + self.start..span.end() + self.start).into(),
+                ));
+            }
+            err
+        })
     }
 }
 
@@ -2265,6 +2341,7 @@ impl ValueSource {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
+        start: usize,
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -2276,6 +2353,7 @@ impl ValueSource {
             schema,
             bind_context,
             metadata,
+            start,
             is_finished: false,
         }
     }

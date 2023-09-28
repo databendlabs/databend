@@ -27,6 +27,7 @@ use common_ast::ast::SetExpr;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
+use common_ast::ast::TypeName;
 use common_ast::parser::parse_sql;
 use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
@@ -39,6 +40,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
+use common_expression::types::DataType;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
@@ -261,18 +263,27 @@ impl<'a> Binder {
                 .required_source_schema
                 .fields()
                 .iter()
-                .map(|f| SelectTarget::AliasedExpr {
-                    expr: Box::new(Expr::ColumnRef {
+                .map(|f| {
+                    let column = Expr::ColumnRef {
                         span: None,
                         database: None,
                         table: None,
-                        column: AstColumnID::Name(Identifier {
-                            name: f.name().to_string(),
-                            quote: None,
+                        column: AstColumnID::Name(Identifier::from_name(f.name().to_string())),
+                    };
+                    let expr = if f.data_type().remove_nullable() == DataType::Variant {
+                        Expr::Cast {
                             span: None,
-                        }),
-                    }),
-                    alias: None,
+                            expr: Box::new(column),
+                            target_type: TypeName::Variant,
+                            pg_style: false,
+                        }
+                    } else {
+                        column
+                    };
+                    SelectTarget::AliasedExpr {
+                        expr: Box::new(expr),
+                        alias: None,
+                    }
                 })
                 .collect::<Vec<_>>();
 
@@ -664,7 +675,7 @@ pub async fn resolve_file_location(
     match location.clone() {
         FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
         FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri)?;
+            let (storage_params, path) = parse_uri_location(&mut uri).await?;
             if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 Err(ErrorCode::StorageInsecure(
                     "copy from insecure storage is not allowed",

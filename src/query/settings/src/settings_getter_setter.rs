@@ -89,19 +89,9 @@ impl Settings {
         }
     }
 
-    // Set storage_fetch_part_num.
-    pub fn set_storage_fetch_part_num(&self, val: u64) -> Result<()> {
-        self.try_set_u64("storage_fetch_part_num", val)
-    }
-
     // Get parquet_uncompressed_buffer_size.
     pub fn get_parquet_uncompressed_buffer_size(&self) -> Result<u64> {
         self.try_get_u64("parquet_uncompressed_buffer_size")
-    }
-
-    // Set parquet_uncompressed_buffer_size.
-    pub fn set_parquet_uncompressed_buffer_size(&self, val: u64) -> Result<()> {
-        self.try_set_u64("parquet_uncompressed_buffer_size", val)
     }
 
     pub fn get_max_memory_usage(&self) -> Result<u64> {
@@ -138,26 +128,13 @@ impl Settings {
         self.try_get_u64("storage_io_min_bytes_for_seek")
     }
 
-    pub fn set_storage_io_min_bytes_for_seek(&self, val: u64) -> Result<()> {
-        self.try_set_u64("storage_io_min_bytes_for_seek", val)
-    }
-
     pub fn get_storage_io_max_page_bytes_for_read(&self) -> Result<u64> {
         self.try_get_u64("storage_io_max_page_bytes_for_read")
-    }
-
-    pub fn set_storage_io_max_page_bytes_for_read(&self, val: u64) -> Result<()> {
-        self.try_set_u64("storage_io_max_page_bytes_for_read", val)
     }
 
     // Get max_execute_time_in_seconds.
     pub fn get_max_execute_time_in_seconds(&self) -> Result<u64> {
         self.try_get_u64("max_execute_time_in_seconds")
-    }
-
-    // Set max_execute_time_in_seconds.
-    pub fn set_max_execute_time_in_seconds(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_execute_time_in_seconds", val)
     }
 
     // Get flight client timeout.
@@ -187,11 +164,6 @@ impl Settings {
         self.try_get_u64("group_by_two_level_threshold")
     }
 
-    // Set group by two level threshold
-    pub fn set_group_by_two_level_threshold(&self, val: u64) -> Result<()> {
-        self.try_set_u64("group_by_two_level_threshold", val)
-    }
-
     pub fn get_max_inlist_to_or(&self) -> Result<u64> {
         self.try_get_u64("max_inlist_to_or")
     }
@@ -200,16 +172,8 @@ impl Settings {
         Ok(self.try_get_u64("unquoted_ident_case_sensitive")? != 0)
     }
 
-    pub fn set_unquoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
-        self.try_set_u64("unquoted_ident_case_sensitive", u64::from(val))
-    }
-
     pub fn get_quoted_ident_case_sensitive(&self) -> Result<bool> {
         Ok(self.try_get_u64("quoted_ident_case_sensitive")? != 0)
-    }
-
-    pub fn set_quoted_ident_case_sensitive(&self, val: bool) -> Result<()> {
-        self.try_set_u64("quoted_ident_case_sensitive", u64::from(val))
     }
 
     pub fn get_max_result_rows(&self) -> Result<u64> {
@@ -220,56 +184,24 @@ impl Settings {
         Ok(self.try_get_u64("enable_dphyp")? != 0)
     }
 
-    pub fn set_enable_dphyp(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_dphyp", u64::from(val))
-    }
-
     pub fn get_enable_cbo(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_cbo")? != 0)
-    }
-
-    pub fn set_enable_cbo(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_cbo", u64::from(val))
     }
 
     pub fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_join_reorder")? != 0)
     }
 
-    pub fn set_disable_join_reorder(&self, val: bool) -> Result<()> {
-        self.try_set_u64("disable_join_reorder", u64::from(val))
-    }
-
-    pub fn get_enable_join_spill(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_join_spill")? != 0)
-    }
-
-    pub fn set_enable_join_spill(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_join_spill", u64::from(val))
-    }
-
     pub fn get_join_spilling_threshold(&self) -> Result<usize> {
         Ok(self.try_get_u64("join_spilling_threshold")? as usize)
-    }
-
-    pub fn set_join_spilling_threshold(&self, value: usize) -> Result<()> {
-        self.try_set_u64("join_spilling_threshold", value as u64)
     }
 
     pub fn get_runtime_filter(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_runtime_filter")? != 0)
     }
 
-    pub fn set_runtime_filter(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_runtime_filter", u64::from(val))
-    }
-
     pub fn get_prefer_broadcast_join(&self) -> Result<bool> {
         Ok(self.try_get_u64("prefer_broadcast_join")? != 0)
-    }
-
-    pub fn set_prefer_broadcast_join(&self, val: bool) -> Result<()> {
-        self.try_set_u64("join_distribution_type", u64::from(val))
     }
 
     pub fn get_sql_dialect(&self) -> Result<Dialect> {
@@ -293,10 +225,6 @@ impl Settings {
 
     pub fn get_hive_parquet_chunk_size(&self) -> Result<u64> {
         self.try_get_u64("hive_parquet_chunk_size")
-    }
-
-    pub fn set_load_file_metadata_expire_hours(&self, val: u64) -> Result<()> {
-        self.try_set_u64("load_file_metadata_expire_hours", val)
     }
 
     pub fn get_load_file_metadata_expire_hours(&self) -> Result<u64> {
@@ -331,10 +259,6 @@ impl Settings {
         Ok(self.try_get_u64("spilling_bytes_threshold_per_proc")? as usize)
     }
 
-    pub fn set_spilling_bytes_threshold_per_proc(&self, value: usize) -> Result<()> {
-        self.try_set_u64("spilling_bytes_threshold_per_proc", value as u64)
-    }
-
     pub fn get_spilling_memory_ratio(&self) -> Result<usize> {
         Ok(self.try_get_u64("spilling_memory_ratio")? as usize)
     }
@@ -345,10 +269,6 @@ impl Settings {
 
     pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
-    }
-
-    pub fn set_lazy_read_threshold(&self, value: u64) -> Result<()> {
-        self.try_set_u64("lazy_read_threshold", value)
     }
 
     pub fn get_lazy_read_threshold(&self) -> Result<u64> {
@@ -365,14 +285,6 @@ impl Settings {
 
     pub fn get_enable_table_lock(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_table_lock")? != 0)
-    }
-
-    pub fn set_enable_table_lock(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_table_lock", u64::from(val))
-    }
-
-    pub fn set_table_lock_expire_secs(&self, val: u64) -> Result<()> {
-        self.try_set_u64("table_lock_expire_secs", val)
     }
 
     pub fn get_table_lock_expire_secs(&self) -> Result<u64> {
@@ -404,40 +316,24 @@ impl Settings {
         Ok(self.try_get_u64("enable_distributed_copy_into")? != 0)
     }
 
-    pub fn set_enable_distributed_copy(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_copy_into", u64::from(val))
-    }
-
     pub fn get_enable_experimental_merge_into(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_experimental_merge_into")? != 0)
-    }
-
-    pub fn set_enable_experimental_merge_into(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_experimental_merge_into", u64::from(val))
     }
 
     pub fn get_enable_distributed_replace(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_distributed_replace_into")? != 0)
     }
 
-    pub fn set_enable_distributed_replace(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_replace_into", u64::from(val))
+    pub fn get_enable_distributed_compact(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_compact")? != 0)
     }
 
     pub fn get_enable_aggregating_index_scan(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_aggregating_index_scan")? != 0)
     }
 
-    pub fn set_enable_aggregating_index_scan(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_aggregating_index_scan", u64::from(val))
-    }
-
     pub fn get_enable_recluster_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_recluster_after_write")? != 0)
-    }
-
-    pub fn set_enable_recluster_after_write(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_recluster_after_write", u64::from(val))
     }
 
     pub fn get_use_parquet2(&self) -> Result<bool> {
@@ -451,23 +347,13 @@ impl Settings {
     pub fn get_enable_replace_into_partitioning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_partitioning")? != 0)
     }
-    pub fn set_enable_replace_into_partitioning(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_replace_into_partitioning", u64::from(val))
-    }
 
     pub fn get_enable_replace_into_bloom_pruning(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_replace_into_bloom_pruning")? != 0)
     }
 
-    pub fn set_enable_replace_into_bloom_pruning(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_replace_into_bloom_pruning", u64::from(val))
-    }
-
     pub fn get_replace_into_bloom_pruning_max_column_number(&self) -> Result<u64> {
         self.try_get_u64("replace_into_bloom_pruning_max_column_number")
-    }
-    pub fn set_replace_into_bloom_pruning_max_column_number(&self, val: u64) -> Result<()> {
-        self.try_set_u64("replace_into_bloom_pruning_max_column_number", val)
     }
 
     pub fn get_replace_into_shuffle_strategy(&self) -> Result<ReplaceIntoShuffleStrategy> {
@@ -475,16 +361,12 @@ impl Settings {
         ReplaceIntoShuffleStrategy::try_from(v)
     }
 
-    pub fn set_replace_into_shuffle_strategy(&self, val: u64) -> Result<()> {
-        ReplaceIntoShuffleStrategy::try_from(val)?;
-        self.try_set_u64("replace_into_shuffle_strategy", val)
-    }
-
     pub fn get_recluster_timeout_secs(&self) -> Result<u64> {
         self.try_get_u64("recluster_timeout_secs")
     }
-    pub fn set_recluster_timeout_secs(&self, val: u64) -> Result<()> {
-        self.try_set_u64("recluster_timeout_secs", val)
+
+    pub fn get_recluster_block_size(&self) -> Result<u64> {
+        self.try_get_u64("recluster_block_size")
     }
 
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
@@ -502,15 +384,7 @@ impl Settings {
         Ok(self.try_get_u64("ddl_column_type_nullable")? == 1)
     }
 
-    pub fn set_ddl_column_type_nullable(&self, val: bool) -> Result<()> {
-        self.try_set_u64("ddl_column_type_nullable", u64::from(val))
-    }
-
     pub fn get_enable_query_profiling(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_profiling")? != 0)
-    }
-
-    pub fn set_enable_query_profiling(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_query_profiling", u64::from(val))
     }
 }

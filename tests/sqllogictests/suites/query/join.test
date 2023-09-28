@@ -716,78 +716,40 @@ drop table t1;
 statement ok
 drop table t2;
 
-
-# Test hash join build spill with empty probe
-# The test mainly to test trigger spill and there is no blocking during spilling.
 statement ok
-set disable_join_reorder = 1;
+create table t(id int);
 
 statement ok
-set enable_join_spill = 1;
+insert into t values(1), (2);
 
 statement ok
-set join_spilling_threshold = 1;
+create table t1(id int, col1 varchar);
 
 statement ok
-create table t3(a int);
+insert into t1 values(1, 'c'), (3, 'd');
 
-query I
-select * from t3 inner join numbers(100000) on t3.a = number;
+query I rowsort
+SELECT * FROM t JOIN t1, t as t2 JOIN t1 as t3;
 ----
+1 1 c 1 1 c
+1 1 c 1 3 d
+1 1 c 2 1 c
+1 1 c 2 3 d
+1 3 d 1 1 c
+1 3 d 1 3 d
+1 3 d 2 1 c
+1 3 d 2 3 d
+2 1 c 1 1 c
+2 1 c 1 3 d
+2 1 c 2 1 c
+2 1 c 2 3 d
+2 3 d 1 1 c
+2 3 d 1 3 d
+2 3 d 2 1 c
+2 3 d 2 3 d
 
 statement ok
-drop table t3;
-
-# Test hash join with probe has data
-statement ok
-create table t3 as select number as a from numbers(10);
-
-query I
-select a from t3 inner join numbers(100000) on t3.a = number order by a;
-----
-0
-1
-2
-3
-4
-5
-6
-7
-8
-9
-
-# Test hash join with probe only has one partition
-statement ok
-drop table t3;
+drop table t;
 
 statement ok
-create table t3(a int);
-
-statement ok
-insert into t3 values(0), (0), (0), (0), (0), (0), (0), (0), (0), (0);
-
-query I
-select a from t3 inner join numbers(100000) on t3.a = number order by a;
-----
-0
-0
-0
-0
-0
-0
-0
-0
-0
-0
-
-statement ok
-drop table t3;
-
-statement ok
-set disable_join_reorder = 0;
-
-statement ok
-set enable_join_spill = 0;
-
-statement ok
-set join_spilling_threshold = 0;
+drop table t1;

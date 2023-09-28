@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_catalog::plan::StageTableInfo;
+use common_compress::CompressAlgorithm;
+use common_compress::CompressCodec;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -45,10 +47,11 @@ pub struct RowBasedFileSink {
     uuid: String,
     group_id: usize,
     batch_id: usize,
+
+    compression: Option<CompressAlgorithm>,
 }
 
 impl RowBasedFileSink {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         table_info: StageTableInfo,
@@ -56,6 +59,7 @@ impl RowBasedFileSink {
         prefix: Vec<u8>,
         uuid: String,
         group_id: usize,
+        compression: Option<CompressAlgorithm>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(RowBasedFileSink {
             table_info,
@@ -67,6 +71,7 @@ impl RowBasedFileSink {
             group_id,
             batch_id: 0,
             output_data: vec![],
+            compression,
         })))
     }
 }
@@ -111,13 +116,22 @@ impl Processor for RowBasedFileSink {
         for b in buffers.buffers {
             output.extend_from_slice(b.as_slice());
         }
+        if let Some(compression) = self.compression {
+            output = CompressCodec::from(compression).compress_all(&output)?;
+        }
         self.output_data = output;
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        let path = unload_path(&self.table_info, &self.uuid, self.group_id, self.batch_id);
+        let path = unload_path(
+            &self.table_info,
+            &self.uuid,
+            self.group_id,
+            self.batch_id,
+            self.compression,
+        );
         let data = mem::take(&mut self.output_data);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;

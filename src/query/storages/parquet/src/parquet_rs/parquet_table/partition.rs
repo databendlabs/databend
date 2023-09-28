@@ -23,6 +23,7 @@ use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -49,7 +50,8 @@ impl ParquetRSTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let parquet_metas = self.parquet_metas.lock().await;
+        // Unwrap safety: no other thread will hold this lock.
+        let parquet_metas = self.parquet_metas.try_lock().unwrap();
         let file_locations = if parquet_metas.is_empty() {
             match &self.files_to_read {
                 Some(files) => files
@@ -97,7 +99,7 @@ impl ParquetRSTable {
             self.read_options,
         )?);
 
-        let copy_status = if ctx.get_query_kind().eq_ignore_ascii_case("copy") {
+        let copy_status = if matches!(ctx.get_query_kind(), QueryKind::Copy) {
             Some(ctx.get_copy_status())
         } else {
             None
@@ -356,11 +358,16 @@ fn prune_and_generate_partitions(
             ..
         } = meta.as_ref();
         part_stats.partitions_total += meta.num_row_groups();
-        let rgs = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
-        let mut row_selections = pruner.prune_pages(meta, &rgs)?;
+        let (rgs, omits) = pruner.prune_row_groups(meta, row_group_level_stats.as_deref())?;
+        let mut row_selections = if omits.iter().all(|x| *x) {
+            None
+        } else {
+            pruner.prune_pages(meta, &rgs)?
+        };
+
         let mut rows_read = 0; // Rows read in current file.
 
-        for rg in rgs {
+        for (rg, omit) in rgs.into_iter().zip(omits.into_iter()) {
             let rg_meta = meta.row_group(rg);
             let num_rows = rg_meta.num_rows() as usize;
             // Split rows belonging to current row group.
@@ -412,6 +419,7 @@ fn prune_and_generate_partitions(
                 compressed_size,
                 uncompressed_size,
                 sort_min_max,
+                omit_filter: omit,
             });
         }
 

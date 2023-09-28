@@ -81,7 +81,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = ctx.get_id();
-        let query_kind = ctx.get_query_kind();
+        let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
         // Schema.
         let current_database = ctx.get_current_database();
@@ -105,6 +105,12 @@ impl InterpreterQueryLog {
         let result_bytes = 0u64;
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
+        let join_spilled_rows = 0u64;
+        let join_spilled_bytes = 0u64;
+        let agg_spilled_rows = 0u64;
+        let agg_spilled_bytes = 0u64;
+        let group_by_spilled_rows = 0u64;
+        let group_by_spilled_bytes = 0u64;
 
         // Client.
         let client_address = match ctx.get_client_address() {
@@ -161,6 +167,12 @@ impl InterpreterQueryLog {
             result_bytes,
             cpu_usage,
             memory_usage,
+            join_spilled_bytes,
+            join_spilled_rows,
+            agg_spilled_bytes,
+            agg_spilled_rows,
+            group_by_spilled_bytes,
+            group_by_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,
@@ -187,7 +199,7 @@ impl InterpreterQueryLog {
 
         // Query.
         let query_id = ctx.get_id();
-        let query_kind = ctx.get_query_kind();
+        let query_kind = ctx.get_query_kind().to_string();
         let query_text = ctx.get_query_str();
 
         // Stats.
@@ -211,6 +223,15 @@ impl InterpreterQueryLog {
         let total_partitions = data_metrics.get_partitions_total();
         let cpu_usage = ctx.get_settings().get_max_threads()? as u32;
         let memory_usage = ctx.get_current_session().get_memory_usage() as u64;
+
+        let join_spilled_rows = ctx.get_join_spill_progress_value().rows as u64;
+        let join_spilled_bytes = ctx.get_join_spill_progress_value().bytes as u64;
+
+        let agg_spilled_rows = ctx.get_aggregate_spill_progress_value().rows as u64;
+        let agg_spilled_bytes = ctx.get_aggregate_spill_progress_value().bytes as u64;
+
+        let group_by_spilled_rows = ctx.get_group_by_spill_progress_value().rows as u64;
+        let group_by_spilled_bytes = ctx.get_group_by_spill_progress_value().bytes as u64;
 
         // Result.
         let result_rows = ctx.get_result_progress_value().rows as u64;
@@ -275,6 +296,12 @@ impl InterpreterQueryLog {
             result_bytes,
             cpu_usage,
             memory_usage,
+            join_spilled_bytes,
+            join_spilled_rows,
+            agg_spilled_bytes,
+            agg_spilled_rows,
+            group_by_spilled_bytes,
+            group_by_spilled_rows,
             client_info: "".to_string(),
             client_address,
             user_agent,

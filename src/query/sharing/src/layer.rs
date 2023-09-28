@@ -131,12 +131,11 @@ impl Accessor for SharedAccessor {
     type BlockingWriter = ();
     type Pager = ();
     type BlockingPager = ();
-    type Appender = ();
 
     fn info(&self) -> AccessorInfo {
         let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
-            .set_capability(Capability {
+            .set_native_capability(Capability {
                 read: true,
                 read_with_range: true,
 

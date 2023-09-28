@@ -77,7 +77,8 @@ impl Binder {
             database,
             table_ident,
             source,
-            alias_target,
+            source_alias,
+            target_alias,
             join_expr,
             merge_options,
             ..
@@ -113,19 +114,18 @@ impl Binder {
             catalog: catalog.clone(),
             database: database.clone(),
             table: table_ident.clone(),
-            alias: alias_target.clone(),
+            alias: target_alias.clone(),
             travel_point: None,
             pivot: None,
             unpivot: None,
         };
 
         // get_source_table_reference
-        let source_data = source.transform_table_reference();
+        let source_data = source.transform_table_reference(source_alias.clone());
 
         // bind source data
-        let (source_expr, mut left_context) = self
-            .bind_merge_into_source(bind_context, None, &source.clone())
-            .await?;
+        let (source_expr, mut left_context) =
+            self.bind_single_table(bind_context, &source_data).await?;
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
@@ -229,7 +229,7 @@ impl Binder {
             right: Box::new(target_table),
         };
 
-        let (join_sexpr, bind_ctx) = self
+        let (join_sexpr, mut bind_ctx) = self
             .bind_join(
                 bind_context,
                 left_context,
@@ -242,7 +242,7 @@ impl Binder {
 
         let name_resolution_ctx = self.name_resolution_ctx.clone();
         let mut scalar_binder = ScalarBinder::new(
-            &mut right_context,
+            &mut bind_ctx,
             self.ctx.clone(),
             &name_resolution_ctx,
             self.metadata.clone(),
@@ -300,6 +300,7 @@ impl Binder {
             catalog: catalog_name.to_string(),
             database: database_name.to_string(),
             table: table_name,
+            target_alias: target_alias.clone(),
             table_id,
             bind_context: Box::new(bind_ctx.clone()),
             meta_data: self.metadata.clone(),

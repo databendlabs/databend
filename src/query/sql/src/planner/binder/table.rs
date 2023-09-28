@@ -25,7 +25,6 @@ use common_ast::ast::Connection;
 use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
-use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
@@ -578,26 +577,21 @@ impl Binder {
                 self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
-            TableReference::Join { .. } => unreachable!(),
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_merge_into_source(
-        &mut self,
-        bind_context: &mut BindContext,
-        _span: Span,
-        source: &MergeSource,
-    ) -> Result<(SExpr, BindContext)> {
-        // merge source has three kinds type
-        // a. values b. streamingV2 c. query
-        match source {
-            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
-            MergeSource::StreamingV2 {
-                settings: _,
-                on_error_mode: _,
-                start: _,
-            } => unimplemented!(),
+            TableReference::Join { join, .. } => {
+                let (left_expr, left_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.left).await?;
+                let (right_expr, right_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.right).await?;
+                self.bind_join(
+                    bind_context,
+                    left_bind_ctx,
+                    right_bind_ctx,
+                    left_expr,
+                    right_expr,
+                    join,
+                )
+                .await
+            }
         }
     }
 
@@ -978,13 +972,8 @@ impl Binder {
             }
         }
 
-        let mut stat = table.table().table_statistics()?;
-        if let Some(rows) = statistics_provider.num_rows() {
-            // For external storage (parquet)
-            if let Some(stat) = &mut stat {
-                stat.num_rows = Some(rows);
-            }
-        };
+        let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(Arc::new(
                 Scan {

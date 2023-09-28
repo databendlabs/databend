@@ -149,9 +149,9 @@ impl IcebergCatalog {
     pub async fn list_database_from_read(&self) -> Result<Vec<Arc<dyn Database>>> {
         let op = self.operator.operator();
         let mut dbs = vec![];
-        let mut ls = op.list("/").await?;
+        let mut ls = op.lister_with("/").metakey(Metakey::Mode).await?;
         while let Some(dir) = ls.try_next().await? {
-            let meta = op.metadata(&dir, Metakey::Mode).await?;
+            let meta = dir.metadata();
             if !meta.is_dir() {
                 continue;
             }
