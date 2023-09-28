@@ -28,7 +28,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storages_parquet::ParquetPart;
-use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRSFullReader;
 use opendal::Reader;
 use parquet::arrow::async_reader::ParquetRecordBatchStream;
 
@@ -45,7 +45,7 @@ pub struct IcebergTableSource {
 
     // Used to read parquet.
     output_schema: DataSchemaRef,
-    parquet_reader: Arc<ParquetRSReader>,
+    parquet_reader: Arc<ParquetRSFullReader>,
     stream: Option<ParquetRecordBatchStream<Reader>>,
 }
 
@@ -54,7 +54,7 @@ impl IcebergTableSource {
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
         output_schema: DataSchemaRef,
-        parquet_reader: Arc<ParquetRSReader>,
+        parquet_reader: Arc<ParquetRSFullReader>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(IcebergTableSource {

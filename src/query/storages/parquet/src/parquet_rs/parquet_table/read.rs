@@ -28,7 +28,7 @@ use crate::parquet_rs::source::ParquetSource;
 use crate::utils::calc_parallelism;
 use crate::ParquetPart;
 use crate::ParquetRSPruner;
-use crate::ParquetRSReader;
+use crate::ParquetRSReaderBuilder;
 
 impl ParquetRSTable {
     #[inline]
@@ -41,13 +41,14 @@ impl ParquetRSTable {
         let table_schema: TableSchemaRef = self.table_info.schema();
         // If there is a `ParquetFilesPart`, we should create pruner for it.
         // `ParquetFilesPart`s are always staying at the end of `parts`.
-        let pruner = if matches!(
+        let has_files_part = matches!(
             plan.parts
                 .partitions
                 .last()
                 .map(|p| p.as_any().downcast_ref::<ParquetPart>().unwrap()),
             Some(ParquetPart::ParquetFiles(_)),
-        ) {
+        );
+        let pruner = if has_files_part {
             Some(ParquetRSPruner::try_create(
                 ctx.get_function_context()?,
                 table_schema.clone(),
@@ -66,7 +67,7 @@ impl ParquetRSTable {
             .as_ref()
             .and_then(|p| p.top_k(&self.schema(), RangeIndex::supported_type));
 
-        let builder = ParquetRSReader::builder_with_parquet_schema(
+        let mut builder = ParquetRSReaderBuilder::create_with_parquet_schema(
             ctx.clone(),
             self.operator.clone(),
             table_schema,
@@ -77,13 +78,24 @@ impl ParquetRSTable {
         .with_pruner(pruner)
         .with_topk(topk.as_ref());
 
-        let reader = Arc::new(builder.build()?);
+        let row_group_reader = Arc::new(builder.build_row_group_reader()?);
+        let full_file_reader = if has_files_part {
+            Some(Arc::new(builder.build_full_reader()?))
+        } else {
+            None
+        };
 
         let topk = Arc::new(topk);
-        // TODO(parquet):
-        // - introduce Top-K optimization.
         pipeline.add_source(
-            |output| ParquetSource::create(ctx.clone(), output, reader.clone(), topk.clone()),
+            |output| {
+                ParquetSource::create(
+                    ctx.clone(),
+                    output,
+                    row_group_reader.clone(),
+                    full_file_reader.clone(),
+                    topk.clone(),
+                )
+            },
             num_threads,
         )
     }
