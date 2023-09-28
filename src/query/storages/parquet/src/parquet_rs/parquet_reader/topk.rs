@@ -12,14 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow_array::RecordBatch;
-use common_arrow::arrow::array::Arrow2Arrow;
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_catalog::plan::TopK;
 use common_exception::Result;
 use common_expression::Column;
+use common_expression::TableField;
 use common_expression::TopKSorter;
+use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
+use parquet::schema::types::SchemaDescriptor;
 
 pub struct ParquetTopK {
     projection: ProjectionMask,
@@ -42,23 +47,24 @@ impl ParquetTopK {
         &self.field_levels
     }
 
-    pub fn evaluate(
-        &self,
-        batch: &RecordBatch,
-        sorter: &mut TopKSorter,
-    ) -> Result<arrow_array::BooleanArray> {
-        assert_eq!(batch.num_columns(), 1);
-        let array = batch.column(0);
-        let col = Column::from_arrow_rs(array.clone(), batch.schema().field(0))?;
-        let num_rows = col.len();
+    pub fn evaluate_column(&self, column: &Column, sorter: &mut TopKSorter) -> Bitmap {
+        let num_rows = column.len();
         let mut bitmap = MutableBitmap::with_capacity(num_rows);
         bitmap.extend_constant(num_rows, true);
-        sorter.push_column(&col, &mut bitmap);
-        let boolean_array = common_arrow::arrow::array::BooleanArray::new(
-            common_arrow::arrow::datatypes::DataType::Boolean,
-            bitmap.into(),
-            None,
-        );
-        Ok(arrow_array::BooleanArray::from(boolean_array.to_data()))
+        sorter.push_column(column, &mut bitmap);
+        bitmap.into()
     }
+}
+
+/// Build [`TopK`] into [`ParquetTopK`] and get its [`TableField`].
+pub fn build_topk(
+    topk: &TopK,
+    schema_desc: &SchemaDescriptor,
+) -> Result<(Arc<ParquetTopK>, TableField)> {
+    let projection = ProjectionMask::leaves(schema_desc, vec![topk.column_id as usize]);
+    let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
+    Ok((
+        Arc::new(ParquetTopK::new(projection, field_levels)),
+        topk.order_by.clone(),
+    ))
 }

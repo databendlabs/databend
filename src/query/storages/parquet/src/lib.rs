@@ -16,6 +16,8 @@
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(let_chains)]
+#![feature(core_intrinsics)]
+#![feature(int_roundings)]
 
 mod parquet2;
 mod parquet_part;
@@ -25,7 +27,9 @@ mod utils;
 pub use parquet2::Parquet2Table;
 pub use parquet_part::ParquetFilesPart;
 pub use parquet_part::ParquetPart;
+pub use parquet_rs::ParquetRSFullReader;
 pub use parquet_rs::ParquetRSPruner;
-pub use parquet_rs::ParquetRSReader;
+pub use parquet_rs::ParquetRSReaderBuilder;
 pub use parquet_rs::ParquetRSRowGroupPart;
+pub use parquet_rs::ParquetRSRowGroupReader;
 pub use parquet_rs::ParquetRSTable;
