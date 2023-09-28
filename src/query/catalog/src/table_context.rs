@@ -112,7 +112,13 @@ pub trait TableContext: Send + Sync {
     fn get_scan_progress(&self) -> Arc<Progress>;
     fn get_scan_progress_value(&self) -> ProgressValues;
     fn get_write_progress(&self) -> Arc<Progress>;
+    fn get_join_spill_progress(&self) -> Arc<Progress>;
+    fn get_group_by_spill_progress(&self) -> Arc<Progress>;
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress>;
     fn get_write_progress_value(&self) -> ProgressValues;
+    fn get_join_spill_progress_value(&self) -> ProgressValues;
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues;
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues;
     fn get_result_progress(&self) -> Arc<Progress>;
     fn get_result_progress_value(&self) -> ProgressValues;
     fn get_status_info(&self) -> String;
