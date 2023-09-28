@@ -34,6 +34,7 @@ use super::policy::ReadPolicy;
 use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
 use super::utils::evaluate_topk;
+use super::utils::read_all;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
@@ -120,14 +121,20 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
         row_group
             .fetch(self.topk.projection(), selection.as_ref())
             .await?;
-        let prefetched = if let Some(block) =
-            evaluate_topk(&row_group, &self.topk, &mut selection, num_rows, sorter)?
-        {
-            block
-        } else {
-            // All rows are filtered out.
-            return Ok(None);
-        };
+        let block = read_all(
+            &row_group,
+            self.topk.field_levels(),
+            selection.clone(),
+            &None,
+            num_rows,
+        )?;
+        let prefetched =
+            if let Some(block) = evaluate_topk(block, &self.topk, &mut selection, sorter)? {
+                block
+            } else {
+                // All rows are filtered out.
+                return Ok(None);
+            };
 
         // Slice the prefetched block by `batch_size`.
         num_rows = prefetched.num_rows();

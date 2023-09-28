@@ -34,6 +34,7 @@ use super::policy::ReadPolicy;
 use super::policy::ReadPolicyBuilder;
 use super::policy::ReadPolicyImpl;
 use super::utils::evaluate_topk;
+use super::utils::read_all;
 use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
@@ -148,19 +149,27 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
             .unwrap_or(row_group.row_count());
         let mut prefetched = DataBlock::new(vec![], num_rows);
 
-        // Evaluate topk first may filter more rows.
-        if let Some((topk, sorter)) = self.topk.as_ref().zip(sorter.as_mut()) {
+        // Fetch topk columns and check if this row group can be filtered out.
+        // Note: we can only check but cannot update the sorter heap because we should evaluate predicate first.
+        if let Some((topk, sorter)) = self.topk.as_ref().zip(sorter.as_ref()) {
             row_group
                 .fetch(topk.projection(), selection.as_ref())
                 .await?;
-            if let Some(block) = evaluate_topk(&row_group, topk, &mut selection, num_rows, sorter)?
-            {
-                prefetched = block;
-                num_rows = prefetched.num_rows();
-            } else {
+            // Topk column **must** not be in a nested column.
+            let block = read_all(
+                &row_group,
+                topk.field_levels(),
+                selection.clone(),
+                &None,
+                num_rows,
+            )?;
+            debug_assert_eq!(block.num_columns(), 1);
+            let topk_col = block.columns()[0].value.as_column().unwrap();
+            if sorter.never_match_any(topk_col) {
                 // All rows in current row group are filtered out.
                 return Ok(None);
             }
+            prefetched.merge_block(block);
         }
 
         // Evaluate predicate
@@ -168,15 +177,13 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
             row_group
                 .fetch(self.predicate.projection(), selection.as_ref())
                 .await?;
-            let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
-                self.predicate.field_levels(),
+            let block = read_all(
                 &row_group,
-                num_rows, // Read all rows at one time.
+                self.predicate.field_levels(),
                 selection.clone(),
+                self.predicate.field_paths(),
+                num_rows,
             )?;
-            let batch = reader.next().transpose()?.unwrap();
-            debug_assert!(reader.next().is_none());
-            let block = transform_record_batch(&batch, self.predicate.field_paths())?;
             let filter = self.predicate.evaluate_block(&block)?;
             if filter.unset_bits() == num_rows {
                 // All rows in current row group are filtered out.
@@ -195,6 +202,16 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 }
             }
             num_rows = prefetched.num_rows();
+        }
+
+        // Evaluate topk
+        if let Some((topk, sorter)) = self.topk.as_ref().zip(sorter.as_mut()) {
+            if let Some(block) = evaluate_topk(prefetched, topk, &mut selection, sorter)? {
+                prefetched = block;
+            } else {
+                // All rows are filtered out.
+                return Ok(None);
+            }
         }
 
         // Slice the prefetched block by `batch_size`.

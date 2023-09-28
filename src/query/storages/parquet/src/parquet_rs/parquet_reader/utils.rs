@@ -66,7 +66,7 @@ fn error_cannot_traverse_path(path: &[FieldIndex], schema: &arrow_schema::Schema
 /// `field_paths` is used to traverse nested columns in `batch`.
 pub fn transform_record_batch(
     batch: &RecordBatch,
-    field_paths: &Option<Vec<(FieldRef, Vec<FieldIndex>)>>,
+    field_paths: &Option<FieldPaths>,
 ) -> Result<DataBlock> {
     if let Some(field_paths) = field_paths {
         transform_record_batch_by_field_paths(batch, field_paths)

@@ -17,31 +17,39 @@ use common_expression::DataBlock;
 use common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
 use parquet::arrow::arrow_reader::RowSelection;
+use parquet::arrow::FieldLevels;
 
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
+use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 
-pub fn evaluate_topk(
-    row_group: &InMemoryRowGroup,
-    topk: &ParquetTopK,
-    selection: &mut Option<RowSelection>,
+pub fn read_all(
+    rg: &InMemoryRowGroup,
+    field_levels: &FieldLevels,
+    selection: Option<RowSelection>,
+    field_paths: &Option<FieldPaths>,
     num_rows: usize,
-    sorter: &mut TopKSorter,
-) -> Result<Option<DataBlock>> {
-    let mut reader = ParquetRecordBatchReader::try_new_with_row_groups(
-        topk.field_levels(),
-        row_group,
-        num_rows,
-        selection.clone(),
-    )?;
+) -> Result<DataBlock> {
+    let mut reader =
+        ParquetRecordBatchReader::try_new_with_row_groups(field_levels, rg, num_rows, selection)?;
     let batch = reader.next().transpose()?.unwrap();
     debug_assert!(reader.next().is_none());
-    // Topk column **must** not be in a nested column.
-    let block = transform_record_batch(&batch, &None)?;
-    debug_assert_eq!(block.num_columns(), 1);
+    transform_record_batch(&batch, field_paths)
+}
+
+#[inline]
+pub fn evaluate_topk(
+    block: DataBlock,
+    topk: &ParquetTopK,
+    selection: &mut Option<RowSelection>,
+    sorter: &mut TopKSorter,
+) -> Result<Option<DataBlock>> {
+    debug_assert!(block.num_columns() >= 1);
+    // The topk column must be the first column.
     let topk_col = block.columns()[0].value.as_column().unwrap();
+    let num_rows = topk_col.len();
     let filter = topk.evaluate_column(topk_col, sorter);
     if filter.unset_bits() == num_rows {
         // All rows are filtered out.
