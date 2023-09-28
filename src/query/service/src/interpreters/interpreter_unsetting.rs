@@ -47,7 +47,6 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let session = self.ctx.get_current_session();
 
         let settings = self.ctx.get_shared_settings();
         for var in plan.vars {
