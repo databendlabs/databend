@@ -3004,6 +3004,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-compress",
  "common-exception",
  "common-expression",
  "common-formats",
