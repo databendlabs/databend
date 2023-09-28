@@ -23,16 +23,20 @@ EvalScalar
         ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
         ├── estimated rows: 0.60
         ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
-        └── TableScan
-            ├── table: default.default.products
-            ├── output columns: [name (#0), details (#1)]
-            ├── read rows: 3
-            ├── read bytes: 370
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-            ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
-            └── estimated rows: 0.60
+        └── Filter
+            ├── output columns: [products.name (#0), products.details (#1)]
+            ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')]
+            ├── estimated rows: 0.60
+            └── TableScan
+                ├── table: default.default.products
+                ├── output columns: [name (#0), details (#1)]
+                ├── read rows: 3
+                ├── read bytes: 328
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+                ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
+                └── estimated rows: 3.00
 
 query T
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB' and all_features = '512GB';
@@ -50,16 +54,20 @@ EvalScalar
     ├── output columns: [products.name (#0), products.details (#1), json_path_query (#2)]
     ├── estimated rows: 0.60
     ├── set returning functions: json_path_query(products.details (#1), '$.features.*')
-    └── TableScan
-        ├── table: default.default.products
-        ├── output columns: [name (#0), details (#1)]
-        ├── read rows: 3
-        ├── read bytes: 370
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-        ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
-        └── estimated rows: 0.60
+    └── Filter
+        ├── output columns: [products.name (#0), products.details (#1)]
+        ├── filters: [is_true(products.name (#0) = 'Laptop'), is_true(TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')]
+        ├── estimated rows: 0.60
+        └── TableScan
+            ├── table: default.default.products
+            ├── output columns: [name (#0), details (#1)]
+            ├── read rows: 3
+            ├── read bytes: 328
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
+            ├── push downs: [filters: [and_filters(products.name (#0) = 'Laptop', TRY_CAST(json_path_query_first(products.details (#1), '$.features.*') AS String NULL) = '16GB')], limit: NONE]
+            └── estimated rows: 3.00
 
 query T
 select name, json_path_query(details, '$.features.*') as all_features, json_path_query_first(details, '$.features.*') as first_feature from products where name = 'Laptop' and first_feature = '16GB';

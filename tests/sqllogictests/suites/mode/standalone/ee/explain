@@ -276,34 +276,38 @@ query T
 EXPLAIN SELECT avg(a + 1) from t1
 ----
 EvalScalar
-├── output columns: [avg((a + 1)) (#7)]
-├── expressions: [avg((a + 1)) (#6)]
+├── output columns: [(sum((a + 1)) / if((count((a + 1)) = 0), 1, count((a + 1)))) (#11)]
+├── expressions: [sum((a + 1)) (#6) / CAST(if(CAST(count((a + 1)) (#10) = 0 AS Boolean NULL), 1, count((a + 1)) (#10)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
-└── AggregateFinal
-    ├── output columns: [avg((a + 1)) (#6)]
-    ├── group by: []
-    ├── aggregate functions: [avg(avg_arg_0)]
+└── EvalScalar
+    ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#10)]
+    ├── expressions: [count((a + 1)) (#8)]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [avg((a + 1)) (#6)]
+    └── AggregateFinal
+        ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#8)]
         ├── group by: []
-        ├── aggregate functions: [avg(avg_arg_0)]
+        ├── aggregate functions: [sum(sum_arg_0), count()]
         ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── output columns: [avg_arg_0 (#5)]
-            ├── expressions: [t1.a (#3) + 1]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_index_db.t1
-                ├── output columns: [a (#3)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
-                ├── rewritten query: [selection: [index_col_0 (#0)]]
-                └── estimated rows: 0.00
+        └── AggregatePartial
+            ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#8)]
+            ├── group by: []
+            ├── aggregate functions: [sum(sum_arg_0), count()]
+            ├── estimated rows: 1.00
+            └── EvalScalar
+                ├── output columns: [sum_arg_0 (#5)]
+                ├── expressions: [t1.a (#3) + 1]
+                ├── estimated rows: 0.00
+                └── TableScan
+                    ├── table: default.test_index_db.t1
+                    ├── output columns: [a (#3)]
+                    ├── read rows: 0
+                    ├── read bytes: 0
+                    ├── partitions total: 0
+                    ├── partitions scanned: 0
+                    ├── push downs: [filters: [], limit: NONE]
+                    ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+                    ├── rewritten query: [selection: [index_col_0 (#0), index_col_0 (#0), index_col_0 (#0)]]
+                    └── estimated rows: 0.00
 
 
 # Should not be rewritten
@@ -432,4 +436,3 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_virtual_db
-
