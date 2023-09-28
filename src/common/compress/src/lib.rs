@@ -25,3 +25,4 @@ pub use decode::DecompressCodec;
 pub use decode::DecompressDecoder;
 pub use decode::DecompressReader;
 pub use decode::DecompressState;
+pub use encode::CompressCodec;
