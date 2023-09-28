@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -27,6 +28,7 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
+use common_settings::ChangeValue;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
@@ -112,13 +114,30 @@ pub struct ExecuteStopped {
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
     pub stop_time: Instant,
-    pub session: Arc<Session>,
+    pub session_state: ExecutorSessionState,
 }
 
 pub struct Executor {
     pub query_id: String,
     pub start_time: Instant,
     pub state: ExecuteState,
+}
+
+// ExecutorSessionState is used to record the session state when the query is stopped.
+// The HTTP Query API returns the session state to the client on each request. The client
+// may store these new session state, and pass it to the next http query request.
+pub struct ExecutorSessionState {
+    pub current_database: String,
+    pub settings: HashMap<String, ChangeValue>,
+}
+
+impl ExecutorSessionState {
+    fn from(session: Arc<Session>) -> Self {
+        Self {
+            current_database: session.get_current_database(),
+            settings: session.get_changed_settings(),
+        }
+    }
 }
 
 impl Executor {
@@ -138,11 +157,11 @@ impl Executor {
         }
     }
 
-    pub fn get_session(&self) -> Arc<Session> {
+    pub fn get_session_state(&self) -> ExecutorSessionState {
         match &self.state {
-            Starting(r) => r.ctx.get_current_session(),
-            Running(r) => r.ctx.get_current_session(),
-            Stopped(r) => r.session.clone(),
+            Starting(r) => ExecutorSessionState::from(r.ctx.get_current_session()),
+            Running(r) => ExecutorSessionState::from(r.ctx.get_current_session()),
+            Stopped(r) => r.session_state.clone(),
         }
     }
 

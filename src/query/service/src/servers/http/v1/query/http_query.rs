@@ -406,9 +406,9 @@ impl HttpQuery {
     #[async_backtrace::framed]
     async fn get_response_session(&self) -> HttpSessionConf {
         let executor = self.state.read().await;
-        let session = executor.get_session();
-        let settings = session
-            .get_changed_settings()
+        let session_state = executor.get_session_state();
+        let settings = session_state
+            .settings
             .iter()
             .map(|(k, v)| (k.to_string(), v.value.as_string()))
             .collect::<BTreeMap<_, _>>();
@@ -421,7 +421,7 @@ impl HttpQuery {
 
         // TODO: add current role here
         HttpSessionConf {
-            database: Some(session.get_current_database()),
+            database: Some(session_state.current_database),
             keep_server_session_secs,
             settings: Some(settings),
         }
