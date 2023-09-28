@@ -1209,6 +1209,22 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
+            serde_json::json!({"sql": "unset max_threads", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            Some(QueryAffect::ChangeSettings {
+                keys: vec!["max_threads".to_string()],
+                values: vec!["4".to_string()], /* TODO(liyz): for backward compat, should formalize the behavior on UNSET later. */
+                is_globals: vec![false],
+            }),
+            Some(HttpSessionConf {
+                database: Some("default".to_string()),
+                keep_server_session_secs: None,
+                settings: Some(BTreeMap::from([(
+                    "timezone".to_string(),
+                    "Asia/Shanghai".to_string(),
+                )])),
+            }),
+        ),
+        (
             serde_json::json!({"sql":  "create database if not exists db2", "session": {"settings": {"max_threads": "6"}}}),
             None,
             Some(HttpSessionConf {
