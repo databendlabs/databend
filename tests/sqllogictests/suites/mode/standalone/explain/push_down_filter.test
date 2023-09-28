@@ -101,32 +101,32 @@ statement ok
 create view v1 as select t2.sid, t2.val from t2;
 
 statement ok
-create view v2 as
+create view v2 AS
 select
-	t.id as sc,
-	COALESCE(sum(tb.de), 0) AS de
+  t.id as sc,
+  coalesce(sum(tb.de), 0) as de
 from
-	t1 as t
-	left outer join (
-  	select 
-    	t3.sid,
-    	sum(COALESCE(t3.val, 0)) as de
+  t1 as t
+  left outer join (
+    select
+      t3.sid,
+      sum(coalesce(t3.val, 0)) as de
     from
-    	v1 as t3
+      v1 as t3
     group by
-    	t3.sid
+      t3.sid
   ) as tb on(tb.sid = t.id)
 group by
-	t.id
+  t.id
 union
 all
-select 
-	t.id as sc,
-	0 as de
+select
+  t.id as sc,
+  0 as de
 from
-	t1 as t
+  t1 as t
 group by
-	t.id;
+  t.id
 
 query T
 explain select distinct t.sc from v2 t where t.sc = 1;
