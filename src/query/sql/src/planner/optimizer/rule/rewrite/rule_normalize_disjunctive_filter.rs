@@ -178,7 +178,6 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
                 Arc::new(
                     Filter {
                         predicates: split_predicates,
-                        is_having: filter.is_having,
                     }
                     .into(),
                 ),
