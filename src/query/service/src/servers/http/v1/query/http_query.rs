@@ -330,7 +330,7 @@ impl HttpQuery {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
                         stop_time: Instant::now(),
-                        session_state: ExecutorSessionState::from(ctx_clone.get_current_session()),
+                        session_state: ExecutorSessionState::new(ctx_clone.get_current_session()),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(

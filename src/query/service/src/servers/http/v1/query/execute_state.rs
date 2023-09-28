@@ -133,7 +133,7 @@ pub struct ExecutorSessionState {
 }
 
 impl ExecutorSessionState {
-    fn from(session: Arc<Session>) -> Self {
+    fn new(session: Arc<Session>) -> Self {
         Self {
             current_database: session.get_current_database(),
             settings: session.get_changed_settings(),
@@ -160,8 +160,8 @@ impl Executor {
 
     pub fn get_session_state(&self) -> ExecutorSessionState {
         match &self.state {
-            Starting(r) => ExecutorSessionState::from(r.ctx.get_current_session()),
-            Running(r) => ExecutorSessionState::from(r.ctx.get_current_session()),
+            Starting(r) => ExecutorSessionState::new(r.ctx.get_current_session()),
+            Running(r) => ExecutorSessionState::new(r.ctx.get_current_session()),
             Stopped(r) => r.session_state.clone(),
         }
     }
@@ -208,7 +208,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
-                    session_state: ExecutorSessionState::from(s.ctx.get_current_session()),
+                    session_state: ExecutorSessionState::new(s.ctx.get_current_session()),
                     stop_time: Instant::now(),
                     affect: Default::default(),
                 }))
@@ -229,7 +229,7 @@ impl Executor {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
                     stop_time: Instant::now(),
-                    session_state: ExecutorSessionState::from(r.ctx.get_current_session()),
+                    session_state: ExecutorSessionState::new(r.ctx.get_current_session()),
                     affect: r.ctx.get_affect(),
                 }))
             }
