@@ -1209,18 +1209,18 @@ async fn test_affect() -> Result<()> {
             }),
         ),
         (
-            serde_json::json!({"sql": "unset max_threads", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
+            serde_json::json!({"sql": "unset timezone", "session": {"settings": {"max_threads": "6", "timezone": "Asia/Shanghai"}}}),
             Some(QueryAffect::ChangeSettings {
-                keys: vec!["max_threads".to_string()],
-                values: vec!["24".to_string()], /* TODO(liyz): for backward compat, should formalize the behavior on UNSET later. */
+                keys: vec![],
+                values: vec![], /* TODO(liyz): consider to return the complete settings after set or unset */
                 is_globals: vec![false],
             }),
             Some(HttpSessionConf {
                 database: Some("default".to_string()),
                 keep_server_session_secs: None,
                 settings: Some(BTreeMap::from([(
-                    "timezone".to_string(),
-                    "Asia/Shanghai".to_string(),
+                    "max_threads".to_string(),
+                    "6".to_string(),
                 )])),
             }),
         ),
