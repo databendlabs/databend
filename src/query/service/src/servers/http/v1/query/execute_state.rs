@@ -133,7 +133,7 @@ pub struct ExecutorSessionState {
 }
 
 impl ExecutorSessionState {
-    fn new(session: Arc<Session>) -> Self {
+    pub fn new(session: Arc<Session>) -> Self {
         Self {
             current_database: session.get_current_database(),
             settings: session.get_changed_settings(),
