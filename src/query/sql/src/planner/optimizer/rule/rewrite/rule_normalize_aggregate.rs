@@ -75,7 +75,8 @@ impl Rule for RuleNormalizeAggregate {
             if let ScalarExpr::AggregateFunction(function) = &aggregate_function.scalar {
                 if !function.distinct
                     && function.func_name == "count"
-                    && (function.args.is_empty() || !function.args[0].data_type()?.is_nullable_or_null())
+                    && (function.args.is_empty()
+                        || !function.args[0].data_type()?.is_nullable_or_null())
                 {
                     if work_expr.is_none() {
                         let mut new_function = function.clone();
