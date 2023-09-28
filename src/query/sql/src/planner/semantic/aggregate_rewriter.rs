@@ -50,7 +50,7 @@ impl VisitorMut for AggregateRewriter {
 }
 
 impl AggregateRewriter {
-    fn rewrite_sum(&self, args: &mut Vec<Expr>) -> Option<Expr> {
+    fn rewrite_sum(&self, args: &[Expr]) -> Option<Expr> {
         match &args[0] {
             Expr::BinaryOp {
                 op, left, right, ..
@@ -82,14 +82,15 @@ impl AggregateRewriter {
         None
     }
 
-    fn rewrite_avg(&self, args: &mut Vec<Expr>) -> Option<Expr> {
-        if let Expr::ColumnRef { .. } = &args[0] {
-            let text = format!("sum({}) / if(count() = 0, 1, count())", args[0]);
+    fn rewrite_avg(&self, args: &[Expr]) -> Option<Expr> {
+        let text = format!(
+            "sum({}) / if(count({}) = 0, 1, count({}))",
+            args[0], args[0], args[0]
+        );
 
-            if let Ok(tokens) = tokenize_sql(&text) {
-                if let Ok(new_expr) = parse_expr(&tokens, self.sql_dialect) {
-                    return Some(new_expr);
-                }
+        if let Ok(tokens) = tokenize_sql(&text) {
+            if let Ok(new_expr) = parse_expr(&tokens, self.sql_dialect) {
+                return Some(new_expr);
             }
         }
 

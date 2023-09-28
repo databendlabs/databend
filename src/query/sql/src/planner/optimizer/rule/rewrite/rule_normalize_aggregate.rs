@@ -15,26 +15,19 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::Scalar;
 
-use crate::optimizer::rule::constant::is_falsy;
-use crate::optimizer::rule::constant::is_true;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
-use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
-use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::ColumnBinding;
-use crate::IndexType;
 use crate::Visibility;
 
 pub struct RuleNormalizeAggregate {
@@ -80,22 +73,23 @@ impl Rule for RuleNormalizeAggregate {
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());
         for aggregate_function in &aggregate.aggregate_functions {
             if let ScalarExpr::AggregateFunction(function) = &aggregate_function.scalar {
-                if !function.distinct && function.func_name == "count" {
-                    if function.args.is_empty() || !function.args[0].data_type()?.is_nullable() {
-                        if work_expr.is_none() {
-                            let mut new_function = function.clone();
-                            new_function.args = vec![];
+                if !function.distinct
+                    && function.func_name == "count"
+                    && (function.args.is_empty() || !function.args[0].data_type()?.is_nullable())
+                {
+                    if work_expr.is_none() {
+                        let mut new_function = function.clone();
+                        new_function.args = vec![];
 
-                            work_expr = Some((aggregate_function.index, function.clone()));
-                            new_aggregate_functions.push(ScalarItem {
-                                index: aggregate_function.index,
-                                scalar: ScalarExpr::AggregateFunction(new_function),
-                            });
-                        }
-
-                        alias_functions_index.push((aggregate_function.index, function.clone()));
-                        continue;
+                        work_expr = Some((aggregate_function.index, function.clone()));
+                        new_aggregate_functions.push(ScalarItem {
+                            index: aggregate_function.index,
+                            scalar: ScalarExpr::AggregateFunction(new_function),
+                        });
                     }
+
+                    alias_functions_index.push((aggregate_function.index, function.clone()));
+                    continue;
                 }
             }
 
