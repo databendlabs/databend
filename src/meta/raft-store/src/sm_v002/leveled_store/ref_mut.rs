@@ -44,7 +44,7 @@ impl<'d> RefMut<'d> {
     }
 
     #[allow(dead_code)]
-    pub(in crate::sm_v002) fn to_leveled_ref(&self) -> Ref {
+    pub(in crate::sm_v002) fn to_ref(&self) -> Ref {
         Ref::new(Some(&*self.writable), self.frozen)
     }
 
