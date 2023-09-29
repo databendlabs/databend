@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::fmt;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use futures_util::stream::BoxStream;
 
@@ -23,50 +23,37 @@ use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::ref_::Ref;
+use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
 use crate::sm_v002::marked::Marked;
 
-/// A readonly leveled map that owns the data.
-#[derive(Debug, Default, Clone)]
-pub struct StaticLeveledMap {
-    /// From oldest to newest, i.e., levels[0] is the oldest
-    levels: Vec<Arc<Level>>,
+/// A readonly leveled map that does not not own the data.
+#[derive(Debug)]
+pub struct Ref<'d> {
+    /// The top level is the newest and writable.
+    writable: Option<&'d Level>,
+
+    /// The immutable levels.
+    frozen: &'d StaticLeveledMap,
 }
 
-impl StaticLeveledMap {
-    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<Level>>) -> Self {
-        Self {
-            levels: levels.into_iter().collect(),
-        }
+impl<'d> Ref<'d> {
+    pub(in crate::sm_v002) fn new(
+        writable: Option<&'d Level>,
+        frozen: &'d StaticLeveledMap,
+    ) -> Ref<'d> {
+        Self { writable, frozen }
     }
 
-    /// Return an iterator of all levels from newest to oldest.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
-        self.levels.iter().map(|x| x.as_ref()).rev()
-    }
-
-    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<Level>> {
-        self.levels.last()
-    }
-
-    pub(in crate::sm_v002) fn push(&mut self, level: Arc<Level>) {
-        self.levels.push(level);
-    }
-
-    pub(in crate::sm_v002) fn len(&self) -> usize {
-        self.levels.len()
-    }
-
-    #[allow(dead_code)]
-    pub(in crate::sm_v002) fn to_ref(&self) -> Ref<'_> {
-        Ref::new(None, self)
+    /// Return an iterator of all levels in reverse order.
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d Level> + 'd {
+        self.writable.into_iter().chain(self.frozen.iter_levels())
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for StaticLeveledMap
+impl<'d, K> MapApiRO<K> for Ref<'d>
 where
-    K: MapKey,
+    K: MapKey + fmt::Debug,
     Level: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
@@ -81,8 +68,8 @@ where
     async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
         K: Borrow<Q>,
-        Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
+        Q: Ord + Send + Sync + ?Sized,
     {
         let levels = self.iter_levels();
         compacted_range(range, levels).await
