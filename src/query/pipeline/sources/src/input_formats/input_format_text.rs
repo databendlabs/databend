@@ -452,6 +452,9 @@ impl<T: InputFormatTextBase> InputFormat for T {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct RowBatch {
+    /// row[i] starts at row_ends[i-1] and ends at row_ends[i]
+    /// has num_fields[i] fields
+    /// field[j] starts at field_ends[i-1][j] and ends at field_ends[i-1][j]
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
