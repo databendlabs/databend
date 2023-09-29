@@ -17,13 +17,13 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 
 use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::leveled_map::LeveledRef;
+use crate::sm_v002::leveled_store::map_api::compacted_get;
+use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
 #[derive(Debug, Default, Clone)]
@@ -55,6 +55,10 @@ impl StaticLeveledMap {
     pub(in crate::sm_v002) fn len(&self) -> usize {
         self.levels.len()
     }
+
+    pub(in crate::sm_v002) fn to_ref(&self) -> LeveledRef<'_> {
+        LeveledRef::new(None, self)
+    }
 }
 
 #[async_trait::async_trait]
@@ -68,15 +72,8 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        // TODO: use LeveledRef
-        for level_data in self.iter_levels() {
-            // let got = <&LevelData as MapApiRO<'_, '_, K>>::get(level_data, key).await;
-            let got = level_data.get(key).await;
-            if !got.is_not_found() {
-                return got;
-            }
-        }
-        Marked::empty()
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
     async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
@@ -85,18 +82,7 @@ where
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        // TODO: use LeveledRef
-        let mut km = KMerge::by(util::by_key_seq::<K, K::V>);
-
-        for api in self.iter_levels() {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // keep one of the entries with the same key, which has larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-        x
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
     }
 }

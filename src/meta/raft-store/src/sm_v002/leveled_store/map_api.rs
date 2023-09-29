@@ -18,7 +18,11 @@ use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
+use stream_more::KMerge;
+use stream_more::StreamMore;
 
+use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
 /// MapKey defines the behavior of a key in a map.
@@ -137,4 +141,55 @@ impl MapApiExt {
 
         s.set(key, Some((value, meta.cloned()))).await
     }
+}
+
+/// Get a key from multi levels data.
+///
+/// Returns the first non-tombstone entry.
+pub(in crate::sm_v002) async fn compacted_get<'d, K, Q>(
+    key: &Q,
+    levels: impl Iterator<Item = &'d LevelData>,
+) -> Marked<K::V>
+where
+    K: MapKey,
+    K: Borrow<Q>,
+    Q: Ord + Send + Sync + ?Sized,
+    LevelData: MapApiRO<K>,
+{
+    for lvl in levels {
+        let got = lvl.get(key).await;
+        if !got.is_not_found() {
+            return got;
+        }
+    }
+    Marked::empty()
+}
+
+/// Iterate over a range of entries by keys from multi levels.
+///
+/// The returned iterator contains at most one entry for each key.
+/// There could be tombstone entries: [`Marked::TombStone`]
+pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R>(
+    range: R,
+    levels: impl Iterator<Item = &'d LevelData>,
+) -> BoxStream<'d, (K, Marked<K::V>)>
+where
+    K: MapKey,
+    K: Borrow<Q>,
+    R: RangeBounds<Q> + Clone + Send + Sync,
+    Q: Ord + Send + Sync + ?Sized,
+    LevelData: MapApiRO<K>,
+{
+    let mut kmerge = KMerge::by(util::by_key_seq);
+
+    for lvl in levels {
+        let strm = lvl.range(range.clone()).await;
+        kmerge = kmerge.merge(strm);
+    }
+
+    // Merge entries with the same key, keep the one with larger internal-seq
+    let m = kmerge.coalesce(util::choose_greater);
+
+    let strm: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
+    strm
 }

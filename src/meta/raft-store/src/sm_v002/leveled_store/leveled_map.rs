@@ -19,22 +19,21 @@ use std::sync::Arc;
 
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 
 use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::map_api::compacted_get;
+use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
-use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
 /// A readonly leveled map store that does not not own the data.
 #[derive(Debug)]
 pub struct LeveledRef<'d> {
     /// The top level is the newest and writable.
-    writable: &'d LevelData,
+    writable: Option<&'d LevelData>,
 
     /// The immutable levels.
     frozen: &'d StaticLeveledMap,
@@ -42,7 +41,7 @@ pub struct LeveledRef<'d> {
 
 impl<'d> LeveledRef<'d> {
     pub(in crate::sm_v002) fn new(
-        writable: &'d LevelData,
+        writable: Option<&'d LevelData>,
         frozen: &'d StaticLeveledMap,
     ) -> LeveledRef<'d> {
         Self { writable, frozen }
@@ -50,7 +49,7 @@ impl<'d> LeveledRef<'d> {
 
     /// Return an iterator of all levels in reverse order.
     pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d LevelData> + 'd {
-        [self.writable].into_iter().chain(self.frozen.iter_levels())
+        self.writable.into_iter().chain(self.frozen.iter_levels())
     }
 }
 
@@ -58,22 +57,15 @@ impl<'d> LeveledRef<'d> {
 impl<'d, K> MapApiRO<K> for LeveledRef<'d>
 where
     K: MapKey + fmt::Debug,
-    // &'d LevelData: MapApiRO<K>,
     LevelData: MapApiRO<K>,
-    // &'him LevelData: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        for level_data in self.iter_levels() {
-            let got = level_data.get(key).await;
-            if !got.is_not_found() {
-                return got;
-            }
-        }
-        Marked::empty()
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
     async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
@@ -82,23 +74,8 @@ where
         R: RangeBounds<Q> + Clone + Send + Sync,
         Q: Ord + Send + Sync + ?Sized,
     {
-        // TODO: &LeveledRef use LeveledRef
-
         let levels = self.iter_levels();
-
-        let mut km = KMerge::by(util::by_key_seq);
-
-        // for api in levels {
-        for api in levels {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-        x
+        compacted_range(range, levels).await
     }
 }
 
@@ -123,7 +100,7 @@ impl<'d> LeveledRefMut<'d> {
     pub(in crate::sm_v002) fn to_leveled_ref<'me>(&'me self) -> LeveledRef<'me> {
         // LeveledRef::new(self.writable, self.frozen)
         LeveledRef::<'me> {
-            writable: self.writable,
+            writable: Some(&*self.writable),
             frozen: self.frozen,
         }
     }
@@ -149,7 +126,8 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.to_leveled_ref().get(key).await
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
     async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
@@ -158,23 +136,8 @@ where
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        // TODO: remove this dup impl
-
         let levels = self.iter_levels();
-
-        let mut km = KMerge::by(util::by_key_seq);
-
-        // for api in levels {
-        for api in levels {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-        x
+        compacted_range(range, levels).await
     }
 }
 
@@ -193,7 +156,6 @@ where
         K: Ord,
     {
         // Get from this level or the base level.
-        // let prev = MapApiRO::<'a, String>::get(self, &key).await.clone();
         let x = self.to_leveled_ref();
         let prev = x.get(&key).await.clone();
 
@@ -274,7 +236,7 @@ impl LeveledMap {
     }
 
     pub(crate) fn leveled_ref(&self) -> LeveledRef {
-        LeveledRef::new(&self.writable, &self.frozen)
+        LeveledRef::new(Some(&self.writable), &self.frozen)
     }
 }
 
@@ -289,7 +251,8 @@ where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        self.leveled_ref().get(key).await
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
     async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
@@ -298,23 +261,8 @@ where
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        // TODO: remove this dup impl
-
         let levels = self.iter_levels();
-
-        let mut km = KMerge::by(util::by_key_seq);
-
-        // for api in levels {
-        for api in levels {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        let x: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-        x
+        compacted_range(range, levels).await
     }
 }
 
