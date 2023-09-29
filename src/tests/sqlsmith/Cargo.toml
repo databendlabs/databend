@@ -29,5 +29,5 @@ common-io = { path = "../../common/io" }
 common-sql = { path = "../../query/sql" }
 
 [[bin]]
-name = "sqlsmith"
+name = "databend-sqlsmith"
 path = "src/bin/main.rs"
