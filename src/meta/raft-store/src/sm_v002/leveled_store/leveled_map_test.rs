@@ -50,7 +50,7 @@ async fn test_freeze() -> anyhow::Result<()> {
     // Listing from the base level sees the old value.
     let frozen = l.frozen_ref();
 
-    let got = MapApiRO::<String>::range(&frozen.to_ref(), s("")..)
+    let got = MapApiRO::<String>::range(frozen, s("")..)
         .await
         .collect::<Vec<_>>()
         .await;

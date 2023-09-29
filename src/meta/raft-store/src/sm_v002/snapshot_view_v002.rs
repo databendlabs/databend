@@ -93,8 +93,7 @@ impl SnapshotViewV002 {
         let mut data = self.compacted.newest().unwrap().new_level();
 
         // `range()` will compact tombstone internally
-        let r = &self.compacted.to_ref();
-        let strm = MapApiRO::<String>::range::<String, _>(r, ..)
+        let strm = MapApiRO::<String>::range::<String, _>(&self.compacted, ..)
             .await
             .filter(|(_k, v)| {
                 let x = !v.is_tomb_stone();
@@ -106,11 +105,12 @@ impl SnapshotViewV002 {
         data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
-        let r = &self.compacted.to_ref();
-        let strm = MapApiRO::<ExpireKey>::range(r, ..).await.filter(|(_k, v)| {
-            let x = !v.is_tomb_stone();
-            async move { x }
-        });
+        let strm = MapApiRO::<ExpireKey>::range(&self.compacted, ..)
+            .await
+            .filter(|(_k, v)| {
+                let x = !v.is_tomb_stone();
+                async move { x }
+            });
 
         let bt = strm.collect().await;
 

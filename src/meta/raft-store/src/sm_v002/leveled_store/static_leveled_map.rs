@@ -56,6 +56,7 @@ impl StaticLeveledMap {
         self.levels.len()
     }
 
+    #[allow(dead_code)]
     pub(in crate::sm_v002) fn to_ref(&self) -> LeveledRef<'_> {
         LeveledRef::new(None, self)
     }

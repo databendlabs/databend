@@ -97,6 +97,7 @@ impl<'d> LeveledRefMut<'d> {
         Self { writable, frozen }
     }
 
+    #[allow(dead_code)]
     pub(in crate::sm_v002) fn to_leveled_ref<'me>(&'me self) -> LeveledRef<'me> {
         // LeveledRef::new(self.writable, self.frozen)
         LeveledRef::<'me> {
@@ -156,8 +157,7 @@ where
         K: Ord,
     {
         // Get from this level or the base level.
-        let x = self.to_leveled_ref();
-        let prev = x.get(&key).await.clone();
+        let prev = self.get(&key).await.clone();
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.is_not_found() && value.is_none() {
