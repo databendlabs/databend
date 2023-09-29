@@ -39,7 +39,7 @@ impl MapKey for ExpireKey {
 ///
 /// State machine data is composed of multiple levels.
 #[derive(Debug, Default)]
-pub struct LevelData {
+pub struct Level {
     /// System data(non-user data).
     sys_data: SysData,
 
@@ -50,7 +50,7 @@ pub struct LevelData {
     expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
-impl LevelData {
+impl Level {
     /// Create a new level that is based on this level.
     pub(crate) fn new_level(&self) -> Self {
         Self {
@@ -82,7 +82,7 @@ impl LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<String> for LevelData {
+impl MapApiRO<String> for Level {
     async fn get<Q>(&self, key: &Q) -> Marked<<String as MapKey>::V>
     where
         String: Borrow<Q>,
@@ -106,7 +106,7 @@ impl MapApiRO<String> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApi<String> for LevelData {
+impl MapApi<String> for Level {
     async fn set(
         &mut self,
         key: String,
@@ -133,7 +133,7 @@ impl MapApi<String> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApiRO<ExpireKey> for LevelData {
+impl MapApiRO<ExpireKey> for Level {
     async fn get<Q>(&self, key: &Q) -> Marked<<ExpireKey as MapKey>::V>
     where
         ExpireKey: Borrow<Q>,
@@ -161,7 +161,7 @@ impl MapApiRO<ExpireKey> for LevelData {
 }
 
 #[async_trait::async_trait]
-impl MapApi<ExpireKey> for LevelData {
+impl MapApi<ExpireKey> for Level {
     async fn set(
         &mut self,
         key: ExpireKey,
@@ -186,7 +186,7 @@ impl MapApi<ExpireKey> for LevelData {
     }
 }
 
-impl AsRef<SysData> for LevelData {
+impl AsRef<SysData> for Level {
     fn as_ref(&self) -> &SysData {
         &self.sys_data
     }

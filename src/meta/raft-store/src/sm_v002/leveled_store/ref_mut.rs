@@ -18,7 +18,7 @@ use std::ops::RangeBounds;
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApi;
@@ -28,21 +28,18 @@ use crate::sm_v002::leveled_store::ref_::Ref;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
 use crate::sm_v002::marked::Marked;
 
-/// A writable leveled map store that does not not own the data.
+/// A writable leveled map that does not not own the data.
 #[derive(Debug)]
 pub struct RefMut<'d> {
     /// The top level is the newest and writable.
-    writable: &'d mut LevelData,
+    writable: &'d mut Level,
 
     /// The immutable levels.
     frozen: &'d StaticLeveledMap,
 }
 
 impl<'d> RefMut<'d> {
-    pub(in crate::sm_v002) fn new(
-        writable: &'d mut LevelData,
-        frozen: &'d StaticLeveledMap,
-    ) -> Self {
+    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLeveledMap) -> Self {
         Self { writable, frozen }
     }
 
@@ -52,7 +49,7 @@ impl<'d> RefMut<'d> {
     }
 
     /// Return an iterator of all levels in new-to-old order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ LevelData> + '_ {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'_ Level> + '_ {
         [&*self.writable]
             .into_iter()
             .chain(self.frozen.iter_levels())
@@ -65,7 +62,7 @@ impl<'d> RefMut<'d> {
 impl<'d, K> MapApiRO<K> for RefMut<'d>
 where
     K: MapKey,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
@@ -91,7 +88,7 @@ where
 impl<'d, K> MapApi<K> for RefMut<'d>
 where
     K: MapKey,
-    LevelData: MapApi<K>,
+    Level: MapApi<K>,
 {
     async fn set(
         &mut self,

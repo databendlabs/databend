@@ -18,7 +18,7 @@ use std::ops::RangeBounds;
 
 use futures_util::stream::BoxStream;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
@@ -26,11 +26,11 @@ use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
 use crate::sm_v002::marked::Marked;
 
-/// A readonly leveled map store that does not not own the data.
+/// A readonly leveled map that does not not own the data.
 #[derive(Debug)]
 pub struct Ref<'d> {
     /// The top level is the newest and writable.
-    writable: Option<&'d LevelData>,
+    writable: Option<&'d Level>,
 
     /// The immutable levels.
     frozen: &'d StaticLeveledMap,
@@ -38,14 +38,14 @@ pub struct Ref<'d> {
 
 impl<'d> Ref<'d> {
     pub(in crate::sm_v002) fn new(
-        writable: Option<&'d LevelData>,
+        writable: Option<&'d Level>,
         frozen: &'d StaticLeveledMap,
     ) -> Ref<'d> {
         Self { writable, frozen }
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d LevelData> + 'd {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &'d Level> + 'd {
         self.writable.into_iter().chain(self.frozen.iter_levels())
     }
 }
@@ -54,7 +54,7 @@ impl<'d> Ref<'d> {
 impl<'d, K> MapApiRO<K> for Ref<'d>
 where
     K: MapKey + fmt::Debug,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where

@@ -21,7 +21,7 @@ use futures_util::stream::BoxStream;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
@@ -148,13 +148,13 @@ impl MapApiExt {
 /// Returns the first non-tombstone entry.
 pub(in crate::sm_v002) async fn compacted_get<'d, K, Q>(
     key: &Q,
-    levels: impl Iterator<Item = &'d LevelData>,
+    levels: impl Iterator<Item = &'d Level>,
 ) -> Marked<K::V>
 where
     K: MapKey,
     K: Borrow<Q>,
     Q: Ord + Send + Sync + ?Sized,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     for lvl in levels {
         let got = lvl.get(key).await;
@@ -171,14 +171,14 @@ where
 /// There could be tombstone entries: [`Marked::TombStone`]
 pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R>(
     range: R,
-    levels: impl Iterator<Item = &'d LevelData>,
+    levels: impl Iterator<Item = &'d Level>,
 ) -> BoxStream<'d, (K, Marked<K::V>)>
 where
     K: MapKey,
     K: Borrow<Q>,
     R: RangeBounds<Q> + Clone + Send + Sync,
     Q: Ord + Send + Sync + ?Sized,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     let mut kmerge = KMerge::by(util::by_key_seq);
 

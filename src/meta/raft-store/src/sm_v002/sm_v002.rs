@@ -50,7 +50,7 @@ use tokio::sync::RwLock;
 
 use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiExt;
@@ -204,7 +204,7 @@ impl SMV002 {
         Ok(())
     }
 
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<LevelData, MetaBytesError> {
+    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, MetaBytesError> {
         let mut importer = Self::new_importer();
 
         for ent in data {

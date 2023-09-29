@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use futures_util::stream::BoxStream;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
@@ -26,29 +26,30 @@ use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
 use crate::sm_v002::marked::Marked;
 
+/// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
 pub struct StaticLeveledMap {
     /// From oldest to newest, i.e., levels[0] is the oldest
-    levels: Vec<Arc<LevelData>>,
+    levels: Vec<Arc<Level>>,
 }
 
 impl StaticLeveledMap {
-    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<LevelData>>) -> Self {
+    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<Level>>) -> Self {
         Self {
             levels: levels.into_iter().collect(),
         }
     }
 
     /// Return an iterator of all levels from newest to oldest.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         self.levels.iter().map(|x| x.as_ref()).rev()
     }
 
-    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<LevelData>> {
+    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<Level>> {
         self.levels.last()
     }
 
-    pub(in crate::sm_v002) fn push(&mut self, level: Arc<LevelData>) {
+    pub(in crate::sm_v002) fn push(&mut self, level: Arc<Level>) {
         self.levels.push(level);
     }
 
@@ -66,7 +67,7 @@ impl StaticLeveledMap {
 impl<K> MapApiRO<K> for StaticLeveledMap
 where
     K: MapKey,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where

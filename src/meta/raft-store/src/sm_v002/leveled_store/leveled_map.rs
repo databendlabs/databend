@@ -20,7 +20,7 @@ use std::sync::Arc;
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApi;
@@ -40,7 +40,7 @@ use crate::sm_v002::marked::Marked;
 #[derive(Debug, Default)]
 pub struct LeveledMap {
     /// The top level is the newest and writable.
-    writable: LevelData,
+    writable: Level,
 
     /// The immutable levels, from the oldest to the newest.
     /// levels[0] is the bottom and oldest level.
@@ -48,7 +48,7 @@ pub struct LeveledMap {
 }
 
 impl LeveledMap {
-    pub(crate) fn new(writable: LevelData) -> Self {
+    pub(crate) fn new(writable: Level) -> Self {
         Self {
             writable,
             frozen: Default::default(),
@@ -56,7 +56,7 @@ impl LeveledMap {
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         [&self.writable]
             .into_iter()
             .chain(self.frozen.iter_levels())
@@ -73,12 +73,12 @@ impl LeveledMap {
     }
 
     /// Return an immutable reference to the top level i.e., the writable level.
-    pub fn writable_ref(&self) -> &LevelData {
+    pub fn writable_ref(&self) -> &Level {
         &self.writable
     }
 
     /// Return a mutable reference to the top level i.e., the writable level.
-    pub fn writable_mut(&mut self) -> &mut LevelData {
+    pub fn writable_mut(&mut self) -> &mut Level {
         &mut self.writable
     }
 
@@ -105,7 +105,7 @@ impl LeveledMap {
 impl<K> MapApiRO<K> for LeveledMap
 where
     K: MapKey + fmt::Debug,
-    LevelData: MapApiRO<K>,
+    Level: MapApiRO<K>,
 {
     async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
@@ -131,7 +131,7 @@ where
 impl<K> MapApi<K> for LeveledMap
 where
     K: MapKey,
-    LevelData: MapApi<K>,
+    Level: MapApi<K>,
 {
     async fn set(
         &mut self,
