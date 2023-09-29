@@ -231,7 +231,7 @@ impl LeveledMap {
         self.frozen = b;
     }
 
-    pub(crate) fn leveled_ref_mut<'s>(&'s mut self) -> LeveledRefMut<'s> {
+    pub(crate) fn leveled_ref_mut(&mut self) -> LeveledRefMut {
         LeveledRefMut::new(&mut self.writable, &self.frozen)
     }
 

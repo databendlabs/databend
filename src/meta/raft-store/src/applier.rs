@@ -199,7 +199,7 @@ impl<'a> Applier<'a> {
     pub(crate) async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv_primary_index(&upsert_kv).await;
+        let (prev, result) = self.sm.upsert_kv_primary_index(upsert_kv).await;
 
         self.sm
             .update_expire_index(&upsert_kv.key, &prev, &result)

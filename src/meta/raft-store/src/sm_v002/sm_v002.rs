@@ -227,6 +227,7 @@ impl SMV002 {
         &self.blocking_config
     }
 
+    #[allow(dead_code)]
     pub(crate) fn new_applier(&mut self) -> Applier {
         Applier::new(self)
     }

@@ -98,8 +98,8 @@ pub(in crate::sm_v002) struct MapApiExt;
 impl MapApiExt {
     /// Update only the meta associated to an entry and keeps the value unchanged.
     /// If the entry does not exist, nothing is done.
-    pub(in crate::sm_v002) async fn update_meta<'d, K, T>(
-        s: &'d mut T,
+    pub(in crate::sm_v002) async fn update_meta<K, T>(
+        s: &mut T,
         key: K,
         meta: Option<KVMeta>,
     ) -> (Marked<K::V>, Marked<K::V>)
@@ -122,8 +122,8 @@ impl MapApiExt {
     /// Update only the value and keeps the meta unchanged.
     /// If the entry does not exist, create one.
     #[allow(dead_code)]
-    pub(in crate::sm_v002) async fn upsert_value<'d, K, T>(
-        s: &'d mut T,
+    pub(in crate::sm_v002) async fn upsert_value<K, T>(
+        s: &mut T,
         key: K,
         value: K::V,
     ) -> (Marked<K::V>, Marked<K::V>)
