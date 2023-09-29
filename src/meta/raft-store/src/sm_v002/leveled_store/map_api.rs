@@ -158,7 +158,7 @@ where
 {
     for lvl in levels {
         let got = lvl.get(key).await;
-        if !got.is_not_found() {
+        if !got.not_found() {
             return got;
         }
     }

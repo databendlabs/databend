@@ -156,8 +156,8 @@ impl<T> Marked<T> {
         }
     }
 
-    /// Not a normal entry or a tombstone.
-    pub fn is_not_found(&self) -> bool {
+    /// Return if the entry is neither a normal entry nor a tombstone.
+    pub fn not_found(&self) -> bool {
         matches!(self, Marked::TombStone {
             internal_seq: 0,
             ..
