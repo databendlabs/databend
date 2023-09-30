@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use bytes::Bytes;
 use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
@@ -118,7 +119,7 @@ impl BlockReader {
                     need_default_vals.push(true);
                 }
                 Some(v) => {
-                    deserialized_column_arrays.push(v);
+                    deserialized_column_arrays.push((v, column_node.field.clone()));
                     need_default_vals.push(false);
                 }
             }
@@ -126,7 +127,7 @@ impl BlockReader {
 
         // assembly the arrays
         let mut chunk_arrays = vec![];
-        for array in &deserialized_column_arrays {
+        for (array, _field) in &deserialized_column_arrays {
             match array {
                 DeserializedArray::Deserialized((_, array, ..)) => {
                     chunk_arrays.push(array);
@@ -163,9 +164,39 @@ impl BlockReader {
         };
 
         // populate cache if necessary
+        if let Some(cache) = CacheManager::instance().get_table_data_cache() {
+            // populate array cache items
+            for (item, field) in deserialized_column_arrays.iter() {
+                if let DeserializedArray::Deserialized((column_id, array, _size)) = item {
+                    let meta = column_metas.get(&column_id).unwrap();
+                    let (offset, len) = meta.offset_length();
+                    let key = TableDataCacheKey::new(block_path, *column_id, offset, len);
+
+                    let bytes = {
+                        let mut file = Vec::new();
+                        use common_arrow::arrow::datatypes::Schema;
+                        use common_arrow::arrow::io::ipc::write;
+
+                        // TODO make compression configable
+                        let schema = Schema::from(vec![field.clone()]);
+                        let options = write::WriteOptions { compression: None };
+                        let mut writer = write::FileWriter::new(&mut file, schema, None, options);
+                        writer.start()?;
+                        let chunk = Chunk::try_new(vec![array.clone()])?;
+                        writer.write(&chunk, None)?;
+                        writer.finish()?;
+                        file
+                    };
+
+                    cache.put(key.into(), Arc::new(Bytes::from(bytes)))
+                }
+            }
+        }
+
+        // populate cache if necessary
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
             // populate array cache items
-            for item in deserialized_column_arrays.into_iter() {
+            for (item, _field) in deserialized_column_arrays.into_iter() {
                 if let DeserializedArray::Deserialized((column_id, array, size)) = item {
                     let meta = column_metas.get(&column_id).unwrap();
                     let (offset, len) = meta.offset_length();
@@ -228,6 +259,16 @@ impl BlockReader {
                             field_column_data.push(data.as_ref());
                             field_column_descriptors.push(column_descriptor.clone());
                             field_uncompressed_size += data.len();
+                        }
+                        DataItem::ArrowIpc(column_array) => {
+                            if is_nested {
+                                // TODO more context info for error message
+                                return Err(ErrorCode::StorageOther(
+                                    "unexpected nested field: nested leaf field hits cached",
+                                ));
+                            }
+                            // since it is not nested, one column is enough
+                            return Ok(Some(DeserializedArray::Cached(column_array)));
                         }
                         DataItem::ColumnArray(column_array) => {
                             if is_nested {

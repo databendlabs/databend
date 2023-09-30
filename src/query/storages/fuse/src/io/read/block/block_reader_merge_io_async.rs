@@ -160,12 +160,43 @@ impl BlockReader {
                 if let Some(cache_array) = column_array_cache.get(&column_cache_key) {
                     cached_column_array.push((*column_id, cache_array));
                     need_real_io_read = false;
+                    continue;
                 }
 
                 // and then, check column data cache
                 if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
-                    cached_column_data.push((*column_id, cached_column_raw_data));
+                    let array = {
+                        // TODO just a proof of concept, need to refactor:
+                        // deserialize the cached column data to arrow array using arrow ipc format
+                        use bytes::Bytes;
+                        use common_arrow::arrow::io::ipc::read;
+                        let mut file = std::io::Cursor::<&Bytes>::new(&cached_column_raw_data);
+                        let metadata = read::read_file_metadata(&mut file)?;
+                        let dictionaries = read::read_file_dictionaries(
+                            &mut file,
+                            &metadata,
+                            &mut Default::default(),
+                        )?;
+                        // only on chunk inside
+                        let chunk_index = 0;
+                        let chunk = read::read_batch(
+                            &mut file,
+                            &dictionaries,
+                            &metadata,
+                            None,
+                            None,
+                            chunk_index,
+                            &mut Default::default(),
+                            &mut Default::default(),
+                        )?;
+                        // only 1 Array inside
+                        chunk.into_arrays().remove(0)
+                    };
+
+                    let cache_item = std::sync::Arc::new((array, cached_column_raw_data.len()));
+                    cached_column_data.push((*column_id, cache_item));
                     need_real_io_read = false;
+                    continue;
                 }
 
                 if !need_real_io_read {

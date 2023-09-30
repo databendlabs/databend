@@ -50,13 +50,13 @@ impl OwnerMemory {
     }
 }
 
-type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
+// type CachedColumnData = Vec<(ColumnId, Arc<Bytes>)>;
 type CachedColumnArray = Vec<(ColumnId, Arc<SizedColumnArray>)>;
 pub struct MergeIOReadResult {
     block_path: String,
     columns_chunk_offsets: HashMap<ColumnId, (usize, Range<usize>)>,
     owner_memory: OwnerMemory,
-    pub cached_column_data: CachedColumnData,
+    pub cached_column_data: CachedColumnArray,
     pub cached_column_array: CachedColumnArray,
     table_data_cache: Option<TableDataCache>,
 }
@@ -64,6 +64,7 @@ pub struct MergeIOReadResult {
 #[derive(EnumAsInner)]
 pub enum DataItem<'a> {
     RawData(Bytes),
+    ArrowIpc(&'a Arc<SizedColumnArray>),
     ColumnArray(&'a Arc<SizedColumnArray>),
 }
 
@@ -95,8 +96,7 @@ impl MergeIOReadResult {
 
         // merge column data from cache
         for (column_id, data) in &self.cached_column_data {
-            let data = data.as_ref();
-            res.insert(*column_id, DataItem::RawData(data.clone()));
+            res.insert(*column_id, DataItem::ArrowIpc(data));
         }
 
         // merge column array from cache
@@ -116,11 +116,11 @@ impl MergeIOReadResult {
             res.insert(*column_id, chunk.slice(range.clone()));
         }
 
-        // merge column data from cache
-        for (column_id, data) in &self.cached_column_data {
-            let data = data.as_ref();
-            res.insert(*column_id, data.clone());
-        }
+        //// merge column data from cache
+        // for (column_id, data) in &self.cached_column_data {
+        //    let data = data.as_ref();
+        //    res.insert(*column_id, data.clone());
+        //}
 
         Ok(res)
     }
@@ -136,19 +136,19 @@ impl MergeIOReadResult {
         column_range: Range<u64>,
         range: Range<usize>,
     ) {
-        if let Some(table_data_cache) = &self.table_data_cache {
-            // populate raw column data cache (compressed raw bytes)
-            if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
-                let cache_key = TableDataCacheKey::new(
-                    &self.block_path,
-                    column_id,
-                    column_range.start,
-                    column_range.end - column_range.start,
-                );
-                let data = chunk_data.slice(range.clone());
-                table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data));
-            }
-        }
+        // if let Some(table_data_cache) = &self.table_data_cache {
+        //    // populate raw column data cache (compressed raw bytes)
+        //    if let Ok(chunk_data) = self.get_chunk(chunk_index, &self.block_path) {
+        //        let cache_key = TableDataCacheKey::new(
+        //            &self.block_path,
+        //            column_id,
+        //            column_range.start,
+        //            column_range.end - column_range.start,
+        //        );
+        //        let data = chunk_data.slice(range.clone());
+        //        table_data_cache.put(cache_key.as_ref().to_owned(), Arc::new(data));
+        //    }
+        //}
         self.columns_chunk_offsets
             .insert(column_id, (chunk_index, range));
     }
