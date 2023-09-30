@@ -429,27 +429,27 @@ fn eval_arg_type(args: &[DataType]) -> DecimalDataType {
             DataType::Number(num_type) => match num_type {
                 NumberDataType::Float32 => {
                     precision = max(precision, 38);
-                    scale = max(precision, 18);
+                    scale = max(scale, 18);
                 }
                 NumberDataType::Float64 => {
                     precision = max(precision, 38);
-                    scale = max(precision, 18);
+                    scale = max(scale, 18);
                 }
                 _ => {
                     if let Some(size) = NumberDataType::UInt64.get_decimal_properties() {
                         precision = max(precision, size.precision);
-                        scale = max(precision, size.scale);
+                        scale = max(scale, size.scale);
                     }
                 }
             },
             DataType::Decimal(decimal_type) => match decimal_type {
                 DecimalDataType::Decimal128(size) => {
                     precision = max(precision, size.precision);
-                    scale = max(precision, size.scale);
+                    scale = max(scale, size.scale);
                 }
                 DecimalDataType::Decimal256(size) => {
                     precision = max(precision, size.precision);
-                    scale = max(precision, size.scale);
+                    scale = max(scale, size.scale);
                     use_decimal256 = true
                 }
             },
