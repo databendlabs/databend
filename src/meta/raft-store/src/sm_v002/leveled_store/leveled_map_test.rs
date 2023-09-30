@@ -17,6 +17,7 @@ use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 
@@ -204,9 +205,11 @@ async fn test_two_levels() -> anyhow::Result<()> {
 
 /// Create multi levels store:
 ///
+/// ```text
 /// l2 |         c(D) d
 /// l1 |    b(D) c        e
 /// l0 | a  b    c    d
+/// ```
 async fn build_3_levels() -> LeveledMap {
     let mut l = LeveledMap::default();
     // internal_seq: 0
@@ -356,8 +359,10 @@ async fn test_three_levels_delete() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// ```text
 /// |      b(m) c
 /// | a(m) b    c(m)
+/// ```
 async fn build_2_level_with_meta() -> LeveledMap {
     let mut l = LeveledMap::default();
 
@@ -401,7 +406,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await;
 
-        let (prev, result) = MapApi::<String>::upsert_value(&mut l, s("a"), b("a1")).await;
+        let (prev, result) = MapApiExt::upsert_value(&mut l, s("a"), b("a1")).await;
         assert_eq!(
             prev,
             Marked::new_normal(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
@@ -422,7 +427,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await;
 
-        let (prev, result) = MapApi::<String>::upsert_value(&mut l, s("b"), b("x1")).await;
+        let (prev, result) = MapApiExt::upsert_value(&mut l, s("b"), b("x1")).await;
         assert_eq!(
             prev,
             Marked::new_normal(
@@ -461,7 +466,7 @@ async fn test_two_level_update_value() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await;
 
-        let (prev, result) = MapApi::<String>::upsert_value(&mut l, s("d"), b("d1")).await;
+        let (prev, result) = MapApiExt::upsert_value(&mut l, s("d"), b("d1")).await;
         assert_eq!(prev, Marked::new_tomb_stone(0));
         assert_eq!(result, Marked::new_normal(6, b("d1"), None));
 
@@ -479,8 +484,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await;
 
         let (prev, result) =
-            MapApi::<String>::update_meta(&mut l, s("a"), Some(KVMeta { expire_at: Some(2) }))
-                .await;
+            MapApiExt::update_meta(&mut l, s("a"), Some(KVMeta { expire_at: Some(2) })).await;
         assert_eq!(
             prev,
             Marked::new_normal(1, b("a0"), Some(KVMeta { expire_at: Some(1) }))
@@ -501,7 +505,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await;
 
-        let (prev, result) = MapApi::<String>::update_meta(&mut l, s("b"), None).await;
+        let (prev, result) = MapApiExt::update_meta(&mut l, s("b"), None).await;
         assert_eq!(
             prev,
             Marked::new_normal(
@@ -522,7 +526,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
     {
         let mut l = build_2_level_with_meta().await;
 
-        let (prev, result) = MapApi::<String>::update_meta(
+        let (prev, result) = MapApiExt::update_meta(
             &mut l,
             s("c"),
             Some(KVMeta {
@@ -560,8 +564,7 @@ async fn test_two_level_update_meta() -> anyhow::Result<()> {
         let mut l = build_2_level_with_meta().await;
 
         let (prev, result) =
-            MapApi::<String>::update_meta(&mut l, s("d"), Some(KVMeta { expire_at: Some(2) }))
-                .await;
+            MapApiExt::update_meta(&mut l, s("d"), Some(KVMeta { expire_at: Some(2) })).await;
         assert_eq!(prev, Marked::new_tomb_stone(0));
         assert_eq!(result, Marked::new_tomb_stone(0));
 
