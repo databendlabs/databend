@@ -63,10 +63,14 @@ impl Parquet2Table {
             &first_file,
         )
         .await?;
+
+        let num_rows = file_metas.iter().map(|m| m.num_rows as u64).sum();
         let column_statistics_provider =
             create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
 
-        let table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
+        let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
+        table_info.meta.statistics.number_of_rows = num_rows;
+
         Ok(Arc::new(Parquet2Table {
             table_info,
             arrow_schema,

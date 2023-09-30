@@ -31,7 +31,7 @@ use crate::state_machine::ExpireValue;
 /// A deleted tombstone also have `internal_seq`, while for an application, deleted entry has seq=0.
 /// A normal entry(non-deleted) has a positive `seq` that is same as the corresponding `internal_seq`.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(in crate::sm_v002) enum Marked<T = Vec<u8>> {
+pub(crate) enum Marked<T = Vec<u8>> {
     TombStone {
         internal_seq: u64,
     },
@@ -156,8 +156,8 @@ impl<T> Marked<T> {
         }
     }
 
-    /// Not a normal entry or a tombstone.
-    pub fn is_not_found(&self) -> bool {
+    /// Return if the entry is neither a normal entry nor a tombstone.
+    pub fn not_found(&self) -> bool {
         matches!(self, Marked::TombStone {
             internal_seq: 0,
             ..

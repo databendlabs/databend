@@ -441,7 +441,6 @@ impl Binder {
 
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
-            is_having: false,
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);

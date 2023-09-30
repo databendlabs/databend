@@ -104,7 +104,6 @@ impl Rule for RulePushDownFilterProjectSet {
         if !pushed_down_predicates.is_empty() {
             let pushed_down_filter = Filter {
                 predicates: pushed_down_predicates,
-                is_having: filter.is_having,
             };
             let mut result = if remaining_predicates.is_empty() {
                 SExpr::create_unary(
@@ -117,7 +116,6 @@ impl Rule for RulePushDownFilterProjectSet {
             } else {
                 let remaining_filter = Filter {
                     predicates: remaining_predicates,
-                    is_having: filter.is_having,
                 };
                 SExpr::create_unary(
                     Arc::new(remaining_filter.into()),
