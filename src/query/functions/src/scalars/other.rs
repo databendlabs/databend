@@ -12,49 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::slice::SlicePattern;
+use std::cmp::max;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::cmp::max;
 
-
-use common_arrow::arrow_format::ipc::Decimal;
-use common_arrow::arrow_format::ipc::Precision;
 use common_base::base::convert_byte_size;
 use common_base::base::convert_number_size;
 use common_base::base::uuid::Uuid;
 use common_expression::error_to_null;
-use common_expression::types::DecimalSize;
 use common_expression::types::boolean::BooleanDomain;
-use common_expression::types::decimal::DecimalScalar;
-use common_expression::types::decimal::DecimalColumnBuilder;
+use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
-use common_expression::types::number::Float32Type;
 use common_expression::types::number::Int64Type;
-use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt32Type;
-use common_expression::types::number::Int32Type;
-use common_expression::types::number::UInt16Type;
-use common_expression::types::number::Int16Type;
 use common_expression::types::number::UInt8Type;
-use common_expression::types::number::Int8Type;
 use common_expression::types::number::F64;
-use common_expression::types::number::F32;
 use common_expression::types::string::StringColumn;
-use common_expression::types::ArgType;
 use common_expression::types::AnyType;
+use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::DecimalSize;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
 use common_expression::types::NumberColumn;
 use common_expression::types::NumberDataType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use common_expression::types::NumberScalar;
 use common_expression::types::NumberType;
 use common_expression::types::SimpleDomain;
@@ -80,8 +67,8 @@ use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
 
-use crate::scalars::decimal::convert_to_decimal;
 use crate::scalars::array::eval_array_aggr;
+use crate::scalars::decimal::convert_to_decimal;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -259,19 +246,18 @@ pub fn register(registry: &mut FunctionRegistry) {
             return None;
         }
         let name = "greatest".to_string();
-        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let arg_type = eval_arg_type(args_type);
-        let return_type: DataType = DataType::Decimal(arg_type.clone());
+        let return_type: DataType = DataType::Decimal(arg_type);
         let f = Function {
             signature: FunctionSignature {
                 name,
-                args_type: vec![return_type.clone();args_type.len()],
+                args_type: vec![return_type.clone(); args_type.len()],
                 return_type,
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
-                eval: Box::new(|args, ctx|{
-                    let arg = eval_args(args, ctx, arg_type.clone());
+                eval: Box::new(move |args, ctx| {
+                    let arg = eval_args(args, ctx, arg_type);
                     eval_array_aggr("max", &[arg.as_ref()], ctx)
                 }),
             },
@@ -434,68 +420,65 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
     grouping
 }
 
-fn eval_arg_type(
-    args: &[DataType],
-) -> DecimalDataType {
-    let mut precision:u8=0;
-    let mut scale:u8= 0;
-    let mut use_decimal256= false;
+fn eval_arg_type(args: &[DataType]) -> DecimalDataType {
+    let mut precision: u8 = 0;
+    let mut scale: u8 = 0;
+    let mut use_decimal256 = false;
     for arg in args.iter() {
         match arg {
-                    DataType::Number(num_type)=> match num_type {
-                        NumberDataType::Float32=>{
-                           precision = max(precision,38);
-                           scale = max(precision,18);
-                        },
-                        NumberDataType::Float64=>{
-                           precision = max(precision,38);
-                           scale = max(precision,18);
-                        },
-                         _ => {
-                           if let Some(size) = NumberDataType::UInt64.get_decimal_properties() {
-                                precision = max(precision,size.precision);
-                                scale = max(precision,size.scale);
-                           }
-                         }
+            DataType::Number(num_type) => match num_type {
+                NumberDataType::Float32 => {
+                    precision = max(precision, 38);
+                    scale = max(precision, 18);
+                }
+                NumberDataType::Float64 => {
+                    precision = max(precision, 38);
+                    scale = max(precision, 18);
+                }
+                _ => {
+                    if let Some(size) = NumberDataType::UInt64.get_decimal_properties() {
+                        precision = max(precision, size.precision);
+                        scale = max(precision, size.scale);
                     }
-                    DataType::Decimal(decimal_type) => match decimal_type{
-                        DecimalDataType::Decimal128(size)=>{
-                           precision = max(precision,size.precision);
-                           scale = max(precision,size.scale);
-                        },
-                        DecimalDataType::Decimal256(size)=>{
-                           precision = max(precision,size.precision);
-                           scale = max(precision,size.scale);
-                           use_decimal256 = true
-                        },
-                    }
-                    _ => unreachable!()
-            }
+                }
+            },
+            DataType::Decimal(decimal_type) => match decimal_type {
+                DecimalDataType::Decimal128(size) => {
+                    precision = max(precision, size.precision);
+                    scale = max(precision, size.scale);
+                }
+                DecimalDataType::Decimal256(size) => {
+                    precision = max(precision, size.precision);
+                    scale = max(precision, size.scale);
+                    use_decimal256 = true
+                }
+            },
+            _ => unreachable!(),
         }
-     let mut arg_type = DecimalDataType::Decimal128(DecimalSize {  precision, scale });
-     if use_decimal256 || precision > MAX_DECIMAL128_PRECISION{
-         arg_type = DecimalDataType::Decimal256(DecimalSize {  precision, scale });
-     }
-     arg_type
+    }
+    let mut arg_type = DecimalDataType::Decimal128(DecimalSize { precision, scale });
+    if use_decimal256 || precision > MAX_DECIMAL128_PRECISION {
+        arg_type = DecimalDataType::Decimal256(DecimalSize { precision, scale });
+    }
+    arg_type
 }
 
 fn eval_args(
     args: &[ValueRef<AnyType>],
     ctx: &mut EvalContext,
     dest_type: DecimalDataType,
-) ->Value<AnyType>{
-     let mut builder = ColumnBuilder::with_capacity(&DataType::Decimal(dest_type), args.len());
+) -> Value<AnyType> {
+    let mut builder = ColumnBuilder::with_capacity(&DataType::Decimal(dest_type), args.len());
     for arg in args.iter() {
         match arg {
-                ValueRef::Scalar(scalar ) => {
-                    let from_type = scalar.infer_data_type();
-                    if let Value::Scalar(scalar)= convert_to_decimal(arg,ctx,&from_type,dest_type){
-                        builder.push(scalar.as_ref());
-                    }
-                },
-                _ => unreachable!()
+            ValueRef::Scalar(scalar) => {
+                let from_type = scalar.infer_data_type();
+                if let Value::Scalar(scalar) = convert_to_decimal(arg, ctx, &from_type, dest_type) {
+                    builder.push(scalar.as_ref());
+                }
             }
+            _ => unreachable!(),
         }
-        Value::Column(builder.build())
-        
+    }
+    Value::Column(builder.build())
 }

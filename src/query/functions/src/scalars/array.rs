@@ -652,27 +652,6 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn register_array_aggr(registry: &mut FunctionRegistry) {
-    fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
-        if args_type.len() != 1 {
-            return None;
-        }
-        let arg_type = args_type[0].remove_nullable();
-        if arg_type == DataType::EmptyArray {
-            if name == "count" {
-                return Some(DataType::Number(NumberDataType::UInt64));
-            }
-            return Some(DataType::Null);
-        }
-        let array_type = arg_type.as_array()?;
-        let factory = AggregateFunctionFactory::instance();
-        let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
-        let return_type = func.return_type().ok()?;
-        if args_type[0].is_nullable() {
-            Some(return_type.wrap_nullable())
-        } else {
-            Some(return_type)
-        }
-    }
     for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
         registry.register_function_factory(fn_name, |_, args_type| {
             let return_type = eval_aggr_return_type(name, args_type)?;
@@ -781,3 +760,24 @@ pub fn eval_array_aggr(
     }
 }
 
+fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
+    if args_type.len() != 1 {
+        return None;
+    }
+    let arg_type = args_type[0].remove_nullable();
+    if arg_type == DataType::EmptyArray {
+        if name == "count" {
+            return Some(DataType::Number(NumberDataType::UInt64));
+        }
+        return Some(DataType::Null);
+    }
+    let array_type = arg_type.as_array()?;
+    let factory = AggregateFunctionFactory::instance();
+    let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
+    let return_type = func.return_type().ok()?;
+    if args_type[0].is_nullable() {
+        Some(return_type.wrap_nullable())
+    } else {
+        Some(return_type)
+    }
+}
