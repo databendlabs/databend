@@ -132,11 +132,16 @@ impl PushDownInfo {
                 }
 
                 let leaf_fields = schema.leaf_fields();
-                let column_id = leaf_fields
+                let (leaf_id, f) = leaf_fields
                     .iter()
-                    .find(|&p| p == field)
-                    .unwrap()
-                    .column_id();
+                    .enumerate()
+                    .find(|&(_, p)| p == field)
+                    .unwrap();
+                // Databend column id is not equal to parquet leaf id when there is nested type.
+                if f.column_id as usize != leaf_id {
+                    return None;
+                }
+                let column_id = f.column_id;
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),

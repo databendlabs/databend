@@ -245,7 +245,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: left_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -262,7 +261,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: right_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -577,11 +575,7 @@ impl SubqueryRewriter {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
                 }
 
-                let filter_plan = Filter {
-                    predicates,
-                    is_having: filter.is_having,
-                }
-                .into();
+                let filter_plan = Filter { predicates }.into();
                 Ok(SExpr::create_unary(
                     Arc::new(filter_plan),
                     Arc::new(flatten_plan),

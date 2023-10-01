@@ -84,7 +84,6 @@ pub fn try_derive_predicates(
             Arc::new(
                 Filter {
                     predicates: left_push_down,
-                    is_having: false,
                 }
                 .into(),
             ),
@@ -97,7 +96,6 @@ pub fn try_derive_predicates(
             Arc::new(
                 Filter {
                     predicates: right_push_down,
-                    is_having: false,
                 }
                 .into(),
             ),

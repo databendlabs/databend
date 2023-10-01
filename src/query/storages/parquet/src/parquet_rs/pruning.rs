@@ -36,6 +36,7 @@ use crate::parquet_rs::statistics::convert_index_to_column_statistics;
 /// A pruner to prune row groups and pages of a parquet files.
 ///
 /// We can use this pruner to compute row groups and pages to skip.
+#[derive(Clone)]
 pub struct ParquetRSPruner {
     leaf_fields: Arc<Vec<TableField>>,
     range_pruner: Option<(

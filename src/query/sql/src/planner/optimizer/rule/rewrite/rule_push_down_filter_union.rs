@@ -114,7 +114,6 @@ impl Rule for RulePushDownFilterUnion {
             .collect::<Result<Vec<_>>>()?;
         let right_filer = Filter {
             predicates: new_predicates,
-            is_having: filter.is_having,
         };
 
         let mut union_left_child = union_s_expr.child(0)?.clone();

@@ -205,11 +205,21 @@ pub struct CsvReaderState {
 
     // remain from last read batch
     pub out: Vec<u8>,
+
+    // field_end[..n_end] store the output of each call to reader.read_record()
+    // it may belong to part of a row.
+    // flush to RowBatch when a complete row is read
     pub field_ends: Vec<usize>,
     pub n_end: usize,
 
     num_fields: usize,
     projection: Option<Vec<usize>>,
+}
+
+enum ReadRecordOutput {
+    Record { num_fields: usize, bytes: usize },
+    RecordSkipped,
+    PartialRecord { bytes: usize },
 }
 
 impl CsvReaderState {
@@ -218,64 +228,83 @@ impl CsvReaderState {
         input: &[u8],
         output: &mut [u8],
         file_status: &mut FileStatus,
-    ) -> Result<(Option<usize>, usize, usize)> {
+    ) -> Result<(ReadRecordOutput, usize)> {
         let (result, n_in, n_out, n_end) =
             self.reader
                 .read_record(input, output, &mut self.field_ends[self.n_end..]);
         self.n_end += n_end;
+        // shadow the n_end return from reader to avoid misuse
+        let n_end = self.n_end;
 
         match result {
             ReadRecordResult::InputEmpty => {
                 if input.is_empty() {
                     Err(ErrorCode::BadBytes("unexpected eof"))
                 } else {
-                    Ok((None, n_in, n_out))
+                    self.common.offset += n_in;
+                    Ok((ReadRecordOutput::PartialRecord { bytes: n_out }, n_in))
                 }
             }
             ReadRecordResult::OutputFull => Err(self.error_output_full()),
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
-                if self.projection.is_none() {
-                    if !self.error_on_column_count_mismatch && self.n_end < self.num_fields {
-                        // support we expect 4 fields but got row with only 2 columns : "1,2\n"
-                        // here we pretend we read "1,2,,\n"
-                        debug_assert!(self.n_end > 0);
-                        let end = self.field_ends[n_end - 1];
-                        for i in self.n_end..self.num_fields {
-                            self.field_ends[i] = end;
-                        }
-                        self.n_end = self.num_fields;
+                let output = {
+                    if self.projection.is_some() {
+                        // select $1, $2, $3 ..  from csv, not check num of fields here
 
-                        self.common.rows += 1;
-                        self.common.offset += n_in;
-                        self.n_end = 0;
-                        return Ok((Some(self.num_fields), n_in, n_out));
+                        ReadRecordOutput::Record {
+                            num_fields: n_end,
+                            bytes: n_out,
+                        }
+                    } else {
+                        // copy
+                        if !self.error_on_column_count_mismatch {
+                            // cut or patch to num_fields
+
+                            if self.n_end < self.num_fields {
+                                // support we expect 4 fields but got row with only 2 columns : "1,2\n"
+                                // here we pretend we read "1,2,,\n"
+                                debug_assert!(self.n_end > 0);
+                                let end = self.field_ends[n_end - 1];
+                                for i in n_end..self.num_fields {
+                                    self.field_ends[i] = end;
+                                }
+                            }
+                            ReadRecordOutput::Record {
+                                num_fields: self.num_fields,
+                                bytes: n_out,
+                            }
+                        } else {
+                            // check num of fields strictly
+
+                            if let Err(e) = self.check_num_field() {
+                                self.ctx.on_error(
+                                    e,
+                                    None,
+                                    file_status,
+                                    &self.split_info.file.path,
+                                    self.common.rows,
+                                )?;
+                                ReadRecordOutput::RecordSkipped
+                            } else {
+                                ReadRecordOutput::Record {
+                                    num_fields: self.num_fields,
+                                    bytes: n_out,
+                                }
+                            }
+                        }
                     }
-                    if let Err(e) = self.check_num_field() {
-                        self.ctx.on_error(
-                            e,
-                            None,
-                            file_status,
-                            &self.split_info.file.path,
-                            self.common.rows,
-                        )?;
-                        self.common.rows += 1;
-                        self.common.offset += n_in;
-                        self.n_end = 0;
-                        return Ok((Some(0), n_in, n_out));
-                    }
-                }
-                self.common.rows += 1;
+                };
                 self.common.offset += n_in;
-                let n_end = self.n_end;
+                self.common.rows += 1;
                 self.n_end = 0;
-                Ok((Some(n_end), n_in, n_out))
+                Ok((output, n_in))
             }
             ReadRecordResult::End => {
                 if !input.is_empty() {
                     Err(ErrorCode::BadBytes("unexpected eof"))
                 } else {
-                    Ok((None, n_in, n_out))
+                    Ok((ReadRecordOutput::PartialRecord { bytes: n_out }, n_in))
                 }
             }
         }
@@ -283,18 +312,18 @@ impl CsvReaderState {
 }
 
 impl AligningStateTextBased for CsvReaderState {
-    fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+    fn align(&mut self, mut buf_in: &[u8]) -> Result<Vec<RowBatch>> {
+        let size_in = buf_in.len();
         let mut file_status = FileStatus::default();
-        let mut out_tmp = vec![0u8; buf_in.len()];
-        let mut buf = buf_in;
+        let mut buf_out = vec![0u8; buf_in.len()];
         while self.common.rows_to_skip > 0 {
-            let (_, n_in, _) = self.read_record(buf, &mut out_tmp, &mut file_status)?;
-            buf = &buf[n_in..];
+            let (_, n_in) = self.read_record(buf_in, &mut buf_out, &mut file_status)?;
+            buf_in = &buf_in[n_in..];
             self.common.rows_to_skip -= 1;
         }
 
-        let mut out_pos = 0usize;
-        let mut row_batch_end: usize = 0;
+        let mut buf_out_pos = 0usize;
+        let mut buf_out_row_end: usize = 0;
 
         let last_batch_remain_len = self.out.len();
 
@@ -310,26 +339,28 @@ impl AligningStateTextBased for CsvReaderState {
             start_row_of_split: Some(0),
         };
 
-        while !buf.is_empty() {
-            let (num_fields, n_in, n_out) =
-                self.read_record(buf, &mut out_tmp[out_pos..], &mut file_status)?;
-            buf = &buf[n_in..];
-            out_pos += n_out;
-            if let Some(num_fields) = num_fields {
-                if num_fields == 0 {
-                    out_pos = row_batch_end;
-                } else {
+        while !buf_in.is_empty() {
+            let (res, n_in) =
+                self.read_record(buf_in, &mut buf_out[buf_out_pos..], &mut file_status)?;
+            buf_in = &buf_in[n_in..];
+            match res {
+                ReadRecordOutput::Record { num_fields, bytes } => {
+                    buf_out_pos += bytes;
+                    row_batch.num_fields.push(num_fields);
                     row_batch
                         .field_ends
                         .extend_from_slice(&self.field_ends[..num_fields]);
-                    row_batch.num_fields.push(num_fields);
-                    row_batch.row_ends.push(last_batch_remain_len + out_pos);
-                    row_batch_end = out_pos;
+                    row_batch.row_ends.push(last_batch_remain_len + buf_out_pos);
+                    buf_out_row_end = buf_out_pos;
                 }
+                ReadRecordOutput::PartialRecord { bytes } => {
+                    buf_out_pos += bytes;
+                }
+                _ => {}
             }
         }
 
-        out_tmp.truncate(out_pos);
+        buf_out.truncate(buf_out_pos);
         if file_status.error.is_some() {
             self.ctx
                 .table_context
@@ -341,28 +372,28 @@ impl AligningStateTextBased for CsvReaderState {
             debug!(
                 "csv aligner: {} + {} bytes => 0 rows",
                 self.out.len(),
-                buf_in.len(),
+                size_in,
             );
-            self.out.extend_from_slice(&out_tmp);
+            self.out.extend_from_slice(&buf_out);
             Ok(vec![])
         } else {
             let last_remain = mem::take(&mut self.out);
 
             self.common.batch_id += 1;
-            self.out.extend_from_slice(&out_tmp[row_batch_end..]);
+            self.out.extend_from_slice(&buf_out[buf_out_row_end..]);
             debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),
-                buf_in.len(),
+                size_in,
                 row_batch.row_ends.len(),
                 self.out.len()
             );
 
-            out_tmp.truncate(row_batch_end);
+            buf_out.truncate(buf_out_row_end);
             row_batch.data = if last_remain.is_empty() {
-                out_tmp
+                buf_out
             } else {
-                vec![last_remain, out_tmp].concat()
+                vec![last_remain, buf_out].concat()
             };
 
             Ok(vec![row_batch])
@@ -376,34 +407,31 @@ impl AligningStateTextBased for CsvReaderState {
 
         let mut file_status = FileStatus::default();
         if self.common.rows_to_skip > 0 {
-            let _ = self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
+            self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
         } else {
             let last_batch_remain_len = self.out.len();
-            let (num_fields, _, n_out) =
-                self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
-            if let Some(num_fields) = num_fields {
-                if num_fields > 0 {
-                    let data = mem::take(&mut self.out);
+            let (out, _n_in) = self.read_record(&in_tmp, &mut out_tmp, &mut file_status)?;
+            if let ReadRecordOutput::Record { num_fields, bytes } = out {
+                let data = mem::take(&mut self.out);
 
-                    let row_batch = RowBatch {
-                        data,
-                        row_ends: vec![last_batch_remain_len + n_out],
-                        field_ends: self.field_ends[..num_fields].to_vec(),
-                        num_fields: vec![num_fields],
-                        split_info: self.split_info.clone(),
-                        batch_id: self.common.batch_id,
-                        start_offset_in_split: self.common.offset,
-                        start_row_in_split: self.common.rows,
-                        start_row_of_split: Some(0),
-                    };
-                    res.push(row_batch);
+                let row_batch = RowBatch {
+                    data,
+                    row_ends: vec![last_batch_remain_len + bytes],
+                    field_ends: self.field_ends[..num_fields].to_vec(),
+                    num_fields: vec![num_fields],
+                    split_info: self.split_info.clone(),
+                    batch_id: self.common.batch_id,
+                    start_offset_in_split: self.common.offset,
+                    start_row_in_split: self.common.rows,
+                    start_row_of_split: Some(0),
+                };
+                res.push(row_batch);
 
-                    self.common.batch_id += 1;
-                    debug!(
-                        "csv aligner flush last row of {} bytes",
-                        last_batch_remain_len,
-                    );
-                }
+                self.common.batch_id += 1;
+                debug!(
+                    "csv aligner flush last row of {} bytes",
+                    last_batch_remain_len,
+                );
             }
         }
         if file_status.error.is_some() {
