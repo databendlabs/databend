@@ -247,17 +247,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         let name = "greatest".to_string();
         let arg_type = eval_arg_type(args_type);
-        let return_type: DataType = DataType::Decimal(arg_type);
         let f = Function {
             signature: FunctionSignature {
                 name,
-                args_type: vec![return_type.clone(); args_type.len()],
-                return_type,
+                args_type: vec![arg_type.clone(); args_type.len()],
+                return_type: arg_type.clone(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    let arg = eval_args(args, ctx, arg_type);
+                    let arg = eval_args(args, ctx, arg_type.clone());
                     eval_array_aggr("max", &[arg.as_ref()], ctx)
                 }),
             },
@@ -420,60 +419,92 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
     grouping
 }
 
-fn eval_arg_type(args: &[DataType]) -> DecimalDataType {
+fn eval_arg_type(args: &[DataType]) -> DataType {
     let mut precision: u8 = 0;
     let mut scale: u8 = 0;
-    let mut use_decimal256 = false;
-    for arg in args.iter() {
+    let mut is_decimal256 = false;
+    let mut data_type = args[0].clone();
+
+    for arg in args.iter().take(0) {
         match arg {
-            DataType::Number(num_type) => match num_type {
-                NumberDataType::Float32 => {
-                    precision = max(precision, 38);
-                    scale = max(scale, 18);
-                }
-                NumberDataType::Float64 => {
-                    precision = max(precision, 38);
-                    scale = max(scale, 18);
-                }
-                _ => {
-                    if let Some(size) = NumberDataType::UInt64.get_decimal_properties() {
-                        precision = max(precision, size.precision);
-                        scale = max(scale, size.scale);
+            DataType::Number(no_type) => {
+                if let Some(num_type) = data_type.as_number() {
+                    match no_type.is_same(num_type.to_owned()) {
+                        false => {
+                            if no_type.can_lossless_cast_to(num_type.to_owned()) {
+                                data_type = DataType::Number(num_type.to_owned());
+                            } else if num_type.can_lossless_cast_to(no_type.to_owned()) {
+                                data_type = DataType::Number(no_type.to_owned());
+                            } else {
+                                precision = max(precision, 38);
+                                scale = max(scale, 18);
+                                if is_decimal256 || precision > MAX_DECIMAL128_PRECISION {
+                                    data_type = DataType::Decimal(DecimalDataType::Decimal256(
+                                        DecimalSize { precision, scale },
+                                    ));
+                                } else {
+                                    data_type = DataType::Decimal(DecimalDataType::Decimal128(
+                                        DecimalSize { precision, scale },
+                                    ));
+                                }
+                            }
+                        }
+                        true => {}
                     }
                 }
-            },
+            }
             DataType::Decimal(decimal_type) => match decimal_type {
                 DecimalDataType::Decimal128(size) => {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
+                    if is_decimal256 || precision > MAX_DECIMAL128_PRECISION {
+                        data_type = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                            precision,
+                            scale,
+                        }));
+                    } else {
+                        data_type = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                            precision,
+                            scale,
+                        }));
+                    }
                 }
                 DecimalDataType::Decimal256(size) => {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
-                    use_decimal256 = true
+                    is_decimal256 = true;
+                    data_type = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                        precision,
+                        scale,
+                    }));
                 }
             },
             _ => unreachable!(),
         }
     }
-    let mut arg_type = DecimalDataType::Decimal128(DecimalSize { precision, scale });
-    if use_decimal256 || precision > MAX_DECIMAL128_PRECISION {
-        arg_type = DecimalDataType::Decimal256(DecimalSize { precision, scale });
-    }
-    arg_type
+    data_type
 }
 
 fn eval_args(
     args: &[ValueRef<AnyType>],
     ctx: &mut EvalContext,
-    dest_type: DecimalDataType,
+    dest_type: DataType,
 ) -> Value<AnyType> {
-    let mut builder = ColumnBuilder::with_capacity(&DataType::Decimal(dest_type), args.len());
+    let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
     for arg in args.iter() {
         match arg {
             ValueRef::Scalar(scalar) => {
-                let from_type = scalar.infer_data_type();
-                if let Value::Scalar(scalar) = convert_to_decimal(arg, ctx, &from_type, dest_type) {
+                if dest_type.is_decimal() {
+                    let from_type = scalar.infer_data_type();
+                    let decimal_type = dest_type.as_decimal().unwrap();
+                    if let Value::Scalar(scalar) =
+                        convert_to_decimal(arg, ctx, &from_type, decimal_type.to_owned())
+                    {
+                        builder.push(scalar.as_ref());
+                    }
+                } else {
+                    let scalar = scalar.as_number().unwrap().to_owned();
+                    let scalar = scalar.as_value(dest_type.as_number().unwrap().to_owned());
                     builder.push(scalar.as_ref());
                 }
             }
