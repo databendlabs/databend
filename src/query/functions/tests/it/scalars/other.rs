@@ -82,9 +82,9 @@ fn test_ignore(file: &mut impl Write) {
 }
 fn test_greatest(file: &mut impl Write) {
     run_ast(file, "greatest(1,2)", &[]);
-    run_ast(file, "greastest(1.1,1.2)", &[]);
-    run_ast(file, "greastest(100, 3.145)", &[]);
-    run_ast(file, "greastest(100, 3.145,12)", &[]);
+    run_ast(file, "greatest(1.1,1.2)", &[]);
+    run_ast(file, "greatest(100, 3.145)", &[]);
+    run_ast(file, "greatest(100, 3.145,12)", &[]);
 }
 
 fn test_assume_not_null(file: &mut impl Write) {
