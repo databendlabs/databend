@@ -250,7 +250,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let f = Function {
             signature: FunctionSignature {
                 name,
-                args_type: vec![arg_type.clone(); args_type.len()],
+                args_type: args_type.to_vec(),
                 return_type: arg_type.clone(),
             },
             eval: FunctionEval::Scalar {
