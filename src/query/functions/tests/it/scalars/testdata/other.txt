@@ -175,12 +175,28 @@ output domain  : {FALSE}
 output         : false
 
 ast            : greatest(1,2)
-raw expr       : concat(1, 2)
-checked expr   : concat<Decimal, Decimal Decimal>(1, 2)
-optimized expr : 2
-output type    : Decimal
-output domain  : {2}
+raw expr       : greatest(1, 2)
+checked expr   : greatest<UInt8, UInt8>(1_u8, 2_u8)
+optimized expr : 2_u8
+output type    : UInt8
+output domain  : {2..=2}
 output         : 2
+
+ast            : greatest(1.1,1.2)
+raw expr       : greatest(1.1, 1.2)
+checked expr   : greatest<Float32, Float32>(1.1_f32, 1.2_f32)
+optimized expr : 1.2_f32
+output type    : Float32
+output domain  : {1.2..=1.2}
+output         : 1.2
+
+ast            : greatest(100,3.145)
+raw expr       : greatest(100, 3.145)
+checked expr   : greatest<Float32, Float32>(1.1_f32, 1.2_f32)
+optimized expr : 1.2_f32
+output type    : Float32
+output domain  : {1.2..=1.2}
+output         : 1.2
 
 ast            : assume_not_null(a2)
 raw expr       : assume_not_null(a2::UInt8 NULL)
