@@ -492,21 +492,48 @@ fn eval_args(
 ) -> Value<AnyType> {
     let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
     for arg in args.iter() {
-        match arg {
-            ValueRef::Scalar(scalar) => {
-                if dest_type.is_decimal() {
+        match dest_type {
+            DataType::Decimal(v) => {
+                if let ValueRef::Scalar(scalar) = arg {
                     let from_type = scalar.infer_data_type();
-                    let decimal_type = dest_type.as_decimal().unwrap();
-                    if let Value::Scalar(scalar) =
-                        convert_to_decimal(arg, ctx, &from_type, decimal_type.to_owned())
+                    if let Value::Scalar(decimal_scalar) =
+                        convert_to_decimal(arg, ctx, &from_type, v)
                     {
-                        builder.push(scalar.as_ref());
+                        builder.push(decimal_scalar.as_ref());
                     }
                 } else {
-                    let scalar = scalar.as_number().unwrap().to_owned();
-                    let scalar = scalar.as_value(dest_type.as_number().unwrap().to_owned());
-                    builder.push(scalar.as_ref());
+                    unreachable!("expect Scalar but: {:?}", arg);
                 }
+            }
+            DataType::Number(v) => {
+                if let ValueRef::Scalar(ScalarRef::Number(scalar)) = arg {
+                    let num_scalar = scalar.as_value(v);
+                    builder.push(num_scalar.as_ref());
+                } else {
+                    unreachable!("expect Scalar::Number but: {:?}", arg);
+                }
+                // match arg {
+                //     ValueRef::Scalar(scalar) => match  scalar {
+                //         ScalarRef::Number(num) => {},
+                //         ScalarRef::Decimal(decimal) => {},
+                //         _ => unreachable!(),
+                //         // let from_type = scalar.infer_data_type();
+                //         // if dest_type.is_decimal() {
+                //         //     let decimal_type = dest_type.as_decimal().unwrap();
+                //         //     if let Value::Scalar(scalar) =
+                //         //         convert_to_decimal(arg, ctx, &from_type, decimal_type.to_owned())
+                //         //     {
+                //         //         builder.push(scalar.as_ref());
+                //         //     }
+                //         // } else {
+                //         //     if from_type == dest_type {
+                //         //         let scalar = scalar.as_number().unwrap().to_owned();
+                //         //         let scalar = scalar.as_value(dest_type.as_number().unwrp().to_owned());
+                //         //     }
+                //         //     builder.push(scalar.as_ref());
+                //     }
+                //     _ => unreachable!(),
+                // }
             }
             _ => unreachable!(),
         }
