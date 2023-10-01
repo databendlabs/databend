@@ -511,5 +511,5 @@ fn eval_args(
             _ => unreachable!(),
         }
     }
-    Value::Column(builder.build())
+    Value::Scalar(Scalar::Array(builder.build()))
 }
