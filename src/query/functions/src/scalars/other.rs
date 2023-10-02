@@ -501,7 +501,7 @@ fn eval_args(
                         builder.push(decimal_scalar.as_ref());
                     }
                 } else {
-                    unreachable!("expect Scalar but: {:?}", arg);
+                    unreachable!("expect Scalar but: {:?}", args);
                 }
             }
             DataType::Number(v) => match arg {
