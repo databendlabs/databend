@@ -20,7 +20,6 @@ use common_exception::Result;
 
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -195,16 +194,12 @@ impl Column {
     {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let mut ptr = builder.as_mut_ptr();
-        let col_ptr = col.as_slice().as_ptr();
-
-        unsafe {
-            for index in indices.iter() {
-                copy_advance_aligned(col_ptr.add(index.to_usize()), &mut ptr, 1)
-            }
-            set_vec_len_by_ptr(&mut builder, ptr);
-        }
-
+        let col = col.as_slice();
+        builder.extend(
+            indices
+                .iter()
+                .map(|index| unsafe { *col.get_unchecked(index.to_usize()) }),
+        );
         builder
     }
 
@@ -234,22 +229,20 @@ impl Column {
         let col_offset = col.offsets().as_slice();
         let col_data_ptr = col.data().as_slice().as_ptr();
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut offsets_ptr = offsets.as_mut_ptr();
-        let mut items_ptr = items.as_mut_ptr();
         let mut data_size = 0;
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
-            for index in indices.iter() {
+            *offsets.get_unchecked_mut(0) = 0;
+            for (i, index) in indices.iter().enumerate() {
                 let start = *col_offset.get_unchecked(index.to_usize()) as usize;
                 let len = *col_offset.get_unchecked(index.to_usize() + 1) as usize - start;
                 data_size += len as u64;
-                store_advance_aligned(data_size, &mut offsets_ptr);
-                store_advance_aligned((col_data_ptr.add(start) as u64, len), &mut items_ptr);
+                *items.get_unchecked_mut(i) = (col_data_ptr.add(start) as u64, len);
+                *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
-            set_vec_len_by_ptr(items, items_ptr);
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
@@ -271,7 +264,7 @@ impl Column {
         let num_rows = indices.len();
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut ptr = builder.as_mut_ptr();
+        let mut builder_len = 0;
         let mut unset_bits = 0;
         let mut value = 0;
         let mut i = 0;
@@ -285,14 +278,16 @@ impl Column {
                 }
                 i += 1;
                 if i % 8 == 0 {
-                    store_advance_aligned(value, &mut ptr);
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
                     value = 0;
                 }
             }
             if i % 8 != 0 {
-                store_advance_aligned(value, &mut ptr);
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
             }
-            set_vec_len_by_ptr(&mut builder, ptr);
+            builder.set_len(builder_len);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()

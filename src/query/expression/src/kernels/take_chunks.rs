@@ -23,7 +23,6 @@ use itertools::Itertools;
 use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
@@ -713,18 +712,9 @@ impl Column {
     where T: Copy {
         let num_rows = indices.len();
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let mut ptr = builder.as_mut_ptr();
-
-        unsafe {
-            for row_ptr in indices.iter() {
-                store_advance_aligned(
-                    col[row_ptr.chunk_index as usize][row_ptr.row_index as usize],
-                    &mut ptr,
-                );
-            }
-            set_vec_len_by_ptr(&mut builder, ptr);
-        }
-
+        builder.extend(indices.iter().map(|row_ptr| unsafe {
+            col.get_unchecked(row_ptr.chunk_index as usize)[row_ptr.row_index as usize]
+        }));
         builder
     }
 
@@ -749,22 +739,20 @@ impl Column {
         // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
         // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
         let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-        let mut offsets_ptr = offsets.as_mut_ptr();
-        let mut items_ptr = items.as_mut_ptr();
         let mut data_size = 0;
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
-            for row_ptr in indices.iter() {
+            *offsets.get_unchecked_mut(0) = 0;
+            for (i, row_ptr) in indices.iter().enumerate() {
                 let item =
                     col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize);
                 data_size += item.len() as u64;
-                store_advance_aligned(data_size, &mut offsets_ptr);
-                store_advance_aligned((item.as_ptr() as u64, item.len()), &mut items_ptr);
+                *items.get_unchecked_mut(i) = (item.as_ptr() as u64, item.len());
+                *offsets.get_unchecked_mut(i + 1) = data_size;
             }
-            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
-            set_vec_len_by_ptr(items, items_ptr);
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
         }
 
         // Build [`data`].
@@ -785,7 +773,7 @@ impl Column {
         let num_rows = indices.len();
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let mut ptr = builder.as_mut_ptr();
+        let mut builder_len = 0;
         let mut unset_bits = 0;
         let mut value = 0;
         let mut i = 0;
@@ -799,14 +787,16 @@ impl Column {
                 }
                 i += 1;
                 if i % 8 == 0 {
-                    store_advance_aligned(value, &mut ptr);
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
                     value = 0;
                 }
             }
             if i % 8 != 0 {
-                store_advance_aligned(value, &mut ptr);
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
             }
-            set_vec_len_by_ptr(&mut builder, ptr);
+            builder.set_len(builder_len);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()
