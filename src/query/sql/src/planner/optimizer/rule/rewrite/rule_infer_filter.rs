@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -84,6 +85,7 @@ pub struct PredicateSet {
     expr_to_idx: HashMap<ScalarExpr, usize>,
     equal_exprs: Vec<Vec<ScalarExpr>>,
     predicates: Vec<Vec<Predicate>>,
+    equal_pairs: Vec<(usize, usize)>,
     is_merged: bool,
     is_falsy: bool,
 }
@@ -103,6 +105,7 @@ impl PredicateSet {
             expr_to_idx: HashMap::new(),
             equal_exprs: vec![],
             predicates: vec![],
+            equal_pairs: vec![],
             is_merged: false,
             is_falsy: false,
         }
@@ -113,25 +116,32 @@ impl PredicateSet {
         expr: &ScalarExpr,
         predicates: Vec<Predicate>,
         equal_exprs: Vec<ScalarExpr>,
-    ) {
+    ) -> usize {
         self.exprs.push(expr.clone());
-        self.expr_to_idx.insert(expr.clone(), self.num_exprs);
         self.predicates.push(predicates);
         self.equal_exprs.push(equal_exprs);
+        self.expr_to_idx.insert(expr.clone(), self.num_exprs);
         self.num_exprs += 1;
+        self.num_exprs - 1
     }
 
     fn add_equal(&mut self, left: &ScalarExpr, right: &ScalarExpr) {
-        match self.expr_to_idx.get(left) {
+        let left_idx = match self.expr_to_idx.get(left) {
             Some(idx) => {
-                let equal_exprs = &mut self.equal_exprs[*idx];
-                equal_exprs.push(right.clone());
+                self.equal_exprs[*idx].push(right.clone());
+                *idx
             }
             None => self.add_expr(left, vec![], vec![right.clone()]),
         };
-        if self.expr_to_idx.get(right).is_none() {
-            self.add_expr(right, vec![], vec![]);
-        }
+        let right_idx = match self.expr_to_idx.get(right) {
+            Some(idx) => {
+                self.equal_exprs[*idx].push(left.clone());
+                *idx
+            }
+            None => self.add_expr(right, vec![], vec![left.clone()]),
+        };
+        self.equal_pairs.push((left_idx, right_idx));
+        self.equal_pairs.push((right_idx, left_idx));
     }
 
     fn add_predicate(&mut self, left: &ScalarExpr, right: Predicate) {
@@ -159,7 +169,9 @@ impl PredicateSet {
                 }
                 predicates.push(right);
             }
-            None => self.add_expr(left, vec![right], vec![]),
+            None => {
+                self.add_expr(left, vec![right], vec![]);
+            }
         };
     }
 
@@ -328,7 +340,7 @@ impl PredicateSet {
         let mut result = vec![];
         let num_exprs = self.num_exprs;
         let mut parents = vec![0; num_exprs];
-        for (i, parent) in parents.iter_mut().enumerate().take(num_exprs) {
+        for (i, parent) in parents.iter_mut().enumerate() {
             *parent = i;
         }
         for (left_idx, equal_exprs) in self.equal_exprs.iter().enumerate() {
@@ -341,8 +353,17 @@ impl PredicateSet {
         for predicates in old_predicates_set.iter_mut() {
             predicates.sort();
         }
+        let mut equal_sets: HashMap<usize, HashSet<usize>> = HashMap::new();
         for idx in 0..num_exprs {
             let parent_idx = Self::find(&mut parents, idx);
+            match equal_sets.get_mut(&parent_idx) {
+                Some(equal_set) => {
+                    equal_set.insert(idx);
+                }
+                None => {
+                    equal_sets.insert(parent_idx, HashSet::from([idx]));
+                }
+            };
             if idx != parent_idx {
                 let expr = self.exprs[parent_idx].clone();
                 let predicates = self.predicates[idx].clone();
@@ -374,6 +395,38 @@ impl PredicateSet {
                         ScalarExpr::ConstantExpr(predicate.constant.clone()),
                     ],
                 }));
+            }
+        }
+        let mut new_equal_pairs = Vec::new();
+        for equal_set in equal_sets.into_values() {
+            let equal_set = equal_set.into_iter().collect::<Vec<_>>();
+            let equal_set_len = equal_set.len();
+            for i in 0..equal_set_len {
+                for j in i + 1..equal_set_len {
+                    new_equal_pairs.push((i, j));
+                    new_equal_pairs.push((j, i));
+                    result.push(ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: String::from(ComparisonOp::Equal.to_func_name()),
+                        params: vec![],
+                        arguments: vec![
+                            self.exprs[equal_set[i]].clone(),
+                            self.exprs[equal_set[j]].clone(),
+                        ],
+                    }));
+                }
+            }
+        }
+        let old_equal_pairs = &mut self.equal_pairs;
+        old_equal_pairs.sort();
+        new_equal_pairs.sort();
+        if old_equal_pairs.len() != new_equal_pairs.len() {
+            is_updated = true;
+        } else {
+            for (i, pair) in new_equal_pairs.into_iter().enumerate() {
+                if old_equal_pairs[i] != pair {
+                    is_updated = true;
+                }
             }
         }
         (is_updated | self.is_falsy, result)
@@ -529,8 +582,9 @@ impl Rule for RuleInferFilter {
                         (true, true) => {
                             if op == ComparisonOp::Equal {
                                 predicate_set.add_equal(&func.arguments[0], &func.arguments[1]);
+                            } else {
+                                new_predicates.push(predicate);
                             }
-                            new_predicates.push(predicate);
                         }
                         (true, false) => {
                             if let ScalarExpr::ConstantExpr(constant) = &func.arguments[1] {
@@ -582,8 +636,8 @@ impl Rule for RuleInferFilter {
         is_rewritten |= predicate_set.is_merged;
         if !predicate_set.is_falsy {
             // `derive_predicates` may change is_falsy to true.
-            let (is_merged, infer_predicates) = predicate_set.derive_predicates();
-            is_rewritten |= is_merged;
+            let (is_updated, infer_predicates) = predicate_set.derive_predicates();
+            is_rewritten |= is_updated;
             new_predicates.extend(infer_predicates);
         }
         if predicate_set.is_falsy {
