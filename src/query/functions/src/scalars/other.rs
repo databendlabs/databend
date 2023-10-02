@@ -440,8 +440,7 @@ fn eval_arg_type(args: &[DataType]) -> DataType {
             },
             DataType::Number(no_type) => {
                 let size = no_type.get_decimal_properties().unwrap();
-                precision = max(precision, size.precision);
-                scale = max(scale, size.scale);
+                precision = max(size.precision + scale, precision);
                 match num_type {
                     Some(noo_type) => {
                         if !no_type.is_same(noo_type) {

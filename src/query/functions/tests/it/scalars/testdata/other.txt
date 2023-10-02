@@ -184,9 +184,9 @@ output         : 2
 
 ast            : greatest(1.1,1.2)
 raw expr       : greatest(1.1, 1.2)
-checked expr   : greatest<Float32, Float32>(1.1_f32, 1.2_f32)
-optimized expr : 1.2_f32
-output type    : Float32
+checked expr   : greatest<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.2_d128(2,1))
+optimized expr : 1.2_d128(2,1)
+output type    : Decimal(2, 1)
 output domain  : {1.2..=1.2}
 output         : 1.2
 
