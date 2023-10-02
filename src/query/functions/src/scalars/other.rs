@@ -450,11 +450,11 @@ fn eval_arg_type(args: &[DataType]) -> DataType {
                 let size = no_type.get_decimal_properties().unwrap();
                 precision = max(size.precision + scale, precision);
                 match num_type {
-                    Some(noo_type) => {
-                        if !no_type.is_same(noo_type) {
-                            if no_type.can_lossless_cast_to(noo_type) {
-                                num_type = Some(noo_type);
-                            } else if noo_type.can_lossless_cast_to(no_type.to_owned()) {
+                    Some(int_type) => {
+                        if !no_type.is_same(int_type) {
+                            if no_type.can_lossless_cast_to(int_type) {
+                                num_type = Some(int_type);
+                            } else if int_type.can_lossless_cast_to(no_type.to_owned()) {
                                 num_type = Some(no_type.to_owned());
                             } else {
                                 is_decimal128 = true;
