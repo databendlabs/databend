@@ -15,8 +15,10 @@
 use std::io::Write;
 
 use common_expression::types::*;
+use common_expression::Column;
 use common_expression::FromData;
 use goldenfile::Mint;
+use roaring::RoaringTreemap;
 
 use super::run_ast;
 
@@ -174,6 +176,11 @@ fn test_cast_to_variant(file: &mut impl Write, is_try: bool) {
     run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
         "a",
         StringType::from_data_with_validity(vec!["a", "bc", "def"], vec![true, false, true]),
+    )]);
+
+    run_ast(file, format!("{prefix}CAST(a AS VARIANT)"), &[(
+        "a",
+        gen_bitmap_data(),
     )]);
 }
 
@@ -657,4 +664,23 @@ fn test_cast_between_string_and_decimal(file: &mut impl Write, is_try: bool) {
         format!("{prefix}CAST('-1.0e+10' AS DECIMAL(11, 0))"),
         &[],
     );
+}
+
+fn gen_bitmap_data() -> Column {
+    // construct bitmap column with 4 row:
+    // 0..5, 1..6, 2..7, 3..8
+    const N: u64 = 4;
+    let rbs_iter = (0..N).map(|i| {
+        let mut rb = RoaringTreemap::new();
+        rb.insert_range(i..(i + 5));
+        rb
+    });
+
+    let rbs = rbs_iter.map(|rb| {
+        let mut data = Vec::new();
+        rb.serialize_into(&mut data).unwrap();
+        data
+    });
+
+    BitmapType::from_data(rbs)
 }
