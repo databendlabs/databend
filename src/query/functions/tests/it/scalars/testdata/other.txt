@@ -192,11 +192,43 @@ output         : 1.2
 
 ast            : greatest(100,3.145)
 raw expr       : greatest(100, 3.145)
-checked expr   : greatest<Float32, Float32>(1.1_f32, 1.2_f32)
-optimized expr : 1.2_f32
-output type    : Float32
-output domain  : {1.2..=1.2}
-output         : 1.2
+checked expr   : greatest<UInt8, Decimal(4, 3)>(100_u8, 3.145_d128(4,3))
+optimized expr : 100.000_d128(6,3)
+output type    : Decimal(6, 3)
+output domain  : {100.000..=100.000}
+output         : 100.000
+
+ast            : greatest(100, 3.145,12)
+raw expr       : greatest(100, 3.145, 12)
+checked expr   : greatest<UInt8, Decimal(4, 3), UInt8>(100_u8, 3.145_d128(4,3), 12_u8)
+optimized expr : 100.000_d128(6,3)
+output type    : Decimal(6, 3)
+output domain  : {100.000..=100.000}
+output         : 100.000
+
+ast            : greatest(10,12,800)
+raw expr       : greatest(10,12,800)
+checked expr   : greatest<UInt8, Decimal(4, 3), UInt8>(100_u8, 3.145_d128(4,3), 12_u8)
+optimized expr : 100.000_d128(6,3)
+output type    : Decimal(6, 3)
+output domain  : {100.000..=100.000}
+output         : 100.000
+
+ast            : greatest(10,-12)
+raw expr       : greatest(10,-12)
+checked expr   : greatest<UInt8, Decimal(4, 3), UInt8>(100_u8, 3.145_d128(4,3), 12_u8)
+optimized expr : 100.000_d128(6,3)
+output type    : Decimal(6, 3)
+output domain  : {100.000..=100.000}
+output         : 100.000
+
+ast            : greatest(255,-128)
+raw expr       : greatest(255,-128)
+checked expr   : greatest<UInt8, Decimal(4, 3), UInt8>(100_u8, 3.145_d128(4,3), 12_u8)
+optimized expr : 100.000_d128(6,3)
+output type    : Decimal(6, 3)
+output domain  : {100.000..=100.000}
+output         : 100.000
 
 ast            : assume_not_null(a2)
 raw expr       : assume_not_null(a2::UInt8 NULL)

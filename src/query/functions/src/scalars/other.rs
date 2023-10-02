@@ -431,16 +431,24 @@ fn eval_arg_type(args: &[DataType]) -> DataType {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
                     is_decimal128 = true;
+                    if let Some(no_type) = num_type {
+                        let size = no_type.get_decimal_properties().unwrap();
+                        precision = max(size.precision+scale,precision);
+                    }
                 }
                 DecimalDataType::Decimal256(size) => {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
                     is_decimal256 = true;
+                    if let Some(no_type) = num_type {
+                        let size = no_type.get_decimal_properties().unwrap();
+                        precision = max(size.precision+scale,precision);
+                    }
                 }
             },
             DataType::Number(no_type) => {
                 let size = no_type.get_decimal_properties().unwrap();
-                precision = max(size.precision + scale, precision);
+                precision = max(size.precision+scale,precision);
                 match num_type {
                     Some(noo_type) => {
                         if !no_type.is_same(noo_type) {
@@ -507,28 +515,6 @@ fn eval_args(
                     },
                     _ => unreachable!("expect Scalar but: {:?}", arg),
                 }
-                // match arg {
-                //     ValueRef::Scalar(scalar) => match  scalar {
-                //         ScalarRef::Number(num) => {},
-                //         ScalarRef::Decimal(decimal) => {},
-                //         _ => unreachable!(),
-                //         // let from_type = scalar.infer_data_type();
-                //         // if dest_type.is_decimal() {
-                //         //     let decimal_type = dest_type.as_decimal().unwrap();
-                //         //     if let Value::Scalar(scalar) =
-                //         //         convert_to_decimal(arg, ctx, &from_type, decimal_type.to_owned())
-                //         //     {
-                //         //         builder.push(scalar.as_ref());
-                //         //     }
-                //         // } else {
-                //         //     if from_type == dest_type {
-                //         //         let scalar = scalar.as_number().unwrap().to_owned();
-                //         //         let scalar = scalar.as_value(dest_type.as_number().unwrp().to_owned());
-                //         //     }
-                //         //     builder.push(scalar.as_ref());
-                //     }
-                //     _ => unreachable!(),
-                // }
             }
             _ => unreachable!(),
         }
