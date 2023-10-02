@@ -433,7 +433,7 @@ fn eval_arg_type(args: &[DataType]) -> DataType {
                     is_decimal128 = true;
                     if let Some(no_type) = num_type {
                         let size = no_type.get_decimal_properties().unwrap();
-                        precision = max(size.precision+scale,precision);
+                        precision = max(size.precision + scale, precision);
                     }
                 }
                 DecimalDataType::Decimal256(size) => {
@@ -442,13 +442,13 @@ fn eval_arg_type(args: &[DataType]) -> DataType {
                     is_decimal256 = true;
                     if let Some(no_type) = num_type {
                         let size = no_type.get_decimal_properties().unwrap();
-                        precision = max(size.precision+scale,precision);
+                        precision = max(size.precision + scale, precision);
                     }
                 }
             },
             DataType::Number(no_type) => {
                 let size = no_type.get_decimal_properties().unwrap();
-                precision = max(size.precision+scale,precision);
+                precision = max(size.precision + scale, precision);
                 match num_type {
                     Some(noo_type) => {
                         if !no_type.is_same(noo_type) {
@@ -504,18 +504,16 @@ fn eval_args(
                     unreachable!("expect Scalar but: {:?}", arg);
                 }
             }
-            DataType::Number(v) => {
-                match arg {
-                    ValueRef::Scalar(scalar) => match scalar {
-                        ScalarRef::Number(scalar) => {
-                            let num_scalar = scalar.as_value(v);
-                            builder.push(num_scalar.as_ref());
-                        }
-                        _ => unreachable!("expect NumberScalar but: {:?}", scalar),
-                    },
-                    _ => unreachable!("expect Scalar but: {:?}", arg),
-                }
-            }
+            DataType::Number(v) => match arg {
+                ValueRef::Scalar(scalar) => match scalar {
+                    ScalarRef::Number(scalar) => {
+                        let num_scalar = scalar.as_value(v);
+                        builder.push(num_scalar.as_ref());
+                    }
+                    _ => unreachable!("expect NumberScalar but: {:?}", scalar),
+                },
+                _ => unreachable!("expect Scalar but: {:?}", arg),
+            },
             _ => unreachable!(),
         }
     }

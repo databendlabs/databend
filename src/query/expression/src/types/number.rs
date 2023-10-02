@@ -472,14 +472,16 @@ impl NumberScalar {
         })
     }
     pub fn as_value(&self, dest_type: NumberDataType) -> Scalar {
-        crate::with_number_mapped_type!(|NUM_TYPE| match &dest_type {
-            NumberDataType::NUM_TYPE => {
-                let value =
-                    NumberType::<NUM_TYPE>::try_downcast_scalar(&Scalar::Number(*self).as_ref())
-                        .unwrap()
-                        .to_owned();
-                NumberType::<NUM_TYPE>::upcast_scalar(value)
+        crate::with_integer_mapped_type!(|DEST_TYPE| match &dest_type {
+            NumberDataType::DEST_TYPE => {
+                NumberType::<DEST_TYPE>::upcast_scalar(crate::with_integer_mapped_type!(
+                    |NUM_TYPE| match self {
+                        NumberScalar::NUM_TYPE(num) => (*num).try_into().unwrap(),
+                        _ => unreachable!(),
+                    }
+                ))
             }
+            _ => unreachable!(),
         })
     }
 }
