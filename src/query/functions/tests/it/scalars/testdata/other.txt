@@ -237,6 +237,7 @@ output type    : Int16
 output domain  : {255..=255}
 output         : 255
 
+
 ast            : assume_not_null(a2)
 raw expr       : assume_not_null(a2::UInt8 NULL)
 checked expr   : assume_not_null<T0=UInt8><T0 NULL>(a2)
