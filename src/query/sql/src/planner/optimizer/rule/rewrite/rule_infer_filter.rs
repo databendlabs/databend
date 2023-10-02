@@ -42,7 +42,7 @@ use crate::plans::ScalarExpr;
 // The rule tries to infer new predicates from existing predicates, for example:
 // 1. [A > 1 and A > 5] => [A > 5], [A > 1 and A <= 1 => false], [A = 1 and A < 10] => [A = 1]
 // 2. [A = 10 and A = B] => [B = 10]
-// TODO(Dousir9): [A = B and A = C] => [B = C]
+// 3. [A = B and A = C] => [B = C]
 pub struct RuleInferFilter {
     id: RuleID,
     patterns: Vec<SExpr>,
