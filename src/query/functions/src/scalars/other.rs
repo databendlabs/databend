@@ -23,7 +23,6 @@ use common_base::base::convert_number_size;
 use common_base::base::uuid::Uuid;
 use common_expression::error_to_null;
 use common_expression::types::boolean::BooleanDomain;
-use common_expression::types::decimal::MAX_DECIMAL128_PRECISION;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
 use common_expression::types::number::Int64Type;
@@ -418,71 +417,64 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
     }
     grouping
 }
-
 fn eval_arg_type(args: &[DataType]) -> DataType {
     let mut precision: u8 = 0;
     let mut scale: u8 = 0;
+    let mut is_decimal128 = false;
     let mut is_decimal256 = false;
-    let mut data_type = args[0].clone();
+    let mut num_type: Option<NumberDataType> = None;
 
-    for arg in args.iter().take(0) {
+    for arg in args.iter() {
         match arg {
-            DataType::Number(no_type) => {
-                if let Some(num_type) = data_type.as_number() {
-                    match no_type.is_same(num_type.to_owned()) {
-                        false => {
-                            if no_type.can_lossless_cast_to(num_type.to_owned()) {
-                                data_type = DataType::Number(num_type.to_owned());
-                            } else if num_type.can_lossless_cast_to(no_type.to_owned()) {
-                                data_type = DataType::Number(no_type.to_owned());
-                            } else {
-                                precision = max(precision, 38);
-                                scale = max(scale, 18);
-                                if is_decimal256 || precision > MAX_DECIMAL128_PRECISION {
-                                    data_type = DataType::Decimal(DecimalDataType::Decimal256(
-                                        DecimalSize { precision, scale },
-                                    ));
-                                } else {
-                                    data_type = DataType::Decimal(DecimalDataType::Decimal128(
-                                        DecimalSize { precision, scale },
-                                    ));
-                                }
-                            }
-                        }
-                        true => {}
-                    }
-                }
-            }
             DataType::Decimal(decimal_type) => match decimal_type {
                 DecimalDataType::Decimal128(size) => {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
-                    if is_decimal256 || precision > MAX_DECIMAL128_PRECISION {
-                        data_type = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                            precision,
-                            scale,
-                        }));
-                    } else {
-                        data_type = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                            precision,
-                            scale,
-                        }));
-                    }
+                    is_decimal128 = true;
                 }
                 DecimalDataType::Decimal256(size) => {
                     precision = max(precision, size.precision);
                     scale = max(scale, size.scale);
                     is_decimal256 = true;
-                    data_type = DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                        precision,
-                        scale,
-                    }));
                 }
             },
+            DataType::Number(no_type) => {
+                let size = no_type.get_decimal_properties().unwrap();
+                precision = max(precision, size.precision);
+                scale = max(scale, size.scale);
+                match num_type {
+                    Some(noo_type) => {
+                        if !no_type.is_same(noo_type) {
+                            if no_type.can_lossless_cast_to(noo_type) {
+                                num_type = Some(noo_type);
+                            } else if noo_type.can_lossless_cast_to(no_type.to_owned()) {
+                                num_type = Some(no_type.to_owned());
+                            } else {
+                                is_decimal128 = true;
+                            }
+                        }
+                    }
+                    None => {
+                        num_type = Some(no_type.to_owned());
+                    }
+                }
+            }
             _ => unreachable!(),
         }
     }
-    data_type
+    if is_decimal256 {
+        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+            precision,
+            scale,
+        }))
+    } else if is_decimal128 {
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision,
+            scale,
+        }))
+    } else {
+        DataType::Number(num_type.unwrap())
+    }
 }
 
 fn eval_args(
@@ -506,11 +498,15 @@ fn eval_args(
                 }
             }
             DataType::Number(v) => {
-                if let ValueRef::Scalar(ScalarRef::Number(scalar)) = arg {
-                    let num_scalar = scalar.as_value(v);
-                    builder.push(num_scalar.as_ref());
-                } else {
-                    unreachable!("expect Scalar::Number but: {:?}", arg);
+                match arg {
+                    ValueRef::Scalar(scalar) => match scalar {
+                        ScalarRef::Number(scalar) => {
+                            let num_scalar = scalar.as_value(v);
+                            builder.push(num_scalar.as_ref());
+                        }
+                        _ => unreachable!("expect NumberScalar but: {:?}", scalar),
+                    },
+                    _ => unreachable!("expect Scalar but: {:?}", arg),
                 }
                 // match arg {
                 //     ValueRef::Scalar(scalar) => match  scalar {
