@@ -244,6 +244,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.is_empty() {
             return None;
         }
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let name = "greatest".to_string();
         let arg_type = eval_arg_type(args_type);
         let f = Function {
@@ -260,7 +261,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }),
             },
         };
-        Some(Arc::new(f))
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
     });
 }
 
