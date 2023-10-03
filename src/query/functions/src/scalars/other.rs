@@ -247,7 +247,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let name = "greatest".to_string();
         let arg_type = eval_arg_type(args_type);
-        let mut return_type = arg_type.clone().wrap_nullable();
+        let return_type = arg_type.clone().wrap_nullable();
         let f = Function {
             signature: FunctionSignature {
                 name,
