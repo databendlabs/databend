@@ -489,21 +489,31 @@ fn eval_args(
     ctx: &mut EvalContext,
     dest_type: DataType,
 ) -> Value<AnyType> {
+    match &args[0] {
+        ValueRef::Scalar(_) => eval_scalar_args(args, ctx, dest_type),
+        ValueRef::Column(_) => eval_column_args(args, ctx, dest_type),
+    }
+}
+
+fn eval_scalar_args(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
     let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
     for arg in args.iter() {
         match dest_type {
-            DataType::Decimal(v) => {
-                if let ValueRef::Scalar(scalar) = arg {
+            DataType::Decimal(v) => match arg {
+                ValueRef::Scalar(scalar) => {
                     let from_type = scalar.infer_data_type();
                     if let Value::Scalar(decimal_scalar) =
                         convert_to_decimal(arg, ctx, &from_type, v)
                     {
                         builder.push(decimal_scalar.as_ref());
                     }
-                } else {
-                    unreachable!("expect Scalar but: {:?}", args);
                 }
-            }
+                _ => unreachable!(),
+            },
             DataType::Number(v) => match arg {
                 ValueRef::Scalar(scalar) => match scalar {
                     ScalarRef::Number(scalar) => {
@@ -512,10 +522,50 @@ fn eval_args(
                     }
                     _ => unreachable!("expect NumberScalar but: {:?}", scalar),
                 },
-                _ => unreachable!("expect Scalar but: {:?}", arg),
+                _ => unreachable!(),
             },
             _ => unreachable!(),
         }
     }
     Value::Scalar(Scalar::Array(builder.build()))
+}
+fn eval_column_args(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    let m = args.len();
+    let n = args[0].as_column().unwrap().len();
+    let mut builder =
+        ColumnBuilder::with_capacity(&DataType::Array(Box::new(dest_type.clone())), n);
+    for j in 0..n {
+        let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
+        for item in args.iter().take(m) {
+            let col = item.as_column().unwrap();
+            let arg = col.index(j).unwrap();
+            match dest_type {
+                DataType::Decimal(v) => {
+                    let from_type = arg.infer_data_type();
+                    if let Value::Scalar(decimal_scalar) = convert_to_decimal(
+                        &Value::Scalar(arg.to_owned()).as_ref(),
+                        ctx,
+                        &from_type,
+                        v,
+                    ) {
+                        scalar_builder.push(decimal_scalar.as_ref());
+                    }
+                }
+                DataType::Number(v) => match arg {
+                    ScalarRef::Number(scalar) => {
+                        let num_scalar = scalar.as_value(v);
+                        scalar_builder.push(num_scalar.as_ref());
+                    }
+                    _ => unreachable!("expect NumberScalar but: {:?}", arg),
+                },
+                _ => unreachable!(),
+            }
+        }
+        builder.push(Scalar::Array(scalar_builder.build()).as_ref());
+    }
+    Value::Column(builder.build())
 }
