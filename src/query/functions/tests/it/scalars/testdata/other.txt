@@ -179,7 +179,7 @@ ast            : greatest(1,2)
 raw expr       : greatest(1, 2)
 checked expr   : greatest<UInt8, UInt8>(1_u8, 2_u8)
 optimized expr : 2_u8
-output type    : UInt8
+output type    : UInt8 NULL
 output domain  : {2..=2}
 output         : 2
 
@@ -188,7 +188,7 @@ ast            : greatest(1.1,1.2)
 raw expr       : greatest(1.1, 1.2)
 checked expr   : greatest<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.2_d128(2,1))
 optimized expr : 1.2_d128(2,1)
-output type    : Decimal(2, 1)
+output type    : Decimal(2, 1) NULL
 output domain  : {1.2..=1.2}
 output         : 1.2
 
@@ -197,7 +197,7 @@ ast            : greatest(100,3.145)
 raw expr       : greatest(100, 3.145)
 checked expr   : greatest<UInt8, Decimal(4, 3)>(100_u8, 3.145_d128(4,3))
 optimized expr : 100.000_d128(6,3)
-output type    : Decimal(6, 3)
+output type    : Decimal(6, 3) NULL
 output domain  : {100.000..=100.000}
 output         : 100.000
 
@@ -206,7 +206,7 @@ ast            : greatest(100,3.145,12)
 raw expr       : greatest(100, 3.145, 12)
 checked expr   : greatest<UInt8, Decimal(4, 3), UInt8>(100_u8, 3.145_d128(4,3), 12_u8)
 optimized expr : 100.000_d128(6,3)
-output type    : Decimal(6, 3)
+output type    : Decimal(6, 3) NULL
 output domain  : {100.000..=100.000}
 output         : 100.000
 
@@ -215,7 +215,7 @@ ast            : greatest(10,12,800)
 raw expr       : greatest(10, 12, 800)
 checked expr   : greatest<UInt8, UInt8, UInt16>(10_u8, 12_u8, 800_u16)
 optimized expr : 800_u16
-output type    : UInt16
+output type    : UInt16 NULL
 output domain  : {800..=800}
 output         : 800
 
@@ -224,7 +224,7 @@ ast            : greatest(10,-12)
 raw expr       : greatest(10, minus(12))
 checked expr   : greatest<UInt8, Int16>(10_u8, minus<UInt8>(12_u8))
 optimized expr : 10_i16
-output type    : Int16
+output type    : Int16 NULL
 output domain  : {10..=10}
 output         : 10
 
@@ -233,7 +233,7 @@ ast            : greatest(255,-128)
 raw expr       : greatest(255, minus(128))
 checked expr   : greatest<UInt8, Int16>(255_u8, minus<UInt8>(128_u8))
 optimized expr : 255_i16
-output type    : Int16
+output type    : Int16 NULL
 output domain  : {255..=255}
 output         : 255
 
