@@ -37,7 +37,11 @@ SELECT id, name, category, price, rating,
          AS adjusted_price
 FROM products
 ----
-4 4 1 1
+1 Product 1 0 100.00 3 0.06 1 0.2 0.20 120.00
+3 Product 3 0 200.00 5 0.10 2 0.1 0.10 220.00
+5 Product 5 1 300.00 1 0.02 1 0.2 0.20 360.00
+2 Product 2 1 150.00 4 0.08 2 0.1 0.10 165.00
+4 Product 4 2 250.00 2 0.04 1 0.2 0.20 300.00
 
 query ITITITT
 SELECT id, name, category, price, rating,
@@ -60,7 +64,11 @@ SELECT id, name, category, price, rating,
          AS adjusted_price
 FROM products
 ----
-4 4 1 1
+1 Product 1 0 100.00 3 0.06 1 0.2 0.20 120.00
+3 Product 3 0 200.00 5 0.10 2 0.1 0.10 220.00
+5 Product 5 1 300.00 1 0.02 1 0.2 0.20 360.00
+2 Product 2 1 150.00 4 0.08 2 0.1 0.10 165.00
+4 Product 4 2 250.00 2 0.04 1 0.2 0.20 300.00
 
 statement ok
 DROP DATABASE greatest_func_test
