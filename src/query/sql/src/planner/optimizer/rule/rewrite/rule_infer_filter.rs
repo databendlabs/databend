@@ -403,8 +403,8 @@ impl PredicateSet {
             let equal_set_len = equal_set.len();
             for i in 0..equal_set_len {
                 for j in i + 1..equal_set_len {
-                    new_equal_pairs.push((i, j));
-                    new_equal_pairs.push((j, i));
+                    new_equal_pairs.push((equal_set[i], equal_set[j]));
+                    new_equal_pairs.push((equal_set[j], equal_set[i]));
                     result.push(ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
                         func_name: String::from(ComparisonOp::Equal.to_func_name()),
