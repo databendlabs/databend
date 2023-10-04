@@ -24,6 +24,7 @@ use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+#[derive(Clone)]
 pub struct DeleteByExprMutator {
     expr: Option<Expr>,
     row_id_idx: usize,

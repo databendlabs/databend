@@ -305,11 +305,16 @@ impl PipelineBuilder {
         let MergeIntoSource { input, row_id_idx } = merge_into_source;
 
         self.build_pipeline(input)?;
-        self.main_pipeline.try_resize(1)?;
-        let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+        // merge into's parallism depends on the join probe number.
+        let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+        let output_len = self.main_pipeline.output_len();
+        for _ in 0..output_len {
+            let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+            items.push(merge_into_split_processor.into_pipe_item());
+        }
 
         self.main_pipeline
-            .add_pipe(merge_into_split_processor.into_pipe());
+            .add_pipe(Pipe::create(output_len, output_len * 2, items));
 
         Ok(())
     }
@@ -480,19 +485,63 @@ impl PipelineBuilder {
             }
             output_len
         };
-        let pipe_items = vec![
-            matched_split_processor.into_pipe_item(),
-            merge_into_not_matched_processor.into_pipe_item(),
-        ];
-
+        // recieve matched data and not matched data parallely.
+        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
+        for _ in (0..self.main_pipeline.output_len()).step_by(2) {
+            pipe_items.push(matched_split_processor.clone().into_pipe_item());
+            pipe_items.push(merge_into_not_matched_processor.clone().into_pipe_item());
+        }
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
-            pipe_items,
+            pipe_items.clone(),
         ));
 
-        self.main_pipeline
-            .resize_partial_one(vec![vec![0], vec![1, 2]])?;
+        // row_id port0_1
+        // matched update data port0_2
+        // not macthed insert data port0_3
+        // row_id port1_1
+        // matched update data port1_2
+        // not macthed insert data port1_3
+        // ......
+        assert_eq!(self.main_pipeline.output_len() % 3, 0);
+
+        // merge rowid and serialize_blocks
+        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len() / 3 * 2);
+        for idx in (0..self.main_pipeline.output_len()).step_by(3) {
+            ranges.push(vec![idx]);
+            ranges.push(vec![idx + 1, idx + 2]);
+        }
+        self.main_pipeline.resize_partial_one(ranges.clone())?;
+        assert_eq!(self.main_pipeline.output_len() % 2, 0);
+
+        // shuffle outputs and resize row_id
+        // ----------------------------------------------------------------------
+        // row_id port0_1               row_id port0_1
+        // data port0_2                 row_id port1_1              row_id port
+        // row_id port1_1   ======>     ......           ======>
+        // data port1_2                 data port0_2                data port0
+        // ......                       data port1_2                data port1
+        // ......                       .....                       .....
+        // ----------------------------------------------------------------------
+        let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            rules.push(idx);
+            rules.push(idx + self.main_pipeline.output_len() / 2);
+        }
+        self.main_pipeline.reorder_inputs(rules);
+        // resize row_id
+        ranges.clear();
+        let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            vec.push(idx);
+        }
+        ranges.push(vec.clone());
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
+        }
+        self.main_pipeline.resize_partial_one(ranges.clone())?;
+
         // fill default columns
         let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
@@ -505,9 +554,8 @@ impl PipelineBuilder {
                     tbl.clone(),
                 )
             },
-            1,
+            self.main_pipeline.output_len() - 1,
         )?;
-
         builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
 
@@ -526,7 +574,7 @@ impl PipelineBuilder {
                         computed_schema.clone(),
                     )
                 },
-                1,
+                self.main_pipeline.output_len() - 1,
             )?;
             builder.add_items_prepend(vec![create_dummy_item()]);
             self.main_pipeline.add_pipe(builder.finalize());
@@ -534,22 +582,39 @@ impl PipelineBuilder {
 
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+        let serialize_block_transform_item = serialize_block_transform.into_pipe_item();
 
-        let pipe_items = vec![
-            table.matched_mutator(
-                self.ctx.clone(),
-                block_builder,
-                io_request_semaphore,
-                segments.clone(),
-            )?,
-            serialize_block_transform.into_pipe_item(),
-        ];
+        pipe_items.clear();
+        pipe_items.push(table.rowid_aggregate_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
+            segments.clone(),
+        )?);
+
+        for _ in 0..self.main_pipeline.output_len() - 1 {
+            pipe_items.push(serialize_block_transform_item.clone());
+        }
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
             pipe_items,
         ));
+
+        // resize block ports
+        // aggregate_mutator port               aggregate_mutator port
+        // serialize_block port0     ======>
+        // serialize_block port1                serialize_block port
+        // .......
+        ranges.clear();
+        ranges.push(vec![0]);
+        vec.clear();
+        for idx in 0..self.main_pipeline.output_len() - 1 {
+            vec.push(idx + 1);
+        }
+        ranges.push(vec);
+        self.main_pipeline.resize_partial_one(ranges)?;
 
         let pipe_items = vec![
             create_dummy_item(),

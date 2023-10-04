@@ -37,12 +37,14 @@ use crate::operations::merge_into::mutator::SplitByExprMutator;
 // (source_schema,condition,values_exprs)
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
+#[derive(Clone)]
 struct InsertDataBlockMutation {
     op: BlockOperator,
     split_mutator: SplitByExprMutator,
 }
 
 // need to evaluate expression and
+#[derive(Clone)]
 pub struct MergeIntoNotMatchedProcessor {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
