@@ -128,7 +128,6 @@ impl Binder {
             self.bind_single_table(bind_context, &source_data).await?;
 
         // add all left source columns for read
-        // todo: (JackTan25) do column prune after finish "split expr for target and source"
         let mut columns_set = left_context.column_set();
 
         let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
@@ -511,4 +510,9 @@ impl Binder {
         }
         false
     }
+
+    // target_only_expr rules:
+    // we need to find all exprs in matched/unmatched clauses' [AND expr].
+    // split all exprs which is correlated to target table and push down these
+    // expr to filter data of target table.
 }
