@@ -485,7 +485,7 @@ impl PipelineBuilder {
             }
             output_len
         };
-        // recieve matched data and not matched data parallely.
+        // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
         for _ in (0..self.main_pipeline.output_len()).step_by(2) {
             pipe_items.push(matched_split_processor.clone().into_pipe_item());
