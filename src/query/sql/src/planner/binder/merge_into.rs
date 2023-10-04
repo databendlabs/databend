@@ -222,6 +222,7 @@ impl Binder {
         columns_set.insert(column_binding.index);
 
         // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
+        // add new block_level hash table to improve performance.
         let join = Join {
             op: LeftOuter,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
