@@ -39,7 +39,6 @@ use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_co
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
 
-#[derive(Clone)]
 enum MutationKind {
     Update(UpdateDataBlockMutation),
     Delete(DeleteDataBlockMutation),
@@ -62,17 +61,14 @@ impl BlockMetaInfo for RowIdKind {
     }
 }
 
-#[derive(Clone)]
 struct UpdateDataBlockMutation {
     update_mutator: UpdateByExprMutator,
 }
 
-#[derive(Clone)]
 struct DeleteDataBlockMutation {
     delete_mutator: DeleteByExprMutator,
 }
 
-#[derive(Clone)]
 pub struct MatchedSplitProcessor {
     input_port: Arc<InputPort>,
     output_port_row_id: Arc<OutputPort>,

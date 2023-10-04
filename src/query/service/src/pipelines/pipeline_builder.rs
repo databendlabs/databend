@@ -436,24 +436,11 @@ impl PipelineBuilder {
             row_id_idx,
             segments,
         } = merge_into;
+
         self.build_pipeline(input)?;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
-        let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-            unmatched.clone(),
-            input.output_schema()?,
-            self.ctx.get_function_context()?,
-        )?;
-
-        let matched_split_processor = MatchedSplitProcessor::create(
-            self.ctx.clone(),
-            *row_id_idx,
-            matched.clone(),
-            field_index_of_input_schema.clone(),
-            input.output_schema()?,
-            Arc::new(DataSchema::from(tbl.schema())),
-        )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
@@ -461,15 +448,15 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
 
-        // append data for unmatched data
-        let serialize_block_transform = TransformSerializeBlock::try_create(
+        // this TransformSerializeBlock is just used to get block_builder
+        let block_builder = TransformSerializeBlock::try_create(
             self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,
-            cluster_stats_gen,
-        )?;
-        let block_builder = serialize_block_transform.get_block_builder();
+            cluster_stats_gen.clone(),
+        )?
+        .get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
             self.ctx.clone(),
@@ -485,11 +472,27 @@ impl PipelineBuilder {
             }
             output_len
         };
+
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
         for _ in (0..self.main_pipeline.output_len()).step_by(2) {
-            pipe_items.push(matched_split_processor.clone().into_pipe_item());
-            pipe_items.push(merge_into_not_matched_processor.clone().into_pipe_item());
+            let matched_split_processor = MatchedSplitProcessor::create(
+                self.ctx.clone(),
+                *row_id_idx,
+                matched.clone(),
+                field_index_of_input_schema.clone(),
+                input.output_schema()?,
+                Arc::new(DataSchema::from(tbl.schema())),
+            )?;
+
+            let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                unmatched.clone(),
+                input.output_schema()?,
+                self.ctx.get_function_context()?,
+            )?;
+
+            pipe_items.push(matched_split_processor.into_pipe_item());
+            pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
         }
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
@@ -582,7 +585,6 @@ impl PipelineBuilder {
 
         let max_threads = self.ctx.get_settings().get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
-        let serialize_block_transform_item = serialize_block_transform.into_pipe_item();
 
         pipe_items.clear();
         pipe_items.push(table.rowid_aggregate_mutator(
@@ -593,7 +595,14 @@ impl PipelineBuilder {
         )?);
 
         for _ in 0..self.main_pipeline.output_len() - 1 {
-            pipe_items.push(serialize_block_transform_item.clone());
+            let serialize_block_transform = TransformSerializeBlock::try_create(
+                self.ctx.clone(),
+                InputPort::create(),
+                OutputPort::create(),
+                table,
+                cluster_stats_gen.clone(),
+            )?;
+            pipe_items.push(serialize_block_transform.into_pipe_item());
         }
 
         self.main_pipeline.add_pipe(Pipe::create(
