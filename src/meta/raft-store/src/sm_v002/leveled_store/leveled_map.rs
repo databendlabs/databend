@@ -19,14 +19,16 @@ use std::sync::Arc;
 
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::compacted_get;
+use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::MapKey;
+use crate::sm_v002::leveled_store::ref_::Ref;
+use crate::sm_v002::leveled_store::ref_mut::RefMut;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
-use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
 
 /// State machine data organized in multiple levels.
@@ -38,7 +40,7 @@ use crate::sm_v002::marked::Marked;
 #[derive(Debug, Default)]
 pub struct LeveledMap {
     /// The top level is the newest and writable.
-    writable: LevelData,
+    writable: Level,
 
     /// The immutable levels, from the oldest to the newest.
     /// levels[0] is the bottom and oldest level.
@@ -46,7 +48,7 @@ pub struct LeveledMap {
 }
 
 impl LeveledMap {
-    pub(crate) fn new(writable: LevelData) -> Self {
+    pub(crate) fn new(writable: Level) -> Self {
         Self {
             writable,
             frozen: Default::default(),
@@ -54,7 +56,7 @@ impl LeveledMap {
     }
 
     /// Return an iterator of all levels in reverse order.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         [&self.writable]
             .into_iter()
             .chain(self.frozen.iter_levels())
@@ -71,12 +73,12 @@ impl LeveledMap {
     }
 
     /// Return an immutable reference to the top level i.e., the writable level.
-    pub fn writable_ref(&self) -> &LevelData {
+    pub fn writable_ref(&self) -> &Level {
         &self.writable
     }
 
     /// Return a mutable reference to the top level i.e., the writable level.
-    pub fn writable_mut(&mut self) -> &mut LevelData {
+    pub fn writable_mut(&mut self) -> &mut Level {
         &mut self.writable
     }
 
@@ -89,76 +91,59 @@ impl LeveledMap {
     pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
         self.frozen = b;
     }
+
+    pub(crate) fn to_ref_mut(&mut self) -> RefMut {
+        RefMut::new(&mut self.writable, &self.frozen)
+    }
+
+    pub(crate) fn to_ref(&self) -> Ref {
+        Ref::new(Some(&self.writable), &self.frozen)
+    }
 }
 
 #[async_trait::async_trait]
 impl<K> MapApiRO<K> for LeveledMap
 where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<K>,
+    K: MapKey + fmt::Debug,
+    Level: MapApiRO<K>,
 {
-    type V = <LevelData as MapApiRO<K>>::V;
-
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        for level_data in self.iter_levels() {
-            let got = level_data.get(key).await;
-            if !got.is_not_found() {
-                return got;
-            }
-        }
-        return Marked::empty();
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
-        K: 'a,
-        K: Borrow<T> + Clone,
-        Self::V: Unpin,
-        T: Ord,
-        R: RangeBounds<T> + Clone + Send + Sync,
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let mut km = KMerge::by(util::by_key_seq);
-
-        for api in self.iter_levels() {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        Box::pin(m)
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
     }
 }
 
 #[async_trait::async_trait]
 impl<K> MapApi<K> for LeveledMap
 where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApi<K>,
+    K: MapKey,
+    Level: MapApi<K>,
 {
     async fn set(
         &mut self,
         key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>)
+        value: Option<(K::V, Option<KVMeta>)>,
+    ) -> (Marked<K::V>, Marked<K::V>)
     where
         K: Ord,
     {
-        // Get from this level or the base level.
-        let prev = self.get(&key).await.clone();
+        let mut l = self.to_ref_mut();
+        MapApi::set(&mut l, key, value).await
 
-        // No such entry at all, no need to create a tombstone for delete
-        if prev.is_not_found() && value.is_none() {
-            return (prev, Marked::new_tomb_stone(0));
-        }
-
-        // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.writable_mut().set(key, value).await;
-        (prev, inserted)
+        // (&mut l).set(key, value).await
     }
 }
