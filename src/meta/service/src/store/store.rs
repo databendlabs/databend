@@ -73,6 +73,10 @@ impl RaftStore {
         let sto = StoreInner::open_create(config, open, create).await?;
         Ok(Self::new(sto))
     }
+
+    pub fn inner(&self) -> Arc<StoreInner> {
+        self.inner.clone()
+    }
 }
 
 impl Deref for RaftStore {
