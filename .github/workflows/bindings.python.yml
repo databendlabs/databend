@@ -91,7 +91,7 @@ jobs:
       contents: read
       id-token: write
     environment:
-      name: pypi
+      name: pypi.org
       url: https://pypi.org/p/databend-driver/
     steps:
       - uses: actions/checkout@v4

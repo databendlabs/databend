@@ -9,6 +9,7 @@ authors = { workspace = true }
 
 [lib]
 crate-type = ["cdylib"]
+name = "databend_driver"
 doc = false
 
 [dependencies]

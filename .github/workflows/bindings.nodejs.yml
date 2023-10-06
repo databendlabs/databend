@@ -111,7 +111,7 @@ jobs:
       contents: read
       id-token: write
     environment:
-      name: npmjs
+      name: npmjs.com
       url: https://www.npmjs.com/package/databend-driver
     steps:
       - uses: actions/checkout@v4
