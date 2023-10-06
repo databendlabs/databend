@@ -389,6 +389,11 @@ impl StoreInner {
     /// Export data that can be used to restore a meta-service node.
     #[minitrace::trace]
     pub async fn export(&self) -> Result<Vec<String>, io::Error> {
+        // Convert to io::Error(InvalidData).
+        fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
+            io::Error::new(ErrorKind::InvalidData, e)
+        }
+
         // Lock all components so that we have a consistent view.
         //
         // Hold the snapshot lock to prevent snapshot from being replaced until exporting finished.
@@ -405,16 +410,12 @@ impl StoreInner {
 
         // Export data header first
         {
-            let header_tree = SledTree::open(&self.db, TREE_HEADER, false)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let header_tree = SledTree::open(&self.db, TREE_HEADER, false).map_err(invalid_data)?;
 
-            let header_kvs = header_tree
-                .export()
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let header_kvs = header_tree.export()?;
 
             for kv in header_kvs.iter() {
-                let line = vec_kv_to_json(TREE_HEADER, kv)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                let line = vec_kv_to_json(TREE_HEADER, kv)?;
                 res.push(line);
             }
         }
@@ -425,10 +426,7 @@ impl StoreInner {
 
             let ks = raft_state.inner.key_space::<RaftStateKV>();
 
-            let id = ks
-                .get(&RaftStateKey::Id)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
-                .map(NodeId::from);
+            let id = ks.get(&RaftStateKey::Id)?.map(NodeId::from);
 
             if let Some(id) = id {
                 let ent_id = RaftStoreEntry::RaftStateKV {
@@ -436,16 +434,12 @@ impl StoreInner {
                     value: RaftStateValue::NodeId(id),
                 };
 
-                let s = serde_json::to_string(&(tree_name, ent_id))
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                let s = serde_json::to_string(&(tree_name, ent_id)).map_err(invalid_data)?;
 
                 res.push(s);
             }
 
-            let vote = ks
-                .get(&RaftStateKey::HardState)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
-                .map(Vote::from);
+            let vote = ks.get(&RaftStateKey::HardState)?.map(Vote::from);
 
             if let Some(vote) = vote {
                 let ent_vote = RaftStoreEntry::RaftStateKV {
@@ -453,15 +447,13 @@ impl StoreInner {
                     value: RaftStateValue::HardState(vote),
                 };
 
-                let s = serde_json::to_string(&(tree_name, ent_vote))
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                let s = serde_json::to_string(&(tree_name, ent_vote)).map_err(invalid_data)?;
 
                 res.push(s);
             }
 
             let committed = ks
-                .get(&RaftStateKey::Committed)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
+                .get(&RaftStateKey::Committed)?
                 .and_then(Option::<LogId>::from);
 
             let ent_committed = RaftStoreEntry::RaftStateKV {
@@ -469,8 +461,7 @@ impl StoreInner {
                 value: RaftStateValue::Committed(committed),
             };
 
-            let s = serde_json::to_string(&(tree_name, ent_committed))
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let s = serde_json::to_string(&(tree_name, ent_committed)).map_err(invalid_data)?;
 
             res.push(s);
         };
@@ -479,18 +470,13 @@ impl StoreInner {
         {
             let tree_name = &log.inner.name;
 
-            let log_kvs = log
-                .inner
-                .export()
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let log_kvs = log.inner.export()?;
 
             for kv in log_kvs.iter() {
-                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
 
                 let tree_kv = (tree_name, kv_entry);
-                let line = serde_json::to_string(&tree_kv)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
 
                 res.push(line);
             }
@@ -512,18 +498,16 @@ impl StoreInner {
                 let f = snapshot_store
                     .load_snapshot(&meta.snapshot_id)
                     .await
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                    .map_err(invalid_data)?;
                 let bf = BufReader::new(f);
                 let mut lines = AsyncBufReadExt::lines(bf);
 
                 while let Some(l) = lines.next_line().await? {
-                    let ent: RaftStoreEntry = serde_json::from_str(&l)
-                        .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                    let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
 
                     let named_entry = (tree_name, ent);
 
-                    let l = serde_json::to_string(&named_entry)
-                        .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                    let l = serde_json::to_string(&named_entry).map_err(invalid_data)?;
 
                     res.push(l);
                 }
