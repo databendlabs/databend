@@ -1,4 +1,4 @@
-statement error mysql client error: Server error: `ERROR HY000 \(1105\): TableAlreadyExists\. Code: 2302, Text = Table 'range_t' already exists\.'
+statement ok
 create table range_t(c varchar, i int)
 
 statement ok
