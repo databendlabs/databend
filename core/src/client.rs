@@ -256,6 +256,26 @@ impl APIClient {
         }
     }
 
+    pub async fn kill_query(&self, kill_uri: &str) -> Result<()> {
+        let endpoint = self.endpoint.join(kill_uri)?;
+        let headers = self.make_headers().await?;
+        let resp = self
+            .cli
+            .post(endpoint.clone())
+            .basic_auth(self.user.clone(), self.password.clone())
+            .headers(headers.clone())
+            .send()
+            .await?;
+        if resp.status() != StatusCode::OK {
+            let resp_err = QueryError {
+                code: resp.status().as_u16(),
+                message: format!("kill query failed: {}", resp.text().await?),
+            };
+            return Err(Error::InvalidResponse(resp_err));
+        }
+        Ok(())
+    }
+
     pub async fn wait_for_query(&self, resp: QueryResponse) -> Result<QueryResponse> {
         if let Some(next_uri) = &resp.next_uri {
             let schema = resp.schema;

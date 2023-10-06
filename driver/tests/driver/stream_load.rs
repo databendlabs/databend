@@ -100,7 +100,7 @@ async fn stream_load(presigned: bool, file_type: &str) {
     ];
     assert_eq!(result, expected);
 
-    let sql = format!("DROP TABLE `{}` ALL;", table);
+    let sql = format!("DROP TABLE `{}`;", table);
     conn.exec(&sql).await.unwrap();
 }
 

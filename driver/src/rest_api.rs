@@ -75,7 +75,10 @@ impl Connection for RestAPIConnection {
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
         let resp = self.client.query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
-        self.finish_query(resp.final_uri).await?;
+        match resp.kill_uri {
+            Some(uri) => self.client.kill_query(&uri).await.map_err(|e| e.into()),
+            None => Err(Error::InvalidResponse("kill_uri is empty".to_string())),
+        }?;
         let schema = resp.schema.try_into()?;
         if resp.data.is_empty() {
             Ok(None)
@@ -150,13 +153,6 @@ impl<'o> RestAPIConnection {
         }
         result.schema = schema;
         Ok(result)
-    }
-
-    async fn finish_query(&self, final_uri: Option<String>) -> Result<QueryResponse> {
-        match final_uri {
-            Some(uri) => self.client.query_page(&uri).await.map_err(|e| e.into()),
-            None => Err(Error::InvalidResponse("final_uri is empty".to_string())),
-        }
     }
 
     fn default_file_format_options() -> BTreeMap<&'o str, &'o str> {

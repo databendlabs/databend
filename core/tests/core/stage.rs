@@ -79,7 +79,7 @@ async fn insert_with_stage(presigned: bool) {
     ];
     assert_eq!(resp.data, expect);
 
-    let sql = format!("DROP TABLE `{}` ALL;", table);
+    let sql = format!("DROP TABLE `{}`;", table);
     client.query_wait(&sql).await.unwrap();
 }
 
