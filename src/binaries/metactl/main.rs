@@ -50,12 +50,19 @@ pub struct Config {
     pub log_level: String,
 
     #[clap(long)]
+    pub status: bool,
+
+    #[clap(long)]
     pub import: bool,
 
     #[clap(long)]
     pub export: bool,
 
-    #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
+    #[clap(
+        long,
+        env = "METASRV_GRPC_API_ADDRESS",
+        default_value = "127.0.0.1:9191"
+    )]
     pub grpc_api_address: String,
 
     /// When export raft data, this is the name of the save db file.
@@ -79,7 +86,7 @@ pub struct Config {
 #[serde(default)]
 pub struct MetaCtlRaftConfig {
     /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long, default_value = "./_meta")]
+    #[clap(long)]
     #[serde(alias = "kvsrv_raft_dir")]
     pub raft_dir: String,
 
@@ -106,7 +113,7 @@ impl From<MetaCtlRaftConfig> for RaftConfig {
 impl Default for MetaCtlRaftConfig {
     fn default() -> Self {
         Self {
-            raft_dir: "./_meta".to_string(),
+            raft_dir: "".to_string(),
             id: 0,
         }
     }

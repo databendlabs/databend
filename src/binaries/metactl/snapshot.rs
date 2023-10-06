@@ -66,12 +66,11 @@ use crate::Config;
 pub async fn export_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
 
-    // export from grpc api if metasrv is running
-    if config.grpc_api_address.is_empty() {
+    if raft_config.raft_dir.is_empty() {
+        export_from_running_node(config).await?;
+    } else {
         init_sled_db(raft_config.raft_dir.clone());
         export_from_dir(config).await?;
-    } else {
-        export_from_running_node(config).await?;
     }
 
     Ok(())
