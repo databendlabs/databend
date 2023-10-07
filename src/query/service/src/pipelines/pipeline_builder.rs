@@ -289,13 +289,6 @@ impl PipelineBuilder {
         select_schema: Arc<DataSchema>,
         output_schema: Arc<DataSchema>,
     ) -> Result<bool> {
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
         // check if cast needed
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
