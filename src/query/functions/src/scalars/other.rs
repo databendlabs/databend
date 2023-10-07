@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
@@ -29,9 +30,12 @@ use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::number::F64;
 use common_expression::types::string::StringColumn;
+use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::DecimalSize;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
@@ -45,6 +49,7 @@ use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -60,6 +65,9 @@ use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
+
+use crate::scalars::array::eval_array_aggr;
+use crate::scalars::decimal::convert_to_decimal;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -185,7 +193,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
-
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
         |_, domain| {
@@ -233,6 +240,34 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col)
         },
     );
+    registry.register_function_factory("greatest", |_, args_type| {
+        if args_type.is_empty() {
+            return None;
+        }
+        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
+        let name = "greatest".to_string();
+        let arg_type = eval_arg_type(args_type);
+        let return_type = arg_type.wrap_nullable();
+        let f = Function {
+            signature: FunctionSignature {
+                name,
+                args_type: args_type.to_vec(),
+                return_type,
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
+                eval: Box::new(move |args, ctx| {
+                    let arg = eval_args(args, ctx, arg_type.clone());
+                    eval_array_aggr("max", &[arg.as_ref()], ctx)
+                }),
+            },
+        };
+        if has_null {
+            Some(Arc::new(f.passthrough_nullable()))
+        } else {
+            Some(Arc::new(f))
+        }
+    });
 }
 
 fn register_inet_aton(registry: &mut FunctionRegistry) {
@@ -387,4 +422,156 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
         grouping |= ((grouping_id & (1 << j)) >> j) << i;
     }
     grouping
+}
+fn eval_arg_type(args: &[DataType]) -> DataType {
+    let mut precision: u8 = 0;
+    let mut scale: u8 = 0;
+    let mut is_decimal128 = false;
+    let mut is_decimal256 = false;
+    let mut num_type: Option<NumberDataType> = None;
+
+    for arg in args.iter() {
+        match arg {
+            DataType::Decimal(decimal_type) => match decimal_type {
+                DecimalDataType::Decimal128(size) => {
+                    precision = max(precision, size.precision);
+                    scale = max(scale, size.scale);
+                    is_decimal128 = true;
+                    if let Some(no_type) = num_type {
+                        let size = no_type.get_decimal_properties().unwrap();
+                        precision = max(size.precision + scale, precision);
+                    }
+                }
+                DecimalDataType::Decimal256(size) => {
+                    precision = max(precision, size.precision);
+                    scale = max(scale, size.scale);
+                    is_decimal256 = true;
+                    if let Some(no_type) = num_type {
+                        let size = no_type.get_decimal_properties().unwrap();
+                        precision = max(size.precision + scale, precision);
+                    }
+                }
+            },
+            DataType::Number(no_type) => {
+                let size = no_type.get_decimal_properties().unwrap();
+                precision = max(size.precision + scale, precision);
+                match num_type {
+                    Some(int_type) => {
+                        if !no_type.is_same(int_type) {
+                            if no_type.can_lossless_cast_to(int_type) {
+                                num_type = Some(int_type);
+                            } else if int_type.can_lossless_cast_to(no_type.to_owned()) {
+                                num_type = Some(no_type.to_owned());
+                            } else {
+                                is_decimal128 = true;
+                            }
+                        }
+                    }
+                    None => {
+                        num_type = Some(no_type.to_owned());
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+    }
+    if is_decimal256 {
+        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+            precision,
+            scale,
+        }))
+    } else if is_decimal128 {
+        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision,
+            scale,
+        }))
+    } else {
+        DataType::Number(num_type.unwrap())
+    }
+}
+
+fn eval_args(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    match &args[0] {
+        ValueRef::Scalar(_) => eval_scalar_args(args, ctx, dest_type),
+        ValueRef::Column(_) => eval_column_args(args, ctx, dest_type),
+    }
+}
+
+fn eval_scalar_args(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
+    for arg in args.iter() {
+        match dest_type {
+            DataType::Decimal(v) => match arg {
+                ValueRef::Scalar(scalar) => {
+                    let from_type = scalar.infer_data_type();
+                    if let Value::Scalar(decimal_scalar) =
+                        convert_to_decimal(arg, ctx, &from_type, v)
+                    {
+                        builder.push(decimal_scalar.as_ref());
+                    }
+                }
+                _ => unreachable!(),
+            },
+            DataType::Number(v) => match arg {
+                ValueRef::Scalar(scalar) => match scalar {
+                    ScalarRef::Number(scalar) => {
+                        let num_scalar = scalar.as_value(v);
+                        builder.push(num_scalar.as_ref());
+                    }
+                    _ => unreachable!("expect NumberScalar but: {:?}", scalar),
+                },
+                _ => unreachable!(),
+            },
+            _ => unreachable!(),
+        }
+    }
+    Value::Scalar(Scalar::Array(builder.build()))
+}
+fn eval_column_args(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    dest_type: DataType,
+) -> Value<AnyType> {
+    let m = args.len();
+    let n = args[0].as_column().unwrap().len();
+    let mut builder =
+        ColumnBuilder::with_capacity(&DataType::Array(Box::new(dest_type.clone())), n);
+    for j in 0..n {
+        let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
+        for item in args.iter().take(m) {
+            let col = item.as_column().unwrap();
+            let arg = col.index(j).unwrap();
+            match dest_type {
+                DataType::Decimal(v) => {
+                    let from_type = arg.infer_data_type();
+                    if let Value::Scalar(decimal_scalar) = convert_to_decimal(
+                        &Value::Scalar(arg.to_owned()).as_ref(),
+                        ctx,
+                        &from_type,
+                        v,
+                    ) {
+                        scalar_builder.push(decimal_scalar.as_ref());
+                    }
+                }
+                DataType::Number(v) => match arg {
+                    ScalarRef::Number(scalar) => {
+                        let num_scalar = scalar.as_value(v);
+                        scalar_builder.push(num_scalar.as_ref());
+                    }
+                    _ => unreachable!("expect NumberScalar but: {:?}", arg),
+                },
+                _ => unreachable!(),
+            }
+        }
+        builder.push(Scalar::Array(scalar_builder.build()).as_ref());
+    }
+    Value::Column(builder.build())
 }

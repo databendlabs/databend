@@ -43,7 +43,7 @@ use common_storage::DataOperator;
 use common_storages_parquet::ParquetFilesPart;
 use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetRSPruner;
-use common_storages_parquet::ParquetRSReader;
+use common_storages_parquet::ParquetRSReaderBuilder;
 use icelake::catalog::Catalog;
 use opendal::Operator;
 use storages_common_pruner::RangePrunerCreator;
@@ -189,12 +189,16 @@ impl IcebergTable {
             options,
         )?;
 
-        let builder =
-            ParquetRSReader::builder(ctx.clone(), self.op.operator(), table_schema, &arrow_schema)?
-                .with_push_downs(plan.push_downs.as_ref())
-                .with_pruner(Some(pruner));
+        let mut builder = ParquetRSReaderBuilder::create(
+            ctx.clone(),
+            self.op.operator(),
+            table_schema,
+            &arrow_schema,
+        )?
+        .with_push_downs(plan.push_downs.as_ref())
+        .with_pruner(Some(pruner));
 
-        let praquet_reader = Arc::new(builder.build()?);
+        let praquet_reader = Arc::new(builder.build_full_reader()?);
 
         // TODO: we need to support top_k.
         let output_schema = Arc::new(DataSchema::from(plan.schema()));

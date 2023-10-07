@@ -377,6 +377,18 @@ impl NumberDataType {
             NumberDataType::Float64 => true,
         }
     }
+    pub const fn is_same(self, dest: Self) -> bool {
+        if self.bit_width() != dest.bit_width() {
+            return false;
+        }
+        if self.is_signed() != dest.is_signed() {
+            return false;
+        }
+        if self.is_float() != dest.is_float() {
+            return false;
+        }
+        true
+    }
 
     pub const fn can_lossless_cast_to(self, dest: Self) -> bool {
         match (self.is_float(), dest.is_float()) {
@@ -457,6 +469,19 @@ impl NumberScalar {
             NumberScalar::NUM_TYPE(num) => *num > 0,
             NumberScalar::Float32(num) => num.is_positive(),
             NumberScalar::Float64(num) => num.is_positive(),
+        })
+    }
+    pub fn as_value(&self, dest_type: NumberDataType) -> Scalar {
+        crate::with_integer_mapped_type!(|DEST_TYPE| match &dest_type {
+            NumberDataType::DEST_TYPE => {
+                NumberType::<DEST_TYPE>::upcast_scalar(crate::with_integer_mapped_type!(
+                    |NUM_TYPE| match self {
+                        NumberScalar::NUM_TYPE(num) => (*num).try_into().unwrap(),
+                        _ => unreachable!(),
+                    }
+                ))
+            }
+            _ => unreachable!(),
         })
     }
 }
