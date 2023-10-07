@@ -112,14 +112,8 @@ impl UpdateByExprMutator {
                 None,
                 "and",
                 [
-                    (
-                        Value::Column(Column::Boolean(old_filter.into_column().unwrap())),
-                        DataType::Boolean,
-                    ),
-                    (
-                        Value::Column(Column::Boolean(predicates.into_column().unwrap())),
-                        DataType::Boolean,
-                    ),
+                    (old_filter.upcast(), DataType::Boolean),
+                    (predicates.upcast(), DataType::Boolean),
                 ],
                 &self.func_ctx,
                 data_block.num_rows(),
