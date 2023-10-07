@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -34,6 +35,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MatchExpr;
+use common_storage::metrics::merge_into::merge_into_matched_operation_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
@@ -229,6 +231,7 @@ impl Processor for MatchedSplitProcessor {
             if self.ops.is_empty() {
                 return Ok(());
             }
+            let start = Instant::now();
             let mut current_block = data_block;
             for op in self.ops.iter() {
                 match op {
@@ -279,6 +282,8 @@ impl Processor for MatchedSplitProcessor {
                     current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
                 self.output_data_updated_data = Some(current_block);
             }
+            let elapsed_time = start.elapsed().as_millis() as u64;
+            merge_into_matched_operation_milliseconds(elapsed_time);
         }
         Ok(())
     }
