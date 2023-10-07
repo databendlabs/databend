@@ -38,6 +38,6 @@ for (path of files) {
  * limitations under the License.
  */
 
-` + data
+` + data,
   );
 }

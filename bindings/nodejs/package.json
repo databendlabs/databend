@@ -31,12 +31,12 @@
     "LICENSE"
   ],
   "devDependencies": {
-    "@cucumber/cucumber": "^9.2.0",
-    "@napi-rs/cli": "^2.15.1",
+    "@cucumber/cucumber": "^9.6.0",
+    "@napi-rs/cli": "^2.16.3",
     "@types/node": "^18.14.5",
-    "prettier": "^2.8.8",
-    "typedoc": "^0.24",
-    "typescript": "^5.1.5"
+    "prettier": "^3.0.3",
+    "typedoc": "^0.25.1",
+    "typescript": "^5.2.2"
   },
   "engines": {
     "node": ">= 10"
