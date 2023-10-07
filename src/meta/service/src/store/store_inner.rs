@@ -387,26 +387,26 @@ impl StoreInner {
     }
 
     /// Export data that can be used to restore a meta-service node.
-    #[minitrace::trace]
-    pub async fn export(&self) -> Result<Vec<String>, io::Error> {
-        // Convert to io::Error(InvalidData).
+    ///
+    /// Returns a `BoxStream<'a, Result<String, io::Error>>` that yields a series of JSON strings.
+    #[futures_async_stream::try_stream(boxed, ok = String, error = io::Error)]
+    pub async fn export(self: Arc<StoreInner>) {
+        // Convert an error occurred during export to `io::Error(InvalidData)`.
         fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
             io::Error::new(ErrorKind::InvalidData, e)
         }
 
-        // Lock all components so that we have a consistent view.
+        // Lock all data components so that we have a consistent view.
         //
         // Hold the snapshot lock to prevent snapshot from being replaced until exporting finished.
         // Holding this lock prevent logs from being purged.
         //
         // Although vote and log must be consistent,
-        // it is OK to export RaftState and logs without transaction protection,
+        // it is OK to export RaftState and logs without transaction protection(i.e. they do not share a lock),
         // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
         let current_snapshot = self.current_snapshot.read().await;
         let raft_state = self.raft_state.read().await;
         let log = self.log.read().await;
-
-        let mut res = vec![];
 
         // Export data header first
         {
@@ -416,7 +416,7 @@ impl StoreInner {
 
             for kv in header_kvs.iter() {
                 let line = vec_kv_to_json(TREE_HEADER, kv)?;
-                res.push(line);
+                yield line;
             }
         }
 
@@ -435,8 +435,7 @@ impl StoreInner {
                 };
 
                 let s = serde_json::to_string(&(tree_name, ent_id)).map_err(invalid_data)?;
-
-                res.push(s);
+                yield s;
             }
 
             let vote = ks.get(&RaftStateKey::HardState)?.map(Vote::from);
@@ -448,8 +447,7 @@ impl StoreInner {
                 };
 
                 let s = serde_json::to_string(&(tree_name, ent_vote)).map_err(invalid_data)?;
-
-                res.push(s);
+                yield s;
             }
 
             let committed = ks
@@ -462,8 +460,7 @@ impl StoreInner {
             };
 
             let s = serde_json::to_string(&(tree_name, ent_committed)).map_err(invalid_data)?;
-
-            res.push(s);
+            yield s;
         };
 
         // Export logs that has smaller or equal leader id as `vote`
@@ -477,8 +474,7 @@ impl StoreInner {
 
                 let tree_kv = (tree_name, kv_entry);
                 let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
-
-                res.push(line);
+                yield line;
             }
         }
 
@@ -507,14 +503,11 @@ impl StoreInner {
 
                     let named_entry = (tree_name, ent);
 
-                    let l = serde_json::to_string(&named_entry).map_err(invalid_data)?;
-
-                    res.push(l);
+                    let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
+                    yield line;
                 }
             }
         }
-
-        Ok(res)
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {

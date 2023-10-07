@@ -25,6 +25,7 @@ use std::net::SocketAddr;
 use std::net::ToSocketAddrs;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use common_base::base::tokio;
@@ -55,6 +56,7 @@ use common_meta_types::NodeId;
 use common_meta_types::StoredMembership;
 use databend_meta::store::RaftStore;
 use databend_meta::store::StoreInner;
+use futures::TryStreamExt;
 use tokio::net::TcpSocket;
 use url::Url;
 
@@ -467,7 +469,7 @@ async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     let raft_config: RaftConfig = config.raft_config.clone().into();
 
     let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
-    let lines = sto_inn.export().await?;
+    let mut lines = Arc::new(sto_inn).export();
 
     eprintln!("    From: {}", raft_config.raft_dir);
 
@@ -479,9 +481,11 @@ async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         None
     };
 
-    let cnt = lines.len();
+    let mut cnt = 0;
 
-    for line in lines {
+    while let Some(line) = lines.try_next().await? {
+        cnt += 1;
+
         if file.as_ref().is_none() {
             println!("{}", line);
         } else {
