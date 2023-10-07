@@ -56,15 +56,20 @@ impl ParquetTopK {
     }
 }
 
+/// The information used for evalaute TopK.
+pub struct BuiltTopK {
+    pub topk: Arc<ParquetTopK>,
+    pub field: TableField,
+    pub leaf_id: usize,
+}
+
 /// Build [`TopK`] into [`ParquetTopK`] and get its [`TableField`].
-pub fn build_topk(
-    topk: &TopK,
-    schema_desc: &SchemaDescriptor,
-) -> Result<(Arc<ParquetTopK>, TableField)> {
-    let projection = ProjectionMask::leaves(schema_desc, vec![topk.column_id as usize]);
+pub fn build_topk(topk: &TopK, schema_desc: &SchemaDescriptor) -> Result<BuiltTopK> {
+    let projection = ProjectionMask::leaves(schema_desc, vec![topk.leaf_id]);
     let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
-    Ok((
-        Arc::new(ParquetTopK::new(projection, field_levels)),
-        topk.order_by.clone(),
-    ))
+    Ok(BuiltTopK {
+        topk: Arc::new(ParquetTopK::new(projection, field_levels)),
+        field: topk.field.clone(),
+        leaf_id: topk.leaf_id,
+    })
 }
