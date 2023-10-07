@@ -129,7 +129,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
-            &None,
+            self.topk.field_paths(),
             num_rows,
         )?;
         let prefetched =

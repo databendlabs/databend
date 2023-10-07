@@ -160,7 +160,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 &row_group,
                 topk.field_levels(),
                 selection.clone(),
-                &None,
+                topk.field_paths(),
                 num_rows,
             )?;
             debug_assert_eq!(block.num_columns(), 1);
