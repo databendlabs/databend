@@ -15,8 +15,6 @@
 use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Context;
-use std::task::Poll;
 
 use common_arrow::arrow_format::flight::data::BasicAuth;
 use common_base::base::tokio::sync::mpsc;
@@ -329,25 +327,5 @@ impl MetaService for MetaServiceImpl {
             return Ok(Response::new(resp));
         }
         Err(Status::unavailable("can not get client ip address"))
-    }
-}
-
-pub struct ExportStream {
-    pub data: Vec<String>,
-}
-
-impl Stream for ExportStream {
-    type Item = Vec<String>;
-
-    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let l = self.data.len();
-
-        if l == 0 {
-            return Poll::Ready(None);
-        }
-
-        let chunk_size = std::cmp::min(16, l);
-
-        Poll::Ready(Some(self.data.drain(0..chunk_size).collect()))
     }
 }
