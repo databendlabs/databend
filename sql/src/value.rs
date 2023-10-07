@@ -448,6 +448,8 @@ impl_try_from_to_option!(i32);
 impl_try_from_to_option!(i64);
 impl_try_from_to_option!(f32);
 impl_try_from_to_option!(f64);
+impl_try_from_to_option!(NaiveDateTime);
+impl_try_from_to_option!(NaiveDate);
 
 impl std::fmt::Display for NumberValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
