@@ -95,10 +95,10 @@ impl BlockOperator {
                     let evaluator =
                         Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS).with_cache();
                     let result = evaluator.run_exprs(exprs)?;
-                    let block = DataBlock::new(result, input.num_rows());
+                    input.add_columns(result);
                     match projections {
-                        Some(projections) => Ok(block.project(projections)),
-                        None => Ok(block),
+                        Some(projections) => Ok(input.project(projections)),
+                        None => Ok(input),
                     }
                 }
             }
