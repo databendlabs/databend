@@ -107,15 +107,6 @@ impl<'a> Evaluator<'a> {
     pub fn run_exprs(&self, exprs: &[Expr]) -> Result<Vec<BlockEntry>> {
         let mut columns: Vec<BlockEntry> = Vec::with_capacity(exprs.len());
         for expr in exprs {
-            // try get result from cache
-            if let Some(cached_values) = &self.cached_values {
-                if let Some(cached_result) = cached_values.borrow().get(expr) {
-                    let col = BlockEntry::new(expr.data_type().clone(), cached_result.clone());
-                    columns.push(col);
-                    continue;
-                }
-            }
-
             let result = self.run(expr)?;
             let col = BlockEntry::new(expr.data_type().clone(), result);
             columns.push(col);
@@ -138,7 +129,7 @@ impl<'a> Evaluator<'a> {
         self.check_expr(expr);
 
         // try get result from cache
-        if let Some(cached_values) = &self.cached_values {
+        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && let Some(cached_values) = &self.cached_values {
             if let Some(cached_result) = cached_values.borrow().get(expr) {
                 return Ok(cached_result.clone());
             }
@@ -235,7 +226,7 @@ impl<'a> Evaluator<'a> {
                             .enumerate()
                             .collect(),
                         self.func_ctx,
-                        self.fn_registry
+                        self.fn_registry,
                     )
                     .1,
                     None,
