@@ -7012,7 +7012,7 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
 CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c', aws_secret_key='4x5y6z' ) FILE_FORMAT = (compression='GZIP', record_delimiter=',', type='CSV' )
 ---------- AST ------------
