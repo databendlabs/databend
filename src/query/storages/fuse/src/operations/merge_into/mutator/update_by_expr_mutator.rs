@@ -20,7 +20,6 @@ use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
