@@ -23,6 +23,7 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+
 pub struct SplitByExprMutator {
     expr: Option<Expr>,
     func_ctx: FunctionContext,

@@ -32,6 +32,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+#[derive(Clone)]
 pub struct UpdateByExprMutator {
     expr: Option<Expr>,
     func_ctx: FunctionContext,
