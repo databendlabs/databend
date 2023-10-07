@@ -251,7 +251,7 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.levels.leveled_ref(), key).await;
+        let got = MapApiRO::<String>::get(&self.levels.to_ref(), key).await;
         Into::<Option<SeqV>>::into(got)
     }
 
