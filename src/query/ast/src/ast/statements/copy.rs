@@ -99,7 +99,7 @@ impl Display for CopyStmt {
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
             write_comma_separated_map(f, &self.file_format)?;
-            write!(f, " )")?;
+            write!(f, ")")?;
         }
 
         if !self.validation_mode.is_empty() {
