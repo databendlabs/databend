@@ -107,9 +107,15 @@ pub struct Filters {
 #[derive(Debug, Clone)]
 pub struct TopK {
     pub limit: usize,
-    pub order_by: TableField,
+    /// Record the leaf field of the topk column.
+    /// - The `name` of `field` will be used to track column in the read block.
+    /// - The `column_id` of `field` will be used to retrieve column stats from block meta
+    /// (only used for fuse engine, for parquet table, we will use `leaf_id`).
+    pub field: TableField,
     pub asc: bool,
-    pub column_id: u32,
+    /// The index in `table_schema.leaf_fields()`.
+    /// It's only used for external parquet files reading.
+    pub leaf_id: usize,
 }
 
 pub const TOPK_PUSHDOWN_THRESHOLD: usize = 1000;
@@ -124,10 +130,9 @@ impl PushDownInfo {
                 return None;
             }
 
-            if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
+            if let RemoteExpr::<String>::ColumnRef { id, data_type, .. } = &order.0 {
                 // TODO: support sub column of nested type.
-                let field = schema.field_with_name(id).ok()?;
-                if !support(&field.data_type().into()) {
+                if !support(data_type) {
                     return None;
                 }
 
@@ -135,19 +140,14 @@ impl PushDownInfo {
                 let (leaf_id, f) = leaf_fields
                     .iter()
                     .enumerate()
-                    .find(|&(_, p)| p == field)
+                    .find(|&(_, p)| p.name() == id)
                     .unwrap();
-                // Databend column id is not equal to parquet leaf id when there is nested type.
-                if f.column_id as usize != leaf_id {
-                    return None;
-                }
-                let column_id = f.column_id;
 
                 let top_k = TopK {
                     limit: self.limit.unwrap(),
-                    order_by: field.clone(),
+                    field: f.clone(),
                     asc: order.1,
-                    column_id,
+                    leaf_id,
                 };
                 Some(top_k)
             } else {
