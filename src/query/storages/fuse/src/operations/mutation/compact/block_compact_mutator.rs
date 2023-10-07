@@ -18,7 +18,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::vec;
 
-use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
@@ -35,6 +34,8 @@ use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::io::SegmentsIO;
+use crate::metrics::metrics_inc_compact_block_build_task_milliseconds;
+use crate::operations::acquire_task_permit;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::compact::compact_part::CompactExtraInfo;
 use crate::operations::mutation::compact::compact_part::CompactLazyPartInfo;
@@ -175,7 +176,8 @@ impl BlockCompactMutator {
         ));
 
         let cluster = self.ctx.get_cluster();
-        let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() {
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let partitions = if cluster.is_empty() || parts.len() < cluster.nodes.len() * max_threads {
             let column_ids = self
                 .compact_params
                 .base_snapshot
@@ -215,28 +217,15 @@ impl BlockCompactMutator {
         thresholds: BlockThresholds,
         mut lazy_parts: Vec<CompactLazyPartInfo>,
     ) -> Result<Vec<PartInfoPtr>> {
-        let max_concurrency = {
-            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-            // Prevent us from miss-configured max_storage_io_requests setting, e.g. 0
-            let v = std::cmp::max(max_io_requests, 10);
-            if v > max_io_requests {
-                log::warn!(
-                    "max_storage_io_requests setting is too low {}, increased to {}",
-                    max_io_requests,
-                    v
-                )
-            }
-            v
-        };
+        let start = Instant::now();
 
-        // Pruning runtime.
-        let runtime = GlobalIORuntime::instance();
-        let semaphore = Arc::new(Semaphore::new(max_concurrency));
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_concurrency = std::cmp::max(max_threads * 2, 10);
+        let semaphore: Arc<Semaphore> = Arc::new(Semaphore::new(max_concurrency));
 
-        let mut remain = lazy_parts.len() % max_concurrency;
-        let batch_size = lazy_parts.len() / max_concurrency;
-        let mut works = Vec::with_capacity(max_concurrency);
-
+        let mut remain = lazy_parts.len() % max_threads;
+        let batch_size = lazy_parts.len() / max_threads;
+        let mut works = Vec::with_capacity(max_threads);
         while !lazy_parts.is_empty() {
             let gap_size = std::cmp::min(1, remain);
             let batch_size = batch_size + gap_size;
@@ -246,24 +235,22 @@ impl BlockCompactMutator {
             let semaphore = semaphore.clone();
 
             let batch = lazy_parts.drain(0..batch_size).collect::<Vec<_>>();
-            works.push(runtime.spawn(async_backtrace::location!().frame({
-                async move {
-                    let mut res = vec![];
-                    for lazy_part in batch {
-                        let mut builder =
-                            CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
-                        let parts = builder
-                            .build_tasks(
-                                lazy_part.segment_indices,
-                                lazy_part.compact_segments,
-                                semaphore.clone(),
-                            )
-                            .await?;
-                        res.extend(parts);
-                    }
-                    Ok::<_, ErrorCode>(res)
+            works.push(async move {
+                let mut res = vec![];
+                for lazy_part in batch {
+                    let mut builder =
+                        CompactTaskBuilder::new(column_ids.clone(), cluster_key_id, thresholds);
+                    let parts = builder
+                        .build_tasks(
+                            lazy_part.segment_indices,
+                            lazy_part.compact_segments,
+                            semaphore.clone(),
+                        )
+                        .await?;
+                    res.extend(parts);
                 }
-            })));
+                Ok::<_, ErrorCode>(res)
+            });
         }
 
         match futures::future::try_join_all(works).await {
@@ -271,11 +258,17 @@ impl BlockCompactMutator {
                 "build compact tasks failure, {}",
                 e
             ))),
-            Ok(workers) => {
-                let mut parts = vec![];
-                for worker in workers {
-                    let res = worker?;
-                    parts.extend(res);
+            Ok(res) => {
+                let parts = res.into_iter().flatten().collect::<Vec<_>>();
+                // Status.
+                {
+                    let elapsed_time = start.elapsed().as_millis() as u64;
+                    ctx.set_status_info(&format!(
+                        "compact: end to build compact parts:{}, cost:{} ms",
+                        parts.len(),
+                        elapsed_time,
+                    ));
+                    metrics_inc_compact_block_build_task_milliseconds(elapsed_time);
                 }
                 Ok(parts)
             }
@@ -487,25 +480,21 @@ impl CompactTaskBuilder {
         let mut unchanged_blocks = Vec::new();
         let mut removed_segment_summary = Statistics::default();
 
-        let mut iter = compact_segments.into_iter().rev();
-        let tasks = std::iter::from_fn(|| {
-            iter.next().map(|v| {
-                Box::new(move |permit: OwnedSemaphorePermit| {
-                    Box::pin(async move {
-                        let _permit = permit;
-                        let blocks = v.block_metas()?;
-                        Ok::<_, ErrorCode>((blocks, v.summary.clone()))
-                    })
-                })
-            })
-        });
-
         let runtime = GlobalIORuntime::instance();
-        let join_handlers = runtime
-            .try_spawn_batch_with_owned_semaphore(semaphore.clone(), tasks)
-            .await?;
+        let mut handlers = Vec::with_capacity(compact_segments.len());
+        for segment in compact_segments.into_iter().rev() {
+            let permit = acquire_task_permit(semaphore.clone()).await?;
+            let handler = runtime.spawn(async_backtrace::location!().frame({
+                async move {
+                    let blocks = segment.block_metas()?;
+                    drop(permit);
+                    Ok::<_, ErrorCode>((blocks, segment.summary.clone()))
+                }
+            }));
+            handlers.push(handler);
+        }
 
-        let joint = futures::future::try_join_all(join_handlers)
+        let joint = futures::future::try_join_all(handlers)
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("deserialize failure, {}", e)))?;
 

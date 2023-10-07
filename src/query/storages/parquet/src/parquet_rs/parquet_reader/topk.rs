@@ -20,22 +20,32 @@ use common_catalog::plan::TopK;
 use common_exception::Result;
 use common_expression::Column;
 use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::TopKSorter;
 use parquet::arrow::parquet_to_arrow_field_levels;
 use parquet::arrow::FieldLevels;
 use parquet::arrow::ProjectionMask;
 use parquet::schema::types::SchemaDescriptor;
 
+use super::utils::compute_output_field_paths;
+use super::utils::FieldPaths;
+
 pub struct ParquetTopK {
     projection: ProjectionMask,
     field_levels: FieldLevels,
+    field_paths: Option<FieldPaths>,
 }
 
 impl ParquetTopK {
-    pub fn new(projection: ProjectionMask, field_levels: FieldLevels) -> Self {
+    pub fn new(
+        projection: ProjectionMask,
+        field_levels: FieldLevels,
+        field_paths: Option<FieldPaths>,
+    ) -> Self {
         Self {
             projection,
             field_levels,
+            field_paths,
         }
     }
 
@@ -47,6 +57,10 @@ impl ParquetTopK {
         &self.field_levels
     }
 
+    pub fn field_paths(&self) -> &Option<FieldPaths> {
+        &self.field_paths
+    }
+
     pub fn evaluate_column(&self, column: &Column, sorter: &mut TopKSorter) -> Bitmap {
         let num_rows = column.len();
         let mut bitmap = MutableBitmap::with_capacity(num_rows);
@@ -56,15 +70,32 @@ impl ParquetTopK {
     }
 }
 
+/// The information used for evalaute TopK.
+pub struct BuiltTopK {
+    pub topk: Arc<ParquetTopK>,
+    pub field: TableField,
+    pub leaf_id: usize,
+}
+
 /// Build [`TopK`] into [`ParquetTopK`] and get its [`TableField`].
-pub fn build_topk(
-    topk: &TopK,
-    schema_desc: &SchemaDescriptor,
-) -> Result<(Arc<ParquetTopK>, TableField)> {
-    let projection = ProjectionMask::leaves(schema_desc, vec![topk.column_id as usize]);
+pub fn build_topk(topk: &TopK, schema_desc: &SchemaDescriptor) -> Result<BuiltTopK> {
+    let projection = ProjectionMask::leaves(schema_desc, vec![topk.leaf_id]);
     let field_levels = parquet_to_arrow_field_levels(schema_desc, projection.clone(), None)?;
-    Ok((
-        Arc::new(ParquetTopK::new(projection, field_levels)),
-        topk.order_by.clone(),
-    ))
+    let field_paths = if topk.field.name.contains(':') {
+        // It's a inner column
+        compute_output_field_paths(
+            schema_desc,
+            &projection,
+            &TableSchema::new(vec![topk.field.clone()]),
+            true,
+        )?
+    } else {
+        None
+    };
+
+    Ok(BuiltTopK {
+        topk: Arc::new(ParquetTopK::new(projection, field_levels, field_paths)),
+        field: topk.field.clone(),
+        leaf_id: topk.leaf_id,
+    })
 }
