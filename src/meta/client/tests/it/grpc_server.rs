@@ -46,7 +46,7 @@ pub struct GrpcServiceForTestImpl {}
 #[tonic::async_trait]
 impl MetaService for GrpcServiceForTestImpl {
     type HandshakeStream =
-        Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send + 'static>>;
 
     async fn handshake(
         &self,
@@ -69,7 +69,7 @@ impl MetaService for GrpcServiceForTestImpl {
     }
 
     type ExportStream =
-        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + 'static>>;
 
     async fn export(
         &self,
@@ -79,7 +79,7 @@ impl MetaService for GrpcServiceForTestImpl {
     }
 
     type WatchStream =
-        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + 'static>>;
 
     async fn watch(
         &self,
