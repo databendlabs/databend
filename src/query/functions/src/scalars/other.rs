@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
@@ -243,23 +242,27 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let name = "greatest".to_string();
-        let first_type = args_type[0];
+        let first_type = &args_type[0];
+        let mut type_mismatch = false;
+        for arg_type in args_type.iter().skip(0) {
+            if first_type != arg_type {
+                type_mismatch = true;
+            }
+        }
         let return_type = first_type.wrap_nullable();
         let f = Function {
             signature: FunctionSignature {
                 name,
                 args_type: args_type.to_vec(),
-                return_type,
+                return_type: return_type.clone(),
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    for arg_type in args_type.iter().skip(0) {
-                        if first_type != arg_type {
-                            ctx.set_error(0, "arg should be same type!");
-                        }
+                    if type_mismatch {
+                        ctx.set_error(0, "arg should be same type!");
                     }
-                    let arg = eval_args(args, ctx, first_type.clone());
+                    let arg = eval_args(args, return_type.remove_nullable());
                     eval_array_aggr("max", &[arg.as_ref()], ctx)
                 }),
             },
@@ -426,23 +429,14 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
     grouping
 }
 
-fn eval_args(
-    args: &[ValueRef<AnyType>],
-    ctx: &mut EvalContext,
-    dest_type: DataType,
-) -> Value<AnyType> {
+fn eval_args(args: &[ValueRef<AnyType>], dest_type: DataType) -> Value<AnyType> {
     match &args[0] {
-        ValueRef::Scalar(scalar) => {
+        ValueRef::Scalar(_) => {
             let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
             for item in args.iter() {
-                match item {
-                    ValueRef::Scalar(scalar)=>{
-                        builder.push(scalar.to_owned());
-                    }  
-                    _ => unreachable!(),
-               }
-           }
-           Value::Scalar(Scalar::Array(builder.build()))
+                builder.push(item.as_scalar().unwrap().clone());
+            }
+            Value::Scalar(Scalar::Array(builder.build()))
         }
         ValueRef::Column(_) => {
             let m = args.len();
@@ -452,14 +446,13 @@ fn eval_args(
             for j in 0..n {
                 let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
                 for item in args.iter().take(m) {
-                     let col = item.as_column().unwrap();
-                     let arg = col.index(j).unwrap();  
-                     scalar_builder.push(arg.to_owned());
+                    let col = item.as_column().unwrap();
+                    let arg = col.index(j).unwrap();
+                    scalar_builder.push(arg);
                 }
                 builder.push(Scalar::Array(scalar_builder.build()).as_ref());
             }
             Value::Column(builder.build())
-        }       
-    } 
+        }
+    }
 }
-
