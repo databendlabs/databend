@@ -51,7 +51,7 @@ If your table has more columns than the file, you can specify the columns into w
 
 When working with CSV format, if your table has more columns than the file and the additional columns are at the end of the table, you can load data using the `FILE_FORMAT` option `ERROR_ON_COLUMN_COUNT_MISMATCH`.
 
-If you are interested in learning more, please check out the resources listed below.
+If you are interested in learning more, please check out the resources below:
 
 - [Docs | Example 5: Loading to Table with Extra Columns](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table#example-5-loading-to-table-with-extra-columns)
 
@@ -61,25 +61,25 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Introducing Read Policies to Parquet Reader
 
-There is a drawback of using `arrow-rs` APIs: when we try to prefetching data for prewhere and topk push downs, we can't reuse the deserialized blocks.
+There is a drawback of using the `arrow-rs` APIs: When we try to prefetch data for prewhere and topk push downs, we can't reuse the deserialized blocks.
 
 In order to improve the logic of row group reading and reuse the prefetched data blocks at the final output stage, we have done a lot of refactoring and introduced some read policies.
 
 **NoPrefetchPoliy** 
 
-There is no prefetch stage, we can read, deserialize and output data block we need directly.
+No prefetch stage at all. Databend reads, deserializes, and outputs data blocks you need directly.
 
 **PredicateAndTopkPolicy**
 
-At prefetch stage, prefetch columns needed by prewhere and topk. Deserialize them into `DataBlock` and evaluate it into `RowSelection`. Slice the `DataBlock` by batch size and store the `VecDeque` in memory.
+Databend prefetches columns needed by prewhere and topk at the prefetch stage. It deserializes them into a DataBlock and evaluates them into RowSelection. It then slices the DataBlock by batch size and stores the resulting VecDeque in memory.
 
-At final stage, read remain columns by `RowSelection` and output `DataBlock`s by batch size, and merge the prefetch block and project the block by `output_schema`.
+Databend reads the remaining columns specified by RowSelection at the final stage, and it outputs DataBlocks in batches. Then, it merges the prefetched blocks and projects the resulting blocks according to the output_schema.
 
 **TopkOnlyPolicy**
 
-It's similar to `PredicateAndTopkPolicy`, but we only evaluate topk at prefech stage.
+It's similar to the `PredicateAndTopkPolicy`, but Databend only evaluates the topk at the prefech stage.
 
-If you are interested in learning more, please check out the resources listed below:
+If you are interested in learning more, please check out the resources below:
 
 - [PR #13020 | refactor: introduce ReadPolicy to parquet reader](https://github.com/datafuselabs/databend/pull/13020)
 
@@ -89,18 +89,17 @@ We have also made these improvements to Databend that we hope you will find help
 
 - Added spill info to query log.
 - Added support for compression when using `COPY INTO`.
-- Added `GET /v1/background/:tenant/background_tasks` http api to query background tasks.
+- Introduced the `GET /v1/background/:tenant/background_tasks` HTTP API for querying background tasks.
 - Read [Example 4: Filtering Files with Pattern](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table#example-4-filtering-files-with-pattern) to understand how to use Pattern to filter files.
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Fixing the issues detected by SQLsmith
+### Fixing issues detected by SQLsmith
 
-So far SQLsmith has found about 40 panics or other bugs in Databend, in the past month since it’s been running. Databend Labs has been working on fixing these issues to improve stability, even in edge cases.
+In the last month, SQLsmith has discovered around 40 bugs in Databend. Databend Labs is actively working to fix these issues and improve system stability, even in uncommon scenarios. Your involvement in this effort, which may include tasks like type conversion or handling special values, is encouraged and can be facilitated by referring to past fixes.
 
-We also hope that you can participate in this work, which may involve type conversion or special values. By referring to previous fixes, it can be easily fixed.
 
 [Issues | Found by SQLsmith](https://github.com/datafuselabs/databend/issues?q=is%3Aissue+is%3Aopen+label%3Afound-by-sqlsmith)
 
