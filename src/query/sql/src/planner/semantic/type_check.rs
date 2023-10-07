@@ -2513,8 +2513,24 @@ impl<'a> TypeChecker<'a> {
                     .await
             }
             ("greatest", args) => {
+                if args.is_empty() {
+                    return None;
+                }
+                let new_args = args.iter().map(|expr| (*expr).to_owned()).collect();
                 // Rewrite greatest(x, y,z) to array_max(array(x,y,z))
-                Some(self.resolve_function(span, "array_max", vec![], vec![self.resolve_function(span, "array", vec![], args).await?]).await)
+                Some(
+                    self.resolve_function(
+                        span,
+                        "array_max",
+                        vec![],
+                        vec![&Expr::Array {
+                            span,
+                            exprs: new_args,
+                        }]
+                        .as_slice(),
+                    )
+                    .await,
+                )
             }
             _ => None,
         }
