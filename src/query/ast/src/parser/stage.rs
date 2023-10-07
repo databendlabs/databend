@@ -59,22 +59,25 @@ fn connection_opt(sep: &'static str) -> impl FnMut(Input) -> IResult<(String, St
 
 pub fn connection_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let connection_opt = connection_opt("=");
-    map(rule! { "(" ~ (#connection_opt)* ~ ")"}, |(_, opts, _)| {
-        BTreeMap::from_iter(opts.iter().map(|(k, v)| (k.to_lowercase(), v.clone())))
-    })(i)
+    map(
+        rule! { "(" ~ ( #connection_opt ~ ","? )* ~ ^")"},
+        |(_, opts, _)| {
+            BTreeMap::from_iter(opts.iter().map(|((k, v), _)| (k.to_lowercase(), v.clone())))
+        },
+    )(i)
 }
 
 pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
     let option_type = map(
         rule! {
-            TYPE ~ "=" ~ (TSV | CSV | NDJSON | PARQUET | JSON | XML)
+            TYPE ~ "=" ~ ( TSV | CSV | NDJSON | PARQUET | JSON | XML )
         },
         |(_, _, v)| ("type".to_string(), v.text().to_string()),
     );
 
     let option_compression = map(
         rule! {
-            COMPRESSION ~ "=" ~ (AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ)
+            COMPRESSION ~ "=" ~ ( AUTO | NONE | GZIP | BZ2 | BROTLI | ZSTD | DEFLATE | RAWDEFLATE | XZ )
         },
         |(_, _, v)| ("COMPRESSION".to_string(), v.text().to_string()),
     );
@@ -133,12 +136,12 @@ pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-        "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string )* ~ ^")"
+        "(" ~ ( #ident ~ ^"=" ~ ^#parameter_to_string ~ ","? )* ~ ^")"
         },
         |(_, opts, _)| {
             BTreeMap::from_iter(
                 opts.iter()
-                    .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
+                    .map(|(k, _, v, _)| (k.name.to_lowercase(), v.clone())),
             )
         },
     )(i)

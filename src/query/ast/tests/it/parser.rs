@@ -169,7 +169,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
@@ -256,8 +256,8 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;"#,
+                )
+                size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
@@ -266,7 +266,7 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10,
+                size_limit=10
                 max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
@@ -335,21 +335,21 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
+                )
                 size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                ),
+                )
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;"#,
+                )
+                size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
@@ -388,6 +388,14 @@ fn test_statement() {
                 size_limit=10
                 disable_variant_check=true;"#,
         r#"copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)"#,
+        r#"COPY INTO books FROM 's3://databend/books.csv' 
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://localhost:9000/',
+                    ACCESS_KEY_ID = 'ROOTUSER',
+                    SECRET_ACCESS_KEY = 'CHANGEME123',
+                    region = 'us-west-2'
+                )
+                FILE_FORMAT = (type = CSV);"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'

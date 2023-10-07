@@ -23,8 +23,8 @@ use std::io::Result;
 use itertools::Itertools;
 use url::Url;
 
-use crate::ast::write_quoted_comma_separated_list;
-use crate::ast::write_space_separated_map;
+use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -88,7 +88,7 @@ impl Display for CopyStmt {
 
         if let Some(files) = &self.files {
             write!(f, " FILES = (")?;
-            write_quoted_comma_separated_list(f, files)?;
+            write_comma_separated_quoted_list(f, files)?;
             write!(f, " )")?;
         }
 
@@ -98,9 +98,7 @@ impl Display for CopyStmt {
 
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
-            for (k, v) in self.file_format.iter() {
-                write!(f, " {} = '{}'", k, v)?;
-            }
+            write_comma_separated_map(f, &self.file_format)?;
             write!(f, " )")?;
         }
 
@@ -256,7 +254,7 @@ impl Display for Connection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
-            write_space_separated_map(f, &self.conns)?;
+            write_comma_separated_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())
