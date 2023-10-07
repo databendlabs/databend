@@ -2514,7 +2514,7 @@ impl<'a> TypeChecker<'a> {
             }
             ("greatest", args) => {
                 // Rewrite greatest(x, y,z) to array_max(array(x,y,z))
-                Some(self.resolve_function(span, "array_max", vec![], args).await)
+                Some(self.resolve_function(span, "array_max", vec![], vec![self.resolve_function(span, "array", vec![], args).await?]).await)
             }
             _ => None,
         }
