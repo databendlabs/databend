@@ -1144,12 +1144,10 @@ impl PipelineBuilder {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
-        let num_input_columns = input_schema.num_fields();
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -1223,12 +1221,10 @@ impl PipelineBuilder {
             let ops = vec![BlockOperator::Project { projection }];
             let func_ctx = self.ctx.get_function_context()?;
 
-            let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
-                    num_input_columns,
                     func_ctx.clone(),
                     ops.clone(),
                 )))
@@ -1285,7 +1281,6 @@ impl PipelineBuilder {
                 ))
             })?;
 
-        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
@@ -1293,7 +1288,6 @@ impl PipelineBuilder {
                     expr: predicate.clone(),
                 }],
                 self.ctx.get_function_context()?,
-                num_input_columns,
             );
 
             if self.enable_profiling {
@@ -1318,13 +1312,10 @@ impl PipelineBuilder {
         self.build_pipeline(&project.input)?;
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = project.input.output_schema()?.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
@@ -1336,7 +1327,6 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
-        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
@@ -1354,11 +1344,8 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = input_schema.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1392,11 +1379,8 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = project_set.input.output_schema()?.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1420,14 +1404,10 @@ impl PipelineBuilder {
         let funcs = lambda.lambda_funcs.clone();
         let op = BlockOperator::LambdaMap { funcs };
 
-        let input_schema = lambda.input.output_schema()?;
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = input_schema.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1896,7 +1876,6 @@ impl PipelineBuilder {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
-                        input_schema.num_fields(),
                         self.ctx.get_function_context()?,
                         vec![BlockOperator::Project {
                             projection: projection.clone(),
