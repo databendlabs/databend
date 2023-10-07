@@ -2,6 +2,7 @@
 .idea
 target/
 Cargo.lock
+venv/
 
 /tests/data
 *.output

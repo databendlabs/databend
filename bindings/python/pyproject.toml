@@ -20,8 +20,6 @@ test = ["behave"]
 lint = ["black", "flake8"]
 
 [project.urls]
-Documentation = ""
-Homepage = ""
 Repository = "https://github.com/datafuselabs/bendsql"
 
 [tool.maturin]
