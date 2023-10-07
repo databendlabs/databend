@@ -44,7 +44,7 @@ select count(*) from products;
 
 # table will be auto compacted after copy into, the volume of data is small, so by default setting, it will be compacted to 1 block.
 query I
-select block_count from fuse_snapshot('default','products');
+select block_count from fuse_snapshot('default','products') limit 1;
 ----
 1
 
