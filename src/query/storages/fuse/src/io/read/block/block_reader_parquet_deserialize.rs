@@ -167,7 +167,7 @@ impl BlockReader {
             // populate array cache items
             for (item, field) in deserialized_column_arrays.iter() {
                 if let DeserializedArray::Deserialized((column_id, array, _size)) = item {
-                    let meta = column_metas.get(&column_id).unwrap();
+                    let meta = column_metas.get(column_id).unwrap();
                     let (offset, len) = meta.offset_length();
                     let key = TableDataCacheKey::new(block_path, *column_id, offset, len);
 
