@@ -258,7 +258,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         if first_type != arg_type {
                             ctx.set_error(0, "arg should be same type!");
                         }
-                    } 
+                    }
                     let arg = eval_args(args, ctx, first_type.clone());
                     eval_array_aggr("max", &[arg.as_ref()], ctx)
                 }),
@@ -433,16 +433,16 @@ fn eval_args(
 ) -> Value<AnyType> {
     match &args[0] {
         ValueRef::Scalar(scalar) => {
-          let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
-          for item in args.iter() {
-               match item {
-                ValueRef::Scalar(scalar)=>{
-                    builder.push(scalar.to_owned());
-                }
-                _ => unreachable!(),
+            let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
+            for item in args.iter() {
+                match item {
+                    ValueRef::Scalar(scalar)=>{
+                        builder.push(scalar.to_owned());
+                    }  
+                    _ => unreachable!(),
                }
-          }
-          Value::Scalar(Scalar::Array(builder.build()))
+           }
+           Value::Scalar(Scalar::Array(builder.build()))
         }
         ValueRef::Column(_) => {
             let m = args.len();
@@ -452,9 +452,9 @@ fn eval_args(
             for j in 0..n {
                 let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
                 for item in args.iter().take(m) {
-                   let col = item.as_column().unwrap();
-                   let arg = col.index(j).unwrap();  
-                   scalar_builder.push(arg.to_owned());
+                     let col = item.as_column().unwrap();
+                     let arg = col.index(j).unwrap();  
+                     scalar_builder.push(arg.to_owned());
                 }
                 builder.push(Scalar::Array(scalar_builder.build()).as_ref());
             }
