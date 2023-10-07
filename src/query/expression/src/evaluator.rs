@@ -12,8 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cell::RefCell;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::ops::Not;
+use std::rc::Rc;
 
 use common_arrow::arrow::bitmap;
 use common_arrow::arrow::bitmap::Bitmap;
@@ -60,6 +63,8 @@ pub struct Evaluator<'a> {
     input_columns: &'a DataBlock,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
+    #[allow(clippy::type_complexity)]
+    cached_values: Option<Rc<RefCell<HashMap<Expr, Value<AnyType>>>>>,
 }
 
 impl<'a> Evaluator<'a> {
@@ -72,6 +77,16 @@ impl<'a> Evaluator<'a> {
             input_columns,
             func_ctx,
             fn_registry,
+            cached_values: None,
+        }
+    }
+
+    pub fn with_cache(self) -> Self {
+        Self {
+            input_columns: self.input_columns,
+            func_ctx: self.func_ctx,
+            fn_registry: self.fn_registry,
+            cached_values: Some(Rc::new(RefCell::new(HashMap::new()))),
         }
     }
 
@@ -89,6 +104,25 @@ impl<'a> Evaluator<'a> {
         }
     }
 
+    pub fn run_exprs(&self, exprs: &[Expr]) -> Result<Vec<BlockEntry>> {
+        let mut columns: Vec<BlockEntry> = Vec::with_capacity(exprs.len());
+        for expr in exprs {
+            // try get result from cache
+            if let Some(cached_values) = &self.cached_values {
+                if let Some(cached_result) = cached_values.borrow().get(expr) {
+                    let col = BlockEntry::new(expr.data_type().clone(), cached_result.clone());
+                    columns.push(col);
+                    continue;
+                }
+            }
+
+            let result = self.run(expr)?;
+            let col = BlockEntry::new(expr.data_type().clone(), result);
+            columns.push(col);
+        }
+        Ok(columns)
+    }
+
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None)
     }
@@ -102,6 +136,13 @@ impl<'a> Evaluator<'a> {
 
         #[cfg(debug_assertions)]
         self.check_expr(expr);
+
+        // try get result from cache
+        if let Some(cached_values) = &self.cached_values {
+            if let Some(cached_result) = cached_values.borrow().get(expr) {
+                return Ok(cached_result.clone());
+            }
+        }
 
         let result = match expr {
             Expr::Constant { scalar, .. } => Ok(Value::Scalar(scalar.clone())),
@@ -204,6 +245,21 @@ impl<'a> Evaluator<'a> {
                 RECURSING.store(false, Ordering::SeqCst);
             }
         }
+
+        // Do not cache `ColumnRef` and `Constant`
+        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && let Some(cached_values) = &self.cached_values {
+            if let Ok(r) = &result {
+                // Prepare data that lock used.
+                let expr_cloned = expr.clone();
+                let result_cloned = r.clone();
+
+                // Acquire the write lock and insert the value.
+                if let Entry::Vacant(v) = cached_values.borrow_mut().entry(expr_cloned) {
+                    v.insert(result_cloned);
+                }
+            }
+        }
+
         result
     }
 
