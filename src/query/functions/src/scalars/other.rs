@@ -236,12 +236,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col)
         },
     );
-    registry.register_function_factory("greatest", |_, args_type| {
+    registry.register_function_factory("least", |_, args_type| {
         if args_type.is_empty() {
             return None;
         }
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-        let name = "greatest".to_string();
+        let name = "least".to_string();
         let first_type = &args_type[0];
         let mut type_mismatch = false;
         for arg_type in args_type.iter().skip(0) {
@@ -263,7 +263,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         ctx.set_error(0, "arg should be same type!");
                     }
                     let arg = eval_args(args, return_type.remove_nullable());
-                    eval_array_aggr("max", &[arg.as_ref()], ctx)
+                    eval_array_aggr("min", &[arg.as_ref()], ctx)
                 }),
             },
         };

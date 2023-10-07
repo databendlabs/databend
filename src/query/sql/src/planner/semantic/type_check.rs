@@ -2512,6 +2512,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
                     .await
             }
+            ("greatest", args) => {
+                // Rewrite greatest(x, y,z) to array_max([x,y,z])
+                Some(self.resolve_function(span, "array_max", vec![], args).await)
+            }
             _ => None,
         }
     }
