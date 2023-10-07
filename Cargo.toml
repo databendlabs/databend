@@ -133,6 +133,7 @@ lazy_static = "1.4.0"
 # future and async
 futures = "0.3.24"
 futures-util = "0.3.24"
+futures-async-stream = { version = "0.2.7" }
 stream-more = "0.1.3"
 bytes = "1.5.0"
 
@@ -231,7 +232,7 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "231a6fa" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "dd80c89" }
 arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

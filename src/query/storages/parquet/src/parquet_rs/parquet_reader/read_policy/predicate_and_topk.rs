@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
@@ -37,6 +36,7 @@ use super::utils::evaluate_topk;
 use super::utils::read_all;
 use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
+use crate::parquet_rs::parquet_reader::topk::BuiltTopK;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::bitmap_to_boolean_array;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
@@ -60,7 +60,7 @@ impl PredicateAndTopkPolicyBuilder {
     pub fn create(
         schema_desc: &SchemaDescriptor,
         predicate: &(Arc<ParquetPredicate>, Vec<usize>),
-        topk: Option<&(Arc<ParquetTopK>, TableField)>,
+        topk: Option<&BuiltTopK>,
         output_leaves: &[usize],
         remain_schema: &TableSchema,
         output_schema: &TableSchema,
@@ -70,8 +70,8 @@ impl PredicateAndTopkPolicyBuilder {
 
         // Compute projections to read columns for each stage (prefetch and remain).
         let mut prefetch_leaves = predicate_leaves.iter().cloned().collect::<HashSet<_>>();
-        if let Some((_, field)) = topk {
-            prefetch_leaves.insert(field.column_id as usize);
+        if let Some(topk) = topk {
+            prefetch_leaves.insert(topk.leaf_id);
         }
         // Remove prefetch columns
         // TODO(parquet): reuse inner columns of a nested type.
@@ -85,23 +85,23 @@ impl PredicateAndTopkPolicyBuilder {
 
         // Remain fields will not contain predicate fields.
         // We just need to remove the topk column if it is contained in remain fields.
-        let remain_fields = if let Some((_, tf)) = topk {
+        let remain_fields = if let Some(topk) = topk {
             remain_schema
                 .fields()
                 .iter()
                 .cloned()
-                .filter(|f| f.name() != tf.name())
+                .filter(|f| f.name() != topk.field.name())
                 .collect::<Vec<_>>()
         } else {
             remain_schema.fields().clone()
         };
 
-        let (prefetch_fields, topk) = if let Some((topk, tf)) = topk {
-            let fields = vec![tf.clone()]
+        let (prefetch_fields, topk) = if let Some(topk) = topk {
+            let fields = vec![topk.field.clone()]
                 .into_iter()
                 .chain(predicate.schema().fields().clone().into_iter())
                 .collect::<Vec<_>>();
-            (fields, Some(topk.clone()))
+            (fields, Some(topk.topk.clone()))
         } else {
             (predicate.schema().fields().clone(), None)
         };
@@ -160,7 +160,7 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 &row_group,
                 topk.field_levels(),
                 selection.clone(),
-                &None,
+                topk.field_paths(),
                 num_rows,
             )?;
             debug_assert_eq!(block.num_columns(), 1);
