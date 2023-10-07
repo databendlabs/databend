@@ -41,7 +41,6 @@ use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
-use common_meta_sled_store::openraft::RaftLogId;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::Endpoint;
@@ -90,11 +89,12 @@ pub struct StoreInner {
 
     /// Raft state includes:
     /// id: NodeId,
-    ///     current_term,
-    ///     voted_for
-    pub raft_state: RaftState,
+    ///     vote,      // the last `Vote`
+    ///     committed, // last `LogId` that is known committed
+    pub raft_state: RwLock<RaftState>,
 
-    pub log: RaftLog,
+    /// A series of raft logs.
+    pub log: RwLock<RaftLog>,
 
     /// The Raft state machine.
     pub state_machine: Arc<RwLock<SMV002>>,
@@ -173,8 +173,8 @@ impl StoreInner {
             config: config.clone(),
             is_opened: is_open,
             db,
-            raft_state,
-            log,
+            raft_state: RwLock::new(raft_state),
+            log: RwLock::new(log),
             state_machine: sm,
             current_snapshot: RwLock::new(stored_snapshot),
         })
@@ -380,7 +380,6 @@ impl StoreInner {
                     AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
                 )
             })?;
-
         // TODO(1): read_state_machine_id() and write_state_machine_id() is no longer used.
         // TODO(xp): use checksum to check consistency?
 
@@ -388,77 +387,71 @@ impl StoreInner {
     }
 
     /// Export data that can be used to restore a meta-service node.
-    #[minitrace::trace]
-    pub async fn export(&self) -> Result<Vec<String>, io::Error> {
-        // NOTE:
+    ///
+    /// Returns a `BoxStream<'a, Result<String, io::Error>>` that yields a series of JSON strings.
+    #[futures_async_stream::try_stream(boxed, ok = String, error = io::Error)]
+    pub async fn export(self: Arc<StoreInner>) {
+        // Convert an error occurred during export to `io::Error(InvalidData)`.
+        fn invalid_data(e: impl std::error::Error + Send + Sync + 'static) -> io::Error {
+            io::Error::new(ErrorKind::InvalidData, e)
+        }
+
+        // Lock all data components so that we have a consistent view.
+        //
         // Hold the snapshot lock to prevent snapshot from being replaced until exporting finished.
         // Holding this lock prevent logs from being purged.
+        //
+        // Although vote and log must be consistent,
+        // it is OK to export RaftState and logs without transaction protection(i.e. they do not share a lock),
+        // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
         let current_snapshot = self.current_snapshot.read().await;
-
-        let mut res = vec![];
+        let raft_state = self.raft_state.read().await;
+        let log = self.log.read().await;
 
         // Export data header first
         {
-            let header_tree = SledTree::open(&self.db, TREE_HEADER, false)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let header_tree = SledTree::open(&self.db, TREE_HEADER, false).map_err(invalid_data)?;
 
-            let header_kvs = header_tree
-                .export()
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let header_kvs = header_tree.export()?;
 
             for kv in header_kvs.iter() {
-                let line = vec_kv_to_json(TREE_HEADER, kv)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-                res.push(line);
+                let line = vec_kv_to_json(TREE_HEADER, kv)?;
+                yield line;
             }
         }
 
-        // Export RaftState
-        //
-        // Although vote and log must be consistent,
-        // it is OK to export RaftState and logs without transaction protection,
-        // if it guarantees no logs have a greater `vote` than `RaftState.HardState`.
+        // Export raft state
+        {
+            let tree_name = &raft_state.inner.name;
 
-        let exported_vote = {
-            let tree_name = &self.raft_state.inner.name;
+            let ks = raft_state.inner.key_space::<RaftStateKV>();
 
-            let ks = self.raft_state.inner.key_space::<RaftStateKV>();
+            let id = ks.get(&RaftStateKey::Id)?.map(NodeId::from);
 
-            let id = ks
-                .get(&RaftStateKey::Id)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
-                .map(NodeId::from);
             if let Some(id) = id {
                 let ent_id = RaftStoreEntry::RaftStateKV {
                     key: RaftStateKey::Id,
                     value: RaftStateValue::NodeId(id),
                 };
 
-                let s = serde_json::to_string(&(tree_name, ent_id))
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-                res.push(s);
+                let s = serde_json::to_string(&(tree_name, ent_id)).map_err(invalid_data)?;
+                yield s;
             }
 
-            let vote = ks
-                .get(&RaftStateKey::HardState)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
-                .map(Vote::from);
+            let vote = ks.get(&RaftStateKey::HardState)?.map(Vote::from);
+
             if let Some(vote) = vote {
                 let ent_vote = RaftStoreEntry::RaftStateKV {
                     key: RaftStateKey::HardState,
                     value: RaftStateValue::HardState(vote),
                 };
 
-                let s = serde_json::to_string(&(tree_name, ent_vote))
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-                res.push(s);
+                let s = serde_json::to_string(&(tree_name, ent_vote)).map_err(invalid_data)?;
+                yield s;
             }
 
             let committed = ks
-                .get(&RaftStateKey::Committed)
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?
+                .get(&RaftStateKey::Committed)?
                 .and_then(Option::<LogId>::from);
 
             let ent_committed = RaftStoreEntry::RaftStateKV {
@@ -466,51 +459,29 @@ impl StoreInner {
                 value: RaftStateValue::Committed(committed),
             };
 
-            let s = serde_json::to_string(&(tree_name, ent_committed))
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-            res.push(s);
-
-            // NOTE: `vote` is used in the following code.
-            vote.unwrap_or_default()
+            let s = serde_json::to_string(&(tree_name, ent_committed)).map_err(invalid_data)?;
+            yield s;
         };
 
         // Export logs that has smaller or equal leader id as `vote`
         {
-            let tree_name = &self.log.inner.name;
+            let tree_name = &log.inner.name;
 
-            let log_kvs = self
-                .log
-                .inner
-                .export()
-                .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+            let log_kvs = log.inner.export()?;
+
             for kv in log_kvs.iter() {
-                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-                if let RaftStoreEntry::Logs { ref value, .. } = kv_entry {
-                    if value.get_log_id().leader_id > exported_vote.leader_id {
-                        warn!(
-                            "found log({}) with greater leader id than vote({}), skip exporting logs",
-                            value.get_log_id(),
-                            exported_vote
-                        );
-                        break;
-                    }
-                }
+                let kv_entry = RaftStoreEntry::deserialize(&kv[0], &kv[1])?;
 
                 let tree_kv = (tree_name, kv_entry);
-                let line = serde_json::to_string(&tree_kv)
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-                res.push(line);
+                let line = serde_json::to_string(&tree_kv).map_err(invalid_data)?;
+                yield line;
             }
         }
 
         // Export snapshot of state machine
         {
             // NOTE:
-            // This name had been used by the sled tree based sm.
+            // The name in form of "state_machine/[0-9]+" had been used by the sled tree based sm.
             // Do not change it for keeping compatibility.
             let tree_name = "state_machine/0";
 
@@ -523,25 +494,20 @@ impl StoreInner {
                 let f = snapshot_store
                     .load_snapshot(&meta.snapshot_id)
                     .await
-                    .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                    .map_err(invalid_data)?;
                 let bf = BufReader::new(f);
                 let mut lines = AsyncBufReadExt::lines(bf);
 
                 while let Some(l) = lines.next_line().await? {
-                    let ent: RaftStoreEntry = serde_json::from_str(&l)
-                        .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
+                    let ent: RaftStoreEntry = serde_json::from_str(&l).map_err(invalid_data)?;
 
                     let named_entry = (tree_name, ent);
 
-                    let l = serde_json::to_string(&named_entry)
-                        .map_err(|e| io::Error::new(ErrorKind::InvalidData, e))?;
-
-                    res.push(l);
+                    let line = serde_json::to_string(&named_entry).map_err(invalid_data)?;
+                    yield line;
                 }
             }
         }
-
-        Ok(res)
     }
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
