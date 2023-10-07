@@ -36,6 +36,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -45,7 +46,7 @@ impl HashJoinProbeState {
     {
         let input_num_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
@@ -68,25 +69,20 @@ impl HashJoinProbeState {
             .load(Ordering::Relaxed);
 
         // Start to probe hash table.
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(
                         key,
+                        *ptr,
                         local_build_indexes_ptr,
                         matched_num,
                         max_block_size,
                     )
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        local_build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    (0, 0)
                 };
             let mut total_probe_matched = 0;
             if match_count > 0 {
@@ -217,7 +213,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
@@ -265,6 +261,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -274,7 +271,7 @@ impl HashJoinProbeState {
     {
         let input_num_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
@@ -304,25 +301,20 @@ impl HashJoinProbeState {
             .load(Ordering::Relaxed);
 
         // Start to probe hash table.
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(
                         key,
+                        *ptr,
                         local_build_indexes_ptr,
                         matched_num,
                         max_block_size,
                     )
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        local_build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    (0, 0)
                 };
             let mut total_probe_matched = 0;
             if match_count > 0 {
@@ -484,7 +476,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,

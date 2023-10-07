@@ -83,6 +83,11 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
     ) -> Result<KeysState>;
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
+
+    fn build_keys_iter_and_hashes<'a>(
+        &self,
+        keys_state: &'a KeysState,
+    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)>;
 }
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
@@ -195,10 +200,27 @@ impl HashMethod for HashMethodSingleString {
         Ok(KeysState::Column(group_columns[0].0.clone()))
     }
 
-    fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
-        match key_state {
-            KeysState::Column(Column::String(col)) => Ok(col.iter()),
-            KeysState::Column(Column::Variant(col)) => Ok(col.iter()),
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match keys_state {
+            KeysState::Column(Column::String(col))
+            | KeysState::Column(Column::Variant(col))
+            | KeysState::Column(Column::Bitmap(col)) => Ok(col.iter()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn build_keys_iter_and_hashes<'a>(
+        &self,
+        keys_state: &'a KeysState,
+    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        match keys_state {
+            KeysState::Column(Column::String(col))
+            | KeysState::Column(Column::Variant(col))
+            | KeysState::Column(Column::Bitmap(col)) => {
+                let mut hashes = Vec::with_capacity(col.len());
+                hashes.extend(col.iter().map(|key| key.fast_hash()));
+                Ok((col.iter(), hashes))
+            }
             _ => unreachable!(),
         }
     }
@@ -238,6 +260,20 @@ impl HashMethod for HashMethodSerializer {
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
             KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn build_keys_iter_and_hashes<'a>(
+        &self,
+        keys_state: &'a KeysState,
+    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        match keys_state {
+            KeysState::Column(Column::String(col)) => {
+                let mut hashes = Vec::with_capacity(col.len());
+                hashes.extend(col.iter().map(|key| key.fast_hash()));
+                Ok((col.iter(), hashes))
+            }
             _ => unreachable!(),
         }
     }
@@ -312,6 +348,20 @@ impl HashMethod for HashMethodDictionarySerializer {
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match keys_state {
             KeysState::Dictionary { dictionaries, .. } => Ok(dictionaries.iter()),
+            _ => unreachable!(),
+        }
+    }
+
+    fn build_keys_iter_and_hashes<'a>(
+        &self,
+        keys_state: &'a KeysState,
+    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        match keys_state {
+            KeysState::Dictionary { dictionaries, .. } => {
+                let mut hashes = Vec::with_capacity(dictionaries.len());
+                hashes.extend(dictionaries.iter().map(|key| key.fast_hash()));
+                Ok((dictionaries.iter(), hashes))
+            }
             _ => unreachable!(),
         }
     }
@@ -532,6 +582,21 @@ macro_rules! impl_hash_method_fixed_keys {
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
             }
+
+            fn build_keys_iter_and_hashes<'a>(
+                &self,
+                keys_state: &'a KeysState,
+            ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+                use crate::types::ArgType;
+                match keys_state {
+                    KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
+                        let mut hashes = Vec::with_capacity(col.len());
+                        hashes.extend(col.iter().map(|key| key.fast_hash()));
+                        Ok((col.iter(), hashes))
+                    }
+                    other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
+                }
+            }
         }
     };
 }
@@ -584,6 +649,20 @@ macro_rules! impl_hash_method_fixed_large_keys {
             ) -> Result<Self::HashKeyIter<'a>> {
                 match key_state {
                     KeysState::$name(v) => Ok(v.iter()),
+                    _ => unreachable!(),
+                }
+            }
+
+            fn build_keys_iter_and_hashes<'a>(
+                &self,
+                keys_state: &'a KeysState,
+            ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+                match keys_state {
+                    KeysState::$name(v) => {
+                        let mut hashes = Vec::with_capacity(v.len());
+                        hashes.extend(v.iter().map(|key| key.fast_hash()));
+                        Ok((v.iter(), hashes))
+                    }
                     _ => unreachable!(),
                 }
             }

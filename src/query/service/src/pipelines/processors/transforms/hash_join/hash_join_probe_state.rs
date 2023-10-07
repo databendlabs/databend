@@ -38,6 +38,7 @@ use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_hashtable::HashJoinHashtableLike;
 use common_sql::ColumnSet;
 use log::info;
 use parking_lot::Mutex;
@@ -246,11 +247,15 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                let (keys_iter, mut hashes) =
+                    table.hash_method.build_keys_iter_and_hashes(&keys_state)?;
+                // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+                table.hash_table.probe(&mut hashes);
                 self.result_blocks(
                     &table.hash_table,
                     probe_state,
                     keys_iter,
+                    &hashes,
                     &input,
                     is_probe_projected,
                 )

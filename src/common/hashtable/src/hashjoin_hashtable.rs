@@ -52,7 +52,7 @@ pub struct RawEntry<K> {
 pub struct HashJoinHashTable<K: Keyable, A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    pub(crate) hash_mask: usize,
+    pub(crate) hash_mask: u64,
     pub(crate) phantom: PhantomData<K>,
 }
 
@@ -68,7 +68,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            hash_mask: capacity - 1,
+            hash_mask: capacity as u64 - 1,
             phantom: PhantomData,
         };
         hashtable.atomic_pointers = unsafe {
@@ -78,7 +78,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
     }
 
     pub fn insert(&mut self, key: K, raw_entry_ptr: *mut RawEntry<K>) {
-        let index = key.hash() as usize & self.hash_mask;
+        let index = (key.hash() & self.hash_mask) as usize;
         // # Safety
         // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
@@ -107,38 +107,42 @@ where
 {
     type Key = K;
 
-    fn contains(&self, key_ref: &Self::Key) -> bool {
-        let index = key_ref.hash() as usize & self.hash_mask;
-        let mut raw_entry_ptr = self.pointers[index];
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn probe(&self, hashes: &mut [u64]) {
+        hashes
+            .iter_mut()
+            .for_each(|hash| *hash = self.pointers[(*hash & self.hash_mask) as usize]);
+    }
+
+    fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {
         loop {
-            if raw_entry_ptr == 0 {
+            if ptr == 0 {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *mut RawEntry<K>) };
-            if key_ref == &raw_entry.key {
+            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
+            if key == &raw_entry.key {
                 return true;
             }
-            raw_entry_ptr = raw_entry.next;
+            ptr = raw_entry.next;
         }
         false
     }
 
-    fn probe_hash_table(
+    fn next_probe(
         &self,
-        key_ref: &Self::Key,
+        key: &Self::Key,
+        mut ptr: u64,
         vec_ptr: *mut RowPtr,
         mut occupied: usize,
         capacity: usize,
     ) -> (usize, u64) {
-        let index = key_ref.hash() as usize & self.hash_mask;
         let origin = occupied;
-        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if raw_entry_ptr == 0 || occupied >= capacity {
+            if ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *mut RawEntry<K>) };
-            if key_ref == &raw_entry.key {
+            let raw_entry = unsafe { &*(ptr as *mut RawEntry<K>) };
+            if key == &raw_entry.key {
                 // # Safety
                 // occupied is less than the capacity of vec_ptr.
                 unsafe {
@@ -150,45 +154,10 @@ where
                 };
                 occupied += 1;
             }
-            raw_entry_ptr = raw_entry.next;
+            ptr = raw_entry.next;
         }
         if occupied > origin {
-            (occupied - origin, raw_entry_ptr)
-        } else {
-            (0, 0)
-        }
-    }
-
-    fn next_incomplete_ptr(
-        &self,
-        key_ref: &Self::Key,
-        mut incomplete_ptr: u64,
-        vec_ptr: *mut RowPtr,
-        mut occupied: usize,
-        capacity: usize,
-    ) -> (usize, u64) {
-        let origin = occupied;
-        loop {
-            if incomplete_ptr == 0 || occupied >= capacity {
-                break;
-            }
-            let raw_entry = unsafe { &*(incomplete_ptr as *mut RawEntry<K>) };
-            if key_ref == &raw_entry.key {
-                // # Safety
-                // occupied is less than the capacity of vec_ptr.
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        &raw_entry.row_ptr as *const RowPtr,
-                        vec_ptr.add(occupied),
-                        1,
-                    )
-                };
-                occupied += 1;
-            }
-            incomplete_ptr = raw_entry.next;
-        }
-        if occupied > origin {
-            (occupied - origin, incomplete_ptr)
+            (occupied - origin, ptr)
         } else {
             (0, 0)
         }
