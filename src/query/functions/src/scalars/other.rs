@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::max;
+
 use std::io::Write;
 use std::net::Ipv4Addr;
 use std::sync::Arc;
@@ -100,7 +100,8 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_number",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
+        vectorize_with_builder_1_arg::<Float64
+        Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
             output.put_str(&new_val);
             output.commit_row();
@@ -246,8 +247,13 @@ pub fn register(registry: &mut FunctionRegistry) {
         }
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let name = "greatest".to_string();
-        let arg_type = eval_arg_type(args_type);
-        let return_type = arg_type.wrap_nullable();
+        let first_type = args_type[0];
+        for arg_type in args_type.iter().skip(0) {
+            if first_type != arg_type {
+                ctx.set_error(0, "arg shoud be same type!");
+            }
+        } 
+        let return_type = first_type.wrap_nullable();
         let f = Function {
             signature: FunctionSignature {
                 name,
@@ -423,72 +429,6 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
     }
     grouping
 }
-fn eval_arg_type(args: &[DataType]) -> DataType {
-    let mut precision: u8 = 0;
-    let mut scale: u8 = 0;
-    let mut is_decimal128 = false;
-    let mut is_decimal256 = false;
-    let mut num_type: Option<NumberDataType> = None;
-
-    for arg in args.iter() {
-        match arg {
-            DataType::Decimal(decimal_type) => match decimal_type {
-                DecimalDataType::Decimal128(size) => {
-                    precision = max(precision, size.precision);
-                    scale = max(scale, size.scale);
-                    is_decimal128 = true;
-                    if let Some(no_type) = num_type {
-                        let size = no_type.get_decimal_properties().unwrap();
-                        precision = max(size.precision + scale, precision);
-                    }
-                }
-                DecimalDataType::Decimal256(size) => {
-                    precision = max(precision, size.precision);
-                    scale = max(scale, size.scale);
-                    is_decimal256 = true;
-                    if let Some(no_type) = num_type {
-                        let size = no_type.get_decimal_properties().unwrap();
-                        precision = max(size.precision + scale, precision);
-                    }
-                }
-            },
-            DataType::Number(no_type) => {
-                let size = no_type.get_decimal_properties().unwrap();
-                precision = max(size.precision + scale, precision);
-                match num_type {
-                    Some(int_type) => {
-                        if !no_type.is_same(int_type) {
-                            if no_type.can_lossless_cast_to(int_type) {
-                                num_type = Some(int_type);
-                            } else if int_type.can_lossless_cast_to(no_type.to_owned()) {
-                                num_type = Some(no_type.to_owned());
-                            } else {
-                                is_decimal128 = true;
-                            }
-                        }
-                    }
-                    None => {
-                        num_type = Some(no_type.to_owned());
-                    }
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-    if is_decimal256 {
-        DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-            precision,
-            scale,
-        }))
-    } else if is_decimal128 {
-        DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-            precision,
-            scale,
-        }))
-    } else {
-        DataType::Number(num_type.unwrap())
-    }
-}
 
 fn eval_args(
     args: &[ValueRef<AnyType>],
@@ -496,82 +436,34 @@ fn eval_args(
     dest_type: DataType,
 ) -> Value<AnyType> {
     match &args[0] {
-        ValueRef::Scalar(_) => eval_scalar_args(args, ctx, dest_type),
-        ValueRef::Column(_) => eval_column_args(args, ctx, dest_type),
-    }
+        ValueRef::Scalar(scalar) => {
+          let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
+          for item in args.iter() {
+               match item {
+                ValueRef::Scalar(scalar)=>{
+                    builder.push(scalar.to_owned());
+                }
+                _ => unreachable!(),
+               }
+          }
+          Value::Scalar(Scalar::Array(builder.build()))
+        }
+        ValueRef::Column(_) => {
+            let m = args.len();
+            let n = args[0].as_column().unwrap().len();
+            let mut builder =
+                ColumnBuilder::with_capacity(&DataType::Array(Box::new(dest_type.clone())), n);
+            for j in 0..n {
+                let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
+                for item in args.iter().take(m) {
+                   let col = item.as_column().unwrap();
+                   let arg = col.index(j).unwrap();  
+                   scalar_builder.push(arg.to_owned());
+                }
+                builder.push(Scalar::Array(scalar_builder.build()).as_ref());
+            }
+            Value::Column(builder.build())
+        }       
+    } 
 }
 
-fn eval_scalar_args(
-    args: &[ValueRef<AnyType>],
-    ctx: &mut EvalContext,
-    dest_type: DataType,
-) -> Value<AnyType> {
-    let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
-    for arg in args.iter() {
-        match dest_type {
-            DataType::Decimal(v) => match arg {
-                ValueRef::Scalar(scalar) => {
-                    let from_type = scalar.infer_data_type();
-                    if let Value::Scalar(decimal_scalar) =
-                        convert_to_decimal(arg, ctx, &from_type, v)
-                    {
-                        builder.push(decimal_scalar.as_ref());
-                    }
-                }
-                _ => unreachable!(),
-            },
-            DataType::Number(v) => match arg {
-                ValueRef::Scalar(scalar) => match scalar {
-                    ScalarRef::Number(scalar) => {
-                        let num_scalar = scalar.as_value(v);
-                        builder.push(num_scalar.as_ref());
-                    }
-                    _ => unreachable!("expect NumberScalar but: {:?}", scalar),
-                },
-                _ => unreachable!(),
-            },
-            _ => unreachable!(),
-        }
-    }
-    Value::Scalar(Scalar::Array(builder.build()))
-}
-fn eval_column_args(
-    args: &[ValueRef<AnyType>],
-    ctx: &mut EvalContext,
-    dest_type: DataType,
-) -> Value<AnyType> {
-    let m = args.len();
-    let n = args[0].as_column().unwrap().len();
-    let mut builder =
-        ColumnBuilder::with_capacity(&DataType::Array(Box::new(dest_type.clone())), n);
-    for j in 0..n {
-        let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
-        for item in args.iter().take(m) {
-            let col = item.as_column().unwrap();
-            let arg = col.index(j).unwrap();
-            match dest_type {
-                DataType::Decimal(v) => {
-                    let from_type = arg.infer_data_type();
-                    if let Value::Scalar(decimal_scalar) = convert_to_decimal(
-                        &Value::Scalar(arg.to_owned()).as_ref(),
-                        ctx,
-                        &from_type,
-                        v,
-                    ) {
-                        scalar_builder.push(decimal_scalar.as_ref());
-                    }
-                }
-                DataType::Number(v) => match arg {
-                    ScalarRef::Number(scalar) => {
-                        let num_scalar = scalar.as_value(v);
-                        scalar_builder.push(num_scalar.as_ref());
-                    }
-                    _ => unreachable!("expect NumberScalar but: {:?}", arg),
-                },
-                _ => unreachable!(),
-            }
-        }
-        builder.push(Scalar::Array(scalar_builder.build()).as_ref());
-    }
-    Value::Column(builder.build())
-}
