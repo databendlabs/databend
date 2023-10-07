@@ -7,7 +7,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'Comment'                       | 'system'             | 'engines'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'Engine'                        | 'system'             | 'engines'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'active_result_scan'            | 'system'             | 'query_cache'         | 'Boolean'             | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'auth_string'                   | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'agg_spilled_bytes'             | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'agg_spilled_rows'              | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                     | 'system'             | 'users'               | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auto_increment'                | 'information_schema' | 'tables'              | 'NULL'                | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'block_count'                   | 'system'             | 'clustering_history'  | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -124,6 +125,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'file_name'                     | 'system'             | 'temp_files'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'file_type'                     | 'system'             | 'temp_files'          | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'group'                         | 'system'             | 'configs'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'group_by_spilled_bytes'        | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'group_by_spilled_rows'         | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'handler_type'                  | 'system'             | 'query_log'           | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'host'                          | 'system'             | 'clusters'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'host'                          | 'system'             | 'processes'           | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
@@ -152,6 +155,8 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'is_updatable'                  | 'information_schema' | 'views'               | 'UInt8'               | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'job_state'                     | 'system'             | 'background_jobs'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
 | 'job_type'                      | 'system'             | 'background_jobs'     | 'Nullable(String)'    | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
+| 'join_spilled_bytes'            | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
+| 'join_spilled_rows'             | 'system'             | 'query_log'           | 'UInt64'              | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'keywords'                      | 'information_schema' | 'keywords'            | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'kind'                          | 'system'             | 'metrics'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'labels'                        | 'system'             | 'metrics'             | 'String'              | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

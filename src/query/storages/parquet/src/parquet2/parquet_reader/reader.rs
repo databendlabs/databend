@@ -257,8 +257,10 @@ impl Parquet2Reader {
 
         for index in self.columns_to_read() {
             let meta = &part.column_metas[index];
-            let reader =
-                operator.range_reader(&part.location, meta.offset..meta.offset + meta.length)?;
+            let reader = operator
+                .reader_with(&part.location)
+                .range(meta.offset..meta.offset + meta.length)
+                .call()?;
             metrics_inc_copy_read_size_bytes(meta.length);
             readers.insert(
                 *index,
@@ -311,7 +313,7 @@ impl Parquet2Reader {
                             metrics_inc_copy_read_size_bytes(length);
                         }
 
-                        let data = op.range_read(&path, offset..offset + length).await?;
+                        let data = op.read_with(&path).range(offset..offset + length).await?;
                         Ok::<_, ErrorCode>((
                             *index,
                             DataReader::new(Box::new(std::io::Cursor::new(data)), length as usize),

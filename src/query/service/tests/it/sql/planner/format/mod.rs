@@ -165,7 +165,6 @@ fn test_format() {
                         }
                         .into(),
                     ],
-                    is_having: false,
                 }
                 .into(),
             ),

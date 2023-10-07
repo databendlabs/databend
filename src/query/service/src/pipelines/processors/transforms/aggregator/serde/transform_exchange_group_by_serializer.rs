@@ -21,6 +21,8 @@ use common_arrow::arrow::io::flight::default_ipc_fields;
 use common_arrow::arrow::io::flight::WriteOptions;
 use common_arrow::arrow::io::ipc::IpcField;
 use common_base::base::GlobalUniqName;
+use common_base::base::ProgressValues;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::arrow::serialize_column;
 use common_expression::types::ArgType;
@@ -61,8 +63,10 @@ use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spi
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
+use crate::sessions::QueryContext;
 
 pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
+    ctx: Arc<QueryContext>,
     method: Method,
     local_pos: usize,
     options: WriteOptions,
@@ -73,7 +77,9 @@ pub struct TransformExchangeGroupBySerializer<Method: HashMethodBounds> {
 }
 
 impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         method: Method,
@@ -89,6 +95,7 @@ impl<Method: HashMethodBounds> TransformExchangeGroupBySerializer<Method> {
             input,
             output,
             TransformExchangeGroupBySerializer::<Method> {
+                ctx,
                 method,
                 operator,
                 local_pos,
@@ -174,12 +181,14 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
                             true => local_spilling_group_by_payload(
+                                self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
                                 payload,
                             )?,
                             false => spilling_group_by_payload(
+                                self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
@@ -219,6 +228,7 @@ fn get_columns(data_block: DataBlock) -> Vec<BlockEntry> {
 }
 
 fn spilling_group_by_payload<Method: HashMethodBounds>(
+    ctx: Arc<QueryContext>,
     operator: Operator,
     method: &Method,
     location_prefix: &str,
@@ -233,6 +243,8 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
     let mut data_range_start_column_data = Vec::with_capacity(256);
     let mut data_range_end_column_data = Vec::with_capacity(256);
     let mut columns_layout_column_data = Vec::with_capacity(256);
+    // Record how many rows are spilled
+    let mut rows = 0;
 
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
@@ -241,6 +253,7 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         let now = Instant::now();
         let data_block = serialize_group_by(method, inner_table)?;
+        rows += 0;
 
         let old_write_size = write_size;
         let columns = get_columns(data_block);
@@ -274,7 +287,10 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         if !write_data.is_empty() {
             let mut write_bytes = 0;
-            let mut writer = operator.writer(&location).await?;
+            let mut writer = operator
+                .writer_with(&location)
+                .buffer(8 * 1024 * 1024)
+                .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
                     write_bytes += data.len();
@@ -289,6 +305,14 @@ fn spilling_group_by_payload<Method: HashMethodBounds>(
                 metrics_inc_group_by_spill_write_count();
                 metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
                 metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
+
+            {
+                let progress_val = ProgressValues {
+                    rows,
+                    bytes: write_bytes,
+                };
+                ctx.get_group_by_spill_progress().incr(&progress_val);
             }
 
             info!(

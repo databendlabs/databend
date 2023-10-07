@@ -119,7 +119,7 @@ impl CopyIntoTablePlan {
         };
 
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        let all_source_file_infos = if operator.info().can_blocking() {
+        let all_source_file_infos = if operator.info().native_capability().blocking {
             if self.force {
                 stage_table_info
                     .files_info

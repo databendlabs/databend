@@ -50,7 +50,8 @@ impl ParquetRSTable {
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
     ) -> Result<(PartStatistics, Partitions)> {
-        let parquet_metas = self.parquet_metas.lock().await;
+        // Unwrap safety: no other thread will hold this lock.
+        let parquet_metas = self.parquet_metas.try_lock().unwrap();
         let file_locations = if parquet_metas.is_empty() {
             match &self.files_to_read {
                 Some(files) => files
@@ -406,7 +407,7 @@ fn prune_and_generate_partitions(
                 topk.as_ref()
                     .zip(row_group_level_stats.as_ref())
                     .map(|(t, stats)| {
-                        let stat = &stats[rg][&t.column_id];
+                        let stat = &stats[rg][&(t.leaf_id as u32)];
                         (stat.min.clone(), stat.max.clone())
                     });
 

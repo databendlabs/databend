@@ -299,16 +299,18 @@ async fn build_3_levels() -> LeveledMap {
 async fn build_sm_with_expire() -> SMV002 {
     let mut sm = SMV002::default();
 
-    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10))
+    let mut a = sm.new_applier();
+    a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await;
-    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
+    a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await;
 
     sm.levels.freeze_writable();
 
-    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
+    let mut a = sm.new_applier();
+    a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await;
-    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15))
+    a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
         .await;
 
     sm

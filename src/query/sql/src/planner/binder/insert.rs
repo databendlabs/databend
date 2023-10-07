@@ -102,7 +102,7 @@ impl Binder {
             } => {
                 if format.to_uppercase() == "VALUES" {
                     let data = rest_str.trim_end_matches(';').trim_start().to_owned();
-                    Ok(InsertInputSource::Values(data))
+                    Ok(InsertInputSource::Values { data, start })
                 } else {
                     Ok(InsertInputSource::StreamingWithFormat(format, start, None))
                 }
@@ -122,7 +122,7 @@ impl Binder {
                     input_context_option: None,
                 })
             }
-            InsertSource::Values { rest_str } => {
+            InsertSource::Values { rest_str, start } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
                     Some(attachment) => {
@@ -141,7 +141,10 @@ impl Binder {
                             )
                             .await;
                     }
-                    None => Ok(InsertInputSource::Values(values_str)),
+                    None => Ok(InsertInputSource::Values {
+                        data: rest_str,
+                        start,
+                    }),
                 }
             }
             InsertSource::Select { query } => {

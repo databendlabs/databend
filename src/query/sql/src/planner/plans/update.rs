@@ -65,6 +65,7 @@ impl UpdatePlan {
         schema: DataSchema,
         col_indices: Vec<usize>,
         use_column_name_index: Option<usize>,
+        has_alias: bool,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
@@ -94,7 +95,11 @@ impl UpdatePlan {
                     let mut right = None;
                     for column_binding in self.bind_context.columns.iter() {
                         if BindContext::match_column_binding(
-                            Some(&self.database),
+                            if has_alias {
+                                None
+                            } else {
+                                Some(&self.database)
+                            },
                             Some(&self.table),
                             field.name(),
                             column_binding,
@@ -106,6 +111,7 @@ impl UpdatePlan {
                             break;
                         }
                     }
+
                     let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,

@@ -111,7 +111,7 @@ impl PartitionPruner {
         let mut stats = PartStatistics::default();
         let mut partitions = vec![];
 
-        let is_blocking_io = operator.info().can_blocking();
+        let is_blocking_io = operator.info().native_capability().blocking;
         let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
         let no_stats = file_meta.row_groups.iter().any(|r| {
@@ -180,7 +180,7 @@ impl PartitionPruner {
                 let min_max = self
                     .top_k
                     .as_ref()
-                    .filter(|(tk, _)| tk.column_id as usize == *index)
+                    .filter(|(tk, _)| tk.leaf_id == *index)
                     .zip(row_group_stats.as_ref())
                     .map(|((_, offset), stats)| {
                         let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();

@@ -97,7 +97,7 @@ impl Parquet2Table {
             let offset = projected_column_nodes
                 .column_nodes
                 .iter()
-                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
+                .position(|node| node.leaf_indices[0] == top_k.leaf_id)
                 .unwrap();
             (top_k, offset)
         });
@@ -156,7 +156,7 @@ impl Parquet2Table {
                 .iter()
                 .map(|f| (f.path.clone(), f.size))
                 .collect::<Vec<_>>(),
-            None => if self.operator.info().can_blocking() {
+            None => if self.operator.info().native_capability().blocking {
                 self.files_info.blocking_list(&self.operator, false, None)
             } else {
                 self.files_info.list(&self.operator, false, None).await

@@ -56,7 +56,7 @@ impl Interpreter for PresignInterpreter {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "presign_interpreter_execute");
 
         let op = StageTable::get_op(&self.plan.stage)?;
-        if !op.info().can_presign() {
+        if !op.info().full_capability().presign {
             return Err(ErrorCode::StorageUnsupported(
                 "storage doesn't support presign operation",
             ));

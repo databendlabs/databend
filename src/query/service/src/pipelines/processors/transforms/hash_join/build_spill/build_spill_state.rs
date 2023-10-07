@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -53,7 +54,7 @@ impl BuildSpillState {
         let tenant = ctx.get_tenant();
         let spill_config = SpillerConfig::create(query_spill_prefix(&tenant));
         let operator = DataOperator::instance().operator();
-        let spiller = Spiller::create(operator, spill_config, SpillerType::HashJoinBuild);
+        let spiller = Spiller::create(ctx, operator, spill_config, SpillerType::HashJoinBuild);
         Self {
             build_state,
             spill_coordinator,
@@ -75,14 +76,11 @@ impl BuildSpillState {
         // Collect rows in `RowSpace`'s buffer
         let mut row_space_buffer = self.build_state.hash_join_state.row_space.buffer.write();
         blocks.extend(row_space_buffer.drain(..));
-        let mut buffer_row_size = self
-            .build_state
+        self.build_state
             .hash_join_state
             .row_space
             .buffer_row_size
-            .write();
-        *buffer_row_size = 0;
-
+            .store(0, Ordering::Relaxed);
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
         blocks.append(chunks);
@@ -164,6 +162,43 @@ impl BuildSpillState {
         Ok(false)
     }
 
+    // Pick partitions which need to spill
+    fn pick_partitions(&self, partition_blocks: &mut HashMap<u8, Vec<DataBlock>>) -> Result<()> {
+        // Compute each partition's data size
+        let mut partition_sizes = partition_blocks
+            .iter()
+            .map(|(id, blocks)| {
+                let size = blocks
+                    .iter()
+                    .fold(0, |acc, block| acc + block.memory_size());
+                (*id, size)
+            })
+            .collect::<Vec<(u8, usize)>>();
+        partition_sizes.sort_by_key(|&(_id, size)| size);
+        let mut memory_limit = self
+            .build_state
+            .ctx
+            .get_settings()
+            .get_join_spilling_threshold()?;
+        for (id, size) in partition_sizes.into_iter() {
+            if size <= memory_limit {
+                // Put the partition's data to chunks
+                let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
+                let blocks = partition_blocks.get_mut(&id).unwrap();
+                let rows_num = blocks.iter().fold(0, |acc, block| acc + block.num_rows());
+                chunks.append(blocks);
+                let build_num_rows =
+                    unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
+                *build_num_rows += rows_num;
+                partition_blocks.remove(&id);
+                memory_limit -= size;
+            } else {
+                break;
+            }
+        }
+        Ok(())
+    }
+
     // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
     pub(crate) fn split_spill_tasks(
@@ -172,7 +207,8 @@ impl BuildSpillState {
         spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
     ) -> Result<()> {
         let blocks = self.collect_rows()?;
-        let partition_blocks = self.partition_input_blocks(&blocks)?;
+        let mut partition_blocks = self.partition_input_blocks(&blocks)?;
+        self.pick_partitions(&mut partition_blocks)?;
         let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());
         // Stat how many rows in each partition, then split it equally.
         for (partition_id, blocks) in partition_blocks.iter() {
@@ -195,7 +231,6 @@ impl BuildSpillState {
             }
         }
 
-        // Todo: we don't need to spill all partitions.
         let mut task_id: usize = 0;
         while task_id < active_processors_num {
             let mut task = Vec::with_capacity(partition_tasks.len());

@@ -106,7 +106,7 @@ impl SegmentsIO {
         });
 
         let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let permit_nums = threads_nums * 2;
         execute_futures_in_parallel(
             tasks,
             threads_nums,

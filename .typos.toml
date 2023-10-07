@@ -11,6 +11,7 @@
 "INOUT" = "INOUT"
 "ser" = "ser"
 "Ser" = "Ser"
+"flate" = "flate"
 
 [files]
 extend-exclude = [

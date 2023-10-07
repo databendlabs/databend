@@ -46,20 +46,20 @@ Limit
     ├── output columns: [numbers.number (#0)]
     ├── sort keys: [number ASC NULLS LAST]
     ├── estimated rows: 0.20
-    └── Filter
-        ├── output columns: [numbers.number (#0)]
-        ├── filters: [numbers.b (#0) > 1]
+    └── AggregateFinal
+        ├── output columns: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
+        ├── group by: [number, number, number, number]
+        ├── aggregate functions: []
         ├── estimated rows: 0.20
-        └── AggregateFinal
-            ├── output columns: [numbers.number (#0), numbers.number (#0), numbers.number (#0), numbers.number (#0)]
+        └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [number, number, number, number]
             ├── aggregate functions: []
-            ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [#_group_by_key]
-                ├── group by: [number, number, number, number]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
+            ├── estimated rows: 0.20
+            └── Filter
+                ├── output columns: [numbers.number (#0)]
+                ├── filters: [numbers.b (#0) > 1]
+                ├── estimated rows: 0.20
                 └── TableScan
                     ├── table: default.system.numbers
                     ├── output columns: [number (#0)]
@@ -67,7 +67,7 @@ Limit
                     ├── read bytes: 8
                     ├── partitions total: 1
                     ├── partitions scanned: 1
-                    ├── push downs: [filters: [], limit: NONE]
+                    ├── push downs: [filters: [numbers.b (#0) > 1], limit: NONE]
                     └── estimated rows: 1.00
 
 query T

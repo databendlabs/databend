@@ -130,7 +130,9 @@ where TablesTable<T>: HistoryAware
                         if col_name == "database" {
                             if let Scalar::String(s) = scalar {
                                 if let Ok(database) = String::from_utf8(s.clone()) {
-                                    db_name.push(database);
+                                    if !db_name.contains(&database) {
+                                        db_name.push(database);
+                                    }
                                 }
                             }
                         }

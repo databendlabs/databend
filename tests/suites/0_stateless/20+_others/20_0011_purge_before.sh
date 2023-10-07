@@ -31,7 +31,7 @@ echo "checking that after purge (by snapshot id) there should be 4 rows left"
 echo "select count(*)=4  from t20_0011" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
-echo "drop table t20_0011 all" | $MYSQL_CLIENT_CONNECT
+echo "drop table t20_0011" | $MYSQL_CLIENT_CONNECT
 
 # PURGE BEFORE TIMESTAMP
 
@@ -58,4 +58,4 @@ echo "checking that after purge (by timestamp) there should be 4 rows left"
 echo "select count(*)=4  from t20_0011" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
-echo "drop table t20_0011 all" | $MYSQL_CLIENT_CONNECT
+echo "drop table t20_0011" | $MYSQL_CLIENT_CONNECT

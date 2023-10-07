@@ -16,6 +16,7 @@ use std::cell::SyncUnsafeCell;
 use std::collections::HashSet;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicI8;
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
@@ -37,7 +38,6 @@ use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
 use ethnum::U256;
-use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
@@ -82,7 +82,7 @@ pub struct HashJoinState {
     /// After the processor added its chunks to `HashTable`, it will be decreased by 1.
     /// When the counter is 0, it means all hash join build processors have added their chunks to `HashTable`.
     /// And the build phase is finished. Probe phase will start.
-    pub(crate) hash_table_builders: Mutex<usize>,
+    pub(crate) hash_table_builders: AtomicUsize,
     /// After `hash_table_builders` is 0, send message to notify all probe processors.
     /// There are three types' messages:
     /// 1. **0**: it's the initial message used by creating the watch channel
@@ -148,7 +148,7 @@ impl HashJoinState {
         let (continue_build_watcher, _continue_build_dummy_receiver) = watch::channel(false);
         Ok(Arc::new(HashJoinState {
             hash_table: SyncUnsafeCell::new(HashJoinHashTable::Null),
-            hash_table_builders: Mutex::new(0),
+            hash_table_builders: AtomicUsize::new(0),
             build_done_watcher,
             _build_done_dummy_receiver,
             hash_join_desc,
@@ -220,7 +220,7 @@ impl HashJoinState {
 
     pub fn set_spilled_partition(&self, partitions: &HashSet<u8>) {
         let mut spill_partition = self.build_spilled_partitions.write();
-        *spill_partition = partitions.clone();
+        spill_partition.extend(partitions);
     }
 
     #[async_backtrace::framed]

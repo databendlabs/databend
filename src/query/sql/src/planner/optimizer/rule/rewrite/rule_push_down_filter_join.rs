@@ -196,7 +196,6 @@ pub fn try_push_down_filter_join(
             Arc::new(
                 Filter {
                     predicates: original_predicates,
-                    is_having: false,
                 }
                 .into(),
             ),
