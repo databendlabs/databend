@@ -97,7 +97,7 @@ impl Parquet2Table {
             let offset = projected_column_nodes
                 .column_nodes
                 .iter()
-                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
+                .position(|node| node.leaf_indices[0] == top_k.leaf_id)
                 .unwrap();
             (top_k, offset)
         });
