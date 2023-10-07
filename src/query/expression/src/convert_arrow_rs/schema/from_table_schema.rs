@@ -36,7 +36,7 @@ impl From<&TableField> for ArrowField {
     fn from(f: &TableField) -> Self {
         let ty = f.data_type().into();
         let mut metadata = HashMap::new();
-        match f.data_type() {
+        match f.data_type().remove_nullable() {
             TableDataType::EmptyArray => {
                 metadata.insert(
                     EXTENSION_KEY.to_string(),
@@ -58,15 +58,18 @@ impl From<&TableField> for ArrowField {
             TableDataType::Bitmap => {
                 metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_BITMAP.to_string());
             }
-            _ => Default::default(),
+            _ => {}
         };
-        match ty {
-            ArrowDataType::Struct(_) if f.is_nullable() => {
-                let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
+        if !metadata.is_empty() {
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
+        } else {
+            match ty {
+                ArrowDataType::Struct(_) if f.is_nullable() => {
+                    let ty = set_nullable(&ty);
+                    ArrowField::new(f.name(), ty, f.is_nullable())
+                }
+                _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
             }
-            // if datatype is null, need to set nullable to true
-            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
         }
     }
 }
