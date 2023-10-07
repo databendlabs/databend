@@ -600,7 +600,6 @@ impl Rule for RuleInferFilter {
                 Arc::new(
                     Filter {
                         predicates: new_predicates,
-                        is_having: filter.is_having,
                     }
                     .into(),
                 ),

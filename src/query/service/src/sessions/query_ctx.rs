@@ -319,16 +319,32 @@ impl TableContext for QueryContext {
         self.shared.write_progress.clone()
     }
 
-    fn get_spill_progress(&self) -> Arc<Progress> {
-        self.shared.spill_progress.clone()
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.shared.join_spill_progress.clone()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.shared.agg_spill_progress.clone()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.shared.group_by_spill_progress.clone()
     }
 
     fn get_write_progress_value(&self) -> ProgressValues {
         self.shared.write_progress.as_ref().get_values()
     }
 
-    fn get_spill_progress_value(&self) -> ProgressValues {
-        self.shared.spill_progress.as_ref().get_values()
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        self.shared.join_spill_progress.as_ref().get_values()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
+        self.shared.agg_spill_progress.as_ref().get_values()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        self.shared.group_by_spill_progress.as_ref().get_values()
     }
 
     fn get_result_progress(&self) -> Arc<Progress> {

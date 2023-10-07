@@ -369,15 +369,31 @@ impl TableContext for CtxDelegation {
         self.ctx.get_write_progress()
     }
 
-    fn get_spill_progress(&self) -> Arc<Progress> {
-        self.ctx.get_spill_progress()
+    fn get_join_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_join_spill_progress()
+    }
+
+    fn get_aggregate_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_aggregate_spill_progress()
+    }
+
+    fn get_group_by_spill_progress(&self) -> Arc<Progress> {
+        self.ctx.get_group_by_spill_progress()
     }
 
     fn get_write_progress_value(&self) -> ProgressValues {
         todo!()
     }
 
-    fn get_spill_progress_value(&self) -> ProgressValues {
+    fn get_join_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_group_by_spill_progress_value(&self) -> ProgressValues {
+        todo!()
+    }
+
+    fn get_aggregate_spill_progress_value(&self) -> ProgressValues {
         todo!()
     }
 

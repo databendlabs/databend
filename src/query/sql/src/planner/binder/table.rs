@@ -972,13 +972,8 @@ impl Binder {
             }
         }
 
-        let mut stat = table.table().table_statistics()?;
-        if let Some(rows) = statistics_provider.num_rows() {
-            // For external storage (parquet)
-            if let Some(stat) = &mut stat {
-                stat.num_rows = Some(rows);
-            }
-        };
+        let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(Arc::new(
                 Scan {

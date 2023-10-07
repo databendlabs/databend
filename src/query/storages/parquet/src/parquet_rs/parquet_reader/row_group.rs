@@ -93,6 +93,9 @@ impl ChunkReader for ColumnChunkData {
 /// It's inspired by `InMemoryRowGroup` in apache `parquet` crate,
 /// but it is a private struct. Therefore, we copied the main codes here and did some optimizations.
 pub struct InMemoryRowGroup<'a> {
+    location: &'a str,
+    op: Operator,
+
     metadata: &'a RowGroupMetaData,
     page_locations: Option<&'a [Vec<PageLocation>]>,
     column_chunks: Vec<Option<Arc<ColumnChunkData>>>,
@@ -100,8 +103,15 @@ pub struct InMemoryRowGroup<'a> {
 }
 
 impl<'a> InMemoryRowGroup<'a> {
-    pub fn new(rg: &'a RowGroupMetaData, page_locations: Option<&'a [Vec<PageLocation>]>) -> Self {
+    pub fn new(
+        location: &'a str,
+        op: Operator,
+        rg: &'a RowGroupMetaData,
+        page_locations: Option<&'a [Vec<PageLocation>]>,
+    ) -> Self {
         Self {
+            location,
+            op,
             metadata: rg,
             page_locations,
             column_chunks: vec![None; rg.num_columns()],
@@ -118,8 +128,6 @@ impl<'a> InMemoryRowGroup<'a> {
     /// If call `fetch` multiple times, it will only fetch the data that has not been fetched.
     pub async fn fetch(
         &mut self,
-        loc: &str,
-        op: Operator,
         projection: &ProjectionMask,
         selection: Option<&RowSelection>,
     ) -> Result<()> {
@@ -164,7 +172,7 @@ impl<'a> InMemoryRowGroup<'a> {
             // Fetch ranges in different async tasks.
             let mut handles = Vec::with_capacity(fetch_ranges.len());
             for range in fetch_ranges {
-                let fut_read = op.read_with(loc);
+                let fut_read = self.op.read_with(self.location);
                 handles.push(async move {
                     let data = fut_read.range(range).await?;
                     Ok::<_, ErrorCode>(Bytes::from(data))
@@ -209,7 +217,7 @@ impl<'a> InMemoryRowGroup<'a> {
             // Fetch ranges in different async tasks.
             let mut handles = Vec::with_capacity(fetch_ranges.len());
             for range in fetch_ranges {
-                let fut_read = op.read_with(loc);
+                let fut_read = self.op.read_with(self.location);
                 handles.push(async move {
                     let data = fut_read.range(range).await?;
                     Ok::<_, ErrorCode>(Bytes::from(data))

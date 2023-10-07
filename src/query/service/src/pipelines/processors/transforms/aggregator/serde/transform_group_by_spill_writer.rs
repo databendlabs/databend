@@ -17,6 +17,8 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::GlobalUniqName;
+use common_base::base::ProgressValues;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::serialize_column;
@@ -41,8 +43,10 @@ use crate::pipelines::processors::transforms::metrics::metrics_inc_aggregate_spi
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_bytes;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_count;
 use crate::pipelines::processors::transforms::metrics::metrics_inc_group_by_spill_write_milliseconds;
+use crate::sessions::QueryContext;
 
 pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
+    ctx: Arc<QueryContext>,
     method: Method,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
@@ -56,6 +60,7 @@ pub struct TransformGroupBySpillWriter<Method: HashMethodBounds> {
 
 impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
     pub fn create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         method: Method,
@@ -63,6 +68,7 @@ impl<Method: HashMethodBounds> TransformGroupBySpillWriter<Method> {
         location_prefix: String,
     ) -> Box<dyn Processor> {
         Box::new(TransformGroupBySpillWriter::<Method> {
+            ctx,
             method,
             input,
             output,
@@ -145,6 +151,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
                 self.spilling_future = Some(spilling_group_by_payload(
+                    self.ctx.clone(),
                     self.operator.clone(),
                     &self.method,
                     &self.location_prefix,
@@ -173,6 +180,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
 }
 
 pub fn spilling_group_by_payload<Method: HashMethodBounds>(
+    ctx: Arc<QueryContext>,
     operator: Operator,
     method: &Method,
     location_prefix: &str,
@@ -184,6 +192,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
     let mut write_size = 0;
     let mut write_data = Vec::with_capacity(256);
     let mut spilled_buckets_payloads = Vec::with_capacity(256);
+    let mut rows = 0;
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
             continue;
@@ -191,6 +200,7 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
 
         let now = Instant::now();
         let data_block = serialize_group_by(method, inner_table)?;
+        rows += data_block.num_rows();
 
         let begin = write_size;
         let columns = data_block.columns().to_vec();
@@ -244,6 +254,14 @@ pub fn spilling_group_by_payload<Method: HashMethodBounds>(
             metrics_inc_group_by_spill_write_count();
             metrics_inc_group_by_spill_write_bytes(write_bytes as u64);
             metrics_inc_group_by_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+        }
+
+        {
+            let progress_val = ProgressValues {
+                rows,
+                bytes: write_bytes,
+            };
+            ctx.get_group_by_spill_progress().incr(&progress_val);
         }
 
         info!(
