@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -40,7 +41,9 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::counter::Count;
 use common_tracing::func_name;
+use futures::stream::TryChunksError;
 use futures::StreamExt;
+use futures::TryStreamExt;
 use log::debug;
 use log::info;
 use minitrace::prelude::*;
@@ -194,7 +197,7 @@ impl MetaService for MetaServiceImpl {
             let elapsed = t0.elapsed();
             info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
 
-            Ok::<_, tonic::Status>(reply)
+            Ok::<_, Status>(reply)
         }
         .in_span(root)
         .await?;
@@ -243,13 +246,12 @@ impl MetaService for MetaServiceImpl {
         .await
     }
 
-    type ExportStream =
-        Pin<Box<dyn Stream<Item = Result<ExportedChunk, tonic::Status>> + Send + Sync + 'static>>;
+    type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;
 
-    // Export all meta data.
-    //
-    // Including raft hard state, logs and state machine.
-    // The exported data is a list of json strings in form of `(tree_name, sub_tree_prefix, key, value)`.
+    /// Export all meta data.
+    ///
+    /// Including header, raft state, logs and state machine.
+    /// The exported data is a series of JSON encoded strings of `RaftStoreEntry`.
     async fn export(
         &self,
         _request: Request<common_meta_types::protobuf::Empty>,
@@ -257,16 +259,21 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let res = meta_node.sto.export().await?;
+        let strm = meta_node.sto.inner().export();
 
-        let stream = ExportStream { data: res };
-        let s = stream.map(|strings| Ok(ExportedChunk { data: strings }));
+        let chunk_size = 32;
+        // - Chunk up upto 32 Ok items inside a Vec<String>;
+        // - Convert Vec<String> to ExportedChunk;
+        // - Convert TryChunkError<_, io::Error> to Status;
+        let s = strm
+            .try_chunks(chunk_size)
+            .map_ok(|chunk: Vec<String>| ExportedChunk { data: chunk })
+            .map_err(|e: TryChunksError<_, io::Error>| Status::internal(e.1.to_string()));
 
         Ok(Response::new(Box::pin(s)))
     }
 
-    type WatchStream =
-        Pin<Box<dyn Stream<Item = Result<WatchResponse, tonic::Status>> + Send + Sync + 'static>>;
+    type WatchStream = Pin<Box<dyn Stream<Item = Result<WatchResponse, Status>> + Send + 'static>>;
 
     #[minitrace::trace]
     async fn watch(
