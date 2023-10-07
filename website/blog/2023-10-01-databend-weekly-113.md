@@ -88,7 +88,7 @@ If you are interested in learning more, please check out the resources below:
 We have also made these improvements to Databend that we hope you will find helpful:
 
 - Added spill info to query log.
-- Added support for compression when using `COPY INTO`.
+- Added support for unloading data into a compressed file with COPY INTO.
 - Introduced the `GET /v1/background/:tenant/background_tasks` HTTP API for querying background tasks.
 - Read [Example 4: Filtering Files with Pattern](https://databend.rs/doc/sql-commands/dml/dml-copy-into-table#example-4-filtering-files-with-pattern) to understand how to use Pattern to filter files.
 
