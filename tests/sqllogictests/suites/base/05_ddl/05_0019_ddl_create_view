@@ -110,7 +110,7 @@ CREATE VIEW test
 AS
     SELECT *
     FROM
-        's3://testbucket/admin/data/tuple.parquet' (FILES => ('tuple.parquet','test.parquet'),FILE_FORMAT => 'parquet',PATTERN => '.*.parquet', aws_key_id => 'minioadmin', aws_secret_key => 'minioadmin', endpoint_url => 'http://127.0.0.1:9900/')
+        's3://testbucket/admin/data/tuple.parquet' ( FILES => ('tuple.parquet', 'test.parquet'), FILE_FORMAT => 'parquet', PATTERN => '.*.parquet',aws_key_id='minioadmin', aws_secret_key='minioadmin', endpoint_url='http://127.0.0.1:9900/' )
 
 statement ok
 drop view if exists loop_view1;
