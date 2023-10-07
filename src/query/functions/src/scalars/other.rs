@@ -100,8 +100,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_number",
         |_, _| FunctionDomain::Full,
-        vectorize_with_builder_1_arg::<Float64
-        Type, StringType>(move |val, output, _| {
+        vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
             output.put_str(&new_val);
             output.commit_row();
@@ -250,7 +249,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         let first_type = args_type[0];
         for arg_type in args_type.iter().skip(0) {
             if first_type != arg_type {
-                ctx.set_error(0, "arg shoud be same type!");
+                ctx.set_error(0, "arg should be same type!");
             }
         } 
         let return_type = first_type.wrap_nullable();
