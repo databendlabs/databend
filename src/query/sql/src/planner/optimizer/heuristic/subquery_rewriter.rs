@@ -439,7 +439,6 @@ impl SubqueryRewriter {
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
-                    is_having: false,
                 };
 
                 // Filter: COUNT(*) = 1 or COUNT(*) != 1

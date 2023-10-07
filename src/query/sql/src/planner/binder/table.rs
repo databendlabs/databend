@@ -577,7 +577,21 @@ impl Binder {
                 self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
-            TableReference::Join { .. } => unreachable!(),
+            TableReference::Join { join, .. } => {
+                let (left_expr, left_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.left).await?;
+                let (right_expr, right_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.right).await?;
+                self.bind_join(
+                    bind_context,
+                    left_bind_ctx,
+                    right_bind_ctx,
+                    left_expr,
+                    right_expr,
+                    join,
+                )
+                .await
+            }
         }
     }
 
@@ -958,13 +972,8 @@ impl Binder {
             }
         }
 
-        let mut stat = table.table().table_statistics()?;
-        if let Some(rows) = statistics_provider.num_rows() {
-            // For external storage (parquet)
-            if let Some(stat) = &mut stat {
-                stat.num_rows = Some(rows);
-            }
-        };
+        let stat = table.table().table_statistics()?;
+
         Ok((
             SExpr::create_leaf(Arc::new(
                 Scan {

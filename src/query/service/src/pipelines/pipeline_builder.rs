@@ -725,6 +725,7 @@ impl PipelineBuilder {
                     self.ctx.clone(),
                     name_resolution_ctx,
                     async_sourcer.schema.clone(),
+                    async_sourcer.start,
                 );
                 AsyncSourcer::create(self.ctx.clone(), output, inner)
             },
@@ -1490,6 +1491,7 @@ impl PipelineBuilder {
                 let transform = match params.aggregate_functions.is_empty() {
                     true => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformGroupBySpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1499,6 +1501,7 @@ impl PipelineBuilder {
                     }),
                     false => with_mappedhash_method!(|T| match method.clone() {
                         HashMethodKind::T(method) => TransformAggregateSpillWriter::create(
+                            self.ctx.clone(),
                             input,
                             output,
                             method,
@@ -1521,15 +1524,14 @@ impl PipelineBuilder {
             })?;
         }
 
-        let tenant = self.ctx.get_tenant();
         self.exchange_injector = match params.aggregate_functions.is_empty() {
             true => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, ()>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, ()>::create(self.ctx.clone(), method, params.clone()),
             }),
             false => with_mappedhash_method!(|T| match method.clone() {
                 HashMethodKind::T(method) =>
-                    AggregateInjector::<_, usize>::create(tenant.clone(), method, params.clone()),
+                    AggregateInjector::<_, usize>::create(self.ctx.clone(), method, params.clone()),
             }),
         };
 
@@ -1585,7 +1587,6 @@ impl PipelineBuilder {
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
         let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
-        let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();
 
         match params.aggregate_functions.is_empty() {
@@ -1593,8 +1594,11 @@ impl PipelineBuilder {
                 HashMethodKind::T(v) => {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
-                        self.exchange_injector =
-                            AggregateInjector::<_, ()>::create(tenant, v.clone(), params.clone());
+                        self.exchange_injector = AggregateInjector::<_, ()>::create(
+                            self.ctx.clone(),
+                            v.clone(),
+                            params.clone(),
+                        );
                     }
 
                     self.build_pipeline(&aggregate.input)?;
@@ -1614,7 +1618,7 @@ impl PipelineBuilder {
                     let input: &PhysicalPlan = &aggregate.input;
                     if matches!(input, PhysicalPlan::ExchangeSource(_)) {
                         self.exchange_injector = AggregateInjector::<_, usize>::create(
-                            tenant,
+                            self.ctx.clone(),
                             v.clone(),
                             params.clone(),
                         );
@@ -2249,6 +2253,7 @@ pub struct ValueSource {
     bind_context: BindContext,
     schema: DataSchemaRef,
     metadata: MetadataRef,
+    start: usize,
     is_finished: bool,
 }
 
@@ -2292,23 +2297,34 @@ impl AsyncSource for ValueSource {
 #[async_trait::async_trait]
 impl FastValuesDecodeFallback for ValueSource {
     async fn parse_fallback(&self, sql: &str) -> Result<Vec<Scalar>> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(sql)?;
-        let mut bind_context = self.bind_context.clone();
-        let metadata = self.metadata.clone();
+        let res: Result<Vec<Scalar>> = try {
+            let settings = self.ctx.get_settings();
+            let sql_dialect = settings.get_sql_dialect()?;
+            let tokens = tokenize_sql(sql)?;
+            let mut bind_context = self.bind_context.clone();
+            let metadata = self.metadata.clone();
 
-        let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
-        let values = bind_context
-            .exprs_to_scalar(
-                exprs,
-                &self.schema,
-                self.ctx.clone(),
-                &self.name_resolution_ctx,
-                metadata,
-            )
-            .await?;
-        Ok(values)
+            let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
+            bind_context
+                .exprs_to_scalar(
+                    exprs,
+                    &self.schema,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    metadata,
+                )
+                .await?
+        };
+        res.map_err(|mut err| {
+            // The input for ValueSource is a sub-section of the original SQL. This causes
+            // the error span to have an offset, so we adjust the span accordingly.
+            if let Some(span) = err.span() {
+                err = err.set_span(Some(
+                    (span.start() + self.start..span.end() + self.start).into(),
+                ));
+            }
+            err
+        })
     }
 }
 
@@ -2318,6 +2334,7 @@ impl ValueSource {
         ctx: Arc<dyn TableContext>,
         name_resolution_ctx: NameResolutionContext,
         schema: DataSchemaRef,
+        start: usize,
     ) -> Self {
         let bind_context = BindContext::new();
         let metadata = Arc::new(RwLock::new(Metadata::default()));
@@ -2329,6 +2346,7 @@ impl ValueSource {
             schema,
             bind_context,
             metadata,
+            start,
             is_finished: false,
         }
     }

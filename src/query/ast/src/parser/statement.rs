@@ -577,15 +577,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ALL?
+            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
+        |(_, _, opt_if_exists, (catalog, database, table))| {
             Statement::DropTable(DropTableStmt {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
-                all: opt_all.is_some(),
             })
         },
     );
@@ -638,14 +637,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let truncate_table = map(
         rule! {
-            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3 ~ PURGE?
+            TRUNCATE ~ TABLE ~ #dot_separated_idents_1_to_3
         },
-        |(_, _, (catalog, database, table), opt_purge)| {
+        |(_, _, (catalog, database, table))| {
             Statement::TruncateTable(TruncateTableStmt {
                 catalog,
                 database,
                 table,
-                purge: opt_purge.is_some(),
             })
         },
     );
@@ -1495,7 +1493,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
             | #alter_table : "`ALTER TABLE [<database>.]<table> <action>`"
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
-            | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
+            | #truncate_table : "`TRUNCATE TABLE [<database>.]<table>`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
             | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
@@ -1635,7 +1633,7 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
         rule! {
             VALUES ~ #rest_str
         },
-        |(_, (rest_str, _))| InsertSource::Values { rest_str },
+        |(_, (rest_str, start))| InsertSource::Values { rest_str, start },
     );
     let query = map(query, |query| InsertSource::Select {
         query: Box::new(query),

@@ -185,7 +185,6 @@ impl DPhpy {
                 if !op.non_equi_conditions.is_empty() {
                     let filter = Filter {
                         predicates: op.non_equi_conditions.clone(),
-                        is_having: false,
                     };
                     self.filters.insert(filter);
                 }
@@ -584,10 +583,7 @@ impl DPhpy {
                     predicates.extend(filter.clone().predicates.iter().cloned())
                 }
                 new_s_expr = SExpr::create_unary(
-                    Arc::new(RelOperator::Filter(Filter {
-                        predicates,
-                        is_having: false,
-                    })),
+                    Arc::new(RelOperator::Filter(Filter { predicates })),
                     Arc::new(new_s_expr),
                 );
                 new_s_expr = self.push_down_filter(&new_s_expr)?;

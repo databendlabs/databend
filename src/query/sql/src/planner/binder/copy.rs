@@ -213,7 +213,6 @@ impl<'a> Binder {
                     }
                     .into(),
                 );
-
                 let plan = CopyIntoTablePlan {
                     catalog_info,
                     database_name,
@@ -482,6 +481,15 @@ impl<'a> Binder {
             .await?;
         let (scalar_items, projections) =
             self.analyze_projection(&from_context.aggregate_info, &select_list)?;
+
+        if projections.len() != plan.required_source_schema.num_fields() {
+            return Err(ErrorCode::BadArguments(format!(
+                "Number of columns in select list ({}) does not match that of the corresponding table ({})",
+                projections.len(),
+                plan.required_source_schema.num_fields(),
+            )));
+        }
+
         let s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
@@ -675,7 +683,7 @@ pub async fn resolve_file_location(
     match location.clone() {
         FileLocation::Stage(location) => resolve_stage_location(ctx, &location).await,
         FileLocation::Uri(mut uri) => {
-            let (storage_params, path) = parse_uri_location(&mut uri)?;
+            let (storage_params, path) = parse_uri_location(&mut uri).await?;
             if !storage_params.is_secure() && !GlobalConfig::instance().storage.allow_insecure {
                 Err(ErrorCode::StorageInsecure(
                     "copy from insecure storage is not allowed",

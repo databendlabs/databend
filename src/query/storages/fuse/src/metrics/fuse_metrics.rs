@@ -61,6 +61,8 @@ lazy_static! {
         register_counter(key!("compact_block_read_bytes"));
     static ref COMPACT_BLOCK_READ_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds(key!("compact_block_read_milliseconds"));
+    static ref COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: Histogram =
+        register_histogram_in_milliseconds(key!("compact_block_build_task_milliseconds"));
     static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
         register_counter(key!("segments_range_pruning_before"));
     static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
@@ -234,6 +236,10 @@ pub fn metrics_inc_compact_block_read_bytes(c: u64) {
 
 pub fn metrics_inc_compact_block_read_milliseconds(c: u64) {
     COMPACT_BLOCK_READ_MILLISECONDS.observe(c as f64);
+}
+
+pub fn metrics_inc_compact_block_build_task_milliseconds(c: u64) {
+    COMPACT_BLOCK_BUILD_TASK_MILLISECONDS.observe(c as f64);
 }
 
 /// Pruning metrics.

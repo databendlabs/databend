@@ -26,6 +26,7 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_storage::DataOperator;
+use futures::StreamExt;
 use opendal::EntryMode;
 use opendal::Metakey;
 
@@ -105,17 +106,15 @@ impl Database for IcebergDatabase {
     async fn list_tables(&self) -> Result<Vec<Arc<dyn Table>>> {
         let mut tables = vec![];
         let op = self.db_root.operator();
-        let mut lister = op.list("/").await?;
-        while let Some(page) = lister.next_page().await? {
-            for entry in page {
-                let meta = op.metadata(&entry, Metakey::Mode).await?;
-                if meta.mode() != EntryMode::DIR {
-                    continue;
-                }
-                let tbl_name = entry.name().trim_end_matches('/');
-                let table = self.get_table(tbl_name).await?;
-                tables.push(table);
+        let mut lister = op.lister_with("/").metakey(Metakey::Mode).await?;
+        while let Some(entry) = lister.next().await.transpose()? {
+            let meta = entry.metadata();
+            if meta.mode() != EntryMode::DIR {
+                continue;
             }
+            let tbl_name = entry.name().trim_end_matches('/');
+            let table = self.get_table(tbl_name).await?;
+            tables.push(table);
         }
         Ok(tables)
     }

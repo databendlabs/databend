@@ -129,7 +129,6 @@ impl Binder {
 
         let filter = Filter {
             predicates: vec![scalar.clone()],
-            is_having: false,
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {

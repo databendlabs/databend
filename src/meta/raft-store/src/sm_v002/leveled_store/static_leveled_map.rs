@@ -13,90 +13,78 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::fmt;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::compacted_get;
+use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::util;
+use crate::sm_v002::leveled_store::map_api::MapKey;
+use crate::sm_v002::leveled_store::ref_::Ref;
 use crate::sm_v002::marked::Marked;
 
+/// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
 pub struct StaticLeveledMap {
     /// From oldest to newest, i.e., levels[0] is the oldest
-    levels: Vec<Arc<LevelData>>,
+    levels: Vec<Arc<Level>>,
 }
 
 impl StaticLeveledMap {
-    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<LevelData>>) -> Self {
+    pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<Level>>) -> Self {
         Self {
             levels: levels.into_iter().collect(),
         }
     }
 
     /// Return an iterator of all levels from newest to oldest.
-    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &LevelData> {
+    pub(in crate::sm_v002) fn iter_levels(&self) -> impl Iterator<Item = &Level> {
         self.levels.iter().map(|x| x.as_ref()).rev()
     }
 
-    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<LevelData>> {
+    pub(in crate::sm_v002) fn newest(&self) -> Option<&Arc<Level>> {
         self.levels.last()
     }
 
-    pub(in crate::sm_v002) fn push(&mut self, level: Arc<LevelData>) {
+    pub(in crate::sm_v002) fn push(&mut self, level: Arc<Level>) {
         self.levels.push(level);
     }
 
     pub(in crate::sm_v002) fn len(&self) -> usize {
         self.levels.len()
     }
+
+    #[allow(dead_code)]
+    pub(in crate::sm_v002) fn to_ref(&self) -> Ref<'_> {
+        Ref::new(None, self)
+    }
 }
 
 #[async_trait::async_trait]
 impl<K> MapApiRO<K> for StaticLeveledMap
 where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<K>,
+    K: MapKey,
+    Level: MapApiRO<K>,
 {
-    type V = <LevelData as MapApiRO<K>>::V;
-
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        for level_data in self.iter_levels() {
-            let got = level_data.get(key).await;
-            if !got.is_not_found() {
-                return got;
-            }
-        }
-        return Marked::empty();
+        let levels = self.iter_levels();
+        compacted_get(key, levels).await
     }
 
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
     where
-        K: 'a,
-        K: Borrow<T> + Clone,
-        Self::V: Unpin,
-        T: Ord,
-        R: RangeBounds<T> + Clone + Send + Sync,
+        K: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let mut km = KMerge::by(util::by_key_seq::<K, Self::V>);
-
-        for api in self.iter_levels() {
-            let a = api.range(range.clone()).await;
-            km = km.merge(a);
-        }
-
-        // keep one of the entries with the same key, which has larger internal-seq
-        let m = km.coalesce(util::choose_greater);
-
-        Box::pin(m)
+        let levels = self.iter_levels();
+        compacted_range(range, levels).await
     }
 }
