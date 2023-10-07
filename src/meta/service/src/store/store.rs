@@ -97,6 +97,8 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 
         match self
             .log
+            .read()
+            .await
             .range_values(range)
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -132,6 +134,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), StorageError> {
         self.raft_state
+            .write()
+            .await
             .save_committed(committed)
             .await
             .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Write)
@@ -139,6 +143,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
     async fn read_committed(&mut self) -> Result<Option<LogId>, StorageError> {
         self.raft_state
+            .read()
+            .await
             .read_committed()
             .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Read)
     }
@@ -146,6 +152,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
         let last_purged_log_id = match self
             .log
+            .read()
+            .await
             .get_last_purged()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
         {
@@ -158,6 +166,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         let last = match self
             .log
+            .read()
+            .await
             .logs()
             .last()
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
@@ -191,6 +201,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .raft_state
+            .write()
+            .await
             .save_vote(hs)
             .await
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Write)
@@ -211,6 +223,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .log
+            .write()
+            .await
             .range_remove(log_id.index..)
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
@@ -229,6 +243,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         if let Err(err) = self
             .log
+            .write()
+            .await
             .set_last_purged(log_id)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
@@ -238,6 +254,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
         };
         if let Err(err) = self
             .log
+            .write()
+            .await
             .range_remove(..=log_id.index)
             .await
             .map_to_sto_err(ErrorSubject::Log(log_id), ErrorVerb::Delete)
@@ -265,6 +283,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
 
         match self
             .log
+            .write()
+            .await
             .append(entries)
             .await
             .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Write)
@@ -396,6 +416,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn read_vote(&mut self) -> Result<Option<Vote>, StorageError> {
         match self
             .raft_state
+            .read()
+            .await
             .read_vote()
             .map_to_sto_err(ErrorSubject::Vote, ErrorVerb::Read)
         {
