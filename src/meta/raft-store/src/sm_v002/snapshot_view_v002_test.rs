@@ -27,6 +27,7 @@ use pretty_assertions::assert_eq;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
@@ -61,7 +62,9 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+    let got = d
+        .str_map()
+        .range::<str, _>(..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -72,10 +75,7 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         (s("e"), Marked::new_normal(6, b("e1"), None)),
     ]);
 
-    let got = MapApiRO::<ExpireKey>::range(d, ..)
-        .await
-        .collect::<Vec<_>>()
-        .await;
+    let got = d.expire_map().range(..).await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![]);
 
     Ok(())
@@ -93,7 +93,9 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = compacted.newest().unwrap().as_ref();
 
-    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+    let got = d
+        .str_map()
+        .range::<String, _>(..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -125,10 +127,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapApiRO::<ExpireKey>::range(d, ..)
-        .await
-        .collect::<Vec<_>>()
-        .await;
+    let got = d.expire_map().range(..).await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
         (
@@ -256,10 +255,10 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
-    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None))).await;
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None))).await;
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
+    l.str_map_mut().set(s("a"), Some((b("a0"), None))).await;
+    l.str_map_mut().set(s("b"), Some((b("b0"), None))).await;
+    l.str_map_mut().set(s("c"), Some((b("c0"), None))).await;
+    l.str_map_mut().set(s("d"), Some((b("d0"), None))).await;
 
     l.freeze_writable();
     let sd = l.writable_mut().sys_data_mut();
@@ -270,9 +269,9 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    MapApi::<String>::set(&mut l, s("b"), None).await;
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None))).await;
-    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
+    l.str_map_mut().set(s("b"), None).await;
+    l.str_map_mut().set(s("c"), Some((b("c1"), None))).await;
+    l.str_map_mut().set(s("e"), Some((b("e1"), None))).await;
 
     l.freeze_writable();
     let sd = l.writable_mut().sys_data_mut();
@@ -283,8 +282,8 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    MapApi::<String>::set(&mut l, s("c"), None).await;
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None))).await;
+    l.str_map_mut().set(s("c"), None).await;
+    l.str_map_mut().set(s("d"), Some((b("d2"), None))).await;
 
     l
 }
