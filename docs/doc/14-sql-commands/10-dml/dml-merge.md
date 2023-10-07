@@ -7,9 +7,17 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Performs INSERT, UPDATE, or DELETE operations on rows within a target table, all in accordance with conditions and matching criteria specified within the statement, using data from a specified source.
 
-The data source, which can a subquery, is linked to the target data via a JOIN expression. This expression assesses whether each row in the source can find a match in the target table and subsequently determines which operations (INSERT, UPDATE, or DELETE) should be applied to the target table.
+The data source, which can a subquery, is linked to the target data via a JOIN expression. This expression assesses whether each row in the source can find a match in the target table and subsequently determines which operation (INSERT, UPDATE, or DELETE) should be applied to the target table.
 
-A MERGE INTO statement can contain one or more MATCHED and NOT MATCHED clauses, instructing Databend on how to handle matched and unmatched scenarios. For a MATCHED clause, you have the option to choose between performing an UPDATE or DELETE operation on the target table. Conversely, in the case of a NOT MATCHED clause, the available choice is INSERT.
+![Alt text](../../../public/img/sql/merge-into-single-clause.png)
+
+A MERGE INTO statement usually contains a MATCHED and / or a NOT MATCHED clause, instructing Databend on how to handle matched and unmatched scenarios. For a MATCHED clause, you have the option to choose between performing an UPDATE or DELETE operation on the target table. Conversely, in the case of a NOT MATCHED clause, the available choice is INSERT.
+
+## Multiple MATCHED & NOT MATCHED Clauses
+
+A MERGE INTO statement can include multiple MATCHED and / or NOT MATCHED clauses, giving you the flexibility to specify different actions to be taken based on the conditions met during the merge operation.
+
+![Alt text](../../../public/img/sql/merge-into-multi-clause.png)
 
 If a MERGE INTO statement includes multiple MATCHED clauses, a condition needs to be specified for each clause EXCEPT the last one. These conditions determine the criteria under which the associated operations are executed. Databend evaluates the conditions in the specified order. Once a condition is met, it triggers the specified operation, skips any remaining MATCHED clauses, then moves on to the next row in the source. If the MERGE INTO statement also includes multiple NOT MATCHED clauses, Databend handles them in a similar way.
 
@@ -21,7 +29,7 @@ MERGE INTO is currently in an experimental state. Before using MERGE INTO, you n
 
 ```sql
 MERGE INTO <target_table> 
-    USING <source> ON <join_expr> { matchedClause | notMatchedClause } [ ... ]
+    USING (SELECT ... ) ON <join_expr> { matchedClause | notMatchedClause } [ ... ]
 
 matchedClause ::=
   WHEN MATCHED [ AND <condition> ] THEN 
@@ -59,9 +67,6 @@ INSERT INTO employees VALUES
 INSERT INTO salaries VALUES
     (1, 50000.00),
     (2, 60000.00);
-
--- Now, let's use Databend to update salaries for existing employees
--- based on their department and increment salaries for HR employees
 
 SET enable_experimental_merge_into = 1;
 
