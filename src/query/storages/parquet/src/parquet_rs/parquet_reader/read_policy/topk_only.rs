@@ -20,7 +20,6 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TopKSorter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReader;
@@ -36,6 +35,7 @@ use super::policy::ReadPolicyImpl;
 use super::utils::evaluate_topk;
 use super::utils::read_all;
 use crate::parquet_rs::parquet_reader::row_group::InMemoryRowGroup;
+use crate::parquet_rs::parquet_reader::topk::BuiltTopK;
 use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_rs::parquet_reader::utils::transform_record_batch;
@@ -55,18 +55,22 @@ pub struct TopkOnlyPolicyBuilder {
 impl TopkOnlyPolicyBuilder {
     pub fn create(
         schema_desc: &SchemaDescriptor,
-        topk: (Arc<ParquetTopK>, TableField),
+        topk: &BuiltTopK,
         output_schema: &TableSchema,
         output_leaves: &[usize],
         inner_projection: bool,
     ) -> Result<Box<dyn ReadPolicyBuilder>> {
-        let (topk, topk_field) = topk;
+        let BuiltTopK {
+            topk,
+            field: topk_field,
+            leaf_id,
+        } = topk;
 
         // Prefetch the topk column. Compute the remain columns.
         let remain_leaves = output_leaves
             .iter()
             .cloned()
-            .filter(|i| *i != topk_field.column_id as usize)
+            .filter(|i| i != leaf_id)
             .collect::<Vec<_>>();
         let remain_projection = ProjectionMask::leaves(schema_desc, remain_leaves);
         let remain_fields = output_schema
@@ -86,12 +90,12 @@ impl TopkOnlyPolicyBuilder {
         )?);
 
         let mut src_schema = remain_schema;
-        src_schema.fields.push(topk_field);
+        src_schema.fields.push(topk_field.clone());
         let src_schema = Arc::new(DataSchema::from(&src_schema));
         let dst_schema = Arc::new(DataSchema::from(output_schema));
 
         Ok(Box::new(Self {
-            topk,
+            topk: topk.clone(),
             remain_projection,
             remain_field_levels,
             remain_field_paths,
@@ -125,7 +129,7 @@ impl ReadPolicyBuilder for TopkOnlyPolicyBuilder {
             &row_group,
             self.topk.field_levels(),
             selection.clone(),
-            &None,
+            self.topk.field_paths(),
             num_rows,
         )?;
         let prefetched =
