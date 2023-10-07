@@ -921,7 +921,7 @@ pub(crate) fn register_decimal_to_int<T: Number>(registry: &mut FunctionRegistry
     });
 }
 
-pub fn convert_to_decimal(
+ fn convert_to_decimal(
     arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
     from_type: &DataType,

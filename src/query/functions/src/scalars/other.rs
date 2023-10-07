@@ -34,8 +34,6 @@ use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
-use common_expression::types::DecimalDataType;
-use common_expression::types::DecimalSize;
 use common_expression::types::GenericType;
 use common_expression::types::NullType;
 use common_expression::types::NullableType;
@@ -67,7 +65,6 @@ use rand::Rng;
 use rand::SeedableRng;
 
 use crate::scalars::array::eval_array_aggr;
-use crate::scalars::decimal::convert_to_decimal;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -247,11 +244,6 @@ pub fn register(registry: &mut FunctionRegistry) {
         let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
         let name = "greatest".to_string();
         let first_type = args_type[0];
-        for arg_type in args_type.iter().skip(0) {
-            if first_type != arg_type {
-                ctx.set_error(0, "arg should be same type!");
-            }
-        } 
         let return_type = first_type.wrap_nullable();
         let f = Function {
             signature: FunctionSignature {
@@ -262,7 +254,12 @@ pub fn register(registry: &mut FunctionRegistry) {
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
                 eval: Box::new(move |args, ctx| {
-                    let arg = eval_args(args, ctx, arg_type.clone());
+                    for arg_type in args_type.iter().skip(0) {
+                        if first_type != arg_type {
+                            ctx.set_error(0, "arg should be same type!");
+                        }
+                    } 
+                    let arg = eval_args(args, ctx, first_type.clone());
                     eval_array_aggr("max", &[arg.as_ref()], ctx)
                 }),
             },
