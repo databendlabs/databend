@@ -122,12 +122,13 @@ async fn test_export() -> anyhow::Result<()> {
         })
         .collect::<Vec<_>>();
 
+    // Wash the time_ms fields
     let lines = lines
         .iter()
         .map(|x| {
             Regex::new(r"\d{13}")
                 .unwrap()
-                .replace_all(&x, "1111111111111")
+                .replace_all(x, "1111111111111")
                 .to_string()
         })
         .collect::<Vec<_>>();
