@@ -2147,6 +2147,7 @@ impl<'a> TypeChecker<'a> {
             "array_reduce",
             "to_variant",
             "try_to_variant",
+            "greatest",
         ]
     }
 
