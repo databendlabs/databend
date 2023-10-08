@@ -1543,7 +1543,3 @@ WHERE t_s_secyear.customer_id = t_s_firstyear.customer_id
 ORDER BY 1 NULLS FIRST
 LIMIT 100;
 ----
-
-
-
-
