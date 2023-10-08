@@ -81,8 +81,8 @@ fn test_ignore(file: &mut impl Write) {
     run_ast(file, "ignore(100, 'str')", &[]);
 }
 fn test_greatest(file: &mut impl Write) {
-    run_ast(file, "greatest(1,2)", &[]);
-    run_ast(file, "greatest(1.1,1.2)", &[]);
+    run_ast(file, "GREATEST(1,2)", &[]);
+    run_ast(file, "GREATEST(1.1,1.2)", &[]);
 }
 
 fn test_assume_not_null(file: &mut impl Write) {
