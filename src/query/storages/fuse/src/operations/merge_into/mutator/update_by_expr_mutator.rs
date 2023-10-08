@@ -144,7 +144,7 @@ impl UpdateByExprMutator {
                 DataType::Boolean,
                 Value::upcast(predicates.clone()),
             ));
-            (Value::upcast(predicates.clone()), origin_block)
+            (Value::upcast(predicates), origin_block)
         };
 
         let exprs: Vec<Expr> = self
