@@ -16,6 +16,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -35,6 +36,9 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
 use itertools::Itertools;
 use log::info;
@@ -121,6 +125,7 @@ impl MatchedAggregator {
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        let start = Instant::now();
         if data_block.is_empty() {
             return Ok(());
         }
@@ -157,12 +162,14 @@ impl MatchedAggregator {
                 }
             }
         };
-
+        let elapsed_time = start.elapsed().as_millis() as u64;
+        metrics_inc_merge_into_accumulate_milliseconds(elapsed_time);
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        let start = Instant::now();
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
 
@@ -250,6 +257,8 @@ impl MatchedAggregator {
                 mutation_logs.push(segment_mutation_log);
             }
         }
+        let elapsed_time = start.elapsed().as_millis() as u64;
+        metrics_inc_merge_into_apply_milliseconds(elapsed_time);
         Ok(Some(MutationLogs {
             entries: mutation_logs,
         }))
@@ -294,6 +303,7 @@ impl AggregationContext {
         let res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
 
         if res_block.is_empty() {
+            metrics_inc_merge_into_deleted_blocks_counter(1);
             return Ok(Some(MutationLogEntry::DeletedBlock {
                 index: BlockMetaIndex {
                     segment_idx,
