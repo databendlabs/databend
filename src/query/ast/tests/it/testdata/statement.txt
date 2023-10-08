@@ -9213,6 +9213,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9269,6 +9270,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9335,6 +9337,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9401,6 +9404,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9471,6 +9475,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9541,6 +9546,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9593,6 +9599,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9645,6 +9652,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9703,6 +9711,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9768,6 +9777,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9812,6 +9822,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9868,6 +9879,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9940,6 +9952,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9996,6 +10009,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10052,6 +10066,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10108,6 +10123,7 @@ Copy(
         purge: false,
         force: true,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10174,6 +10190,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: true,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10228,6 +10245,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )

@@ -54,6 +54,7 @@ pub struct CopyStmt {
     pub purge: bool,
     pub force: bool,
     pub disable_variant_check: bool,
+    pub return_failed_only: bool,
     pub on_error: String,
 }
 
@@ -72,6 +73,7 @@ impl CopyStmt {
             CopyOption::Purge(v) => self.purge = v,
             CopyOption::Force(v) => self.force = v,
             CopyOption::DisableVariantCheck(v) => self.disable_variant_check = v,
+            CopyOption::ReturnFailedOnly(v) => self.return_failed_only = v,
             CopyOption::OnError(v) => self.on_error = v,
         }
     }
@@ -391,5 +393,6 @@ pub enum CopyOption {
     Purge(bool),
     Force(bool),
     DisableVariantCheck(bool),
+    ReturnFailedOnly(bool),
     OnError(String),
 }

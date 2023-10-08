@@ -1113,6 +1113,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 force: Default::default(),
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
+                return_failed_only: Default::default(),
             };
             for opt in opts {
                 copy_stmt.apply_option(opt);
@@ -2649,6 +2650,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(
             rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
+        ),
+        map(
+            rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
+            |(_, _, return_failed_only)| CopyOption::ReturnFailedOnly(return_failed_only),
         ),
     ))(i)
 }

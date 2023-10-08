@@ -746,6 +746,8 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("RETURN_FAILED_ONLY", ignore(ascii_case))]
+    RETURN_FAILED_ONLY,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
