@@ -482,7 +482,7 @@ impl MetaGrpcClient {
                     grpc_metrics::incr_meta_grpc_client_request_failed(
                         &current_endpoint,
                         req_name,
-                        &err.to_string(),
+                        err,
                     );
                     error!(
                         request_id = as_display!(request_id);

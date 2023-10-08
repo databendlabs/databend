@@ -32,3 +32,14 @@ pub enum MetaClientError {
     #[error(transparent)]
     HandshakeError(MetaHandshakeError),
 }
+
+impl MetaClientError {
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaClientError::ClientRuntimeError(_) => "ClientRuntimeError",
+            MetaClientError::ConfigError(_) => "ConfigError",
+            MetaClientError::NetworkError(err) => err.name(),
+            MetaClientError::HandshakeError(_) => "MetaHandshakeError",
+        }
+    }
+}
