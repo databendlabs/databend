@@ -20,7 +20,6 @@ use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
@@ -96,46 +95,57 @@ impl UpdateByExprMutator {
             .unwrap();
 
         let mut data_block = data_block.clone();
-        let origin_block = data_block.clone();
-        if has_filter {
+        let (last_filter, origin_block) = if has_filter {
             let filter_entry = data_block.get_by_offset(data_block.num_columns() - 1);
-            let mut old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
+            let old_filter: Value<BooleanType> = filter_entry.value.try_downcast().unwrap();
             // pop filter
             data_block = data_block.pop_columns(1)?;
+            // has pop old filter
+            let origin_block = data_block.clone();
             // add filter
-            let old_predicate = old_filter.into_column().unwrap();
+            let old_predicate = old_filter.clone().into_column().unwrap();
 
-            let filter = old_predicate.not();
-            old_filter = Value::Column(filter);
+            let filter_not = old_predicate.not();
+            let old_filter_not: Value<BooleanType> = Value::Column(filter_not);
 
             let (res, _) = eval_function(
                 None,
                 "and",
                 [
-                    (
-                        Value::Column(Column::Boolean(old_filter.into_column().unwrap())),
-                        DataType::Boolean,
-                    ),
-                    (
-                        Value::Column(Column::Boolean(predicates.into_column().unwrap())),
-                        DataType::Boolean,
-                    ),
+                    (old_filter_not.upcast(), DataType::Boolean),
+                    (predicates.upcast(), DataType::Boolean),
                 ],
                 &self.func_ctx,
                 data_block.num_rows(),
                 &BUILTIN_FUNCTIONS,
             )?;
+
             predicates = res.try_downcast().unwrap();
+
             data_block.add_column(BlockEntry::new(
                 DataType::Boolean,
-                Value::upcast(predicates),
+                Value::upcast(predicates.clone()),
             ));
+            let (last_filter, _) = eval_function(
+                None,
+                "or",
+                [
+                    (old_filter.upcast(), DataType::Boolean),
+                    (predicates.upcast(), DataType::Boolean),
+                ],
+                &self.func_ctx,
+                data_block.num_rows(),
+                &BUILTIN_FUNCTIONS,
+            )?;
+            (last_filter, origin_block)
         } else {
+            let origin_block = data_block.clone();
             data_block.add_column(BlockEntry::new(
                 DataType::Boolean,
-                Value::upcast(predicates),
+                Value::upcast(predicates.clone()),
             ));
-        }
+            (Value::upcast(predicates), origin_block)
+        };
 
         let exprs: Vec<Expr> = self
             .update_lists
@@ -174,7 +184,10 @@ impl UpdateByExprMutator {
             }
         }
         // add filter
-        block_entries.push(data_block.get_by_offset(0).clone());
+        block_entries.push(BlockEntry {
+            data_type: DataType::Boolean,
+            value: last_filter,
+        });
         Ok(DataBlock::new(block_entries, data_block.num_rows()))
     }
 }

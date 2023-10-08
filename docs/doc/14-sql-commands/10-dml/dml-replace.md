@@ -1,5 +1,5 @@
 ---
-title: REPLACE INTO
+title: REPLACE
 ---
 
 import FunctionDescription from '@site/src/components/FunctionDescription';

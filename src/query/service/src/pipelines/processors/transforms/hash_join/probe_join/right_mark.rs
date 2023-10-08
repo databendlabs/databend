@@ -35,6 +35,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -42,7 +43,7 @@ impl HashJoinProbeState {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let has_null = *self
             .hash_join_state
             .hash_join_desc
@@ -50,10 +51,12 @@ impl HashJoinProbeState {
             .has_null
             .read();
         let markers = probe_state.markers.as_mut().unwrap();
-        for (i, key) in keys_iter.enumerate() {
-            let contains = match self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                true => hash_table.contains(key),
-                false => self.contains(hash_table, key, valids, i),
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+            let contains = match self.hash_join_state.hash_join_desc.from_correlated_subquery
+                || valids.map_or(true, |v| v.get_bit(i))
+            {
+                true => hash_table.next_contains(key, *ptr),
+                false => false,
             };
 
             if contains {
@@ -80,6 +83,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -88,7 +92,7 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let has_null = *self
             .hash_join_state
             .hash_join_desc
@@ -125,21 +129,16 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    continue;
                 };
+
             if match_count == 0 {
                 continue;
             }
@@ -194,7 +193,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,

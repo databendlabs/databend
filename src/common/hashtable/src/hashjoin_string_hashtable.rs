@@ -34,7 +34,7 @@ pub struct StringRawEntry {
 pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    pub(crate) hash_mask: usize,
+    pub(crate) hash_mask: u64,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
@@ -49,7 +49,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            hash_mask: capacity - 1,
+            hash_mask: capacity as u64 - 1,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -58,7 +58,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
     }
 
     pub fn insert(&mut self, key: &[u8], raw_entry_ptr: *mut StringRawEntry) {
-        let index = key.fast_hash() as usize & self.hash_mask;
+        let index = (key.fast_hash() & self.hash_mask) as usize;
         // # Safety
         // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
@@ -85,23 +85,28 @@ where A: Allocator + Clone + 'static
 {
     type Key = [u8];
 
-    fn contains(&self, key_ref: &Self::Key) -> bool {
-        let index = key_ref.fast_hash() as usize & self.hash_mask;
-        let mut raw_entry_ptr = self.pointers[index];
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn probe(&self, hashes: &mut [u64]) {
+        hashes
+            .iter_mut()
+            .for_each(|hash| *hash = self.pointers[(*hash & self.hash_mask) as usize]);
+    }
+
+    fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {
         loop {
-            if raw_entry_ptr == 0 {
+            if ptr == 0 {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(
                 STRING_EARLY_SIZE,
-                std::cmp::min(key_ref.len(), raw_entry.length as usize),
+                std::cmp::min(key.len(), raw_entry.length as usize),
             );
-            if raw_entry.length as usize == key_ref.len()
-                && key_ref[0..min_len] == raw_entry.early[0..min_len]
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
             {
-                let key = unsafe {
+                let key_ref = unsafe {
                     std::slice::from_raw_parts(
                         raw_entry.key as *const u8,
                         raw_entry.length as usize,
@@ -111,32 +116,31 @@ where A: Allocator + Clone + 'static
                     return true;
                 }
             }
-            raw_entry_ptr = raw_entry.next;
+            ptr = raw_entry.next;
         }
         false
     }
 
-    fn probe_hash_table(
+    fn next_probe(
         &self,
-        key_ref: &Self::Key,
+        key: &Self::Key,
+        mut ptr: u64,
         vec_ptr: *mut RowPtr,
         mut occupied: usize,
         capacity: usize,
     ) -> (usize, u64) {
-        let index = key_ref.fast_hash() as usize & self.hash_mask;
         let origin = occupied;
-        let mut raw_entry_ptr = self.pointers[index];
         loop {
-            if raw_entry_ptr == 0 || occupied >= capacity {
+            if ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
+            let raw_entry = unsafe { &*(ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
-            let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
-            if raw_entry.length as usize == key_ref.len()
-                && key_ref[0..min_len] == raw_entry.early[0..min_len]
+            let min_len = std::cmp::min(STRING_EARLY_SIZE, key.len());
+            if raw_entry.length as usize == key.len()
+                && key[0..min_len] == raw_entry.early[0..min_len]
             {
-                let key = unsafe {
+                let key_ref = unsafe {
                     std::slice::from_raw_parts(
                         raw_entry.key as *const u8,
                         raw_entry.length as usize,
@@ -155,57 +159,10 @@ where A: Allocator + Clone + 'static
                     occupied += 1;
                 }
             }
-            raw_entry_ptr = raw_entry.next;
+            ptr = raw_entry.next;
         }
         if occupied > origin {
-            (occupied - origin, raw_entry_ptr)
-        } else {
-            (0, 0)
-        }
-    }
-
-    fn next_incomplete_ptr(
-        &self,
-        key_ref: &Self::Key,
-        mut incomplete_ptr: u64,
-        vec_ptr: *mut RowPtr,
-        mut occupied: usize,
-        capacity: usize,
-    ) -> (usize, u64) {
-        let origin = occupied;
-        loop {
-            if incomplete_ptr == 0 || occupied >= capacity {
-                break;
-            }
-            let raw_entry = unsafe { &*(incomplete_ptr as *mut StringRawEntry) };
-            // Compare `early` and the length of the string, the size of `early` is 4.
-            let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
-            if raw_entry.length as usize == key_ref.len()
-                && key_ref[0..min_len] == raw_entry.early[0..min_len]
-            {
-                let key = unsafe {
-                    std::slice::from_raw_parts(
-                        raw_entry.key as *const u8,
-                        raw_entry.length as usize,
-                    )
-                };
-                if key == key_ref {
-                    // # Safety
-                    // occupied is less than the capacity of vec_ptr.
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &raw_entry.row_ptr as *const RowPtr,
-                            vec_ptr.add(occupied),
-                            1,
-                        )
-                    };
-                    occupied += 1;
-                }
-            }
-            incomplete_ptr = raw_entry.next;
-        }
-        if occupied > origin {
-            (occupied - origin, incomplete_ptr)
+            (occupied - origin, ptr)
         } else {
             (0, 0)
         }
