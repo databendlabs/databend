@@ -24,6 +24,7 @@ use stream_more::StreamMore;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
+use crate::state_machine::ExpireKey;
 
 /// MapKey defines the behavior of a key in a map.
 ///
@@ -79,6 +80,43 @@ where K: MapKey
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Send + Sync + Clone;
 }
+
+/// Trait for using Self as an implementation of the MapApi.
+pub(in crate::sm_v002) trait AsMap {
+    /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
+    fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>
+    where Self: MapApiRO<K> + Sized {
+        self
+    }
+
+    /// Use Self as an implementation of the [`MapApi`] interface, allowing for mutation.
+    fn as_map_mut<K: MapKey>(&mut self) -> &mut impl MapApi<K>
+    where Self: MapApi<K> + Sized {
+        self
+    }
+
+    fn str_map(&self) -> &impl MapApiRO<String>
+    where Self: MapApiRO<String> + Sized {
+        self
+    }
+
+    fn expire_map(&self) -> &impl MapApiRO<ExpireKey>
+    where Self: MapApiRO<ExpireKey> + Sized {
+        self
+    }
+
+    fn str_map_mut(&mut self) -> &mut impl MapApi<String>
+    where Self: MapApi<String> + Sized {
+        self
+    }
+
+    fn expire_map_mut(&mut self) -> &mut impl MapApi<ExpireKey>
+    where Self: MapApi<ExpireKey> + Sized {
+        self
+    }
+}
+
+impl<T> AsMap for T {}
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
