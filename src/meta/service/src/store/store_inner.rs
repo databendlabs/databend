@@ -138,9 +138,6 @@ impl StoreInner {
         let log = RaftLog::open(&db, config).await?;
         info!("RaftLog opened");
 
-        // TODO(1): remove read_state_machine_id();
-        // TODO(1): StateMachine::clean()
-
         fn to_startup_err(e: impl std::error::Error + 'static) -> MetaStartupError {
             let ae = AnyError::new(&e);
             let store_err = MetaStorageError::SnapshotError(ae);
@@ -371,8 +368,6 @@ impl StoreInner {
         &self,
         data: Box<SnapshotData>,
     ) -> Result<(), MetaStorageError> {
-        //
-
         SMV002::install_snapshot(self.state_machine.clone(), data)
             .await
             .map_err(|e| {
@@ -380,7 +375,7 @@ impl StoreInner {
                     AnyError::new(&e).add_context(|| "replacing state-machine with snapshot"),
                 )
             })?;
-        // TODO(1): read_state_machine_id() and write_state_machine_id() is no longer used.
+
         // TODO(xp): use checksum to check consistency?
 
         Ok(())
