@@ -27,9 +27,10 @@ use pretty_assertions::assert_eq;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
@@ -61,21 +62,20 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         &btreemap! {3=>Node::new("3", Endpoint::new("3", 3))}
     );
 
-    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+    let got = d
+        .str_map()
+        .range::<str, _>(..)
         .await
         .collect::<Vec<_>>()
         .await;
     assert_eq!(got, vec![
         //
-        (s("a"), Marked::new_normal(1, b("a0"), None)),
-        (s("d"), Marked::new_normal(7, b("d2"), None)),
-        (s("e"), Marked::new_normal(6, b("e1"), None)),
+        (s("a"), Marked::new_with_meta(1, b("a0"), None)),
+        (s("d"), Marked::new_with_meta(7, b("d2"), None)),
+        (s("e"), Marked::new_with_meta(6, b("e1"), None)),
     ]);
 
-    let got = MapApiRO::<ExpireKey>::range(d, ..)
-        .await
-        .collect::<Vec<_>>()
-        .await;
+    let got = d.expire_map().range(..).await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![]);
 
     Ok(())
@@ -93,7 +93,9 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
 
     let d = compacted.newest().unwrap().as_ref();
 
-    let got = MapApiRO::<String>::range::<String, _>(d, ..)
+    let got = d
+        .str_map()
+        .range::<String, _>(..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -101,7 +103,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_normal(
+            Marked::new_with_meta(
                 4,
                 b("a1"),
                 Some(KVMeta {
@@ -111,11 +113,11 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
         (
             s("b"),
-            Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
         ),
         (
             s("c"),
-            Marked::new_normal(
+            Marked::new_with_meta(
                 3,
                 b("c0"),
                 Some(KVMeta {
@@ -125,23 +127,20 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
     ]);
 
-    let got = MapApiRO::<ExpireKey>::range(d, ..)
-        .await
-        .collect::<Vec<_>>()
-        .await;
+    let got = d.expire_map().range(..).await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         //
         (
             ExpireKey::new(5_000, 2),
-            Marked::new_normal(2, s("b"), None)
+            Marked::new_with_meta(2, s("b"), None)
         ),
         (
             ExpireKey::new(15_000, 4),
-            Marked::new_normal(4, s("a"), None)
+            Marked::new_with_meta(4, s("a"), None)
         ),
         (
             ExpireKey::new(20_000, 3),
-            Marked::new_normal(3, s("c"), None)
+            Marked::new_with_meta(3, s("c"), None)
         ),
     ]);
 
@@ -227,7 +226,7 @@ async fn test_import() -> anyhow::Result<()> {
 
     let d = SMV002::import(data)?;
 
-    let snapshot = SnapshotViewV002::new(StaticLeveledMap::new([Arc::new(d)]));
+    let snapshot = SnapshotViewV002::new(StaticLevels::new([Arc::new(d)]));
 
     let got = snapshot
         .export()
@@ -256,10 +255,10 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {1=>Node::new("1", Endpoint::new("1", 1))};
 
     // internal_seq: 0
-    MapApi::<String>::set(&mut l, s("a"), Some((b("a0"), None))).await;
-    MapApi::<String>::set(&mut l, s("b"), Some((b("b0"), None))).await;
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c0"), None))).await;
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d0"), None))).await;
+    l.str_map_mut().set(s("a"), Some((b("a0"), None))).await;
+    l.str_map_mut().set(s("b"), Some((b("b0"), None))).await;
+    l.str_map_mut().set(s("c"), Some((b("c0"), None))).await;
+    l.str_map_mut().set(s("d"), Some((b("d0"), None))).await;
 
     l.freeze_writable();
     let sd = l.writable_mut().sys_data_mut();
@@ -270,9 +269,9 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {2=>Node::new("2", Endpoint::new("2", 2))};
 
     // internal_seq: 4
-    MapApi::<String>::set(&mut l, s("b"), None).await;
-    MapApi::<String>::set(&mut l, s("c"), Some((b("c1"), None))).await;
-    MapApi::<String>::set(&mut l, s("e"), Some((b("e1"), None))).await;
+    l.str_map_mut().set(s("b"), None).await;
+    l.str_map_mut().set(s("c"), Some((b("c1"), None))).await;
+    l.str_map_mut().set(s("e"), Some((b("e1"), None))).await;
 
     l.freeze_writable();
     let sd = l.writable_mut().sys_data_mut();
@@ -283,8 +282,8 @@ async fn build_3_levels() -> LeveledMap {
     *sd.nodes_mut() = btreemap! {3=>Node::new("3", Endpoint::new("3", 3))};
 
     // internal_seq: 6
-    MapApi::<String>::set(&mut l, s("c"), None).await;
-    MapApi::<String>::set(&mut l, s("d"), Some((b("d2"), None))).await;
+    l.str_map_mut().set(s("c"), None).await;
+    l.str_map_mut().set(s("d"), Some((b("d2"), None))).await;
 
     l
 }
@@ -299,16 +298,18 @@ async fn build_3_levels() -> LeveledMap {
 async fn build_sm_with_expire() -> SMV002 {
     let mut sm = SMV002::default();
 
-    sm.upsert_kv(UpsertKV::update("a", b"a0").with_expire_sec(10))
+    let mut a = sm.new_applier();
+    a.upsert_kv(&UpsertKV::update("a", b"a0").with_expire_sec(10))
         .await;
-    sm.upsert_kv(UpsertKV::update("b", b"b0").with_expire_sec(5))
+    a.upsert_kv(&UpsertKV::update("b", b"b0").with_expire_sec(5))
         .await;
 
     sm.levels.freeze_writable();
 
-    sm.upsert_kv(UpsertKV::update("c", b"c0").with_expire_sec(20))
+    let mut a = sm.new_applier();
+    a.upsert_kv(&UpsertKV::update("c", b"c0").with_expire_sec(20))
         .await;
-    sm.upsert_kv(UpsertKV::update("a", b"a1").with_expire_sec(15))
+    a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(15))
         .await;
 
     sm

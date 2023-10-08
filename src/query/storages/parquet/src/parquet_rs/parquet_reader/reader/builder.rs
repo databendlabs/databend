@@ -20,7 +20,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
 use parquet::arrow::arrow_to_parquet_schema;
@@ -37,7 +36,7 @@ use crate::parquet_rs::parquet_reader::policy::POLICY_TOPK_ONLY;
 use crate::parquet_rs::parquet_reader::predicate::build_predicate;
 use crate::parquet_rs::parquet_reader::predicate::ParquetPredicate;
 use crate::parquet_rs::parquet_reader::topk::build_topk;
-use crate::parquet_rs::parquet_reader::topk::ParquetTopK;
+use crate::parquet_rs::parquet_reader::topk::BuiltTopK;
 use crate::parquet_rs::parquet_reader::utils::compute_output_field_paths;
 use crate::parquet_rs::parquet_reader::utils::FieldPaths;
 use crate::parquet_rs::parquet_reader::NoPretchPolicyBuilder;
@@ -59,7 +58,7 @@ pub struct ParquetRSReaderBuilder<'a> {
 
     // Can be reused to build multiple readers.
     built_predicate: Option<(Arc<ParquetPredicate>, Vec<usize>)>,
-    built_topk: Option<(Arc<ParquetTopK>, TableField)>,
+    built_topk: Option<BuiltTopK>,
     #[allow(clippy::type_complexity)]
     built_output: Option<(
         ProjectionMask,          // The output projection mask.
@@ -274,7 +273,7 @@ impl<'a> ParquetRSReaderBuilder<'a> {
         let (_, output_leaves, output_schema, paths) = self.built_output.as_ref().unwrap();
         TopkOnlyPolicyBuilder::create(
             &self.schema_desc,
-            self.built_topk.clone().unwrap(),
+            self.built_topk.as_ref().unwrap(),
             output_schema,
             output_leaves,
             paths.is_some(),

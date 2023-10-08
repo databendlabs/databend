@@ -32,12 +32,14 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_hashtable::HashJoinHashtableLike;
 use common_sql::ColumnSet;
 use log::info;
 use parking_lot::Mutex;
@@ -57,6 +59,7 @@ use crate::sql::planner::plans::JoinType;
 /// Define some shared states for all hash join probe threads.
 pub struct HashJoinProbeState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) func_ctx: FunctionContext,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     /// Processors count
@@ -95,6 +98,7 @@ impl HashJoinProbeState {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<QueryContext>,
+        func_ctx: FunctionContext,
         hash_join_state: Arc<HashJoinState>,
         probe_projections: &ColumnSet,
         probe_keys: &[RemoteExpr],
@@ -117,6 +121,7 @@ impl HashJoinProbeState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(HashJoinProbeState {
             ctx,
+            func_ctx,
             hash_join_state,
             processor_count,
             probe_workers: AtomicUsize::new(0),
@@ -246,11 +251,15 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
-                let keys_iter = table.hash_method.build_keys_iter(&keys_state)?;
+                let (keys_iter, mut hashes) =
+                    table.hash_method.build_keys_iter_and_hashes(&keys_state)?;
+                // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+                table.hash_table.probe(&mut hashes);
                 self.result_blocks(
                     &table.hash_table,
                     probe_state,
                     keys_iter,
+                    &hashes,
                     &input,
                     is_probe_projected,
                 )
@@ -376,6 +385,7 @@ impl HashJoinProbeState {
         let max_block_size = state.max_block_size;
         let true_validity = &state.true_validity;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -441,6 +451,7 @@ impl HashJoinProbeState {
                     build_columns,
                     build_columns_data_type,
                     &build_num_rows,
+                    string_items_buf,
                 )?;
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
@@ -486,6 +497,7 @@ impl HashJoinProbeState {
     ) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -525,6 +537,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?);
             build_indexes_occupied = 0;
         }
@@ -538,6 +551,7 @@ impl HashJoinProbeState {
     ) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -577,6 +591,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?);
             build_indexes_occupied = 0;
         }
@@ -586,6 +601,7 @@ impl HashJoinProbeState {
     pub fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         let max_block_size = state.max_block_size;
         let build_indexes = &mut state.build_indexes;
+        let string_items_buf = &mut state.string_items_buf;
         let mut build_indexes_occupied = 0;
         let mut result_blocks = vec![];
 
@@ -654,6 +670,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 &build_num_rows,
+                string_items_buf,
             )?;
             result_blocks.push(self.merge_eq_block(
                 Some(build_block),
