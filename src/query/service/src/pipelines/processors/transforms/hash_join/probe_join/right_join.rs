@@ -49,6 +49,7 @@ impl HashJoinProbeState {
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let mut matched_num = 0;
         let mut result_blocks = vec![];
@@ -106,7 +107,8 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let probe_block = DataBlock::take(input, local_probe_indexes)?;
+                        let probe_block =
+                            DataBlock::take(input, local_probe_indexes, string_items_buf)?;
 
                         // The join type is right join, we need to wrap nullable for probe side.
                         let nullable_columns = probe_block
@@ -124,6 +126,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
@@ -161,6 +164,7 @@ impl HashJoinProbeState {
                                     .other_predicate
                                     .as_ref()
                                     .unwrap(),
+                                &self.func_ctx,
                             )?;
 
                             if all_true {
@@ -242,7 +246,11 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if is_probe_projected {
-            let probe_block = DataBlock::take(input, &local_probe_indexes[0..matched_num])?;
+            let probe_block = DataBlock::take(
+                input,
+                &local_probe_indexes[0..matched_num],
+                string_items_buf,
+            )?;
 
             // The join type is right join, we need to wrap nullable for probe side.
             let mut validity = MutableBitmap::new();
@@ -263,6 +271,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 build_num_rows,
+                string_items_buf,
             )?)
         } else {
             None
@@ -297,6 +306,7 @@ impl HashJoinProbeState {
                         .other_predicate
                         .as_ref()
                         .unwrap(),
+                    &self.func_ctx,
                 )?;
 
                 if all_true {
