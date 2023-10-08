@@ -324,10 +324,23 @@ impl Interpreter for RefreshIndexInterpreter {
             })?;
         let block_name_offset = output_schema.index_of(&block_name_col.index.to_string())?;
 
+        let fields = output_schema
+            .fields()
+            .iter()
+            .map(|f| {
+                let pos = select_columns
+                    .iter()
+                    .find(|col| col.index.to_string().eq_ignore_ascii_case(f.name()))
+                    .ok_or_else(|| ErrorCode::Internal("should find the corresponding column"))?;
+                Ok(DataField::new(&pos.column_name, f.data_type().clone()))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let new_output_schema = Arc::new(output_schema.project_by_fields(fields));
+
         // Build the final sink schema.
-        let mut sink_schema = infer_table_schema(&output_schema)?.as_ref().clone();
+        let mut sink_schema = infer_table_schema(&new_output_schema)?.as_ref().clone();
         if !self.plan.user_defined_block_name {
-            sink_schema.drop_column(&block_name_col.index.to_string())?;
+            sink_schema.drop_column(&block_name_col.column_name)?;
         }
         let sink_schema = Arc::new(sink_schema);
 
