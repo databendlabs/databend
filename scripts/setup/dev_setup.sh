@@ -352,20 +352,6 @@ function install_rustup {
 	rustup show
 }
 
-function install_cargo_binary {
-	BIN_NAME=$1
-	VERSION=$2
-	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
-		echo "${BIN_NAME} is already installed"
-	else
-		if [ -z "$VERSION" ]; then
-			cargo install "${BIN_NAME}"
-		else
-			cargo install --version "${VERSION}" "${BIN_NAME}"
-		fi
-	fi
-}
-
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -591,8 +577,9 @@ fi
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
-		while IFS='@' read -r tool version; do
-			install_cargo_binary "$tool" "$version"
+		cargo install cargo-quickinstall
+		while read -r tool; do
+			cargo quickinstall "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
 
