@@ -113,7 +113,10 @@ async fn test_export() -> anyhow::Result<()> {
                 .unwrap()
                 .replace_all(
                     &x,
-                    format!(r#""grpc_api_advertise_address":"{}""#, grpc_api_advertise_addr),
+                    format!(
+                        r#""grpc_api_advertise_address":"{}""#,
+                        grpc_api_advertise_addr
+                    ),
                 )
                 .to_string()
         })
