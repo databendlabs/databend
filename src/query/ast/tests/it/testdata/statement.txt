@@ -11502,7 +11502,7 @@ Query(
 ---------- Input ----------
 SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;
 ---------- Output ---------
-SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet',endpoint_url='xxx' ) AS t
+SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet',endpoint_url=>'xxx' ) AS t
 ---------- AST ------------
 Query(
     Query {

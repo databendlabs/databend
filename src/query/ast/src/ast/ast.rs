@@ -140,3 +140,17 @@ pub(crate) fn write_comma_separated_map(
     }
     Ok(())
 }
+
+/// Write input map items into `field_a=>x, field_b=>y`
+pub(crate) fn write_comma_separated_arrow_map(
+    f: &mut Formatter<'_>,
+    items: impl IntoIterator<Item = (impl Display, impl Display)>,
+) -> std::fmt::Result {
+    for (i, (k, v)) in items.into_iter().enumerate() {
+        if i > 0 {
+            write!(f, ", ")?;
+        }
+        write!(f, "{k}=>'{v}'")?;
+    }
+    Ok(())
+}

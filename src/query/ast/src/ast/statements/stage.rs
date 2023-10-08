@@ -17,6 +17,7 @@ use std::default::Default;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::write_comma_separated_arrow_map;
 use crate::ast::write_comma_separated_map;
 use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::UriLocation;
@@ -132,7 +133,7 @@ impl Display for SelectStageOptions {
             write!(f, " PATTERN => '{}',", pattern)?;
         }
 
-        write_comma_separated_map(f, &self.connection)?;
+        write_comma_separated_arrow_map(f, &self.connection)?;
 
         write!(f, " )")?;
 
