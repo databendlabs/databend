@@ -94,7 +94,7 @@ impl DataBlock {
 
         let indices: PrimitiveArray<u32> =
             arrow_sort::lexsort_to_indices_impl(&order_arrays, limit, &build_compare)?;
-        DataBlock::take(block, indices.values())
+        DataBlock::take(block, indices.values(), &mut None)
     }
 
     // merge two blocks to one sorted block

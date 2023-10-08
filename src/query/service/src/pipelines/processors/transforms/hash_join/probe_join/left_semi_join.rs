@@ -32,6 +32,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
@@ -41,16 +42,19 @@ impl HashJoinProbeState {
         // If there is no build key, the result is input
         // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let probe_indexes = &mut probe_state.probe_indexes;
+        let string_items_buf = &mut probe_state.string_items_buf;
         let mut matched_num = 0;
         let mut result_blocks = vec![];
 
-        for (i, key) in keys_iter.enumerate() {
-            let contains = if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                hash_table.contains(key)
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+            let contains = if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                || valids.map_or(true, |v| v.get_bit(i))
+            {
+                hash_table.next_contains(key, *ptr)
             } else {
-                self.contains(hash_table, key, valids, i)
+                false
             };
 
             match (contains, SEMI) {
@@ -63,7 +67,7 @@ impl HashJoinProbeState {
                                 "Aborted query, because the server is shutting down or the query was killed.",
                             ));
                         }
-                        let probe_block = DataBlock::take(input, probe_indexes)?;
+                        let probe_block = DataBlock::take(input, probe_indexes, string_items_buf)?;
                         result_blocks.push(probe_block);
 
                         matched_num = 0;
@@ -75,7 +79,7 @@ impl HashJoinProbeState {
         if matched_num == 0 {
             return Ok(result_blocks);
         }
-        let probe_block = DataBlock::take(input, &probe_indexes[0..matched_num])?;
+        let probe_block = DataBlock::take(input, &probe_indexes[0..matched_num], string_items_buf)?;
         result_blocks.push(probe_block);
         Ok(result_blocks)
     }
@@ -90,6 +94,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -98,13 +103,14 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         // The semi join will return multiple data chunks of similar size.
         let mut matched_num = 0;
         let mut result_blocks = vec![];
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -123,25 +129,19 @@ impl HashJoinProbeState {
             .unwrap();
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
-        let dummy_probed_rows = vec![RowPtr {
+        let dummy_probed_row = RowPtr {
             chunk_index: 0,
             row_index: 0,
-        }];
+        };
 
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    (0, 0)
                 };
 
             let true_match_count = match_count;
@@ -150,14 +150,10 @@ impl HashJoinProbeState {
                     continue;
                 }
                 false => {
-                    // dummy_probed_rows
+                    // dummy_probed_row
                     unsafe {
-                        std::ptr::copy_nonoverlapping(
-                            &dummy_probed_rows[0] as *const RowPtr,
-                            build_indexes_ptr.add(matched_num),
-                            1,
-                        )
-                    }
+                        std::ptr::write(build_indexes_ptr.add(matched_num), dummy_probed_row)
+                    };
                     match_count = 1;
                 }
                 true => (),
@@ -180,7 +176,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes)?)
+                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
                     } else {
                         None
                     };
@@ -190,6 +186,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
@@ -197,7 +194,11 @@ impl HashJoinProbeState {
                     let result_block =
                         self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
-                    let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
+                    let mut bm = match self.get_other_filters(
+                        &result_block,
+                        other_predicate,
+                        &self.func_ctx,
+                    )? {
                         (Some(b), _, _) => b.make_mut(),
                         (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
                         (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
@@ -221,7 +222,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
@@ -259,7 +260,11 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+            Some(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_num],
+                string_items_buf,
+            )?)
         } else {
             None
         };
@@ -269,13 +274,14 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 build_num_rows,
+                string_items_buf,
             )?)
         } else {
             None
         };
         let result_block = self.merge_eq_block(probe_block.clone(), build_block, matched_num);
 
-        let mut bm = match self.get_other_filters(&result_block, other_predicate)? {
+        let mut bm = match self.get_other_filters(&result_block, other_predicate, &self.func_ctx)? {
             (Some(b), _, _) => b.make_mut(),
             (_, true, _) => MutableBitmap::from_len_set(result_block.num_rows()),
             (_, _, true) => MutableBitmap::from_len_zeroed(result_block.num_rows()),
