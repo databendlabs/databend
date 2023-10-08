@@ -21,6 +21,7 @@ use common_exception::Result;
 
 use super::Hint;
 use crate::ast::write_comma_separated_list;
+use crate::ast::write_comma_separated_map;
 use crate::ast::write_dot_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
@@ -257,9 +258,7 @@ impl Display for MergeSource {
                 start: _,
             } => {
                 write!(f, " FILE_FORMAT = (")?;
-                for (k, v) in settings.iter() {
-                    write!(f, " {} = '{}'", k, v)?;
-                }
+                write_comma_separated_map(f, settings)?;
                 write!(f, " )")?;
                 write!(
                     f,
