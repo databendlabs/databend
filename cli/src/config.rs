@@ -165,20 +165,28 @@ pub struct ConnectionConfig {
 
 impl Config {
     pub fn load() -> Self {
-        let path = format!(
-            "{}/.config/bendsql/config.toml",
-            std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
-        );
-
-        let path = Path::new(&path);
-        if !path.exists() {
-            return Self::default();
+        let paths = [
+            format!(
+                "{}/.bendsql/config.toml",
+                std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+            ),
+            format!(
+                "{}/.config/bendsql/config.toml",
+                std::env::var("HOME").unwrap_or_else(|_| ".".to_string())
+            ),
+        ];
+        let path = paths.iter().find(|p| Path::new(p).exists());
+        match path {
+            Some(path) => Self::load_from_file(path),
+            None => Self::default(),
         }
+    }
 
+    fn load_from_file(path: &str) -> Self {
         match toml::from_str(&std::fs::read_to_string(path).unwrap()) {
             Ok(config) => config,
             Err(e) => {
-                eprintln!("Failed to load config: {}, will use default config", e);
+                eprintln!("Failed to load config file {}: {}, using defaults", path, e);
                 Self::default()
             }
         }

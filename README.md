@@ -72,11 +72,12 @@ Options:
 
 ## Custom configuration
 
-By default bendsql will read configuration from `~/.config/bendsql/config.toml` if the file exists.
+By default bendsql will read configuration from `~/.bendsql/config.toml` and `~/.config/bendsql/config.toml`
+ sequentially if exists.
 
 - Example file
 ```
-❯ cat ~/.config/bendsql/config.toml
+❯ cat ~/.bendsql/config.toml
 [connection]
 connect_timeout = "30s"
 
