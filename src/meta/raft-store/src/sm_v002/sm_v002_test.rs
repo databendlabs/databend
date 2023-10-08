@@ -18,6 +18,7 @@ use common_meta_types::UpsertKV;
 use futures_util::StreamExt;
 use pretty_assertions::assert_eq;
 
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::SMV002;
@@ -183,7 +184,8 @@ async fn test_internal_expire_index() -> anyhow::Result<()> {
     // Check internal expire index
     let got = sm
         .levels
-        .range::<ExpireKey, _>(..)
+        .expire_map()
+        .range(..)
         .await
         .collect::<Vec<_>>()
         .await;
@@ -250,7 +252,8 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     // Check expire store
     let got = sm
         .levels
-        .range::<ExpireKey, _>(..)
+        .expire_map()
+        .range(..)
         .await
         .collect::<Vec<_>>()
         .await;
