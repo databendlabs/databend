@@ -397,7 +397,7 @@ impl Decimal for i128 {
             let mantissa = (bits & MAN_MASK) | MAN_ONE;
             if exponent <= M {
                 (<i128 as From<u64>>::from(mantissa >> (M - exponent))) * sign
-            } else if exponent < 255 {
+            } else if exponent < 127 {
                 (<i128 as From<u64>>::from(mantissa) << (exponent - M)) * sign
             } else if sign > 0 {
                 i128::MAX
