@@ -570,7 +570,7 @@ error:
   --> SQL:1:41
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  | ----                                    ^ expected `)` or `=`
+  | ----                                    ^ expected `=`
   | |                                       
   | while parsing `COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -589,7 +589,7 @@ error:
   --> SQL:1:43
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----                                      ^ expected `)`, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | ----                                      ^ expected <QuotedString>, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, or `XML`
   | |                                         
   | while parsing `COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
@@ -608,7 +608,7 @@ error:
   --> SQL:1:43
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----                                      ^ expected `)`, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, `XML`, or <QuotedString>
+  | ----                                      ^ expected <QuotedString>, `TSV`, `CSV`, `NDJSON`, `PARQUET`, `JSON`, or `XML`
   | |                                         
   | while parsing `COPY
                 INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
