@@ -7,7 +7,7 @@ ANALYZE TABLE source_table;
 
 -- load data to target_table, it's almost 6000000 rows in source
 COPY INTO target_table
-FROM  'fs:///tmp/data/lineitem2.tbl' PATTERN = 'lineitem.tbl.*' FILE_FORMAT =(
+FROM  'fs:///tmp/data/lineitem2.tbl' PATTERN = 'lineitem.tbl2.*' FILE_FORMAT =(
         type = 'CSV' field_delimiter = '|' record_delimiter = '\n' skip_header = 0
     );
 
