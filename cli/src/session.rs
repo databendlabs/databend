@@ -66,10 +66,15 @@ impl Session {
             println!();
 
             let rows = conn.query_iter(PROMPT_SQL).await;
-            if let Ok(mut rows) = rows {
-                while let Some(row) = rows.next().await {
-                    let name: (String,) = row.unwrap().try_into().unwrap();
-                    keywords.push(name.0);
+            match rows {
+                Ok(mut rows) => {
+                    while let Some(row) = rows.next().await {
+                        let name: (String,) = row.unwrap().try_into().unwrap();
+                        keywords.push(name.0);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("loading auto complete keywords failed: {}", e);
                 }
             }
         }
@@ -132,12 +137,12 @@ impl Session {
                             Err(e) => {
                                 if e.to_string().contains("Unauthenticated") {
                                     if let Err(e) = self.reconnect().await {
-                                        eprintln!("Reconnect error: {}", e);
+                                        eprintln!("reconnect error: {}", e);
                                     } else if let Err(e) = self.handle_query(true, &query).await {
-                                        eprintln!("{}", e);
+                                        eprintln!("error: {}", e);
                                     }
                                 } else {
-                                    eprintln!("{}", e);
+                                    eprintln!("error: {}", e);
                                     self.query.clear();
                                     break;
                                 }
@@ -302,7 +307,7 @@ impl Session {
                             start.elapsed().as_secs_f64()
                         );
                     } else {
-                        eprintln!("Processed in ({:.3} sec)", start.elapsed().as_secs_f64());
+                        eprintln!("processed in ({:.3} sec)", start.elapsed().as_secs_f64());
                     }
                     eprintln!();
                 }
@@ -319,7 +324,7 @@ impl Session {
                     QueryKind::Put => {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
-                            eprintln!("Put args are invalid, must be 2 argruments");
+                            eprintln!("put args are invalid, must be 2 argruments");
                             return Ok(false);
                         }
                         self.conn.put_files(&args[1], &args[2]).await?
@@ -327,7 +332,7 @@ impl Session {
                     QueryKind::Get => {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
-                            eprintln!("Put args are invalid, must be 2 argruments");
+                            eprintln!("put args are invalid, must be 2 argruments");
                             return Ok(false);
                         }
                         self.conn.get_files(&args[1], &args[2]).await?
@@ -392,7 +397,7 @@ impl Session {
         // TODO:(everpcpc) show progress
         if self.settings.show_progress {
             eprintln!(
-                "==> Stream Loaded {}:\n    {}",
+                "==> stream loaded {}:\n    {}",
                 file_path.display(),
                 format_write_progress(&progress, start.elapsed().as_secs_f64())
             );
@@ -405,11 +410,11 @@ impl Session {
         if self.is_repl {
             let info = self.conn.info().await;
             eprintln!(
-                "Reconnecting to {}:{} as user {}.",
+                "reconnecting to {}:{} as user {}.",
                 info.host, info.port, info.user
             );
             let version = self.conn.version().await?;
-            eprintln!("Connected to {}", version);
+            eprintln!("connected to {}", version);
             eprintln!();
         }
         Ok(())
