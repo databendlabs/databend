@@ -1,0 +1,5 @@
+statement ok
+set enable_experimental_merge_into = 0;
+
+statement ok
+set enable_experimental_merge_into = 1;
