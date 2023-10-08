@@ -23,11 +23,11 @@ use futures_util::StreamExt;
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
-use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
@@ -93,24 +93,23 @@ impl SnapshotViewV002 {
         let mut data = self.compacted.newest().unwrap().new_level();
 
         // `range()` will compact tombstone internally
-        let strm = MapApiRO::<String>::range::<String, _>(&self.compacted, ..)
-            .await
-            .filter(|(_k, v)| {
-                let x = !v.is_tomb_stone();
-                async move { x }
-            });
+
+        let strm = self.compacted.str_map().range::<String, _>(..).await;
+        let strm = strm.filter(|(_k, v)| {
+            let x = !v.is_tomb_stone();
+            async move { x }
+        });
 
         let bt = strm.collect().await;
 
         data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
-        let strm = MapApiRO::<ExpireKey>::range(&self.compacted, ..)
-            .await
-            .filter(|(_k, v)| {
-                let x = !v.is_tomb_stone();
-                async move { x }
-            });
+        let strm = self.compacted.expire_map().range(..).await;
+        let strm = strm.filter(|(_k, v)| {
+            let x = !v.is_tomb_stone();
+            async move { x }
+        });
 
         let bt = strm.collect().await;
 
@@ -171,46 +170,44 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let kv_iter = MapApiRO::<String>::range::<String, _>(&self.compacted, ..)
-            .await
-            .filter_map(|(k, v)| async move {
-                if let Marked::Normal {
-                    internal_seq,
-                    value,
-                    meta,
-                } = v
-                {
-                    let seqv = SeqV::with_meta(internal_seq, meta, value);
-                    Some(RaftStoreEntry::GenericKV {
-                        key: k.clone(),
-                        value: seqv,
-                    })
-                } else {
-                    None
-                }
-            });
+        let strm = self.compacted.str_map().range::<String, _>(..).await;
+        let kv_iter = strm.filter_map(|(k, v)| async move {
+            if let Marked::Normal {
+                internal_seq,
+                value,
+                meta,
+            } = v
+            {
+                let seqv = SeqV::with_meta(internal_seq, meta, value);
+                Some(RaftStoreEntry::GenericKV {
+                    key: k.clone(),
+                    value: seqv,
+                })
+            } else {
+                None
+            }
+        });
 
         // expire index
 
-        let expire_iter = MapApiRO::<ExpireKey>::range(&self.compacted, ..)
-            .await
-            .filter_map(|(k, v)| async move {
-                if let Marked::Normal {
-                    internal_seq,
-                    value,
-                    meta: _,
-                } = v
-                {
-                    let ev = ExpireValue::new(value, internal_seq);
+        let strm = self.compacted.expire_map().range(..).await;
+        let expire_iter = strm.filter_map(|(k, v)| async move {
+            if let Marked::Normal {
+                internal_seq,
+                value,
+                meta: _,
+            } = v
+            {
+                let ev = ExpireValue::new(value, internal_seq);
 
-                    Some(RaftStoreEntry::Expire {
-                        key: k.clone(),
-                        value: ev,
-                    })
-                } else {
-                    None
-                }
-            });
+                Some(RaftStoreEntry::Expire {
+                    key: k.clone(),
+                    value: ev,
+                })
+            } else {
+                None
+            }
+        });
 
         futures::stream::iter(sm_meta)
             .chain(kv_iter)
