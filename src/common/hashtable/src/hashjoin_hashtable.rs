@@ -109,9 +109,7 @@ where
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
         let index = key_ref.hash() as usize & self.hash_mask;
-        // # Safety
-        // `index` = hash & mask, it is less than the capacity of hash table.
-        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
             if raw_entry_ptr == 0 {
                 break;
@@ -134,18 +132,22 @@ where
     ) -> (usize, u64) {
         let index = key_ref.hash() as usize & self.hash_mask;
         let origin = occupied;
-        // # Safety
-        // `index` = hash & mask, it is less than the capacity of hash table.
-        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
             if raw_entry_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *const RawEntry<K>) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut RawEntry<K>) };
             if key_ref == &raw_entry.key {
                 // # Safety
                 // occupied is less than the capacity of vec_ptr.
-                unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &raw_entry.row_ptr as *const RowPtr,
+                        vec_ptr.add(occupied),
+                        1,
+                    )
+                };
                 occupied += 1;
             }
             raw_entry_ptr = raw_entry.next;
@@ -170,11 +172,17 @@ where
             if incomplete_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(incomplete_ptr as *const RawEntry<K>) };
+            let raw_entry = unsafe { &*(incomplete_ptr as *mut RawEntry<K>) };
             if key_ref == &raw_entry.key {
                 // # Safety
                 // occupied is less than the capacity of vec_ptr.
-                unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
+                unsafe {
+                    std::ptr::copy_nonoverlapping(
+                        &raw_entry.row_ptr as *const RowPtr,
+                        vec_ptr.add(occupied),
+                        1,
+                    )
+                };
                 occupied += 1;
             }
             incomplete_ptr = raw_entry.next;
