@@ -175,6 +175,15 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        if let Some(s) = &select_ctx {
+            let select_schema = s.select_schema.as_ref();
+            // validate schema
+            if select_schema.fields().len() < plan.schema().fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
+            }
+        }
         // remove top exchange
         if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
             root = input.clone();

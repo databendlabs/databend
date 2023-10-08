@@ -1,5 +1,5 @@
 ---
-title: INSERT INTO
+title: INSERT
 ---
 
 Writes data into a table.

@@ -20,6 +20,7 @@ use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
@@ -119,14 +120,14 @@ impl MapApi<String> for Level {
 
         let marked = if let Some((v, meta)) = value {
             let seq = self.sys_data_mut().next_seq();
-            Marked::new_normal(seq, v, meta)
+            Marked::new_with_meta(seq, v, meta)
         } else {
             // Do not increase the sequence number, just use the max seq for all tombstone.
             let seq = self.curr_seq();
             Marked::new_tomb_stone(seq)
         };
 
-        let prev = MapApiRO::<String>::get(&*self, key.as_str()).await;
+        let prev = (*self).str_map().get(&key).await;
         self.kv.insert(key, marked.clone());
         (prev, marked)
     }
@@ -180,7 +181,7 @@ impl MapApi<ExpireKey> for Level {
             Marked::TombStone { internal_seq: seq }
         };
 
-        let prev = MapApiRO::<ExpireKey>::get(&*self, &key).await;
+        let prev = (*self).expire_map().get(&key).await;
         self.expire.insert(key, marked.clone());
         (prev, marked)
     }
