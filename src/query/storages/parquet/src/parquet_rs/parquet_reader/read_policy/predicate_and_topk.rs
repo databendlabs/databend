@@ -54,6 +54,10 @@ pub struct PredicateAndTopkPolicyBuilder {
 
     src_schema: DataSchemaRef,
     dst_schema: DataSchemaRef,
+
+    /// Record which prefetched columns are needed to be output.
+    /// Other prefetched columns can be released immediately.
+    output_prefetched_field_indices: Vec<usize>,
 }
 
 impl PredicateAndTopkPolicyBuilder {
@@ -96,15 +100,23 @@ impl PredicateAndTopkPolicyBuilder {
             remain_schema.fields().clone()
         };
 
-        let (prefetch_fields, topk) = if let Some(topk) = topk {
-            let fields = vec![topk.field.clone()]
-                .into_iter()
-                .chain(predicate.schema().fields().clone().into_iter())
-                .collect::<Vec<_>>();
-            (fields, Some(topk.topk.clone()))
-        } else {
-            (predicate.schema().fields().clone(), None)
-        };
+        let mut output_prefetched_field = vec![];
+        let mut output_prefetched_field_indices = vec![];
+        let offset = topk.is_some() as usize;
+        if let Some(topk) = topk {
+            if output_schema.has_field(&topk.field.name) {
+                output_prefetched_field.push(topk.field.clone());
+                output_prefetched_field_indices.push(0);
+            }
+        }
+        let topk = topk.map(|t| t.topk.clone());
+        for (index, field) in predicate.schema().fields().iter().enumerate() {
+            if !output_schema.has_field(&field.name) {
+                continue;
+            }
+            output_prefetched_field.push(field.clone());
+            output_prefetched_field_indices.push(offset + index);
+        }
 
         let remain_field_levels =
             parquet_to_arrow_field_levels(schema_desc, remain_projection.clone(), None)?;
@@ -117,7 +129,7 @@ impl PredicateAndTopkPolicyBuilder {
         )?);
 
         let mut src_schema = remain_schema;
-        src_schema.fields.extend(prefetch_fields);
+        src_schema.fields.extend(output_prefetched_field);
 
         let src_schema = Arc::new(DataSchema::from(&src_schema));
         let dst_schema = Arc::new(DataSchema::from(output_schema));
@@ -130,6 +142,7 @@ impl PredicateAndTopkPolicyBuilder {
             remain_field_paths,
             src_schema,
             dst_schema,
+            output_prefetched_field_indices,
         }))
     }
 }
@@ -213,6 +226,13 @@ impl ReadPolicyBuilder for PredicateAndTopkPolicyBuilder {
                 return Ok(None);
             }
         }
+
+        // Only retain the columns that are needed to be output. Release other columns.
+        let mut needed_columns = Vec::with_capacity(self.output_prefetched_field_indices.len());
+        for index in self.output_prefetched_field_indices.iter() {
+            needed_columns.push(prefetched.columns()[*index].clone());
+        }
+        let prefetched = DataBlock::new(needed_columns, prefetched.num_rows());
 
         // Slice the prefetched block by `batch_size`.
         let mut prefetched_blocks = VecDeque::with_capacity(num_rows.div_ceil(batch_size));
