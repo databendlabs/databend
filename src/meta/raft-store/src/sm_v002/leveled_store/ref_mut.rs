@@ -25,7 +25,7 @@ use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// A writable leveled map that does not not own the data.
@@ -35,11 +35,11 @@ pub struct RefMut<'d> {
     writable: &'d mut Level,
 
     /// The immutable levels.
-    frozen: &'d StaticLeveledMap,
+    frozen: &'d StaticLevels,
 }
 
 impl<'d> RefMut<'d> {
-    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLeveledMap) -> Self {
+    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLevels) -> Self {
         Self { writable, frozen }
     }
 
