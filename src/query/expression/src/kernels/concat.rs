@@ -257,15 +257,9 @@ impl Column {
     pub fn concat_primitive_types<T>(cols: &[Buffer<T>], num_rows: usize) -> Vec<T>
     where T: Copy {
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
-        let mut ptr = builder.as_mut_ptr();
-
-        unsafe {
-            for col in cols {
-                copy_advance_aligned(col.as_slice().as_ptr(), &mut ptr, col.len());
-            }
-            builder.set_len(num_rows);
+        for col in cols {
+            builder.extend(col.iter());
         }
-
         builder
     }
 
