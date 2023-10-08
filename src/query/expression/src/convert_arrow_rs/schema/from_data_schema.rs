@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
@@ -22,6 +24,11 @@ use crate::infer_schema_type;
 use crate::types::DataType;
 use crate::DataField;
 use crate::DataSchema;
+use crate::ARROW_EXT_TYPE_BITMAP;
+use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::ARROW_EXT_TYPE_VARIANT;
+use crate::EXTENSION_KEY;
 
 impl From<&DataSchema> for ArrowSchema {
     fn from(value: &DataSchema) -> Self {
@@ -36,12 +43,26 @@ impl From<&DataSchema> for ArrowSchema {
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
         let ty = f.data_type().into();
-        match ty {
-            ArrowDataType::Struct(_) if f.is_nullable_or_null() => {
-                let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable_or_null())
+        let extend_type = match f.data_type().remove_nullable() {
+            DataType::EmptyArray => Some(ARROW_EXT_TYPE_EMPTY_ARRAY.to_string()),
+            DataType::EmptyMap => Some(ARROW_EXT_TYPE_EMPTY_MAP.to_string()),
+            DataType::Variant => Some(ARROW_EXT_TYPE_VARIANT.to_string()),
+            DataType::Bitmap => Some(ARROW_EXT_TYPE_BITMAP.to_string()),
+            _ => None,
+        };
+
+        if let Some(extend_type) = extend_type {
+            let mut metadata = HashMap::new();
+            metadata.insert(EXTENSION_KEY.to_string(), extend_type);
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
+        } else {
+            match ty {
+                ArrowDataType::Struct(_) if f.is_nullable() => {
+                    let ty = set_nullable(&ty);
+                    ArrowField::new(f.name(), ty, f.is_nullable())
+                }
+                _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
         }
     }
 }
