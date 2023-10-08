@@ -7,7 +7,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Performs INSERT, UPDATE, or DELETE operations on rows within a target table, all in accordance with conditions and matching criteria specified within the statement, using data from a specified source.
 
-The data source, which can a subquery, is linked to the target data via a JOIN expression. This expression assesses whether each row in the source can find a match in the target table and subsequently determines which operation (INSERT, UPDATE, or DELETE) should be applied to the target table.
+The data source, which can be a subquery, is linked to the target data via a JOIN expression. This expression assesses whether each row in the source can find a match in the target table and then determines which type of clause (MATCHED or NOT MATCHED) it should move to in the next execution step.
 
 ![Alt text](../../../public/img/sql/merge-into-single-clause.png)
 
@@ -42,15 +42,17 @@ notMatchedClause ::=
 
 ## Examples
 
+This example uses MERGE INTO to synchronize employee data from 'employees' into 'salaries,' allowing for inserting and updating salary information based on specified criteria.
+
 ```sql
--- Create the 'employees' table
+-- Create the 'employees' table as the source for merging
 CREATE TABLE employees (
     employee_id INT,
     employee_name VARCHAR(255),
     department VARCHAR(255)
 );
 
--- Create the 'salaries' table
+-- Create the 'salaries' table as the target for merging
 CREATE TABLE salaries (
     employee_id INT,
     salary DECIMAL(10, 2)
@@ -68,8 +70,10 @@ INSERT INTO salaries VALUES
     (1, 50000.00),
     (2, 60000.00);
 
+-- Enable MERGE INTO
 SET enable_experimental_merge_into = 1;
 
+-- Merge data into 'salaries' based on employee details from 'employees'
 MERGE INTO salaries
 USING (SELECT * FROM employees)
 ON salaries.employee_id = employees.employee_id
@@ -83,6 +87,7 @@ WHEN NOT MATCHED THEN
     INSERT (employee_id, salary)
     VALUES (employees.employee_id, 55000.00);
 
+-- Retrieve all records from the 'salaries' table after merging
 SELECT * FROM salaries;
 
 employee_id | salary
