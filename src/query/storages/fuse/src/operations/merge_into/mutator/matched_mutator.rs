@@ -319,10 +319,12 @@ impl AggregationContext {
         let serialized = GlobalIORuntime::instance()
             .spawn_blocking(move || {
                 block_builder.build(res_block, |block, generator| {
-                    info!("serialize block before get cluster_stats:\n {:?}", block);
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    info!("serialize block after get cluster_stats:\n {:?}", block);
+                    info!(
+                        "serialize block after get cluster_stats:\n {:?}",
+                        cluster_stats
+                    );
                     Ok((cluster_stats, block))
                 })
             })
