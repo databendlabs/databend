@@ -30,7 +30,7 @@ use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
 use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002::SMV002;
@@ -70,9 +70,9 @@ async fn test_compact_copied_value_and_kv() -> anyhow::Result<()> {
         .await;
     assert_eq!(got, vec![
         //
-        (s("a"), Marked::new_normal(1, b("a0"), None)),
-        (s("d"), Marked::new_normal(7, b("d2"), None)),
-        (s("e"), Marked::new_normal(6, b("e1"), None)),
+        (s("a"), Marked::new_with_meta(1, b("a0"), None)),
+        (s("d"), Marked::new_with_meta(7, b("d2"), None)),
+        (s("e"), Marked::new_with_meta(6, b("e1"), None)),
     ]);
 
     let got = d.expire_map().range(..).await.collect::<Vec<_>>().await;
@@ -103,7 +103,7 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             s("a"),
-            Marked::new_normal(
+            Marked::new_with_meta(
                 4,
                 b("a1"),
                 Some(KVMeta {
@@ -113,11 +113,11 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         ),
         (
             s("b"),
-            Marked::new_normal(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
+            Marked::new_with_meta(2, b("b0"), Some(KVMeta { expire_at: Some(5) }))
         ),
         (
             s("c"),
-            Marked::new_normal(
+            Marked::new_with_meta(
                 3,
                 b("c0"),
                 Some(KVMeta {
@@ -132,15 +132,15 @@ async fn test_compact_expire_index() -> anyhow::Result<()> {
         //
         (
             ExpireKey::new(5_000, 2),
-            Marked::new_normal(2, s("b"), None)
+            Marked::new_with_meta(2, s("b"), None)
         ),
         (
             ExpireKey::new(15_000, 4),
-            Marked::new_normal(4, s("a"), None)
+            Marked::new_with_meta(4, s("a"), None)
         ),
         (
             ExpireKey::new(20_000, 3),
-            Marked::new_normal(3, s("c"), None)
+            Marked::new_with_meta(3, s("c"), None)
         ),
     ]);
 
@@ -226,7 +226,7 @@ async fn test_import() -> anyhow::Result<()> {
 
     let d = SMV002::import(data)?;
 
-    let snapshot = SnapshotViewV002::new(StaticLeveledMap::new([Arc::new(d)]));
+    let snapshot = SnapshotViewV002::new(StaticLevels::new([Arc::new(d)]));
 
     let got = snapshot
         .export()

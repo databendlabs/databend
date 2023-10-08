@@ -120,7 +120,7 @@ impl MapApi<String> for Level {
 
         let marked = if let Some((v, meta)) = value {
             let seq = self.sys_data_mut().next_seq();
-            Marked::new_normal(seq, v, meta)
+            Marked::new_with_meta(seq, v, meta)
         } else {
             // Do not increase the sequence number, just use the max seq for all tombstone.
             let seq = self.curr_seq();

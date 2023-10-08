@@ -436,20 +436,15 @@ pub trait HashtableLike {
 pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
-    fn contains(&self, key_ref: &Self::Key) -> bool;
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn probe(&self, hashes: &mut [u64]);
 
-    fn probe_hash_table(
-        &self,
-        key_ref: &Self::Key,
-        vec_ptr: *mut RowPtr,
-        occupied: usize,
-        capacity: usize,
-    ) -> (usize, u64);
+    fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 
-    fn next_incomplete_ptr(
+    fn next_probe(
         &self,
-        key_ref: &Self::Key,
-        incomplete_ptr: u64,
+        key: &Self::Key,
+        ptr: u64,
         vec_ptr: *mut RowPtr,
         occupied: usize,
         capacity: usize,
