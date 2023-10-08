@@ -1,5 +1,5 @@
 ---
-title: MERGE INTO
+title: MERGE
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
