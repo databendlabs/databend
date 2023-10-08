@@ -36,6 +36,8 @@ async fn test_export() -> anyhow::Result<()> {
     // Thus in this test we'll gonna trigger a snapshot manually.
 
     let (tc, _addr) = crate::tests::start_metasrv().await?;
+    let config_id = tc.config.raft_config.config_id.clone();
+    let grpc_api_advertise_addr = tc.config.grpc_api_advertise_address().unwrap();
 
     let client = tc.grpc_client().await?;
 
@@ -92,20 +94,33 @@ async fn test_export() -> anyhow::Result<()> {
 
     // The addresses are built from random number.
     // Wash them.
-    let lines = lines
+    let want = want
         .iter()
         .map(|x| {
             Regex::new(r"29\d\d\d")
                 .unwrap()
-                .replace_all(x, "29000")
+                .replace_all(x, config_id.clone())
                 .to_string()
         })
         .map(|x| {
             Regex::new(r"test-29\d\d\d")
                 .unwrap()
-                .replace_all(&x, "test-29000")
+                .replace_all(&x, format!("test-{}", config_id))
                 .to_string()
         })
+        .map(|x| {
+            Regex::new(r#""grpc_api_advertise_address":"127\.0\.0\.1:\d+""#)
+                .unwrap()
+                .replace_all(
+                    &x,
+                    format!(r#""grpc_api_advertise_address":"{}""#, grpc_api_advertise_addr),
+                )
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+
+    let lines = lines
+        .iter()
         .map(|x| {
             Regex::new(r"\d{13}")
                 .unwrap()

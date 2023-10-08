@@ -21,7 +21,6 @@ use std::time::Duration;
 use anyhow::Result;
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_base::base::GlobalSequence;
 use common_base::base::Stoppable;
 use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
@@ -91,7 +90,13 @@ pub async fn start_metasrv_cluster(node_ids: &[NodeId]) -> anyhow::Result<Vec<Me
 }
 
 pub fn next_port() -> u32 {
-    29000u32 + (GlobalSequence::next() as u32)
+    use std::net::Ipv4Addr;
+    use std::net::SocketAddrV4;
+    use std::net::TcpListener;
+    let loopback = Ipv4Addr::new(127, 0, 0, 1);
+    let socket = SocketAddrV4::new(loopback, 0);
+    let listener = TcpListener::bind(socket).unwrap();
+    listener.local_addr().unwrap().port() as u32
 }
 
 pub struct MetaSrvTestContext {
