@@ -10311,6 +10311,7 @@ Copy(
         purge: false,
         force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
