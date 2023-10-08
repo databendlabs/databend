@@ -92,11 +92,12 @@ impl LeveledMap {
         self.frozen = b;
     }
 
-    pub(crate) fn leveled_ref_mut(&mut self) -> RefMut {
+    pub(crate) fn to_ref_mut(&mut self) -> RefMut {
         RefMut::new(&mut self.writable, &self.frozen)
     }
 
-    pub(crate) fn leveled_ref(&self) -> Ref {
+    #[allow(dead_code)]
+    pub(crate) fn to_ref(&self) -> Ref {
         Ref::new(Some(&self.writable), &self.frozen)
     }
 }
@@ -141,9 +142,7 @@ where
     where
         K: Ord,
     {
-        let mut l = self.leveled_ref_mut();
+        let mut l = self.to_ref_mut();
         MapApi::set(&mut l, key, value).await
-
-        // (&mut l).set(key, value).await
     }
 }

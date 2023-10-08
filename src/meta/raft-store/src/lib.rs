@@ -14,10 +14,9 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(impl_trait_in_assoc_type)]
-// #![feature(type_alias_impl_trait)]
+#![feature(return_position_impl_trait_in_trait)]
 
 // #![allow(incomplete_features)]
-// #![feature(return_position_impl_trait_in_trait)]
 
 pub mod applier;
 pub(crate) mod compat07;

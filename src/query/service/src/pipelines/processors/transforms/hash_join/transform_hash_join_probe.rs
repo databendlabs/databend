@@ -188,6 +188,12 @@ impl TransformHashJoinProbe {
             return Ok(Event::Sync);
         }
 
+        if self.spill_state.is_some() && !self.spill_done {
+            self.need_spill = true;
+            self.step = HashJoinProbeStep::Spill;
+            return Ok(Event::Async);
+        }
+
         if self.input_port.is_finished() {
             return if self.join_probe_state.hash_join_state.need_outer_scan()
                 || self.join_probe_state.hash_join_state.need_mark_scan()
