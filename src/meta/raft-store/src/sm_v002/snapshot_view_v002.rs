@@ -25,7 +25,7 @@ use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireValue;
@@ -36,16 +36,16 @@ use crate::state_machine::StateMachineMetaValue;
 /// A snapshot view of a state machine, which is static and not affected by further writing to the state machine.
 pub struct SnapshotViewV002 {
     /// The compacted snapshot data.
-    compacted: StaticLeveledMap,
+    compacted: StaticLevels,
 
     /// Original non compacted snapshot data.
     ///
     /// This is kept just for debug.
-    original: StaticLeveledMap,
+    original: StaticLevels,
 }
 
 impl SnapshotViewV002 {
-    pub fn new(top: StaticLeveledMap) -> Self {
+    pub fn new(top: StaticLevels) -> Self {
         Self {
             compacted: top.clone(),
             original: top,
@@ -53,12 +53,12 @@ impl SnapshotViewV002 {
     }
 
     /// Return the data level of this snapshot
-    pub fn compacted(&self) -> StaticLeveledMap {
+    pub fn compacted(&self) -> StaticLevels {
         self.compacted.clone()
     }
 
     /// The original, non compacted snapshot data.
-    pub fn original_ref(&self) -> &StaticLeveledMap {
+    pub fn original_ref(&self) -> &StaticLevels {
         &self.original
     }
 
@@ -115,7 +115,7 @@ impl SnapshotViewV002 {
 
         data.replace_expire(bt);
 
-        self.compacted = StaticLeveledMap::new([Arc::new(data)]);
+        self.compacted = StaticLevels::new([Arc::new(data)]);
     }
 
     /// Export all its data in RaftStoreEntry format.
