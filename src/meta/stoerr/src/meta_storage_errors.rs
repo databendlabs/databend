@@ -50,6 +50,15 @@ impl MetaStorageError {
     ) -> Self {
         MetaStorageError::SnapshotError(AnyError::new(error).add_context(context))
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaStorageError::BytesError(_) => "BytesError",
+            MetaStorageError::SledError(_) => "SledError",
+            MetaStorageError::SnapshotError(_) => "SnapshotError",
+            MetaStorageError::TransactionConflict => "TransactionConflict",
+        }
+    }
 }
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
