@@ -332,7 +332,7 @@ impl Interpreter for RefreshIndexInterpreter {
             .map(|f| {
                 let pos = select_columns
                     .iter()
-                    .find(|col| col.index.to_string().eq_ignore_ascii_case(&f.name()))
+                    .find(|col| col.index.to_string().eq_ignore_ascii_case(f.name()))
                     .ok_or_else(|| ErrorCode::Internal("should find the corresponding column"))?;
                 Ok(DataField::new(&pos.column_name, f.data_type().clone()))
             })
