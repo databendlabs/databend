@@ -87,9 +87,7 @@ where A: Allocator + Clone + 'static
 
     fn contains(&self, key_ref: &Self::Key) -> bool {
         let index = key_ref.fast_hash() as usize & self.hash_mask;
-        // # Safety
-        // `index` = hash & mask, it is less than the capacity of hash table.
-        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
             if raw_entry_ptr == 0 {
                 break;
@@ -127,14 +125,12 @@ where A: Allocator + Clone + 'static
     ) -> (usize, u64) {
         let index = key_ref.fast_hash() as usize & self.hash_mask;
         let origin = occupied;
-        // # Safety
-        // `index` = hash & mask, it is less than the capacity of hash table.
-        let mut raw_entry_ptr = unsafe { *self.pointers.get_unchecked(index) };
+        let mut raw_entry_ptr = self.pointers[index];
         loop {
             if raw_entry_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(raw_entry_ptr as *const StringRawEntry) };
+            let raw_entry = unsafe { &*(raw_entry_ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
@@ -149,7 +145,13 @@ where A: Allocator + Clone + 'static
                 if key == key_ref {
                     // # Safety
                     // occupied is less than the capacity of vec_ptr.
-                    unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            &raw_entry.row_ptr as *const RowPtr,
+                            vec_ptr.add(occupied),
+                            1,
+                        )
+                    };
                     occupied += 1;
                 }
             }
@@ -175,7 +177,7 @@ where A: Allocator + Clone + 'static
             if incomplete_ptr == 0 || occupied >= capacity {
                 break;
             }
-            let raw_entry = unsafe { &*(incomplete_ptr as *const StringRawEntry) };
+            let raw_entry = unsafe { &*(incomplete_ptr as *mut StringRawEntry) };
             // Compare `early` and the length of the string, the size of `early` is 4.
             let min_len = std::cmp::min(STRING_EARLY_SIZE, key_ref.len());
             if raw_entry.length as usize == key_ref.len()
@@ -190,7 +192,13 @@ where A: Allocator + Clone + 'static
                 if key == key_ref {
                     // # Safety
                     // occupied is less than the capacity of vec_ptr.
-                    unsafe { std::ptr::write(vec_ptr.add(occupied), raw_entry.row_ptr) };
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(
+                            &raw_entry.row_ptr as *const RowPtr,
+                            vec_ptr.add(occupied),
+                            1,
+                        )
+                    };
                     occupied += 1;
                 }
             }
