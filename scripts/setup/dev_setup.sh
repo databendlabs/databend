@@ -366,6 +366,20 @@ function install_cargo_binary {
 	fi
 }
 
+function quickinstall_cargo_binary {
+	BIN_NAME=$1
+	VERSION=$2
+	if cargo install --list | grep "${BIN_NAME}" &>/dev/null; then
+		echo "${BIN_NAME} is already installed"
+	else
+		if [ -z "$VERSION" ]; then
+			cargo quickinstall "${BIN_NAME}"
+		else
+			cargo quickinstall --version "${VERSION}" "${BIN_NAME}"
+		fi
+	fi
+}
+
 function usage {
 	cat <<EOF
     usage: $0 [options]
@@ -591,8 +605,9 @@ fi
 if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
+		install_cargo_binary cargo-quickinstall
 		while IFS='@' read -r tool version; do
-			install_cargo_binary "$tool" "$version"
+			quickinstall_cargo_binary "$tool" "$version"
 		done <scripts/setup/rust-tools.txt
 	fi
 
