@@ -16,6 +16,7 @@ use common_ast::ast::BinaryOperator;
 use common_ast::ast::Expr;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Dialect;
 use common_ast::VisitorMut;
 
@@ -26,6 +27,9 @@ pub struct AggregateRewriter {
 
 impl VisitorMut for AggregateRewriter {
     fn visit_expr(&mut self, expr: &mut Expr) {
+        // rewrite children
+        walk_expr_mut(self, expr);
+
         let new_expr = match expr {
             Expr::FunctionCall {
                 distinct,
