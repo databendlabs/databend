@@ -29,32 +29,37 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
     ) -> Result<Vec<DataBlock>>
     where
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let mut matched_num = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
-        for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = self.probe_key(
-                hash_table,
-                key,
-                valids,
-                i,
-                local_build_indexes_ptr,
-                matched_num,
-                max_block_size,
-            );
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+            let (mut match_count, mut incomplete_ptr) = if valids.map_or(true, |v| v.get_bit(i)) {
+                hash_table.next_probe(
+                    key,
+                    *ptr,
+                    local_build_indexes_ptr,
+                    matched_num,
+                    max_block_size,
+                )
+            } else {
+                continue;
+            };
+
             if match_count == 0 {
                 continue;
             }
+
             matched_num += match_count;
             if matched_num >= max_block_size {
                 loop {
@@ -74,7 +79,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
@@ -106,6 +111,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -114,7 +120,7 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         // The right join will return multiple data blocks of similar size.
         let mut matched_num = 0;
         let local_probe_indexes = &mut probe_state.probe_indexes;
@@ -131,16 +137,19 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = self.probe_key(
-                hash_table,
-                key,
-                valids,
-                i,
-                local_build_indexes_ptr,
-                matched_num,
-                max_block_size,
-            );
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+            let (mut match_count, mut incomplete_ptr) = if valids.map_or(true, |v| v.get_bit(i)) {
+                hash_table.next_probe(
+                    key,
+                    *ptr,
+                    local_build_indexes_ptr,
+                    matched_num,
+                    max_block_size,
+                )
+            } else {
+                continue;
+            };
+
             if match_count == 0 {
                 continue;
             }
@@ -208,7 +217,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
