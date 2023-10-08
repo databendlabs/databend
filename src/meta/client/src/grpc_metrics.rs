@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::error::Error;
+
+use common_meta_types::MetaError;
 use common_metrics::register_counter_family;
 use common_metrics::register_gauge;
 use common_metrics::register_histogram_family_in_milliseconds;
@@ -63,11 +66,19 @@ pub fn incr_meta_grpc_client_request_success(endpoint: &str, request: &str) {
         .inc();
 }
 
-pub fn incr_meta_grpc_client_request_failed(endpoint: &str, request: &str, err: &str) {
+pub fn incr_meta_grpc_client_request_failed(
+    endpoint: &str,
+    request: &str,
+    err: &(dyn Error + 'static),
+) {
+    let err_name = err
+        .downcast_ref::<MetaError>()
+        .map(|e| e.name())
+        .unwrap_or("unknown");
     let labels = vec![
         (LABEL_ENDPOINT, endpoint.to_string()),
         (LABEL_REQUEST, request.to_string()),
-        (LABEL_ERROR, err.to_string()),
+        (LABEL_ERROR, err_name.to_string()),
     ];
     META_GRPC_CLIENT_REQUEST_FAILED.get_or_create(&labels).inc();
 }

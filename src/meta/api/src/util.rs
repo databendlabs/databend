@@ -787,7 +787,9 @@ pub async fn get_table_names_by_ids(
         .iter()
         .map(|id| TableIdToName { table_id: *id }.to_string_key())
         .collect();
+
     let mut id_iter = ids.iter();
+
     for c in keys.chunks(DEFAULT_MGET_SIZE) {
         let table_seq_name: Vec<(u64, Option<DBIdTableName>)> = mget_pb_values(kv_api, c).await?;
         for (_seq, table_name_opt) in table_seq_name {
@@ -810,23 +812,29 @@ pub async fn get_tableinfos_by_ids(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     ids: &[u64],
     tenant_dbname: &DatabaseNameIdent,
-    dbid_tbnames_opt: Option<Vec<DBIdTableName>>,
+    dbid_tbl_names: Option<Vec<DBIdTableName>>,
     db_type: DatabaseType,
 ) -> Result<Vec<Arc<TableInfo>>, KVAppError> {
     let mut tb_meta_keys = Vec::with_capacity(ids.len());
     for id in ids.iter() {
-        let tbid = TableId { table_id: *id };
+        let table_id = TableId { table_id: *id };
 
-        tb_meta_keys.push(tbid.to_string_key());
+        tb_meta_keys.push(table_id.to_string_key());
     }
 
     // mget() corresponding table_metas
 
-    let seq_tb_metas = kv_api.mget_kv(&tb_meta_keys).await?;
+    let mut seq_tbl_metas = Vec::with_capacity(ids.len());
+    let chunk_size = DEFAULT_MGET_SIZE;
 
-    let mut tb_infos = Vec::with_capacity(ids.len());
+    for table_ids in tb_meta_keys.chunks(chunk_size) {
+        let got = kv_api.mget_kv(table_ids).await?;
+        seq_tbl_metas.extend(got);
+    }
 
-    let tbnames = match dbid_tbnames_opt {
+    let mut tbl_infos = Vec::with_capacity(ids.len());
+
+    let tbl_names = match dbid_tbl_names {
         Some(dbid_tbnames) => Vec::<String>::from_iter(
             dbid_tbnames
                 .into_iter()
@@ -836,22 +844,22 @@ pub async fn get_tableinfos_by_ids(
         None => get_table_names_by_ids(kv_api, ids).await?,
     };
 
-    for (i, seq_meta_opt) in seq_tb_metas.iter().enumerate() {
+    for (i, seq_meta_opt) in seq_tbl_metas.iter().enumerate() {
         if let Some(seq_meta) = seq_meta_opt {
-            let tb_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
+            let tbl_meta: TableMeta = deserialize_struct(&seq_meta.data)?;
 
             let tb_info = TableInfo {
                 ident: TableIdent {
                     table_id: ids[i],
                     seq: seq_meta.seq,
                 },
-                desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbnames[i]),
-                meta: tb_meta,
-                name: tbnames[i].clone(),
+                desc: format!("'{}'.'{}'", tenant_dbname.db_name, tbl_names[i]),
+                meta: tbl_meta,
+                name: tbl_names[i].clone(),
                 tenant: tenant_dbname.tenant.clone(),
                 db_type: db_type.clone(),
             };
-            tb_infos.push(Arc::new(tb_info));
+            tbl_infos.push(Arc::new(tb_info));
         } else {
             debug!(
                 k = &tb_meta_keys[i];
@@ -860,7 +868,7 @@ pub async fn get_tableinfos_by_ids(
         }
     }
 
-    Ok(tb_infos)
+    Ok(tbl_infos)
 }
 
 pub async fn list_tables_from_unshare_db(

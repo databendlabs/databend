@@ -66,6 +66,7 @@ fn test_decode_v31_copy_max_file() -> anyhow::Result<()> {
             single: false,
             max_file_size: 0,
             disable_variant_check: false,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         ..Default::default()
