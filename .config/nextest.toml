@@ -5,3 +5,4 @@ serial-integration = { max-threads = 1 }
 [[profile.default.overrides]]
 filter = 'package(databend-meta)'
 test-group = 'serial-integration'
+
