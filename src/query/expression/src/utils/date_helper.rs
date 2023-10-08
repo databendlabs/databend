@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::LazyLock;
+
 use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
@@ -27,7 +29,6 @@ use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use num_traits::AsPrimitive;
-use once_cell::sync::Lazy;
 
 use crate::types::date::check_date;
 use crate::types::timestamp::check_timestamp;
@@ -52,7 +53,7 @@ impl Default for TzLUT {
     }
 }
 
-static TZ_FACTORY: Lazy<TzFactory> = Lazy::new(|| {
+static TZ_FACTORY: LazyLock<TzFactory> = LazyLock::new(|| {
     let factory = TzFactory {
         luts: dashmap::DashMap::new(),
     };

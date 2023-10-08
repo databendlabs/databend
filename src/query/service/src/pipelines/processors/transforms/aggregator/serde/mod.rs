@@ -39,6 +39,8 @@ pub use transform_spill_reader::TransformAggregateSpillReader;
 pub use transform_spill_reader::TransformGroupBySpillReader;
 
 pub mod exchange_defines {
+    use std::sync::OnceLock;
+
     use common_arrow::arrow::datatypes::Field;
     use common_arrow::arrow::io::flight::default_ipc_fields;
     use common_arrow::arrow::io::flight::WriteOptions;
@@ -48,7 +50,6 @@ pub mod exchange_defines {
     use common_expression::types::NumberDataType;
     use common_expression::DataField;
     use common_expression::DataSchema;
-    use once_cell::sync::OnceCell;
 
     pub fn spilled_schema() -> DataSchema {
         DataSchema::new(vec![
@@ -63,7 +64,7 @@ pub mod exchange_defines {
     }
 
     pub fn spilled_fields() -> &'static [Field] {
-        static IPC_SCHEMA: OnceCell<Vec<Field>> = OnceCell::new();
+        static IPC_SCHEMA: OnceLock<Vec<Field>> = OnceLock::new();
 
         IPC_SCHEMA.get_or_init(|| {
             let schema = spilled_schema();
@@ -73,7 +74,7 @@ pub mod exchange_defines {
     }
 
     pub fn spilled_ipc_schema() -> &'static IpcSchema {
-        static IPC_SCHEMA: OnceCell<IpcSchema> = OnceCell::new();
+        static IPC_SCHEMA: OnceLock<IpcSchema> = OnceLock::new();
 
         IPC_SCHEMA.get_or_init(|| {
             let schema = spilled_schema();
@@ -89,7 +90,7 @@ pub mod exchange_defines {
     }
 
     pub fn spilled_ipc_fields() -> &'static [IpcField] {
-        static IPC_FIELDS: OnceCell<Vec<IpcField>> = OnceCell::new();
+        static IPC_FIELDS: OnceLock<Vec<IpcField>> = OnceLock::new();
 
         IPC_FIELDS.get_or_init(|| {
             let schema = spilled_schema();

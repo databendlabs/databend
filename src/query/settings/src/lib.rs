@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(once_cell_try)]
+
 mod settings;
 mod settings_default;
 mod settings_getter_setter;

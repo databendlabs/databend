@@ -2585,7 +2585,6 @@ dependencies = [
  "itertools 0.10.5",
  "log",
  "num_cpus",
- "once_cell",
  "serde",
  "sys-info",
 ]
@@ -3052,7 +3051,6 @@ dependencies = [
  "itertools 0.10.5",
  "jsonb",
  "log",
- "once_cell",
  "opendal",
  "parking_lot 0.12.1",
  "serde",

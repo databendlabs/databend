@@ -17,6 +17,7 @@ use std::any::TypeId;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -39,7 +40,6 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
-use once_cell::sync::OnceCell;
 use parking_lot::RwLock;
 
 use crate::table::SystemTablePart;
@@ -71,8 +71,8 @@ pub struct SystemLogQueue<Event: SystemLogElement> {
     data: Arc<RwLock<Data<Event>>>,
 }
 
-static INSTANCES_MAP: OnceCell<RwLock<HashMap<TypeId, Box<dyn Any + 'static + Send + Sync>>>> =
-    OnceCell::new();
+static INSTANCES_MAP: OnceLock<RwLock<HashMap<TypeId, Box<dyn Any + 'static + Send + Sync>>>> =
+    OnceLock::new();
 
 impl<Event: SystemLogElement + 'static> SystemLogQueue<Event> {
     pub fn init(max_rows: usize) {
@@ -84,18 +84,17 @@ impl<Event: SystemLogElement + 'static> SystemLogQueue<Event> {
     }
 
     pub fn instance() -> Result<Arc<SystemLogQueue<Event>>> {
-        unsafe {
-            match INSTANCES_MAP
-                .get_unchecked()
-                .read()
-                .get(&TypeId::of::<Self>())
-            {
-                None => Err(ErrorCode::Internal("")),
-                Some(instance) => instance
-                    .downcast_ref::<Arc<Self>>()
-                    .cloned()
-                    .ok_or(ErrorCode::Internal("")),
-            }
+        match INSTANCES_MAP
+            .get()
+            .unwrap()
+            .read()
+            .get(&TypeId::of::<Self>())
+        {
+            None => Err(ErrorCode::Internal("")),
+            Some(instance) => instance
+                .downcast_ref::<Arc<Self>>()
+                .cloned()
+                .ok_or(ErrorCode::Internal("")),
         }
     }
 

@@ -19,6 +19,7 @@
 #![feature(try_blocks)]
 #![feature(extend_one)]
 #![feature(default_free_fn)]
+#![feature(lazy_cell)]
 
 pub mod evaluator;
 pub mod executor;

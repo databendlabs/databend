@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::LazyLock;
 
-use once_cell::sync::Lazy;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
@@ -38,7 +38,7 @@ pub const OPT_KEY_LEGACY_SNAPSHOT_LOC: &str = "snapshot_loc";
 /// Table option keys that reserved for internal usage only
 /// - Users are not allowed to specified this option keys in DDL
 /// - Should not be shown in `show create table` statement
-pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static RESERVED_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_DATABASE_ID);
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
@@ -46,7 +46,7 @@ pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|
 });
 
 /// Table option keys that Should not be shown in `show create table` statement
-pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+pub static INTERNAL_TABLE_OPTION_KEYS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
     let mut r = HashSet::new();
     r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     r.insert(OPT_KEY_DATABASE_ID);

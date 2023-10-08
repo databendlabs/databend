@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #![feature(generators)]
+#![feature(lazy_cell)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;

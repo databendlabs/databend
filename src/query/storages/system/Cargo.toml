@@ -43,7 +43,6 @@ chrono = { workspace = true }
 futures = { workspace = true }
 itertools = "0.10.5"
 log = { workspace = true }
-once_cell = "1.15.0"
 opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }

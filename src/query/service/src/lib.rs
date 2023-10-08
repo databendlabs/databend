@@ -34,6 +34,7 @@
 #![feature(iterator_try_collect)]
 #![feature(let_chains)]
 #![feature(try_blocks)]
+#![feature(lazy_cell)]
 
 extern crate core;
 

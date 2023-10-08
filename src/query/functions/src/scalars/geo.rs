@@ -16,6 +16,7 @@ use std::mem::MaybeUninit;
 use std::num::Wrapping;
 use std::sync::Arc;
 use std::sync::Once;
+use std::sync::OnceLock;
 
 use common_expression::types::map::KvPair;
 use common_expression::types::number::Float64Type;
@@ -51,7 +52,6 @@ use geo::LineString;
 use geo::Polygon;
 use h3o::LatLng;
 use h3o::Resolution;
-use once_cell::sync::OnceCell;
 
 const PI: f64 = std::f64::consts::PI;
 const PI_F: f32 = std::f32::consts::PI;
@@ -69,12 +69,12 @@ const METRIC_LUT_SIZE: usize = 1024;
 const EARTH_RADIUS: f32 = 6371007.180918475f32;
 const EARTH_DIAMETER: f32 = 2f32 * EARTH_RADIUS;
 
-static COS_LUT: OnceCell<[f32; COS_LUT_SIZE + 1]> = OnceCell::new();
-static ASIN_SQRT_LUT: OnceCell<[f32; ASIN_SQRT_LUT_SIZE + 1]> = OnceCell::new();
+static COS_LUT: OnceLock<[f32; COS_LUT_SIZE + 1]> = OnceLock::new();
+static ASIN_SQRT_LUT: OnceLock<[f32; ASIN_SQRT_LUT_SIZE + 1]> = OnceLock::new();
 
-static SPHERE_METRIC_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new();
-static SPHERE_METRIC_METERS_LUT: OnceCell<[f32; METRIC_LUT_SIZE + 1]> = OnceCell::new();
-static WGS84_METRIC_METERS_LUT: OnceCell<[f32; 2 * (METRIC_LUT_SIZE + 1)]> = OnceCell::new();
+static SPHERE_METRIC_LUT: OnceLock<[f32; METRIC_LUT_SIZE + 1]> = OnceLock::new();
+static SPHERE_METRIC_METERS_LUT: OnceLock<[f32; METRIC_LUT_SIZE + 1]> = OnceLock::new();
+static WGS84_METRIC_METERS_LUT: OnceLock<[f32; 2 * (METRIC_LUT_SIZE + 1)]> = OnceLock::new();
 
 #[derive(PartialEq)]
 enum GeoMethod {

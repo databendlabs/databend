@@ -17,6 +17,7 @@
 #![feature(box_patterns)]
 #![feature(type_ascription)]
 #![feature(try_blocks)]
+#![feature(lazy_cell)]
 
 use aggregates::AggregateFunctionFactory;
 use common_expression::FunctionRegistry;

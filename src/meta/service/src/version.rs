@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
+
 use semver::BuildMetadata;
 use semver::Prerelease;
 use semver::Version;
 
-pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
+pub static METASRV_COMMIT_VERSION: LazyLock<String> = LazyLock::new(|| {
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let git_sha = option_env!("VERGEN_GIT_SHA");
     let rustc_semver = option_env!("VERGEN_RUSTC_SEMVER");
@@ -34,7 +35,7 @@ pub static METASRV_COMMIT_VERSION: Lazy<String> = Lazy::new(|| {
     }
 });
 
-pub static METASRV_SEMVER: Lazy<Version> = Lazy::new(|| {
+pub static METASRV_SEMVER: LazyLock<Version> = LazyLock::new(|| {
     let build_semver = option_env!("DATABEND_GIT_SEMVER");
     let semver = build_semver.expect("DATABEND_GIT_SEMVER can not be None");
 
