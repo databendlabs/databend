@@ -125,8 +125,10 @@ impl<'a> Evaluator<'a> {
         #[cfg(debug_assertions)]
         self.check_expr(expr);
 
+        let is_validity_none = validity.is_none();
+
         // try get result from cache
-        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && let Some(cached_values) = &self.cached_values {
+        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && is_validity_none && let Some(cached_values) = &self.cached_values {
             if let Some(cached_result) = cached_values.borrow().get(expr) {
                 return Ok(cached_result.clone());
             }
@@ -235,13 +237,11 @@ impl<'a> Evaluator<'a> {
         }
 
         // Do not cache `ColumnRef` and `Constant`
-        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && let Some(cached_values) = &self.cached_values {
+        if !matches!(expr, Expr::ColumnRef {..} | Expr::Constant{..}) && is_validity_none && let Some(cached_values) = &self.cached_values {
             if let Ok(r) = &result {
-                // Prepare data that lock used.
                 let expr_cloned = expr.clone();
                 let result_cloned = r.clone();
 
-                // Acquire the write lock and insert the value.
                 if let Entry::Vacant(v) = cached_values.borrow_mut().entry(expr_cloned) {
                     v.insert(result_cloned);
                 }
