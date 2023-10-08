@@ -301,7 +301,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             CREATE ~ CATALOG ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ #ident
             ~ TYPE ~ "=" ~ #catalog_type
-            ~ CONNECTION ~ "=" ~ #options
+            ~ CONNECTION ~ "=" ~ #connection_options
         },
         |(_, _, opt_if_not_exists, catalog, _, _, ty, _, _, options)| {
             Statement::CreateCatalog(CreateCatalogStmt {
@@ -1014,12 +1014,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
-            ~ ( URL ~ ^"=" ~ ^#uri_location)?
+            ~ ( URL ~ ^"=" ~ ^#uri_location )?
             ~ ( #file_format_clause )?
-            ~ ( ON_ERROR ~ ^"=" ~ ^#ident)?
-            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64)?
-            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident)?
-            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string)?
+            ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
+            ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
+            ~ ( VALIDATION_MODE ~ ^"=" ~ ^#ident )?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
         },
         |(
             _,
@@ -1093,7 +1093,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
-            ~ ( #copy_option ~ ","? )*
+            ~ #copy_option*
         },
         |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
@@ -1113,8 +1113,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 force: Default::default(),
                 disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
+                return_failed_only: Default::default(),
             };
-            for (opt, _) in opts {
+            for opt in opts {
                 copy_stmt.apply_option(opt);
             }
             Statement::Copy(copy_stmt)
@@ -2649,6 +2650,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(
             rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
             |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
+        ),
+        map(
+            rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
+            |(_, _, return_failed_only)| CopyOption::ReturnFailedOnly(return_failed_only),
         ),
     ))(i)
 }
