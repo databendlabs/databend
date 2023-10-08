@@ -1,5 +1,5 @@
 ---
-title: DELETE FROM
+title: DELETE
 ---
 
 import FunctionDescription from '@site/src/components/FunctionDescription';

@@ -78,7 +78,7 @@ impl SledKeySpace for StateMachineMeta {
 }
 
 /// Key-Value Types for storing meta data of a raft in sled::Tree:
-/// node_id, vote, state_machine_id pairs:(a,b)
+/// node_id, vote
 pub struct RaftStateKV {}
 impl SledKeySpace for RaftStateKV {
     const PREFIX: u8 = 4;

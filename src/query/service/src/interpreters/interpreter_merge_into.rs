@@ -227,13 +227,9 @@ impl MergeIntoInterpreter {
                     metadata: self.plan.meta_data.clone(),
                     catalog: catalog.clone(),
                 };
-                let col_indices = if item.condition.is_none() {
-                    vec![]
-                } else {
-                    // we don't need real col_indices here, just give a
-                    // dummy index, that's ok.
-                    vec![DUMMY_COL_INDEX]
-                };
+                // we don't need real col_indices here, just give a
+                // dummy index, that's ok.
+                let col_indices = vec![DUMMY_COL_INDEX];
                 let update_list: Vec<(FieldIndex, RemoteExpr<String>)> = update_plan
                     .generate_update_list(
                         self.ctx.clone(),
