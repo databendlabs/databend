@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
 mod grpc_action;
 mod grpc_client;

@@ -1,4 +1,3 @@
-#![feature(lazy_cell)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,6 +20,7 @@
 //! a embedded raft `StateMachine`.
 
 #![allow(clippy::uninlined_format_args)]
+#![feature(lazy_cell)]
 
 mod kv_api_impl;
 mod meta_embedded;
