@@ -493,6 +493,7 @@ insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a'
 
 statement ok
 merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
+
 # By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
 # as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted 
 # by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit 
