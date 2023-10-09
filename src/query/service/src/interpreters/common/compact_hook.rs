@@ -68,22 +68,7 @@ async fn do_hook_compact(
         return Ok(());
     }
 
-    let table = ctx
-        .get_table(
-            &compact_target.catalog,
-            &compact_target.database,
-            &compact_target.table,
-        )
-        .await?;
-
-    let has_cluster_key = !table.cluster_keys(ctx.clone()).is_empty();
-
-    // only if target table have cluster keys defined, and auto-reclustering is enabled,
-    // we will hook the compact action with a on-finished callback
-    if !pipeline.is_empty()
-        && has_cluster_key
-        && ctx.get_settings().get_enable_recluster_after_write()?
-    {
+    if !pipeline.is_empty() && ctx.get_settings().get_enable_recluster_after_write()? {
         pipeline.set_on_finished(move |err| {
 
             let op_name = &trace_ctx.operation_name;
