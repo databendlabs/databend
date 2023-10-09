@@ -34,6 +34,7 @@ use common_pipeline_core::processors::Processor;
 use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_append_blocks_rows;
 use crate::metrics::metrics_inc_replace_block_number_input;
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
@@ -173,6 +174,7 @@ impl Processor for ReplaceIntoProcessor {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
             }
+            metrics_inc_replace_append_blocks_rows(data_block.num_rows() as u64);
             self.output_data_append = Some(data_block);
             return Ok(());
         }
