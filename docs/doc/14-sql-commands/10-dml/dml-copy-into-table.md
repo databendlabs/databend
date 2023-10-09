@@ -4,7 +4,7 @@ sidebar_label: "COPY INTO <table>"
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.128"/>
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
 COPY INTO allows you to load data from files located in one of the following locations:
 
@@ -275,7 +275,7 @@ This example establishes a connection to Amazon S3 using AWS access keys and sec
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
 CONNECTION = (
-    ACCESS_KEY_ID = '<your-access-key-ID>'
+    ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
 FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
@@ -289,8 +289,8 @@ This example connects to Amazon S3 using AWS IAM role authentication with an ext
 COPY INTO mytable
 FROM 's3://mybucket/'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>'
-    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role'
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
     EXTERNAL_ID = '123456'
 )
 PATTERN = '.*[.]csv'
@@ -307,8 +307,8 @@ This example connects to Azure Blob Storage and loads data from 'data.csv' into 
 COPY INTO mytable
 FROM 'azblob://mybucket/data.csv'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net'
-    ACCOUNT_NAME = '<account_name>'
+    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
+    ACCOUNT_NAME = '<account_name>',
     ACCOUNT_KEY = '<account_key>'
 )
 FILE_FORMAT = (type = CSV);
@@ -348,8 +348,8 @@ This example loads a GZIP-compressed CSV file on Amazon S3 into Databend:
 COPY INTO mytable
 FROM 's3://mybucket/data.csv.gz'
 CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>'
-    ACCESS_KEY_ID = '<your-access-key-ID>'
+    ENDPOINT_URL = 'https://<endpoint-URL>',
+    ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
 FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO);
