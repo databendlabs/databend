@@ -49,18 +49,20 @@ impl DataBlock {
         hash_key_types: &[DataType],
         efficiently_memory: bool,
     ) -> Result<HashMethodKind> {
-        if hash_key_types.len() == 1 {
-            let typ = hash_key_types[0].clone();
-            if matches!(typ, DataType::String | DataType::Variant) {
-                return Ok(HashMethodKind::SingleString(
-                    HashMethodSingleString::default(),
-                ));
-            }
+        if hash_key_types.len() == 1
+            && matches!(
+                hash_key_types[0],
+                DataType::String | DataType::Variant | DataType::Bitmap
+            )
+        {
+            return Ok(HashMethodKind::SingleString(
+                HashMethodSingleString::default(),
+            ));
         }
 
         let mut group_key_len = 0;
-        for typ in hash_key_types {
-            let not_null_type = typ.remove_nullable();
+        for hash_key_type in hash_key_types {
+            let not_null_type = hash_key_type.remove_nullable();
 
             if not_null_type.is_numeric()
                 || not_null_type.is_date_or_date_time()
@@ -69,7 +71,7 @@ impl DataBlock {
                 group_key_len += not_null_type.numeric_byte_size().unwrap();
 
                 // extra one byte for null flag
-                if typ.is_nullable() {
+                if hash_key_type.is_nullable() {
                     group_key_len += 1;
                 }
             } else {

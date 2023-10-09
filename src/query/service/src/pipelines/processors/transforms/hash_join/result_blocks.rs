@@ -33,6 +33,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -45,6 +46,7 @@ impl HashJoinProbeState {
                 hash_table,
                 probe_state,
                 keys_iter,
+                pointers,
                 input,
                 is_probe_projected,
             ),
@@ -59,6 +61,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                     )
                 } else {
@@ -66,6 +69,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -82,6 +86,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                     )
                 } else {
@@ -89,6 +94,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -101,12 +107,13 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter)
+                    self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter, pointers)
                 } else {
                     self.probe_right_semi_join_with_conjunct::<_, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -119,12 +126,13 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter)
+                    self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter, pointers)
                 } else {
                     self.probe_right_anti_join_with_conjunct::<_, _>(
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -142,6 +150,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -150,6 +159,7 @@ impl HashJoinProbeState {
                         hash_table,
                         probe_state,
                         keys_iter,
+                        pointers,
                         input,
                         is_probe_projected,
                     )
@@ -159,6 +169,7 @@ impl HashJoinProbeState {
                 hash_table,
                 probe_state,
                 keys_iter,
+                pointers,
                 input,
                 is_probe_projected,
             ),
@@ -178,11 +189,14 @@ impl HashJoinProbeState {
                 .other_predicate
                 .is_none()
             {
-                true => self.probe_left_mark_join(hash_table, probe_state, keys_iter, input),
+                true => {
+                    self.probe_left_mark_join(hash_table, probe_state, keys_iter, pointers, input)
+                }
                 false => self.probe_left_mark_join_with_conjunct(
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),
@@ -197,6 +211,7 @@ impl HashJoinProbeState {
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),
@@ -204,6 +219,7 @@ impl HashJoinProbeState {
                     hash_table,
                     probe_state,
                     keys_iter,
+                    pointers,
                     input,
                     is_probe_projected,
                 ),

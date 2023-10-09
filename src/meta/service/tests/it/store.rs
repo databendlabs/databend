@@ -242,8 +242,6 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- install snapshot");
         {
-            // TODO(1): remove write_state_machine_id
-            // sto.raft_state.write_state_machine_id(&(0, 0)).await?;
             sto.do_install_snapshot(data).await?;
         }
 

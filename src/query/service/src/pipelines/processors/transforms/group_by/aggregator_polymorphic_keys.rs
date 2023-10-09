@@ -619,6 +619,13 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         self.method.build_keys_iter(keys_state)
     }
+
+    fn build_keys_iter_and_hashes<'a>(
+        &self,
+        keys_state: &'a KeysState,
+    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        self.method.build_keys_iter_and_hashes(keys_state)
+    }
 }
 
 impl<Method> PolymorphicKeysHelper<PartitionedHashMethod<Method>> for PartitionedHashMethod<Method>

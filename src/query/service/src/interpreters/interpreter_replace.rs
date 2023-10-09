@@ -183,6 +183,15 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+        if let Some(s) = &select_ctx {
+            let select_schema = s.select_schema.as_ref();
+            // validate schema
+            if select_schema.fields().len() < plan.schema().fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "Fields in select statement is less than expected",
+                ));
+            }
+        }
 
         let delete_when = if let Some(expr) = &plan.delete_when {
             if bind_context.is_none() {

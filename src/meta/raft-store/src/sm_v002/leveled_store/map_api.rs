@@ -21,9 +21,9 @@ use futures_util::stream::BoxStream;
 use stream_more::KMerge;
 use stream_more::StreamMore;
 
-use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::util;
 use crate::sm_v002::marked::Marked;
+use crate::state_machine::ExpireKey;
 
 /// MapKey defines the behavior of a key in a map.
 ///
@@ -79,6 +79,43 @@ where K: MapKey
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Send + Sync + Clone;
 }
+
+/// Trait for using Self as an implementation of the MapApi.
+pub(in crate::sm_v002) trait AsMap {
+    /// Use Self as an implementation of the [`MapApiRO`] (Read-Only) interface.
+    fn as_map<K: MapKey>(&self) -> &impl MapApiRO<K>
+    where Self: MapApiRO<K> + Sized {
+        self
+    }
+
+    /// Use Self as an implementation of the [`MapApi`] interface, allowing for mutation.
+    fn as_map_mut<K: MapKey>(&mut self) -> &mut impl MapApi<K>
+    where Self: MapApi<K> + Sized {
+        self
+    }
+
+    fn str_map(&self) -> &impl MapApiRO<String>
+    where Self: MapApiRO<String> + Sized {
+        self
+    }
+
+    fn expire_map(&self) -> &impl MapApiRO<ExpireKey>
+    where Self: MapApiRO<ExpireKey> + Sized {
+        self
+    }
+
+    fn str_map_mut(&mut self) -> &mut impl MapApi<String>
+    where Self: MapApi<String> + Sized {
+        self
+    }
+
+    fn expire_map_mut(&mut self) -> &mut impl MapApi<ExpireKey>
+    where Self: MapApi<ExpireKey> + Sized {
+        self
+    }
+}
+
+impl<T> AsMap for T {}
 
 /// Provide a read-write key-value map API set, used to access state machine data.
 #[async_trait::async_trait]
@@ -146,15 +183,15 @@ impl MapApiExt {
 /// Get a key from multi levels data.
 ///
 /// Returns the first non-tombstone entry.
-pub(in crate::sm_v002) async fn compacted_get<'d, K, Q>(
+pub(in crate::sm_v002) async fn compacted_get<'d, K, Q, L>(
     key: &Q,
-    levels: impl Iterator<Item = &'d Level>,
+    levels: impl IntoIterator<Item = &'d L>,
 ) -> Marked<K::V>
 where
     K: MapKey,
     K: Borrow<Q>,
     Q: Ord + Send + Sync + ?Sized,
-    Level: MapApiRO<K>,
+    L: MapApiRO<K> + 'static,
 {
     for lvl in levels {
         let got = lvl.get(key).await;
@@ -169,16 +206,16 @@ where
 ///
 /// The returned iterator contains at most one entry for each key.
 /// There could be tombstone entries: [`Marked::TombStone`]
-pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R>(
+pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R, L>(
     range: R,
-    levels: impl Iterator<Item = &'d Level>,
+    levels: impl IntoIterator<Item = &'d L>,
 ) -> BoxStream<'d, (K, Marked<K::V>)>
 where
     K: MapKey,
     K: Borrow<Q>,
     R: RangeBounds<Q> + Clone + Send + Sync,
     Q: Ord + Send + Sync + ?Sized,
-    Level: MapApiRO<K>,
+    L: MapApiRO<K> + 'static,
 {
     let mut kmerge = KMerge::by(util::by_key_seq);
 
@@ -192,4 +229,85 @@ where
 
     let strm: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
     strm
+}
+
+#[cfg(test)]
+mod tests {
+    use futures_util::StreamExt;
+
+    use crate::sm_v002::leveled_store::level::Level;
+    use crate::sm_v002::leveled_store::map_api::compacted_get;
+    use crate::sm_v002::leveled_store::map_api::compacted_range;
+    use crate::sm_v002::leveled_store::map_api::MapApi;
+    use crate::sm_v002::marked::Marked;
+
+    #[tokio::test]
+    async fn test_compacted_get() -> anyhow::Result<()> {
+        let mut l0 = Level::default();
+        l0.set(s("a"), Some((b("a"), None))).await;
+
+        let mut l1 = l0.new_level();
+        l1.set(s("a"), None).await;
+
+        let l2 = l1.new_level();
+
+        let got = compacted_get::<String, _, _>(&s("a"), [&l0, &l1, &l2]).await;
+        assert_eq!(got, Marked::new_normal(1, b("a")));
+
+        let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l1, &l0]).await;
+        assert_eq!(got, Marked::new_tomb_stone(1));
+
+        let got = compacted_get::<String, _, _>(&s("a"), [&l1, &l0]).await;
+        assert_eq!(got, Marked::new_tomb_stone(1));
+
+        let got = compacted_get::<String, _, _>(&s("a"), [&l2, &l0]).await;
+        assert_eq!(got, Marked::new_normal(1, b("a")));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_compacted_range() -> anyhow::Result<()> {
+        // ```
+        // l2 |    b
+        // l1 | a*    c*
+        // l0 | a  b
+        // ```
+        let mut l0 = Level::default();
+        l0.set(s("a"), Some((b("a"), None))).await;
+        l0.set(s("b"), Some((b("b"), None))).await;
+
+        let mut l1 = l0.new_level();
+        l1.set(s("a"), None).await;
+        l1.set(s("c"), None).await;
+
+        let mut l2 = l1.new_level();
+        l2.set(s("b"), Some((b("b2"), None))).await;
+
+        let got = compacted_range::<String, String, _, _>(&s("").., [&l2, &l1, &l0]).await;
+        let got = got.collect::<Vec<_>>().await;
+        assert_eq!(got, vec![
+            //
+            (s("a"), Marked::new_tomb_stone(2)),
+            (s("b"), Marked::new_normal(3, b("b2"))),
+            (s("c"), Marked::new_tomb_stone(2)),
+        ]);
+
+        let got = compacted_range::<String, String, _, _>(&s("b").., [&l2, &l1, &l0]).await;
+        let got = got.collect::<Vec<_>>().await;
+        assert_eq!(got, vec![
+            //
+            (s("b"), Marked::new_normal(3, b("b2"))),
+            (s("c"), Marked::new_tomb_stone(2)),
+        ]);
+
+        Ok(())
+    }
+
+    fn s(x: impl ToString) -> String {
+        x.to_string()
+    }
+
+    fn b(x: impl ToString) -> Vec<u8> {
+        x.to_string().as_bytes().to_vec()
+    }
 }

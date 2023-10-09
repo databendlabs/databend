@@ -37,4 +37,4 @@ CREATE TRANSIENT TABLE IF NOT EXISTS target_table (
     l_shipinstruct STRING not null,
     l_shipmode STRING not null,
     l_comment STRING not null
-);
+) CLUSTER BY(l_shipdate, l_orderkey);
