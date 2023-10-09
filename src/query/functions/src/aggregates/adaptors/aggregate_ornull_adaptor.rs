@@ -173,18 +173,11 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
     }
 
     #[inline]
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let flag = reader[reader.len() - 1];
-        self.inner
-            .deserialize(place, &mut &reader[..reader.len() - 1])?;
-        self.set_flag(place, flag);
-        Ok(())
-    }
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        let flag = self.get_flag(place) > 0 || reader[reader.len() - 1] > 0;
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        self.inner.merge(place, rhs)?;
-        let flag = self.get_flag(place) > 0 || self.get_flag(rhs) > 0;
-        self.set_flag(place, u8::from(flag));
+        self.inner.merge(place, &mut &reader[..reader.len() - 1])?;
+        self.set_flag(place, flag as u8);
         Ok(())
     }
 

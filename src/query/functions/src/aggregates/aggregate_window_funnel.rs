@@ -147,16 +147,6 @@ where T: Ord
             self.events_list.sort_by(cmp);
         }
     }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = deserialize_from_slice(reader)?;
-
-        Ok(())
-    }
 }
 
 #[derive(Clone)]
@@ -287,19 +277,13 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        AggregateWindowFunnelState::<T::Scalar>::serialize(state, writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        state.deserialize(reader)
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-
-        state.merge(rhs);
+        let mut rhs: AggregateWindowFunnelState<T::Scalar> = deserialize_from_slice(reader)?;
+        state.merge(&mut rhs);
         Ok(())
     }
 

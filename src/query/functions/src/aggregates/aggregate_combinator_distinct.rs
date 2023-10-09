@@ -96,15 +96,11 @@ where State: DistinctStateFunc
         state.serialize(writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
-    }
+        let rhs = State::deserialize(reader)?;
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<State>();
-        let rhs = rhs.get::<State>();
-        state.merge(rhs)
+        state.merge(&rhs)
     }
 
     #[allow(unused_mut)]

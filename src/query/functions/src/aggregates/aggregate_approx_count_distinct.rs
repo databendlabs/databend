@@ -126,16 +126,10 @@ where for<'a> T::ScalarRef<'a>: Hash
         serialize_into_buf(writer, &state.hll)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        state.hll = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let rhs = rhs.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        state.hll.union(&rhs.hll);
+        let hll: HyperLogLog<T::ScalarRef<'_>> = deserialize_from_slice(reader)?;
+        state.hll.union(&hll);
 
         Ok(())
     }

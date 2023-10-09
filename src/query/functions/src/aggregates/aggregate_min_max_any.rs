@@ -27,6 +27,8 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use common_io::prelude::deserialize_from_slice;
+use common_io::prelude::serialize_into_buf;
 use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;
@@ -117,18 +119,15 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
-    }
+        let rhs: State = deserialize_from_slice(reader)?;
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
-        let state = place.get::<State>();
-        state.merge(rhs)
+        state.merge(&rhs)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

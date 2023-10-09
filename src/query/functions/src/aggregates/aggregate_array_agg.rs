@@ -124,15 +124,6 @@ where
         builder.push(array_value);
         Ok(())
     }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = deserialize_from_slice(reader)?;
-        Ok(())
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -232,15 +223,6 @@ where
         }
         let array_value = ScalarRef::Array(inner_builder.build());
         builder.push(array_value);
-        Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.values = deserialize_from_slice(reader)?;
         Ok(())
     }
 }
@@ -356,18 +338,14 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
-    }
+        let rhs: State = deserialize_from_slice(reader)?;
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
-        let state = place.get::<State>();
-        state.merge(rhs)
+        state.merge(&rhs)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

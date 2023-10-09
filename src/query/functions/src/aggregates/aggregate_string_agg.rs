@@ -126,15 +126,9 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<StringAggState>();
-        state.values = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<StringAggState>();
-        let state = place.get::<StringAggState>();
+        let rhs: StringAggState = deserialize_from_slice(reader)?;
         state.values.extend_from_slice(rhs.values.as_slice());
         Ok(())
     }

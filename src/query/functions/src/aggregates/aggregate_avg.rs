@@ -42,7 +42,7 @@ use crate::aggregates::AggregateFunction;
 use crate::aggregates::AggregateFunctionRef;
 
 #[derive(Serialize, Deserialize)]
-struct AvgState<T: SumState> {
+struct AvgState<T> {
     pub value: T,
     pub count: u64,
 }
@@ -117,21 +117,15 @@ where T: SumState
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AvgState<T>>();
 
-        writer.write_scalar(&state.count)?;
-        state.value.serialize(writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AvgState<T>>();
-        state.count = reader.read_scalar()?;
-        state.value.deserialize(reader)
-    }
+        let rhs: AvgState<T> = deserialize_from_slice(reader)?;
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AvgState<T>>();
-        let rhs = rhs.get::<AvgState<T>>();
         state.count += rhs.count;
-        state.value.merge(&mut rhs.value)
+        state.value.merge(&rhs.value)
     }
 
     #[allow(unused_mut)]

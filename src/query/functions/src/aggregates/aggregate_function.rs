@@ -71,9 +71,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
 
-    fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
-
-    fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+    fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
         for place in places {

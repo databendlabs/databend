@@ -32,7 +32,7 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
-pub struct AggregateCountState {
+struct AggregateCountState {
     count: u64,
 }
 
@@ -152,17 +152,10 @@ impl AggregateFunction for AggregateCountFunction {
         serialize_into_buf(writer, &state.count)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        state.count = deserialize_from_slice(reader)?;
-        Ok(())
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<AggregateCountState>();
-        let rhs = rhs.get::<AggregateCountState>();
-        state.count += rhs.count;
-
+        let other: u64 = deserialize_from_slice(reader)?;
+        state.count += other;
         Ok(())
     }
 

@@ -81,11 +81,7 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
-    fn deserialize(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()> {
-        Ok(())
-    }
-
-    fn merge(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
+    fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()> {
         Ok(())
     }
 

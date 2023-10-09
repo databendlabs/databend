@@ -27,6 +27,8 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 use common_io::prelude::*;
+use serde::Deserialize;
+use serde::Serialize;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
@@ -34,6 +36,7 @@ use super::aggregate_function_factory::AggregateFunctionDescription;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
+#[derive(Serialize, Deserialize)]
 struct AggregateRetentionState {
     pub events: u32,
 }
@@ -46,15 +49,6 @@ impl AggregateRetentionState {
 
     fn merge(&mut self, other: &Self) {
         self.events |= other.events;
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.events)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.events = deserialize_from_slice(reader)?;
-        Ok(())
     }
 }
 
@@ -144,18 +138,13 @@ impl AggregateFunction for AggregateRetentionFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        state.serialize(writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();
-        state.deserialize(reader)
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateRetentionState>();
-        let state = place.get::<AggregateRetentionState>();
-        state.merge(rhs);
+        let rhs: AggregateRetentionState = deserialize_from_slice(reader)?;
+        state.merge(&rhs);
         Ok(())
     }
 

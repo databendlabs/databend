@@ -14,6 +14,7 @@
 
 use std::alloc::Layout;
 use std::fmt;
+use std::io::BufRead;
 use std::marker::PhantomData;
 use std::ops::BitAndAssign;
 use std::ops::BitOrAssign;
@@ -296,22 +297,14 @@ where
         Ok(())
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<BitmapAggState>();
-        let flag = reader[0];
-        state.rb = if flag == 1 {
-            Some(RoaringTreemap::deserialize_from(&reader[1..])?)
-        } else {
-            None
-        };
-        Ok(())
-    }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let state = place.get::<BitmapAggState>();
-        let rhs = rhs.get::<BitmapAggState>();
-        if let Some(rb) = &rhs.rb {
-            state.add::<OP>(rb.clone());
+        let flag = reader[0];
+        reader.consume(1);
+        if flag == 1 {
+            let rb = RoaringTreemap::deserialize_from(reader)?;
+            state.add::<OP>(rb);
         }
         Ok(())
     }
@@ -482,12 +475,8 @@ where
         self.inner.serialize(place, writer)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        self.inner.deserialize(place, reader)
-    }
-
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        self.inner.merge(place, rhs)
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+        self.inner.merge(place, reader)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
