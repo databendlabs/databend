@@ -175,7 +175,7 @@ impl ReplaceInterpreter {
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
 
-        let (mut root, select_ctx) = self
+        let (mut root, select_ctx, bind_context) = self
             .connect_input_source(
                 self.ctx.clone(),
                 &self.plan.source,
@@ -184,22 +184,25 @@ impl ReplaceInterpreter {
             )
             .await?;
 
-        let source_schema = root.output_schema()?;
-        let mut bind_context = BindContext::default();
-        let name_resolution_ctx =
-            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let mut scalar_binder = ScalarBinder::new(
-            &mut bind_context,
-            self.ctx.clone(),
-            &name_resolution_ctx,
-            metadata,
-            &[],
-            Default::default(),
-            Default::default(),
-        );
-
         let delete_when = if let Some(expr) = &plan.delete_when {
+            if bind_context.is_none() {
+                return Err(ErrorCode::Unimplemented(
+                    "Delte semantic is only supported in subquery",
+                ));
+            }
+            let mut bind_context = bind_context.unwrap();
+            let name_resolution_ctx =
+                NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+            let metadata = Arc::new(RwLock::new(Metadata::default()));
+            let mut scalar_binder = ScalarBinder::new(
+                &mut bind_context,
+                self.ctx.clone(),
+                &name_resolution_ctx,
+                metadata,
+                &[],
+                Default::default(),
+                Default::default(),
+            );
             let (scalar, _) = scalar_binder.bind(expr).await?;
             let filters = create_push_down_filters(&scalar)?;
 
@@ -305,11 +308,11 @@ impl ReplaceInterpreter {
         source: &'a InsertInputSource,
         schema: DataSchemaRef,
         purge_info: &mut Option<(Vec<StageFileInfo>, StageInfo)>,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
         match source {
             InsertInputSource::Values { data, start } => self
                 .connect_value_source(schema.clone(), data, *start)
-                .map(|x| (x, None)),
+                .map(|x| (x, None, None)),
 
             InsertInputSource::SelectPlan(plan) => {
                 self.connect_query_plan_source(ctx.clone(), plan).await
@@ -326,7 +329,7 @@ impl ReplaceInterpreter {
                             files,
                             copy_into_table_plan.stage_table_info.stage_info.clone(),
                         ));
-                        Ok((Box::new(physical_plan), None))
+                        Ok((Box::new(physical_plan), None, None))
                     }
                     _ => unreachable!("plan in InsertInputSource::Stage must be CopyIntoTable"),
                 },
@@ -356,7 +359,7 @@ impl ReplaceInterpreter {
         &'a self,
         ctx: Arc<QueryContext>,
         query_plan: &Plan,
-    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>)> {
+    ) -> Result<(Box<PhysicalPlan>, Option<SelectCtx>, Option<BindContext>)> {
         let (s_expr, metadata, bind_context, formatted_ast) = match query_plan {
             Plan::Query {
                 s_expr,
@@ -385,6 +388,6 @@ impl ReplaceInterpreter {
             select_column_bindings: bind_context.columns.clone(),
             select_schema: query_plan.schema(),
         };
-        Ok((physical_plan, Some(select_ctx)))
+        Ok((physical_plan, Some(select_ctx), Some(*bind_context.clone())))
     }
 }
