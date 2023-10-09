@@ -30,7 +30,7 @@ SELECT LEAST(price,member_price) FROM products
 ----
 90.00
 120.00
-290.00
+190.00
 210.00
 150.00
 
