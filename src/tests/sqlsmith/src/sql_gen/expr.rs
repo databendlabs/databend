@@ -20,7 +20,9 @@ use common_ast::ast::Identifier;
 use common_ast::ast::IntervalKind;
 use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
+use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
+use common_ast::ast::UnaryOperator;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
@@ -35,11 +37,19 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         match self.rng.gen_range(0..=10) {
             0..=3 => self.gen_column(ty),
             4..=6 => self.gen_scalar_value(ty),
-            7..=8 => self.gen_scalar_func(ty),
-            9 => self.gen_factory_scalar_func(ty),
-            10 => self.gen_inner_expr(ty),
-            // TODO other exprs
+            7 => self.gen_scalar_func(ty),
+            8 => self.gen_factory_scalar_func(ty),
+            9 => self.gen_window_func(ty),
+            10 => self.gen_other_expr(ty),
             _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn gen_simple_expr(&mut self, ty: &DataType) -> Expr {
+        if self.rng.gen_bool(0.6) {
+            self.gen_column(ty)
+        } else {
+            self.gen_scalar_value(ty)
         }
     }
 
@@ -209,14 +219,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 Expr::Array { span: None, exprs }
             }
             DataType::Map(box inner_ty) => {
-                if let DataType::Tuple(inner_tys) = inner_ty {
-                    let key_ty = &inner_tys[0];
-                    let val_ty = &inner_tys[1];
+                if let DataType::Tuple(fields) = inner_ty {
                     let len = self.rng.gen_range(1..=3);
                     let mut kvs = Vec::with_capacity(len);
                     for _ in 0..len {
-                        let key = self.gen_scalar_value(key_ty);
-                        let val = self.gen_scalar_value(val_ty);
+                        let key = self.gen_literal();
+                        let val = self.gen_expr(&fields[1]);
                         kvs.push((key, val));
                     }
                     Expr::Map { span: None, kvs }
@@ -270,7 +278,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    #[allow(dead_code)]
     fn gen_literal(&mut self) -> Literal {
         let n = self.rng.gen_range(1..=7);
         match n {
@@ -305,10 +312,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         )
     }
 
-    fn gen_inner_expr(&mut self, ty: &DataType) -> Expr {
+    fn gen_other_expr(&mut self, ty: &DataType) -> Expr {
         match ty.remove_nullable() {
             DataType::Boolean => {
-                match self.rng.gen_range(0..=6) {
+                match self.rng.gen_range(0..=9) {
                     0 => {
                         let inner_ty = self.gen_data_type();
                         Expr::IsNull {
@@ -329,7 +336,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                     2 => {
                         let expr_ty = self.gen_data_type();
-                        let len = self.rng.gen_range(0..=5);
+                        let len = self.rng.gen_range(1..=5);
                         let list = (0..len)
                             .map(|_| self.gen_expr(&expr_ty))
                             .collect::<Vec<_>>();
@@ -388,6 +395,42 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             right: Box::new(right),
                         }
                     }
+                    7 => {
+                        let not = self.rng.gen_bool(0.5);
+                        let (subquery, _) = self.gen_subquery(false);
+                        Expr::Exists {
+                            span: None,
+                            not,
+                            subquery: Box::new(subquery),
+                        }
+                    }
+                    8 => {
+                        let modifier = match self.rng.gen_range(0..=3) {
+                            0 => None,
+                            1 => Some(SubqueryModifier::Any),
+                            2 => Some(SubqueryModifier::All),
+                            3 => Some(SubqueryModifier::Some),
+                            _ => unreachable!(),
+                        };
+                        let (subquery, _) = self.gen_subquery(true);
+                        Expr::Subquery {
+                            span: None,
+                            modifier,
+                            subquery: Box::new(subquery),
+                        }
+                    }
+                    9 => {
+                        let expr_ty = self.gen_simple_data_type();
+                        let expr = self.gen_expr(&expr_ty);
+                        let not = self.rng.gen_bool(0.5);
+                        let (subquery, _) = self.gen_subquery(true);
+                        Expr::InSubquery {
+                            span: None,
+                            expr: Box::new(expr),
+                            subquery: Box::new(subquery),
+                            not,
+                        }
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -431,8 +474,70 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     }
                 }
             }
+            DataType::Number(_) => match self.rng.gen_range(0..=3) {
+                0 => {
+                    let expr_ty = if self.rng.gen_bool(0.5) {
+                        DataType::Date
+                    } else {
+                        DataType::Timestamp
+                    };
+                    let expr = self.gen_expr(&expr_ty);
+                    let kind = match self.rng.gen_range(0..=6) {
+                        0 => IntervalKind::Year,
+                        1 => IntervalKind::Quarter,
+                        2 => IntervalKind::Month,
+                        3 => IntervalKind::Day,
+                        4 => IntervalKind::Hour,
+                        5 => IntervalKind::Minute,
+                        6 => IntervalKind::Second,
+                        7 => IntervalKind::Doy,
+                        8 => IntervalKind::Dow,
+                        _ => unreachable!(),
+                    };
+                    Expr::Extract {
+                        span: None,
+                        kind,
+                        expr: Box::new(expr),
+                    }
+                }
+                1 => {
+                    let expr_ty = DataType::String;
+                    let substr_expr = self.gen_expr(&expr_ty);
+                    let str_expr = self.gen_expr(&expr_ty);
+                    Expr::Position {
+                        span: None,
+                        substr_expr: Box::new(substr_expr),
+                        str_expr: Box::new(str_expr),
+                    }
+                }
+                2 => Expr::CountAll {
+                    span: None,
+                    window: None,
+                },
+                3 => {
+                    let expr_ty = self.gen_all_number_data_type();
+                    let expr = self.gen_expr(&expr_ty);
+                    let op = match self.rng.gen_range(0..=5) {
+                        0 => UnaryOperator::Plus,
+                        1 => UnaryOperator::Minus,
+                        2 => UnaryOperator::Not,
+                        3 => UnaryOperator::Factorial,
+                        4 => UnaryOperator::SquareRoot,
+                        5 => UnaryOperator::CubeRoot,
+                        6 => UnaryOperator::Abs,
+                        7 => UnaryOperator::BitwiseNot,
+                        _ => unreachable!(),
+                    };
+                    Expr::UnaryOp {
+                        span: None,
+                        op,
+                        expr: Box::new(expr),
+                    }
+                }
+                _ => unreachable!(),
+            },
             DataType::Date | DataType::Timestamp => {
-                let unit = match self.rng.gen_range(0..=8) {
+                let unit = match self.rng.gen_range(0..=6) {
                     0 => IntervalKind::Year,
                     1 => IntervalKind::Quarter,
                     2 => IntervalKind::Month,
@@ -440,8 +545,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     4 => IntervalKind::Hour,
                     5 => IntervalKind::Minute,
                     6 => IntervalKind::Second,
-                    7 => IntervalKind::Doy,
-                    8 => IntervalKind::Dow,
                     _ => unreachable!(),
                 };
                 let interval_ty = DataType::Number(NumberDataType::Int64);
@@ -505,8 +608,31 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 expr
             }
             _ => {
-                // no suitable expr exist, generate scalar value instead
-                self.gen_scalar_value(ty)
+                if self.rng.gen_bool(0.3) {
+                    let cond_ty = DataType::Boolean;
+                    let len = self.rng.gen_range(1..=3);
+                    let mut conditions = Vec::with_capacity(len);
+                    let mut results = Vec::with_capacity(len);
+                    for _ in 0..len {
+                        conditions.push(self.gen_expr(&cond_ty));
+                        results.push(self.gen_expr(ty));
+                    }
+                    let else_result = if self.rng.gen_bool(0.5) {
+                        Some(Box::new(self.gen_expr(ty)))
+                    } else {
+                        None
+                    };
+                    Expr::Case {
+                        span: None,
+                        operand: None,
+                        conditions,
+                        results,
+                        else_result,
+                    }
+                } else {
+                    // no suitable expr exist, generate scalar value instead
+                    self.gen_scalar_value(ty)
+                }
             }
         }
     }

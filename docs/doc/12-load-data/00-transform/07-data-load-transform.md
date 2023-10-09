@@ -2,7 +2,19 @@
 title: Transforming Data on Load
 ---
 
-Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
+Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](/14-sql-commands/10-dml/dml-copy-into-table.md) command, with this syntax:
+
+```sql
+COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
+     FROM ( SELECT [<file_col> ... ]
+            FROM { userStage | internalStage | externalStage } )
+[ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
+[ PATTERN = '<regex_pattern>' ]
+[ FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] ) ]
+[ copyOptions ]
+```
+
+This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:
 
 - **Loading a subset of data columns**: Allows you to selectively import specific columns from a dataset, focusing on the data that is relevant to your analysis or application.
 
@@ -14,17 +26,28 @@ Databend offers a powerful feature that enables data transformation during the l
 
 - **Loading data to a table with additional columns**: Enables you to load data into a table that already contains additional columns, accommodating the existing structure while mapping and inserting the data into the corresponding columns efficiently.
 
-:::note
-This feature is currently only available for the Parquet file format.
-:::
-
 ## Tutorials
 
 This section provides several brief tutorials that offer practical guidance on how to transform data while loading it. Each tutorial will walk you through the data loading process in two ways: loading directly from a remote file and loading from a staged file. Please note that these tutorials are independent of each other, and you don't need to complete them in order. Feel free to follow along based on your needs.
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.org/employees.parquet) and then upload it to your user stage with [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.org/employees.parquet) and then upload it to your user stage using [BendSQL](../../13-sql-clients/01-bendsql.md). For example,
+
+```sql
+root@localhost:8000/default> PUT fs:///Users/eric/Documents/books.parquet @~
+
+PUT fs:///Users/eric/Documents/books.parquet @~
+
+┌───────────────────────────────────────────────┐
+│                 file                │  status │
+│                String               │  String │
+├─────────────────────────────────────┼─────────┤
+│ /Users/eric/Documents/books.parquet │ SUCCESS │
+└───────────────────────────────────────────────┘
+```
+
+If you query the file, you will find that it contains these records:
 
 ```sql
 -- Query remote sample file directly

@@ -159,6 +159,7 @@ fn test_statement() {
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
+        r#"select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');"#,
         r#"select 'stringwith''quote'''"#,
         r#"select 'stringwith"doublequote'"#,
         r#"select '🦈'"#,
@@ -168,7 +169,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
@@ -308,10 +309,11 @@ fn test_statement() {
         r#"COPY INTO mytable
                 FROM @my_stage
                 FILE_FORMAT = (
-                    type = CSV
-                    field_delimiter = ','
-                    record_delimiter = '\n'
-                    skip_header = 1
+                    type = CSV,
+                    field_delimiter = ',',
+                    record_delimiter = '\n',
+                    skip_header = 1,
+                    error_on_column_count_mismatch = FALSE
                 )
                 size_limit=10;"#,
         r#"COPY INTO 's3://mybucket/data.csv'
@@ -385,6 +387,15 @@ fn test_statement() {
                 )
                 size_limit=10
                 disable_variant_check=true;"#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)"#,
+        r#"COPY INTO books FROM 's3://databend/books.csv' 
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://localhost:9000/',
+                    ACCESS_KEY_ID = 'ROOTUSER',
+                    SECRET_ACCESS_KEY = 'CHANGEME123',
+                    region = 'us-west-2'
+                )
+                FILE_FORMAT = (type = CSV);"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
@@ -529,6 +540,20 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2 offset 2;"#,
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
+        r#"copy into t1 from "" FILE"#,
+        r#"copy into t1 from "" FILE_FORMAT"#,
+        r#"copy into t1 from "" FILE_FORMAT = "#,
+        r#"copy into t1 from "" FILE_FORMAT = ("#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE"#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"copy into t1 from "" FILE_FORMAT = (TYPE ="#,
+        r#"COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);"#,
+        r#"COPY INTO mytable
+                FROM @my_stage
+                FILE_FORMAT = (
+                    type = CSV,
+                    error_on_column_count_mismatch = 1
+                )"#,
     ];
 
     for case in cases {

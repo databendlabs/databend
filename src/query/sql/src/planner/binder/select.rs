@@ -46,6 +46,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use log::warn;
 
 use super::sort::OrderItem;
+use super::Finder;
 use crate::binder::join::JoinConditions;
 use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
@@ -53,6 +54,7 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
+use crate::normalize_identifier;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -330,14 +332,20 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         if let Some(with) = &query.with {
             for (idx, cte) in with.ctes.iter().enumerate() {
-                let table_name = cte.alias.name.name.clone();
+                let table_name =
+                    normalize_identifier(&cte.alias.name, &self.name_resolution_ctx).name;
                 if bind_context.cte_map_ref.contains_key(&table_name) {
                     return Err(ErrorCode::SemanticError(format!(
                         "duplicate cte {table_name}"
                     )));
                 }
                 let cte_info = CteInfo {
-                    columns_alias: cte.alias.columns.iter().map(|c| c.name.clone()).collect(),
+                    columns_alias: cte
+                        .alias
+                        .columns
+                        .iter()
+                        .map(|c| normalize_identifier(c, &self.name_resolution_ctx).name)
+                        .collect(),
                     query: *cte.query.clone(),
                     materialized: cte.materialized,
                     cte_idx: idx,
@@ -414,9 +422,25 @@ impl Binder {
         );
         scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
+
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::AggregateFunction(_) | ScalarExpr::WindowFunction(_)
+            )
+        };
+
+        let finder = Finder::new(&f);
+        let finder = scalar.accept(finder)?;
+        if !finder.scalars().is_empty() {
+            return Err(ErrorCode::SemanticError(
+                "Where clause can't contain aggregate or window functions".to_string(),
+            )
+            .set_span(scalar.span()));
+        }
+
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
-            is_having: false,
         };
         let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);

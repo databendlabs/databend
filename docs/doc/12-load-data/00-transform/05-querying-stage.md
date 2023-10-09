@@ -3,7 +3,7 @@ title: Querying Staged Files
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.1.65"/>
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 
@@ -25,6 +25,15 @@ FROM {@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]}
   [ FILES => ( '<file_name>' [ , '<file_name>' ... ])]
 )]
 ```
+
+:::note
+When the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+```sql
+SELECT * FROM 's3://mybucket/dataset(databend)/' ...
+
+SELECT * FROM 's3://mybucket/dataset databend/' ...
+```
+:::
 
 ### FILE_FORMAT
 

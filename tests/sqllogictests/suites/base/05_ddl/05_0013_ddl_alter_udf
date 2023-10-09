@@ -15,4 +15,3 @@ ALTER FUNCTION is_not_null AS (d) -> not(is_null(d))
 
 statement ok
 DROP FUNCTION test_alter_udf
-

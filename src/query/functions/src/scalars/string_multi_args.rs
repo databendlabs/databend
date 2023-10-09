@@ -532,7 +532,12 @@ fn char_fn(args: &[ValueRef<AnyType>], _: &mut EvalContext) -> Value<AnyType> {
         .step_by(args.len())
         .collect::<Vec<_>>();
     let result = StringColumn::new(values.into(), offsets.into());
-    Value::Column(Column::String(result))
+
+    let col = Column::String(result);
+    match len {
+        Some(_) => Value::Column(col),
+        _ => Value::Scalar(AnyType::index_column(&col, 0).unwrap().to_owned()),
+    }
 }
 
 fn regexp_instr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<AnyType> {
@@ -872,6 +877,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
         if let Err(err) = regexp::validate_regexp_arguments("regexp_substr", pos, occur, None) {
             ctx.set_error(builder.len(), err);
             StringType::push_default(&mut builder);
+            validity.push(false);
             continue;
         }
 
@@ -893,6 +899,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
                     StringType::push_default(&mut builder);
+                    validity.push(false);
                     continue;
                 }
             }

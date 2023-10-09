@@ -37,6 +37,7 @@ macro_rules! build_exceptions {
                         $code,
                         stringify!($body),
                         display_text.into(),
+                        String::new(),
                         None,
                         bt,
                     )
@@ -271,6 +272,10 @@ build_exceptions! {
     IllegalUDFFormat(2601),
     UnknownUDF(2602),
     UdfAlreadyExists(2603),
+    UDFServerConnectError(2604),
+    UDFSchemaMismatch(2605),
+    UnsupportedDataType(2606),
+    UDFDataError(2607),
 
     // Database error codes.
     UnknownDatabaseEngine(2701),

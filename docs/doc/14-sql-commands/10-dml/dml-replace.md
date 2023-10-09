@@ -1,5 +1,5 @@
 ---
-title: REPLACE INTO
+title: REPLACE
 ---
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
@@ -42,6 +42,14 @@ VALUES (123, 'John Doe', 50000, 'john.doe@example.com');
 -- This REPLACE INTO updates the inserted row
 REPLACE INTO employees (employee_id, employee_name, employee_salary, employee_email) ON (employee_email)
 VALUES (123, 'John Doe', 60000, 'john.doe@example.com');
+```
+
+## Distributed REPLACE INTO
+
+REPLACE INTO supports distributed execution in cluster environments. You can enable distributed REPLACE INTO by setting ENABLE_DISTRIBUTED_REPLACE_INTO to 1. This helps enhance data loading performance and scalability in cluster environments.
+
+```sql
+SET enable_distributed_replace_into = 1;
 ```
 
 ## Examples

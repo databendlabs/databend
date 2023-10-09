@@ -14,36 +14,13 @@
 
 use std::sync::Arc;
 
-use chrono::NaiveDateTime;
-use chrono::TimeZone;
-use chrono::Utc;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableSchema;
-use common_meta_app::schema::TableIdent;
-use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableMeta;
 
 use crate::ParquetPart;
-
-pub(super) fn naive_parquet_table_info(schema: Arc<TableSchema>) -> TableInfo {
-    TableInfo {
-        ident: TableIdent::new(0, 0),
-        desc: "''.'read_parquet'".to_string(),
-        name: "read_parquet".to_string(),
-        meta: TableMeta {
-            schema,
-            engine: "SystemReadParquet".to_string(),
-            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
-            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
 
 fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [(usize, usize)]) -> usize {
     // there may be 1 block  reading and 2 blocks in deserializer and sink.

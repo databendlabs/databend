@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 
 use common_base::runtime::execute_futures_in_parallel;
@@ -127,9 +128,14 @@ pub async fn read_parquet_metas_batch(
     for (location, size) in file_infos {
         let meta =
             load_and_check_parquet_meta(&location, size, op.clone(), &expect, &schema_from).await?;
+        if unlikely(meta.file_metadata().num_rows() == 0) {
+            // Don't collect empty files
+            continue;
+        }
         let stats = collect_row_group_stats(meta.row_groups(), &leaf_fields, None);
         metas.push(Arc::new(FullParquetMeta {
             location,
+            size,
             meta,
             row_group_level_stats: stats,
         }));

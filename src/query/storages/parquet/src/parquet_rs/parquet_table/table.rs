@@ -18,6 +18,9 @@ use std::sync::Arc;
 use arrow_schema::DataType as ArrowDataType;
 use arrow_schema::Field as ArrowField;
 use arrow_schema::Schema as ArrowSchema;
+use chrono::NaiveDateTime;
+use chrono::TimeZone;
+use chrono::Utc;
 use common_base::base::tokio::sync::Mutex;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
@@ -27,16 +30,20 @@ use common_catalog::plan::ParquetTableInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::Table;
+use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::init_stage_operator;
 use common_storage::parquet_rs::infer_schema_with_extension;
@@ -49,7 +56,6 @@ use parquet::schema::types::SchemaDescPtr;
 
 use super::meta::read_metas_in_parallel;
 use super::stats::create_stats_provider;
-use crate::utils::naive_parquet_table_info;
 
 pub struct ParquetRSTable {
     pub(super) read_options: ParquetReadOptions,
@@ -126,12 +132,12 @@ impl ParquetRSTable {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        let table_info = create_parquet_table_info(&arrow_schema)?;
+        let table_info = create_parquet_table_info(&arrow_schema, &stage_info)?;
         let leaf_fields = Arc::new(table_info.schema().leaf_fields());
 
         // If the query is `COPY`, we don't need to collect column statistics.
         // It's because the only transform could be contained in `COPY` command is projection.
-        let need_stats_provider = !ctx.get_query_kind().eq_ignore_ascii_case("copy");
+        let need_stats_provider = !matches!(ctx.get_query_kind(), QueryKind::Copy);
         let settings = ctx.get_settings();
         let max_threads = settings.get_max_threads()? as usize;
         let max_memory_usage = settings.get_max_memory_usage()?;
@@ -248,7 +254,8 @@ impl Table for ParquetRSTable {
         }
 
         // This method can only be called once.
-        let mut parquet_metas = self.parquet_metas.lock().await;
+        // Unwrap safety: no other thread will hold this lock.
+        let mut parquet_metas = self.parquet_metas.try_lock().unwrap();
         assert!(parquet_metas.is_empty());
 
         // Lazy read parquet file metas.
@@ -284,6 +291,25 @@ impl Table for ParquetRSTable {
 
         Ok(Box::new(provider))
     }
+
+    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+        // Unwrap safety: no other thread will hold this lock.
+        let parquet_metas = self.parquet_metas.try_lock().unwrap();
+        if parquet_metas.is_empty() {
+            return Ok(None);
+        }
+
+        let num_rows = parquet_metas
+            .iter()
+            .map(|m| m.meta.file_metadata().num_rows() as u64)
+            .sum();
+
+        // Other fields are not needed yet.
+        Ok(Some(TableStatistics {
+            num_rows: Some(num_rows),
+            ..Default::default()
+        }))
+    }
 }
 
 fn lower_field_name(field: &ArrowField) -> ArrowField {
@@ -318,10 +344,20 @@ fn arrow_to_table_schema(schema: &ArrowSchema) -> Result<TableSchema> {
     TableSchema::try_from(&schema).map_err(ErrorCode::from_std_error)
 }
 
-fn create_parquet_table_info(schema: &ArrowSchema) -> Result<TableInfo> {
-    Ok(naive_parquet_table_info(
-        arrow_to_table_schema(schema)?.into(),
-    ))
+fn create_parquet_table_info(schema: &ArrowSchema, stage_info: &StageInfo) -> Result<TableInfo> {
+    Ok(TableInfo {
+        ident: TableIdent::new(0, 0),
+        desc: "''.'read_parquet'".to_string(),
+        name: format!("read_parquet({})", stage_info.stage_name),
+        meta: TableMeta {
+            schema: arrow_to_table_schema(schema)?.into(),
+            engine: "SystemReadParquet".to_string(),
+            created_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            updated_on: Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(0, 0).unwrap()),
+            ..Default::default()
+        },
+        ..Default::default()
+    })
 }
 
 fn get_compression_ratio(filemeta: &ParquetMetaData) -> f64 {

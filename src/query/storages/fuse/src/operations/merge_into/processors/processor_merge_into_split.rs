@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -25,6 +26,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_matched_rows;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_split_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_unmatched_rows;
 
 use crate::operations::merge_into::mutator::MergeIntoSplitMutator;
@@ -148,9 +150,13 @@ impl Processor for MergeIntoSplitProcessor {
             if self.target_table_empty {
                 self.output_data_not_matched_data = Some(data_block)
             } else {
+                let start = Instant::now();
                 let (matched_block, not_matched_block) = self
                     .merge_into_split_mutator
                     .split_data_block(&data_block)?;
+                let elapsed_time = start.elapsed().as_millis() as u64;
+                metrics_inc_merge_into_split_milliseconds(elapsed_time);
+
                 if !matched_block.is_empty() {
                     metrics_inc_merge_into_matched_rows(matched_block.num_rows() as u32);
                     self.output_data_matched_data = Some(matched_block);

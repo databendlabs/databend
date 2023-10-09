@@ -4,12 +4,12 @@ description:
   Drop an existing user-defined function.
 ---
 
-Drop an existing user-defined function.
+Drops a user-defined function.
 
 ## Syntax
 
 ```sql
-DROP FUNCTION [IF EXISTS] <name>
+DROP FUNCTION [IF EXISTS] <function_name>
 ```
 
 ## Examples

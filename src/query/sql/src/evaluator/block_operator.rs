@@ -73,7 +73,7 @@ pub enum BlockOperator {
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         if input.is_empty() {
-            return Ok(DataBlock::empty());
+            return Ok(input);
         }
         match self {
             BlockOperator::Map { exprs, projections } => {
@@ -91,12 +91,16 @@ impl BlockOperator {
                         None => Ok(input),
                     }
                 } else {
-                    for expr in exprs {
-                        let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
-                        let result = evaluator.run(expr)?;
-                        let col = BlockEntry::new(expr.data_type().clone(), result);
-                        input.add_column(col);
-                    }
+                    let evaluator =
+                        Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS).with_cache();
+                    let results = evaluator.run_exprs(exprs)?;
+                    results
+                        .into_iter()
+                        .zip(exprs.iter())
+                        .for_each(|(result, expr)| {
+                            let col = BlockEntry::new(expr.data_type().clone(), result);
+                            input.add_column(col);
+                        });
                     match projections {
                         Some(projections) => Ok(input.project(projections)),
                         None => Ok(input),
@@ -449,30 +453,22 @@ pub struct CompoundBlockOperator {
 }
 
 impl CompoundBlockOperator {
-    pub fn new(
-        operators: Vec<BlockOperator>,
-        ctx: FunctionContext,
-        input_num_columns: usize,
-    ) -> Self {
-        let operators = Self::compact_map(operators, input_num_columns);
+    pub fn new(operators: Vec<BlockOperator>, ctx: FunctionContext) -> Self {
+        let operators = Self::compact_map(operators);
         Self { operators, ctx }
     }
 
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
-        input_num_columns: usize,
         ctx: FunctionContext,
         operators: Vec<BlockOperator>,
     ) -> Box<dyn Processor> {
-        let operators = Self::compact_map(operators, input_num_columns);
+        let operators = Self::compact_map(operators);
         Transformer::<Self>::create(input_port, output_port, Self { operators, ctx })
     }
 
-    pub fn compact_map(
-        operators: Vec<BlockOperator>,
-        input_num_columns: usize,
-    ) -> Vec<BlockOperator> {
+    pub fn compact_map(operators: Vec<BlockOperator>) -> Vec<BlockOperator> {
         let mut results = Vec::with_capacity(operators.len());
 
         for op in operators {
@@ -496,7 +492,7 @@ impl CompoundBlockOperator {
             }
         }
 
-        crate::evaluator::cse::apply_cse(results, input_num_columns)
+        results
     }
 }
 

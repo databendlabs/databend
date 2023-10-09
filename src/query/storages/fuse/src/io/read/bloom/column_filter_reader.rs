@@ -133,7 +133,8 @@ impl Loader<Xor8Filter> for Xor8FilterLoader {
     async fn load(&self, params: &LoadParams) -> Result<Xor8Filter> {
         let bytes = self
             .operator
-            .range_read(&params.location, self.offset..self.offset + self.len)
+            .read_with(&params.location)
+            .range(self.offset..self.offset + self.len)
             .await?;
 
         let page_meta_data = PageMetaData {

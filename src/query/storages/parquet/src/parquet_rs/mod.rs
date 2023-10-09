@@ -15,13 +15,13 @@
 mod parquet_reader;
 mod parquet_table;
 mod partition;
-mod predicate;
 mod pruning;
-mod row_group;
 mod source;
 mod statistics;
 
-pub use parquet_reader::ParquetRSReader;
+pub use parquet_reader::ParquetRSFullReader;
+pub use parquet_reader::ParquetRSReaderBuilder;
+pub use parquet_reader::ParquetRSRowGroupReader;
 pub use parquet_table::ParquetRSTable;
 pub use partition::ParquetRSRowGroupPart;
 pub use pruning::ParquetRSPruner;

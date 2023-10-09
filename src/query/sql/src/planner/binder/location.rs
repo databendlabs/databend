@@ -353,7 +353,7 @@ fn parse_webhdfs_params(l: &mut UriLocation) -> Result<StorageParams> {
 }
 
 /// parse_uri_location will parse given UriLocation into StorageParams and Path.
-pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
+pub async fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)> {
     // Path endswith `/` means it's a directory, otherwise it's a file.
     // If the path is a directory, we will use this path as root.
     // If the path is a file, we will use `/` as root (which is the default value)
@@ -409,6 +409,8 @@ pub fn parse_uri_location(l: &mut UriLocation) -> Result<(StorageParams, String)
             ));
         }
     };
+
+    let sp = sp.auto_detect().await;
 
     Ok((sp, path))
 }

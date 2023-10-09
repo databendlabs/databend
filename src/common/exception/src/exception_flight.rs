@@ -52,6 +52,7 @@ impl TryFrom<FlightData> for ErrorCode {
                     serialized_error.code,
                     serialized_error.name,
                     serialized_error.message,
+                    String::new(),
                     None,
                     None,
                 )
@@ -60,6 +61,7 @@ impl TryFrom<FlightData> for ErrorCode {
                     serialized_error.code,
                     serialized_error.name,
                     serialized_error.message,
+                    String::new(),
                     None,
                     Some(ErrorCodeBacktrace::Serialized(Arc::new(
                         serialized_error.backtrace,

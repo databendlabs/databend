@@ -24,6 +24,7 @@ use common_ast::parser::token::Tokenizer;
 use common_ast::walk_statement_mut;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::query_kind::QueryKind;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use parking_lot::RwLock;
@@ -94,7 +95,7 @@ impl Planner {
 
                 if matches!(stmt, Statement::Copy(_)) {
                     // Indicate binder there is no need to collect column statistics for the binding table.
-                    self.ctx.attach_query_str("Copy".to_string(), String::new());
+                    self.ctx.attach_query_str(QueryKind::Copy, String::new());
                 }
 
                 self.replace_stmt(&mut stmt, sql_dialect);

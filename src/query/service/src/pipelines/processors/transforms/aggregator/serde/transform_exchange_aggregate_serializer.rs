@@ -26,7 +26,8 @@ use opendal::Operator;
 use log::info;
 use common_arrow::arrow::io::flight::{default_ipc_fields, WriteOptions};
 use common_arrow::arrow::io::ipc::IpcField;
-use common_base::base::GlobalUniqName;
+use common_base::base::{GlobalUniqName, ProgressValues};
+use common_catalog::table_context::TableContext;
 use common_expression::arrow::serialize_column;
 use common_expression::types::{ArgType, ArrayType, Int64Type, UInt64Type, ValueType};
 use common_pipeline_transforms::processors::transforms::{BlockMetaTransform, BlockMetaTransformer};
@@ -41,8 +42,10 @@ use crate::pipelines::processors::transforms::metrics::{metrics_inc_aggregate_sp
 use common_hashtable::HashtableLike;
 use crate::pipelines::processors::transforms::aggregator::serde::{AggregateSerdeMeta, exchange_defines};
 use crate::pipelines::processors::transforms::aggregator::serde::transform_aggregate_spill_writer::spilling_aggregate_payload as local_spilling_aggregate_payload;
+use crate::sessions::QueryContext;
 
 pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
+    ctx: Arc<QueryContext>,
     method: Method,
     local_pos: usize,
     options: WriteOptions,
@@ -56,6 +59,7 @@ pub struct TransformExchangeAggregateSerializer<Method: HashMethodBounds> {
 impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
+        ctx: Arc<QueryContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         method: Method,
@@ -71,6 +75,7 @@ impl<Method: HashMethodBounds> TransformExchangeAggregateSerializer<Method> {
         BlockMetaTransformer::create(input, output, TransformExchangeAggregateSerializer::<
             Method,
         > {
+            ctx,
             method,
             params,
             operator,
@@ -105,6 +110,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                     serialized_blocks.push(FlightSerialized::Future(
                         match index == self.local_pos {
                             true => local_spilling_aggregate_payload(
+                                self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
@@ -112,6 +118,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
                                 payload,
                             )?,
                             false => spilling_aggregate_payload(
+                                self.ctx.clone(),
                                 self.operator.clone(),
                                 &self.method,
                                 &self.location_prefix,
@@ -150,6 +157,7 @@ impl<Method: HashMethodBounds> BlockMetaTransform<ExchangeShuffleMeta>
 }
 
 fn spilling_aggregate_payload<Method: HashMethodBounds>(
+    ctx: Arc<QueryContext>,
     operator: Operator,
     method: &Method,
     location_prefix: &str,
@@ -165,6 +173,8 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
     let mut data_range_start_column_data = Vec::with_capacity(256);
     let mut data_range_end_column_data = Vec::with_capacity(256);
     let mut columns_layout_column_data = Vec::with_capacity(256);
+    // Record how many rows are spilled.
+    let mut rows = 0;
 
     for (bucket, inner_table) in payload.cell.hashtable.iter_tables_mut().enumerate() {
         if inner_table.len() == 0 {
@@ -173,6 +183,7 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
 
         let now = Instant::now();
         let data_block = serialize_aggregate(method, params, inner_table)?;
+        rows += data_block.num_rows();
 
         let old_write_size = write_size;
         let columns = data_block.columns().to_vec();
@@ -206,7 +217,10 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
             let instant = Instant::now();
 
             let mut write_bytes = 0;
-            let mut writer = operator.writer(&location).await?;
+            let mut writer = operator
+                .writer_with(&location)
+                .buffer(8 * 1024 * 1024)
+                .await?;
             for write_bucket_data in write_data.into_iter() {
                 for data in write_bucket_data.into_iter() {
                     write_bytes += data.len();
@@ -221,6 +235,16 @@ fn spilling_aggregate_payload<Method: HashMethodBounds>(
                 metrics_inc_aggregate_spill_write_count();
                 metrics_inc_aggregate_spill_write_bytes(write_bytes as u64);
                 metrics_inc_aggregate_spill_write_milliseconds(instant.elapsed().as_millis() as u64);
+            }
+
+            {
+                {
+                    let progress_val = ProgressValues {
+                        rows,
+                        bytes: write_bytes,
+                    };
+                    ctx.get_aggregate_spill_progress().incr(&progress_val);
+                }
             }
 
             info!(

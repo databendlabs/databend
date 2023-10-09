@@ -91,6 +91,7 @@ pub struct ErrorCode {
     code: u16,
     name: String,
     display_text: String,
+    detail: String,
     span: Span,
     // cause is only used to contain an `anyhow::Error`.
     // TODO: remove `cause` when we completely get rid of `anyhow::Error`.
@@ -107,17 +108,35 @@ impl ErrorCode {
         self.name.clone()
     }
 
+    pub fn display_text(&self) -> String {
+        if let Some(cause) = &self.cause {
+            format!("{}\n{:?}", self.display_text, cause)
+        } else {
+            self.display_text.clone()
+        }
+    }
+
     pub fn message(&self) -> String {
-        self.cause
-            .as_ref()
-            .map(|cause| format!("{}\n{:?}", self.display_text, cause))
-            .unwrap_or_else(|| self.display_text.clone())
+        let msg = self.display_text();
+        if self.detail.is_empty() {
+            msg
+        } else {
+            format!("{}\n{}", msg, self.detail)
+        }
+    }
+
+    pub fn detail(&self) -> String {
+        self.detail.clone()
     }
 
     #[must_use]
     pub fn add_message(self, msg: impl AsRef<str>) -> Self {
         Self {
-            display_text: format!("{}\n{}", msg.as_ref(), self.display_text),
+            display_text: if self.display_text.is_empty() {
+                msg.as_ref().to_string()
+            } else {
+                format!("{}\n{}", msg.as_ref(), self.display_text)
+            },
             ..self
         }
     }
@@ -125,7 +144,33 @@ impl ErrorCode {
     #[must_use]
     pub fn add_message_back(self, msg: impl AsRef<str>) -> Self {
         Self {
-            display_text: format!("{}{}", self.display_text, msg.as_ref()),
+            display_text: if self.display_text.is_empty() {
+                msg.as_ref().to_string()
+            } else {
+                format!("{}\n{}", self.display_text, msg.as_ref())
+            },
+            ..self
+        }
+    }
+
+    pub fn add_detail_back(self, msg: impl AsRef<str>) -> Self {
+        Self {
+            detail: if self.detail.is_empty() {
+                msg.as_ref().to_string()
+            } else {
+                format!("{}\n{}", self.detail, msg.as_ref())
+            },
+            ..self
+        }
+    }
+
+    pub fn add_detail(self, msg: impl AsRef<str>) -> Self {
+        Self {
+            detail: if self.detail.is_empty() {
+                msg.as_ref().to_string()
+            } else {
+                format!("{}\n{}", msg.as_ref(), self.detail)
+            },
             ..self
         }
     }
@@ -226,6 +271,7 @@ impl ErrorCode {
             code: 1001,
             name: String::from("FromStdError"),
             display_text: error.to_string(),
+            detail: String::new(),
             span: None,
             cause: None,
             backtrace: capture(),
@@ -237,6 +283,7 @@ impl ErrorCode {
             code: 1001,
             name: String::from("Internal"),
             display_text: error,
+            detail: String::new(),
             span: None,
             cause: None,
             backtrace: capture(),
@@ -248,6 +295,7 @@ impl ErrorCode {
             code: 1001,
             name: String::from("Internal"),
             display_text: error,
+            detail: String::new(),
             span: None,
             cause: None,
             backtrace: None,
@@ -258,12 +306,14 @@ impl ErrorCode {
         code: u16,
         name: impl ToString,
         display_text: String,
+        detail: String,
         cause: Option<Box<dyn std::error::Error + Sync + Send>>,
         backtrace: Option<ErrorCodeBacktrace>,
     ) -> ErrorCode {
         ErrorCode {
             code,
             display_text,
+            detail,
             span: None,
             cause,
             backtrace,
@@ -322,7 +372,8 @@ impl Clone for ErrorCode {
         ErrorCode::create(
             self.code(),
             &self.name,
-            self.message(),
+            self.display_text(),
+            self.detail.clone(),
             None,
             self.backtrace(),
         )

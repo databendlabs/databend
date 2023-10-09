@@ -17,6 +17,8 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::Scalar;
 
+use crate::optimizer::rule::constant::is_falsy;
+use crate::optimizer::rule::constant::is_true;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -30,26 +32,6 @@ fn normalize_predicates(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {
     [remove_true_predicate, normalize_falsy_predicate]
         .into_iter()
         .fold(predicates, |acc, f| f(acc))
-}
-
-fn is_true(predicate: &ScalarExpr) -> bool {
-    matches!(
-        predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
-            value: Scalar::Boolean(true),
-            ..
-        })
-    )
-}
-
-fn is_falsy(predicate: &ScalarExpr) -> bool {
-    matches!(
-        predicate,
-        ScalarExpr::ConstantExpr(ConstantExpr {
-            value,
-            ..
-        }) if value == &Scalar::Boolean(false) || value == &Scalar::Null
-    )
 }
 
 fn remove_true_predicate(predicates: Vec<ScalarExpr>) -> Vec<ScalarExpr> {

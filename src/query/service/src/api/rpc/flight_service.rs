@@ -46,6 +46,7 @@ use crate::api::rpc::flight_actions::FlightAction;
 use crate::api::rpc::request_builder::RequestGetter;
 use crate::api::DataExchangeManager;
 use crate::interpreters::Interpreter;
+use crate::interpreters::KillInterpreter;
 use crate::interpreters::TruncateTableInterpreter;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
@@ -176,7 +177,7 @@ impl FlightService for DatabendQueryFlightService {
                     // Keep query id
                     ctx.set_id(init_query_fragments_plan.executor_packet.query_id.clone());
                     ctx.attach_query_str(
-                        init_query_fragments_plan.executor_packet.query_kind.clone(),
+                        init_query_fragments_plan.executor_packet.query_kind,
                         "".to_string(),
                     );
 
@@ -229,6 +230,18 @@ impl FlightService for DatabendQueryFlightService {
 
                     let interpreter =
                         TruncateTableInterpreter::from_flight(ctx, truncate_table.packet)?;
+                    interpreter.execute2().await?;
+                    FlightResult { body: vec![] }
+                }
+                FlightAction::KillQuery(kill_query) => {
+                    let config = GlobalConfig::instance();
+                    let session_manager = SessionManager::instance();
+                    let settings = Settings::create(config.query.tenant_id.clone());
+                    let session =
+                        session_manager.create_with_settings(SessionType::FlightRPC, settings)?;
+                    let ctx = session.create_query_context().await?;
+
+                    let interpreter = KillInterpreter::from_flight(ctx, kill_query.packet)?;
                     interpreter.execute2().await?;
                     FlightResult { body: vec![] }
                 }

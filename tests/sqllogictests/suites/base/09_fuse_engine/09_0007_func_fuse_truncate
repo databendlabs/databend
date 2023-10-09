@@ -1,0 +1,43 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0007
+
+statement ok
+CREATE DATABASE db_09_0007
+
+statement ok
+USE db_09_0007
+
+statement ok
+create table t(a uint64)
+
+statement ok
+insert into t values (5)
+
+statement ok
+insert into t values (6)
+
+statement ok
+insert into t values (7)
+
+query I
+select count(*) from fuse_snapshot('db_09_0007', 't')
+----
+3
+
+statement ok
+truncate table `t`
+
+query I
+select count(*) from fuse_snapshot('db_09_0007', 't')
+----
+4
+
+statement ok
+select * from t
+
+statement ok
+DROP TABLE t
+
+statement ok
+DROP DATABASE db_09_0007
+

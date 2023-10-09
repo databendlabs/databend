@@ -1,138 +1,60 @@
 ---
 title: SHOW TABLE STATUS
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Shows the status of the tables in a database. The status information includes various physical sizes and timestamps about a table, see [Examples](#examples) for details. 
+<FunctionDescription description="Introduced or updated: v1.2.131"/>
 
-The command returns status information of all the tables in the current database by default. Use a FROM | IN clause to specify another database rather than the current one. You can also filter tables with a LIKE or WHERE clause.
+Shows the status of the tables in a database. The status information includes various physical sizes and timestamps about a table, see [Examples](#examples) for details.
 
 ## Syntax
 
 ```sql
 SHOW TABLE STATUS
-    [{FROM | IN} db_name]
+    [{FROM | IN} <database_name>]
     [LIKE 'pattern' | WHERE expr]
 ```
 
+| Parameter | Description                                                                                                                 |
+|-----------|-----------------------------------------------------------------------------------------------------------------------------|
+| FROM / IN | Specifies a database. If omitted, the command returns the results from the current database.                                |
+| LIKE      | Filters the results by the table names using case-sensitive pattern matching.                                                              |
+| WHERE     | Filters the results using an expression in the WHERE clause.                                                                |
+
 ## Examples
 
-```sql
-CREATE TABLE t(id INT);
+The following example displays the status of tables in the current database, providing details such as name, engine, rows, and other relevant information:
 
--- Show status of all tables in the current database
+```sql
 SHOW TABLE STATUS;
-*************************** 1. row ***************************
-           Name: t
-         Engine: FUSE
-        Version: 0
-     Row_format: NULL
-           Rows: 0
- Avg_row_length: NULL
-    Data_length: 0
-Max_data_length: NULL
-   Index_length: 0
-      Data_free: NULL
- Auto_increment: NULL
-    Create_time: 2022-04-08 04:13:48.988 +0000
-    Update_time: NULL
-     Check_time: NULL
-      Collation: NULL
-       Checksum: NULL
-        Comment:
+
+name   |engine|version|row_format|rows|avg_row_length|data_length|max_data_length|index_length|data_free|auto_increment|create_time                  |update_time|check_time|collation|checksum|comment|cluster_by|
+-------+------+-------+----------+----+--------------+-----------+---------------+------------+---------+--------------+-----------------------------+-----------+----------+---------+--------+-------+----------+
+books  |FUSE  |      0|          |   2|              |        160|               |         713|         |              |2023-09-25 06:40:47.237 +0000|           |          |         |        |       |          |
+mytable|FUSE  |      0|          |   5|              |         40|               |        1665|         |              |2023-08-28 07:53:05.455 +0000|           |          |         |        |       |((a + 1)) |
+ontime |FUSE  |      0|          | 199|              |     147981|               |       22961|         |              |2023-09-19 07:04:06.414 +0000|           |          |         |        |       |          |
 ```
 
-The following returns status information of the table named "t":
+The following example displays the status of tables in the current database where the names start with 'my':
 
 ```sql
-SHOW TABLE STATUS LIKE 't';
-*************************** 1. row ***************************
-           Name: t
-         Engine: FUSE
-        Version: 0
-     Row_format: NULL
-           Rows: 0
- Avg_row_length: NULL
-    Data_length: 0
-Max_data_length: NULL
-   Index_length: 0
-      Data_free: NULL
- Auto_increment: NULL
-    Create_time: 2022-04-08 04:13:48.988 +0000
-    Update_time: NULL
-     Check_time: NULL
-      Collation: NULL
-       Checksum: NULL
-        Comment:
+SHOW TABLE STATUS LIKE 'my%';
+
+name   |engine|version|row_format|rows|avg_row_length|data_length|max_data_length|index_length|data_free|auto_increment|create_time                  |update_time|check_time|collation|checksum|comment|cluster_by|
+-------+------+-------+----------+----+--------------+-----------+---------------+------------+---------+--------------+-----------------------------+-----------+----------+---------+--------+-------+----------+
+mytable|FUSE  |      0|          |   5|              |         40|               |        1665|         |              |2023-08-28 07:53:05.455 +0000|           |          |         |        |       |((a + 1)) |
 ```
 
-The following uses a LIKE clause to return status information of the tables with a name starting with "t":
+The following example displays the status of tables in the current database where the number of rows is greater than 100:
+
+:::note
+When using the SHOW TABLE STATUS query, be aware that some column names, such as "rows," may be interpreted as SQL keywords, potentially leading to errors. To avoid this issue, always enclose column names with backticks, as shown in this example. This ensures that column names are treated as identifiers rather than keywords in the SQL query.
+:::
 
 ```sql
-SHOW TABLE STATUS LIKE 't%';
-*************************** 1. row ***************************
-           Name: t
-         Engine: FUSE
-        Version: 0
-     Row_format: NULL
-           Rows: 0
- Avg_row_length: NULL
-    Data_length: 0
-Max_data_length: NULL
-   Index_length: 0
-      Data_free: NULL
- Auto_increment: NULL
-    Create_time: 2022-04-08 04:13:48.988 +0000
-    Update_time: NULL
-     Check_time: NULL
-      Collation: NULL
-       Checksum: NULL
-        Comment:
-```
+SHOW TABLE STATUS WHERE `rows` > 100;
 
-The following uses a WHERE clause to return status information of the tables with a name starting with "t":
-
-```sql
-SHOW TABLE STATUS WHERE name LIKE 't%';
-*************************** 1. row ***************************
-           Name: t
-         Engine: FUSE
-        Version: 0
-     Row_format: NULL
-           Rows: 0
- Avg_row_length: NULL
-    Data_length: 0
-Max_data_length: NULL
-   Index_length: 0
-      Data_free: NULL
- Auto_increment: NULL
-    Create_time: 2022-04-08 04:13:48.988 +0000
-    Update_time: NULL
-     Check_time: NULL
-      Collation: NULL
-       Checksum: NULL
-        Comment:
-```
-
-The following returns status information of all tables in the database `default`:
-
-```sql
-SHOW TABLE STATUS FROM 'default';
-*************************** 1. row ***************************
-           Name: t
-         Engine: FUSE
-        Version: 0
-     Row_format: NULL
-           Rows: 0
- Avg_row_length: NULL
-    Data_length: 0
-Max_data_length: NULL
-   Index_length: 0
-      Data_free: NULL
- Auto_increment: NULL
-    Create_time: 2022-04-08 04:13:48.988 +0000
-    Update_time: NULL
-     Check_time: NULL
-      Collation: NULL
-       Checksum: NULL
-        Comment:
+name  |engine|version|row_format|rows|avg_row_length|data_length|max_data_length|index_length|data_free|auto_increment|create_time                  |update_time|check_time|collation|checksum|comment|cluster_by|
+------+------+-------+----------+----+--------------+-----------+---------------+------------+---------+--------------+-----------------------------+-----------+----------+---------+--------+-------+----------+
+ontime|FUSE  |      0|          | 199|              |     147981|               |       22961|         |              |2023-09-19 07:04:06.414 +0000|           |          |         |        |       |          |
 ```

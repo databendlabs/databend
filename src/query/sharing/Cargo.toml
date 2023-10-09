@@ -12,7 +12,7 @@ doctest = false
 [dependencies]
 anyhow = { workspace = true }
 async-trait = "0.1"
-bytes = "1"
+bytes = { workspace = true }
 common-auth = { path = "../../common/auth" }
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }

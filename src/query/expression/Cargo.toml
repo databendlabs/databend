@@ -12,6 +12,7 @@ test = false
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-arrow = { path = "../../common/arrow" }
+common-base = { path = "../../common/base" }
 common-datavalues = { path = "../datavalues" }
 common-exception = { path = "../../common/exception" }
 common-hashtable = { path = "../../common/hashtable" }
@@ -21,7 +22,10 @@ common-io = { path = "../../common/io" }
 
 # Crates.io dependencies
 arrow-array = "46.0.0"
+arrow-flight = "46.0.0"
 arrow-schema = "46.0.0"
+arrow-select = "46.0.0"
+async-backtrace = { workspace = true }
 base64 = "0.21.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -47,7 +51,7 @@ rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
 terminal_size = "0.2.6"
-
+tonic = { workspace = true }
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 

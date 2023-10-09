@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -30,11 +31,12 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
+use common_storage::metrics::merge_into::merge_into_not_matched_operation_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
-
+// (source_schema,condition,values_exprs)
 type UnMatchedExprs = Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>;
 
 struct InsertDataBlockMutation {
@@ -43,6 +45,7 @@ struct InsertDataBlockMutation {
 }
 
 // need to evaluate expression and
+
 pub struct MergeIntoNotMatchedProcessor {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
@@ -65,6 +68,7 @@ impl MergeIntoNotMatchedProcessor {
         for (idx, item) in unmatched.iter().enumerate() {
             let eval_projections: HashSet<usize> =
                 (input_schema.num_fields()..input_schema.num_fields() + item.2.len()).collect();
+
             data_schemas.insert(idx, item.0.clone());
             ops.push(InsertDataBlockMutation {
                 op: BlockOperator::Map {
@@ -148,7 +152,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
             if data_block.is_empty() {
                 return Ok(());
             }
-
+            let start = Instant::now();
             let mut current_block = data_block;
             for (idx, op) in self.ops.iter().enumerate() {
                 let (mut satisfied_block, unsatisfied_block) =
@@ -167,7 +171,10 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     current_block = unsatisfied_block
                 }
             }
+            let elapsed_time = start.elapsed().as_millis() as u64;
+            merge_into_not_matched_operation_milliseconds(elapsed_time);
         }
+
         Ok(())
     }
 }

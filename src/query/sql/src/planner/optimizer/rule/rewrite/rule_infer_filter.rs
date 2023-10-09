@@ -72,7 +72,7 @@ impl RuleInferFilter {
     }
 }
 
-#[derive(Clone)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Debug)]
 pub struct Predicate {
     op: ComparisonOp,
     constant: ConstantExpr,
@@ -108,11 +108,16 @@ impl PredicateSet {
         }
     }
 
-    fn add_expr(&mut self, expr: &ScalarExpr, predicates: Vec<Predicate>) {
+    fn add_expr(
+        &mut self,
+        expr: &ScalarExpr,
+        predicates: Vec<Predicate>,
+        equal_exprs: Vec<ScalarExpr>,
+    ) {
         self.exprs.push(expr.clone());
         self.expr_to_idx.insert(expr.clone(), self.num_exprs);
         self.predicates.push(predicates);
-        self.equal_exprs.push(vec![]);
+        self.equal_exprs.push(equal_exprs);
         self.num_exprs += 1;
     }
 
@@ -122,10 +127,10 @@ impl PredicateSet {
                 let equal_exprs = &mut self.equal_exprs[*idx];
                 equal_exprs.push(right.clone());
             }
-            None => self.add_expr(left, vec![]),
+            None => self.add_expr(left, vec![], vec![right.clone()]),
         };
         if self.expr_to_idx.get(right).is_none() {
-            self.add_expr(right, vec![]);
+            self.add_expr(right, vec![], vec![]);
         }
     }
 
@@ -154,7 +159,7 @@ impl PredicateSet {
                 }
                 predicates.push(right);
             }
-            None => self.add_expr(left, vec![right]),
+            None => self.add_expr(left, vec![right], vec![]),
         };
     }
 
@@ -318,7 +323,8 @@ impl PredicateSet {
         }
     }
 
-    fn into_predicates(mut self) -> Vec<ScalarExpr> {
+    fn derive_predicates(&mut self) -> (bool, Vec<ScalarExpr>) {
+        let mut is_updated = self.is_merged;
         let mut result = vec![];
         let num_exprs = self.num_exprs;
         let mut parents = vec![0; num_exprs];
@@ -331,20 +337,34 @@ impl PredicateSet {
                 Self::union(&mut parents, left_idx, *right_idx);
             }
         }
+        let mut old_predicates_set = self.predicates.clone();
+        for predicates in old_predicates_set.iter_mut() {
+            predicates.sort();
+        }
         for idx in 0..num_exprs {
             let parent_idx = Self::find(&mut parents, idx);
             if idx != parent_idx {
+                let expr = self.exprs[parent_idx].clone();
                 let predicates = self.predicates[idx].clone();
                 for predicate in predicates {
-                    let expr = self.exprs[parent_idx].clone();
                     self.add_predicate(&expr, predicate);
                 }
             }
         }
+        for predicates in self.predicates.iter_mut() {
+            predicates.sort();
+        }
         for (scalar, idx) in self.expr_to_idx.iter() {
             let parent_idx = Self::find(&mut parents, *idx);
-            let predicates = &self.predicates[parent_idx];
-            for predicate in predicates.iter() {
+            let old_predicates = &old_predicates_set[*idx];
+            let parent_predicates = &self.predicates[parent_idx];
+            if old_predicates.len() != parent_predicates.len() {
+                is_updated = true;
+            }
+            for (i, predicate) in parent_predicates.iter().enumerate() {
+                if i < old_predicates.len() && &old_predicates[i] != predicate {
+                    is_updated = true;
+                }
                 result.push(ScalarExpr::FunctionCall(FunctionCall {
                     span: None,
                     func_name: String::from(predicate.op.to_func_name()),
@@ -356,7 +376,7 @@ impl PredicateSet {
                 }));
             }
         }
-        result
+        (is_updated | self.is_falsy, result)
     }
 }
 
@@ -507,7 +527,9 @@ impl Rule for RuleInferFilter {
                         func.arguments[1].is_column_ref(),
                     ) {
                         (true, true) => {
-                            predicate_set.add_equal(&func.arguments[0], &func.arguments[1]);
+                            if op == ComparisonOp::Equal {
+                                predicate_set.add_equal(&func.arguments[0], &func.arguments[1]);
+                            }
                             new_predicates.push(predicate);
                         }
                         (true, false) => {
@@ -558,6 +580,12 @@ impl Rule for RuleInferFilter {
             }
         }
         is_rewritten |= predicate_set.is_merged;
+        if !predicate_set.is_falsy {
+            // `derive_predicates` may change is_falsy to true.
+            let (is_merged, infer_predicates) = predicate_set.derive_predicates();
+            is_rewritten |= is_merged;
+            new_predicates.extend(infer_predicates);
+        }
         if predicate_set.is_falsy {
             new_predicates = vec![
                 ConstantExpr {
@@ -566,16 +594,12 @@ impl Rule for RuleInferFilter {
                 }
                 .into(),
             ];
-        } else {
-            let infer_predicates = predicate_set.into_predicates();
-            new_predicates.extend(infer_predicates);
         }
         if is_rewritten {
             state.add_result(SExpr::create_unary(
                 Arc::new(
                     Filter {
                         predicates: new_predicates,
-                        is_having: filter.is_having,
                     }
                     .into(),
                 ),

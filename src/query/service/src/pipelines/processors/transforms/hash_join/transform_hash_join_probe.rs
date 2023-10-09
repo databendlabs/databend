@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::VecDeque;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -23,14 +24,17 @@ use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_sql::optimizer::ColumnSet;
 use common_sql::plans::JoinType;
+use log::info;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::probe_spill::ProbeSpillState;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::Processor;
 
+#[derive(Debug)]
 enum HashJoinProbeStep {
     // The step is to wait build phase finished.
     WaitBuild,
@@ -42,6 +46,8 @@ enum HashJoinProbeStep {
     FastReturn,
     // Spill step is used to spill the probe side data.
     Spill,
+    // Async running will read the spilled data, then go to probe
+    AsyncRunning,
 }
 
 pub struct TransformHashJoinProbe {
@@ -56,6 +62,14 @@ pub struct TransformHashJoinProbe {
     probe_state: ProbeState,
     max_block_size: usize,
     outer_scan_finished: bool,
+    processor_id: usize,
+
+    // If the processor has finished spill, set it to true.
+    spill_done: bool,
+    spill_state: Option<Box<ProbeSpillState>>,
+    // If input data can't find proper partitions to spill,
+    // directly probe them with hashtable.
+    need_spill: bool,
 }
 
 impl TransformHashJoinProbe {
@@ -65,12 +79,14 @@ impl TransformHashJoinProbe {
         output_port: Arc<OutputPort>,
         projections: ColumnSet,
         join_probe_state: Arc<HashJoinProbeState>,
+        probe_spill_state: Option<Box<ProbeSpillState>>,
         max_block_size: usize,
         func_ctx: FunctionContext,
         join_type: &JoinType,
         with_conjunct: bool,
+        has_string_column: bool,
     ) -> Result<Box<dyn Processor>> {
-        join_probe_state.probe_attach()?;
+        let id = join_probe_state.probe_attach()?;
         Ok(Box::new(TransformHashJoinProbe {
             input_port,
             output_port,
@@ -79,9 +95,19 @@ impl TransformHashJoinProbe {
             output_data_blocks: VecDeque::new(),
             step: HashJoinProbeStep::WaitBuild,
             join_probe_state,
-            probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
+            probe_state: ProbeState::create(
+                max_block_size,
+                join_type,
+                with_conjunct,
+                has_string_column,
+                func_ctx,
+            ),
             max_block_size,
             outer_scan_finished: false,
+            spill_done: false,
+            spill_state: probe_spill_state,
+            processor_id: id,
+            need_spill: true,
         }))
     }
 
@@ -104,9 +130,15 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
-    // Run the probe phase with spilled data.
-    fn run_with_spilled_data(&mut self) -> Result<Event> {
-        todo!("run_with_spilled_data")
+    fn async_run(&mut self) -> Result<Event> {
+        debug_assert!(self.input_port.is_finished());
+        if !self.input_data.is_empty() {
+            self.step = HashJoinProbeStep::Running;
+            Ok(Event::Sync)
+        } else {
+            // Read spilled data
+            Ok(Event::Async)
+        }
     }
 
     fn run(&mut self) -> Result<Event> {
@@ -118,7 +150,6 @@ impl TransformHashJoinProbe {
             {
                 self.join_probe_state.probe_done()?;
             }
-
             return Ok(Event::Finished);
         }
 
@@ -149,7 +180,18 @@ impl TransformHashJoinProbe {
             if let Some(remain) = remain_block {
                 self.input_data.push_back(remain);
             }
+            if self.spill_state.is_some() {
+                self.need_spill = true;
+                self.step = HashJoinProbeStep::Spill;
+                return Ok(Event::Async);
+            }
             return Ok(Event::Sync);
+        }
+
+        if self.spill_state.is_some() && !self.spill_done {
+            self.need_spill = true;
+            self.step = HashJoinProbeStep::Spill;
+            return Ok(Event::Async);
         }
 
         if self.input_port.is_finished() {
@@ -159,14 +201,8 @@ impl TransformHashJoinProbe {
                 self.join_probe_state.probe_done()?;
                 Ok(Event::Async)
             } else {
-                if !self
-                    .join_probe_state
-                    .hash_join_state
-                    .spill_partition
-                    .read()
-                    .is_empty()
-                {
-                    self.join_probe_state.finish_final_probe();
+                if !self.join_probe_state.spill_partitions.read().is_empty() {
+                    self.join_probe_state.finish_final_probe()?;
                     self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
                 }
@@ -174,10 +210,10 @@ impl TransformHashJoinProbe {
                     .join_probe_state
                     .ctx
                     .get_settings()
-                    .get_enable_join_spill()?
+                    .get_join_spilling_threshold()?
+                    != 0
                 {
-                    // Todo: find a better way to notify build finish.
-                    self.join_probe_state.finish_final_probe();
+                    self.join_probe_state.finish_final_probe()?;
                 }
                 self.output_port.finish();
                 Ok(Event::Finished)
@@ -185,6 +221,39 @@ impl TransformHashJoinProbe {
         }
         self.input_port.set_need_data();
         Ok(Event::NeedData)
+    }
+
+    fn reset(&mut self) -> Result<()> {
+        self.step = HashJoinProbeStep::Running;
+        // self.probe_state.reset();
+        if (self.join_probe_state.hash_join_state.need_outer_scan()
+            || self.join_probe_state.hash_join_state.need_mark_scan())
+            && self.join_probe_state.probe_workers.load(Ordering::Relaxed) == 0
+        {
+            self.join_probe_state
+                .probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
+        }
+
+        if self
+            .join_probe_state
+            .final_probe_workers
+            .load(Ordering::Relaxed)
+            == 0
+        {
+            // Before probe processor into `WaitBuild` state, send `1` to channel
+            // After all build processors are finished, the last one will send `2` to channel and wake up all probe processors.
+            self.join_probe_state
+                .hash_join_state
+                .build_done_watcher
+                .send(1)
+                .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
+            self.join_probe_state
+                .final_probe_workers
+                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
+        }
+        self.outer_scan_finished = false;
+        Ok(())
     }
 }
 
@@ -203,6 +272,10 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::WaitBuild => Ok(Event::Async),
             HashJoinProbeStep::Spill => {
                 if !self.input_data.is_empty() {
+                    if !self.need_spill {
+                        self.step = HashJoinProbeStep::Running;
+                        return Ok(Event::Sync);
+                    }
                     return Ok(Event::Async);
                 }
 
@@ -213,7 +286,21 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    self.join_probe_state.finish_spill();
+                    // Add spilled partition ids to `spill_partitions` of `HashJoinProbeState`
+                    let spilled_partition_set = &self
+                        .spill_state
+                        .as_ref()
+                        .unwrap()
+                        .spiller
+                        .spilled_partition_set;
+                    if !spilled_partition_set.is_empty() {
+                        info!("probe spilled partitions: {:?}", spilled_partition_set);
+                        let mut spill_partitions = self.join_probe_state.spill_partitions.write();
+                        spill_partitions.extend(spilled_partition_set);
+                    }
+
+                    self.spill_done = true;
+                    self.join_probe_state.finish_spill()?;
                     // Wait build side to build hash table
                     self.step = HashJoinProbeStep::WaitBuild;
                     return Ok(Event::Async);
@@ -225,13 +312,8 @@ impl Processor for TransformHashJoinProbe {
                 self.output_port.finish();
                 Ok(Event::Finished)
             }
-            HashJoinProbeStep::Running => {
-                if !self.join_probe_state.probe_partition_set.read().is_empty() {
-                    self.run_with_spilled_data()
-                } else {
-                    self.run()
-                }
-            }
+            HashJoinProbeStep::Running => self.run(),
+            HashJoinProbeStep::AsyncRunning => self.async_run(),
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
                     return Ok(Event::Finished);
@@ -254,14 +336,8 @@ impl Processor for TransformHashJoinProbe {
                 match self.outer_scan_finished {
                     false => Ok(Event::Sync),
                     true => {
-                        if !self
-                            .join_probe_state
-                            .hash_join_state
-                            .spill_partition
-                            .read()
-                            .is_empty()
-                        {
-                            self.join_probe_state.finish_final_probe();
+                        if !self.join_probe_state.spill_partitions.read().is_empty() {
+                            self.join_probe_state.finish_final_probe()?;
                             self.step = HashJoinProbeStep::WaitBuild;
                             return Ok(Event::Async);
                         }
@@ -269,9 +345,10 @@ impl Processor for TransformHashJoinProbe {
                             .join_probe_state
                             .ctx
                             .get_settings()
-                            .get_enable_join_spill()?
+                            .get_join_spilling_threshold()?
+                            != 0
                         {
-                            self.join_probe_state.finish_final_probe();
+                            self.join_probe_state.finish_final_probe()?;
                         }
                         self.output_port.finish();
                         Ok(Event::Finished)
@@ -302,9 +379,10 @@ impl Processor for TransformHashJoinProbe {
                 }
                 Ok(())
             }
-            HashJoinProbeStep::WaitBuild
-            | HashJoinProbeStep::FastReturn
-            | HashJoinProbeStep::Spill => unreachable!(),
+            HashJoinProbeStep::FastReturn
+            | HashJoinProbeStep::WaitBuild
+            | HashJoinProbeStep::Spill
+            | HashJoinProbeStep::AsyncRunning => unreachable!("{:?}", self.step),
         }
     }
 
@@ -312,17 +390,30 @@ impl Processor for TransformHashJoinProbe {
     async fn async_process(&mut self) -> Result<()> {
         match self.step {
             HashJoinProbeStep::WaitBuild => {
-                self.join_probe_state
-                    .hash_join_state
-                    .wait_build_hash_table_finish()
-                    .await?;
+                if !self.spill_done {
+                    self.join_probe_state
+                        .hash_join_state
+                        .wait_first_round_build_done()
+                        .await?;
+                } else {
+                    self.join_probe_state
+                        .hash_join_state
+                        .wait_build_finish()
+                        .await?;
+                }
+
                 let join_type = self
                     .join_probe_state
                     .hash_join_state
                     .hash_join_desc
                     .join_type
                     .clone();
-                if self.join_probe_state.hash_join_state.fast_return()? {
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Relaxed)
+                {
                     match join_type {
                         JoinType::Inner
                         | JoinType::Cross
@@ -348,34 +439,84 @@ impl Processor for TransformHashJoinProbe {
                     }
                     return Ok(());
                 }
-                // If join spill is enable, next step is spill
-                if !self
+                if self
                     .join_probe_state
-                    .hash_join_state
-                    .spill_partition
-                    .read()
-                    .is_empty()
-                    && !*self
-                        .join_probe_state
-                        .hash_join_state
-                        .probe_spill_done
-                        .lock()
+                    .ctx
+                    .get_settings()
+                    .get_join_spilling_threshold()?
+                    != 0
                 {
-                    self.step = HashJoinProbeStep::Spill;
+                    if !self.spill_done {
+                        self.step = HashJoinProbeStep::Spill;
+                    } else {
+                        self.step = HashJoinProbeStep::AsyncRunning;
+                    }
                 } else {
                     self.step = HashJoinProbeStep::Running;
                 }
             }
             HashJoinProbeStep::Running => {
-                self.join_probe_state.wait_probe_finish().await?;
-                if self.join_probe_state.hash_join_state.fast_return()? {
+                self.join_probe_state.barrier.wait().await;
+                if self
+                    .join_probe_state
+                    .hash_join_state
+                    .fast_return
+                    .load(Ordering::Relaxed)
+                {
                     self.step = HashJoinProbeStep::FastReturn;
                 } else {
                     self.step = HashJoinProbeStep::FinalScan;
                 }
             }
             HashJoinProbeStep::Spill => {
-                todo!("spill")
+                if let Some(data) = self.input_data.pop_front() {
+                    let spill_state = self.spill_state.as_mut().unwrap();
+                    let mut hashes = Vec::with_capacity(data.num_rows());
+                    spill_state.get_hashes(&data, &mut hashes)?;
+                    // Pass build spilled partition set, we only need to spill data in build spilled partition set
+                    let build_spilled_partitions = self
+                        .join_probe_state
+                        .hash_join_state
+                        .build_spilled_partitions
+                        .read()
+                        .clone();
+                    let non_matched_data = spill_state
+                        .spiller
+                        .spill_input(data, &hashes, &build_spilled_partitions, self.processor_id)
+                        .await?;
+                    // Use `non_matched_data` to probe the first round hashtable (if the hashtable isn't empty)
+                    if !non_matched_data.is_empty()
+                        && unsafe { &*self.join_probe_state.hash_join_state.build_num_rows.get() }
+                            != &(0_usize)
+                    {
+                        self.input_data.push_back(non_matched_data);
+                        self.need_spill = false;
+                    }
+                }
+            }
+            HashJoinProbeStep::AsyncRunning => {
+                let spill_state = self.spill_state.as_ref().unwrap();
+                let p_id = self
+                    .join_probe_state
+                    .hash_join_state
+                    .partition_id
+                    .load(Ordering::Relaxed);
+                if p_id == -1 {
+                    self.step = HashJoinProbeStep::FastReturn;
+                    return Ok(());
+                }
+                if spill_state
+                    .spiller
+                    .spilled_partition_set
+                    .contains(&(p_id as u8))
+                {
+                    let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
+                    if !spilled_data.is_empty() {
+                        self.input_data.extend(spilled_data);
+                    }
+                }
+                self.join_probe_state.restore_barrier.wait().await;
+                self.reset()?;
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };

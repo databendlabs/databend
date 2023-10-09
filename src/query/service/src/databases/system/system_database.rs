@@ -44,6 +44,7 @@ use common_storages_system::ProcessesTable;
 use common_storages_system::QueryCacheTable;
 use common_storages_system::QueryLogTable;
 use common_storages_system::QueryProfileTable;
+use common_storages_system::QuerySummaryTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
@@ -69,7 +70,7 @@ impl SystemDatabase {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
         map.insert("clusters".to_string(), true);
-        // Add 2023-08-01 by BohuTANG
+        // Add 2023-08-01 by BohuTANG, due to it may leak the auth_string in the output.
         map.insert("users".to_string(), true);
         map
     }
@@ -115,6 +116,7 @@ impl SystemDatabase {
             BackgroundJobTable::create(sys_db_meta.next_table_id()),
             BacktraceTable::create(sys_db_meta.next_table_id()),
             TempFilesTable::create(sys_db_meta.next_table_id()),
+            QuerySummaryTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

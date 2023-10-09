@@ -28,6 +28,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
+use common_meta_app::principal::CopyOptions;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_storage::init_stage_operator;
@@ -119,7 +120,7 @@ impl CopyIntoTablePlan {
         };
 
         let operator = init_stage_operator(&stage_table_info.stage_info)?;
-        let all_source_file_infos = if operator.info().can_blocking() {
+        let all_source_file_infos = if operator.info().native_capability().blocking {
             if self.force {
                 stage_table_info
                     .files_info
@@ -247,6 +248,13 @@ impl CopyPlan {
                 DataType::Nullable(Box::new(DataType::Number(NumberDataType::Int32))),
             ),
         ])
+    }
+
+    pub fn copy_into_table_options(&self) -> Option<CopyOptions> {
+        match self {
+            CopyPlan::IntoTable(p) => Some(p.stage_table_info.stage_info.copy_options.clone()),
+            _ => None,
+        }
     }
 
     pub fn schema(&self) -> DataSchemaRef {

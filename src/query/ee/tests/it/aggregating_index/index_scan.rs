@@ -1085,8 +1085,8 @@ async fn test_fuzz_impl(format: &str) -> Result<()> {
             }
 
             // Clear data
-            execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-            execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+            execute_sql(fixture.ctx(), "DROP TABLE rt").await?;
+            execute_sql(fixture.ctx(), "DROP TABLE t").await?;
         }
     }
     Ok(())

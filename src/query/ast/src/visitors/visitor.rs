@@ -319,9 +319,9 @@ pub trait Visitor<'ast>: Sized {
         }
     }
 
-    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Expr, Expr)]) {
+    fn visit_map(&mut self, _span: Span, kvs: &'ast [(Literal, Expr)]) {
         for (key_expr, val_expr) in kvs {
-            walk_expr(self, key_expr);
+            self.visit_literal(_span, key_expr);
             walk_expr(self, val_expr);
         }
     }
@@ -515,26 +515,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_revoke(&mut self, _revoke: &'ast RevokeStmt) {}
 
-    fn visit_create_udf(
-        &mut self,
-        _if_not_exists: bool,
-        _udf_name: &'ast Identifier,
-        _parameters: &'ast [Identifier],
-        _definition: &'ast Expr,
-        _description: &'ast Option<String>,
-    ) {
-    }
+    fn visit_create_udf(&mut self, _stmt: &'ast CreateUDFStmt) {}
 
     fn visit_drop_udf(&mut self, _if_exists: bool, _udf_name: &'ast Identifier) {}
 
-    fn visit_alter_udf(
-        &mut self,
-        _udf_name: &'ast Identifier,
-        _parameters: &'ast [Identifier],
-        _definition: &'ast Expr,
-        _description: &'ast Option<String>,
-    ) {
-    }
+    fn visit_alter_udf(&mut self, _stmt: &'ast AlterUDFStmt) {}
 
     fn visit_create_stage(&mut self, _stmt: &'ast CreateStageStmt) {}
 
@@ -546,7 +531,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_remove_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
 
-    fn visit_list_stage(&mut self, _location: &'ast str, _pattern: &'ast str) {}
+    fn visit_list_stage(&mut self, _location: &'ast str, _pattern: &'ast Option<String>) {}
 
     fn visit_create_file_format(
         &mut self,

@@ -46,7 +46,7 @@ impl BeyondEndReader {
             let size = split_info.size as u64;
             let offset = offset + size;
             let limit = size as usize;
-            let mut reader = operator.range_reader(&self.path, offset..).await?;
+            let mut reader = operator.reader_with(&self.path).range(offset..).await?;
             let mut num_read_total = 0;
             loop {
                 let num_read = reader.read(&mut buf[..]).await?;

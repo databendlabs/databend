@@ -208,5 +208,17 @@ NULL abc
 NULL [1,
 
 statement ok
+CREATE TABLE IF NOT EXISTS t3(a int, b string, c tuple(id int, name string)) Engine = Fuse
+
+statement ok
+insert into t3 values (1, 'ab', (10, 'v1')),(2, 'cd', (20, 'v2'))
+
+query TTT
+select to_variant(a), to_variant(b), to_variant(c) from t3
+----
+1 "ab" {"id":10,"name":"v1"}
+2 "cd" {"id":20,"name":"v2"}
+
+statement ok
 DROP DATABASE db1
 

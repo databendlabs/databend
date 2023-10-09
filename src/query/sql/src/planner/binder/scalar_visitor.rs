@@ -98,6 +98,11 @@ pub trait ScalarVisitor: Sized {
                                     stack.push(RecursionProcessing::Call(&cast.argument))
                                 }
                                 ScalarExpr::SubqueryExpr(_) => {}
+                                ScalarExpr::UDFServerCall(udf) => {
+                                    for arg in udf.arguments.iter() {
+                                        stack.push(RecursionProcessing::Call(arg));
+                                    }
+                                }
                             }
 
                             visitor

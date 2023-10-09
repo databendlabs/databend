@@ -13,7 +13,6 @@
 //  limitations under the License.
 
 mod file_format;
-mod user_defined_function;
 mod user_grant;
 mod user_info;
 mod user_privilege;

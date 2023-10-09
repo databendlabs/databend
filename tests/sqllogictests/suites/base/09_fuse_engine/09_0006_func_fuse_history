@@ -81,7 +81,7 @@ select count() from fuse_block('db_09_0006', 't1')
 5
 
 statement ok
-truncate table t1 purge
+truncate table t1
 
 query I
 select block_size from fuse_block('db_09_0006', 't1')

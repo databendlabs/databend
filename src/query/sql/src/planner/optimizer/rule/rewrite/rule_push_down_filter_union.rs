@@ -34,6 +34,7 @@ use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
+use crate::plans::UDFServerCall;
 use crate::plans::UnionAll;
 use crate::plans::WindowFunc;
 use crate::plans::WindowFuncType;
@@ -113,7 +114,6 @@ impl Rule for RulePushDownFilterUnion {
             .collect::<Result<Vec<_>>>()?;
         let right_filer = Filter {
             predicates: new_predicates,
-            is_having: filter.is_having,
         };
 
         let mut union_left_child = union_s_expr.child(0)?.clone();
@@ -271,5 +271,21 @@ fn replace_column_binding(
         ScalarExpr::SubqueryExpr(_) => Err(ErrorCode::Unimplemented(
             "replace_column_binding: don't support subquery",
         )),
+        ScalarExpr::UDFServerCall(udf) => {
+            let arguments = udf
+                .arguments
+                .into_iter()
+                .map(|arg| replace_column_binding(index_pairs, arg))
+                .collect::<Result<Vec<_>>>()?;
+
+            Ok(ScalarExpr::UDFServerCall(UDFServerCall {
+                span: udf.span,
+                func_name: udf.func_name,
+                server_addr: udf.server_addr,
+                arg_types: udf.arg_types,
+                return_type: udf.return_type,
+                arguments,
+            }))
+        }
     }
 }

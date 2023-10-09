@@ -21,12 +21,13 @@ use std::num::ParseIntError;
 use common_exception::pretty_print_error;
 use common_exception::Range;
 use itertools::Itertools;
+use ordered_float::OrderedFloat;
 
 use crate::input::Input;
 use crate::parser::token::*;
 use crate::util::transform_span;
 
-const MAX_DISPLAY_ERROR_COUNT: usize = 6;
+const MAX_DISPLAY_ERROR_COUNT: usize = 60;
 
 /// This error type accumulates errors and their position when backtracking
 /// through a parse tree. This take a deepest error at `alt` combinator.
@@ -180,6 +181,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
         Some(inner) => inner,
         None => return String::new(),
     };
+    let span_text = &source[std::ops::Range::from(inner.span)];
 
     let mut labels = vec![];
 
@@ -193,7 +195,7 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
 
     // List all expected tokens in alternative branches.
     if labels.is_empty() {
-        let expected_tokens = error
+        let mut expected_tokens = error
             .errors
             .iter()
             .chain(&inner.errors)
@@ -208,6 +210,12 @@ pub fn display_parser_error(error: Error, source: &str) -> String {
             })
             .unique()
             .collect::<Vec<_>>();
+        expected_tokens.sort_by_cached_key(|token| {
+            OrderedFloat::from(-strsim::jaro_winkler(
+                &token.to_lowercase(),
+                &span_text.to_lowercase(),
+            ))
+        });
 
         let mut msg = String::new();
         let mut iter = expected_tokens.iter().enumerate().peekable();

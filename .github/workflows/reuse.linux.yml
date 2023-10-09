@@ -27,7 +27,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/check
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           github_token: ${{ github.token }}
 
@@ -66,7 +66,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
@@ -87,7 +87,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
+        timeout-minutes: 60
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
@@ -101,7 +101,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
-        timeout-minutes: 30
+        timeout-minutes: 60
 
   test_metactl:
     runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
@@ -181,6 +181,33 @@ jobs:
           storage-format: all
       - name: Upload failure
         if: failure()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.dirs }}
+
+  sqllogic_standalone_udf_server:
+    name: sqllogic_standalone_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    strategy:
+      matrix:
+        dirs:
+          - "udf_server"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Start UDF Server
+        run: |
+          pip install pyarrow
+          python3 tests/udf-server/udf_test.py &
+          sleep 2
+      - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: mysql,http,clickhouse
+          storage-format: all
+      - name: Upload failure
+        if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
         with:
           name: test-sqllogic-standalone-${{ matrix.dirs }}

@@ -25,7 +25,6 @@ use crate::sessions::QueryContext;
 use crate::sql::plans::Plan;
 
 pub struct ManagementModeAccess {}
-
 impl ManagementModeAccess {
     pub fn create() -> Box<dyn AccessChecker> {
         Box::new(ManagementModeAccess {})

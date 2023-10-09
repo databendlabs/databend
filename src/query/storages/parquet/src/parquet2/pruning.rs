@@ -62,8 +62,11 @@ pub struct PartitionPruner {
     pub schema: TableSchemaRef,
     pub schema_descr: SchemaDescriptor,
     pub schema_from: String,
-    /// Pruner to prune row groups.
-    pub row_group_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
+    /// Pruner to prune row groups. (filter & inverted filter)
+    pub row_group_pruner: Option<(
+        Arc<dyn RangePruner + Send + Sync>,
+        Arc<dyn RangePruner + Send + Sync>,
+    )>,
     /// Pruners to prune pages.
     pub page_pruners: Option<ColumnRangePruners>,
     /// The projected column indices.
@@ -108,7 +111,7 @@ impl PartitionPruner {
         let mut stats = PartStatistics::default();
         let mut partitions = vec![];
 
-        let is_blocking_io = operator.info().can_blocking();
+        let is_blocking_io = operator.info().native_capability().blocking;
         let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
 
         let no_stats = file_meta.row_groups.iter().any(|r| {
@@ -120,7 +123,7 @@ impl PartitionPruner {
         let row_group_stats = if no_stats {
             None
         } else if self.row_group_pruner.is_some() && !self.skip_pruning {
-            let pruner = self.row_group_pruner.as_ref().unwrap();
+            let (pruner, _) = self.row_group_pruner.as_ref().unwrap();
             // If collecting stats fails or `should_keep` is true, we still read the row group.
             // Otherwise, the row group will be pruned.
             if let Ok(row_group_stats) =
@@ -177,7 +180,7 @@ impl PartitionPruner {
                 let min_max = self
                     .top_k
                     .as_ref()
-                    .filter(|(tk, _)| tk.column_id as usize == *index)
+                    .filter(|(tk, _)| tk.leaf_id == *index)
                     .zip(row_group_stats.as_ref())
                     .map(|((_, offset), stats)| {
                         let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();

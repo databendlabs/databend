@@ -39,6 +39,7 @@ use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::StageInfo;
 use common_pipeline_core::InputError;
 use common_settings::Settings;
+use common_storage::FileParseError;
 use common_storage::FileStatus;
 use dashmap::DashMap;
 use opendal::Operator;
@@ -373,12 +374,7 @@ impl InputContext {
                 )
             }
         };
-        let msg = format!(
-            "{reason}, split {}, {pos}, options={:?}, schema={:?}",
-            split_info,
-            self.file_format_params,
-            self.schema.fields()
-        );
+        let msg = format!("{reason}, split {}, {pos}", split_info,);
         ErrorCode::BadBytes(msg)
     }
 
@@ -401,9 +397,10 @@ impl InputContext {
     /// the line start from 0, it will be increased by 1 right before output
     pub fn on_error(
         &self,
-        e: ErrorCode,
+        e: FileParseError,
         columns: Option<(&mut [ColumnBuilder], usize)>,
         file_status: &mut FileStatus,
+        file_path: &str,
         line: usize,
     ) -> Result<()> {
         if let Some((columns, num_rows)) = columns {
@@ -426,12 +423,12 @@ impl InputContext {
                 if *abort_num <= 1
                     || self.on_error_count.fetch_add(1, Ordering::Relaxed) >= *abort_num - 1
                 {
-                    Err(e)
+                    Err(e.to_error_code(&self.on_error_mode, file_path, line))
                 } else {
                     Ok(())
                 }
             }
-            _ => Err(e),
+            _ => Err(e.to_error_code(&self.on_error_mode, file_path, line)),
         }
     }
 }

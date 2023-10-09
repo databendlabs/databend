@@ -36,10 +36,10 @@ pub async fn build_query_pipeline(
     result_columns: &[ColumnBinding],
     plan: &PhysicalPlan,
     ignore_result: bool,
-    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
+    let enable_profile = ctx.get_settings().get_enable_query_profiling()?;
     let mut build_res =
-        build_query_pipeline_without_render_result_set(ctx, plan, enable_profiling).await?;
+        build_query_pipeline_without_render_result_set(ctx, plan, enable_profile).await?;
 
     let input_schema = plan.output_schema()?;
     PipelineBuilder::render_result_set(
@@ -79,6 +79,8 @@ pub async fn build_local_pipeline(
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let pipeline = PipelineBuilder::create(
+        ctx.get_function_context()?,
+        ctx.get_settings(),
         ctx.clone(),
         enable_profiling,
         SharedProcessorProfiles::default(),

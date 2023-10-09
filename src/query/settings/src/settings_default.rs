@@ -41,6 +41,7 @@ impl DefaultSettings {
         Ok(Arc::clone(DEFAULT_SETTINGS.get_or_try_init(|| -> Result<Arc<DefaultSettings>> {
             let num_cpus = Self::num_cpus();
             let max_memory_usage = Self::max_memory_usage()?;
+            let recluster_block_size = Self::recluster_block_size()?;
             let default_max_storage_io_requests = Self::storage_io_requests(num_cpus);
 
             let default_settings = HashMap::from([
@@ -159,15 +160,9 @@ impl DefaultSettings {
                     desc: "Disable join reorder optimization.",
                     possible_values: None,
                     display_in_show_settings: false,}),
-                ("enable_join_spill", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enables hash join spill.",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
                 ("join_spilling_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
-                    desc: "Maximum amount of memory can use for hash join build or probe, 0 is unlimited.",
+                    desc: "Maximum amount of memory can use for hash join, 0 is unlimited.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -281,7 +276,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(100),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -355,6 +350,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_distributed_compact", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable distributed execution of table compaction.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
                 ("enable_aggregating_index_scan", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enable scanning aggregating index data while querying.",
@@ -412,6 +413,18 @@ impl DefaultSettings {
                 ("ddl_column_type_nullable", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "If columns are default nullable when create or alter table",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
+                ("enable_query_profiling", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(0),
+                        desc: "Enables recording query profile",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("recluster_block_size", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(recluster_block_size),
+                    desc: "Sets the maximum byte size of blocks for recluster",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -474,6 +487,14 @@ impl DefaultSettings {
                 max_server_memory_usage => max_server_memory_usage,
             },
         })
+    }
+
+    fn recluster_block_size() -> Result<u64> {
+        let max_memory_usage = Self::max_memory_usage()?;
+        // The sort merge consumes more than twice as much memory,
+        // so the block size is set relatively conservatively here.
+        let recluster_block_size = max_memory_usage * 35 / 100;
+        Ok(recluster_block_size)
     }
 
     pub fn has_setting(key: &str) -> Result<bool> {

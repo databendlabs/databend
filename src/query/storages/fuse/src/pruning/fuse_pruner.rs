@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -45,10 +42,9 @@ use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 
+use crate::operations::DeletedSegmentInfo;
 use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
@@ -85,15 +81,18 @@ impl PruningContext {
     ) -> Result<Arc<PruningContext>> {
         let func_ctx = ctx.get_function_context()?;
 
-        let filter_expr = push_down
-            .as_ref()
-            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let filter_expr = push_down.as_ref().and_then(|extra| {
+            extra
+                .filters
+                .as_ref()
+                .map(|f| f.filter.as_expr(&BUILTIN_FUNCTIONS))
+        });
 
         // Limit pruner.
         // if there are ordering/filter clause, ignore limit, even it has been pushed down
         let limit = push_down
             .as_ref()
-            .filter(|p| p.order_by.is_empty() && p.filter.is_none())
+            .filter(|p| p.order_by.is_empty() && p.filters.is_none())
             .and_then(|p| p.limit);
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
@@ -170,23 +169,6 @@ impl PruningContext {
             pruning_stats,
         });
         Ok(pruning_ctx)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
-pub struct DeletedSegmentInfo {
-    // segment index.
-    pub index: usize,
-    // deleted segment location and summary.
-    // location is used for hash
-    pub segment_info: (Location, Statistics),
-}
-
-impl DeletedSegmentInfo {
-    pub fn hash(&self) -> u64 {
-        let mut s = DefaultHasher::new();
-        self.segment_info.0.hash(&mut s);
-        s.finish()
     }
 }
 
@@ -334,10 +316,7 @@ impl FusePruner {
                                     {
                                         deleted_segments.push(DeletedSegmentInfo {
                                             index: segment_location.segment_idx,
-                                            segment_info: (
-                                                segment_location.location.clone(),
-                                                compact_segment_info.summary.clone(),
-                                            ),
+                                            summary: compact_segment_info.summary.clone(),
                                         })
                                     } else {
                                         res.extend(
@@ -402,7 +381,7 @@ impl FusePruner {
         let push_down = self.push_down.clone();
         if push_down
             .as_ref()
-            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filter.is_none())
+            .filter(|p| !p.order_by.is_empty() && p.limit.is_some() && p.filters.is_none())
             .is_some()
         {
             let schema = self.table_schema.clone();

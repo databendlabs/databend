@@ -35,38 +35,26 @@ use crate::EXTENSION_KEY;
 impl From<&TableField> for ArrowField {
     fn from(f: &TableField) -> Self {
         let ty = f.data_type().into();
-        let mut metadata = HashMap::new();
-        match f.data_type() {
-            TableDataType::EmptyArray => {
-                metadata.insert(
-                    EXTENSION_KEY.to_string(),
-                    ARROW_EXT_TYPE_EMPTY_ARRAY.to_string(),
-                );
-            }
-            TableDataType::EmptyMap => {
-                metadata.insert(
-                    EXTENSION_KEY.to_string(),
-                    ARROW_EXT_TYPE_EMPTY_MAP.to_string(),
-                );
-            }
-            TableDataType::Variant => {
-                metadata.insert(
-                    EXTENSION_KEY.to_string(),
-                    ARROW_EXT_TYPE_VARIANT.to_string(),
-                );
-            }
-            TableDataType::Bitmap => {
-                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_BITMAP.to_string());
-            }
-            _ => Default::default(),
+        let extend_type = match f.data_type().remove_nullable() {
+            TableDataType::EmptyArray => Some(ARROW_EXT_TYPE_EMPTY_ARRAY.to_string()),
+            TableDataType::EmptyMap => Some(ARROW_EXT_TYPE_EMPTY_MAP.to_string()),
+            TableDataType::Variant => Some(ARROW_EXT_TYPE_VARIANT.to_string()),
+            TableDataType::Bitmap => Some(ARROW_EXT_TYPE_BITMAP.to_string()),
+            _ => None,
         };
-        match ty {
-            ArrowDataType::Struct(_) if f.is_nullable() => {
-                let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable())
+
+        if let Some(extend_type) = extend_type {
+            let mut metadata = HashMap::new();
+            metadata.insert(EXTENSION_KEY.to_string(), extend_type);
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
+        } else {
+            match ty {
+                ArrowDataType::Struct(_) if f.is_nullable() => {
+                    let ty = set_nullable(&ty);
+                    ArrowField::new(f.name(), ty, f.is_nullable())
+                }
+                _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
             }
-            // if datatype is null, need to set nullable to true
-            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
         }
     }
 }

@@ -43,6 +43,7 @@ pub enum ScalarExpr {
     FunctionCall(FunctionCall),
     CastExpr(CastExpr),
     SubqueryExpr(SubqueryExpr),
+    UDFServerCall(UDFServerCall),
 }
 
 impl ScalarExpr {
@@ -87,6 +88,13 @@ impl ScalarExpr {
             }
             ScalarExpr::CastExpr(scalar) => scalar.argument.used_columns(),
             ScalarExpr::SubqueryExpr(scalar) => scalar.outer_columns.clone(),
+            ScalarExpr::UDFServerCall(scalar) => {
+                let mut result = ColumnSet::new();
+                for scalar in &scalar.arguments {
+                    result = result.union(&scalar.used_columns()).cloned().collect();
+                }
+                result
+            }
         }
     }
 
@@ -128,6 +136,13 @@ impl ScalarExpr {
                     "SubqueryExpr/WindowFunction doesn't support used_tables method".to_string(),
                 ))
             }
+            ScalarExpr::UDFServerCall(scalar) => {
+                let mut result = vec![];
+                for scalar in &scalar.arguments {
+                    result.append(&mut scalar.used_tables(metadata.clone())?);
+                }
+                Ok(result)
+            }
         }
     }
 
@@ -147,6 +162,7 @@ impl ScalarExpr {
             }),
             ScalarExpr::CastExpr(expr) => expr.span.or(expr.argument.span()),
             ScalarExpr::SubqueryExpr(expr) => expr.span,
+            ScalarExpr::UDFServerCall(expr) => expr.span,
             _ => None,
         }
     }
@@ -156,7 +172,8 @@ impl ScalarExpr {
             ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => true,
             ScalarExpr::WindowFunction(_)
             | ScalarExpr::AggregateFunction(_)
-            | ScalarExpr::SubqueryExpr(_) => false,
+            | ScalarExpr::SubqueryExpr(_)
+            | ScalarExpr::UDFServerCall(_) => false,
             ScalarExpr::FunctionCall(func) => {
                 func.arguments.iter().all(|arg| arg.valid_for_clustering())
             }
@@ -316,6 +333,25 @@ impl TryFrom<ScalarExpr> for SubqueryExpr {
     }
 }
 
+impl From<UDFServerCall> for ScalarExpr {
+    fn from(v: UDFServerCall) -> Self {
+        Self::UDFServerCall(v)
+    }
+}
+
+impl TryFrom<ScalarExpr> for UDFServerCall {
+    type Error = ErrorCode;
+    fn try_from(value: ScalarExpr) -> Result<Self> {
+        if let ScalarExpr::UDFServerCall(value) = value {
+            Ok(value)
+        } else {
+            Err(ErrorCode::Internal(
+                "Cannot downcast Scalar to UDFServerCall",
+            ))
+        }
+    }
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct BoundColumnRef {
@@ -324,7 +360,7 @@ pub struct BoundColumnRef {
     pub column: ColumnBinding,
 }
 
-#[derive(Clone, Debug, Educe, PartialOrd)]
+#[derive(Clone, Debug, Educe, Ord, PartialOrd)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct ConstantExpr {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
@@ -332,7 +368,7 @@ pub struct ConstantExpr {
     pub value: Scalar,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 pub enum ComparisonOp {
     Equal,
     NotEqual,
@@ -535,4 +571,16 @@ impl SubqueryExpr {
 
 fn hash_column_set<H: Hasher>(columns: &ColumnSet, state: &mut H) {
     columns.iter().for_each(|c| c.hash(state));
+}
+
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
+pub struct UDFServerCall {
+    #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
+    pub span: Span,
+    pub func_name: String,
+    pub server_addr: String,
+    pub arg_types: Vec<DataType>,
+    pub return_type: Box<DataType>,
+    pub arguments: Vec<ScalarExpr>,
 }

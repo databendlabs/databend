@@ -84,6 +84,16 @@ impl MetaAPIError {
             },
         }
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaAPIError::ForwardToLeader(_) => "ForwardToLeader",
+            MetaAPIError::CanNotForward(_) => "CanNotForward",
+            MetaAPIError::NetworkError(_) => "NetworkError",
+            MetaAPIError::DataError(_) => "DataError",
+            MetaAPIError::RemoteError(_) => "RemoteError",
+        }
+    }
 }
 
 /// Errors raised when handling a request by raft node.
