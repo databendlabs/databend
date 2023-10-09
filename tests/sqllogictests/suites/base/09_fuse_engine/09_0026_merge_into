@@ -461,22 +461,22 @@ select * from salaries order by employee_id;
 
 ## null cast bug fix
 statement ok
-create table t1(a int not null);
+create table t1_target(a int not null);
 
 statement ok
-create table t2(a int not null);
+create table t2_source(a int not null);
 
 statement ok
-insert into t1 values(1);
+insert into t1_target values(1);
 
 statement ok
-insert into t2 values(1),(2);
+insert into t2_source values(1),(2);
 
 statement ok
-merge into t1 using (select * from t2) on t1.a = t2.a when matched then update * when not matched then insert *;
+merge into t1_target using (select * from t2_source) on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
 
 query T
-select * from t1 order by a;
+select * from t1_target order by a;
 ----
 1
 2
