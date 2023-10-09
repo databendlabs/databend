@@ -603,6 +603,15 @@ impl PipelineBuilder {
         let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
+        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        let output_lens = self.main_pipeline.output_len();
+        table.cluster_gen_for_append_with_specified_last_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            output_lens - 1,
+        )?;
+
         pipe_items.clear();
         pipe_items.push(table.rowid_aggregate_mutator(
             self.ctx.clone(),
