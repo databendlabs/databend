@@ -19,11 +19,20 @@ INSERT INTO products VALUES(1, 'Product 1', 0, 100.00,  90.00, 3),(2, 'Product 2
 query T
 SELECT GREATEST(price,member_price) FROM products
 ----
-120.00
-220.00
-360.00
-165.00
+100.00
+150.00
+200.00
+250.00
 300.00
+
+query T
+SELECT LEAST(price,member_price) FROM products
+----
+90.00
+120.00
+290.00
+210.00
+150.00
 
 query ITITITT
 SELECT id, name, category, price, rating,
@@ -61,6 +70,16 @@ query F
 SELECT GREATEST(1.0,2.0)
 ----
 2.0
+
+query I
+SELECT LEAST(1,2)
+----
+1
+
+query F
+SELECT LEAST(1.0,2.0)
+----
+1.0
 
 statement ok
 DROP DATABASE greatest_func_test

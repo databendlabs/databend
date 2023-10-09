@@ -29,7 +29,6 @@ use common_expression::types::number::UInt32Type;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::number::F64;
 use common_expression::types::string::StringColumn;
-use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -46,7 +45,6 @@ use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::Column;
-use common_expression::ColumnBuilder;
 use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
@@ -62,8 +60,6 @@ use common_expression::ValueRef;
 use ordered_float::OrderedFloat;
 use rand::Rng;
 use rand::SeedableRng;
-
-use crate::scalars::array::eval_array_aggr;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("inet_aton", &["ipv4_string_to_num"]);
@@ -236,43 +232,6 @@ pub fn register(registry: &mut FunctionRegistry) {
             Value::Column(col)
         },
     );
-    registry.register_function_factory("least", |_, args_type| {
-        if args_type.is_empty() {
-            return None;
-        }
-        let has_null = args_type.iter().any(|t| t.is_nullable_or_null());
-        let name = "least".to_string();
-        let first_type = &args_type[0];
-        let mut type_mismatch = false;
-        for arg_type in args_type.iter().skip(0) {
-            if first_type != arg_type {
-                type_mismatch = true;
-            }
-        }
-        let return_type = first_type.wrap_nullable();
-        let f = Function {
-            signature: FunctionSignature {
-                name,
-                args_type: args_type.to_vec(),
-                return_type: return_type.clone(),
-            },
-            eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_, _| FunctionDomain::MayThrow),
-                eval: Box::new(move |args, ctx| {
-                    if type_mismatch {
-                        ctx.set_error(0, "arg should be same type!");
-                    }
-                    let arg = eval_args(args, return_type.remove_nullable());
-                    eval_array_aggr("min", &[arg.as_ref()], ctx)
-                }),
-            },
-        };
-        if has_null {
-            Some(Arc::new(f.passthrough_nullable()))
-        } else {
-            Some(Arc::new(f))
-        }
-    });
 }
 
 fn register_inet_aton(registry: &mut FunctionRegistry) {
@@ -427,32 +386,4 @@ pub fn compute_grouping(cols: &[usize], grouping_id: u32) -> u32 {
         grouping |= ((grouping_id & (1 << j)) >> j) << i;
     }
     grouping
-}
-
-fn eval_args(args: &[ValueRef<AnyType>], dest_type: DataType) -> Value<AnyType> {
-    match &args[0] {
-        ValueRef::Scalar(_) => {
-            let mut builder = ColumnBuilder::with_capacity(&dest_type, args.len());
-            for item in args.iter() {
-                builder.push(item.as_scalar().unwrap().clone());
-            }
-            Value::Scalar(Scalar::Array(builder.build()))
-        }
-        ValueRef::Column(_) => {
-            let m = args.len();
-            let n = args[0].as_column().unwrap().len();
-            let mut builder =
-                ColumnBuilder::with_capacity(&DataType::Array(Box::new(dest_type.clone())), n);
-            for j in 0..n {
-                let mut scalar_builder = ColumnBuilder::with_capacity(&dest_type, m);
-                for item in args.iter().take(m) {
-                    let col = item.as_column().unwrap();
-                    let arg = col.index(j).unwrap();
-                    scalar_builder.push(arg);
-                }
-                builder.push(Scalar::Array(scalar_builder.build()).as_ref());
-            }
-            Value::Column(builder.build())
-        }
-    }
 }

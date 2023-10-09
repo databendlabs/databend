@@ -652,6 +652,82 @@ pub fn register(registry: &mut FunctionRegistry) {
 }
 
 fn register_array_aggr(registry: &mut FunctionRegistry) {
+    fn eval_array_aggr(
+        name: &str,
+        args: &[ValueRef<AnyType>],
+        ctx: &mut EvalContext,
+    ) -> Value<AnyType> {
+        match &args[0] {
+            ValueRef::Scalar(scalar) => match scalar {
+                ScalarRef::EmptyArray | ScalarRef::Null => {
+                    if name == "count" {
+                        Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
+                    } else {
+                        Value::Scalar(Scalar::Null)
+                    }
+                }
+                ScalarRef::Array(col) => {
+                    let len = col.len();
+                    match eval_aggr(name, vec![], &[col.clone()], len) {
+                        Ok((res_col, _)) => {
+                            let val = unsafe { res_col.index_unchecked(0) };
+                            Value::Scalar(val.to_owned())
+                        }
+                        Err(err) => {
+                            ctx.set_error(0, err.to_string());
+                            Value::Scalar(Scalar::Null)
+                        }
+                    }
+                }
+                _ => unreachable!(),
+            },
+            ValueRef::Column(column) => {
+                let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
+                let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
+                for arr in column.iter() {
+                    if arr == ScalarRef::Null {
+                        builder.push_default();
+                        continue;
+                    }
+                    let array_column = arr.as_array().unwrap();
+                    let len = array_column.len();
+                    match eval_aggr(name, vec![], &[array_column.clone()], len) {
+                        Ok((col, _)) => {
+                            let val = unsafe { col.index_unchecked(0) };
+                            builder.push(val)
+                        }
+                        Err(err) => {
+                            ctx.set_error(builder.len(), err.to_string());
+                        }
+                    }
+                }
+                Value::Column(builder.build())
+            }
+        }
+    }
+
+    fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
+        if args_type.len() != 1 {
+            return None;
+        }
+        let arg_type = args_type[0].remove_nullable();
+        if arg_type == DataType::EmptyArray {
+            if name == "count" {
+                return Some(DataType::Number(NumberDataType::UInt64));
+            }
+            return Some(DataType::Null);
+        }
+        let array_type = arg_type.as_array()?;
+        let factory = AggregateFunctionFactory::instance();
+        let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
+        let return_type = func.return_type().ok()?;
+        if args_type[0].is_nullable() {
+            Some(return_type.wrap_nullable())
+        } else {
+            Some(return_type)
+        }
+    }
+
     for (fn_name, name) in ARRAY_AGGREGATE_FUNCTIONS {
         registry.register_function_factory(fn_name, |_, args_type| {
             let return_type = eval_aggr_return_type(name, args_type)?;
@@ -703,81 +779,5 @@ fn register_array_aggr(registry: &mut FunctionRegistry) {
                 }
             }),
         );
-    }
-}
-
-pub fn eval_array_aggr(
-    name: &str,
-    args: &[ValueRef<AnyType>],
-    ctx: &mut EvalContext,
-) -> Value<AnyType> {
-    match &args[0] {
-        ValueRef::Scalar(scalar) => match scalar {
-            ScalarRef::EmptyArray | ScalarRef::Null => {
-                if name == "count" {
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(0)))
-                } else {
-                    Value::Scalar(Scalar::Null)
-                }
-            }
-            ScalarRef::Array(col) => {
-                let len = col.len();
-                match eval_aggr(name, vec![], &[col.clone()], len) {
-                    Ok((res_col, _)) => {
-                        let val = unsafe { res_col.index_unchecked(0) };
-                        Value::Scalar(val.to_owned())
-                    }
-                    Err(err) => {
-                        ctx.set_error(0, err.to_string());
-                        Value::Scalar(Scalar::Null)
-                    }
-                }
-            }
-            _ => unreachable!(),
-        },
-        ValueRef::Column(column) => {
-            let return_type = eval_aggr_return_type(name, &[column.data_type()]).unwrap();
-            let mut builder = ColumnBuilder::with_capacity(&return_type, column.len());
-            for arr in column.iter() {
-                if arr == ScalarRef::Null {
-                    builder.push_default();
-                    continue;
-                }
-                let array_column = arr.as_array().unwrap();
-                let len = array_column.len();
-                match eval_aggr(name, vec![], &[array_column.clone()], len) {
-                    Ok((col, _)) => {
-                        let val = unsafe { col.index_unchecked(0) };
-                        builder.push(val)
-                    }
-                    Err(err) => {
-                        ctx.set_error(builder.len(), err.to_string());
-                    }
-                }
-            }
-            Value::Column(builder.build())
-        }
-    }
-}
-
-fn eval_aggr_return_type(name: &str, args_type: &[DataType]) -> Option<DataType> {
-    if args_type.len() != 1 {
-        return None;
-    }
-    let arg_type = args_type[0].remove_nullable();
-    if arg_type == DataType::EmptyArray {
-        if name == "count" {
-            return Some(DataType::Number(NumberDataType::UInt64));
-        }
-        return Some(DataType::Null);
-    }
-    let array_type = arg_type.as_array()?;
-    let factory = AggregateFunctionFactory::instance();
-    let func = factory.get(name, vec![], vec![*array_type.clone()]).ok()?;
-    let return_type = func.return_type().ok()?;
-    if args_type[0].is_nullable() {
-        Some(return_type.wrap_nullable())
-    } else {
-        Some(return_type)
     }
 }

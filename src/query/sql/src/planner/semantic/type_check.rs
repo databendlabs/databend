@@ -2148,6 +2148,7 @@ impl<'a> TypeChecker<'a> {
             "to_variant",
             "try_to_variant",
             "greatest",
+            "least",
         ]
     }
 
@@ -2520,6 +2521,16 @@ impl<'a> TypeChecker<'a> {
                     .ok()?;
                 Some(
                     self.resolve_scalar_function_call(span, "array_max", vec![], vec![array])
+                        .await,
+                )
+            }
+            ("least", args) => {
+                let (array, _) = *self
+                    .resolve_function(span, "array", vec![], args)
+                    .await
+                    .ok()?;
+                Some(
+                    self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
                         .await,
                 )
             }

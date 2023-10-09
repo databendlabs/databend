@@ -1661,7 +1661,6 @@ Functions overloads:
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_distance(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
-0 greatest FACTORY
 0 grouping FACTORY
 0 gt(Variant, Variant) :: Boolean
 1 gt(Variant NULL, Variant NULL) :: Boolean NULL
