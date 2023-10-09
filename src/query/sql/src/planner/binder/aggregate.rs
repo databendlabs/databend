@@ -321,7 +321,7 @@ impl<'a> AggregateRewriter<'a> {
         let agg_info = &mut self.bind_context.aggregate_info;
 
         if let Some(column) =
-            find_replaced_aggregate_function(&agg_info, aggregate, &aggregate.display_name)
+            find_replaced_aggregate_function(agg_info, aggregate, &aggregate.display_name)
         {
             return Ok(BoundColumnRef { span: None, column }.into());
         }
