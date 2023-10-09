@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use anyerror::AnyError;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::GetKVReq;
 use common_meta_kvapi::kvapi::ListKVReply;
@@ -141,6 +142,15 @@ pub enum ForwardResponse {
 }
 
 impl tonic::IntoRequest<RaftRequest> for ForwardRequest<ForwardRequestBody> {
+    fn into_request(self) -> tonic::Request<RaftRequest> {
+        let mes = RaftRequest {
+            data: serde_json::to_string(&self).expect("fail to serialize"),
+        };
+        tonic::Request::new(mes)
+    }
+}
+
+impl tonic::IntoRequest<RaftRequest> for ForwardRequest<MetaGrpcReadReq> {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
