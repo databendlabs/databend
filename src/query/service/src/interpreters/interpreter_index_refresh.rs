@@ -301,13 +301,11 @@ impl Interpreter for RefreshIndexInterpreter {
             let index = input_schema.index_of(field.name())?;
             projections.push(index);
         }
-        let num_input_columns = input_schema.num_fields();
         let func_ctx = self.ctx.get_function_context()?;
         build_res.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
