@@ -34,6 +34,7 @@
 #![allow(incomplete_features)]
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
+#![feature(let_chains)]
 
 #[allow(dead_code)]
 mod block;
