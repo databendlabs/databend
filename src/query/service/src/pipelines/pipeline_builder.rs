@@ -398,10 +398,7 @@ impl PipelineBuilder {
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
         let delete_when = if let Some(x) = delete_when {
-            let schema = input.output_schema()?;
-            let x = x
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .project_column_ref(|name| schema.index_of(name).unwrap());
+            let x = x.as_expr(&BUILTIN_FUNCTIONS);
             Some(x)
         } else {
             None

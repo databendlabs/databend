@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
+use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Deduplicate;
@@ -44,7 +45,6 @@ use common_storages_fuse::FuseTable;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use super::common::create_push_down_filters;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
@@ -204,15 +204,19 @@ impl ReplaceInterpreter {
                 Default::default(),
             );
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            let filters = create_push_down_filters(&scalar)?;
+            let filter = cast_expr_to_non_null_boolean(
+                scalar.as_expr()?.project_column_ref(|col| col.index),
+            )?;
 
-            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+            let filter = filter.as_remote_expr();
+
+            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::Unimplemented(
                     "Delete must have deterministic predicate",
                 ));
             }
-            Some(filters.filter)
+            Some(filter)
         } else {
             None
         };
