@@ -69,7 +69,6 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use uuid::Uuid;
 
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
@@ -434,7 +433,6 @@ impl Table for FuseTable {
         };
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
             schema,
@@ -485,7 +483,6 @@ impl Table for FuseTable {
         };
 
         let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
             schema,

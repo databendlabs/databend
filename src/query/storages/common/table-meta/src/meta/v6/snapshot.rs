@@ -16,6 +16,7 @@ use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_io::prelude::BinaryRead;
@@ -27,19 +28,18 @@ use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::monotonically_increased_timestamp;
-use crate::meta::snapshot_id::new_snapshot_id_with_timestamp;
 use crate::meta::trim_timestamp_to_micro_second;
 use crate::meta::v2;
 use crate::meta::v3;
+use crate::meta::v4;
+use crate::meta::v6::Statistics;
 use crate::meta::ClusterKey;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaEncoding;
 use crate::meta::SnapshotId;
-use crate::meta::Statistics;
 use crate::meta::Versioned;
 
-/// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
     /// format version of TableSnapshot meta data
@@ -87,6 +87,7 @@ pub struct TableSnapshot {
 
 impl TableSnapshot {
     pub fn new(
+        snapshot_id: SnapshotId,
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_id: Option<(SnapshotId, FormatVersion)>,
         schema: TableSchema,
@@ -102,7 +103,6 @@ impl TableSnapshot {
         // trim timestamp to micro seconds
         let trimmed_timestamp = trim_timestamp_to_micro_second(adjusted_timestamp);
         let timestamp = Some(trimmed_timestamp);
-        let snapshot_id = new_snapshot_id_with_timestamp(timestamp);
 
         Self {
             format_version: TableSnapshot::VERSION,
@@ -119,6 +119,7 @@ impl TableSnapshot {
 
     pub fn new_empty_snapshot(schema: TableSchema) -> Self {
         Self::new(
+            Uuid::new_v4(),
             &None,
             None,
             schema,
@@ -130,9 +131,11 @@ impl TableSnapshot {
     }
 
     pub fn from_previous(previous: &TableSnapshot) -> Self {
+        let id = Uuid::new_v4();
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
+            id,
             &clone.timestamp,
             Some((clone.snapshot_id, clone.format_version)),
             clone.schema,
@@ -197,6 +200,7 @@ impl TableSnapshot {
 
         read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
     }
+
     #[inline]
     pub fn encoding() -> MetaEncoding {
         MetaEncoding::MessagePack
@@ -214,7 +218,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             timestamp: s.timestamp,
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema,
-            summary: s.summary,
+            summary: Statistics::from_v2(s.summary),
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
@@ -236,6 +240,24 @@ where T: Into<v3::TableSnapshot>
             prev_snapshot_id: s.prev_snapshot_id,
             schema: s.schema.into(),
             summary: s.summary.into(),
+            segments: s.segments,
+            cluster_key_meta: s.cluster_key_meta,
+            table_statistics_location: s.table_statistics_location,
+        }
+    }
+}
+
+impl From<v4::TableSnapshot> for TableSnapshot {
+    fn from(s: v4::TableSnapshot) -> Self {
+        Self {
+            // NOTE: it is important to let the format_version return from here
+            // carries the format_version of snapshot being converted.
+            format_version: s.format_version,
+            snapshot_id: s.snapshot_id,
+            timestamp: s.timestamp,
+            prev_snapshot_id: s.prev_snapshot_id,
+            schema: s.schema,
+            summary: Statistics::from_v2(s.summary),
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,

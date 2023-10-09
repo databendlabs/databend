@@ -31,7 +31,7 @@ use crate::meta::v2;
 use crate::meta::v2::BlockMeta;
 use crate::meta::v3;
 use crate::meta::v4;
-use crate::meta::v5::Statistics;
+use crate::meta::v6::Statistics;
 use crate::meta::FormatVersion;
 use crate::meta::Location;
 use crate::meta::MetaCompression;

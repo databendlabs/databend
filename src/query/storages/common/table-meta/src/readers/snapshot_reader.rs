@@ -33,7 +33,8 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
         let mut buffer: Vec<u8> = vec![];
         reader.read_to_end(&mut buffer).await?;
         let r = match self {
-            SnapshotVersion::V5(_) => unimplemented!(),
+            SnapshotVersion::V6(_) => unimplemented!(),
+            SnapshotVersion::V5(_) => TableSnapshot::from_slice(&buffer)?,
             SnapshotVersion::V4(_) => TableSnapshot::from_slice(&buffer)?,
             SnapshotVersion::V3(_) => TableSnapshotV3::from_slice(&buffer)?.into(),
             SnapshotVersion::V2(v) => {

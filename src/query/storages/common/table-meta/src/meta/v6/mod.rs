@@ -12,7 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod segment;
 mod snapshot;
+mod statistics;
 
+pub use segment::CompactSegmentInfo;
+pub use segment::InternalSegmentInfo;
+pub use segment::LeafSegmentInfo;
+pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;
+pub use statistics::ClusterStatistics;
+pub use statistics::ColumnStatistics;
+pub use statistics::Statistics;

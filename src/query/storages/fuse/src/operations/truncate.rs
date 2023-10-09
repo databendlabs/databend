@@ -23,7 +23,6 @@ use common_meta_types::MatchSeq;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use uuid::Uuid;
 
 use crate::FuseTable;
 
@@ -36,7 +35,6 @@ impl FuseTable {
             let prev_id = prev_snapshot.snapshot_id;
             let prev_format_version = self.snapshot_format_version(None).await?;
             let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
                 &prev_snapshot.timestamp,
                 Some((prev_id, prev_format_version)),
                 prev_snapshot.schema.clone(),

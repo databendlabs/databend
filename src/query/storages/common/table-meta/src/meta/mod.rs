@@ -17,6 +17,7 @@
 mod compression;
 mod current;
 mod format;
+mod snapshot_id;
 mod statistics;
 mod utils;
 mod v0;
@@ -25,6 +26,7 @@ mod v2;
 mod v3;
 mod v4;
 mod v5;
+mod v6;
 mod versions;
 
 pub use compression::Compression;
@@ -34,6 +36,7 @@ pub(crate) use format::load_json;
 pub(crate) use format::MetaCompression;
 pub(crate) use format::MetaEncoding;
 pub use format::NUM_BLOCK_ID_BITS;
+pub use snapshot_id::SnapshotId;
 pub use statistics::*;
 // export legacy versioned table meta types locally,
 // currently, used by versioned readers only
@@ -56,4 +59,5 @@ pub mod testing {
     pub use super::v2::TableSnapshot as TableSnapshotV2;
     pub use super::v3::SegmentInfo as SegmentInfoV3;
     pub use super::v3::TableSnapshot as TableSnapshotV3;
+    pub use super::v4::TableSnapshot as TableSnapshotV4;
 }

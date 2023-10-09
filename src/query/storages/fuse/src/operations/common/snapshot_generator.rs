@@ -31,7 +31,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_latest;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
@@ -259,7 +258,6 @@ impl SnapshotGenerator for MutationGenerator {
                     );
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
-                        Uuid::new_v4(),
                         &previous.timestamp,
                         Some((previous.snapshot_id, previous.format_version)),
                         schema,
@@ -423,7 +421,6 @@ impl SnapshotGenerator for AppendGenerator {
         }
 
         Ok(TableSnapshot::new(
-            Uuid::new_v4(),
             &prev_timestamp,
             prev_snapshot_id,
             schema,

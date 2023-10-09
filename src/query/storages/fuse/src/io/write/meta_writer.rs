@@ -136,7 +136,6 @@ mod tests {
         for v in 0..TableSnapshot::VERSION {
             let r = catch_unwind(|| {
                 let mut snapshot = TableSnapshot::new(
-                    SnapshotId::new_v4(),
                     &None,
                     None,
                     TableSchema::default(),
@@ -153,7 +152,6 @@ mod tests {
 
         // current version allowed
         let snapshot = TableSnapshot::new(
-            SnapshotId::new_v4(),
             &None,
             None,
             TableSchema::default(),
