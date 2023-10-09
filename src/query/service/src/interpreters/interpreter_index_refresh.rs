@@ -326,11 +326,16 @@ impl Interpreter for RefreshIndexInterpreter {
             })?;
         let block_name_offset = output_schema.index_of(&block_name_col.index.to_string())?;
 
-        let fields = select_columns
+        let fields = output_schema
+            .fields()
             .iter()
-            .map(|col| {
-                let field_type = infer_schema_type(&col.data_type)?;
-                Ok(TableField::new(&col.column_name, field_type))
+            .map(|f| {
+                let pos = select_columns
+                    .iter()
+                    .find(|col| col.index.to_string().eq_ignore_ascii_case(f.name()))
+                    .ok_or_else(|| ErrorCode::Internal("should find the corresponding column"))?;
+                let field_type = infer_schema_type(f.data_type())?;
+                Ok(TableField::new(&pos.column_name, field_type))
             })
             .collect::<Result<Vec<_>>>()?;
 
