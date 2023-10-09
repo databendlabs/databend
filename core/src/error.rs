@@ -20,6 +20,9 @@ pub enum Error {
     BadArgument(String),
     Request(String),
     IO(String),
+    // if you have not polled the next_page_uri for too long, the session will be expired, you'll get a 404
+    // on accessing this next page uri.
+    SessionTimeout(String),
     InvalidResponse(response::QueryError),
     InvalidPage(response::QueryError),
 }
@@ -31,6 +34,7 @@ impl std::fmt::Display for Error {
             Error::BadArgument(msg) => write!(f, "BadArgument: {msg}"),
             Error::Request(msg) => write!(f, "RequestError: {msg}"),
             Error::IO(msg) => write!(f, "IOError: {msg}"),
+            Error::SessionTimeout(msg) => write!(f, "SessionExpired: {msg}"),
             Error::InvalidResponse(e) => {
                 write!(f, "ResponseError with {}: {}", e.code, e.message)
             }

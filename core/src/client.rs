@@ -242,6 +242,10 @@ impl APIClient {
         };
         let resp = Retry::spawn(retry_strategy, req).await?;
         if resp.status() != StatusCode::OK {
+            // TODO(liyz): currently it's not possible to distinguish between session timeout and server crashed
+            if resp.status() == StatusCode::NOT_FOUND {
+                return Err(Error::SessionTimeout(resp.text().await?));
+            }
             let resp_err = QueryError {
                 code: resp.status().as_u16(),
                 message: resp.text().await?,
