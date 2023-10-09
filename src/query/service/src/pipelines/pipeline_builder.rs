@@ -331,6 +331,7 @@ impl PipelineBuilder {
             table_level_range_index,
             table_schema,
             need_insert,
+            delete_when,
         } = deduplicate;
 
         let tbl = self
@@ -396,16 +397,26 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
+        let delete_when = if let Some(x) = delete_when {
+            let schema = input.output_schema()?;
+            let x = x
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| schema.index_of(name).unwrap());
+            Some(x)
+        } else {
+            None
+        };
         let cluster_keys = table.cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
-                self.ctx.as_ref(),
+                self.ctx.clone(),
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when,
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());

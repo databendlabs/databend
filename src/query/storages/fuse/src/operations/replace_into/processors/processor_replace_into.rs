@@ -14,16 +14,21 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::ops::Not;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::BooleanType;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -51,20 +56,23 @@ pub struct ReplaceIntoProcessor {
     output_data_append: Option<DataBlock>,
 
     target_table_empty: bool,
+    delete_when: Option<Expr>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl ReplaceIntoProcessor {
     pub fn create(
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+        delete_when: Option<Expr>,
     ) -> Result<Self> {
         let replace_into_mutator = ReplaceIntoMutator::try_create(
-            ctx,
+            ctx.as_ref(),
             on_conflict_fields,
             cluster_keys,
             bloom_filter_column_indexes,
@@ -84,6 +92,8 @@ impl ReplaceIntoProcessor {
             output_data_merge_into_action: None,
             output_data_append: None,
             target_table_empty,
+            delete_when,
+            ctx,
         })
     }
 
@@ -164,7 +174,7 @@ impl Processor for ReplaceIntoProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(mut data_block) = self.input_data.take() {
             let start = Instant::now();
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
@@ -172,6 +182,18 @@ impl Processor for ReplaceIntoProcessor {
             if !self.target_table_empty {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
+            }
+            let func_ctx = self.ctx.get_function_context()?;
+            let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            if let Some(filter) = &self.delete_when {
+                let predicates = evaluator
+                    .run(filter)
+                    .map_err(|e| e.add_message("eval filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+                let predicate_col = predicates.into_column().unwrap();
+                let filter = predicate_col.not();
+                data_block = data_block.filter_with_bitmap(&filter)?;
             }
             self.output_data_append = Some(data_block);
             return Ok(());

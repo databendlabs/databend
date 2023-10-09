@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageInfo;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
@@ -33,11 +34,17 @@ use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
+use common_sql::BindContext;
+use common_sql::Metadata;
+use common_sql::NameResolutionContext;
+use common_sql::ScalarBinder;
 use common_storage::StageFileInfo;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
+use parking_lot::RwLock;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::common::create_push_down_filters;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
@@ -167,6 +174,7 @@ impl ReplaceInterpreter {
         let table_is_empty = base_snapshot.segments.is_empty();
         let table_level_range_index = base_snapshot.summary.col_stats.clone();
         let mut purge_info = None;
+
         let (mut root, select_ctx) = self
             .connect_input_source(
                 self.ctx.clone(),
@@ -175,6 +183,37 @@ impl ReplaceInterpreter {
                 &mut purge_info,
             )
             .await?;
+
+        let source_schema = root.output_schema()?;
+        let mut bind_context = BindContext::default();
+        let name_resolution_ctx =
+            NameResolutionContext::try_from(self.ctx.get_settings().as_ref())?;
+        let metadata = Arc::new(RwLock::new(Metadata::default()));
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &name_resolution_ctx,
+            metadata,
+            &[],
+            Default::default(),
+            Default::default(),
+        );
+
+        let delete_when = if let Some(expr) = &plan.delete_when {
+            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let filters = create_push_down_filters(&scalar)?;
+
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete must have deterministic predicate",
+                ));
+            }
+            Some(filters.filter)
+        } else {
+            None
+        };
+
         // remove top exchange
         if let PhysicalPlan::Exchange(Exchange { input, .. }) = root.as_ref() {
             root = input.clone();
@@ -212,6 +251,7 @@ impl ReplaceInterpreter {
             table_schema: plan.schema.clone(),
             table_level_range_index,
             need_insert: true,
+            delete_when,
         }));
         root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
             input: root,
