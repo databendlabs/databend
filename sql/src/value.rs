@@ -19,7 +19,15 @@ use crate::{
     error::{ConvertError, Error, Result},
     schema::{DecimalDataType, DecimalSize},
 };
+use itertools::join;
+use roaring::RoaringTreemap;
 use std::fmt::Write;
+
+use crate::schema::ARROW_EXT_TYPE_BITMAP;
+use crate::schema::ARROW_EXT_TYPE_EMPTY_ARRAY;
+use crate::schema::ARROW_EXT_TYPE_EMPTY_MAP;
+use crate::schema::ARROW_EXT_TYPE_VARIANT;
+use crate::schema::EXTENSION_KEY;
 
 // Thu 1970-01-01 is R.D. 719163
 const DAYS_FROM_CE: i32 = 719_163;
@@ -58,6 +66,8 @@ pub enum NumberValue {
 #[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Null,
+    EmptyArray,
+    EmptyMap,
     Boolean(bool),
     String(String),
     Number(NumberValue),
@@ -67,14 +77,16 @@ pub enum Value {
     // Array(Vec<Value>),
     // Map(Vec<(Value, Value)>),
     // Tuple(Vec<Value>),
-    // Variant,
-    // Generic(usize, Vec<u8>),
+    Bitmap(String),
+    Variant(String),
 }
 
 impl Value {
     pub fn get_type(&self) -> DataType {
         match self {
             Self::Null => DataType::Null,
+            Self::EmptyArray => DataType::EmptyArray,
+            Self::EmptyMap => DataType::EmptyMap,
             Self::Boolean(_) => DataType::Boolean,
             Self::String(_) => DataType::String,
             Self::Number(n) => match n {
@@ -98,7 +110,8 @@ impl Value {
             // Self::Array(v) => DataType::Array(Box::new(v[0].get_type())),
             // Self::Map(_) => DataType::Map(Box::new(DataType::Null)),
             // Self::Tuple(_) => DataType::Tuple(vec![]),
-            // Self::Variant => DataType::Variant,
+            Self::Bitmap(_) => DataType::Bitmap,
+            Self::Variant(_) => DataType::Variant,
         }
     }
 }
@@ -109,6 +122,8 @@ impl TryFrom<(&DataType, &str)> for Value {
     fn try_from((t, v): (&DataType, &str)) -> Result<Self> {
         match t {
             DataType::Null => Ok(Self::Null),
+            DataType::EmptyArray => Ok(Self::EmptyArray),
+            DataType::EmptyMap => Ok(Self::EmptyMap),
             DataType::Boolean => Ok(Self::Boolean(v == "1")),
             DataType::String => Ok(Self::String(v.to_string())),
 
@@ -159,6 +174,8 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Date => Ok(Self::Date(
                 chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - DAYS_FROM_CE,
             )),
+            DataType::Bitmap => Ok(Self::Bitmap(v.to_string())),
+            DataType::Variant => Ok(Self::Variant(v.to_string())),
 
             DataType::Nullable(inner) => {
                 if v == NULL_VALUE {
@@ -180,6 +197,51 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
     fn try_from(
         (field, array, seq): (&ArrowField, &Arc<dyn ArrowArray>, usize),
     ) -> std::result::Result<Self, Self::Error> {
+        if let Some(extend_type) = field.metadata().get(EXTENSION_KEY) {
+            match extend_type.as_str() {
+                ARROW_EXT_TYPE_EMPTY_ARRAY => {
+                    return Ok(Value::EmptyArray);
+                }
+                ARROW_EXT_TYPE_EMPTY_MAP => {
+                    return Ok(Value::EmptyMap);
+                }
+                ARROW_EXT_TYPE_VARIANT => {
+                    if field.is_nullable() && array.is_null(seq) {
+                        return Ok(Value::Null);
+                    }
+                    return match array.as_any().downcast_ref::<LargeBinaryArray>() {
+                        Some(array) => Ok(Value::Variant(jsonb::to_string(array.value(seq)))),
+                        None => Err(ConvertError::new("variant", format!("{:?}", array)).into()),
+                    };
+                }
+                ARROW_EXT_TYPE_BITMAP => {
+                    if field.is_nullable() && array.is_null(seq) {
+                        return Ok(Value::Null);
+                    }
+                    return match array.as_any().downcast_ref::<LargeBinaryArray>() {
+                        Some(array) => {
+                            let rb = RoaringTreemap::deserialize_from(array.value(seq))
+                                .expect("failed to deserialize bitmap");
+                            let raw = rb.into_iter().collect::<Vec<_>>();
+                            let s = join(raw.iter(), ",");
+                            Ok(Value::Bitmap(s))
+                        }
+                        None => Err(ConvertError::new("bitmap", format!("{:?}", array)).into()),
+                    };
+                }
+                _ => {
+                    return Err(ConvertError::new(
+                        "extension",
+                        format!(
+                            "Unsupported extension datatype for arrow field: {:?}",
+                            field
+                        ),
+                    )
+                    .into());
+                }
+            }
+        }
+
         if field.is_nullable() && array.is_null(seq) {
             return Ok(Value::Null);
         }
@@ -325,6 +387,8 @@ impl TryFrom<Value> for String {
     fn try_from(val: Value) -> Result<Self> {
         match val {
             Value::String(s) => Ok(s),
+            Value::Bitmap(s) => Ok(s),
+            Value::Variant(s) => Ok(s),
             _ => Err(ConvertError::new("string", format!("{:?}", val)).into()),
         }
     }
@@ -474,6 +538,8 @@ impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Value::Null => write!(f, "NULL"),
+            Value::EmptyArray => write!(f, "[]"),
+            Value::EmptyMap => write!(f, "{{}}"),
             Value::Boolean(b) => write!(f, "{}", b),
             Value::Number(n) => write!(f, "{}", n),
             Value::String(s) => write!(f, "{}", s),
@@ -488,6 +554,8 @@ impl std::fmt::Display for Value {
                 let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
                 write!(f, "{}", d)
             }
+            Value::Bitmap(s) => write!(f, "{}", s),
+            Value::Variant(s) => write!(f, "{}", s),
         }
     }
 }

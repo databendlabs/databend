@@ -1,9 +1,10 @@
-b	2	false
-a	1	true
-0	99999	100000
+b	2	false	"{""k"":""v""}"
+a	1	true	[1,2]
+0	99999	99999	100000
 1
 2
 3
+[]	{}
 with comment
 3.00	3.00
 Asia/Shanghai

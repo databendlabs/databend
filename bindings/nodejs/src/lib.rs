@@ -67,6 +67,8 @@ impl ToNapiValue for Value {
     unsafe fn to_napi_value(env: sys::napi_env, val: Self) -> Result<sys::napi_value> {
         match val.0 {
             databend_driver::Value::Null => Null::to_napi_value(env, Null),
+            databend_driver::Value::EmptyArray => String::to_napi_value(env, "[]".to_string()),
+            databend_driver::Value::EmptyMap => String::to_napi_value(env, "{}".to_string()),
             databend_driver::Value::Boolean(b) => bool::to_napi_value(env, b),
             databend_driver::Value::String(s) => String::to_napi_value(env, s),
             databend_driver::Value::Number(n) => NumberValue::to_napi_value(env, NumberValue(n)),
@@ -81,6 +83,8 @@ impl ToNapiValue for Value {
                     NaiveDateTime::new(v, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
                 )
             }
+            databend_driver::Value::Bitmap(s) => String::to_napi_value(env, s),
+            databend_driver::Value::Variant(s) => String::to_napi_value(env, s),
         }
     }
 }
@@ -317,7 +321,7 @@ impl Connection {
         self.0
             .query_iter(&sql)
             .await
-            .map(|iter| RowIterator(iter))
+            .map(RowIterator)
             .map_err(format_napi_error)
     }
 

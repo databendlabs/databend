@@ -1,14 +1,16 @@
 drop table if exists test;
-create table test(a string, b int, d boolean);
-insert into test values('a', 1, true);
-insert into test values('b', 2, false);
+create table test(a string, b int, c boolean, d variant);
+insert into test values('a', 1, true, '[1,2]');
+insert into test values('b', 2, false, '{"k":"v"}');
 select * from test order by a desc;
 
 truncate table test;
-insert into test select to_string(number), number, false from numbers(100000);
-select min(a), max(b), count() from test;
+insert into test select to_string(number), number, false, number from numbers(100000);
+select min(a), max(b), max(d), count() from test;
 
 select '1';select 2; select 1+2;
+
+select [], {};
 
 -- ignore this line
 

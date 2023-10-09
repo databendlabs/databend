@@ -21,6 +21,13 @@ use databend_client::response::SchemaField as APISchemaField;
 
 use crate::error::{Error, Result};
 
+// Extension types defined by Databend
+pub(crate) const EXTENSION_KEY: &str = "Extension";
+pub(crate) const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+pub(crate) const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
+pub(crate) const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+pub(crate) const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NumberDataType {
     UInt8,
@@ -204,18 +211,26 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
                         "Array type must have one argument".to_string(),
                     ));
                 }
-                let inner = Self::try_from(&desc.args[0])?;
-                DataType::Array(Box::new(inner))
+                if desc.args[0].name == "Nothing" {
+                    DataType::EmptyArray
+                } else {
+                    let inner = Self::try_from(&desc.args[0])?;
+                    DataType::Array(Box::new(inner))
+                }
             }
             "Map" => {
-                if desc.args.len() != 2 {
-                    return Err(Error::Parsing(
-                        "Map type must have two argument".to_string(),
-                    ));
+                if desc.args.len() == 1 && desc.args[0].name == "Nothing" {
+                    DataType::EmptyMap
+                } else {
+                    if desc.args.len() != 2 {
+                        return Err(Error::Parsing(
+                            "Map type must have two arguments".to_string(),
+                        ));
+                    }
+                    let key_ty = Self::try_from(&desc.args[0])?;
+                    let val_ty = Self::try_from(&desc.args[1])?;
+                    DataType::Map(Box::new(DataType::Tuple(vec![key_ty, val_ty])))
                 }
-                let key_ty = Self::try_from(&desc.args[0])?;
-                let val_ty = Self::try_from(&desc.args[1])?;
-                DataType::Map(Box::new(DataType::Tuple(vec![key_ty, val_ty])))
             }
             "Tuple" => {
                 let mut inner = vec![];
@@ -263,43 +278,58 @@ impl TryFrom<&Arc<ArrowField>> for Field {
     type Error = Error;
 
     fn try_from(f: &Arc<ArrowField>) -> Result<Self> {
-        let mut dt = match f.data_type() {
-            ArrowDataType::Null => DataType::Null,
-            ArrowDataType::Boolean => DataType::Boolean,
-            ArrowDataType::Int8 => DataType::Number(NumberDataType::Int8),
-            ArrowDataType::Int16 => DataType::Number(NumberDataType::Int16),
-            ArrowDataType::Int32 => DataType::Number(NumberDataType::Int32),
-            ArrowDataType::Int64 => DataType::Number(NumberDataType::Int64),
-            ArrowDataType::UInt8 => DataType::Number(NumberDataType::UInt8),
-            ArrowDataType::UInt16 => DataType::Number(NumberDataType::UInt16),
-            ArrowDataType::UInt32 => DataType::Number(NumberDataType::UInt32),
-            ArrowDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
-            ArrowDataType::Float32 => DataType::Number(NumberDataType::Float32),
-            ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
-            ArrowDataType::Utf8
-            | ArrowDataType::Binary
-            | ArrowDataType::LargeUtf8
-            | ArrowDataType::LargeBinary
-            | ArrowDataType::FixedSizeBinary(_) => DataType::String,
-            ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
-            ArrowDataType::Date32 => DataType::Date,
-            ArrowDataType::Decimal128(p, s) => {
-                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
-                    precision: *p,
-                    scale: *s as u8,
-                }))
+        let mut dt = if let Some(extend_type) = f.metadata().get(EXTENSION_KEY) {
+            match extend_type.as_str() {
+                ARROW_EXT_TYPE_EMPTY_ARRAY => DataType::EmptyArray,
+                ARROW_EXT_TYPE_EMPTY_MAP => DataType::EmptyMap,
+                ARROW_EXT_TYPE_VARIANT => DataType::Variant,
+                ARROW_EXT_TYPE_BITMAP => DataType::Bitmap,
+                _ => {
+                    return Err(Error::Parsing(format!(
+                        "Unsupported extension datatype for arrow field: {:?}",
+                        f
+                    )))
+                }
             }
-            ArrowDataType::Decimal256(p, s) => {
-                DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
-                    precision: *p,
-                    scale: *s as u8,
-                }))
-            }
-            _ => {
-                return Err(Error::Parsing(format!(
-                    "Unsupported datatype for arrow field: {:?}",
-                    f
-                )))
+        } else {
+            match f.data_type() {
+                ArrowDataType::Null => DataType::Null,
+                ArrowDataType::Boolean => DataType::Boolean,
+                ArrowDataType::Int8 => DataType::Number(NumberDataType::Int8),
+                ArrowDataType::Int16 => DataType::Number(NumberDataType::Int16),
+                ArrowDataType::Int32 => DataType::Number(NumberDataType::Int32),
+                ArrowDataType::Int64 => DataType::Number(NumberDataType::Int64),
+                ArrowDataType::UInt8 => DataType::Number(NumberDataType::UInt8),
+                ArrowDataType::UInt16 => DataType::Number(NumberDataType::UInt16),
+                ArrowDataType::UInt32 => DataType::Number(NumberDataType::UInt32),
+                ArrowDataType::UInt64 => DataType::Number(NumberDataType::UInt64),
+                ArrowDataType::Float32 => DataType::Number(NumberDataType::Float32),
+                ArrowDataType::Float64 => DataType::Number(NumberDataType::Float64),
+                ArrowDataType::Utf8
+                | ArrowDataType::Binary
+                | ArrowDataType::LargeUtf8
+                | ArrowDataType::LargeBinary
+                | ArrowDataType::FixedSizeBinary(_) => DataType::String,
+                ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
+                ArrowDataType::Date32 => DataType::Date,
+                ArrowDataType::Decimal128(p, s) => {
+                    DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                        precision: *p,
+                        scale: *s as u8,
+                    }))
+                }
+                ArrowDataType::Decimal256(p, s) => {
+                    DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                        precision: *p,
+                        scale: *s as u8,
+                    }))
+                }
+                _ => {
+                    return Err(Error::Parsing(format!(
+                        "Unsupported datatype for arrow field: {:?}",
+                        f
+                    )))
+                }
             }
         };
         if f.is_nullable() && !matches!(dt, DataType::Null) {

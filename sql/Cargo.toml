@@ -18,6 +18,9 @@ databend-client = { workspace = true }
 
 chrono = { version = "0.4", default-features = false }
 glob = "0.3"
+itertools = "0.10"
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "3a3c6ef" }
+roaring = { version = "0.10.1", features = ["serde"] }
 serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["std"] }
 tokio-stream = "0.1"
