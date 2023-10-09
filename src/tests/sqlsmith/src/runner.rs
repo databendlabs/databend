@@ -29,7 +29,7 @@ use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
-use crate::reducer::Reducer;
+use crate::reducer::try_reduce_query;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
@@ -178,10 +178,8 @@ impl Runner {
                 tracing::error!(err);
             }
             if try_reduce {
-                let reduce = Reducer::new(query, err_code);
-                reduce
-                    .try_reduce_query(conn.clone(), &reduce.origin_query)
-                    .await;
+                let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
+                tracing::info!("query_sql: {}", reduced_query.to_string());
                 tracing::error!(err);
             }
         }
