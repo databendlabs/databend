@@ -116,8 +116,6 @@ impl MapApi<String> for Level {
         // The chance it is the bottom level is very low in a loaded system.
         // Thus we always tombstone the key if it is None.
 
-        // dbg!("set kv", &key, &value);
-
         let marked = if let Some((v, meta)) = value {
             let seq = self.sys_data_mut().next_seq();
             Marked::new_with_meta(seq, v, meta)

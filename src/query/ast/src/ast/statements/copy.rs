@@ -23,8 +23,8 @@ use std::io::Result;
 use itertools::Itertools;
 use url::Url;
 
-use crate::ast::write_quoted_comma_separated_list;
-use crate::ast::write_space_separated_map;
+use crate::ast::write_comma_separated_map;
+use crate::ast::write_comma_separated_quoted_list;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -54,6 +54,7 @@ pub struct CopyStmt {
     pub purge: bool,
     pub force: bool,
     pub disable_variant_check: bool,
+    pub return_failed_only: bool,
     pub on_error: String,
 }
 
@@ -72,6 +73,7 @@ impl CopyStmt {
             CopyOption::Purge(v) => self.purge = v,
             CopyOption::Force(v) => self.force = v,
             CopyOption::DisableVariantCheck(v) => self.disable_variant_check = v,
+            CopyOption::ReturnFailedOnly(v) => self.return_failed_only = v,
             CopyOption::OnError(v) => self.on_error = v,
         }
     }
@@ -88,7 +90,7 @@ impl Display for CopyStmt {
 
         if let Some(files) = &self.files {
             write!(f, " FILES = (")?;
-            write_quoted_comma_separated_list(f, files)?;
+            write_comma_separated_quoted_list(f, files)?;
             write!(f, " )")?;
         }
 
@@ -98,10 +100,8 @@ impl Display for CopyStmt {
 
         if !self.file_format.is_empty() {
             write!(f, " FILE_FORMAT = (")?;
-            for (k, v) in self.file_format.iter() {
-                write!(f, " {} = '{}'", k, v)?;
-            }
-            write!(f, " )")?;
+            write_comma_separated_map(f, &self.file_format)?;
+            write!(f, ")")?;
         }
 
         if !self.validation_mode.is_empty() {
@@ -256,7 +256,7 @@ impl Display for Connection {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if !self.conns.is_empty() {
             write!(f, " CONNECTION = ( ")?;
-            write_space_separated_map(f, &self.conns)?;
+            write_comma_separated_map(f, &self.conns)?;
             write!(f, " )")?;
         }
         Ok(())
@@ -393,5 +393,6 @@ pub enum CopyOption {
     Purge(bool),
     Force(bool),
     DisableVariantCheck(bool),
+    ReturnFailedOnly(bool),
     OnError(String),
 }
