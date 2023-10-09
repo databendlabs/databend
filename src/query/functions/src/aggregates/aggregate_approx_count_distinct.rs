@@ -134,6 +134,13 @@ where for<'a> T::ScalarRef<'a>: Hash
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        let other = rhs.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
+        state.hll.union(&other.hll);
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
         let builder = NumberType::<u64>::try_downcast_builder(builder).unwrap();

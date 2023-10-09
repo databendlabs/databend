@@ -309,6 +309,16 @@ where
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<BitmapAggState>();
+        let other = rhs.get::<BitmapAggState>();
+
+        if let Some(rb) = other.rb.take() {
+            state.add::<OP>(rb);
+        }
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         AGG::merge_result(place, builder)
     }
@@ -477,6 +487,10 @@ where
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         self.inner.merge(place, reader)
+    }
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.inner.merge_states(place, rhs)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

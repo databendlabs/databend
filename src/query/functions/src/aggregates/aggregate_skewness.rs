@@ -204,6 +204,13 @@ where T: Number + AsPrimitive<f64>
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<SkewnessState>();
+        let other = rhs.get::<SkewnessState>();
+        state.merge(other);
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<SkewnessState>();
         state.merge_result(builder)

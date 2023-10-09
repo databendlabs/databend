@@ -237,6 +237,13 @@ where
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<AggregateCovarianceState>();
+        let other = rhs.get::<AggregateCovarianceState>();
+        state.merge(other);
+        Ok(())
+    }
+
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();

@@ -219,6 +219,20 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        if self.get_flag(place) == 0 {
+            // initial the state to remove the dirty stats
+            self.init_state(place);
+        }
+
+        if self.get_flag(rhs) == 1 {
+            self.set_flag(place, 1);
+            self.nested.merge_states(place, rhs)?;
+        }
+
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         if NULLABLE_RESULT {
             if self.get_flag(place) == 1 {

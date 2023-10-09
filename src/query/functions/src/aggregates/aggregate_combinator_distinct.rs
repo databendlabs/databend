@@ -103,6 +103,12 @@ where State: DistinctStateFunc
         state.merge(&rhs)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<State>();
+        let other = rhs.get::<State>();
+        state.merge(other)
+    }
+
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();

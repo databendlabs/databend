@@ -466,6 +466,12 @@ where State: SumState
         state.merge(&rhs)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<State>();
+        let other = rhs.get::<State>();
+        state.merge(other)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<State>();
         state.merge_avg_result(builder, 0_u64, self.scale_add, &self.window_size)
@@ -652,6 +658,12 @@ where State: SumState
         let rhs: State = deserialize_from_slice(reader)?;
 
         state.merge(&rhs)
+    }
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<State>();
+        let other = rhs.get::<State>();
+        state.merge(other)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

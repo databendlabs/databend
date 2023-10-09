@@ -133,6 +133,13 @@ impl AggregateFunction for AggregateStringAggFunction {
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<StringAggState>();
+        let other = rhs.get::<StringAggState>();
+        state.values.extend_from_slice(other.values.as_slice());
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<StringAggState>();
         let builder = StringType::try_downcast_builder(builder).unwrap();

@@ -159,6 +159,13 @@ impl AggregateFunction for AggregateCountFunction {
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<AggregateCountState>();
+        let other = rhs.get::<AggregateCountState>();
+        state.count += other.count;
+        Ok(())
+    }
+
     fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
         match builder {
             ColumnBuilder::Number(NumberColumnBuilder::UInt64(builder)) => {

@@ -157,6 +157,10 @@ impl AggregateFunction for AggregateIfCombinator {
         self.nested.merge(place, reader)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.nested.merge_states(place, rhs)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         self.nested.merge_result(place, builder)
     }

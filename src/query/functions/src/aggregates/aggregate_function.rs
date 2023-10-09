@@ -73,6 +73,8 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
+    fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
+
     fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
         for place in places {
             self.merge_result(*place, builder)?;

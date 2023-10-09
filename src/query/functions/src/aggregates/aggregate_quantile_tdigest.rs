@@ -366,6 +366,12 @@ where T: Number + AsPrimitive<f64>
         state.merge(&mut rhs)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<QuantileTDigestState>();
+        let other = rhs.get::<QuantileTDigestState>();
+        state.merge(other)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())

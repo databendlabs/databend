@@ -205,6 +205,13 @@ where T: Number + AsPrimitive<f64>
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<KurtosisState>();
+        let other = rhs.get::<KurtosisState>();
+        state.merge(other);
+        Ok(())
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<KurtosisState>();
         state.merge_result(builder)

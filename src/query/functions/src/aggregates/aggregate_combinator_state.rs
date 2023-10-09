@@ -115,6 +115,10 @@ impl AggregateFunction for AggregateStateCombinator {
         self.nested.merge(place, reader)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        self.nested.merge_states(place, rhs)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let str_builder = builder.as_string_mut().unwrap();
         self.serialize(place, &mut str_builder.data)?;

@@ -128,6 +128,13 @@ where T: SumState
         state.value.merge(&rhs.value)
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<AvgState<T>>();
+        let rhs = rhs.get::<AvgState<T>>();
+        state.count += rhs.count;
+        state.value.merge(&rhs.value)
+    }
+
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AvgState<T>>();

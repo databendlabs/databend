@@ -148,6 +148,13 @@ impl AggregateFunction for AggregateRetentionFunction {
         Ok(())
     }
 
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<AggregateRetentionState>();
+        let other = rhs.get::<AggregateRetentionState>();
+        state.merge(other);
+        Ok(())
+    }
+
     #[allow(unused_mut)]
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<AggregateRetentionState>();

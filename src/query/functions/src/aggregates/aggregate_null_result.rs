@@ -85,6 +85,10 @@ impl AggregateFunction for AggregateNullResultFunction {
         Ok(())
     }
 
+    fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()> {
+        Ok(())
+    }
+
     fn merge_result(&self, _place: StateAddr, array: &mut ColumnBuilder) -> Result<()> {
         AnyType::push_default(array);
         Ok(())
