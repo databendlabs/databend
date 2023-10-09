@@ -196,7 +196,7 @@ impl ReplaceInterpreter {
         let delete_when = if let Some(expr) = &plan.delete_when {
             if bind_context.is_none() {
                 return Err(ErrorCode::Unimplemented(
-                    "Delte semantic is only supported in subquery",
+                    "Delete semantic is only supported in subquery",
                 ));
             }
             let mut bind_context = bind_context.unwrap();
