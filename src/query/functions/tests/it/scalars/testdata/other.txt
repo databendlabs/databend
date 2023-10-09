@@ -175,24 +175,6 @@ output domain  : {FALSE}
 output         : false
 
 
-ast            : greatest(1,2)
-raw expr       : greatest(1, 2)
-checked expr   : greatest<UInt8, UInt8>(1_u8, 2_u8)
-optimized expr : 2_u8
-output type    : UInt8 NULL
-output domain  : {2..=2}
-output         : 2
-
-
-ast            : greatest(1.1,1.2)
-raw expr       : greatest(1.1, 1.2)
-checked expr   : greatest<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.2_d128(2,1))
-optimized expr : 1.2_d128(2,1)
-output type    : Decimal(2, 1) NULL
-output domain  : {1.2..=1.2}
-output         : 1.2
-
-
 ast            : assume_not_null(a2)
 raw expr       : assume_not_null(a2::UInt8 NULL)
 checked expr   : assume_not_null<T0=UInt8><T0 NULL>(a2)
