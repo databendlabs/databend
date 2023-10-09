@@ -33,6 +33,7 @@ use common_pipeline_core::processors::Processor;
 use common_sql::evaluator::BlockOperator;
 use common_storage::metrics::merge_into::merge_into_not_matched_operation_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
 use itertools::Itertools;
 
 use crate::operations::merge_into::mutator::SplitByExprMutator;
@@ -161,6 +162,9 @@ impl Processor for MergeIntoNotMatchedProcessor {
                     .add_meta(Some(Box::new(self.data_schemas.get(&idx).unwrap().clone())))?;
                 if !satisfied_block.is_empty() {
                     metrics_inc_merge_into_append_blocks_counter(1);
+                    metrics_inc_merge_into_append_blocks_rows_counter(
+                        satisfied_block.num_rows() as u32
+                    );
                     self.output_data
                         .push(op.op.execute(&self.func_ctx, satisfied_block)?)
                 }

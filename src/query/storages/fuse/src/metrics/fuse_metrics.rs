@@ -134,6 +134,12 @@ lazy_static! {
         register_counter(key!("replace_into_block_number_bloom_pruned"));
     static ref REPLACE_INTO_BLOCK_NUMBER_SOURCE: Counter =
         register_counter(key!("replace_into_block_number_source"));
+    static ref REPLACE_INTO_REPLACED_BLOCKS_ROWS: Counter =
+        register_counter(key!("replace_into_replaced_blocks_rows"));
+    static ref REPLACE_INTO_DELETED_BLOCKS_ROWS: Counter =
+        register_counter(key!("replace_into_deleted_blocks_rows"));
+    static ref REPLACE_INTO_APPEND_BLOCKS_ROWS: Counter =
+        register_counter(key!("replace_into_append_blocks_rows"));
 }
 
 pub fn metrics_inc_commit_mutation_unresolvable_conflict() {
@@ -391,4 +397,19 @@ pub fn metrics_inc_replace_block_number_bloom_pruned(c: u64) {
 // number of blocks from upstream  source
 pub fn metrics_inc_replace_block_number_input(c: u64) {
     REPLACE_INTO_BLOCK_NUMBER_SOURCE.inc_by(c);
+}
+
+// rows of blocks that are replaced
+pub fn metrics_inc_replace_replaced_blocks_rows(c: u64) {
+    REPLACE_INTO_REPLACED_BLOCKS_ROWS.inc_by(c);
+}
+
+// rows of blocks that are deleted
+pub fn metrics_inc_replace_deleted_blocks_rows(c: u64) {
+    REPLACE_INTO_DELETED_BLOCKS_ROWS.inc_by(c);
+}
+
+// rows of blocks that are appended
+pub fn metrics_inc_replace_append_blocks_rows(c: u64) {
+    REPLACE_INTO_APPEND_BLOCKS_ROWS.inc_by(c);
 }
