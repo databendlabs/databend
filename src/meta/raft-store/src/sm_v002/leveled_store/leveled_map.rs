@@ -28,7 +28,7 @@ use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
 use crate::sm_v002::leveled_store::ref_mut::RefMut;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// State machine data organized in multiple levels.
@@ -42,9 +42,8 @@ pub struct LeveledMap {
     /// The top level is the newest and writable.
     writable: Level,
 
-    /// The immutable levels, from the oldest to the newest.
-    /// levels[0] is the bottom and oldest level.
-    frozen: StaticLeveledMap,
+    /// The immutable levels.
+    frozen: StaticLevels,
 }
 
 impl LeveledMap {
@@ -62,8 +61,8 @@ impl LeveledMap {
             .chain(self.frozen.iter_levels())
     }
 
-    /// Freeze the current writable level and create a new writable level.
-    pub fn freeze_writable(&mut self) -> &StaticLeveledMap {
+    /// Freeze the current writable level and create a new empty writable level.
+    pub fn freeze_writable(&mut self) -> &StaticLevels {
         let new_writable = self.writable.new_level();
 
         let frozen = std::mem::replace(&mut self.writable, new_writable);
@@ -83,12 +82,12 @@ impl LeveledMap {
     }
 
     /// Return a reference to the immutable levels.
-    pub fn frozen_ref(&self) -> &StaticLeveledMap {
+    pub fn frozen_ref(&self) -> &StaticLevels {
         &self.frozen
     }
 
     /// Replace all immutable levels with the given one.
-    pub(crate) fn replace_frozen_levels(&mut self, b: StaticLeveledMap) {
+    pub(crate) fn replace_frozen(&mut self, b: StaticLevels) {
         self.frozen = b;
     }
 
@@ -96,6 +95,7 @@ impl LeveledMap {
         RefMut::new(&mut self.writable, &self.frozen)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn to_ref(&self) -> Ref {
         Ref::new(Some(&self.writable), &self.frozen)
     }
@@ -143,7 +143,5 @@ where
     {
         let mut l = self.to_ref_mut();
         MapApi::set(&mut l, key, value).await
-
-        // (&mut l).set(key, value).await
     }
 }

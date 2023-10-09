@@ -28,12 +28,12 @@ use crate::sm_v002::marked::Marked;
 
 /// A readonly leveled map that owns the data.
 #[derive(Debug, Default, Clone)]
-pub struct StaticLeveledMap {
+pub struct StaticLevels {
     /// From oldest to newest, i.e., levels[0] is the oldest
     levels: Vec<Arc<Level>>,
 }
 
-impl StaticLeveledMap {
+impl StaticLevels {
     pub(in crate::sm_v002) fn new(levels: impl IntoIterator<Item = Arc<Level>>) -> Self {
         Self {
             levels: levels.into_iter().collect(),
@@ -64,7 +64,7 @@ impl StaticLeveledMap {
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for StaticLeveledMap
+impl<K> MapApiRO<K> for StaticLevels
 where
     K: MapKey,
     Level: MapApiRO<K>,

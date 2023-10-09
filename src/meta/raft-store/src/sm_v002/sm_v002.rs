@@ -52,6 +52,7 @@ use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
@@ -251,7 +252,7 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.levels.to_ref(), key).await;
+        let got = self.levels.str_map().get(key).await;
         Into::<Option<SeqV>>::into(got)
     }
 
@@ -261,7 +262,7 @@ impl SMV002 {
     pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
         let p = prefix.to_string();
         let mut res = Vec::new();
-        let strm = MapApiRO::<String>::range(&self.levels, p..).await;
+        let strm = self.levels.str_map().range(p..).await;
 
         {
             let mut strm = std::pin::pin!(strm);
@@ -297,7 +298,8 @@ impl SMV002 {
     /// List expiration index by expiration time.
     pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (ExpireKey, String)> + '_ {
         self.levels
-            .range::<ExpireKey, _>(&self.expire_cursor..)
+            .expire_map()
+            .range(&self.expire_cursor..)
             .await
             // Return only non-deleted records
             .filter_map(|(k, v)| async move {
@@ -382,7 +384,7 @@ impl SMV002 {
             "the base must not be changed"
         );
 
-        self.levels.replace_frozen_levels(snapshot.compacted());
+        self.levels.replace_frozen(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.
@@ -390,9 +392,7 @@ impl SMV002 {
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> (Marked<Vec<u8>>, Marked<Vec<u8>>) {
-        let prev = MapApiRO::<String>::get(&self.levels, &upsert_kv.key)
-            .await
-            .clone();
+        let prev = self.levels.str_map().get(&upsert_kv.key).await.clone();
 
         if upsert_kv.seq.match_seq(prev.seq()).is_err() {
             return (prev.clone(), prev);

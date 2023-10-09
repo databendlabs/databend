@@ -43,7 +43,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-databend-driver = "0.2.19"
+databend-driver = "0.7"
 tokio = { version = "1", features = ["full"] }
 tokio-stream = "0.1.12"
 ```
@@ -55,13 +55,14 @@ The value of `hostname` in the code below must align with your HTTP handler sett
 :::
 
 ```rust title='main.rs'
-use databend_driver::new_connection;
+use databend_driver::Client;
 use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
     let dsn = "databend://user1:abc123@localhost:8000/default?sslmode=disable";
-    let conn = new_connection(dsn).unwrap();
+    let client = Client::new(dsn.to_string());
+    let conn = client.get_conn().await.unwrap();
 
     let sql_db_create = "CREATE DATABASE IF NOT EXISTS book_db;";
     conn.exec(sql_db_create).await.unwrap();

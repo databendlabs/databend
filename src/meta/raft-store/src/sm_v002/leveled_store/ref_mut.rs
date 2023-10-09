@@ -25,7 +25,7 @@ use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::ref_::Ref;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// A writable leveled map that does not not own the data.
@@ -35,11 +35,11 @@ pub struct RefMut<'d> {
     writable: &'d mut Level,
 
     /// The immutable levels.
-    frozen: &'d StaticLeveledMap,
+    frozen: &'d StaticLevels,
 }
 
 impl<'d> RefMut<'d> {
-    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLeveledMap) -> Self {
+    pub(in crate::sm_v002) fn new(writable: &'d mut Level, frozen: &'d StaticLevels) -> Self {
         Self { writable, frozen }
     }
 
@@ -98,7 +98,7 @@ where
     where
         K: Ord,
     {
-        // Get from this level or the base level.
+        // Get from the newest level where there is a tombstone or normal record of this key.
         let prev = self.get(&key).await.clone();
 
         // No such entry at all, no need to create a tombstone for delete
@@ -106,7 +106,8 @@ where
             return (prev, Marked::new_tomb_stone(0));
         }
 
-        // The data is a single level map and the returned `_prev` is only from that level.
+        // `writeable` is a single level map and the returned `_prev` is only from that level.
+        // Therefore it should be ignored and we use the `prev` from the multi-level map.
         let (_prev, inserted) = self.writable.set(key, value).await;
         (prev, inserted)
     }
