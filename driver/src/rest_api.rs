@@ -49,7 +49,7 @@ impl Connection for RestAPIConnection {
     }
 
     async fn exec(&self, sql: &str) -> Result<i64> {
-        let mut resp = self.client.query(sql).await?;
+        let mut resp = self.client.start_query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
             resp = self.client.query_page(&next_uri).await?;
         }
@@ -67,13 +67,13 @@ impl Connection for RestAPIConnection {
     }
 
     async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
-        let resp = self.client.query(sql).await?;
+        let resp = self.client.start_query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
         Ok((schema, RowProgressIterator::new(Box::pin(rows))))
     }
 
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
-        let resp = self.client.query(sql).await?;
+        let resp = self.client.start_query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         match resp.kill_uri {
             Some(uri) => self.client.kill_query(&uri).await.map_err(|e| e.into()),

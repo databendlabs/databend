@@ -47,7 +47,7 @@ async fn insert_with_stage(presigned: bool) {
         "CREATE TABLE `{}` (id UInt64, city String, number UInt64)",
         table
     );
-    client.query_wait(&sql).await.unwrap();
+    client.query(&sql).await.unwrap();
 
     let sql = format!("INSERT INTO `{}` VALUES", table);
     let file_format_options = vec![
@@ -67,7 +67,7 @@ async fn insert_with_stage(presigned: bool) {
         .unwrap();
 
     let sql = format!("SELECT * FROM `{}`", table);
-    let resp = client.query_wait(&sql).await.unwrap();
+    let resp = client.query(&sql).await.unwrap();
     assert_eq!(resp.data.len(), 6);
     let expect = [
         ["1", "Beijing", "100"],
@@ -80,7 +80,7 @@ async fn insert_with_stage(presigned: bool) {
     assert_eq!(resp.data, expect);
 
     let sql = format!("DROP TABLE `{}`;", table);
-    client.query_wait(&sql).await.unwrap();
+    client.query(&sql).await.unwrap();
 }
 
 #[tokio::test]

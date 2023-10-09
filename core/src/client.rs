@@ -182,7 +182,7 @@ impl APIClient {
         }
     }
 
-    pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
+    pub async fn start_query(&self, sql: &str) -> Result<QueryResponse> {
         let session_settings = self.make_session().await;
         let req = QueryRequest::new(sql)
             .with_pagination(self.make_pagination())
@@ -293,8 +293,8 @@ impl APIClient {
         }
     }
 
-    pub async fn query_wait(&self, sql: &str) -> Result<QueryResponse> {
-        let resp = self.query(sql).await?;
+    pub async fn query(&self, sql: &str) -> Result<QueryResponse> {
+        let resp = self.start_query(sql).await?;
         self.wait_for_query(resp).await
     }
 
@@ -411,7 +411,7 @@ impl APIClient {
 
     async fn get_presigned_upload_url(&self, stage: &str) -> Result<PresignedResponse> {
         let sql = format!("PRESIGN UPLOAD {}", stage);
-        let resp = self.query_wait(&sql).await?;
+        let resp = self.query(&sql).await?;
         if resp.data.len() != 1 {
             return Err(Error::Request(
                 "Empty response from server for presigned request".to_string(),
