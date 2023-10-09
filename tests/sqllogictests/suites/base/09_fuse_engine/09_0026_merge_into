@@ -481,5 +481,31 @@ select * from t1_target order by a;
 1
 2
 
+## cluster table test
+statement ok
+create table cluster_target(a int,b string,c int) cluster by(a,b);
+
+statement ok
+create table cluster_source(a int,b string,c int);
+
+statement ok
+insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
+
+statement ok
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
+
+# By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
+# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted 
+# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit 
+# `order by` clause.
+query TTT
+select * from cluster_target;
+----
+1 a 2
+2 a 4
+2 b 3
+3 a 3
+12 b 1
+
 statement ok
 set enable_experimental_merge_into = 0;
