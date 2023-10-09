@@ -26,6 +26,7 @@ use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::create_dummy_items;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_for_copy::BlockCompactorForCopy;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
@@ -85,6 +86,64 @@ impl FuseTable {
         Ok(())
     }
 
+    pub fn cluster_gen_for_append_with_spcified_last_len(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        block_thresholds: BlockThresholds,
+        specified_last_len: usize,
+    ) -> Result<ClusterStatsGenerator> {
+        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds)?;
+        let output_lens = pipeline.output_len();
+        let items1 = create_dummy_items(output_lens - specified_last_len, output_lens);
+        let items2 = create_dummy_items(output_lens - specified_last_len, output_lens);
+        let operators = cluster_stats_gen.operators.clone();
+        if !operators.is_empty() {
+            let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+            let mut builder = pipeline.add_transform_with_specified_len(
+                move |input, output| {
+                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                        input,
+                        output,
+                        func_ctx2.clone(),
+                        operators.clone(),
+                    )))
+                },
+                specified_last_len,
+            )?;
+            builder.add_items_prepend(items1);
+            pipeline.add_pipe(builder.finalize());
+        }
+
+        let cluster_keys = &cluster_stats_gen.cluster_key_index;
+        if !cluster_keys.is_empty() {
+            let sort_descs: Vec<SortColumnDescription> = cluster_keys
+                .iter()
+                .map(|index| SortColumnDescription {
+                    offset: *index,
+                    asc: true,
+                    nulls_first: false,
+                    is_nullable: false, // This information is not needed here.
+                })
+                .collect();
+
+            let mut builder = pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    Ok(ProcessorPtr::create(TransformSortPartial::try_create(
+                        transform_input_port,
+                        transform_output_port,
+                        None,
+                        sort_descs.clone(),
+                    )?))
+                },
+                specified_last_len,
+            )?;
+            builder.add_items_prepend(items2);
+            pipeline.add_pipe(builder.finalize());
+        }
+        Ok(cluster_stats_gen)
+    }
+
     pub fn cluster_gen_for_append(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -96,6 +155,7 @@ impl FuseTable {
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
+
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,

@@ -481,5 +481,27 @@ select * from t1_target order by a;
 1
 2
 
+## cluster table test
+statement ok
+create table cluster_target(a int,b string,c int) cluster by(a,b);
+
+statement ok
+create table cluster_source(a int,b string,c int);
+
+statement ok
+insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
+
+statement ok
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
+
+query TTT
+select * from cluster_target;
+----
+1 a 2
+2 a 4
+2 b 3
+3 a 3
+12 b 1
+
 statement ok
 set enable_experimental_merge_into = 0;
