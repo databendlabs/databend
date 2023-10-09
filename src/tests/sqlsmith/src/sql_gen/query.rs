@@ -579,11 +579,9 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     span: None,
                     name: Identifier::from_name(name),
                     params: if self.rng.gen_bool(0.5) {
-                        vec![param1; 2]
+                        vec![param1, param2]
                     } else {
-                        let mut res = vec![param2; 2];
-                        res.push(param3);
-                        res
+                        vec![param1, param2, param3]
                     },
                     named_params: vec![],
                     alias: None,
