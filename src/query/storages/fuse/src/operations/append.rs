@@ -86,7 +86,7 @@ impl FuseTable {
         Ok(())
     }
 
-    pub fn cluster_gen_for_append_with_spcified_last_len(
+    pub fn cluster_gen_for_append_with_specified_last_len(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
