@@ -459,5 +459,27 @@ select * from salaries order by employee_id;
 3 55000.00
 4 55000.00
 
+## null cast bug fix
+statement ok
+create table t1_target(a int not null);
+
+statement ok
+create table t2_source(a int not null);
+
+statement ok
+insert into t1_target values(1);
+
+statement ok
+insert into t2_source values(1),(2);
+
+statement ok
+merge into t1_target using (select * from t2_source) on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
+
+query T
+select * from t1_target order by a;
+----
+1
+2
+
 statement ok
 set enable_experimental_merge_into = 0;
