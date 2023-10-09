@@ -18,11 +18,17 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_tracing::func_name;
 use minitrace::prelude::*;
+use tonic::codegen::BoxStream;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
@@ -64,6 +70,29 @@ impl RaftService for RaftServiceImpl {
             let raft_reply: RaftReply = res.into();
 
             Ok(tonic::Response::new(raft_reply))
+        }
+        .in_span(root)
+        .await
+    }
+
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
+        async {
+            let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
+
+            let strm = self
+                .meta_node
+                .handle_forwardable_request(forward_req)
+                .await
+                .map_err(GrpcHelper::internal_err)?;
+
+            Ok(tonic::Response::new(strm))
         }
         .in_span(root)
         .await
