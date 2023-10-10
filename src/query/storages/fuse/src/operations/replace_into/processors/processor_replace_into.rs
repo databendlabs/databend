@@ -209,7 +209,7 @@ impl Processor for ReplaceIntoProcessor {
             if let Some(filter) = filter {
                 data_block = data_block.filter_with_bitmap(&filter)?;
             }
-            
+
             metrics_inc_replace_append_blocks_rows(data_block.num_rows() as u64);
 
             if data_block.num_rows() > 0 {
