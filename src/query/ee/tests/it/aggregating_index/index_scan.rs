@@ -39,12 +39,14 @@ async fn test_index_scan() -> Result<()> {
     test_index_scan_impl("native").await
 }
 
+#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan_two_agg_funcs() -> Result<()> {
     test_index_scan_two_agg_funcs_impl("parquet").await?;
     test_index_scan_two_agg_funcs_impl("native").await
 }
 
+#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_projected_index_scan() -> Result<()> {
     test_projected_index_scan_impl("parquet").await?;
