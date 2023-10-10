@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator::LeftOuter;
+use common_ast::ast::JoinOperator::RightOuter;
 use common_ast::ast::MatchOperation;
 use common_ast::ast::MatchedClause;
 use common_ast::ast::MergeIntoStmt;
@@ -124,12 +124,12 @@ impl Binder {
         let source_data = source.transform_table_reference(source_alias.clone());
 
         // bind source data
-        let (source_expr, mut left_context) =
+        let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = left_context.column_set();
+        let mut columns_set = source_context.column_set();
 
         let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
             // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
@@ -139,7 +139,7 @@ impl Binder {
                     .remove_computed_fields()
                     .num_fields(),
             );
-            let source_output_columns = &left_context.columns;
+            let source_output_columns = &source_context.columns;
             // we use Vec as the value, because if there could be duplicate names
             let mut name_map = HashMap::<String, Vec<IndexType>>::new();
             for column in source_output_columns {
@@ -189,8 +189,8 @@ impl Binder {
         // Todo: (JackTan25) Maybe we can remove bind target_table
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
-        let (mut target_expr, mut right_context) = self
-            .bind_single_table(&mut left_context, &target_table)
+        let (mut target_expr, mut target_context) = self
+            .bind_single_table(&mut source_context, &target_table)
             .await?;
 
         // add internal_column (_row_id)
@@ -209,7 +209,7 @@ impl Binder {
             },
         };
 
-        let column_binding = right_context
+        let column_binding = target_context
             .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
 
         target_expr =
@@ -223,19 +223,20 @@ impl Binder {
 
         // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
         let join = Join {
-            op: LeftOuter,
+            op: RightOuter,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
-            left: Box::new(source_data.clone()),
-            right: Box::new(target_table),
+            left: Box::new(target_table),
+            // use source as build table
+            right: Box::new(source_data.clone()),
         };
 
         let (join_sexpr, mut bind_ctx) = self
             .bind_join(
                 bind_context,
-                left_context,
-                right_context.clone(),
-                source_expr,
+                target_context.clone(),
+                source_context,
                 target_expr,
+                source_expr,
                 &join,
             )
             .await?;
