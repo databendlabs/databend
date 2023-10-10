@@ -213,6 +213,13 @@ impl ReplaceInterpreter {
                 Default::default(),
             );
             let (scalar, _) = scalar_binder.bind(expr).await?;
+            let columns = scalar.used_columns();
+            if columns.len() != 1 {
+                return Err(ErrorCode::BadArguments(
+                    "Delete must have one column in predicate",
+                ));
+            }
+            let delete_column = columns.iter().next().unwrap();
             let filter = cast_expr_to_non_null_boolean(
                 scalar.as_expr()?.project_column_ref(|col| col.index),
             )?;
@@ -225,7 +232,7 @@ impl ReplaceInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
-            Some(filter)
+            Some((filter, *delete_column))
         } else {
             None
         };

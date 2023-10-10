@@ -949,7 +949,7 @@ pub struct Deduplicate {
     pub select_ctx: Option<SelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,
-    pub delete_when: Option<RemoteExpr>,
+    pub delete_when: Option<(RemoteExpr, usize)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

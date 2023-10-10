@@ -15,9 +15,9 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use crate::ast::Expr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_dot_separated_list;
+use crate::ast::Expr;
 use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;

@@ -338,7 +338,6 @@ impl PipelineBuilder {
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
-        let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
         if let Some(SelectCtx {
             select_column_bindings,
@@ -352,6 +351,18 @@ impl PipelineBuilder {
                 &mut self.main_pipeline,
                 false,
             )?;
+
+            let mut target_schema: DataSchema = table_schema.clone().into();
+            if let Some((_, delete_column)) = delete_when {
+                let delete_column = select_schema.field(*delete_column);
+                target_schema.fields.push(delete_column.clone());
+            }
+            let target_schema = Arc::new(target_schema.clone());
+            if target_schema.fields().len() != select_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "The number of columns in the target table is different from the number of columns in the SELECT clause",
+                ));
+            }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
@@ -371,7 +382,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            target_schema.clone(),
+            Arc::new(table_schema.clone().into()),
         )?;
 
         let _ = table.cluster_gen_for_append(
@@ -396,9 +407,8 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
-        let delete_when = if let Some(x) = delete_when {
-            let x = x.as_expr(&BUILTIN_FUNCTIONS);
-            Some(x)
+        let delete_when = if let Some((remote_expr, delete_column)) = delete_when {
+            Some((remote_expr.as_expr(&BUILTIN_FUNCTIONS), *delete_column))
         } else {
             None
         };
