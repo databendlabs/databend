@@ -63,11 +63,6 @@ async fn test_index_scan_agg_args_are_expression() -> Result<()> {
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
-// #[tokio::test(flavor = "multi_thread")]
-// async fn test_fuzz() -> Result<()> {
-
-// }
-
 #[test]
 fn test_fuzz() {
     let runtime = Runtime::with_worker_threads(2, None).unwrap();
