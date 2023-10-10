@@ -433,9 +433,6 @@ select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
 statement ok
 drop table t;
 
-statement ok
-DROP DATABASE db_09_0023
-
 # delete when
 
 statement ok
@@ -498,3 +495,6 @@ select * from t order by c;
 ----
 2
 3
+
+statement ok
+DROP DATABASE db_09_0023
