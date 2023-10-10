@@ -2252,7 +2252,8 @@ impl ColumnBuilder {
                 builder.commit_row();
             }
             ColumnBuilder::FixedString(builder) => {
-                builder.commit_row();
+                let data = vec![0u8; builder.fixed_size];
+                builder.put(&data);
             }
         }
     }
@@ -2332,7 +2333,6 @@ impl ColumnBuilder {
                 let old_len = builder.data.len();
                 builder.data.resize(builder.fixed_size + old_len, 0);
                 reader.read_exact(&mut builder.data[old_len..builder.fixed_size + old_len])?;
-                builder.commit_row();
             }
         };
 
@@ -2384,7 +2384,6 @@ impl ColumnBuilder {
                 for row in 0..rows {
                     let reader = &reader[step * row..];
                     builder.put(reader);
-                    builder.commit_row();
                 }
             }
 

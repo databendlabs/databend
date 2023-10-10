@@ -12,26 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 use std::ops::Range;
 
 use common_arrow::arrow::buffer::Buffer;
-
 use serde::Deserialize;
 use serde::Serialize;
 
-
-
-
-
-
-
-
 use crate::utils::arrow::buffer_into_mut;
-
-
-
-
 
 #[derive(Clone, PartialEq)]
 pub struct FixedStringColumn {
@@ -104,7 +91,7 @@ impl FixedStringColumn {
 
 impl<'a> FixedStringColumn {
     /// Returns iterator over the values of [`FixedSizeBinaryArray`]
-    pub fn values_iter(&'a self) -> std::slice::ChunksExact<'a, u8> {
+    pub fn iter(&'a self) -> std::slice::ChunksExact<'a, u8> {
         self.data.chunks_exact(self.fixed_size)
     }
 }
@@ -143,9 +130,6 @@ impl FixedStringColumnBuilder {
             None
         }
     }
-
-    #[inline]
-    pub fn commit_row(&mut self) {}
 
     pub fn build(self) -> FixedStringColumn {
         debug_assert!(self.data.len() % self.fixed_size == 0);

@@ -71,7 +71,45 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     // serialize  the state into binary array
     fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        None
+    }
+
     fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
+
+    fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
+        match column {
+            Column::String(c) => {
+                for (place, mut data) in places.iter().zip(c.iter()) {
+                    self.merge(place.next(offset), &mut data)?;
+                }
+            }
+            Column::FixedString(c) => {
+                for (place, mut data) in places.iter().zip(c.iter()) {
+                    self.merge(place.next(offset), &mut data)?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
+        match column {
+            Column::String(c) => {
+                for mut data in c.iter() {
+                    self.merge(place, &mut data)?;
+                }
+            }
+            Column::FixedString(c) => {
+                for mut data in c.iter() {
+                    self.merge(place, &mut data)?;
+                }
+            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
 
     fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 

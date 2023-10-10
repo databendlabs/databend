@@ -150,3 +150,20 @@ pub fn eval_aggr(
     func.merge_result(eval.addr, &mut builder)?;
     Ok((builder.build(), data_type))
 }
+
+// We should use fixed-int encoding, thus we can have fixed size of state
+#[inline]
+pub fn serialize_state<W: std::io::Write, T: serde::Serialize>(
+    writer: &mut W,
+    value: &T,
+) -> Result<()> {
+    bincode::serde::encode_into_std_write(value, writer, bincode::config::legacy())?;
+    Ok(())
+}
+
+#[inline]
+pub fn deserialize_state<T: serde::de::DeserializeOwned>(slice: &mut &[u8]) -> Result<T> {
+    let (value, bytes_read) = bincode::serde::decode_from_slice(slice, bincode::config::legacy())?;
+    *slice = &slice[bytes_read..];
+    Ok(value)
+}
