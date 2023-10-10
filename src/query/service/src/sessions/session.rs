@@ -26,8 +26,6 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
 use common_settings::ChangeValue;
 use common_settings::Settings;
-use common_users::RoleCacheManager;
-use common_users::BUILTIN_ROLE_PUBLIC;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -39,9 +37,8 @@ use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
-
-use super::session_privilege_mgr::SessionPrivilegeManager;
-use super::session_privilege_mgr::SessionPrivilegeManagerImpl;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 
 pub struct Session {
     pub(in crate::sessions) id: String,
@@ -182,9 +179,7 @@ impl Session {
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
-        self.session_ctx
-            .get_current_user()
-            .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
+        self.privilege_mgr.get_current_user()
     }
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
@@ -197,53 +192,28 @@ impl Session {
         user: UserInfo,
         auth_role: Option<String>,
     ) -> Result<()> {
-        self.session_ctx.set_current_user(user);
-        self.session_ctx.set_auth_role(auth_role);
-        self.ensure_current_role().await?;
-        Ok(())
-    }
-
-    // ensure_current_role() is called after authentication and before any privilege checks
-    #[async_backtrace::framed]
-    async fn ensure_current_role(self: &Arc<Self>) -> Result<()> {
-        todo!()
+        self.privilege_mgr.set_authed_user(user, auth_role).await
     }
 
     #[async_backtrace::framed]
     pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
-        let available_roles = self.get_all_available_roles().await?;
-        let role = available_roles.iter().find(|r| r.name == role_name);
-        match role {
-            Some(role) => Ok(role.clone()),
-            None => {
-                let available_role_names = available_roles
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                Err(ErrorCode::InvalidRole(format!(
-                    "Invalid role {} for current session, available: {}",
-                    role_name, available_role_names,
-                )))
-            }
-        }
+        self.privilege_mgr.validate_available_role(role_name).await
     }
 
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
     #[async_backtrace::framed]
     pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
-        let role = self.validate_available_role(role_name).await?;
-        self.session_ctx.set_current_role(Some(role));
-        Ok(())
+        self.privilege_mgr.set_current_role(Some(role_name.to_string())).await
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
-        self.session_ctx.get_current_role()
+        self.privilege_mgr.get_current_role()
     }
 
-    pub fn unset_current_role(self: &Arc<Self>) {
-        self.session_ctx.set_current_role(None)
+    #[async_backtrace::framed]
+    pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
+        self.privilege_mgr.set_current_role(None).await
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,
@@ -251,18 +221,7 @@ impl Session {
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
     pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
-        todo!()
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_object_owner(
-        self: &Arc<Self>,
-        owner: &GrantObject,
-    ) -> Result<Option<RoleInfo>> {
-        let role_mgr = RoleCacheManager::instance();
-        let tenant = self.get_current_tenant();
-        // return true only if grant object owner is the role itself
-        role_mgr.find_object_owner(&tenant, owner).await
+        self.privilege_mgr.get_all_available_roles().await
     }
 
     #[async_backtrace::framed]

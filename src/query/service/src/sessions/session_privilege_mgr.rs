@@ -18,15 +18,15 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_user(&self) -> Result<UserInfo>;
 
-    fn set_current_role(&self, role: Option<RoleInfo>);
+    async fn set_current_role(&self, role: Option<String>) -> Result<()>;
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
-    // fn show_grants(&self);
-
     async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()>;
+
+    // fn show_grants(&self);
 
     async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()>;
 
@@ -84,24 +84,56 @@ impl SessionPrivilegeManagerImpl {
         self.session_ctx.set_current_role(Some(role));
         Ok(())
     }
+
+    #[async_backtrace::framed]
+    async fn get_object_owner(
+        self: &Arc<Self>,
+        owner: &GrantObject,
+    ) -> Result<Option<RoleInfo>> {
+        let role_mgr = RoleCacheManager::instance();
+        let tenant = self.session_ctx.get_current_tenant();
+        // return true only if grant object owner is the role itself
+        role_mgr.find_object_owner(&tenant, owner).await
+    }
 }
 
 #[async_trait::async_trait]
 impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
-    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
-        todo!()
+
+    // set_authed_user() is called after authentication is passed in various protocol handlers, like
+    // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
+    // granted by external authenticator, it will over write the current user's granted roles, and
+    // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
+    #[async_backtrace::framed]
+    async fn set_authed_user(
+        &self,
+        user: UserInfo,
+        auth_role: Option<String>,
+    ) -> Result<()> {
+        self.session_ctx.set_current_user(user);
+        self.session_ctx.set_auth_role(auth_role);
+        self.ensure_current_role().await?;
+        Ok(())
     }
 
-    fn set_current_role(&self, role: Option<RoleInfo>) {
-        todo!()
+    #[async_backtrace::framed]
+    async fn set_current_role(&self, role_name: Option<String>) -> Result<()> {
+        let role = match role_name {
+            Some(role_name) => Some(self.validate_available_role(&role_name).await?),
+            None => None,
+        };
+        self.session_ctx.set_current_role(role);
+        Ok(())
     }
 
     fn get_current_user(&self) -> Result<UserInfo> {
-        todo!()
+        self.session_ctx
+        .get_current_user()
+        .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
     fn get_current_role(&self) -> Option<RoleInfo> {
-        todo!()
+        self.session_ctx.get_current_role()
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,
@@ -171,11 +203,27 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         )))
     }
 
-    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()> {
-        todo!()
+    #[async_backtrace::framed]
+    async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo> {
+        let available_roles = self.get_all_available_roles().await?;
+        let role = available_roles.iter().find(|r| r.name == role_name);
+        match role {
+            Some(role) => Ok(role.clone()),
+            None => {
+                let available_role_names = available_roles
+                    .iter()
+                    .map(|r| r.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(",");
+                Err(ErrorCode::InvalidRole(format!(
+                    "Invalid role {} for current session, available: {}",
+                    role_name, available_role_names,
+                )))
+            }
+        }
     }
 
-    async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo> {
+    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()> {
         todo!()
     }
 
