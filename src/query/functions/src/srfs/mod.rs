@@ -32,6 +32,7 @@ use jsonb::array_values;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
+use jsonb::object_each;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -171,11 +172,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         "json_array_elements".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("json_array_elements", |_, _arg_types| {
+    registry.register_function_factory("json_array_elements", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_array_elements".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Variant))],
+                args_type: args_type.to_vec(),
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
             },
             eval: FunctionEval::SRF {
@@ -201,11 +208,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         "json_each".to_string(),
         FunctionProperty::default().kind(FunctionKind::SRF),
     );
-    registry.register_function_factory("json_each", |_, _arg_types| {
+    registry.register_function_factory("json_each", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "json_each".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Variant))],
+                args_type: args_type.to_vec(),
                 return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Tuple(
                     vec![DataType::String, DataType::Variant],
                 )))]),
@@ -335,18 +348,23 @@ fn unnest_variant_array(
     row: usize,
     max_nums_per_row: &mut [usize],
 ) -> (Value<AnyType>, usize) {
-    let mut len = 0;
-    let mut builder = StringColumnBuilder::with_capacity(0, 0);
-    if let Some(vals) = array_values(val) {
-        len = vals.len();
-        max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
-        for val in vals {
-            builder.put_slice(&val);
-            builder.commit_row();
+    match array_values(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for val in vals {
+                builder.put_slice(&val);
+                builder.commit_row();
+            }
+
+            let col = Column::Variant(builder.build()).wrap_nullable(None);
+            (Value::Column(Column::Tuple(vec![col])), len)
         }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
-    let col = Column::Variant(builder.build()).wrap_nullable(None);
-    (Value::Column(Column::Tuple(vec![col])), len)
 }
 
 fn unnest_variant_obj(
@@ -354,24 +372,27 @@ fn unnest_variant_obj(
     row: usize,
     max_nums_per_row: &mut [usize],
 ) -> (Value<AnyType>, usize) {
-    let mut len = 0;
-    let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
-    let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+    match object_each(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
 
-    if let Some(vals) = jsonb::object_each(val) {
-        len = vals.len();
-        max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
-        for (key, val) in vals {
-            key_builder.put_slice(&key);
-            key_builder.commit_row();
-            val_builder.put_slice(&val);
-            val_builder.commit_row();
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for (key, val) in vals {
+                key_builder.put_slice(&key);
+                key_builder.commit_row();
+                val_builder.put_slice(&val);
+                val_builder.commit_row();
+            }
+
+            let key_col = Column::String(key_builder.build());
+            let val_col = Column::Variant(val_builder.build());
+            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
+
+            (Value::Column(Column::Tuple(vec![tuple_col])), len)
         }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
-
-    let key_col = Column::String(key_builder.build());
-    let val_col = Column::Variant(val_builder.build());
-    let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
-
-    (Value::Column(Column::Tuple(vec![tuple_col])), len)
 }
