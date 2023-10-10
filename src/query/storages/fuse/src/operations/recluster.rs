@@ -223,13 +223,11 @@ impl FuseTable {
             self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds)?;
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
-            let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
-                    num_input_columns,
                     func_ctx2.clone(),
                     operators.clone(),
                 )))

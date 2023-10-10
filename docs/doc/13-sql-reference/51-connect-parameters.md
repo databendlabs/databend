@@ -1,18 +1,16 @@
 ---
 title: Connection Parameters
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-The connection parameters refer to a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. These parameters are enclosed within parentheses and consists of key-value pairs separated by commas or spaces. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
-For example, the following statement creates an external stage on Amazon S3 with the connection parameters:
+The connection parameters refer to a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. These parameters are enclosed within parentheses and consists of key-value pairs separated by commas. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
+
+For example, the following statement creates an external stage on MinIO with the connection parameters:
 
 ```sql
-CREATE STAGE my_s3_stage
-URL = 's3://load/files/'
-CONNECTION = (
-    ACCESS_KEY_ID = '<your-access-key-id>',
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-);
+CREATE STAGE my_minio_stage URL = 's3://databend' CONNECTION = (ENDPOINT_URL = 'http://localhost:9000', ACCESS_KEY_ID = 'ROOTUSER', SECRET_ACCESS_KEY = 'CHANGEME123', region = 'us-west-2');
 ```
 
 The connection parameters vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.

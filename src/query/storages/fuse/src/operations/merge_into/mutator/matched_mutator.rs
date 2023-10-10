@@ -39,7 +39,9 @@ use common_expression::TableSchemaRef;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -290,10 +292,10 @@ impl AggregationContext {
             &self.read_settings,
         )
         .await?;
-
+        let origin_num_rows = origin_data_block.num_rows();
         // apply delete
         let mut bitmap = MutableBitmap::new();
-        for row in 0..origin_data_block.num_rows() {
+        for row in 0..origin_num_rows {
             if modified_offsets.contains(&row) {
                 bitmap.push(false);
             } else {
@@ -304,6 +306,7 @@ impl AggregationContext {
 
         if res_block.is_empty() {
             metrics_inc_merge_into_deleted_blocks_counter(1);
+            metrics_inc_merge_into_deleted_blocks_rows_counter(origin_num_rows as u32);
             return Ok(Some(MutationLogEntry::DeletedBlock {
                 index: BlockMetaIndex {
                     segment_idx,
@@ -319,10 +322,12 @@ impl AggregationContext {
         let serialized = GlobalIORuntime::instance()
             .spawn_blocking(move || {
                 block_builder.build(res_block, |block, generator| {
-                    info!("serialize block before get cluster_stats:\n {:?}", block);
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    info!("serialize block after get cluster_stats:\n {:?}", block);
+                    info!(
+                        "serialize block after get cluster_stats:\n {:?}",
+                        cluster_stats
+                    );
                     Ok((cluster_stats, block))
                 })
             })
@@ -336,6 +341,7 @@ impl AggregationContext {
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
 
         metrics_inc_merge_into_replace_blocks_counter(1);
+        metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
         // generate log
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {

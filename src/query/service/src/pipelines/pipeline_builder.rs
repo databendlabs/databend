@@ -79,7 +79,7 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
@@ -471,6 +471,24 @@ impl PipelineBuilder {
             }
             output_len
         };
+        // Handle matched and unmatched data separately.
+
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
 
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
@@ -584,6 +602,15 @@ impl PipelineBuilder {
 
         let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+
+        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        let output_lens = self.main_pipeline.output_len();
+        table.cluster_gen_for_append_with_specified_last_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            output_lens - 1,
+        )?;
 
         pipe_items.clear();
         pipe_items.push(table.rowid_aggregate_mutator(
@@ -813,7 +840,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+    fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
         let to_table =
             self.ctx
                 .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
@@ -1147,12 +1174,10 @@ impl PipelineBuilder {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
-        let num_input_columns = input_schema.num_fields();
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -1224,12 +1249,10 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
-            let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
-                    num_input_columns,
                     self.func_ctx.clone(),
                     ops.clone(),
                 )))
@@ -1286,7 +1309,6 @@ impl PipelineBuilder {
                 ))
             })?;
 
-        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
@@ -1294,7 +1316,6 @@ impl PipelineBuilder {
                     expr: predicate.clone(),
                 }],
                 self.func_ctx.clone(),
-                num_input_columns,
             );
 
             if self.enable_profiling {
@@ -1317,12 +1338,10 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
-        let num_input_columns = project.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 self.func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
@@ -1334,7 +1353,6 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
-        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
@@ -1350,14 +1368,8 @@ impl PipelineBuilder {
             projections: Some(eval_scalar.projections.clone()),
         };
 
-        let num_input_columns = input_schema.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![op.clone()],
-                self.func_ctx.clone(),
-                num_input_columns,
-            );
+            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1389,14 +1401,8 @@ impl PipelineBuilder {
                 .collect(),
         };
 
-        let num_input_columns = project_set.input.output_schema()?.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![op.clone()],
-                self.func_ctx.clone(),
-                num_input_columns,
-            );
+            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1420,15 +1426,8 @@ impl PipelineBuilder {
         let funcs = lambda.lambda_funcs.clone();
         let op = BlockOperator::LambdaMap { funcs };
 
-        let input_schema = lambda.input.output_schema()?;
-        let num_input_columns = input_schema.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(
-                vec![op.clone()],
-                self.func_ctx.clone(),
-                num_input_columns,
-            );
+            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1894,7 +1893,6 @@ impl PipelineBuilder {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
-                        input_schema.num_fields(),
                         self.func_ctx.clone(),
                         vec![BlockOperator::Project {
                             projection: projection.clone(),

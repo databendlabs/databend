@@ -104,7 +104,6 @@ pub enum Expr<Index: ColumnIndex = usize> {
         #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         span: Span,
         id: FunctionID,
-        #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
         function: Arc<Function>,
         generics: Vec<DataType>,
         args: Vec<Expr<Index>>,
