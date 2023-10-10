@@ -52,9 +52,9 @@ use crate::plans::SubqueryType;
 use crate::IndexType;
 use crate::WindowChecker;
 
-struct RemoveIdentifyQuote;
+struct RemoveIdentifierQuote;
 
-impl VisitorMut for RemoveIdentifyQuote {
+impl VisitorMut for RemoveIdentifierQuote {
     fn visit_identifier(&mut self, ident: &mut Identifier) {
         ident.quote = None
     }
@@ -271,12 +271,15 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     let mut expr = expr.clone();
-                    let mut remove_quote_vistiter = RemoveIdentifyQuote;
-                    walk_expr_mut(&mut remove_quote_vistiter, &mut expr);
+                    let mut remove_quote_vistiter = RemoveIdentifierQuote;
+
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => format!("{:#}", expr).to_lowercase(),
+                        None => {
+                            walk_expr_mut(&mut remove_quote_vistiter, &mut expr);
+                            format!("{:#}", expr).to_lowercase()
+                        }
                     };
 
                     prev_aliases.push((expr_name.clone(), bound_expr.clone()));
