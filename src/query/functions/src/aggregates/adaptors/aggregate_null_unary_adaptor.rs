@@ -228,8 +228,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         }
 
         if self.get_flag(rhs) == 1 {
-            self.set_flag(place, 1);
             self.nested.merge_states(place, rhs)?;
+            self.set_flag(place, 1);
         }
 
         Ok(())
