@@ -1,0 +1,10 @@
+statement ok
+CREATE USER IF NOT EXISTS 'showuser1' IDENTIFIED BY 'password'
+
+query TTTI
+SHOW USERS
+----
+showuser1 % double_sha1_password NO
+
+statement ok
+DROP USER IF EXISTS 'showuser1'
