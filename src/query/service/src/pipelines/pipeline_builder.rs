@@ -79,7 +79,7 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
@@ -858,7 +858,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+    fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
         let to_table =
             self.ctx
                 .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;

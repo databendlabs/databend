@@ -21,7 +21,7 @@ use crate::executor::AsyncSourcerPlan;
 use crate::executor::CommitSink;
 use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
-use crate::executor::CopyIntoTable;
+use crate::executor::CopyIntoTablePhysicalPlan;
 use crate::executor::CopyIntoTableSource;
 use crate::executor::CteScan;
 use crate::executor::Deduplicate;
@@ -330,20 +330,25 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(
+        &mut self,
+        plan: &CopyIntoTablePhysicalPlan,
+    ) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Stage(_) => {
                 Ok(PhysicalPlan::CopyIntoTable(Box::new(plan.clone())))
             }
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
-                    ..plan.clone()
-                })))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(
+                    CopyIntoTablePhysicalPlan {
+                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                            plan: input,
+                            ..*query_ctx.clone()
+                        })),
+                        ..plan.clone()
+                    },
+                )))
             }
         }
     }

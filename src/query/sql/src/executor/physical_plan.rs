@@ -794,7 +794,7 @@ pub struct MergeInto {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CopyIntoTable {
+pub struct CopyIntoTablePhysicalPlan {
     pub catalog_info: CatalogInfo,
     pub required_values_schema: DataSchemaRef,
     pub values_consts: Vec<Scalar>,
@@ -823,7 +823,7 @@ pub struct QuerySource {
     pub result_columns: Vec<ColumnBinding>,
 }
 
-impl CopyIntoTable {
+impl CopyIntoTablePhysicalPlan {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match &self.source {
             CopyIntoTableSource::Query(query_ctx) => Ok(query_ctx.query_source_schema.clone()),
@@ -1042,7 +1042,7 @@ pub enum PhysicalPlan {
     /// Delete
     DeletePartial(Box<DeletePartial>),
     /// Copy into table
-    CopyIntoTable(Box<CopyIntoTable>),
+    CopyIntoTable(Box<CopyIntoTablePhysicalPlan>),
     /// Replace
     AsyncSourcer(AsyncSourcerPlan),
     Deduplicate(Box<Deduplicate>),

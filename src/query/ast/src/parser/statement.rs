@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
@@ -33,6 +32,7 @@ use nom::Slice;
 
 use crate::ast::*;
 use crate::input::Input;
+use crate::parser::copy::copy_into;
 use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
@@ -44,8 +44,6 @@ use crate::rule;
 use crate::util::*;
 use crate::Error;
 use crate::ErrorKind;
-
-const MAX_COPIED_FILES_NUM: usize = 2000;
 
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
@@ -1090,41 +1088,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
-    let copy_into = map(
-        rule! {
-            COPY
-            ~ #hint?
-            ~ INTO ~ #copy_unit
-            ~ FROM ~ #copy_unit
-            ~ #copy_option*
-        },
-        |(_, opt_hints, _, dst, _, src, opts)| {
-            let mut copy_stmt = CopyStmt {
-                hints: opt_hints,
-                src,
-                dst,
-                files: Default::default(),
-                pattern: Default::default(),
-                file_format: Default::default(),
-                validation_mode: Default::default(),
-                size_limit: Default::default(),
-                max_files: Default::default(),
-                max_file_size: Default::default(),
-                split_size: Default::default(),
-                single: Default::default(),
-                purge: Default::default(),
-                force: Default::default(),
-                disable_variant_check: Default::default(),
-                on_error: "abort".to_string(),
-                return_failed_only: Default::default(),
-            };
-            for opt in opts {
-                copy_stmt.apply_option(opt);
-            }
-            Statement::Copy(copy_stmt)
-        },
-    );
-
     let call = map(
         rule! {
             CALL ~ #ident ~ "(" ~ #comma_separated_list0(parameter_to_string) ~ ")"
@@ -1548,16 +1511,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_file_formats: "`SHOW FILE FORMATS`"
             | #drop_file_format: "`DROP FILE FORMAT  [ IF EXISTS ] <format_name>`"
         ),
-        rule!(
-            #copy_into: "`COPY
-                INTO { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> }
-                FROM { internalStage | externalStage | externalLocation | [<database_name>.]<table_name> | ( <query> ) }
-                [ FILE_FORMAT = ( { TYPE = { CSV | JSON | PARQUET } [ formatTypeOptions ] } ) ]
-                [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
-                [ PATTERN = '<regex_pattern>' ]
-                [ VALIDATION_MODE = RETURN_ROWS ]
-                [ copyOptions ]`"
-        ),
+        rule!( #copy_into ),
         rule!(
             #call: "`CALL <procedure_name>(<parameter>, ...)`"
         ),
@@ -2397,44 +2351,6 @@ pub fn kill_target(i: Input) -> IResult<KillTarget> {
     ))(i)
 }
 
-/// Parse input into `CopyUnit`
-///
-/// # Notes
-///
-/// It's required to parse stage location first. Or stage could be parsed as table.
-pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
-    // Parse input like `mytable`
-    let table = |i| {
-        map(
-            rule! {
-            #dot_separated_idents_1_to_3
-            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
-            },
-            |((catalog, database, table), opt_columns)| CopyUnit::Table {
-                catalog,
-                database,
-                table,
-                columns: opt_columns.map(|(_, columns, _)| columns),
-            },
-        )(i)
-    };
-
-    // Parse input like `( SELECT * from mytable )`
-    let query = |i| {
-        map(rule! { "(" ~ #query ~ ")" }, |(_, query, _)| {
-            CopyUnit::Query(Box::new(query))
-        })(i)
-    };
-
-    let location = |i| map(file_location, CopyUnit::Location)(i);
-
-    rule!(
-       #location
-        | #table: "{ { <catalog>. } <database>. }<table>"
-        | #query: "( <query> )"
-    )(i)
-}
-
 pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     let limit_like = map(
         rule! {
@@ -2602,62 +2518,6 @@ pub fn auth_type(i: Input) -> IResult<AuthType> {
         value(AuthType::Sha256Password, rule! { SHA256_PASSWORD }),
         value(AuthType::DoubleSha1Password, rule! { DOUBLE_SHA1_PASSWORD }),
         value(AuthType::JWT, rule! { JWT }),
-    ))(i)
-}
-
-pub fn copy_option(i: Input) -> IResult<CopyOption> {
-    alt((
-        map(
-            rule! { FILES ~ "=" ~ "(" ~ #comma_separated_list0(literal_string) ~ ")" },
-            |(_, _, _, files, _)| CopyOption::Files(files),
-        ),
-        map(
-            rule! { PATTERN ~ "=" ~ #literal_string },
-            |(_, _, pattern)| CopyOption::Pattern(pattern),
-        ),
-        map(rule! { #file_format_clause }, |options| {
-            CopyOption::FileFormat(options)
-        }),
-        map(
-            rule! { VALIDATION_MODE ~ "=" ~ #literal_string },
-            |(_, _, validation_mode)| CopyOption::ValidationMode(validation_mode),
-        ),
-        map(
-            rule! { SIZE_LIMIT ~ "=" ~ #literal_u64 },
-            |(_, _, size_limit)| CopyOption::SizeLimit(size_limit as usize),
-        ),
-        map(
-            rule! { MAX_FILES ~ "=" ~ #literal_u64 },
-            |(_, _, max_files)| CopyOption::MaxFiles(min(MAX_COPIED_FILES_NUM, max_files as usize)),
-        ),
-        map(
-            rule! { MAX_FILE_SIZE ~ "=" ~ #literal_u64 },
-            |(_, _, max_file_size)| CopyOption::MaxFileSize(max_file_size as usize),
-        ),
-        map(
-            rule! { SPLIT_SIZE ~ "=" ~ #literal_u64 },
-            |(_, _, split_size)| CopyOption::SplitSize(split_size as usize),
-        ),
-        map(rule! { SINGLE ~ "=" ~ #literal_bool }, |(_, _, single)| {
-            CopyOption::Single(single)
-        }),
-        map(rule! { PURGE ~ "=" ~ #literal_bool }, |(_, _, purge)| {
-            CopyOption::Purge(purge)
-        }),
-        map(rule! { FORCE ~ "=" ~ #literal_bool }, |(_, _, force)| {
-            CopyOption::Force(force)
-        }),
-        map(rule! { ON_ERROR ~ "=" ~ #ident }, |(_, _, on_error)| {
-            CopyOption::OnError(on_error.to_string())
-        }),
-        map(
-            rule! { DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool },
-            |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
-        ),
-        map(
-            rule! { RETURN_FAILED_ONLY ~ "=" ~ #literal_bool },
-            |(_, _, return_failed_only)| CopyOption::ReturnFailedOnly(return_failed_only),
-        ),
     ))(i)
 }
 

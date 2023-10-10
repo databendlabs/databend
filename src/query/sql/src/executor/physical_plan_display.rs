@@ -25,7 +25,7 @@ use crate::executor::AsyncSourcerPlan;
 use crate::executor::CommitSink;
 use crate::executor::CompactPartial;
 use crate::executor::ConstantTableScan;
-use crate::executor::CopyIntoTable;
+use crate::executor::CopyIntoTablePhysicalPlan;
 use crate::executor::CteScan;
 use crate::executor::Deduplicate;
 use crate::executor::DeletePartial;
@@ -418,7 +418,7 @@ impl Display for CommitSink {
         write!(f, "CommitSink")
     }
 }
-impl Display for CopyIntoTable {
+impl Display for CopyIntoTablePhysicalPlan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "CopyIntoTable")
     }

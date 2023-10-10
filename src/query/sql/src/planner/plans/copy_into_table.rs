@@ -28,8 +28,6 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
-use common_meta_app::principal::CopyOptions;
-use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::CatalogInfo;
 use common_storage::init_stage_operator;
 use common_storage::metrics::copy::metrics_inc_collect_files_get_all_source_files_milliseconds;
@@ -87,6 +85,8 @@ impl CopyIntoTableMode {
 
 #[derive(Clone)]
 pub struct CopyIntoTablePlan {
+    pub no_file_to_copy: bool,
+
     pub catalog_info: CatalogInfo,
     pub database_name: String,
     pub table_name: String,
@@ -201,6 +201,7 @@ impl Debug for CopyIntoTablePlan {
             catalog_info,
             database_name,
             table_name,
+            no_file_to_copy,
             validation_mode,
             force,
             stage_table_info,
@@ -212,28 +213,19 @@ impl Debug for CopyIntoTablePlan {
             "Copy into {:}.{database_name:}.{table_name:}",
             catalog_info.catalog_name()
         )?;
+        write!(f, ", no_file_to_copy: {no_file_to_copy:?}")?;
         write!(f, ", validation_mode: {validation_mode:?}")?;
         write!(f, ", from: {stage_table_info:?}")?;
         write!(f, " force: {force}")?;
+        write!(f, " is_from: {force}")?;
         write!(f, " query: {query:?}")?;
         Ok(())
     }
 }
 
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
-#[derive(Clone)]
-pub enum CopyPlan {
-    NoFileToCopy,
-    IntoTable(CopyIntoTablePlan),
-    IntoStage {
-        stage: Box<StageInfo>,
-        path: String,
-        validation_mode: ValidationMode,
-        from: Box<Plan>,
-    },
-}
 
-impl CopyPlan {
+impl CopyIntoTablePlan {
     fn copy_into_table_schema() -> DataSchemaRef {
         DataSchemaRefExt::create(vec![
             DataField::new("File", DataType::String),
@@ -250,43 +242,11 @@ impl CopyPlan {
         ])
     }
 
-    pub fn copy_into_table_options(&self) -> Option<CopyOptions> {
-        match self {
-            CopyPlan::IntoTable(p) => Some(p.stage_table_info.stage_info.copy_options.clone()),
-            _ => None,
-        }
-    }
-
     pub fn schema(&self) -> DataSchemaRef {
-        match self {
-            CopyPlan::NoFileToCopy => Self::copy_into_table_schema(),
-            CopyPlan::IntoTable(p) if !p.from_attachment => Self::copy_into_table_schema(),
-            _ => Arc::new(DataSchema::empty()),
+        if self.from_attachment {
+            Arc::new(DataSchema::empty())
+        } else {
+            Self::copy_into_table_schema()
         }
-    }
-}
-
-impl Debug for CopyPlan {
-    // Ignore the schema.
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            CopyPlan::IntoTable(plan) => {
-                write!(f, "{plan:?}")?;
-            }
-            CopyPlan::IntoStage {
-                stage,
-                path,
-                validation_mode,
-                ..
-            } => {
-                write!(f, "Copy into {stage:?}")?;
-                write!(f, ", path: {path:?}")?;
-                write!(f, ", validation_mode: {validation_mode:?}")?;
-            }
-            CopyPlan::NoFileToCopy => {
-                write!(f, "No file to copy")?;
-            }
-        }
-        Ok(())
     }
 }
