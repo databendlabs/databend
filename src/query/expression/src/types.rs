@@ -20,6 +20,7 @@ pub mod date;
 pub mod decimal;
 pub mod empty_array;
 pub mod empty_map;
+pub mod fixed_string;
 pub mod generic;
 pub mod map;
 pub mod null;
@@ -81,7 +82,10 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+
+    // Used internally for generic types and FixedString
     Generic(usize),
+    FixedString(usize),
 }
 
 impl DataType {

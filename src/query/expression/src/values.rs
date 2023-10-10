@@ -54,6 +54,8 @@ use crate::types::decimal::DecimalColumnBuilder;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalScalar;
 use crate::types::decimal::DecimalSize;
+use crate::types::fixed_string::FixedStringColumn;
+use crate::types::fixed_string::FixedStringColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnBuilder;
 use crate::types::nullable::NullableColumnVec;
@@ -144,6 +146,7 @@ pub enum Column {
     Decimal(DecimalColumn),
     Boolean(Bitmap),
     String(StringColumn),
+    FixedString(FixedStringColumn),
     Timestamp(Buffer<i64>),
     Date(Buffer<i32>),
     Array(Box<ArrayColumn<AnyType>>),
@@ -190,6 +193,7 @@ pub enum ColumnBuilder {
     Nullable(Box<NullableColumnBuilder<AnyType>>),
     Tuple(Vec<ColumnBuilder>),
     Variant(StringColumnBuilder),
+    FixedString(FixedStringColumnBuilder),
 }
 
 impl<'a, T: ValueType> ValueRef<'a, T> {
@@ -715,6 +719,7 @@ impl Column {
             Column::Nullable(col) => col.len(),
             Column::Tuple(fields) => fields[0].len(),
             Column::Variant(col) => col.len(),
+            Column::FixedString(col) => col.len(),
         }
     }
 
@@ -740,6 +745,7 @@ impl Column {
                     .collect::<Option<Vec<_>>>()?,
             )),
             Column::Variant(col) => Some(ScalarRef::Variant(col.index(index)?)),
+            Column::FixedString(col) => Some(ScalarRef::String(col.index(index)?)),
         }
     }
 
@@ -768,6 +774,7 @@ impl Column {
                     .collect::<Vec<_>>(),
             ),
             Column::Variant(col) => ScalarRef::Variant(col.index_unchecked(index)),
+            Column::FixedString(col) => ScalarRef::String(col.index_unchecked(index)),
         }
     }
 
@@ -817,6 +824,7 @@ impl Column {
                     .collect(),
             ),
             Column::Variant(col) => Column::Variant(col.slice(range)),
+            Column::FixedString(col) => Column::FixedString(col.slice(range)),
         }
     }
 
@@ -899,7 +907,7 @@ impl Column {
                 let domains = fields.iter().map(|col| col.domain()).collect::<Vec<_>>();
                 Domain::Tuple(domains)
             }
-            Column::Bitmap(_) | Column::Variant(_) => Domain::Undefined,
+            Column::Bitmap(_) | Column::Variant(_) | Column::FixedString(_) => Domain::Undefined,
         }
     }
 
@@ -937,6 +945,7 @@ impl Column {
                 DataType::Tuple(inner)
             }
             Column::Variant(_) => DataType::Variant,
+            Column::FixedString(c) => DataType::FixedString(c.fixed_size()),
         }
     }
 
@@ -1081,6 +1090,14 @@ impl Column {
                     .unwrap(),
                 )
             }
+            Column::FixedString(col) => Box::new(
+                common_arrow::arrow::array::FixedSizeBinaryArray::try_new(
+                    arrow_type,
+                    col.data().clone(),
+                    None,
+                )
+                .unwrap(),
+            ),
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -1751,7 +1768,7 @@ impl Column {
                 }
                 VariantType::from_data(data)
             }
-            DataType::Generic(_) => unreachable!(),
+            DataType::Generic(_) | DataType::FixedString(_) => unreachable!(),
         }
     }
 
@@ -1816,6 +1833,7 @@ impl Column {
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.memory_size(),
+            Column::FixedString(col) => col.memory_size(),
         }
     }
 
@@ -1839,6 +1857,7 @@ impl Column {
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
+            Column::FixedString(col) => col.memory_size(),
         }
     }
 
@@ -1925,6 +1944,9 @@ impl ColumnBuilder {
                     .collect(),
             ),
             Column::Variant(col) => ColumnBuilder::Variant(StringColumnBuilder::from_column(col)),
+            Column::FixedString(col) => {
+                ColumnBuilder::FixedString(FixedStringColumnBuilder::from_column(col))
+            }
         }
     }
 
@@ -2013,6 +2035,7 @@ impl ColumnBuilder {
             ColumnBuilder::Nullable(builder) => builder.len(),
             ColumnBuilder::Tuple(fields) => fields[0].len(),
             ColumnBuilder::Variant(builder) => builder.len(),
+            ColumnBuilder::FixedString(c) => c.data.len(),
         }
     }
 
@@ -2047,6 +2070,7 @@ impl ColumnBuilder {
             ColumnBuilder::Nullable(c) => c.builder.memory_size() + c.validity.as_slice().len(),
             ColumnBuilder::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             ColumnBuilder::Variant(col) => col.data.len() + col.offsets.len() * 8,
+            ColumnBuilder::FixedString(c) => c.data.len(),
         }
     }
 
@@ -2080,6 +2104,7 @@ impl ColumnBuilder {
                 DataType::Tuple(fields.iter().map(|f| f.data_type()).collect::<Vec<_>>())
             }
             ColumnBuilder::Variant(_) => DataType::Variant,
+            ColumnBuilder::FixedString(c) => DataType::FixedString(c.fixed_size),
         }
     }
 
@@ -2150,7 +2175,7 @@ impl ColumnBuilder {
                 let data_capacity = if enable_datasize_hint { 0 } else { capacity };
                 ColumnBuilder::Variant(StringColumnBuilder::with_capacity(capacity, data_capacity))
             }
-            DataType::Generic(_) => {
+            DataType::Generic(_) | DataType::FixedString(_) => {
                 unreachable!("unable to initialize column builder for generic type")
             }
         }
@@ -2224,6 +2249,9 @@ impl ColumnBuilder {
             }
             ColumnBuilder::Variant(builder) => {
                 builder.put_slice(JSONB_NULL);
+                builder.commit_row();
+            }
+            ColumnBuilder::FixedString(builder) => {
                 builder.commit_row();
             }
         }
@@ -2300,6 +2328,12 @@ impl ColumnBuilder {
                     field.push_binary(reader)?;
                 }
             }
+            ColumnBuilder::FixedString(builder) => {
+                let old_len = builder.data.len();
+                builder.data.resize(builder.fixed_size + old_len, 0);
+                reader.read_exact(&mut builder.data[old_len..builder.fixed_size + old_len])?;
+                builder.commit_row();
+            }
         };
 
         Ok(())
@@ -2345,6 +2379,15 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+
+            ColumnBuilder::FixedString(builder) => {
+                for row in 0..rows {
+                    let reader = &reader[step * row..];
+                    builder.put(reader);
+                    builder.commit_row();
+                }
+            }
+
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];
@@ -2449,6 +2492,7 @@ impl ColumnBuilder {
                 }
             }
             ColumnBuilder::Variant(builder) => builder.pop().map(Scalar::Variant),
+            ColumnBuilder::FixedString(builder) => builder.pop().map(Scalar::String),
         }
     }
 
@@ -2530,6 +2574,7 @@ impl ColumnBuilder {
                 Column::Tuple(fields.into_iter().map(|field| field.build()).collect())
             }
             ColumnBuilder::Variant(builder) => Column::Variant(builder.build()),
+            ColumnBuilder::FixedString(builder) => Column::FixedString(builder.build()),
         }
     }
 
@@ -2556,6 +2601,7 @@ impl ColumnBuilder {
                     .collect(),
             ),
             ColumnBuilder::Variant(builder) => Scalar::Variant(builder.build_scalar()),
+            ColumnBuilder::FixedString(builder) => Scalar::String(builder.build_scalar()),
         }
     }
 }

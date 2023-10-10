@@ -38,7 +38,8 @@ pub fn contains_variant(data_type: &DataType) -> bool {
         | DataType::Timestamp
         | DataType::Date
         | DataType::Bitmap
-        | DataType::Generic(_) => false,
+        | DataType::Generic(_)
+        | DataType::FixedString(_) => false,
         DataType::Nullable(ty) => contains_variant(ty.as_ref()),
         DataType::Array(ty) => contains_variant(ty.as_ref()),
         DataType::Map(ty) => contains_variant(ty.as_ref()),

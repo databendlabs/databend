@@ -182,6 +182,7 @@ impl Column {
                 let column = Self::filter_string_scalars(column, filter);
                 Column::Variant(column)
             }
+            Column::FixedString(_) => unreachable!(),
         }
     }
 

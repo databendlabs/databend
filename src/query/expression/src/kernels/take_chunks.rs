@@ -370,6 +370,7 @@ impl Column {
                 let builder = VariantType::create_builder(result_size, &[]);
                 Self::take_block_value_types::<VariantType>(columns, builder, indices)
             }
+            Column::FixedString(_) => unreachable!(),
         }
     }
 
@@ -571,6 +572,7 @@ impl Column {
                     .collect_vec();
                 ColumnVec::Variant(columns)
             }
+            Column::FixedString(_) => unreachable!(),
         }
     }
 

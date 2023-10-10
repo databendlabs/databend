@@ -251,6 +251,7 @@ impl Column {
                     .collect_vec();
                 VariantType::upcast_column(Self::concat_string_types(&columns, capacity))
             }
+            Column::FixedString(_) => unreachable!(),
         }
     }
 
