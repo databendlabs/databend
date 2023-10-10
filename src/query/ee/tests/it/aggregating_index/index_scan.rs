@@ -16,6 +16,7 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use common_base::base::tokio;
+use common_base::runtime::Runtime;
 use common_exception::Result;
 use common_expression::block_debug::pretty_format_blocks;
 use common_expression::DataBlock;
@@ -62,10 +63,20 @@ async fn test_index_scan_agg_args_are_expression() -> Result<()> {
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_fuzz() -> Result<()> {
-    test_fuzz_impl("parquet").await?;
-    test_fuzz_impl("native").await
+// #[tokio::test(flavor = "multi_thread")]
+// async fn test_fuzz() -> Result<()> {
+
+// }
+
+#[test]
+fn test_fuzz() {
+    let runtime = Runtime::with_worker_threads(2, None).unwrap();
+    runtime
+        .block_on(async {
+            test_fuzz_impl("parquet").await?;
+            test_fuzz_impl("native").await
+        })
+        .unwrap();
 }
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
