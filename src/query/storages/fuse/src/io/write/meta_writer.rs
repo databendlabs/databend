@@ -108,7 +108,6 @@ mod tests {
     use std::panic::catch_unwind;
 
     use common_expression::TableSchema;
-    use storages_common_table_meta::meta::SnapshotId;
     use storages_common_table_meta::meta::Statistics;
 
     use super::*;
