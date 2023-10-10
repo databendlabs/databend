@@ -343,7 +343,7 @@ impl ReplaceInterpreter {
                     let (physical_plan, files) =
                         interpreter.build_physical_plan(&copy_plan).await?;
                     *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
-                    Ok((Box::new(physical_plan), None))
+                    Ok((Box::new(physical_plan), None, None))
                 }
                 _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
