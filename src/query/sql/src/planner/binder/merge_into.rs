@@ -144,7 +144,7 @@ impl Binder {
             let mut name_map = HashMap::<String, Vec<IndexType>>::new();
             for column in source_output_columns {
                 name_map
-                    .entry(column.column_name.trim_matches("`").to_string())
+                    .entry(column.column_name.as_str().trim_matches('`').to_string())
                     .or_insert_with(|| vec![])
                     .push(column.index);
             }
