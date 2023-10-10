@@ -44,6 +44,7 @@ impl SessionPrivilegeManagerImpl {
         Self { session_ctx }
     }
 
+    #[async_backtrace::framed]
     async fn ensure_current_role(&self) -> Result<()> {
         let tenant = self.session_ctx.get_current_tenant();
         let public_role = RoleCacheManager::instance()
@@ -157,6 +158,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         Ok(related_roles)
     }
 
+    #[async_backtrace::framed]
     async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
