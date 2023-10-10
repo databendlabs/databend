@@ -35,6 +35,7 @@ use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableVersion;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
 use table_lock::TableLockHeartbeat;
@@ -60,6 +61,7 @@ enum State {
     RefreshTable,
     GenerateSnapshot {
         previous: Option<Arc<TableSnapshot>>,
+        prev_snapshot_table_version: Option<TableVersion>,
         cluster_key_meta: Option<ClusterKey>,
         table_info: TableInfo,
     },
@@ -223,14 +225,17 @@ where F: SnapshotGenerator + Send + 'static
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
                 previous,
+                prev_snapshot_table_version,
                 cluster_key_meta,
                 table_info,
             } => {
                 let schema = self.table.schema().as_ref().clone();
-                match self
-                    .snapshot_gen
-                    .generate_new_snapshot(schema, cluster_key_meta, previous)
-                {
+                match self.snapshot_gen.generate_new_snapshot(
+                    schema,
+                    cluster_key_meta,
+                    previous,
+                    prev_snapshot_table_version,
+                ) {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,
@@ -277,9 +282,11 @@ where F: SnapshotGenerator + Send + 'static
                     self.snapshot_gen
                         .fill_default_values(schema, &previous)
                         .await?;
-
+                    let prev_snapshot_table_version =
+                        fuse_table.get_snapshot_table_version().await?;
                     self.state = State::GenerateSnapshot {
                         previous,
+                        prev_snapshot_table_version,
                         cluster_key_meta: fuse_table.cluster_key_meta.clone(),
                         table_info,
                     };
@@ -413,8 +420,10 @@ where F: SnapshotGenerator + Send + 'static
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
                 let previous = fuse_table.read_table_snapshot().await?;
                 let cluster_key_meta = fuse_table.cluster_key_meta.clone();
+                let prev_snapshot_table_version = fuse_table.get_snapshot_table_version().await?;
                 self.state = State::GenerateSnapshot {
                     previous,
+                    prev_snapshot_table_version,
                     cluster_key_meta,
                     table_info: fuse_table.table_info.clone(),
                 };

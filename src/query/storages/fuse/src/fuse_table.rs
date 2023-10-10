@@ -59,6 +59,7 @@ use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
+use storages_common_table_meta::meta::TableVersion;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::table_storage_prefix;
 use storages_common_table_meta::table::TableCompression;
@@ -196,6 +197,20 @@ impl FuseTable {
             table_compression: self.table_compression,
             max_page_size,
             block_per_seg,
+        }
+    }
+
+    pub fn current_table_version(&self) -> TableVersion {
+        self.table_info.ident.seq
+    }
+
+    pub async fn get_snapshot_table_version(&self) -> Result<Option<TableVersion>> {
+        if let Some(location) = self.snapshot_loc().await? {
+            Ok(TableMetaLocationGenerator::location_table_version(
+                &location,
+            ))
+        } else {
+            Ok(None)
         }
     }
 
@@ -419,10 +434,13 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
+        let prev_table_version = self.get_snapshot_table_version().await?;
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_id = prev
+            .as_ref()
+            .map(|v| (v.snapshot_id, prev_version, prev_table_version));
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
@@ -469,13 +487,16 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
+        let prev_table_version = self.get_snapshot_table_version().await?;
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
-        let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
+        let prev_snapshot_id = prev
+            .as_ref()
+            .map(|v| (v.snapshot_id, prev_version, prev_table_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {

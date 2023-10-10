@@ -14,5 +14,7 @@
 
 mod snapshot;
 
+pub use snapshot::SnapshotLocationInfo;
 pub use snapshot::TableSnapshot;
 pub use snapshot::TableSnapshotLite;
+pub use snapshot::TableVersion;

@@ -137,7 +137,8 @@ impl FuseTable {
                 )?;
 
             // 4. Save table statistics
-            let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
+            let snapshot_table_version = self.get_snapshot_table_version().await?;
+            let mut new_snapshot = TableSnapshot::from_previous(&snapshot, snapshot_table_version);
             new_snapshot.summary.col_stats = col_stats;
             new_snapshot.summary.cluster_stats = cluster_stats;
             new_snapshot.table_statistics_location = Some(table_statistics_location);

@@ -58,7 +58,9 @@ pub async fn generate_snapshot_with_segments(
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
-    let mut new_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
+    let snapshot_table_version = fuse_table.get_snapshot_table_version().await?;
+    let mut new_snapshot =
+        TableSnapshot::from_previous(current_snapshot.as_ref(), snapshot_table_version);
     new_snapshot.segments = segment_locations;
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&new_snapshot.snapshot_id, TableSnapshot::VERSION)?;
@@ -193,7 +195,11 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let locations = vec![segments_v3[0].0.clone(), segments_v2[0].0.clone()];
     let mut snapshot_1 = TableSnapshot::new(
         &snapshot_0.timestamp,
-        Some((snapshot_0.snapshot_id, TableSnapshotV2::VERSION)),
+        Some((
+            snapshot_0.snapshot_id,
+            TableSnapshotV2::VERSION,
+            Some(fuse_table.current_table_version()),
+        )),
         schema.as_ref().clone(),
         Statistics::default(),
         locations,
@@ -214,7 +220,8 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         segments_v3[0].0.clone(),
         segments_v2[0].0.clone(),
     ];
-    let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1);
+    let mut snapshot_2 =
+        TableSnapshot::from_previous(&snapshot_1, Some(fuse_table.current_table_version() + 1));
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
     snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary, None);

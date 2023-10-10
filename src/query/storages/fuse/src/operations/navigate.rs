@@ -205,7 +205,7 @@ impl FuseTable {
         // Take the prev snapshot as base snapshot to avoid get orphan snapshot.
         let prev = snapshot.prev_snapshot_id;
         match prev {
-            Some((id, v)) => {
+            Some((id, v, _)) => {
                 let new_loc = self
                     .meta_location_generator()
                     .snapshot_location_from_uuid(&id, v)?;

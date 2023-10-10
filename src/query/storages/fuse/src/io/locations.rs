@@ -20,6 +20,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use storages_common_table_meta::meta::TableVersion;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
@@ -123,6 +124,16 @@ impl TableMetaLocationGenerator {
             SNAPSHOT_V1.version()
         } else {
             SNAPSHOT_V0.version()
+        }
+    }
+
+    pub fn location_table_version(location: &str) -> Option<TableVersion> {
+        let v: Vec<&str> = location.split('/').collect();
+        let v: Vec<&str> = v[v.len() - 1].split('_').collect();
+        if v.len() > 1 {
+            Some(v[1].parse().unwrap())
+        } else {
+            None
         }
     }
 

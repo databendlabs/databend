@@ -42,6 +42,8 @@ pub use statistics::*;
 // currently, used by versioned readers only
 pub(crate) use testing::*;
 pub(crate) use utils::*;
+pub use v5::SnapshotLocationInfo;
+pub use v5::TableVersion;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;

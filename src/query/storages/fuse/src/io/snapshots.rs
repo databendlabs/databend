@@ -334,7 +334,7 @@ impl SnapshotsIO {
         let root_snapshot_lite = TableSnapshotLite::from((root_snapshot, format_version));
         let mut prev_snapshot_id_tuple = root_snapshot_lite.prev_snapshot_id;
         chained_snapshot_lites.push(root_snapshot_lite);
-        while let Some((prev_snapshot_id, _)) = prev_snapshot_id_tuple {
+        while let Some((prev_snapshot_id, _, _)) = prev_snapshot_id_tuple {
             let prev_snapshot_lite = snapshot_map.remove(&prev_snapshot_id);
             match prev_snapshot_lite {
                 None => {

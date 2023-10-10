@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::TableVersion;
 
 use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_latest;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
@@ -55,6 +56,7 @@ pub trait SnapshotGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot>;
 }
 
@@ -219,6 +221,7 @@ impl SnapshotGenerator for MutationGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
 
@@ -259,7 +262,11 @@ impl SnapshotGenerator for MutationGenerator {
                     deduct_statistics_mut(&mut new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
                         &previous.timestamp,
-                        Some((previous.snapshot_id, previous.format_version)),
+                        Some((
+                            previous.snapshot_id,
+                            previous.format_version,
+                            prev_snapshot_table_version,
+                        )),
                         schema,
                         new_summary,
                         new_segments,
@@ -362,6 +369,7 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -378,7 +386,11 @@ impl SnapshotGenerator for AppendGenerator {
 
         if let Some(snapshot) = &previous {
             prev_timestamp = snapshot.timestamp;
-            prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
+            prev_snapshot_id = Some((
+                snapshot.snapshot_id,
+                snapshot.format_version,
+                prev_snapshot_table_version,
+            ));
             table_statistics_location = snapshot.table_statistics_location.clone();
 
             if !self.overwrite {

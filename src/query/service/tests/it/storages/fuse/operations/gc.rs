@@ -84,6 +84,7 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
     // create orphan snapshot, its timestamp is larger than the current one
     {
         let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+        let snapshot_table_version = fuse_table.get_snapshot_table_version().await?;
         let operator = fuse_table.get_operator();
         let location_gen = fuse_table.meta_location_generator();
         let orphan_snapshot_id = Uuid::new_v4();
@@ -91,7 +92,8 @@ async fn test_fuse_purge_normal_orphan_snapshot() -> Result<()> {
             .snapshot_location_from_uuid(&orphan_snapshot_id, TableSnapshot::VERSION)?;
         // orphan_snapshot is created by using `from_previous`, which guarantees
         // that the timestamp of snapshot returned is larger than `current_snapshot`'s.
-        let orphan_snapshot = TableSnapshot::from_previous(current_snapshot.as_ref());
+        let orphan_snapshot =
+            TableSnapshot::from_previous(current_snapshot.as_ref(), snapshot_table_version);
         orphan_snapshot
             .write_meta(&operator, &orphan_snapshot_location)
             .await?;

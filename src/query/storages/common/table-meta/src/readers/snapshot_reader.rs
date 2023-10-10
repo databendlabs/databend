@@ -22,6 +22,7 @@ use crate::meta::SnapshotVersion;
 use crate::meta::TableSnapshot;
 use crate::meta::TableSnapshotV2;
 use crate::meta::TableSnapshotV3;
+use crate::meta::TableSnapshotV4;
 use crate::readers::VersionedReader;
 
 #[async_trait::async_trait]
@@ -35,7 +36,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
         let r = match self {
             SnapshotVersion::V6(_) => unimplemented!(),
             SnapshotVersion::V5(_) => TableSnapshot::from_slice(&buffer)?,
-            SnapshotVersion::V4(_) => TableSnapshot::from_slice(&buffer)?,
+            SnapshotVersion::V4(_) => TableSnapshotV4::from_slice(&buffer)?.into(),
             SnapshotVersion::V3(_) => TableSnapshotV3::from_slice(&buffer)?.into(),
             SnapshotVersion::V2(v) => {
                 let mut ts: TableSnapshotV2 = load_json(&buffer, v).await?;
