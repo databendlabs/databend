@@ -271,13 +271,13 @@ impl Binder {
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     let mut expr = expr.clone();
-                    let mut remove_quote_vistiter = RemoveIdentifierQuote;
+                    let mut remove_quote_visitor = RemoveIdentifierQuote;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
                         None => {
-                            walk_expr_mut(&mut remove_quote_vistiter, &mut expr);
+                            walk_expr_mut(&mut remove_quote_visitor, &mut expr);
                             format!("{:#}", expr).to_lowercase()
                         }
                     };
