@@ -228,13 +228,22 @@ impl<'a> Binder {
                 self.bind_show_table_functions(bind_context, limit).await?
             }
 
-            Statement::Copy(stmt) => {
+            Statement::CopyIntoTable(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                         warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_copy(bind_context, stmt).await?
+                self.bind_copy_into_table(bind_context, stmt).await?
+            }
+
+            Statement::CopyIntoLocation(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_copy_into_location(bind_context, stmt).await?
             }
 
             Statement::ShowMetrics => {
