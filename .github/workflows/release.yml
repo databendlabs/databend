@@ -572,7 +572,7 @@ jobs:
           tar x -C ./target/release -f ./distro/databend-testsuite-${version}-${target}.tar.gz --strip-components 1 bin/
           chmod +x ./target/release/databend-*
       - name: Run sqlsmith
-        timeout-minutes: 30
+        timeout-minutes: 60
         shell: bash
         run: |
           bash ./scripts/ci/ci-run-sqlsmith-tests.sh

@@ -19,6 +19,9 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
+use crate::kernels::utils::store_advance_aligned;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -26,13 +29,11 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
 use crate::types::string::StringColumn;
-use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArrayType;
 use crate::types::BooleanType;
 use crate::types::MapType;
 use crate::types::ValueType;
-use crate::types::VariantType;
 use crate::with_decimal_type;
 use crate::with_number_type;
 use crate::BlockEntry;
@@ -178,14 +179,8 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                let bytes_per_row = column.data().len() / filter.len().max(1);
-                let data_capacity = (filter.len() - filter.unset_bits()) * bytes_per_row;
-
-                Self::filter_scalar_types::<VariantType>(
-                    column,
-                    StringColumnBuilder::with_capacity(length, data_capacity),
-                    filter,
-                )
+                let column = Self::filter_string_scalars(column, filter);
+                Column::Variant(column)
             }
         }
     }
@@ -246,154 +241,187 @@ impl Column {
     // low-level API using unsafe to improve performance
     fn filter_primitive_types<T: Copy>(values: &Buffer<T>, filter: &Bitmap) -> Buffer<T> {
         debug_assert_eq!(values.len(), filter.len());
-        let selected = filter.len() - filter.unset_bits();
-        if selected == values.len() {
+        let num_rows = filter.len() - filter.unset_bits();
+        if num_rows == values.len() {
             return values.clone();
         }
-        let mut values = values.as_slice();
-        let mut new = Vec::<T>::with_capacity(selected);
-        let mut dst = new.as_mut_ptr();
 
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let mut ptr = builder.as_mut_ptr();
+        let mut values_ptr = values.as_slice().as_ptr();
         let (mut slice, offset, mut length) = filter.as_slice();
-        if offset > 0 {
-            // Consume the offset
-            let n = 8 - offset;
-            values
-                .iter()
-                .zip(filter.iter())
-                .take(n)
-                .for_each(|(value, is_selected)| {
-                    if is_selected {
-                        unsafe {
-                            dst.write(*value);
-                            dst = dst.add(1);
-                        }
+
+        unsafe {
+            if offset > 0 {
+                let mut mask = slice[0];
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    if n >= offset {
+                        copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
                     }
-                });
-            slice = &slice[1..];
-            length -= n;
-            values = &values[n..];
-        }
+                    mask = mask & (mask - 1);
+                }
+                length -= 8 - offset;
+                slice = &slice[1..];
+                values_ptr = values_ptr.add(8 - offset);
+            }
 
-        const CHUNK_SIZE: usize = 64;
-        let mut chunks = values.chunks_exact(CHUNK_SIZE);
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        chunks
-            .by_ref()
-            .zip(mask_chunks.by_ref())
-            .for_each(|(chunk, mut mask)| {
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
                 if mask == u64::MAX {
-                    unsafe {
-                        std::ptr::copy(chunk.as_ptr(), dst, CHUNK_SIZE);
-                        dst = dst.add(CHUNK_SIZE);
-                    }
+                    continuous_selected += CHUNK_SIZE;
                 } else {
+                    if continuous_selected > 0 {
+                        copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
+                        values_ptr = values_ptr.add(continuous_selected);
+                        continuous_selected = 0;
+                    }
                     while mask != 0 {
                         let n = mask.trailing_zeros() as usize;
-                        unsafe {
-                            dst.write(chunk[n]);
-                            dst = dst.add(1);
-                        }
+                        copy_advance_aligned(values_ptr.add(n), &mut ptr, 1);
                         mask = mask & (mask - 1);
                     }
+                    values_ptr = values_ptr.add(CHUNK_SIZE);
                 }
-            });
+            }
+            if continuous_selected > 0 {
+                copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
+                values_ptr = values_ptr.add(continuous_selected);
+            }
 
-        chunks
-            .remainder()
-            .iter()
-            .zip(mask_chunks.remainder_iter())
-            .for_each(|(value, is_selected)| {
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
                 if is_selected {
-                    unsafe {
-                        dst.write(*value);
-                        dst = dst.add(1);
-                    }
+                    copy_advance_aligned(values_ptr.add(i), &mut ptr, 1);
                 }
-            });
+            }
 
-        unsafe { new.set_len(selected) };
-        new.into()
+            set_vec_len_by_ptr(&mut builder, ptr);
+        }
+
+        builder.into()
     }
 
     // low-level API using unsafe to improve performance
     fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
         debug_assert_eq!(values.len(), filter.len());
-        let selected = filter.len() - filter.unset_bits();
-        if selected == values.len() {
+        let num_rows = filter.len() - filter.unset_bits();
+        if num_rows == values.len() {
             return values.clone();
         }
-        let data = values.data().as_slice();
-        let offsets = values.offsets().as_slice();
 
-        let mut res_offsets = Vec::with_capacity(selected + 1);
-        res_offsets.push(0);
+        // Each element of `items` is (string pointer(u64), string length).
+        let mut items: Vec<(u64, usize)> = Vec::with_capacity(num_rows);
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        let values_offset = values.offsets().as_slice();
+        let values_data_ptr = values.data().as_slice().as_ptr();
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        let mut offsets_ptr = offsets.as_mut_ptr();
+        let mut items_ptr = items.as_mut_ptr();
+        let mut data_size = 0;
 
-        let mut res_data = vec![];
-        let hint_size = data.len() / (values.len() + 1) * selected;
-
-        static MAX_HINT_SIZE: usize = 1000000000;
-        if hint_size < MAX_HINT_SIZE && values.len() < MAX_HINT_SIZE {
-            res_data.reserve(hint_size)
-        }
-
-        let mut pos = 0;
-
-        let (mut slice, offset, mut length) = filter.as_slice();
-        if offset > 0 {
-            // Consume the offset
-            let n = 8 - offset;
-            values
-                .iter()
-                .zip(filter.iter())
-                .take(n)
-                .for_each(|(value, is_selected)| {
-                    if is_selected {
-                        res_data.extend_from_slice(value);
-                        res_offsets.push(res_data.len() as u64);
-                    }
-                });
-            slice = &slice[1..];
-            length -= n;
-            pos += n;
-        }
-
-        const CHUNK_SIZE: usize = 64;
-        let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
-
-        for mut mask in mask_chunks.by_ref() {
-            if mask == u64::MAX {
-                let data = &data[offsets[pos] as usize..offsets[pos + CHUNK_SIZE] as usize];
-                res_data.extend_from_slice(data);
-
-                let mut last_len = *res_offsets.last().unwrap();
-                for i in 0..CHUNK_SIZE {
-                    last_len += offsets[pos + i + 1] - offsets[pos + i];
-                    res_offsets.push(last_len);
-                }
-            } else {
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            let mut idx = 0;
+            let (mut slice, offset, mut length) = filter.as_slice();
+            if offset > 0 {
+                let mut mask = slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    let data = &data[offsets[pos + n] as usize..offsets[pos + n + 1] as usize];
-                    res_data.extend_from_slice(data);
-                    res_offsets.push(res_data.len() as u64);
-
+                    if n >= offset {
+                        let start = *values_offset.get_unchecked(n - offset) as usize;
+                        let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
+                        data_size += len as u64;
+                        store_advance_aligned(data_size, &mut offsets_ptr);
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
+                        );
+                    }
                     mask = mask & (mask - 1);
                 }
+                length -= 8 - offset;
+                slice = &slice[1..];
+                idx += 8 - offset;
             }
-            pos += CHUNK_SIZE;
+
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
+                if mask == u64::MAX {
+                    continuous_selected += CHUNK_SIZE;
+                } else {
+                    if continuous_selected > 0 {
+                        let start = *values_offset.get_unchecked(idx) as usize;
+                        let len = *values_offset.get_unchecked(idx + continuous_selected) as usize
+                            - start;
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
+                        );
+                        for i in 0..continuous_selected {
+                            data_size += *values_offset.get_unchecked(idx + i + 1)
+                                - *values_offset.get_unchecked(idx + i);
+                            store_advance_aligned(data_size, &mut offsets_ptr);
+                        }
+                        idx += continuous_selected;
+                        continuous_selected = 0;
+                    }
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        let start = *values_offset.get_unchecked(idx + n) as usize;
+                        let len = *values_offset.get_unchecked(idx + n + 1) as usize - start;
+                        data_size += len as u64;
+                        store_advance_aligned(
+                            (values_data_ptr.add(start) as u64, len),
+                            &mut items_ptr,
+                        );
+                        store_advance_aligned(data_size, &mut offsets_ptr);
+                        mask = mask & (mask - 1);
+                    }
+                    idx += CHUNK_SIZE;
+                }
+            }
+            if continuous_selected > 0 {
+                let start = *values_offset.get_unchecked(idx) as usize;
+                let len = *values_offset.get_unchecked(idx + continuous_selected) as usize - start;
+                store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                for i in 0..continuous_selected {
+                    data_size += *values_offset.get_unchecked(idx + i + 1)
+                        - *values_offset.get_unchecked(idx + i);
+                    store_advance_aligned(data_size, &mut offsets_ptr);
+                }
+                idx += continuous_selected;
+            }
+
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
+                if is_selected {
+                    let start = *values_offset.get_unchecked(idx + i) as usize;
+                    let len = *values_offset.get_unchecked(idx + i + 1) as usize - start;
+                    data_size += len as u64;
+                    store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                    store_advance_aligned(data_size, &mut offsets_ptr);
+                }
+            }
+            set_vec_len_by_ptr(&mut items, items_ptr);
+            set_vec_len_by_ptr(&mut offsets, offsets_ptr);
         }
 
-        for is_select in mask_chunks.remainder_iter() {
-            if is_select {
-                let data = &data[offsets[pos] as usize..offsets[pos + 1] as usize];
-                res_data.extend_from_slice(data);
-                res_offsets.push(res_data.len() as u64);
+        // Build [`data`].
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let mut data_ptr = data.as_mut_ptr();
+
+        unsafe {
+            for (str_ptr, len) in items.iter() {
+                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
             }
-            pos += 1;
+            set_vec_len_by_ptr(&mut data, data_ptr);
         }
 
-        StringColumn::new(res_data.into(), res_offsets.into())
+        StringColumn::new(data.into(), offsets.into())
     }
 }

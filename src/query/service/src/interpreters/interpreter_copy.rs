@@ -254,6 +254,10 @@ impl CopyInterpreter {
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
+        let return_all = match self.plan.copy_into_table_options() {
+            None => return Ok(vec![]),
+            Some(o) => !o.return_failed_only,
+        };
         let cs = self.ctx.get_copy_status();
 
         let mut results = cs.files.iter().collect::<Vec<_>>();
@@ -268,13 +272,15 @@ impl CopyInterpreter {
 
         for entry in results {
             let status = entry.value();
-            files.push(entry.key().as_bytes().to_vec());
-            rows_loaded.push(status.num_rows_loaded as i32);
             if let Some(err) = &status.error {
+                files.push(entry.key().as_bytes().to_vec());
+                rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(err.num_errors as i32);
                 first_error.push(Some(err.first_error.error.to_string().as_bytes().to_vec()));
                 first_error_line.push(Some(err.first_error.line as i32 + 1));
-            } else {
+            } else if return_all {
+                files.push(entry.key().as_bytes().to_vec());
+                rows_loaded.push(status.num_rows_loaded as i32);
                 errors_seen.push(0);
                 first_error.push(None);
                 first_error_line.push(None);

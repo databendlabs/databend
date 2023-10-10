@@ -84,6 +84,7 @@ impl TransformHashJoinProbe {
         func_ctx: FunctionContext,
         join_type: &JoinType,
         with_conjunct: bool,
+        has_string_column: bool,
     ) -> Result<Box<dyn Processor>> {
         let id = join_probe_state.probe_attach()?;
         Ok(Box::new(TransformHashJoinProbe {
@@ -94,7 +95,13 @@ impl TransformHashJoinProbe {
             output_data_blocks: VecDeque::new(),
             step: HashJoinProbeStep::WaitBuild,
             join_probe_state,
-            probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
+            probe_state: ProbeState::create(
+                max_block_size,
+                join_type,
+                with_conjunct,
+                has_string_column,
+                func_ctx,
+            ),
             max_block_size,
             outer_scan_finished: false,
             spill_done: false,

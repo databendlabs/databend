@@ -437,4 +437,75 @@ select * from t1 order by a,b,c;
 1 a1 b1
 
 statement ok
+CREATE TABLE employees (employee_id INT, employee_name VARCHAR(255),department VARCHAR(255));
+
+statement ok
+CREATE TABLE salaries (employee_id INT,salary DECIMAL(10, 2));
+
+statement ok
+INSERT INTO employees VALUES(1, 'Alice', 'HR'),(2, 'Bob', 'IT'),(3, 'Charlie', 'Finance'),(4, 'David', 'HR');
+
+statement ok
+INSERT INTO salaries VALUES(1, 50000.00),(2, 60000.00);
+
+statement ok
+MERGE INTO salaries USING (SELECT * FROM employees) ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
+
+query TTT
+select * from salaries order by employee_id;
+----
+1 51000.00
+2 60500.00
+3 55000.00
+4 55000.00
+
+## null cast bug fix
+statement ok
+create table t1_target(a int not null);
+
+statement ok
+create table t2_source(a int not null);
+
+statement ok
+insert into t1_target values(1);
+
+statement ok
+insert into t2_source values(1),(2);
+
+statement ok
+merge into t1_target using (select * from t2_source) on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
+
+query T
+select * from t1_target order by a;
+----
+1
+2
+
+## cluster table test
+statement ok
+create table cluster_target(a int,b string,c int) cluster by(a,b);
+
+statement ok
+create table cluster_source(a int,b string,c int);
+
+statement ok
+insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
+
+statement ok
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when not matched then insert *;
+
+# By default setting, all rows merged from  `cluster_source` will be resident in a single block of `cluster_target`,
+# as table `cluster_target` is clustered by `(a,b)`,  the rows inside the one block are assumed to be sorted 
+# by `(a, b)`,  consequently, the result of the following query should be ordered by `(a,b)` without an explicit 
+# `order by` clause.
+query TTT
+select * from cluster_target;
+----
+1 a 2
+2 a 4
+2 b 3
+3 a 3
+12 b 1
+
+statement ok
 set enable_experimental_merge_into = 0;

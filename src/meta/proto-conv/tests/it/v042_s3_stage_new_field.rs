@@ -64,6 +64,7 @@ fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
             single: false,
             max_file_size: 0,
             disable_variant_check: true,
+            return_failed_only: false,
         },
         comment: "test".to_string(),
         number_of_files: 100,

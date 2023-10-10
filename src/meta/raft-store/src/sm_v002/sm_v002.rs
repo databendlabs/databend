@@ -384,7 +384,7 @@ impl SMV002 {
             "the base must not be changed"
         );
 
-        self.levels.replace_frozen_levels(snapshot.compacted());
+        self.levels.replace_frozen(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.

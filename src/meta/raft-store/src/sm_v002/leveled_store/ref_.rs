@@ -23,7 +23,7 @@ use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
-use crate::sm_v002::leveled_store::static_leveled_map::StaticLeveledMap;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
 
 /// A readonly leveled map that does not not own the data.
@@ -33,13 +33,13 @@ pub struct Ref<'d> {
     writable: Option<&'d Level>,
 
     /// The immutable levels.
-    frozen: &'d StaticLeveledMap,
+    frozen: &'d StaticLevels,
 }
 
 impl<'d> Ref<'d> {
     pub(in crate::sm_v002) fn new(
         writable: Option<&'d Level>,
-        frozen: &'d StaticLeveledMap,
+        frozen: &'d StaticLevels,
     ) -> Ref<'d> {
         Self { writable, frozen }
     }

@@ -684,12 +684,29 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         } else {
             false
         };
-        let name = Identifier::from_name(name);
-        let args = args_type
-            .iter()
-            .map(|ty| self.gen_expr(ty))
-            .collect::<Vec<_>>();
 
+        let mut args = vec![];
+        for (i, ty) in args_type.iter().enumerate() {
+            if name == *"lead" || name == *"lag" || name == *"nth_value" {
+                if i == 1 {
+                    args.push(Expr::Literal {
+                        span: None,
+                        lit: Literal::UInt64(self.rng.gen_range(1..=10)),
+                    })
+                } else {
+                    args.push(self.gen_expr(ty))
+                }
+            } else if name == "factorial" {
+                args.push(Expr::Literal {
+                    span: None,
+                    lit: Literal::UInt64(self.rng.gen_range(0..=20)),
+                })
+            } else {
+                args.push(self.gen_expr(ty))
+            }
+        }
+
+        let name = Identifier::from_name(name);
         Expr::FunctionCall {
             span: None,
             distinct,

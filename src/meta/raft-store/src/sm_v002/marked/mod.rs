@@ -56,7 +56,7 @@ impl<T> From<(u64, T, Option<KVMeta>)> for Marked<T> {
 
 impl<T> From<SeqV<T>> for Marked<T> {
     fn from(value: SeqV<T>) -> Self {
-        Marked::new_normal(value.seq, value.data, value.meta)
+        Marked::new_with_meta(value.seq, value.data, value.meta)
     }
 }
 
@@ -148,11 +148,36 @@ impl<T> Marked<T> {
         Marked::TombStone { internal_seq }
     }
 
-    pub fn new_normal(seq: u64, value: T, meta: Option<KVMeta>) -> Self {
+    pub fn new_normal(seq: u64, value: T) -> Self {
+        Marked::Normal {
+            internal_seq: seq,
+            value,
+            meta: None,
+        }
+    }
+
+    pub fn new_with_meta(seq: u64, value: T, meta: Option<KVMeta>) -> Self {
         Marked::Normal {
             internal_seq: seq,
             value,
             meta,
+        }
+    }
+
+    pub fn with_meta(self, meta: Option<KVMeta>) -> Self {
+        match self {
+            Marked::TombStone { .. } => {
+                unreachable!("Tombstone has no meta")
+            }
+            Marked::Normal {
+                internal_seq,
+                value,
+                ..
+            } => Marked::Normal {
+                internal_seq,
+                value,
+                meta,
+            },
         }
     }
 
@@ -189,7 +214,7 @@ impl<T> From<Marked<T>> for Option<SeqV<T>> {
 
 impl From<ExpireValue> for Marked<String> {
     fn from(value: ExpireValue) -> Self {
-        Marked::new_normal(value.seq, value.key, None)
+        Marked::new_with_meta(value.seq, value.key, None)
     }
 }
 
@@ -203,5 +228,62 @@ impl From<Marked<String>> for Option<ExpireValue> {
                 meta: _,
             } => Some(ExpireValue::new(value, seq)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_meta_types::KVMeta;
+
+    use crate::sm_v002::marked::Marked;
+
+    #[test]
+    fn test_marked_new() {
+        let m = Marked::new_normal(1, "a");
+        assert_eq!(
+            Marked::Normal {
+                internal_seq: 1,
+                value: "a",
+                meta: None
+            },
+            m
+        );
+
+        let m = m.with_meta(Some(KVMeta {
+            expire_at: Some(20),
+        }));
+
+        assert_eq!(
+            Marked::Normal {
+                internal_seq: 1,
+                value: "a",
+                meta: Some(KVMeta {
+                    expire_at: Some(20)
+                })
+            },
+            m
+        );
+
+        let m = Marked::new_with_meta(
+            2,
+            "b",
+            Some(KVMeta {
+                expire_at: Some(30),
+            }),
+        );
+
+        assert_eq!(
+            Marked::Normal {
+                internal_seq: 2,
+                value: "b",
+                meta: Some(KVMeta {
+                    expire_at: Some(30)
+                })
+            },
+            m
+        );
+
+        let m: Marked<u32> = Marked::new_tomb_stone(3);
+        assert_eq!(Marked::TombStone { internal_seq: 3 }, m);
     }
 }

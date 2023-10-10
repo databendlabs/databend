@@ -119,13 +119,8 @@ impl FuseTable {
             let func_ctx = query_ctx.get_function_context()?;
 
             pipeline.add_transform(|input, output| {
-                let transform = CompoundBlockOperator::create(
-                    input,
-                    output,
-                    num_input_columns,
-                    func_ctx.clone(),
-                    ops.clone(),
-                );
+                let transform =
+                    CompoundBlockOperator::create(input, output, func_ctx.clone(), ops.clone());
                 Ok(ProcessorPtr::create(transform))
             })?;
         }

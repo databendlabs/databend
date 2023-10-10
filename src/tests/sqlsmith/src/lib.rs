@@ -14,6 +14,7 @@
 
 #![feature(box_patterns)]
 
+mod reducer;
 mod runner;
 mod sql_gen;
 
