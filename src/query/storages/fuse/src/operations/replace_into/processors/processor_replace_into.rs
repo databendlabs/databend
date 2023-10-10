@@ -195,7 +195,9 @@ impl Processor for ReplaceIntoProcessor {
                 let filter = predicate_col.not();
                 data_block = data_block.filter_with_bitmap(&filter)?;
             }
-            self.output_data_append = Some(data_block);
+            if data_block.num_rows() > 0 {
+                self.output_data_append = Some(data_block);
+            }
             return Ok(());
         }
 
