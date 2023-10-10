@@ -160,29 +160,27 @@ impl RowIterator {
 #[napi]
 pub struct RowIteratorExt {
     schema: databend_driver::Schema,
-    iterator: databend_driver::RowProgressIterator,
+    iterator: databend_driver::RowStatsIterator,
 }
 
 #[napi]
 impl RowIteratorExt {
-    /// Fetch next row or progress.
+    /// Fetch next row or stats.
     /// Returns `None` if there are no more rows.
     #[napi]
-    pub async unsafe fn next(&mut self) -> Option<Result<RowOrProgress>> {
+    pub async unsafe fn next(&mut self) -> Option<Result<RowOrStats>> {
         match self.iterator.next().await {
             None => None,
             Some(r0) => match r0 {
                 Ok(r1) => match r1 {
-                    databend_driver::RowWithProgress::Row(row) => Some(Ok(RowOrProgress {
+                    databend_driver::RowWithStats::Row(row) => Some(Ok(RowOrStats {
                         row: Some(Row(row)),
-                        progress: None,
+                        stats: None,
                     })),
-                    databend_driver::RowWithProgress::Progress(progress) => {
-                        Some(Ok(RowOrProgress {
-                            row: None,
-                            progress: Some(QueryProgress(progress)),
-                        }))
-                    }
+                    databend_driver::RowWithStats::Stats(ss) => Some(Ok(RowOrStats {
+                        row: None,
+                        stats: Some(ServerStats(ss)),
+                    })),
                 },
                 Err(e) => Some(Err(format_napi_error(e))),
             },
@@ -195,23 +193,23 @@ impl RowIteratorExt {
     }
 }
 
-/// Must contain either row or progress.
+/// Must contain either row or stats.
 #[napi]
-pub struct RowOrProgress {
+pub struct RowOrStats {
     row: Option<Row>,
-    progress: Option<QueryProgress>,
+    stats: Option<ServerStats>,
 }
 
 #[napi]
-impl RowOrProgress {
+impl RowOrStats {
     #[napi(getter)]
     pub fn row(&self) -> Option<Row> {
         self.row.clone()
     }
 
     #[napi(getter)]
-    pub fn progress(&self) -> Option<QueryProgress> {
-        self.progress.clone()
+    pub fn stats(&self) -> Option<ServerStats> {
+        self.stats.clone()
     }
 }
 
@@ -230,10 +228,10 @@ impl Row {
 
 #[napi]
 #[derive(Clone)]
-pub struct QueryProgress(databend_driver::QueryProgress);
+pub struct ServerStats(databend_driver::ServerStats);
 
 #[napi]
-impl QueryProgress {
+impl ServerStats {
     #[napi(getter)]
     pub fn total_rows(&self) -> usize {
         self.0.total_rows
@@ -262,6 +260,11 @@ impl QueryProgress {
     #[napi(getter)]
     pub fn write_bytes(&self) -> usize {
         self.0.write_bytes
+    }
+
+    #[napi(getter)]
+    pub fn running_time_ms(&self) -> f64 {
+        self.0.running_time_ms
     }
 }
 
@@ -325,7 +328,7 @@ impl Connection {
             .map_err(format_napi_error)
     }
 
-    /// Execute a SQL query, and return all rows with schema and progress.
+    /// Execute a SQL query, and return all rows with schema and stats.
     #[napi]
     pub async fn query_iter_ext(&self, sql: String) -> Result<RowIteratorExt> {
         let (schema, iterator) = self
@@ -339,7 +342,7 @@ impl Connection {
     /// Load data with stage attachment.
     /// The SQL can be `INSERT INTO tbl VALUES` or `REPLACE INTO tbl VALUES`.
     #[napi]
-    pub async fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> Result<QueryProgress> {
+    pub async fn stream_load(&self, sql: String, data: Vec<Vec<String>>) -> Result<ServerStats> {
         let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
         for row in data {
             wtr.write_record(row)
@@ -350,12 +353,12 @@ impl Connection {
             .map_err(|e| Error::from_reason(format!("{}", e)))?;
         let size = bytes.len() as u64;
         let reader = Box::new(std::io::Cursor::new(bytes));
-        let progress = self
+        let ss = self
             .0
             .stream_load(&sql, reader, size, None, None)
             .await
             .map_err(format_napi_error)?;
-        Ok(QueryProgress(progress))
+        Ok(ServerStats(ss))
     }
 }
 

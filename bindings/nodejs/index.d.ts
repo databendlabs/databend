@@ -36,13 +36,13 @@ export class Connection {
   queryRow(sql: string): Promise<Row | null>
   /** Execute a SQL query, and return all rows. */
   queryIter(sql: string): Promise<RowIterator>
-  /** Execute a SQL query, and return all rows with schema and progress. */
+  /** Execute a SQL query, and return all rows with schema and stats. */
   queryIterExt(sql: string): Promise<RowIteratorExt>
   /**
    * Load data with stage attachment.
    * The SQL can be `INSERT INTO tbl VALUES` or `REPLACE INTO tbl VALUES`.
    */
-  streamLoad(sql: string, data: Array<Array<string>>): Promise<QueryProgress>
+  streamLoad(sql: string, data: Array<Array<string>>): Promise<ServerStats>
 }
 export class ConnectionInfo {
   get handler(): string
@@ -68,25 +68,26 @@ export class RowIterator {
 }
 export class RowIteratorExt {
   /**
-   * Fetch next row or progress.
+   * Fetch next row or stats.
    * Returns `None` if there are no more rows.
    */
-  next(): Promise<Error | RowOrProgress | null>
+  next(): Promise<Error | RowOrStats | null>
   schema(): Schema
 }
-/** Must contain either row or progress. */
-export class RowOrProgress {
+/** Must contain either row or stats. */
+export class RowOrStats {
   get row(): Row | null
-  get progress(): QueryProgress | null
+  get stats(): ServerStats | null
 }
 export class Row {
   values(): Array<any>
 }
-export class QueryProgress {
+export class ServerStats {
   get totalRows(): bigint
   get totalBytes(): bigint
   get readRows(): bigint
   get readBytes(): bigint
   get writeRows(): bigint
   get writeBytes(): bigint
+  get runningTimeMs(): number
 }

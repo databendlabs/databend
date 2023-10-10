@@ -89,7 +89,7 @@ pub struct Settings {
 
     /// Show time elapsed when executing queries.
     /// only works with output format `null`.
-    pub time: bool,
+    pub time: Option<TimeOption>,
 
     /// Multi line mode, default is true.
     pub multi_line: bool,
@@ -103,6 +103,23 @@ pub enum OutputFormat {
     CSV,
     TSV,
     Null,
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq)]
+pub enum TimeOption {
+    Local,
+    Server,
+}
+
+impl TryFrom<&str> for TimeOption {
+    type Error = anyhow::Error;
+    fn try_from(s: &str) -> anyhow::Result<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "server" => Ok(TimeOption::Server),
+            "local" => Ok(TimeOption::Local),
+            _ => Err(anyhow!("Unknown time display option: {}", s)),
+        }
+    }
 }
 
 impl Settings {
@@ -141,7 +158,7 @@ impl Settings {
                 }
             }
             "expand" => self.expand = cmd_value.into(),
-            "time" => self.time = cmd_value.parse()?,
+            "time" => self.time = Some(cmd_value.try_into()?),
             "multi_line" => self.multi_line = cmd_value.parse()?,
             "max_display_rows" => self.max_display_rows = cmd_value.parse()?,
             "max_width" => self.max_width = cmd_value.parse()?,
@@ -206,7 +223,7 @@ impl Default for Settings {
             max_col_width: 1024 * 1024,
             max_width: 1024 * 1024,
             show_stats: false,
-            time: false,
+            time: None,
             multi_line: true,
             replace_newline: true,
         }

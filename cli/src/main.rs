@@ -26,8 +26,8 @@ use std::{
 };
 
 use anyhow::{anyhow, Result};
-use clap::{CommandFactory, Parser, ValueEnum};
-use config::{Config, OutputFormat, Settings};
+use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
+use config::{Config, OutputFormat, Settings, TimeOption};
 use once_cell::sync::Lazy;
 
 static VERSION: Lazy<String> = Lazy::new(|| {
@@ -163,9 +163,11 @@ struct Args {
 
     #[clap(
         long,
+        action = ArgAction::Set,
+        num_args = 0..=1, require_equals = true, default_missing_value = "local",
         help = "Only show execution time without results, will implicitly set output format to `null`."
     )]
-    time: bool,
+    time: Option<TimeOption>,
 }
 
 /// Parse a single key-value pair
@@ -318,10 +320,10 @@ pub async fn main() -> Result<()> {
     if args.stats {
         settings.show_stats = true;
     }
-    if args.time {
-        settings.time = true;
+    if args.time.is_some() {
         settings.output_format = OutputFormat::Null;
     }
+    settings.time = args.time;
 
     let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
 

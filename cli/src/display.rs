@@ -20,7 +20,7 @@ use anyhow::Result;
 use comfy_table::{Cell, CellAlignment, Table};
 use terminal_size::{terminal_size, Width};
 
-use databend_driver::{QueryProgress, Row, RowProgressIterator, RowWithProgress, SchemaRef};
+use databend_driver::{Row, RowStatsIterator, RowWithStats, SchemaRef, ServerStats};
 use rustyline::highlight::Highlighter;
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
@@ -36,7 +36,7 @@ use crate::{
 
 #[async_trait::async_trait]
 pub trait ChunkDisplay {
-    async fn display(&mut self) -> Result<()>;
+    async fn display(&mut self) -> Result<ServerStats>;
     fn total_rows(&self) -> usize;
 }
 
@@ -48,12 +48,12 @@ pub struct FormatDisplay<'a> {
     // disable in explain/show create stmts or user config setting false
     replace_newline: bool,
     schema: SchemaRef,
-    data: RowProgressIterator,
+    data: RowStatsIterator,
 
     rows: usize,
     progress: Option<ProgressBar>,
     start: Instant,
-    stats: Option<QueryProgress>,
+    stats: Option<ServerStats>,
 }
 
 impl<'a> FormatDisplay<'a> {
@@ -63,7 +63,7 @@ impl<'a> FormatDisplay<'a> {
         replace_newline: bool,
         start: Instant,
         schema: SchemaRef,
-        data: RowProgressIterator,
+        data: RowStatsIterator,
     ) -> Self {
         Self {
             settings,
@@ -81,15 +81,15 @@ impl<'a> FormatDisplay<'a> {
 }
 
 impl<'a> FormatDisplay<'a> {
-    async fn display_progress(&mut self, pg: &QueryProgress) {
+    async fn display_progress(&mut self, ss: &ServerStats) {
         if self.settings.show_progress {
-            let pgo = self.progress.take();
+            let pb = self.progress.take();
             match self.kind {
                 QueryKind::Get | QueryKind::Query => {
-                    self.progress = Some(display_progress(pgo, pg, "read"));
+                    self.progress = Some(display_progress(pb, ss, "read"));
                 }
                 QueryKind::Put | QueryKind::Update => {
-                    self.progress = Some(display_progress(pgo, pg, "write"));
+                    self.progress = Some(display_progress(pb, ss, "write"));
                 }
                 _ => {}
             }
@@ -106,13 +106,13 @@ impl<'a> FormatDisplay<'a> {
         let mut error = None;
         while let Some(line) = self.data.next().await {
             match line {
-                Ok(RowWithProgress::Row(row)) => {
+                Ok(RowWithStats::Row(row)) => {
                     self.rows += 1;
                     rows.push(row);
                 }
-                Ok(RowWithProgress::Progress(pg)) => {
-                    self.display_progress(&pg).await;
-                    self.stats = Some(pg);
+                Ok(RowWithStats::Stats(ss)) => {
+                    self.display_progress(&ss).await;
+                    self.stats = Some(ss);
                 }
                 Err(err) => {
                     error = Some(err);
@@ -180,13 +180,13 @@ impl<'a> FormatDisplay<'a> {
             .from_writer(std::io::stdout());
         while let Some(line) = self.data.next().await {
             match line {
-                Ok(RowWithProgress::Row(row)) => {
+                Ok(RowWithStats::Row(row)) => {
                     self.rows += 1;
                     let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
                     wtr.write_record(record)?;
                 }
-                Ok(RowWithProgress::Progress(pg)) => {
-                    self.stats = Some(pg);
+                Ok(RowWithStats::Stats(ss)) => {
+                    self.stats = Some(ss);
                 }
                 Err(err) => {
                     eprintln!("error: {}", err);
@@ -204,13 +204,13 @@ impl<'a> FormatDisplay<'a> {
             .from_writer(std::io::stdout());
         while let Some(line) = self.data.next().await {
             match line {
-                Ok(RowWithProgress::Row(row)) => {
+                Ok(RowWithStats::Row(row)) => {
                     self.rows += 1;
                     let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
                     wtr.write_record(record)?;
                 }
-                Ok(RowWithProgress::Progress(pg)) => {
-                    self.stats = Some(pg);
+                Ok(RowWithStats::Stats(ss)) => {
+                    self.stats = Some(ss);
                 }
                 Err(err) => {
                     eprintln!("error: {}", err);
@@ -224,12 +224,12 @@ impl<'a> FormatDisplay<'a> {
     async fn display_null(&mut self) -> Result<()> {
         while let Some(line) = self.data.next().await {
             match line {
-                Ok(RowWithProgress::Row(_)) => {
+                Ok(RowWithStats::Row(_)) => {
                     self.rows += 1;
                 }
-                Ok(RowWithProgress::Progress(pg)) => {
-                    self.display_progress(&pg).await;
-                    self.stats = Some(pg);
+                Ok(RowWithStats::Stats(ss)) => {
+                    self.display_progress(&ss).await;
+                    self.stats = Some(ss);
                 }
                 Err(err) => {
                     eprintln!("error: {}", err);
@@ -299,7 +299,7 @@ impl<'a> FormatDisplay<'a> {
 
 #[async_trait::async_trait]
 impl<'a> ChunkDisplay for FormatDisplay<'a> {
-    async fn display(&mut self) -> Result<()> {
+    async fn display(&mut self) -> Result<ServerStats> {
         match self.settings.output_format {
             OutputFormat::Table => {
                 self.display_table().await?;
@@ -315,7 +315,8 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
             }
         }
         self.display_stats().await;
-        Ok(())
+        let stats = self.stats.take().unwrap_or_default();
+        Ok(stats)
     }
 
     fn total_rows(&self) -> usize {
@@ -323,29 +324,29 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
     }
 }
 
-fn format_read_progress(progress: &QueryProgress, elapsed: f64) -> String {
+fn format_read_progress(ss: &ServerStats, elapsed: f64) -> String {
     format!(
         "Processing {}/{} ({} rows/s), {}/{} ({}/s)",
-        humanize_count(progress.read_rows as f64),
-        humanize_count(progress.total_rows as f64),
-        humanize_count(progress.read_rows as f64 / elapsed),
-        HumanBytes(progress.read_bytes as u64),
-        HumanBytes(progress.total_bytes as u64),
-        HumanBytes((progress.read_bytes as f64 / elapsed) as u64)
+        humanize_count(ss.read_rows as f64),
+        humanize_count(ss.total_rows as f64),
+        humanize_count(ss.read_rows as f64 / elapsed),
+        HumanBytes(ss.read_bytes as u64),
+        HumanBytes(ss.total_bytes as u64),
+        HumanBytes((ss.read_bytes as f64 / elapsed) as u64)
     )
 }
 
-pub fn format_write_progress(progress: &QueryProgress, elapsed: f64) -> String {
+pub fn format_write_progress(ss: &ServerStats, elapsed: f64) -> String {
     format!(
         "Written {} ({} rows/s), {} ({}/s)",
-        humanize_count(progress.write_rows as f64),
-        humanize_count(progress.write_rows as f64 / elapsed),
-        HumanBytes(progress.write_bytes as u64),
-        HumanBytes((progress.write_bytes as f64 / elapsed) as u64)
+        humanize_count(ss.write_rows as f64),
+        humanize_count(ss.write_rows as f64 / elapsed),
+        HumanBytes(ss.write_bytes as u64),
+        HumanBytes((ss.write_bytes as f64 / elapsed) as u64)
     )
 }
 
-fn display_progress(pb: Option<ProgressBar>, current: &QueryProgress, kind: &str) -> ProgressBar {
+fn display_progress(pb: Option<ProgressBar>, current: &ServerStats, kind: &str) -> ProgressBar {
     let pb = pb.unwrap_or_else(|| {
         let pbn = ProgressBar::new(current.total_bytes as u64);
         let progress_color = "green";

@@ -27,7 +27,7 @@ use crate::flight_sql::FlightSQLConnection;
 use databend_client::presign::{presign_download_from_stage, PresignedResponse};
 use databend_client::stage::StageLocation;
 use databend_sql::error::{Error, Result};
-use databend_sql::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress};
+use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
 use databend_sql::schema::{DataType, Field, NumberDataType, Schema};
 use databend_sql::value::{NumberValue, Value};
 
@@ -92,7 +92,7 @@ pub trait Connection: DynClone + Send + Sync {
     async fn exec(&self, sql: &str) -> Result<i64>;
     async fn query_row(&self, sql: &str) -> Result<Option<Row>>;
     async fn query_iter(&self, sql: &str) -> Result<RowIterator>;
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)>;
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)>;
 
     /// Get presigned url for a given operation and stage location.
     /// The operation can be "UPLOAD" or "DOWNLOAD".
@@ -107,18 +107,14 @@ pub trait Connection: DynClone + Send + Sync {
         _size: u64,
         _file_format_options: Option<BTreeMap<&str, &str>>,
         _copy_options: Option<BTreeMap<&str, &str>>,
-    ) -> Result<QueryProgress> {
+    ) -> Result<ServerStats> {
         Err(Error::Protocol(
             "STREAM LOAD only available in HTTP API".to_owned(),
         ))
     }
 
     // PUT file://<path_to_file>/<filename> internalStage|externalStage
-    async fn put_files(
-        &self,
-        local_file: &str,
-        stage: &str,
-    ) -> Result<(Schema, RowProgressIterator)> {
+    async fn put_files(&self, local_file: &str, stage: &str) -> Result<(Schema, RowStatsIterator)> {
         let mut total_count: usize = 0;
         let mut total_size: usize = 0;
         let local_dsn = url::Url::parse(local_file)?;
@@ -152,16 +148,17 @@ pub trait Connection: DynClone + Send + Sync {
                 }
                 Err(e) => (entry.to_string_lossy().to_string(), e.to_string()),
             };
-            let progress = QueryProgress {
+            let ss = ServerStats {
                 total_rows: 0,
                 total_bytes: 0,
                 read_rows: 0,
                 read_bytes: 0,
                 write_rows: total_count,
                 write_bytes: total_size,
+                running_time_ms: 0.0,
             };
-            results.push(Ok(RowWithProgress::Progress(progress)));
-            results.push(Ok(RowWithProgress::Row(Row::from_vec(vec![
+            results.push(Ok(RowWithStats::Stats(ss)));
+            results.push(Ok(RowWithStats::Row(Row::from_vec(vec![
                 Value::String(fname),
                 Value::String(status),
                 Value::Number(NumberValue::UInt64(size)),
@@ -169,15 +166,11 @@ pub trait Connection: DynClone + Send + Sync {
         }
         Ok((
             put_get_schema(),
-            RowProgressIterator::new(Box::pin(tokio_stream::iter(results))),
+            RowStatsIterator::new(Box::pin(tokio_stream::iter(results))),
         ))
     }
 
-    async fn get_files(
-        &self,
-        stage: &str,
-        local_file: &str,
-    ) -> Result<(Schema, RowProgressIterator)> {
+    async fn get_files(&self, stage: &str, local_file: &str) -> Result<(Schema, RowStatsIterator)> {
         let mut total_count: usize = 0;
         let mut total_size: usize = 0;
         let local_dsn = url::Url::parse(local_file)?;
@@ -207,16 +200,17 @@ pub trait Connection: DynClone + Send + Sync {
                 }
                 Err(e) => (e.to_string(), 0),
             };
-            let progress = QueryProgress {
+            let ss = ServerStats {
                 total_rows: 0,
                 total_bytes: 0,
                 read_rows: total_count,
                 read_bytes: total_size,
                 write_rows: 0,
                 write_bytes: 0,
+                running_time_ms: 0.0,
             };
-            results.push(Ok(RowWithProgress::Progress(progress)));
-            results.push(Ok(RowWithProgress::Row(Row::from_vec(vec![
+            results.push(Ok(RowWithStats::Stats(ss)));
+            results.push(Ok(RowWithStats::Row(Row::from_vec(vec![
                 Value::String(local_file.to_string_lossy().to_string()),
                 Value::String(status),
                 Value::Number(NumberValue::UInt64(size)),
@@ -224,7 +218,7 @@ pub trait Connection: DynClone + Send + Sync {
         }
         Ok((
             put_get_schema(),
-            RowProgressIterator::new(Box::pin(tokio_stream::iter(results))),
+            RowStatsIterator::new(Box::pin(tokio_stream::iter(results))),
         ))
     }
 }

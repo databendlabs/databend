@@ -27,13 +27,13 @@ use crate::schema::SchemaRef;
 use crate::value::Value;
 
 #[derive(Clone, Debug)]
-pub enum RowWithProgress {
+pub enum RowWithStats {
     Row(Row),
-    Progress(QueryProgress),
+    Stats(ServerStats),
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
-pub struct QueryProgress {
+pub struct ServerStats {
     #[serde(default)]
     pub total_rows: usize,
     #[serde(default)]
@@ -48,9 +48,12 @@ pub struct QueryProgress {
     pub write_rows: usize,
     #[serde(default)]
     pub write_bytes: usize,
+
+    #[serde(default)]
+    pub running_time_ms: f64,
 }
 
-impl QueryProgress {
+impl ServerStats {
     pub fn normalize(&mut self) {
         if self.total_rows == 0 {
             self.total_rows = self.read_rows;
@@ -61,17 +64,18 @@ impl QueryProgress {
     }
 }
 
-impl From<databend_client::response::Progresses> for QueryProgress {
-    fn from(progresses: databend_client::response::Progresses) -> Self {
+impl From<databend_client::response::QueryStats> for ServerStats {
+    fn from(stats: databend_client::response::QueryStats) -> Self {
         let mut p = Self {
             total_rows: 0,
             total_bytes: 0,
-            read_rows: progresses.scan_progress.rows,
-            read_bytes: progresses.scan_progress.bytes,
-            write_rows: progresses.write_progress.rows,
-            write_bytes: progresses.write_progress.bytes,
+            read_rows: stats.progresses.scan_progress.rows,
+            read_bytes: stats.progresses.scan_progress.bytes,
+            write_rows: stats.progresses.write_progress.rows,
+            write_bytes: stats.progresses.write_progress.bytes,
+            running_time_ms: stats.running_time_ms,
         };
-        if let Some(total) = progresses.total_scan {
+        if let Some(total) = stats.progresses.total_scan {
             p.total_rows = total.rows;
             p.total_bytes = total.bytes;
         }
@@ -182,16 +186,16 @@ impl Stream for RowIterator {
     }
 }
 
-pub struct RowProgressIterator(Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>);
+pub struct RowStatsIterator(Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>);
 
-impl RowProgressIterator {
-    pub fn new(it: Pin<Box<dyn Stream<Item = Result<RowWithProgress>> + Send>>) -> Self {
+impl RowStatsIterator {
+    pub fn new(it: Pin<Box<dyn Stream<Item = Result<RowWithStats>> + Send>>) -> Self {
         Self(it)
     }
 
     pub async fn filter_rows(self) -> RowIterator {
         let rows = self.0.filter_map(|r| match r {
-            Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
+            Ok(RowWithStats::Row(r)) => Some(Ok(r)),
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
@@ -199,8 +203,8 @@ impl RowProgressIterator {
     }
 }
 
-impl Stream for RowProgressIterator {
-    type Item = Result<RowWithProgress>;
+impl Stream for RowStatsIterator {
+    type Item = Result<RowWithStats>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         Pin::new(&mut self.0).poll_next(cx)

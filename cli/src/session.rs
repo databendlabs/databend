@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use anyhow::anyhow;
 use anyhow::Result;
+use databend_driver::ServerStats;
 use databend_driver::{Client, Connection};
 use rustyline::config::Builder;
 use rustyline::error::ReadlineError;
@@ -31,6 +32,7 @@ use tokio_stream::StreamExt;
 
 use crate::ast::{TokenKind, Tokenizer};
 use crate::config::Settings;
+use crate::config::TimeOption;
 use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay};
 use crate::helper::CliHelper;
 use crate::VERSION;
@@ -130,10 +132,10 @@ impl Session {
                     for query in queries {
                         let _ = rl.add_history_entry(&query);
                         match self.handle_query(true, &query).await {
-                            Ok(true) => {
+                            Ok(None) => {
                                 break 'F;
                             }
-                            Ok(false) => {}
+                            Ok(Some(_)) => {}
                             Err(e) => {
                                 if e.to_string().contains("Unauthenticated") {
                                     if let Err(e) = self.reconnect().await {
@@ -172,10 +174,11 @@ impl Session {
     pub async fn handle_reader<R: BufRead>(&mut self, r: R) -> Result<()> {
         let start = Instant::now();
         let mut lines = r.lines();
+        let mut stats: Option<ServerStats> = None;
         while let Some(Ok(line)) = lines.next() {
             let queries = self.append_query(&line);
             for query in queries {
-                self.handle_query(false, &query).await?;
+                stats = self.handle_query(false, &query).await?;
             }
         }
 
@@ -183,10 +186,20 @@ impl Session {
         let query = self.query.trim().to_owned();
         if !query.is_empty() {
             self.query.clear();
-            self.handle_query(false, &query).await?;
+            stats = self.handle_query(false, &query).await?;
         }
-        if self.settings.time {
-            println!("{:.3}", start.elapsed().as_secs_f64());
+        match self.settings.time {
+            None => {}
+            Some(TimeOption::Local) => {
+                println!("{:.3}", start.elapsed().as_secs_f64());
+            }
+            Some(TimeOption::Server) => {
+                let server_time_ms = match stats {
+                    None => 0.0,
+                    Some(ss) => ss.running_time_ms,
+                };
+                println!("{:.6}", server_time_ms / 1000.0);
+            }
         }
         Ok(())
     }
@@ -274,10 +287,14 @@ impl Session {
         queries
     }
 
-    pub async fn handle_query(&mut self, is_repl: bool, query: &str) -> Result<bool> {
+    pub async fn handle_query(
+        &mut self,
+        is_repl: bool,
+        query: &str,
+    ) -> Result<Option<ServerStats>> {
         let query = query.trim_end_matches(';').trim();
         if is_repl && (query == "exit" || query == "quit") {
-            return Ok(true);
+            return Ok(None);
         }
 
         if is_repl && query.starts_with('.') {
@@ -291,7 +308,7 @@ impl Session {
                 ));
             }
             self.settings.inject_ctrl_cmd(query[0], query[1])?;
-            return Ok(false);
+            return Ok(Some(ServerStats::default()));
         }
 
         let start = Instant::now();
@@ -311,7 +328,7 @@ impl Session {
                     }
                     eprintln!();
                 }
-                Ok(false)
+                Ok(Some(ServerStats::default()))
             }
             other => {
                 let replace_newline = !if self.settings.replace_newline {
@@ -325,7 +342,7 @@ impl Session {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
                             eprintln!("put args are invalid, must be 2 argruments");
-                            return Ok(false);
+                            return Ok(Some(ServerStats::default()));
                         }
                         self.conn.put_files(&args[1], &args[2]).await?
                     }
@@ -333,7 +350,7 @@ impl Session {
                         let args: Vec<String> = get_put_get_args(query);
                         if args.len() != 3 {
                             eprintln!("put args are invalid, must be 2 argruments");
-                            return Ok(false);
+                            return Ok(Some(ServerStats::default()));
                         }
                         self.conn.get_files(&args[1], &args[2]).await?
                     }
@@ -348,8 +365,8 @@ impl Session {
                     Arc::new(schema),
                     data,
                 );
-                displayer.display().await?;
-                Ok(false)
+                let stats = displayer.display().await?;
+                Ok(Some(stats))
             }
         }
     }
@@ -389,7 +406,7 @@ impl Session {
         let file = File::open(file_path).await?;
         let metadata = file.metadata().await?;
 
-        let progress = self
+        let ss = self
             .conn
             .stream_load(query, Box::new(file), metadata.len(), Some(options), None)
             .await?;
@@ -399,7 +416,7 @@ impl Session {
             eprintln!(
                 "==> stream loaded {}:\n    {}",
                 file_path.display(),
-                format_write_progress(&progress, start.elapsed().as_secs_f64())
+                format_write_progress(&ss, start.elapsed().as_secs_f64())
             );
         }
         Ok(())

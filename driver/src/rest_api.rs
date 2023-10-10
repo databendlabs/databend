@@ -25,7 +25,7 @@ use databend_client::presign::PresignedResponse;
 use databend_client::response::QueryResponse;
 use databend_client::APIClient;
 use databend_sql::error::{Error, Result};
-use databend_sql::rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress};
+use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, ServerStats};
 use databend_sql::schema::{Schema, SchemaRef};
 
 use crate::conn::{Connection, ConnectionInfo, Reader};
@@ -59,17 +59,17 @@ impl Connection for RestAPIConnection {
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
         let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
-            Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
+            Ok(RowWithStats::Row(r)) => Some(Ok(r)),
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
         Ok(RowIterator::new(Box::pin(rows)))
     }
 
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)> {
         let resp = self.client.start_query(sql).await?;
         let (schema, rows) = RestAPIRows::from_response(self.client.clone(), resp)?;
-        Ok((schema, RowProgressIterator::new(Box::pin(rows))))
+        Ok((schema, RowStatsIterator::new(Box::pin(rows))))
     }
 
     async fn query_row(&self, sql: &str) -> Result<Option<Row>> {
@@ -115,7 +115,7 @@ impl Connection for RestAPIConnection {
         size: u64,
         file_format_options: Option<BTreeMap<&str, &str>>,
         copy_options: Option<BTreeMap<&str, &str>>,
-    ) -> Result<QueryProgress> {
+    ) -> Result<ServerStats> {
         let now = chrono::Utc::now()
             .timestamp_nanos_opt()
             .ok_or_else(|| Error::IO("Failed to get current timestamp".to_string()))?;
@@ -128,7 +128,7 @@ impl Connection for RestAPIConnection {
             .client
             .insert_with_stage(sql, &stage, file_format_options, copy_options)
             .await?;
-        Ok(QueryProgress::from(resp.stats.progresses))
+        Ok(ServerStats::from(resp.stats))
     }
 }
 
@@ -196,12 +196,12 @@ impl RestAPIRows {
 }
 
 impl Stream for RestAPIRows {
-    type Item = Result<RowWithProgress>;
+    type Item = Result<RowWithStats>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(row) = self.data.pop_front() {
             let row = Row::try_from((self.schema.clone(), &row))?;
-            return Poll::Ready(Some(Ok(RowWithProgress::Row(row))));
+            return Poll::Ready(Some(Ok(RowWithStats::Row(row))));
         }
         match self.next_page {
             Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
@@ -209,8 +209,8 @@ impl Stream for RestAPIRows {
                     self.data = resp.data.into();
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
-                    let progress = QueryProgress::from(resp.stats.progresses);
-                    Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
+                    let ss = ServerStats::from(resp.stats);
+                    Poll::Ready(Some(Ok(RowWithStats::Stats(ss))))
                 }
                 Poll::Ready(Err(e)) => {
                     self.next_page = None;

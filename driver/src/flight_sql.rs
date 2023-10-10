@@ -32,9 +32,7 @@ use url::Url;
 
 use databend_client::presign::{presign_upload_to_stage, PresignedResponse};
 use databend_sql::error::{Error, Result};
-use databend_sql::rows::{
-    QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress, Rows,
-};
+use databend_sql::rows::{Row, RowIterator, RowStatsIterator, RowWithStats, Rows, ServerStats};
 use databend_sql::schema::Schema;
 
 use crate::conn::{Connection, ConnectionInfo, Reader};
@@ -75,14 +73,14 @@ impl Connection for FlightSQLConnection {
     async fn query_iter(&self, sql: &str) -> Result<RowIterator> {
         let (_, rows_with_progress) = self.query_iter_ext(sql).await?;
         let rows = rows_with_progress.filter_map(|r| match r {
-            Ok(RowWithProgress::Row(r)) => Some(Ok(r)),
+            Ok(RowWithStats::Row(r)) => Some(Ok(r)),
             Ok(_) => None,
             Err(err) => Some(Err(err)),
         });
         Ok(RowIterator::new(Box::pin(rows)))
     }
 
-    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowProgressIterator)> {
+    async fn query_iter_ext(&self, sql: &str) -> Result<(Schema, RowStatsIterator)> {
         self.handshake().await?;
         let mut client = self.client.lock().await;
         let mut stmt = client.prepare(sql.to_string(), None).await?;
@@ -93,7 +91,7 @@ impl Connection for FlightSQLConnection {
             .ok_or(Error::Protocol("Ticket is empty".to_string()))?;
         let flight_data = client.do_get(ticket.clone()).await?;
         let (schema, rows) = FlightSQLRows::try_from_flight_data(flight_data).await?;
-        Ok((schema, RowProgressIterator::new(Box::pin(rows))))
+        Ok((schema, RowStatsIterator::new(Box::pin(rows))))
     }
 
     async fn get_presigned_url(&self, operation: &str, stage: &str) -> Result<PresignedResponse> {
@@ -314,18 +312,18 @@ impl FlightSQLRows {
 }
 
 impl Stream for FlightSQLRows {
-    type Item = Result<RowWithProgress>;
+    type Item = Result<RowWithStats>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(row) = self.rows.pop_front() {
-            return Poll::Ready(Some(Ok(RowWithProgress::Row(row))));
+            return Poll::Ready(Some(Ok(RowWithStats::Row(row))));
         }
         match Pin::new(&mut self.data).poll_next(cx) {
             Poll::Ready(Some(Ok(datum))) => {
                 // magic number 1 is used to indicate progress
                 if datum.app_metadata[..] == [0x01] {
-                    let progress: QueryProgress = serde_json::from_slice(&datum.data_body)?;
-                    Poll::Ready(Some(Ok(RowWithProgress::Progress(progress))))
+                    let ss: ServerStats = serde_json::from_slice(&datum.data_body)?;
+                    Poll::Ready(Some(Ok(RowWithStats::Stats(ss))))
                 } else {
                     let dicitionaries_by_id = HashMap::new();
                     let batch = flight_data_to_arrow_batch(
