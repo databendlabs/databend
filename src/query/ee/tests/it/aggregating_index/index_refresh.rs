@@ -305,7 +305,6 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
     Ok(())
 }
 
-#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_agg_index() -> Result<()> {
     test_sync_agg_index_after_insert().await?;
