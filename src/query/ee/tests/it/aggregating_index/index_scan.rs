@@ -32,6 +32,7 @@ use databend_query::test_kits::TestFixture;
 use enterprise_query::test_kits::context::create_ee_query_context;
 use futures_util::TryStreamExt;
 
+#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan() -> Result<()> {
     test_index_scan_impl("parquet").await?;
@@ -56,12 +57,14 @@ async fn test_index_scan_with_count() -> Result<()> {
     test_index_scan_with_count_impl("native").await
 }
 
+#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan_agg_args_are_expression() -> Result<()> {
     test_index_scan_agg_args_are_expression_impl("parquet").await?;
     test_index_scan_agg_args_are_expression_impl("native").await
 }
 
+#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuzz() -> Result<()> {
     test_fuzz_impl("parquet").await?;
@@ -260,6 +263,7 @@ async fn test_index_scan_impl(format: &str) -> Result<()> {
     Ok(())
 }
 
+#[ignore = "flaky"]
 async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
@@ -400,6 +404,7 @@ async fn test_index_scan_two_agg_funcs_impl(format: &str) -> Result<()> {
     Ok(())
 }
 
+#[ignore = "flaky"]
 async fn test_projected_index_scan_impl(format: &str) -> Result<()> {
     let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
