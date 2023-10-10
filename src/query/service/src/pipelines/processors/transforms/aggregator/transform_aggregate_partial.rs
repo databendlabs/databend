@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::intrinsics::unlikely;
 use std::sync::Arc;
 use std::vec;
 
@@ -39,6 +40,7 @@ use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
+use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -103,6 +105,35 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
     }
 }
 
+/// A owned temporary memory.
+struct TempMemory {
+    place: StateAddr,
+    arena: Area,
+}
+
+impl TempMemory {
+    /// Create a lazy memory wh ich will not be allocated until the first time it is used.
+    fn create_lazy() -> Self {
+        let arena = Area::create();
+        Self {
+            place: StateAddr::new(0),
+            arena,
+        }
+    }
+
+    #[inline(always)]
+    fn alloc_layout(&mut self, params: &AggregatorParams) {
+        if unlikely(self.place.addr() == 0) {
+            self.place = params.alloc_layout(&mut self.arena);
+        }
+    }
+
+    #[inline(always)]
+    fn place(&self) -> &StateAddr {
+        &self.place
+    }
+}
+
 // SELECT column_name, agg(xxx) FROM table_name GROUP BY column_name
 pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     method: Method,
@@ -111,8 +142,13 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
 
     params: Arc<AggregatorParams>,
 
-    /// A temporary place to hold aggregating state from index data.
-    temp_place: StateAddr,
+    /// A temporary memory to transform aggregating state from index data.
+    ///
+    /// **NOTES**: we should create a new [`Area`] to transform the aggregating index data.
+    /// We cannot use the [`Area`] in `hash_table` to hold the temporary memory,
+    /// because the [`Area`] may be moved out when spilling happens.
+    /// And this [`TransformPartialAggregate`] will lose the control of the memory.
+    temp_memory: TempMemory,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -143,7 +179,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 params,
                 hash_table,
                 settings: AggregateSettings::try_from(ctx)?,
-                temp_place: StateAddr::new(0),
+                temp_memory: TempMemory::create_lazy(),
             },
         ))
     }
@@ -204,9 +240,11 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+    fn execute_agg_index_block(&mut self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+        self.temp_memory.alloc_layout(&self.params);
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+        let temp_place = self.temp_memory.place();
 
         for index in 0..aggregate_functions.len() {
             // Aggregation states are in the back of the block.
@@ -220,7 +258,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-            let state_place = self.temp_place.next(offset);
+            let state_place = temp_place.next(offset);
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
                 function.deserialize(state_place, &mut raw_state)?;
@@ -277,9 +315,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
 
                     if is_agg_index_block {
-                        if self.temp_place.addr() == 0 {
-                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
-                        }
                         self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
@@ -300,9 +335,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
 
                     if is_agg_index_block {
-                        if self.temp_place.addr() == 0 {
-                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
-                        }
                         self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
