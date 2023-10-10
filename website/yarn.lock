@@ -5945,10 +5945,10 @@ pkg-up@^3.1.0:
   dependencies:
     find-up "^3.0.0"
 
-plugin-image-zoom@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/plugin-image-zoom/-/plugin-image-zoom-1.1.0.tgz#0d0e5950f9af327de894b3608011b4e113968712"
-  integrity sha512-1uUByLjDsqRb3HI5ffujoqPstHdGzKzEJHBG83qVt00t/gRNcVt6oaTS0wEcw5IoQGzPoRnqadv6ivxMfIjghA==
+plugin-image-zoom@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/plugin-image-zoom/-/plugin-image-zoom-1.2.0.tgz#f2ab8a6a082e0c728b870dd8213078d449a67b6d"
+  integrity sha512-uVCjp4bXuli39gmBs+JQvXMtpfLL+5yWfRIKZyM41d3D9oxGBEHmRzDu9EgusIwmBrKJvF9QuOZENw/9s6G+Jw==
   dependencies:
     medium-zoom "^1.0.4"
 
