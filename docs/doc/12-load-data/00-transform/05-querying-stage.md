@@ -3,7 +3,7 @@ title: Querying Staged Files
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.1.65"/>
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 
@@ -18,20 +18,32 @@ This feature can be particularly useful for inspecting or viewing the contents o
 ```sql
 SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_position> ...] 
 FROM {@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]} 
-[ 
-  [<connection_parameters>]
-  [ PATTERN => '<regex_pattern>']
-  [ FILE_FORMAT => '<format_name>']
+[( 
+  [<connection_parameters>],
+  [ PATTERN => '<regex_pattern>'],
+  [ FILE_FORMAT => 'CSV | TSV | NDJSON | PARQUET | XML | <custom_format_name>'],
   [ FILES => ( '<file_name>' [ , '<file_name>' ... ])]
-]
+)]
 ```
+
+:::note
+When the stage path contains special characters such as spaces or parentheses, you can enclose the entire path in single quotes, as demonstrated in the following SQL statements:
+```sql
+SELECT * FROM 's3://mybucket/dataset(databend)/' ...
+
+SELECT * FROM 's3://mybucket/dataset databend/' ...
+```
+:::
 
 ### FILE_FORMAT
 
-The file format must be one of the following:
+The FILE_FORMAT parameter allows you to specify the format of your file, which can be one of the following options: CSV, TSV, NDJSON, PARQUET, XML, or a custom format that you've defined using the [CREATE FILE FORMAT](/14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md) command. For example, 
 
-- Built-in file format, see [Input & Output File Formats](/13-sql-reference/50-file-format-options.md).
-- Named file format created by [CREATE FILE FORMAT](/14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
+```sql
+CREATE FILE FORMAT my_custom_csv TYPE=CSV FIELD_DELIMITER='\t';
+
+SELECT $1 FROM @my_stage/file (FILE_FORMAT=>'my_custom_csv');
+```
 
 Please note that when you need to query or perform a COPY INTO operation from a staged file, it is necessary to explicitly specify the file format during the creation of the stage. Otherwise, the default format, Parquet, will be applied. See an example below:
 
@@ -41,9 +53,9 @@ CREATE STAGE my_stage FILE_FORMAT = (TYPE = CSV);
 In cases where you have staged a file in a format different from the specified stage format, you can explicitly specify the file format within the SELECT or COPY INTO statement. Here are examples:
 
 ```sql
-SELECT * FROM @my_stage (FILE_FORMAT=>'NDJSON');
+SELECT $1 FROM @my_stage (FILE_FORMAT=>'NDJSON');
 
-COPY INTO my_table FROM (SELECT * SELECT @my_stage t) FILE_FORMAT = (TYPE = NDJSON);
+COPY INTO my_table FROM (SELECT $1 SELECT @my_stage t) FILE_FORMAT = (TYPE = NDJSON);
 ```
 
 ### PATTERN

@@ -14,13 +14,14 @@
 
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU8;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Notify;
+use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,6 +31,7 @@ use common_expression::ColumnBuilder;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
@@ -48,6 +50,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnSet;
 use ethnum::U256;
 use itertools::Itertools;
+use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
@@ -63,46 +66,51 @@ use crate::sessions::QueryContext;
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) func_ctx: FunctionContext,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
-    /// Processors count
-    pub(crate) _processor_count: usize,
-    /// When build side input data is coming, we will put it into `RowSpace`'s chunks.
-    /// To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
-    /// Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
-    /// After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
-    pub(crate) chunk_size_limit: Arc<usize>,
+    // When build side input data is coming, will put it into chunks.
+    // To make the size of each chunk suitable, it's better to define a threshold to the size of each chunk.
+    // Before putting the input data into `Chunk`, we will add them to buffer of `RowSpace`
+    // After buffer's size hits the threshold, we will flush the buffer to `Chunk`.
+    pub(crate) chunk_size_limit: usize,
+    /// Wait util all processors finish row space build, then go to next phase.
+    pub(crate) barrier: Barrier,
     /// It will be increased by 1 when a new hash join build processor is created.
     /// After the processor put its input data into `RowSpace`, it will be decreased by 1.
     /// The processor will wait other processors to finish their work before starting to build hash table.
     /// When the counter is 0, it means all hash join build processors have input their data to `RowSpace`.
-    pub(crate) row_space_builders: Mutex<usize>,
-    /// After `row_space_builders` is 0, it will be set as true.
-    /// It works with notify to make sure processors go to next phase's work.
-    pub(crate) row_space_build_done: Mutex<bool>,
-    /// Notify processors `RowSpace` build is done. They can go to next phase.
-    pub(crate) row_space_build_done_notify: Arc<Notify>,
+    pub(crate) row_space_builders: AtomicUsize,
     /// Hash method for hash join keys.
-    pub(crate) method: Arc<HashMethodKind>,
+    pub(crate) method: HashMethodKind,
     /// The size of each entry in HashTable.
-    pub(crate) entry_size: Arc<AtomicUsize>,
+    pub(crate) entry_size: AtomicUsize,
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     /// `build_projections` only contains the columns from upstream required columns
     /// and columns from other_condition which are in build schema.
-    pub(crate) build_projections: Arc<ColumnSet>,
-    /// FIXME: the field can be removed later
-    pub(crate) build_worker_num: Arc<AtomicU32>,
+    pub(crate) build_projections: ColumnSet,
+    pub(crate) build_worker_num: AtomicU32,
     /// Tasks for building hash table.
-    pub(crate) build_hash_table_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) build_hash_table_tasks: RwLock<VecDeque<(usize, usize)>>,
+    pub(crate) mutex: Mutex<()>,
+
+    /// Spill related states
+    /// `send_val` is the message which will be send into `build_done_watcher` channel.
+    pub(crate) send_val: AtomicU8,
+    /// Wait all processors finish read spilled data, then go to new round build
+    pub(crate) restore_barrier: Barrier,
 }
 
 impl HashJoinBuildState {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
+        func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
-        processor_count: usize,
+        barrier: Barrier,
+        restore_barrier: Barrier,
     ) -> Result<Arc<HashJoinBuildState>> {
         let hash_key_types = build_keys
             .iter()
@@ -111,37 +119,46 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
+            func_ctx,
             hash_join_state,
-            _processor_count: processor_count,
-            chunk_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
+            barrier,
+            restore_barrier,
             row_space_builders: Default::default(),
-            row_space_build_done: Default::default(),
-            row_space_build_done_notify: Arc::new(Default::default()),
-            method: Arc::new(method),
-            entry_size: Arc::new(Default::default()),
+            method,
+            entry_size: Default::default(),
             raw_entry_spaces: Default::default(),
-            build_projections: Arc::new(build_projections.clone()),
-            build_worker_num: Arc::new(Default::default()),
-            build_hash_table_tasks: Arc::new(Default::default()),
+            build_projections: build_projections.clone(),
+            build_worker_num: Default::default(),
+            build_hash_table_tasks: Default::default(),
+            mutex: Default::default(),
+            send_val: AtomicU8::new(1),
         }))
     }
 
     /// Add input `DataBlock` to `hash_join_state.row_space`.
     pub fn build(&self, input: DataBlock) -> Result<()> {
         let mut buffer = self.hash_join_state.row_space.buffer.write();
-        let mut buffer_row_size = self.hash_join_state.row_space.buffer_row_size.write();
-        *buffer_row_size += input.num_rows();
+        let input_rows = input.num_rows();
         buffer.push(input);
-        if *buffer_row_size < *self.chunk_size_limit {
-            Ok(())
-        } else {
-            let data_block = DataBlock::concat(buffer.as_slice())?;
-            buffer.clear();
-            *buffer_row_size = 0;
-            drop(buffer);
-            drop(buffer_row_size);
-            self.add_build_block(data_block)
+        let old_size = self
+            .hash_join_state
+            .row_space
+            .buffer_row_size
+            .fetch_add(input_rows, Ordering::Relaxed);
+
+        if old_size + input_rows < self.chunk_size_limit {
+            return Ok(());
         }
+
+        let data_block = DataBlock::concat(buffer.as_slice())?;
+        buffer.clear();
+        self.hash_join_state
+            .row_space
+            .buffer_row_size
+            .store(0, Ordering::Relaxed);
+        drop(buffer);
+        self.add_build_block(data_block)
     }
 
     // Add `data_block` for build table to `row_space`
@@ -176,8 +193,8 @@ impl HashJoinBuildState {
         };
 
         {
-            // Acquire write lock in current scope
-            let _write_lock = self.hash_join_state.row_space.write_lock.write();
+            // Acquire lock in current scope
+            let _lock = self.mutex.lock();
             if self.hash_join_state.need_outer_scan() {
                 let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
                 outer_scan_map.push(block_outer_scan_map);
@@ -195,27 +212,20 @@ impl HashJoinBuildState {
     }
 
     /// Attach to state: `row_space_builders` and `hash_table_builders`.
-    pub fn build_attach(&self) {
-        let mut count = self.row_space_builders.lock();
-        *count += 1;
-        let mut count = self.hash_join_state.hash_table_builders.lock();
-        *count += 1;
+    pub fn build_attach(&self) -> usize {
+        let worker_id = self.row_space_builders.fetch_add(1, Ordering::Relaxed);
+        self.hash_join_state
+            .hash_table_builders
+            .fetch_add(1, Ordering::Relaxed);
         self.build_worker_num.fetch_add(1, Ordering::Relaxed);
+        worker_id
     }
 
     /// Detach to state: `row_space_builders`,
     /// create finalize task and initialize the hash table.
     pub(crate) fn row_space_build_done(&self) -> Result<()> {
-        let mut count = self.row_space_builders.lock();
-        *count -= 1;
-        if *count == 0 {
-            // Need to reset `final_probe_done` before processor into `WaitProbe`
-            {
-                let mut final_probe_done = self.hash_join_state.final_probe_done.lock();
-                if *final_probe_done {
-                    *final_probe_done = false;
-                }
-            }
+        let old_count = self.row_space_builders.fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
             {
                 let mut buffer = self.hash_join_state.row_space.buffer.write();
                 if !buffer.is_empty() {
@@ -229,9 +239,6 @@ impl HashJoinBuildState {
             let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
                 return Ok(());
             }
 
@@ -245,23 +252,20 @@ impl HashJoinBuildState {
                     JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
+                && self.ctx.get_settings().get_join_spilling_threshold()? == 0
             {
-                {
-                    let mut fast_return = self.hash_join_state.fast_return.write();
-                    *fast_return = true;
-                }
-                let mut row_space_build_done = self.row_space_build_done.lock();
-                *row_space_build_done = true;
-                self.row_space_build_done_notify.notify_waiters();
-
-                let mut build_done = self.hash_join_state.build_done.lock();
-                *build_done = true;
-                self.hash_join_state.build_done_notify.notify_waiters();
+                self.hash_join_state
+                    .fast_return
+                    .store(true, Ordering::Relaxed);
+                self.hash_join_state
+                    .build_done_watcher
+                    .send(self.send_val.load(Ordering::Relaxed))
+                    .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
                 return Ok(());
             }
 
             // Create a fixed size hash table.
-            let hashjoin_hashtable = match (*self.method).clone() {
+            let hashjoin_hashtable = match self.method.clone() {
                 HashMethodKind::Serializer(_) => {
                     self.entry_size
                         .store(std::mem::size_of::<StringRawEntry>(), Ordering::SeqCst);
@@ -330,10 +334,6 @@ impl HashJoinBuildState {
             };
             let hashtable = unsafe { &mut *self.hash_join_state.hash_table.get() };
             *hashtable = hashjoin_hashtable;
-
-            let mut row_space_build_done = self.row_space_build_done.lock();
-            *row_space_build_done = true;
-            self.row_space_build_done_notify.notify_waiters();
         }
         Ok(())
     }
@@ -472,12 +472,10 @@ impl HashJoinBuildState {
             }};
         }
 
-        let func_ctx = self.ctx.get_function_context()?;
         let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
         let mut has_null = false;
-        let interrupt = self.hash_join_state.interrupt.clone();
         for chunk_index in task.0..task.1 {
-            if interrupt.load(Ordering::Relaxed) {
+            if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
@@ -485,7 +483,7 @@ impl HashJoinBuildState {
 
             let chunk = &mut chunks[chunk_index];
 
-            let evaluator = Evaluator::new(chunk, &func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let columns: Vec<(Column, DataType)> = self
                 .hash_join_state
                 .hash_join_desc
@@ -590,9 +588,14 @@ impl HashJoinBuildState {
 
     /// Detach to state: `hash_table_builders`.
     pub(crate) fn build_done(&self) -> Result<()> {
-        let mut count = self.hash_join_state.hash_table_builders.lock();
-        *count -= 1;
-        if *count == 0 {
+        let old_count = self
+            .hash_join_state
+            .hash_table_builders
+            .fetch_sub(1, Ordering::Relaxed);
+        if old_count == 1 {
+            info!("finish build hash table with {} rows", unsafe {
+                *self.hash_join_state.build_num_rows.get()
+            });
             let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
@@ -630,26 +633,10 @@ impl HashJoinBuildState {
                 *build_columns_data_type = columns_data_type;
                 *build_columns = columns;
             }
-            let mut build_done = self.hash_join_state.build_done.lock();
-            *build_done = true;
-            self.hash_join_state.build_done_notify.notify_waiters();
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn wait_row_space_build_finish(&self) -> Result<()> {
-        let notified = {
-            let built_guard = self.row_space_build_done.lock();
-
-            match *built_guard {
-                true => None,
-                false => Some(self.row_space_build_done_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
+            self.hash_join_state
+                .build_done_watcher
+                .send(self.send_val.load(Ordering::Relaxed))
+                .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
         }
         Ok(())
     }

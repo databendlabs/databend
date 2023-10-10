@@ -461,6 +461,7 @@ fn test_pad(file: &mut impl Write) {
     run_ast(file, "lpad('hi', 1, '')", &[]);
     run_ast(file, "lpad('', 1, '?')", &[]);
     run_ast(file, "lpad('hi', -1, '?')", &[]);
+    run_ast(file, "lpad('hi', 2000000, '?')", &[]);
     let table = [
         ("a", StringType::from_data(&["hi", "test", "cc"])),
         ("b", UInt8Type::from_data(vec![0u8, 3, 5])),
@@ -481,6 +482,7 @@ fn test_pad(file: &mut impl Write) {
     run_ast(file, "rpad('hi', 1, '')", &[]);
     run_ast(file, "rpad('', 1, '?')", &[]);
     run_ast(file, "rpad('hi', -1, '?')", &[]);
+    run_ast(file, "rpad('hi', 2000000, '?')", &[]);
     run_ast(file, "rpad(a, b, c)", &table);
     run_ast(file, "rpad(a, b, c)", &table_error);
 }
@@ -513,8 +515,14 @@ fn test_strcmp(file: &mut impl Write) {
 
 fn test_locate(file: &mut impl Write) {
     run_ast(file, "locate('bar', 'foobarbar')", &[]);
+    run_ast(file, "locate('', 'foobarbar')", &[]);
+    run_ast(file, "locate('', '')", &[]);
     run_ast(file, "instr('foobarbar', 'bar')", &[]);
+    run_ast(file, "instr('foobarbar', '')", &[]);
+    run_ast(file, "instr('', '')", &[]);
     run_ast(file, "position('bar' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN 'foobarbar')", &[]);
+    run_ast(file, "position('' IN '')", &[]);
     run_ast(file, "position('foobarbar' IN 'bar')", &[]);
     run_ast(file, "locate('bar', 'foobarbar', 5)", &[]);
 
@@ -622,6 +630,7 @@ fn test_insert(file: &mut impl Write) {
 fn test_space(file: &mut impl Write) {
     run_ast(file, "space(0)", &[]);
     run_ast(file, "space(5)", &[]);
+    run_ast(file, "space(2000000)", &[]);
     run_ast(file, "space(a)", &[(
         "a",
         UInt8Type::from_data(vec![0u8, 1, 2, 3, 4, 5, 6, 7, 8, 9]),

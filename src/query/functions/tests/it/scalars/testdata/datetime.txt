@@ -355,6 +355,23 @@ output domain  : {100..=100}
 output         : '1970-04-11'
 
 
+ast            : add(to_date(0), 100)
+raw expr       : add(to_date(0), 100)
+checked expr   : plus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+optimized expr : 100
+output type    : Date
+output domain  : {100..=100}
+output         : '1970-04-11'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | add(to_date(0), 10000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `plus('1970-01-01', 10000000)`
+
+
+
 ast            : subtract_years(to_date(0), 100)
 raw expr       : subtract_years(to_date(0), 100)
 checked expr   : subtract_years<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
@@ -389,6 +406,23 @@ optimized expr : -100
 output type    : Date
 output domain  : {-100..=-100}
 output         : '1969-09-23'
+
+
+ast            : subtract(to_date(0), 100)
+raw expr       : subtract(to_date(0), 100)
+checked expr   : minus<Date, Int64>(to_date<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
+optimized expr : -100
+output type    : Date
+output domain  : {-100..=-100}
+output         : '1969-09-23'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | subtract(to_date(0), 10000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ date is out of range while evaluating function `minus('1970-01-01', 10000000)`
+
 
 
 ast            : add_years(a, b)
@@ -646,6 +680,23 @@ output domain  : {100000000..=100000000}
 output         : '1970-01-01 00:01:40.000000'
 
 
+ast            : add(to_timestamp(0), 100000000000000)
+raw expr       : add(to_timestamp(0), 100000000000000)
+checked expr   : plus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(100000000000000_u64))
+optimized expr : 100000000000000
+output type    : Timestamp
+output domain  : {100000000000000..=100000000000000}
+output         : '1973-03-03 09:46:40.000000'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | add(to_timestamp(0), 1000000000000000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `plus('1970-01-01 00:00:00.000000', 1000000000000000000)`
+
+
+
 ast            : subtract_years(to_timestamp(0), 100)
 raw expr       : subtract_years(to_timestamp(0), 100)
 checked expr   : subtract_years<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt8>(100_u8))
@@ -707,6 +758,23 @@ optimized expr : -100000000
 output type    : Timestamp
 output domain  : {-100000000..=-100000000}
 output         : '1969-12-31 23:58:20.000000'
+
+
+ast            : subtract(to_timestamp(0), 100000000000000)
+raw expr       : subtract(to_timestamp(0), 100000000000000)
+checked expr   : minus<Timestamp, Int64>(to_timestamp<Int64>(to_int64<UInt8>(0_u8)), to_int64<UInt64>(100000000000000_u64))
+optimized expr : -100000000000000
+output type    : Timestamp
+output domain  : {-100000000000000..=-100000000000000}
+output         : '1966-10-31 14:13:20.000000'
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | subtract(to_timestamp(0), 1000000000000000000)
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ timestamp is out of range while evaluating function `minus('1970-01-01 00:00:00.000000', 1000000000000000000)`
+
 
 
 ast            : add_years(a, b)
@@ -2507,6 +2575,15 @@ output domain  : {2021..=2021}
 output         : 2021
 
 
+ast            : to_quarter(to_date(18875))
+raw expr       : to_quarter(to_date(18875))
+checked expr   : to_quarter<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+optimized expr : 3_u8
+output type    : UInt8
+output domain  : {3..=3}
+output         : 3
+
+
 ast            : to_month(to_date(18875))
 raw expr       : to_month(to_date(18875))
 checked expr   : to_month<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
@@ -2631,6 +2708,28 @@ evaluation (internal):
 +--------+----------------------------+
 
 
+ast            : to_quarter(a)
+raw expr       : to_quarter(a::Date)
+checked expr   : to_quarter<Date>(a)
+evaluation:
++--------+--------------+-----------+
+|        | a            | Output    |
++--------+--------------+-----------+
+| Type   | Date         | UInt8     |
+| Domain | {-100..=100} | {0..=255} |
+| Row 0  | '1969-09-23' | 3         |
+| Row 1  | '1970-01-01' | 1         |
+| Row 2  | '1970-04-11' | 2         |
++--------+--------------+-----------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| Output | UInt8([3, 1, 2]) |
++--------+------------------+
+
+
 ast            : to_month(a)
 raw expr       : to_month(a::Date)
 checked expr   : to_month<Date>(a)
@@ -2753,6 +2852,15 @@ optimized expr : 2021_u16
 output type    : UInt16
 output domain  : {2021..=2021}
 output         : 2021
+
+
+ast            : to_quarter(to_timestamp(1630812366))
+raw expr       : to_quarter(to_timestamp(1630812366))
+checked expr   : to_quarter<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 3_u8
+output type    : UInt8
+output domain  : {3..=3}
+output         : 3
 
 
 ast            : to_month(to_timestamp(1630812366))
@@ -2904,6 +3012,28 @@ evaluation (internal):
 | a      | [-100, 0, 100]             |
 | Output | UInt16([1969, 1970, 1970]) |
 +--------+----------------------------+
+
+
+ast            : to_quarter(a)
+raw expr       : to_quarter(a::Timestamp)
+checked expr   : to_quarter<Timestamp>(a)
+evaluation:
++--------+------------------------------+-----------+
+|        | a                            | Output    |
++--------+------------------------------+-----------+
+| Type   | Timestamp                    | UInt8     |
+| Domain | {-100..=100}                 | {0..=255} |
+| Row 0  | '1969-12-31 23:59:59.999900' | 4         |
+| Row 1  | '1970-01-01 00:00:00.000000' | 1         |
+| Row 2  | '1970-01-01 00:00:00.000100' | 1         |
++--------+------------------------------+-----------+
+evaluation (internal):
++--------+------------------+
+| Column | Data             |
++--------+------------------+
+| a      | [-100, 0, 100]   |
+| Output | UInt8([4, 1, 1]) |
++--------+------------------+
 
 
 ast            : to_month(a)

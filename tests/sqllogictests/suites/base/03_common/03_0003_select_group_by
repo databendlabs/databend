@@ -75,7 +75,7 @@ statement ok
 DROP table t
 
 statement ok
-drop table if exists t_datetime all
+drop table if exists t_datetime
 
 statement ok
 CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32)
@@ -226,3 +226,26 @@ select number % 3 a, max(number) - 3,  number % 2 b, sum(number) + 4 from number
 1 994 1 83337
 2 995 0 83504
 2 992 1 83004
+
+query TTT rowsort
+SELECT ( null, to_hour(to_timestamp(3501857592331)), number::Date) from numbers(3) group by all
+----
+(NULL,18,'1970-01-01')
+(NULL,18,'1970-01-02')
+(NULL,18,'1970-01-03')
+
+query TT rowsort
+select to_string(to_bitmap(number)), to_string(to_bitmap(number+3)) FROM numbers(3) GROUP BY GROUPING SETS ((to_bitmap(number), to_bitmap(number+3)))
+----
+0 3
+1 4
+2 5
+
+
+# group by aggregate functions
+
+statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
+select sum(number + 3 ), number % 3  from numbers(10) group by  sum(number + 3 ), number % 3;
+
+statement error (?s)1065.*GROUP BY items can't contain aggregate functions or window functions
+select sum(number + 3 ), number % 3  from numbers(10) group by  1, 2;

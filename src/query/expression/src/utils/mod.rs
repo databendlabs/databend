@@ -21,6 +21,8 @@ pub mod date_helper;
 pub mod display;
 pub mod filter_helper;
 pub mod serialize;
+pub mod udf_client;
+pub mod variant_transform;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;

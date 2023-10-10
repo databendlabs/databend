@@ -244,6 +244,7 @@ async fn benchmark_table(client: &Arc<ClientHandle>, prefix: u64, client_num: u6
     let res = client
         .drop_table_by_id(DropTableByIdReq {
             if_exists: false,
+            tenant: tenant(),
             tb_id: t.ident.table_id,
         })
         .await;

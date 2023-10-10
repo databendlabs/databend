@@ -47,6 +47,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
+use crate::plans::UDFServerCall;
 use crate::plans::WindowFuncType;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -338,6 +339,27 @@ impl SubqueryRewriter {
 
                 Ok((scalar, s_expr))
             }
+            ScalarExpr::UDFServerCall(udf) => {
+                let mut args = vec![];
+                let mut s_expr = s_expr.clone();
+                for arg in udf.arguments.iter() {
+                    let res = self.try_rewrite_subquery(arg, &s_expr, false)?;
+                    s_expr = res.1;
+                    args.push(res.0);
+                }
+
+                let expr: ScalarExpr = UDFServerCall {
+                    span: udf.span,
+                    func_name: udf.func_name.clone(),
+                    server_addr: udf.server_addr.clone(),
+                    arg_types: udf.arg_types.clone(),
+                    return_type: udf.return_type.clone(),
+                    arguments: args,
+                }
+                .into();
+
+                Ok((expr, s_expr))
+            }
         }
     }
 
@@ -385,8 +407,7 @@ impl SubqueryRewriter {
                     from_distinct: false,
                     mode: AggregateMode::Initial,
                     limit: None,
-                    grouping_id_index: 0,
-                    grouping_sets: vec![],
+                    grouping_sets: None,
                 };
 
                 let compare = FunctionCall {
@@ -418,7 +439,6 @@ impl SubqueryRewriter {
                 };
                 let filter = Filter {
                     predicates: vec![compare.into()],
-                    is_having: false,
                 };
 
                 // Filter: COUNT(*) = 1 or COUNT(*) != 1
@@ -588,8 +608,7 @@ impl SubqueryRewriter {
                     ],
                     from_distinct: false,
                     limit: None,
-                    grouping_id_index: 0,
-                    grouping_sets: vec![],
+                    grouping_sets: None,
                 }
                 .into(),
             ),

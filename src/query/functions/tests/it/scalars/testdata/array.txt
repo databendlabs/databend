@@ -100,6 +100,23 @@ output domain  : {4..=4}
 output         : 4
 
 
+ast            : range(10, 20)
+raw expr       : range(10, 20)
+checked expr   : range<UInt64, UInt64>(to_uint64<UInt8>(10_u8), to_uint64<UInt8>(20_u8))
+optimized expr : [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+output type    : Array(UInt64)
+output domain  : [{10..=19}]
+output         : [10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+
+
+error: 
+  --> SQL:1:1
+  |
+1 | range(10, 500000011)
+  | ^^^^^^^^^^^^^^^^^^^^ the allowed maximum values of range function is 500000000, but got 500000001 while evaluating function `range(10, 500000011)`
+
+
+
 error: 
   --> SQL:1:8
   |
@@ -2137,6 +2154,33 @@ optimized expr : NULL
 output type    : Array(Nothing) NULL
 output domain  : {NULL}
 output         : NULL
+
+
+ast            : array_sort_asc_null_first([NULL, NULL, NULL])
+raw expr       : array_sort_asc_null_first(array(NULL, NULL, NULL))
+checked expr   : array_sort_asc_null_first<T0=NULL><Array(T0)>(array<T0=NULL><T0, T0, T0>(NULL, NULL, NULL))
+optimized expr : [NULL, NULL, NULL]
+output type    : Array(NULL)
+output domain  : [{NULL}]
+output         : [NULL, NULL, NULL]
+
+
+ast            : array_sort_desc_null_first([[], [], []])
+raw expr       : array_sort_desc_null_first(array(array(), array(), array()))
+checked expr   : array_sort_desc_null_first<T0=Array(Nothing)><Array(T0)>(array<T0=Array(Nothing)><T0, T0, T0>(array<>(), array<>(), array<>()))
+optimized expr : [[], [], []]
+output type    : Array(Array(Nothing))
+output domain  : [[]]
+output         : [[], [], []]
+
+
+ast            : array_sort_asc_null_first([{}, {}, {}])
+raw expr       : array_sort_asc_null_first(array(map(array(), array()), map(array(), array()), map(array(), array())))
+checked expr   : array_sort_asc_null_first<T0=Map(Nothing)><Array(T0)>(array<T0=Map(Nothing)><T0, T0, T0>(map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>()), map<Array(Nothing), Array(Nothing)>(array<>(), array<>())))
+optimized expr : [{}, {}, {}]
+output type    : Array(Map(Nothing))
+output domain  : [Undefined]
+output         : [{}, {}, {}]
 
 
 ast            : array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])

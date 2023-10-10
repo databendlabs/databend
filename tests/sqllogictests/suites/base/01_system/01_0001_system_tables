@@ -1,2 +1,7 @@
 statement ok
-SELECT * from system.tables where name = 'tables' and created_on > '2022-07-01 12:16:58.630 +0000'
+SELECT * from system.tables where name = 'tables' and created_on > '2022-07-01 12:16:58.630'
+
+query T
+select * from (select name from system.tables where database='system') where name='tables'
+----
+tables

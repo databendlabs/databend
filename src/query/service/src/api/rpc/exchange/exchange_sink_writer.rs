@@ -48,9 +48,7 @@ impl AsyncSink for ExchangeWriterSink {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self) -> Result<()> {
-        let (tx, _) = async_channel::bounded(1);
-        let mut empty = FlightSender::create(tx);
-        std::mem::swap(&mut self.flight_sender, &mut empty);
+        self.flight_sender.close();
         Ok(())
     }
 
@@ -102,9 +100,7 @@ impl Sink for IgnoreExchangeSink {
     const NAME: &'static str = "ExchangeWriterSink";
 
     fn on_finish(&mut self) -> Result<()> {
-        let (tx, _) = async_channel::bounded(1);
-        let mut empty = FlightSender::create(tx);
-        std::mem::swap(&mut self.flight_sender, &mut empty);
+        self.flight_sender.close();
         Ok(())
     }
 

@@ -13,9 +13,7 @@
 // limitations under the License.
 
 use common_base::base::tokio;
-use common_base::base::tokio::fs;
-use common_base::base::GlobalInstance;
-use common_config::InnerConfig;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::Int32Type;
@@ -24,15 +22,23 @@ use common_expression::types::NumberScalar;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::ScalarRef;
+use common_pipeline_core::query_spill_prefix;
 use common_storage::DataOperator;
 use databend_query::spillers::Spiller;
 use databend_query::spillers::SpillerConfig;
 use databend_query::spillers::SpillerType;
-use databend_query::GlobalServices;
+use databend_query::test_kits::TestFixture;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_spill_with_partition() -> Result<()> {
-    let mut spiller = create_spiller().await?;
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    let tenant = ctx.get_tenant();
+    let spiller_config = SpillerConfig::create(query_spill_prefix(&tenant));
+    let operator = DataOperator::instance().operator();
+
+    let mut spiller = Spiller::create(ctx, operator, spiller_config, SpillerType::HashJoinBuild);
+
     spiller.partition_set = vec![0, 1, 2];
 
     // Generate data block: two columns, type is i32, 100 rows
@@ -41,10 +47,10 @@ async fn test_spill_with_partition() -> Result<()> {
         Int32Type::from_data((1..101).collect::<Vec<_>>()),
     ]);
 
-    let res = spiller.spill_with_partition(&(0_u8), &data).await;
+    let res = spiller.spill_with_partition(&(0_u8), &data, 0).await;
 
     assert!(res.is_ok());
-    assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_hash_join_build_spill"));
+    assert!(spiller.partition_location.get(&0).unwrap()[0].starts_with("_query_spill"));
 
     // Test read spilled data
     let data_blocks = spiller.read_spilled_data(&(0_u8)).await?;
@@ -65,28 +71,5 @@ async fn test_spill_with_partition() -> Result<()> {
             }
         }
     }
-    // Delete `_hash_join_build_spill` dir
-    fs::remove_dir_all("_data/_hash_join_build_spill").await?;
     Ok(())
-}
-
-#[cfg(debug_assertions)]
-async fn create_spiller() -> Result<Spiller> {
-    let thread_name = match std::thread::current().name() {
-        None => panic!("thread name is none"),
-        Some(thread_name) => thread_name.to_string(),
-    };
-
-    GlobalInstance::init_testing(&thread_name);
-    GlobalServices::init_with(InnerConfig::default()).await?;
-
-    let spiller_config = SpillerConfig {
-        location_prefix: "_hash_join_build_spill".to_string(),
-    };
-    let operator = DataOperator::instance().operator();
-    Ok(Spiller::create(
-        operator,
-        spiller_config,
-        SpillerType::HashJoin,
-    ))
 }

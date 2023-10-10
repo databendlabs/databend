@@ -38,7 +38,10 @@ pub enum InsertInputSource {
         input_context_option: Option<Arc<InputContext>>,
     },
     // From cloned String and format
-    Values(String),
+    Values {
+        data: String,
+        start: usize,
+    },
     // From stage
     Stage(Box<Plan>),
 }

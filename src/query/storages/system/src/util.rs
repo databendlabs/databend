@@ -17,9 +17,12 @@ use common_expression::Scalar;
 
 pub fn find_eq_filter(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Constant { .. } | Expr::ColumnRef { .. } | Expr::UDFServerCall { .. } => {}
         Expr::Cast { expr, .. } => find_eq_filter(expr, visitor),
         Expr::FunctionCall { function, args, .. } => {
+            // Like: select * from (select * from system.tables where database='default') where name='t'
+            // push downs: [filters: [and_filters(and_filters(tables.database (#1) = 'default', tables.name (#2) = 't'), tables.database (#1) = 'default')], limit: NONE]
+            // database generate twice, so when call find_eq_filter, should check uniq.
             if function.signature.name == "eq" {
                 match args.as_slice() {
                     [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]

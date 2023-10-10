@@ -46,6 +46,7 @@ fn test_variant() {
     test_json_strip_nulls(file);
     test_json_typeof(file);
     test_json_array(file);
+    test_json_path_exists(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
@@ -545,6 +546,48 @@ fn test_json_object(file: &mut impl Write) {
             ]),
         ),
     ]);
+
+    run_ast(file, "try_json_object()", &[]);
+    run_ast(
+        file,
+        "try_json_object('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})",
+        &[],
+    );
+    run_ast(
+        file,
+        "try_json_object('k1', 1, 'k2', null, 'k3', 2, null, 3)",
+        &[],
+    );
+    run_ast(file, "try_json_object('k1', 1, 'k1')", &[]);
+    run_ast(file, "try_json_object('k1', 1, 'k1', 2)", &[]);
+    run_ast(file, "try_json_object(1, 'k1', 2, 'k2')", &[]);
+
+    run_ast(file, "try_json_object(k1, v1, k2, v2)", &[
+        (
+            "k1",
+            StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
+                true, true, false, true,
+            ]),
+        ),
+        (
+            "v1",
+            StringType::from_data_with_validity(&["j1", "k1", "l1", ""], vec![
+                true, true, true, false,
+            ]),
+        ),
+        (
+            "k2",
+            StringType::from_data_with_validity(&["a2", "", "c2", "d2"], vec![
+                true, false, true, true,
+            ]),
+        ),
+        (
+            "v2",
+            StringType::from_data_with_validity(&["j2", "k2", "l2", "m2"], vec![
+                true, true, true, true,
+            ]),
+        ),
+    ]);
 }
 
 fn test_json_object_keep_null(file: &mut impl Write) {
@@ -564,6 +607,48 @@ fn test_json_object_keep_null(file: &mut impl Write) {
     run_ast(file, "json_object_keep_null(1, 'k1', 2, 'k2')", &[]);
 
     run_ast(file, "json_object_keep_null(k1, v1, k2, v2)", &[
+        (
+            "k1",
+            StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
+                true, true, false, true,
+            ]),
+        ),
+        (
+            "v1",
+            StringType::from_data_with_validity(&["j1", "k1", "l1", ""], vec![
+                true, true, true, false,
+            ]),
+        ),
+        (
+            "k2",
+            StringType::from_data_with_validity(&["a2", "", "c2", "d2"], vec![
+                true, false, true, true,
+            ]),
+        ),
+        (
+            "v2",
+            StringType::from_data_with_validity(&["j2", "k2", "l2", "m2"], vec![
+                true, true, true, true,
+            ]),
+        ),
+    ]);
+
+    run_ast(file, "try_json_object_keep_null()", &[]);
+    run_ast(
+        file,
+        "try_json_object_keep_null('a', true, 'b', 1, 'c', 'str', 'd', [1,2], 'e', {'k':'v'})",
+        &[],
+    );
+    run_ast(
+        file,
+        "try_json_object_keep_null('k1', 1, 'k2', null, 'k3', 2, null, 3)",
+        &[],
+    );
+    run_ast(file, "try_json_object_keep_null('k1', 1, 'k1')", &[]);
+    run_ast(file, "try_json_object_keep_null('k1', 1, 'k1', 2)", &[]);
+    run_ast(file, "try_json_object_keep_null(1, 'k1', 2, 'k2')", &[]);
+
+    run_ast(file, "try_json_object_keep_null(k1, v1, k2, v2)", &[
         (
             "k1",
             StringType::from_data_with_validity(&["a1", "b1", "", "d1"], vec![
@@ -767,4 +852,48 @@ fn test_json_array(file: &mut impl Write) {
             ]),
         ),
     ]);
+}
+
+fn test_json_path_exists(file: &mut impl Write) {
+    run_ast(file, "json_path_exists(NULL, '$.a')", &[]);
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), NULL)"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.c')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ == 1)')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": 2}'), '$.a ? (@ > 1)')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[0]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[3]')"#,
+        &[],
+    );
+    run_ast(
+        file,
+        r#"json_path_exists(parse_json('{"a": 1, "b": [1,2,3]}'), '$.b[1 to last] ? (@ >=2 && @ <=3)')"#,
+        &[],
+    );
 }

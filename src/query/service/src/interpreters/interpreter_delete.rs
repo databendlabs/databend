@@ -17,20 +17,20 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
-use common_catalog::table::DeletionFilters;
+use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
-use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::executor::DeletePartial;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
@@ -54,12 +54,17 @@ use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 use common_storages_factory::Table;
+use common_storages_fuse::operations::MutationBlockPruningContext;
+use common_storages_fuse::pruning::create_segment_location_vector;
+use common_storages_fuse::FuseLazyPartInfo;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
+use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 
+use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::executor::ExecutorSettings;
@@ -69,7 +74,8 @@ use crate::schedulers::build_query_pipeline;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::executor::FinalCommit;
+use crate::sql::executor::CommitSink;
+use crate::sql::executor::MutationKind;
 use crate::sql::plans::DeletePlan;
 use crate::stream::PullingExecutorStream;
 
@@ -163,35 +169,14 @@ impl Interpreter for DeleteInterpreter {
 
         let (filters, col_indices) = if let Some(scalar) = selection {
             // prepare the filter expression
-            let filter = cast_expr_to_non_null_boolean(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone()),
-            )?
-            .as_remote_expr();
+            let filters = create_push_down_filters(&scalar)?;
 
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            let expr = filters.filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::Unimplemented(
                     "Delete must have deterministic predicate",
                 ));
             }
-
-            // prepare the inverse filter expression
-            let inverted_filter = {
-                let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
-                    span: None,
-                    func_name: "not".to_string(),
-                    params: vec![],
-                    arguments: vec![scalar.clone()],
-                });
-                cast_expr_to_non_null_boolean(
-                    inverse
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone()),
-                )?
-                .as_remote_expr()
-            };
 
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
                 let mut col_indices = HashSet::new();
@@ -202,13 +187,7 @@ impl Interpreter for DeleteInterpreter {
             } else {
                 scalar.used_columns().into_iter().collect()
             };
-            (
-                Some(DeletionFilters {
-                    filter,
-                    inverted_filter,
-                }),
-                col_indices,
-            )
+            (Some(filters), col_indices)
         } else {
             (None, vec![])
         };
@@ -224,7 +203,7 @@ impl Interpreter for DeleteInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
-        if let Some((partitions, snapshot)) = fuse_table
+        if let Some(snapshot) = fuse_table
             .fast_delete(
                 self.ctx.clone(),
                 filters.clone(),
@@ -234,9 +213,42 @@ impl Interpreter for DeleteInterpreter {
             .await?
         {
             // Safe to unwrap, because if filters is None, fast_delete will do truncate and return None.
-            let filter = filters.unwrap().filter;
+            let filters = filters.unwrap();
+            let cluster = self.ctx.get_cluster();
+            let partitions = if cluster.is_empty() || snapshot.segments.len() < cluster.nodes.len()
+            {
+                let projection = Projection::Columns(col_indices.clone());
+                let prune_ctx = MutationBlockPruningContext {
+                    segment_locations: create_segment_location_vector(
+                        snapshot.segments.clone(),
+                        None,
+                    ),
+                    block_count: Some(snapshot.summary.block_count as usize),
+                };
+                let (partitions, info) = fuse_table
+                    .do_mutation_block_pruning(
+                        self.ctx.clone(),
+                        Some(filters.clone()),
+                        projection,
+                        prune_ctx,
+                        true,
+                        true,
+                    )
+                    .await?;
+                info!(
+                    "delete pruning done, number of whole block deletion detected in pruning phase: {}",
+                    info.num_whole_block_mutation
+                );
+                partitions
+            } else {
+                let mut segments = Vec::with_capacity(snapshot.segments.len());
+                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                    segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()));
+                }
+                Partitions::create(PartitionsShuffleKind::Mod, segments, true)
+            };
             let physical_plan = Self::build_physical_plan(
-                filter,
+                filters,
                 partitions,
                 fuse_table.get_table_info().clone(),
                 col_indices,
@@ -271,18 +283,19 @@ impl Interpreter for DeleteInterpreter {
 impl DeleteInterpreter {
     #[allow(clippy::too_many_arguments)]
     pub fn build_physical_plan(
-        filter: RemoteExpr<String>,
+        filters: Filters,
         partitions: Partitions,
         table_info: TableInfo,
         col_indices: Vec<usize>,
-        snapshot: TableSnapshot,
+        snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
+        let merge_meta = partitions.is_lazy;
         let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
             parts: partitions,
-            filter,
+            filters,
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),
             col_indices,
@@ -300,12 +313,14 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::FinalCommit(Box::new(FinalCommit {
+        Ok(PhysicalPlan::CommitSink(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
             catalog_info,
-        })))
+            mutation_kind: MutationKind::Delete,
+            merge_meta,
+        }))
     }
 }
 
@@ -365,7 +380,6 @@ pub async fn subquery_filter(
         &ctx,
         &[row_id_column_binding.clone()],
         &physical_plan,
-        false,
         false,
     )
     .await?;
@@ -427,6 +441,11 @@ pub fn replace_subquery(
     match selection {
         ScalarExpr::FunctionCall(func) => {
             for arg in &mut func.arguments {
+                replace_subquery(filters, arg)?;
+            }
+        }
+        ScalarExpr::UDFServerCall(udf) => {
+            for arg in &mut udf.arguments {
                 replace_subquery(filters, arg)?;
             }
         }

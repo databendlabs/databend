@@ -84,7 +84,6 @@ pub fn try_derive_predicates(
             Arc::new(
                 Filter {
                     predicates: left_push_down,
-                    is_having: false,
                 }
                 .into(),
             ),
@@ -97,7 +96,6 @@ pub fn try_derive_predicates(
             Arc::new(
                 Filter {
                     predicates: right_push_down,
-                    is_having: false,
                 }
                 .into(),
             ),
@@ -175,5 +173,10 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             replace_column(&mut expr.argument, col_to_scalar);
         }
         ScalarExpr::ConstantExpr(_) | ScalarExpr::SubqueryExpr(_) => {}
+        ScalarExpr::UDFServerCall(expr) => {
+            for arg in expr.arguments.iter_mut() {
+                replace_column(arg, col_to_scalar)
+            }
+        }
     }
 }

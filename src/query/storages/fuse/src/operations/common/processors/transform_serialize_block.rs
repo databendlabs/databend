@@ -171,26 +171,40 @@ impl Processor for TransformSerializeBlock {
         if let Some(meta) = meta {
             let meta =
                 SerializeDataMeta::downcast_from(meta).ok_or(ErrorCode::Internal("It's a bug"))?;
-            if let Some(deleted_segment) = meta.deleted_segment {
-                // delete a whole segment, segment level
-                let data_block =
-                    Self::mutation_logs(MutationLogEntry::DeletedSegment { deleted_segment });
-                self.output.push_data(Ok(data_block));
-                Ok(Event::NeedConsume)
-            } else if input_data.is_empty() {
-                // delete a whole block, block level
-                let data_block =
-                    Self::mutation_logs(MutationLogEntry::DeletedBlock { index: meta.index });
-                self.output.push_data(Ok(data_block));
-                Ok(Event::NeedConsume)
-            } else {
-                // replace the old block
-                self.state = State::NeedSerialize {
-                    block: input_data,
-                    stats_type: meta.stats_type,
-                    index: Some(meta.index),
-                };
-                Ok(Event::Sync)
+            match meta {
+                SerializeDataMeta::DeletedSegment(deleted_segment) => {
+                    // delete a whole segment, segment level
+                    let data_block =
+                        Self::mutation_logs(MutationLogEntry::DeletedSegment { deleted_segment });
+                    self.output.push_data(Ok(data_block));
+                    Ok(Event::NeedConsume)
+                }
+                SerializeDataMeta::SerializeBlock(serialize_block) => {
+                    if input_data.is_empty() {
+                        // delete a whole block, block level
+                        let data_block = Self::mutation_logs(MutationLogEntry::DeletedBlock {
+                            index: serialize_block.index,
+                        });
+                        self.output.push_data(Ok(data_block));
+                        Ok(Event::NeedConsume)
+                    } else {
+                        // replace the old block
+                        self.state = State::NeedSerialize {
+                            block: input_data,
+                            stats_type: serialize_block.stats_type,
+                            index: Some(serialize_block.index),
+                        };
+                        Ok(Event::Sync)
+                    }
+                }
+                SerializeDataMeta::CompactExtras(compact_extras) => {
+                    // compact extras
+                    let data_block = Self::mutation_logs(MutationLogEntry::CompactExtras {
+                        extras: compact_extras,
+                    });
+                    self.output.push_data(Ok(data_block));
+                    Ok(Event::NeedConsume)
+                }
             }
         } else if input_data.is_empty() {
             // do nothing

@@ -16,13 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use arrow_schema::Schema as ArrowSchema;
-use common_base::runtime::execute_futures_in_parallel;
-use common_base::runtime::GLOBAL_MEM_STAT;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::FieldIndex;
 use common_expression::EXTENSION_KEY;
-use opendal::BlockingOperator;
 use opendal::Operator;
 use parquet::arrow::parquet_to_arrow_schema;
 use parquet::file::footer::decode_footer;
@@ -79,64 +76,6 @@ pub fn infer_schema_with_extension(meta: &ParquetMetaData) -> Result<ArrowSchema
     Ok(arrow_schema)
 }
 
-#[allow(dead_code)]
-async fn read_parquet_metas_batch(
-    file_infos: Vec<(String, u64)>,
-    op: Operator,
-    max_memory_usage: u64,
-) -> Result<Vec<ParquetMetaData>> {
-    let mut metas = vec![];
-    for (path, size) in file_infos {
-        metas.push(read_metadata_async(&path, &op, Some(size)).await?)
-    }
-    let used = GLOBAL_MEM_STAT.get_memory_usage();
-    if max_memory_usage as i64 - used < 100 * 1024 * 1024 {
-        Err(ErrorCode::Internal(format!(
-            "not enough memory to load parquet file metas, max_memory_usage = {}, used = {}.",
-            max_memory_usage, used
-        )))
-    } else {
-        Ok(metas)
-    }
-}
-
-#[async_backtrace::framed]
-pub async fn read_parquet_metas_in_parallel(
-    op: Operator,
-    file_infos: Vec<(String, u64)>,
-    thread_nums: usize,
-    permit_nums: usize,
-    max_memory_usage: u64,
-) -> Result<Vec<ParquetMetaData>> {
-    let batch_size = 100;
-    if file_infos.len() <= batch_size {
-        read_parquet_metas_batch(file_infos, op.clone(), max_memory_usage).await
-    } else {
-        let mut chunks = file_infos.chunks(batch_size);
-
-        let tasks = std::iter::from_fn(move || {
-            chunks.next().map(|location| {
-                read_parquet_metas_batch(location.to_vec(), op.clone(), max_memory_usage)
-            })
-        });
-
-        let result = execute_futures_in_parallel(
-            tasks,
-            thread_nums,
-            permit_nums,
-            "read-parquet-metas-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<Vec<_>>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
-
-        Ok(result)
-    }
-}
-
 /// Layout of Parquet file
 /// +---------------------------+-----+---+
 /// |      Rest of file         |  B  | A |
@@ -159,7 +98,8 @@ pub async fn read_metadata_async(
     // read and cache up to DEFAULT_FOOTER_READ_SIZE bytes from the end and process the footer
     let default_end_len = DEFAULT_FOOTER_READ_SIZE.min(file_size);
     let buffer = operator
-        .range_read(path, (file_size - default_end_len)..file_size)
+        .read_with(path)
+        .range((file_size - default_end_len)..file_size)
         .await?;
     let buffer_len = buffer.len();
     let metadata_len = decode_footer(
@@ -180,29 +120,12 @@ pub async fn read_metadata_async(
         // 1. Read the whole footer data again. (file_size - footer_len)..file_size
         // 2. Read the remain data only and concat with the previous read data. (file_size - footer_len)..(file_size - buffer.len()
         let mut metadata = operator
-            .range_read(
-                path,
-                (file_size - footer_len)..(file_size - buffer_len as u64),
-            )
+            .read_with(path)
+            .range((file_size - footer_len)..(file_size - buffer_len as u64))
             .await?;
         metadata.extend(buffer);
         Ok(decode_metadata(&metadata)?)
     }
-}
-
-#[allow(dead_code)]
-pub fn read_metadata(
-    path: &str,
-    operator: &BlockingOperator,
-    file_size: u64,
-) -> Result<ParquetMetaData> {
-    check_footer_size(file_size)?;
-    let footer = operator.range_read(path, (file_size - FOOTER_SIZE)..file_size)?;
-    let metadata_len = decode_footer(&footer[0..8].try_into().unwrap())? as u64;
-    check_meta_size(file_size, metadata_len)?;
-    let metadata =
-        operator.range_read(path, (file_size - FOOTER_SIZE - metadata_len)..file_size)?;
-    Ok(decode_metadata(&metadata)?)
 }
 
 /// check file is large enough to hold footer

@@ -31,7 +31,7 @@ arrow-buffer = "46.0.0"
 arrow-schema = "46.0.0"
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-bytes = "1"
+bytes = { workspace = true }
 chrono = { workspace = true }
 ethnum = { workspace = true }
 futures = "0.3.24"
@@ -44,5 +44,4 @@ typetag = "0.2.3"
 
 [dev-dependencies]
 common-sql = { path = "../../sql" }
-databend-query = { path = "../../service" }
 tempfile = "3.4.0"

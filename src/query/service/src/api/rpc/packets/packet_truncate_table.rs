@@ -25,7 +25,6 @@ use crate::api::FlightAction;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct TruncateTablePacket {
-    pub purge: bool,
     pub table_name: String,
     pub catalog_name: String,
     pub database_name: String,
@@ -38,10 +37,8 @@ impl TruncateTablePacket {
         table_name: String,
         catalog_name: String,
         database_name: String,
-        purge: bool,
     ) -> TruncateTablePacket {
         TruncateTablePacket {
-            purge,
             table_name,
             catalog_name,
             database_name,

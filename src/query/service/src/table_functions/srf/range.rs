@@ -68,9 +68,9 @@ impl RangeTable {
         validate_args(&table_args.positioned, table_func_name)?;
 
         let data_type = match &table_args.positioned[0] {
-            Scalar::Number(_) => Int64Type::data_type(),
-            Scalar::Timestamp(_) => TimestampType::data_type(),
-            Scalar::Date(_) => DateType::data_type(),
+            Scalar::Number(_) => DataType::Number(NumberDataType::Int64),
+            Scalar::Timestamp(_) => DataType::Timestamp,
+            Scalar::Date(_) => DataType::Date,
             other => {
                 return Err(ErrorCode::BadArguments(format!(
                     "Unsupported data type for generate_series: {:?}",
@@ -220,18 +220,13 @@ struct RangeSource<const INCLUSIVE: bool> {
 }
 
 fn get_i64_number(scalar: &Scalar) -> Result<i64> {
-    check_number(
+    check_number::<_, i64>(
         None,
         &FunctionContext::default(),
-        &Expr::<usize>::Cast {
+        &Expr::<usize>::Constant {
             span: None,
-            is_try: false,
-            expr: Box::new(Expr::Constant {
-                span: None,
-                scalar: scalar.clone(),
-                data_type: scalar.clone().as_ref().infer_data_type(),
-            }),
-            dest_type: Int64Type::data_type(),
+            scalar: scalar.clone(),
+            data_type: scalar.clone().as_ref().infer_data_type(),
         },
         &BUILTIN_FUNCTIONS,
     )

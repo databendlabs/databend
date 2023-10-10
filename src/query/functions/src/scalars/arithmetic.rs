@@ -21,6 +21,7 @@ use std::sync::Arc;
 
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumn;
+use common_expression::types::decimal::DecimalDomain;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableDomain;
 use common_expression::types::number::Number;
@@ -56,6 +57,7 @@ use common_expression::with_number_mapped_type_without_64;
 use common_expression::with_unsigned_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
+use common_expression::Domain;
 use common_expression::EvalContext;
 use common_expression::Function;
 use common_expression::FunctionDomain;
@@ -72,6 +74,7 @@ use num_traits::AsPrimitive;
 use super::arithmetic_modulo::vectorize_modulo;
 use super::decimal::register_decimal_to_float32;
 use super::decimal::register_decimal_to_float64;
+use super::decimal::register_decimal_to_int;
 use crate::scalars::decimal::register_decimal_arithmetic;
 
 pub fn register(registry: &mut FunctionRegistry) {
@@ -580,92 +583,96 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         let name = format!("to_{dest_type}").to_lowercase();
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    debug_assert!(!overflowing);
-                                    FunctionDomain::Domain(domain)
-                                },
-                                |val, _|  {
-                                    val.as_()
-                                },
-                            );
+                                            &name,
+                                            |_, domain| {
+                                                let (domain, overflowing) = domain.overflow_cast();
+                                                debug_assert!(!overflowing);
+                                                FunctionDomain::Domain(domain)
+                                            },
+                                            |val, _|  {
+                                                val.as_()
+                                            },
+                                        );
                         } else {
                             registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                            |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    if overflowing {
-                                        FunctionDomain::MayThrow
-                                    } else {
-                                        FunctionDomain::Domain(domain)
-                                    }
-                                },
-                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
-                                    move |val, output, ctx| {
-                                        match num_traits::cast::cast(val) {
-                                            Some(val) => output.push(val),
-                                            None => {
-                                                ctx.set_error(output.len(),"number overflowed");
-                                                output.push(DEST_TYPE::default());
+                                            &name,
+                                                        |_, domain| {
+                                                let (domain, overflowing) = domain.overflow_cast();
+                                                if overflowing {
+                                                    FunctionDomain::MayThrow
+                                                } else {
+                                                    FunctionDomain::Domain(domain)
+                                                }
                                             },
-                                        }
-                                    }
-                                ),
-                            );
+                                            vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
+                                                move |val, output, ctx| {
+                                                    match num_traits::cast::cast(val) {
+                                                        Some(val) => output.push(val),
+                                                        None => {
+                                                            ctx.set_error(output.len(),"number overflowed");
+                                                            output.push(DEST_TYPE::default());
+                                                        },
+                                                    }
+                                                }
+                                            ),
+                                        );
                         }
 
                         let name = format!("try_to_{dest_type}").to_lowercase();
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    debug_assert!(!overflowing);
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: false,
-                                        value: Some(Box::new(
-                                            domain,
-                                        )),
-                                    })
-                                },
-                                vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
-                                    Some(val.as_())
-                                })
-                            );
+                                            &name,
+                                            |_, domain| {
+                                                let (domain, overflowing) = domain.overflow_cast();
+                                                debug_assert!(!overflowing);
+                                                FunctionDomain::Domain(NullableDomain {
+                                                    has_null: false,
+                                                    value: Some(Box::new(
+                                                        domain,
+                                                    )),
+                                                })
+                                            },
+                                            vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
+                                                Some(val.as_())
+                                            })
+                                        );
                         } else {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                &name,
-                                |_, domain| {
-                                    let (domain, overflowing) = domain.overflow_cast();
-                                    FunctionDomain::Domain(NullableDomain {
-                                        has_null: overflowing,
-                                        value: Some(Box::new(
-                                            domain,
-                                        )),
-                                    })
-                                },
-                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
-                                    |val, output, _| {
-                                        if let Some(new_val) = num_traits::cast::cast(val) {
-                                            output.push(new_val);
-                                        } else {
-                                            output.push_null();
-                                        }
-                                    }
-                                ),
-                            );
+                                            &name,
+                                            |_, domain| {
+                                                let (domain, overflowing) = domain.overflow_cast();
+                                                FunctionDomain::Domain(NullableDomain {
+                                                    has_null: overflowing,
+                                                    value: Some(Box::new(
+                                                        domain,
+                                                    )),
+                                                })
+                                            },
+                                            vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
+                                                |val, output, _| {
+                                                    if let Some(new_val) = num_traits::cast::cast(val) {
+                                                        output.push(new_val);
+                                                    } else {
+                                                        output.push_null();
+                                                    }
+                                                }
+                                            ),
+                                        );
                         }
                     }
                 }),
                 NumberClass::Decimal128 => {
-                    // todo(youngsofun): add decimal try_cast and decimal to int
+                    // todo(youngsofun): add decimal try_cast and decimal to int and float
                     if matches!(dest_type, NumberDataType::Float32) {
                         register_decimal_to_float32(registry);
                     }
                     if matches!(dest_type, NumberDataType::Float64) {
                         register_decimal_to_float64(registry);
                     }
+
+                    with_number_mapped_type!(|DEST_TYPE| match dest_type {
+                        NumberDataType::DEST_TYPE => register_decimal_to_int::<DEST_TYPE>(registry),
+                    })
                 }
                 NumberClass::Decimal256 => {
                     // already registered in Decimal128 branch
@@ -680,23 +687,50 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
         if args_type.len() != 1 {
             return None;
         }
-        if !args_type[0].is_decimal() {
+
+        let is_nullable = args_type[0].is_nullable();
+        let arg_type = args_type[0].remove_nullable();
+        if !arg_type.is_decimal() {
             return None;
         }
 
-        let arg_type = args_type[0].clone();
-
-        Some(Arc::new(Function {
+        let function = Function {
             signature: FunctionSignature {
                 name: "minus".to_string(),
-                args_type: args_type.to_owned(),
+                args_type: vec![arg_type.clone()],
                 return_type: arg_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_, _| FunctionDomain::Full),
+                calc_domain: Box::new(|_, d| match &d[0] {
+                    Domain::Decimal(DecimalDomain::Decimal128(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal128(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i128::MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    Domain::Decimal(DecimalDomain::Decimal256(d, size)) => {
+                        FunctionDomain::Domain(Domain::Decimal(DecimalDomain::Decimal256(
+                            SimpleDomain {
+                                min: -d.max,
+                                max: d.min.checked_neg().unwrap_or(i256::MAX), // Only -MIN could overflow
+                            },
+                            *size,
+                        )))
+                    }
+                    _ => unreachable!(),
+                }),
                 eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
             },
-        }))
+        };
+
+        if is_nullable {
+            Some(Arc::new(function.passthrough_nullable()))
+        } else {
+            Some(Arc::new(function))
+        }
     });
 }
 
@@ -874,7 +908,7 @@ fn register_decimal_to_string(registry: &mut FunctionRegistry) {
             return None;
         }
 
-        let arg_type = args_type[0].clone();
+        let arg_type = args_type[0].remove_nullable();
         if !arg_type.is_decimal() {
             return None;
         }

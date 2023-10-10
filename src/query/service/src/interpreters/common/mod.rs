@@ -15,15 +15,18 @@
 mod compact_hook;
 mod grant;
 mod metrics;
+mod query_log;
 mod refresh_aggregating_index;
 mod table;
 mod util;
 
 pub use compact_hook::*;
 pub use grant::validate_grant_object_exists;
+pub use query_log::InterpreterQueryLog;
 pub use refresh_aggregating_index::hook_refresh_agg_index;
 pub use refresh_aggregating_index::RefreshAggIndexDesc;
 pub use table::check_referenced_computed_columns;
 pub use util::check_deduplicate_label;
+pub use util::create_push_down_filters;
 
 pub use self::metrics::*;

@@ -21,15 +21,17 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use chrono::TimeZone;
 use chrono::Utc;
+use common_ast::ast::Connection;
+use common_ast::ast::FileLocation;
 use common_ast::ast::Indirection;
 use common_ast::ast::Join;
-use common_ast::ast::MergeSource;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::Statement;
 use common_ast::ast::TableAlias;
 use common_ast::ast::TableReference;
 use common_ast::ast::TimeTravelPoint;
+use common_ast::ast::UriLocation;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
@@ -77,7 +79,7 @@ use common_users::UserApiProvider;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use crate::binder::copy::parse_file_location;
+use crate::binder::copy::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;
@@ -546,14 +548,20 @@ impl Binder {
                 }
                 Ok((s_expr, res_bind_context))
             }
-            TableReference::Stage {
+            TableReference::Location {
                 span: _,
                 location,
                 options,
                 alias,
             } => {
-                let (mut stage_info, path) =
-                    parse_file_location(&self.ctx, location, options.connection.clone()).await?;
+                let location = match location {
+                    FileLocation::Uri(uri) => FileLocation::Uri(UriLocation {
+                        connection: Connection::new(options.connection.clone()),
+                        ..uri.clone()
+                    }),
+                    _ => location.clone(),
+                };
+                let (mut stage_info, path) = resolve_file_location(&self.ctx, &location).await?;
                 if let Some(f) = &options.file_format {
                     stage_info.file_format_params = match StageFileFormatType::from_str(f) {
                         Ok(t) => FileFormatParams::default_by_type(t)?,
@@ -569,26 +577,21 @@ impl Binder {
                 self.bind_stage_table(table_ctx, bind_context, stage_info, files_info, alias, None)
                     .await
             }
-            TableReference::Join { .. } => unreachable!(),
-        }
-    }
-
-    #[async_backtrace::framed]
-    pub(crate) async fn bind_merge_into_source(
-        &mut self,
-        bind_context: &mut BindContext,
-        _span: Span,
-        source: &MergeSource,
-    ) -> Result<(SExpr, BindContext)> {
-        // merge source has three kinds type
-        // a. values b. streamingV2 c. query
-        match source {
-            MergeSource::Select { query } => self.bind_query(bind_context, query).await,
-            MergeSource::StreamingV2 {
-                settings: _,
-                on_error_mode: _,
-                start: _,
-            } => unimplemented!(),
+            TableReference::Join { join, .. } => {
+                let (left_expr, left_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.left).await?;
+                let (right_expr, right_bind_ctx) =
+                    self.bind_table_reference(bind_context, &join.right).await?;
+                self.bind_join(
+                    bind_context,
+                    left_bind_ctx,
+                    right_bind_ctx,
+                    left_expr,
+                    right_expr,
+                    join,
+                )
+                .await
+            }
         }
     }
 
@@ -617,6 +620,7 @@ impl Binder {
                     .await?
                 } else {
                     ParquetRSTable::create(
+                        table_ctx.clone(),
                         stage_info.clone(),
                         files_info,
                         read_options,
@@ -649,7 +653,10 @@ impl Binder {
 
                 let mut fields = vec![];
                 for i in 1..(max_column_position + 1) {
-                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                    fields.push(TableField::new(
+                        &format!("_${}", i),
+                        TableDataType::Nullable(Box::new(TableDataType::String)),
+                    ));
                 }
 
                 let schema = Arc::new(TableSchema::new(fields));
@@ -817,6 +824,7 @@ impl Binder {
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            allow_internal_columns: true,
             window_definitions: DashMap::new(),
         };
 
@@ -954,7 +962,7 @@ impl Binder {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
-                            col_stats.insert(*column_index, col_stat);
+                            col_stats.insert(*column_index, col_stat.cloned());
                         }
                     }
                 }

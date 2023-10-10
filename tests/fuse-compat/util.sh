@@ -1,9 +1,58 @@
 #!/bin/bash
 
+query_config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
+query_test_path="tests/sqllogictests"
+bend_repo_url="https://github.com/datafuselabs/databend"
+
+
 binary_url() {
     local ver="$1"
     echo "https://github.com/datafuselabs/databend/releases/download/v${ver}-nightly/databend-v${ver}-nightly-x86_64-unknown-linux-gnu.tar.gz"
 }
+
+# Clone only specified dir or file in the specified commit
+git_partial_clone() {
+	local repo_url="$1"
+	local branch="$2"
+	local worktree_path="$3"
+	local local_path="$4"
+
+	echo " === Clone $repo_url@$branch:$worktree_path"
+	echo " ===    To $local_path/$worktree_path"
+
+	rm -rf "$local_path" || echo "no $local_path"
+
+	git clone \
+		-b "$branch" \
+		--depth 1 \
+		--quiet \
+		--filter=blob:none \
+		--sparse \
+		"$repo_url" \
+		"$local_path"
+
+	cd "$local_path"
+	git sparse-checkout set "$worktree_path"
+
+	echo " === Done clone from $repo_url@$branch:$worktree_path"
+
+	ls "$worktree_path"
+
+    cd -
+}
+
+# Download config.toml for a specific version of query.
+download_query_config() {
+	local ver="$1"
+	local local_dir="$2"
+
+	config_dir="$(dirname $query_config_path)"
+	echo " === Download query config.toml from $ver:$config_dir"
+
+	git_partial_clone "$bend_repo_url" "v$ver-nightly" "$config_dir" "$local_dir"
+}
+
+
 
 # download a specific version of databend, untar it to folder `./bins/$ver`
 # `ver` is semver without prefix `v` or `-nightly`
@@ -25,7 +74,7 @@ download_binary() {
         echo " === Download binary ver: $ver"
         echo " === Download binary url: $url"
 
-        curl --connect-timeout 5 --retry 5 --retry-delay 0 -L "$url" -o "$fn"
+        curl --connect-timeout 5 --retry-all-errors --retry 5 --retry-delay 1 -L "$url" -o "$fn"
         # or:
         # wget -q "$url" -o "$fn"
     fi
@@ -66,7 +115,8 @@ run_test() {
     python3 -m pip list
 
     local query_old_ver="$1"
-    local logictest_path="tests/fuse-compat/compat-logictest/$2"
+    local old_config_path="$2"
+    local logictest_path="tests/fuse-compat/compat-logictest/$3"
 
     echo " === Test with query-$query_old_ver and current query"
 
@@ -75,6 +125,7 @@ run_test() {
     local metasrv_old="./bins/$query_old_ver/bin/databend-meta"
     local metasrv_new="./bins/current/databend-meta"
     local sqllogictests="./bins/current/databend-sqllogictests"
+
 
     echo " === metasrv version:"
     # TODO remove --single
@@ -106,12 +157,10 @@ run_test() {
 
     echo ' === Start old databend-query...'
 
-    config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
-
     # TODO clean up data?
     echo " === bring up $query_old"
 
-    nohup "$query_old" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-old.log &
+    nohup "$query_old" -c "$old_config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-old.log &
     python3 scripts/ci/wait_tcp.py --timeout 5 --port 3307
 
     echo " === Run test: fuse_compat_write with old query"
@@ -130,6 +179,7 @@ run_test() {
 
     echo " === Start new databend-query..."
 
+    config_path="scripts/ci/deploy/config/databend-query-node-1.toml"
     echo "new databend config path: $config_path"
 
     nohup "$query_new" -c "$config_path" --log-level DEBUG --meta-endpoints "0.0.0.0:9191" >query-current.log &

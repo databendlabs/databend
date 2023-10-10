@@ -170,10 +170,12 @@ set max_threads = 1;
 statement ok
 copy into t_query2 from (select $1,$2,$3 from @st_query2 as t2) force =  true purge = true;
 
+
+# table will be auto compacted after copy into, the volume of data is small, so by default setting, it will be compacted to 1 block.
 query I
-select block_count from fuse_snapshot('default','t_query2');
+select block_count from fuse_snapshot('default','t_query2') limit 1;
 ----
-2
+1
 
 #test cluster key
 statement ok

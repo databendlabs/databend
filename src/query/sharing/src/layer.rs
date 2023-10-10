@@ -22,7 +22,6 @@ use http::Request;
 use http::Response;
 use http::StatusCode;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MetricsLayer;
 use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::raw::new_request_build_error;
@@ -77,12 +76,11 @@ pub fn create_share_table_operator(
             })?
             // Add retry
             .layer(RetryLayer::new().with_jitter())
-            // Add metrics
-            .layer(MetricsLayer)
             // Add logging
             .layer(LoggingLayer::default())
             // Add tracing
             .layer(MinitraceLayer)
+            // TODO(liyz): add PrometheusClientLayer
             .finish()
         }
         None => {
@@ -133,12 +131,11 @@ impl Accessor for SharedAccessor {
     type BlockingWriter = ();
     type Pager = ();
     type BlockingPager = ();
-    type Appender = ();
 
     fn info(&self) -> AccessorInfo {
         let mut meta = AccessorInfo::default();
         meta.set_scheme(Scheme::Custom("shared"))
-            .set_capability(Capability {
+            .set_native_capability(Capability {
                 read: true,
                 read_with_range: true,
 

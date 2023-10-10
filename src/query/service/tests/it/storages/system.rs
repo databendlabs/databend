@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
+use common_expression::block_debug::box_render;
 use common_expression::block_debug::pretty_format_blocks;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::AuthType;
@@ -28,7 +29,6 @@ use common_meta_app::principal::UserOption;
 use common_meta_app::principal::UserQuota;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageS3Config;
-use common_metrics::init_default_metrics_recorder;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_system::BuildOptionsTable;
 use common_storages_system::CachesTable;
@@ -84,7 +84,8 @@ async fn run_table_tests(
         actual_lines.retain(|&item| {
             !(item.contains("max_threads")
                 || item.contains("max_memory_usage")
-                || item.contains("max_storage_io_requests"))
+                || item.contains("max_storage_io_requests")
+                || item.contains("recluster_block_size"))
         });
     }
     for line in actual_lines {
@@ -268,14 +269,15 @@ async fn test_functions_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_metrics_table() -> Result<()> {
-    init_default_metrics_recorder();
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None, true).await?;
+    let counter1 = common_metrics::register_counter("test_metrics_table_count");
+    let histogram1 =
+        common_metrics::register_histogram_in_milliseconds("test_metrics_table_histogram");
 
-    metrics::counter!("test.test_metrics_table_count", 1);
-    #[cfg(feature = "enable_histogram")]
-    metrics::histogram!("test.test_metrics_table_histogram", 1.0);
+    counter1.inc();
+    histogram1.observe(2.0);
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -283,10 +285,16 @@ async fn test_metrics_table() -> Result<()> {
     assert_eq!(block.num_columns(), 5);
     assert!(block.num_rows() >= 1);
 
-    let output = pretty_format_blocks(result.as_slice())?;
-    assert!(output.contains("test_test_metrics_table_count"));
-    #[cfg(feature = "enable_histogram")]
-    assert!(output.contains("test_test_metrics_table_histogram"));
+    let output = box_render(
+        &Arc::new(source_plan.output_schema.into()),
+        result.as_slice(),
+        1000,
+        1024,
+        30,
+        true,
+    )?;
+    assert!(output.contains("test_metrics_table_count"));
+    assert!(output.contains("test_metrics_table_histogram"));
 
     Ok(())
 }

@@ -12,20 +12,62 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::time::Duration;
+
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
 use common_ast::ast::DropTableStmt;
+use common_ast::ast::NullableConstraint;
 use common_exception::Result;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_sql::resolve_type_name;
+use databend_client::error::Error as ClientError;
 use databend_driver::Client;
+use databend_driver::Error;
 use rand::rngs::SmallRng;
 use rand::Rng;
 use rand::SeedableRng;
 
+use crate::reducer::try_reduce_query;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
+
+const KNOWN_ERRORS: [&str; 31] = [
+    // Errors caused by illegal parameters
+    "Overflow on date YMD",
+    "timestamp is out of range",
+    "unable to cast type",
+    "unable to cast to type",
+    "invalid digit found in string",
+    "number overflowed",
+    "date is out of range",
+    "Odd number of digits",
+    "The maximum sleep time is 3 seconds",
+    "Too many times to repeat",
+    "Incorrect arguments to",
+    "divided by zero",
+    "Decimal overflow at line",
+    "cannot parse to type",
+    "invalid resolution",
+    "invalid cell index",
+    "invalid directed edge index",
+    "invalid coordinate range",
+    "window function calls cannot be nested",
+    // Unsupported features
+    "Row format is not yet support for",
+    "to_decimal not support this DataType",
+    "AggregateSumFunction does not support type",
+    "AggregateArrayMovingAvgFunction does not support type",
+    "AggregateArrayMovingSumFunction does not support type",
+    "The arguments of AggregateRetention should be an expression which returns a Boolean result",
+    "AggregateWindowFunnelFunction does not support type",
+    "nth_value should count from 1",
+    "start must be less than or equal to end when step is positive vice versa",
+    "Expected Number, Date or Timestamp type, but got",
+    "Unsupported data type for generate_series",
+    "Having clause can't contain window functions",
+];
 
 pub struct Runner {
     count: usize,
@@ -70,7 +112,12 @@ impl Runner {
             let mut fields = Vec::new();
             if let CreateTableSource::Columns(columns) = create_table_stmt.source.unwrap() {
                 for column in columns {
-                    let data_type = resolve_type_name(&column.data_type, true)?;
+                    let not_null = match column.nullable_constraint {
+                        Some(NullableConstraint::NotNull) => true,
+                        Some(NullableConstraint::Null) => false,
+                        None => true,
+                    };
+                    let data_type = resolve_type_name(&column.data_type, not_null)?;
                     let field = TableField::new(&column.name.name, data_type);
                     fields.push(field);
                 }
@@ -85,26 +132,54 @@ impl Runner {
 
     pub async fn run(&self) {
         let mut rng = Self::generate_rng(self.seed);
-        let mut generater = SqlGenerator::new(&mut rng);
-        let table_stmts = generater.gen_base_tables();
+        let mut generator = SqlGenerator::new(&mut rng);
+        let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
 
         for table in &tables {
-            let insert_stmt = generater.gen_insert(table, 50);
+            let insert_stmt = generator.gen_insert(table, 50);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
         }
-        generater.tables = tables;
+        generator.tables = tables;
 
         for _ in 0..self.count {
-            let query = generater.gen_query();
+            let query = generator.gen_query();
             let query_sql = query.to_string();
-            tracing::info!("query_sql: {}", query_sql);
-            // TODO check query result
-            if let Err(e) = conn.exec(&query_sql).await {
-                let err = format!("error: {}", e);
+            let mut try_reduce = false;
+            let mut err_code = 0;
+            let mut err = String::new();
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
+                if let Err(e) = conn.exec(&query_sql).await {
+                    if let Error::Api(ClientError::InvalidResponse(err)) = &e {
+                        // TODO: handle Syntax and Semantic errors
+                        err_code = err.code;
+                        if err_code == 1005 || err_code == 1065 {
+                            return;
+                        }
+                        if KNOWN_ERRORS
+                            .iter()
+                            .any(|known_err| err.message.starts_with(known_err))
+                        {
+                            return;
+                        }
+                    }
+
+                    err = format!("error: {}", e);
+                    try_reduce = true;
+                }
+            })
+            .await
+            {
+                tracing::info!("query_sql: {}", query_sql);
+                let err = format!("query timeout: {}", e);
+                tracing::error!(err);
+            }
+            if try_reduce {
+                let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
+                tracing::info!("query_sql: {}", reduced_query.to_string());
                 tracing::error!(err);
             }
         }

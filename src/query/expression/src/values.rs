@@ -555,11 +555,7 @@ impl PartialOrd for Scalar {
             (Scalar::Date(d1), Scalar::Date(d2)) => d1.partial_cmp(d2),
             (Scalar::Array(a1), Scalar::Array(a2)) => a1.partial_cmp(a2),
             (Scalar::Map(m1), Scalar::Map(m2)) => m1.partial_cmp(m2),
-            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(b1.as_slice()).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(b2.as_slice()).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
+            (Scalar::Bitmap(b1), Scalar::Bitmap(b2)) => b1.partial_cmp(b2),
             (Scalar::Tuple(t1), Scalar::Tuple(t2)) => t1.partial_cmp(t2),
             (Scalar::Variant(v1), Scalar::Variant(v2)) => {
                 jsonb::compare(v1.as_slice(), v2.as_slice()).ok()
@@ -595,11 +591,7 @@ impl PartialOrd for ScalarRef<'_> {
             (ScalarRef::Date(d1), ScalarRef::Date(d2)) => d1.partial_cmp(d2),
             (ScalarRef::Array(a1), ScalarRef::Array(a2)) => a1.partial_cmp(a2),
             (ScalarRef::Map(m1), ScalarRef::Map(m2)) => m1.partial_cmp(m2),
-            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => {
-                let rb1 = RoaringTreemap::deserialize_from(*b1).unwrap();
-                let rb2 = RoaringTreemap::deserialize_from(*b2).unwrap();
-                rb1.len().partial_cmp(&rb2.len())
-            }
+            (ScalarRef::Bitmap(b1), ScalarRef::Bitmap(b2)) => b1.partial_cmp(b2),
             (ScalarRef::Tuple(t1), ScalarRef::Tuple(t2)) => t1.partial_cmp(t2),
             (ScalarRef::Variant(v1), ScalarRef::Variant(v2)) => jsonb::compare(v1, v2).ok(),
             _ => None,
@@ -680,13 +672,7 @@ impl PartialOrd for Column {
             (Column::Date(col1), Column::Date(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Array(col1), Column::Array(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Map(col1), Column::Map(col2)) => col1.iter().partial_cmp(col2.iter()),
-            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1
-                .iter()
-                .map(|c1| RoaringTreemap::deserialize_from(c1).unwrap().len())
-                .partial_cmp(
-                    col2.iter()
-                        .map(|c2| RoaringTreemap::deserialize_from(c2).unwrap().len()),
-                ),
+            (Column::Bitmap(col1), Column::Bitmap(col2)) => col1.iter().partial_cmp(col2.iter()),
             (Column::Nullable(col1), Column::Nullable(col2)) => {
                 col1.iter().partial_cmp(col2.iter())
             }
@@ -843,7 +829,9 @@ impl Column {
     }
 
     pub fn domain(&self) -> Domain {
-        assert!(self.len() > 0);
+        if !matches!(self, Column::Array(_) | Column::Map(_)) {
+            assert!(self.len() > 0);
+        }
         match self {
             Column::Null { .. } => Domain::Nullable(NullableDomain {
                 has_null: true,
@@ -879,7 +867,7 @@ impl Column {
                 })
             }
             Column::Array(col) => {
-                if col.len() == 0 {
+                if col.len() == 0 || col.values.len() == 0 {
                     Domain::Array(None)
                 } else {
                     let inner_domain = col.values.domain();
@@ -887,7 +875,7 @@ impl Column {
                 }
             }
             Column::Map(col) => {
-                if col.len() == 0 {
+                if col.len() == 0 || col.values.len() == 0 {
                     Domain::Map(None)
                 } else {
                     let inner_domain = col.values.domain();
@@ -1351,7 +1339,12 @@ impl Column {
                 let offsets = arrow_col.offsets().clone().into_inner();
 
                 let offsets = unsafe { std::mem::transmute::<Buffer<i64>, Buffer<u64>>(offsets) };
-                Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                if data_type.is_variant() {
+                    // Variant column from udf server is converted to LargeBinary, we restore it back here.
+                    Column::Variant(StringColumn::new(arrow_col.values().clone(), offsets))
+                } else {
+                    Column::String(StringColumn::new(arrow_col.values().clone(), offsets))
+                }
             }
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Binary => {
@@ -1371,6 +1364,23 @@ impl Column {
                     offsets.into(),
                 ))
             }
+
+            ArrowDataType::FixedSizeBinary(size) => {
+                let arrow_col = arrow_col
+                    .as_any()
+                    .downcast_ref::<common_arrow::arrow::array::FixedSizeBinaryArray>()
+                    .expect("fail to read from arrow: array should be `FixedSizeBinaryArray`");
+
+                let offsets = (0..arrow_col.len() as u64 + 1)
+                    .map(|x| x * (*size) as u64)
+                    .collect::<Vec<_>>();
+
+                Column::String(StringColumn::new(
+                    arrow_col.values().clone(),
+                    offsets.into(),
+                ))
+            }
+
             // TODO: deprecate it and use LargeBinary instead
             ArrowDataType::Utf8 => {
                 let arrow_col = arrow_col
@@ -1809,6 +1819,29 @@ impl Column {
         }
     }
 
+    pub fn serialize_size(&self) -> usize {
+        match self {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => 0,
+            Column::Number(NumberColumn::UInt8(col)) => col.len(),
+            Column::Number(NumberColumn::UInt16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::UInt32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::UInt64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Float32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::Float64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Int8(col)) => col.len(),
+            Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
+            Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Boolean(c) => c.len(),
+            Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Nullable(c) => c.column.serialize_size() + c.len(),
+            Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
+        }
+    }
+
     /// Returns (is_all_null, Option bitmap)
     pub fn validity(&self) -> (bool, Option<&Bitmap>) {
         match self {
@@ -2220,10 +2253,10 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
-                let offset: u64 = reader.read_uvarint()?;
-                builder.data.resize(offset as usize + builder.data.len(), 0);
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
-                reader.read_exact(&mut builder.data[last..last + offset as usize])?;
+                reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
             }
             ColumnBuilder::Timestamp(builder) => {
@@ -2236,7 +2269,7 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             ColumnBuilder::Array(builder) => {
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 for _ in 0..len {
                     builder.builder.push_binary(reader)?;
                 }
@@ -2245,7 +2278,7 @@ impl ColumnBuilder {
             ColumnBuilder::Map(builder) => {
                 const KEY: usize = 0;
                 const VALUE: usize = 1;
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 let map_builder = builder.builder.as_tuple_mut().unwrap();
                 for _ in 0..len {
                     map_builder[KEY].push_binary(reader)?;

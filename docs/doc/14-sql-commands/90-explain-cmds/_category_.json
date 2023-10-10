@@ -2,6 +2,6 @@
   "label": "Explain Commands",
   "link": {
     "type": "generated-index",
-    "slug": "/reference/sql/explain-commands"
+    "slug": "/sql-commands/explain-cmds"
   }
 }

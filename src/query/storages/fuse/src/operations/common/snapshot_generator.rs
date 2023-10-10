@@ -33,11 +33,9 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
-use crate::metrics::metrics_inc_commit_mutation_latest_snapshot_append_only;
 use crate::metrics::metrics_inc_commit_mutation_modified_segment_exists_in_latest;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::statistics::merge_statistics;
-use crate::statistics::reducers::deduct_statistics;
 use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
 
@@ -111,7 +109,6 @@ pub struct SnapshotMerged {
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub enum ConflictResolveContext {
     AppendOnly((SnapshotMerged, TableSchemaRef)),
-    LatestSnapshotAppendOnly(SnapshotMerged),
     ModifiedSegmentExistsInLatest(SnapshotChanges),
 }
 
@@ -237,42 +234,6 @@ impl SnapshotGenerator for MutationGenerator {
                 return Err(ErrorCode::Internal(
                     "conflict_resolve_ctx should not be AppendOnly in MutationGenerator",
                 ));
-            }
-            ConflictResolveContext::LatestSnapshotAppendOnly(ctx) => {
-                if let Some(range_of_newly_append) =
-                    ConflictResolveContext::is_latest_snapshot_append_only(
-                        &self.base_snapshot,
-                        &previous,
-                    )
-                {
-                    info!("resolvable conflicts detected");
-                    metrics_inc_commit_mutation_latest_snapshot_append_only();
-                    let append_segments = &previous.segments[range_of_newly_append];
-                    let append_statistics =
-                        deduct_statistics(&previous.summary, &self.base_snapshot.summary);
-
-                    let new_segments = append_segments
-                        .iter()
-                        .chain(ctx.merged_segments.iter())
-                        .cloned()
-                        .collect::<Vec<_>>();
-                    let new_summary = merge_statistics(
-                        &ctx.merged_statistics,
-                        &append_statistics,
-                        default_cluster_key_id,
-                    );
-                    let new_snapshot = TableSnapshot::new(
-                        Uuid::new_v4(),
-                        &previous.timestamp,
-                        Some((previous.snapshot_id, previous.format_version)),
-                        schema,
-                        new_summary,
-                        new_segments,
-                        cluster_key_meta,
-                        previous.table_statistics_location.clone(),
-                    );
-                    return Ok(new_snapshot);
-                }
             }
             ConflictResolveContext::ModifiedSegmentExistsInLatest(ctx) => {
                 if let Some((removed, replaced)) =

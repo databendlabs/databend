@@ -36,10 +36,15 @@ externalStage ::= @<external_stage_name>[/<path>]
 userStage ::= @~[/<path>]
 ```
 
+### PATTERN
+
+See [COPY INTO table](/14-sql-commands/10-dml/dml-copy-into-table.md).
+
+
 ## Examples
 
 ```sql
-SELECT * FROM list_stage(location => '@my_stage/', pattern => '.log');
+SELECT * FROM list_stage(location => '@my_stage/', pattern => '.*[.]log');
 +----------------+------+------------------------------------+-------------------------------+---------+
 |      name      | size |                md5                 |         last_modified         | creator |
 +----------------+------+------------------------------------+-------------------------------+---------+

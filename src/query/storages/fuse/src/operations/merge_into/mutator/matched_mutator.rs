@@ -16,6 +16,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -31,10 +32,16 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::NumberColumn;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_accumulate_milliseconds;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_apply_milliseconds;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_deleted_blocks_rows_counter;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_replace_blocks_rows_counter;
 use itertools::Itertools;
 use log::info;
 use opendal::Operator;
@@ -53,6 +60,7 @@ use crate::io::WriteSettings;
 use crate::operations::acquire_task_permit;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
+use crate::operations::merge_into::processors::RowIdKind;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::read_block;
@@ -71,7 +79,7 @@ pub struct MatchedAggregator {
     io_request_semaphore: Arc<Semaphore>,
     segment_reader: CompactSegmentInfoReader,
     segment_locations: AHashMap<SegmentIndex, Location>,
-    block_mutation_row_offset: HashMap<u64, HashSet<usize>>,
+    block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
     aggregation_ctx: Arc<AggregationContext>,
 }
 
@@ -119,26 +127,51 @@ impl MatchedAggregator {
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
+        let start = Instant::now();
         if data_block.is_empty() {
             return Ok(());
         }
-        // data_block is from matched_split, so there is only one column
+        // data_block is from matched_split, so there is only one column.
         // that's row_id
         let row_ids = get_row_id(&data_block, 0)?;
-        for row_id in row_ids {
-            let (prefix, offset) = split_row_id(row_id);
-            self.block_mutation_row_offset
-                .entry(prefix)
-                .and_modify(|v| {
-                    v.insert(offset as usize);
-                })
-                .or_insert(vec![offset as usize].into_iter().collect());
-        }
+        let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
+        match row_id_kind {
+            RowIdKind::Update => {
+                for row_id in row_ids {
+                    let (prefix, offset) = split_row_id(row_id);
+                    if !self
+                        .block_mutation_row_offset
+                        .entry(prefix)
+                        .or_insert_with(|| (HashSet::new(), HashSet::new()))
+                        .0
+                        .insert(offset as usize)
+                    {
+                        return Err(ErrorCode::UnresolvableConflict(
+                            "multi rows from source match one and the same row in the target_table multi times",
+                        ));
+                    }
+                }
+            }
+            RowIdKind::Delete => {
+                for row_id in row_ids {
+                    let (prefix, offset) = split_row_id(row_id);
+                    // support idempotent delete
+                    self.block_mutation_row_offset
+                        .entry(prefix)
+                        .or_insert_with(|| (HashSet::new(), HashSet::new()))
+                        .1
+                        .insert(offset as usize);
+                }
+            }
+        };
+        let elapsed_time = start.elapsed().as_millis() as u64;
+        metrics_inc_merge_into_accumulate_milliseconds(elapsed_time);
         Ok(())
     }
 
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
+        let start = Instant::now();
         // 1.get modified segments
         let mut segment_infos = HashMap::<SegmentIndex, SegmentInfo>::new();
 
@@ -174,8 +207,7 @@ impl MatchedAggregator {
 
         for item in &self.block_mutation_row_offset {
             let (segment_idx, block_idx) = split_prefix(*item.0);
-            // the row_id's segment_idx is reversed
-            let segment_idx = segment_infos.len() - segment_idx as usize - 1;
+            let segment_idx = segment_idx as usize;
             let permit = acquire_task_permit(self.io_request_semaphore.clone()).await?;
             let aggregation_ctx = self.aggregation_ctx.clone();
             let segment_info = segment_infos.get(&segment_idx).unwrap();
@@ -183,7 +215,20 @@ impl MatchedAggregator {
             // the row_id is generated by block_id, not block_idx,reference to fill_internal_column_meta()
             let block_meta = segment_info.blocks[block_idx].clone();
 
-            let modified_offsets = item.1.clone();
+            let update_modified_offsets = &item.1.0;
+            let delete_modified_offsets = &item.1.1;
+            let modified_offsets: HashSet<usize> = update_modified_offsets
+                .union(delete_modified_offsets)
+                .cloned()
+                .collect();
+
+            if modified_offsets.len()
+                < update_modified_offsets.len() + delete_modified_offsets.len()
+            {
+                return Err(ErrorCode::UnresolvableConflict(
+                    "multi rows from source match one and the same row in the target_table multi times",
+                ));
+            }
             let handle = io_runtime.spawn(async_backtrace::location!().frame({
                 async move {
                     let mutation_log_entry = aggregation_ctx
@@ -214,6 +259,8 @@ impl MatchedAggregator {
                 mutation_logs.push(segment_mutation_log);
             }
         }
+        let elapsed_time = start.elapsed().as_millis() as u64;
+        metrics_inc_merge_into_apply_milliseconds(elapsed_time);
         Ok(Some(MutationLogs {
             entries: mutation_logs,
         }))
@@ -245,10 +292,10 @@ impl AggregationContext {
             &self.read_settings,
         )
         .await?;
-
+        let origin_num_rows = origin_data_block.num_rows();
         // apply delete
         let mut bitmap = MutableBitmap::new();
-        for row in 0..origin_data_block.num_rows() {
+        for row in 0..origin_num_rows {
             if modified_offsets.contains(&row) {
                 bitmap.push(false);
             } else {
@@ -258,6 +305,8 @@ impl AggregationContext {
         let res_block = origin_data_block.filter_with_bitmap(&bitmap.into())?;
 
         if res_block.is_empty() {
+            metrics_inc_merge_into_deleted_blocks_counter(1);
+            metrics_inc_merge_into_deleted_blocks_rows_counter(origin_num_rows as u32);
             return Ok(Some(MutationLogEntry::DeletedBlock {
                 index: BlockMetaIndex {
                     segment_idx,
@@ -273,10 +322,12 @@ impl AggregationContext {
         let serialized = GlobalIORuntime::instance()
             .spawn_blocking(move || {
                 block_builder.build(res_block, |block, generator| {
-                    info!("serialize block before get cluster_stats:\n {:?}", block);
                     let cluster_stats =
                         generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    info!("serialize block after get cluster_stats:\n {:?}", block);
+                    info!(
+                        "serialize block after get cluster_stats:\n {:?}",
+                        cluster_stats
+                    );
                     Ok((cluster_stats, block))
                 })
             })
@@ -289,7 +340,8 @@ impl AggregationContext {
         let data_accessor = self.data_accessor.clone();
         write_data(new_block_raw_data, &data_accessor, &new_block_location).await?;
 
-        metrics_inc_merge_into_replace_blocks_counter(new_block_meta.row_count as u32);
+        metrics_inc_merge_into_replace_blocks_counter(1);
+        metrics_inc_merge_into_replace_blocks_rows_counter(origin_num_rows as u32);
         // generate log
         let mutation = MutationLogEntry::ReplacedBlock {
             index: BlockMetaIndex {

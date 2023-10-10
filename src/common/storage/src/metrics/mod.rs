@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod common;
 pub mod copy;
 pub mod merge_into;
 mod storage_metrics;

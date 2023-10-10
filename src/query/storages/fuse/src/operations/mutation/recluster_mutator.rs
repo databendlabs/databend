@@ -32,7 +32,6 @@ use minitrace::future::FutureExt;
 use minitrace::Span;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
-use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
 use crate::statistics::reducers::merge_statistics_mut;
@@ -102,9 +101,8 @@ impl ReclusterMutator {
         }
 
         let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
-        let max_memory_usage = self.ctx.get_settings().get_max_memory_usage()? as usize;
-        let memory_threshold =
-            cmp::min(mem_info.avail as usize * 1024, max_memory_usage) * 45 / 100;
+        let recluster_block_size = self.ctx.get_settings().get_recluster_block_size()? as usize;
+        let memory_threshold = recluster_block_size.min(mem_info.avail as usize * 1024 * 40 / 100);
 
         let mut remained_blocks = Vec::new();
         let mut selected = false;
@@ -259,19 +257,19 @@ impl ReclusterMutator {
         let tasks = std::iter::from_fn(|| {
             iter.next().map(|v| {
                 async move {
-                    SegmentInfo::try_from(v)
-                        .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
+                    v.block_metas()
+                        .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
                 .in_span(Span::enter_with_local_parent("try_from_segments"))
             })
         });
 
         let thread_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let segments = execute_futures_in_parallel(
+
+        let blocks = execute_futures_in_parallel(
             tasks,
             thread_nums,
-            permit_nums,
+            thread_nums * 2,
             "convert-segments-worker".to_owned(),
         )
         .await?
@@ -279,15 +277,13 @@ impl ReclusterMutator {
         .collect::<Result<Vec<_>>>()?;
 
         let mut blocks_map: BTreeMap<i32, Vec<Arc<BlockMeta>>> = BTreeMap::new();
-        for segment in segments.into_iter() {
-            for block in segment.blocks.into_iter() {
-                match &block.cluster_stats {
-                    Some(stats) if stats.cluster_key_id == self.cluster_key_id => {
-                        blocks_map.entry(stats.level).or_default().push(block)
-                    }
-                    _ => {
-                        return Ok(BTreeMap::new());
-                    }
+        for block in blocks.into_iter().flatten() {
+            match &block.cluster_stats {
+                Some(stats) if stats.cluster_key_id == self.cluster_key_id => {
+                    blocks_map.entry(stats.level).or_default().push(block)
+                }
+                _ => {
+                    return Ok(BTreeMap::new());
                 }
             }
         }
@@ -374,7 +370,7 @@ impl ReclusterMutator {
     }
 
     // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
-    fn check_point(start: &[usize], end: &[usize]) -> bool {
+    pub fn check_point(start: &[usize], end: &[usize]) -> bool {
         if start.len() + end.len() > 3 || start.is_empty() || end.is_empty() {
             return false;
         }

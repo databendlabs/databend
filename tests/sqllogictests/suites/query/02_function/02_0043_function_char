@@ -13,6 +13,11 @@ SELECT CHAR(97)
 ----
 a
 
+query TT
+select char(97,98) from numbers(2);
+----
+ab
+ab
 
 query T
 SELECT CHAR(77,121,83,81,76)

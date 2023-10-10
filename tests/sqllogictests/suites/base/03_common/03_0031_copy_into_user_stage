@@ -28,7 +28,7 @@ SELECT COUNT() FROM test_table
 4
 
 statement ok
-drop table test_table all
+drop table test_table
 
 statement ok
 DROP DATABASE db1

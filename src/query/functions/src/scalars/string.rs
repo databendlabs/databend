@@ -22,7 +22,6 @@ use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::string::StringDomain;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
@@ -132,13 +131,16 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    const MAX_PADDING_LENGTH: usize = 1000000;
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "lpad",
-        |_, _, _, _| FunctionDomain::Full,
+        |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
             |s, pad_len, pad, output, ctx| {
                 let pad_len = pad_len as usize;
-                if pad_len <= s.len() {
+                if pad_len > MAX_PADDING_LENGTH {
+                    ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
+                } else if pad_len <= s.len() {
                     output.put_slice(&s[..pad_len]);
                 } else if pad.is_empty() {
                     ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
@@ -183,11 +185,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_3_arg::<StringType, NumberType<u64>, StringType, StringType, _, _>(
         "rpad",
-        |_, _, _, _| FunctionDomain::Full,
+        |_, _, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<StringType, NumberType<u64>, StringType, StringType>(
         |s: &[u8], pad_len: u64, pad: &[u8], output, ctx| {
             let pad_len = pad_len as usize;
-            if pad_len <= s.len() {
+            if pad_len > MAX_PADDING_LENGTH {
+                ctx.set_error(output.len(), format!("padding length '{}' is too big, max is: '{}'", pad_len, MAX_PADDING_LENGTH));
+            } else if pad_len <= s.len() {
                 output.put_slice(&s[..pad_len])
             } else if pad.is_empty() {
                 ctx.set_error(output.len(), format!("can't fill the '{}' length to '{}' with an empty pad string", String::from_utf8_lossy(s), pad_len));
@@ -264,6 +268,11 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     let find_at = |str: &[u8], substr: &[u8], pos: u64| {
+        if substr.is_empty() {
+            // the same behavior as MySQL, Postgres and Clickhouse
+            return if pos == 0 { 1_u64 } else { pos };
+        }
+
         let pos = pos as usize;
         if pos == 0 {
             return 0_u64;
@@ -623,23 +632,40 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     const SPACE: u8 = 0x20;
+    const MAX_SPACE_LENGTH: u64 = 1000000;
     registry.register_passthrough_nullable_1_arg::<NumberType<u64>, StringType, _, _>(
         "space",
-        |_, domain| {
-            FunctionDomain::Domain(StringDomain {
-                min: vec![SPACE; domain.min as usize],
-                max: Some(vec![SPACE; domain.max as usize]),
-            })
-        },
-        |times, _| match times {
-            ValueRef::Scalar(times) => Value::Scalar(vec![SPACE; times as usize]),
+        |_, _| FunctionDomain::MayThrow,
+        |times, ctx| match times {
+            ValueRef::Scalar(times) => {
+                if times > MAX_SPACE_LENGTH {
+                    ctx.set_error(
+                        0,
+                        format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                    );
+                    Value::Scalar(vec![])
+                } else {
+                    Value::Scalar(vec![SPACE; times as usize])
+                }
+            }
             ValueRef::Column(col) => {
                 let mut total_space: u64 = 0;
                 let mut offsets: Vec<u64> = Vec::with_capacity(col.len() + 1);
                 offsets.push(0);
-                for times in col.iter() {
+                for (i, times) in col.iter().enumerate() {
+                    if times > &MAX_SPACE_LENGTH {
+                        ctx.set_error(
+                            i,
+                            format!("space length is too big, max is: {}", MAX_SPACE_LENGTH),
+                        );
+                        break;
+                    }
                     total_space += times;
                     offsets.push(total_space);
+                }
+                if ctx.errors.is_some() {
+                    offsets.truncate(1);
+                    total_space = 0;
                 }
                 let col = StringColumnBuilder {
                     data: vec![SPACE; total_space as usize],

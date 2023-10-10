@@ -1,0 +1,49 @@
+statement ok
+DROP DATABASE IF EXISTS test
+
+statement ok
+CREATE DATABASE test
+
+statement ok
+USE test
+
+statement ok
+CREATE TABLE test.t (t int)
+
+statement ok
+INSERT INTO test.t VALUES (1)
+
+query I
+SELECT "t"  FROM test.t
+----
+1
+
+query I
+SELECT 't'  FROM test.t
+----
+t
+
+statement error (?s)1065.*column x doesn't exist, do you mean 'x'?
+SELECT "x"  FROM test.t
+
+query I
+SELECT 'x'  FROM test.t
+----
+x
+
+statement error (?s)1065.*column t doesn't exist, do you mean 't'?
+SELECT "t"
+
+query I
+SELECT 't'
+----
+t
+
+statement error (?s)1065.*invalid identifier 1, do you mean '1'?
+insert into test.t (t) values ("1")
+
+statement error (?s)1065.*invalid identifier x, do you mean 'x'?
+insert into test.t (t) values ("x")
+
+statement ok
+DROP DATABASE test

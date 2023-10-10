@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_exception::Span;
 
 use super::AggregateInfo;
+use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::ExprContext;
@@ -59,17 +60,26 @@ impl Binder {
         let mut scalars = HashMap::new();
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
-            let is_grouping_sets_item = agg_info.grouping_id_column.is_some()
+            let is_grouping_sets_item = agg_info.grouping_sets.is_some()
                 && agg_info.group_items_map.contains_key(&item.scalar);
-            let mut column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar
-            {
-                let mut column_binding = column_ref.column.clone();
-                // We should apply alias for the ColumnBinding, since it comes from table
-                column_binding.column_name = item.alias.clone();
-                column_binding
-            } else {
-                self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+
+            let mut column_binding = match &item.scalar {
+                ScalarExpr::BoundColumnRef(column_ref) => {
+                    let mut column_binding = column_ref.column.clone();
+                    // We should apply alias for the ColumnBinding, since it comes from table
+                    column_binding.column_name = item.alias.clone();
+                    column_binding
+                }
+                ScalarExpr::AggregateFunction(agg) => {
+                    // Replace to bound column to reduce duplicate derived column bindings.
+                    debug_assert!(!is_grouping_sets_item);
+                    find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                }
+                _ => {
+                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+                }
             };
+
             if is_grouping_sets_item {
                 column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
             }

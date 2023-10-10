@@ -156,6 +156,25 @@ impl Pipeline {
         Ok(())
     }
 
+    pub fn add_transform_with_specified_len<F>(
+        &mut self,
+        f: F,
+        transform_len: usize,
+    ) -> Result<TransformPipeBuilder>
+    where
+        F: Fn(Arc<InputPort>, Arc<OutputPort>) -> Result<ProcessorPtr>,
+    {
+        let mut transform_builder = TransformPipeBuilder::create();
+        for _index in 0..transform_len {
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+
+            let processor = f(input_port.clone(), output_port.clone())?;
+            transform_builder.add_transform(input_port, output_port, processor);
+        }
+        Ok(transform_builder)
+    }
+
     // Add source processor to pipeline.
     // numbers: how many output pipe numbers.
     pub fn add_source<F>(&mut self, f: F, numbers: usize) -> Result<()>
@@ -255,7 +274,7 @@ impl Pipeline {
         }
     }
 
-    /// Duplite a pipe input to two outputs.
+    /// Duplicate a pipe input to two outputs.
     ///
     /// If `force_finish_together` enabled, once one output is finished, the other output will be finished too.
     pub fn duplicate(&mut self, force_finish_together: bool) -> Result<()> {

@@ -9,7 +9,7 @@ cat $TESTS_DATA_DIR/ddl/hits.sql | $MYSQL_CLIENT_CONNECT
 
 hits_statements=(
   ## load data
-  "COPY INTO hits FROM 'https://repo.databend.rs/dataset/stateful/hits_100k.tsv' FILE_FORMAT = ( type = 'tsv' record_delimiter = '\n' skip_header = 1 );"
+  "COPY INTO hits FROM 'https://ci.databend.org/dataset/stateful/hits_100k.tsv' FILE_FORMAT = ( type = 'tsv' record_delimiter = '\n' skip_header = 1 );"
   ## run test
   "SELECT '====== SQL1 ======';"
   "SELECT COUNT(*) FROM hits;"
@@ -105,4 +105,4 @@ for i in "${hits_statements[@]}"; do
 done
 
 ## Clean up
-echo "drop table if exists hits all;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists hits;" | $MYSQL_CLIENT_CONNECT

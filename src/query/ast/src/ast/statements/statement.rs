@@ -21,7 +21,6 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
-use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -164,23 +163,12 @@ pub enum Statement {
     Revoke(RevokeStmt),
 
     // UDF
-    CreateUDF {
-        if_not_exists: bool,
-        udf_name: Identifier,
-        parameters: Vec<Identifier>,
-        definition: Box<Expr>,
-        description: Option<String>,
-    },
+    CreateUDF(CreateUDFStmt),
     DropUDF {
         if_exists: bool,
         udf_name: Identifier,
     },
-    AlterUDF {
-        udf_name: Identifier,
-        parameters: Vec<Identifier>,
-        definition: Box<Expr>,
-        description: Option<String>,
-    },
+    AlterUDF(AlterUDFStmt),
 
     // Stages
     CreateStage(CreateStageStmt),
@@ -198,7 +186,7 @@ pub enum Statement {
     },
     ListStage {
         location: String,
-        pattern: String,
+        pattern: Option<String>,
     },
 
     // UserDefinedFileFormat
@@ -253,11 +241,11 @@ impl Statement {
             Statement::Copy(copy) => {
                 let mut copy_clone = copy.clone();
 
-                if let CopyUnit::UriLocation(location) = &mut copy_clone.src {
+                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.src {
                     location.connection = location.connection.mask()
                 }
 
-                if let CopyUnit::UriLocation(location) = &mut copy_clone.dst {
+                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.dst {
                     location.connection = location.connection.mask()
                 }
                 format!("{}", Statement::Copy(copy_clone))
@@ -450,24 +438,7 @@ impl Display for Statement {
                 }
             }
             Statement::Revoke(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateUDF {
-                if_not_exists,
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                write!(f, "CREATE FUNCTION")?;
-                if *if_not_exists {
-                    write!(f, " IF NOT EXISTS")?;
-                }
-                write!(f, " {udf_name} AS (")?;
-                write_comma_separated_list(f, parameters)?;
-                write!(f, ") -> {definition}")?;
-                if let Some(description) = description {
-                    write!(f, " DESC = '{description}'")?;
-                }
-            }
+            Statement::CreateUDF(stmt) => write!(f, "{stmt}")?,
             Statement::DropUDF {
                 if_exists,
                 udf_name,
@@ -478,22 +449,10 @@ impl Display for Statement {
                 }
                 write!(f, " {udf_name}")?;
             }
-            Statement::AlterUDF {
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                write!(f, "ALTER FUNCTION {udf_name} AS (")?;
-                write_comma_separated_list(f, parameters)?;
-                write!(f, ") -> {definition}")?;
-                if let Some(description) = description {
-                    write!(f, " DESC = '{description}'")?;
-                }
-            }
+            Statement::AlterUDF(stmt) => write!(f, "{stmt}")?,
             Statement::ListStage { location, pattern } => {
                 write!(f, "LIST @{location}")?;
-                if !pattern.is_empty() {
+                if let Some(pattern) = pattern {
                     write!(f, " PATTERN = '{pattern}'")?;
                 }
             }

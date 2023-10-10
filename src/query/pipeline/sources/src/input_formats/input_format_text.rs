@@ -36,7 +36,6 @@ use common_settings::Settings;
 use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use log::debug;
-use log::warn;
 use opendal::Operator;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
@@ -453,6 +452,9 @@ impl<T: InputFormatTextBase> InputFormat for T {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct RowBatch {
+    /// row[i] starts at row_ends[i-1] and ends at row_ends[i]
+    /// has num_fields[i] fields
+    /// field[j] starts at field_ends[i-1][j] and ends at field_ends[i-1][j]
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
@@ -464,18 +466,6 @@ pub struct RowBatch {
     pub start_offset_in_split: usize,
     pub start_row_in_split: usize,
     pub start_row_of_split: Option<usize>,
-}
-
-impl RowBatch {
-    pub fn error(&self, msg: &str, ctx: &InputContext, offset: usize, row: usize) -> ErrorCode {
-        ctx.parse_error_row_based(
-            msg,
-            &self.split_info,
-            offset + self.start_offset_in_split,
-            self.start_row_in_split + row,
-            self.start_row_of_split,
-        )
-    }
 }
 
 impl RowBatchTrait for RowBatch {
@@ -530,16 +520,25 @@ impl<T: InputFormatTextBase> AligningStateTrait for AligningStateMaybeCompressed
     fn align(&mut self, read_batch: Option<Vec<u8>>) -> Result<Vec<RowBatch>> {
         let row_batches = if let Some(data) = read_batch {
             let buf = if let Some(decoder) = self.decompressor.as_mut() {
-                decompress(decoder, &data)?
+                decoder.decompress_batch(&data)?
             } else {
                 data
             };
             self.state.align(&buf)?
         } else {
-            if let Some(decoder) = &self.decompressor {
+            if let Some(decoder) = self.decompressor.as_mut() {
                 let state = decoder.state();
-                if !matches!(state, DecompressState::Done | DecompressState::Reading) {
-                    warn!("decompressor end with state {:?}", state)
+                if !matches!(state, DecompressState::Done) {
+                    let data = decoder.decompress_batch(&[])?;
+                    if !data.is_empty() {
+                        self.state.align(&data)?;
+                    }
+                }
+                if !matches!(state, DecompressState::Done) {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "decompressor state is {:?} after decompressing all data",
+                        state
+                    )));
                 }
             }
             self.state.align_flush()?
@@ -666,38 +665,4 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
             self.flush()
         }
     }
-}
-
-fn decompress(decoder: &mut DecompressDecoder, compressed: &[u8]) -> Result<Vec<u8>> {
-    let mut decompress_bufs = vec![];
-    let mut amt = 0;
-    loop {
-        match decoder.state() {
-            DecompressState::Reading => {
-                if amt == compressed.len() {
-                    break;
-                }
-                let read = decoder.fill(&compressed[amt..]);
-                amt += read;
-            }
-            DecompressState::Decoding => {
-                let mut decompress_buf = vec![0u8; 4096];
-                let written = decoder.decode(&mut decompress_buf[..]).map_err(|e| {
-                    ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
-                })?;
-                decompress_buf.truncate(written);
-                decompress_bufs.push(decompress_buf);
-            }
-            DecompressState::Flushing => {
-                let mut decompress_buf = vec![0u8; 4096];
-                let written = decoder.finish(&mut decompress_buf).map_err(|e| {
-                    ErrorCode::InvalidCompressionData(format!("compression data invalid: {e}"))
-                })?;
-                decompress_buf.truncate(written);
-                decompress_bufs.push(decompress_buf);
-            }
-            DecompressState::Done => break,
-        }
-    }
-    Ok(decompress_bufs.concat())
 }

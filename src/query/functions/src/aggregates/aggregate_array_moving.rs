@@ -217,11 +217,12 @@ where T: Decimal
 {
     #[inline]
     pub fn check_over_flow(&self, value: T) -> Result<()> {
-        if value > T::max_of_max_precision() {
+        if value > T::MAX || value < T::MIN {
             return Err(ErrorCode::Overflow(format!(
-                "Decimal overflow: {} > {}",
+                "Decimal overflow: {} not in [{}, {}]",
                 value,
-                T::max_of_max_precision()
+                T::MIN,
+                T::MAX,
             )));
         }
         Ok(())
@@ -376,9 +377,9 @@ where T: Decimal
                 Some(value) => value,
                 None => {
                     return Err(ErrorCode::Overflow(format!(
-                        "Decimal overflow: {} > (precision: {})",
+                        "Decimal overflow: {} mul {}",
                         sum,
-                        T::max_of_max_precision()
+                        T::e(scale_add as u32)
                     )));
                 }
             };
@@ -498,18 +499,13 @@ where State: SumState
         scale_add: u8,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size: u64 = check_number(
+            let window_size = check_number::<_, u64>(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Expr::<usize>::Constant {
                     span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: params[0].clone(),
-                        data_type: params[0].as_ref().infer_data_type(),
-                    }),
-                    dest_type: DataType::Number(NumberDataType::UInt64),
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
                 },
                 &BUILTIN_FUNCTIONS,
             )?;
@@ -694,18 +690,13 @@ where State: SumState
         return_type: DataType,
     ) -> Result<AggregateFunctionRef> {
         let window_size = if params.len() == 1 {
-            let window_size: u64 = check_number(
+            let window_size = check_number::<_, u64>(
                 None,
                 &FunctionContext::default(),
-                &Expr::<usize>::Cast {
+                &Expr::<usize>::Constant {
                     span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::Constant {
-                        span: None,
-                        scalar: params[0].clone(),
-                        data_type: params[0].as_ref().infer_data_type(),
-                    }),
-                    dest_type: DataType::Number(NumberDataType::UInt64),
+                    scalar: params[0].clone(),
+                    data_type: params[0].as_ref().infer_data_type(),
                 },
                 &BUILTIN_FUNCTIONS,
             )?;

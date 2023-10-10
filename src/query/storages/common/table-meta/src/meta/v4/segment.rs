@@ -29,6 +29,7 @@ use crate::meta::format::encode;
 use crate::meta::format::read_and_deserialize;
 use crate::meta::format::MetaCompression;
 use crate::meta::format::SegmentHeader;
+use crate::meta::format::MAX_SEGMENT_BLOCK_NUMBER;
 use crate::meta::v2::BlockMeta;
 use crate::meta::FormatVersion;
 use crate::meta::MetaEncoding;
@@ -62,6 +63,13 @@ pub struct SegmentInfo {
 
 impl SegmentInfo {
     pub fn new(blocks: Vec<Arc<BlockMeta>>, summary: Statistics) -> Self {
+        assert!(
+            blocks.len() <= MAX_SEGMENT_BLOCK_NUMBER,
+            "number of block overflow: {},  max number allowed {}",
+            blocks.len(),
+            MAX_SEGMENT_BLOCK_NUMBER,
+        );
+
         Self {
             format_version: SegmentInfo::VERSION,
             blocks,
@@ -193,14 +201,14 @@ impl SegmentInfo {
     }
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
     pub encoding: MetaEncoding,
     pub compression: MetaCompression,
 }
 
-#[derive(Clone)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone)]
 pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,

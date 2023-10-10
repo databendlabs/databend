@@ -71,6 +71,7 @@ fn test_get(file: &mut impl Write) {
     run_ast(file, "map(['a','b'],[1,2])['x']", &[]);
 
     run_ast(file, "{}['k']", &[]);
+    run_ast(file, "{1:NULL}[1]", &[]);
     run_ast(file, "{'k1':'v1','k2':'v2'}['k1']", &[]);
     run_ast(file, "{'k1':'v1','k2':'v2'}['k3']", &[]);
 

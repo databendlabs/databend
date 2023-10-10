@@ -40,7 +40,7 @@ impl Loader<FileMetaData> for LoaderWrapper<Operator> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<FileMetaData> {
         let mut reader = if let Some(len) = params.len_hint {
-            self.0.range_reader(&params.location, 0..len).await?
+            self.0.reader_with(&params.location).range(0..len).await?
         } else {
             self.0.reader(&params.location).await?
         };

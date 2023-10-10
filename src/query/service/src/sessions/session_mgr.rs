@@ -29,8 +29,6 @@ use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_metrics::label_counter;
-use common_metrics::label_gauge;
 use common_settings::Settings;
 use futures::future::Either;
 use futures::StreamExt;
@@ -38,14 +36,11 @@ use log::info;
 use parking_lot::RwLock;
 
 use crate::sessions::session::Session;
+use crate::sessions::session_metrics;
 use crate::sessions::ProcessInfo;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManagerStatus;
 use crate::sessions::SessionType;
-
-static METRIC_SESSION_CONNECT_NUMBERS: &str = "session_connect_numbers";
-static METRIC_SESSION_CLOSE_NUMBERS: &str = "session_close_numbers";
-static METRIC_SESSION_ACTIVE_CONNECTIONS: &str = "session_connections";
 
 pub struct SessionManager {
     pub(in crate::sessions) max_sessions: usize,
@@ -129,26 +124,18 @@ impl SessionManager {
         let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
-        let mut sessions = self.active_sessions.write();
-        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
-            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
-        }
+        {
+            let mut sessions = self.active_sessions.write();
+            if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+                self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+            }
 
-        let config = GlobalConfig::instance();
-        label_counter(
-            METRIC_SESSION_CONNECT_NUMBERS,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
-        label_gauge(
-            METRIC_SESSION_ACTIVE_CONNECTIONS,
-            sessions.len() as f64,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
+            session_metrics::incr_session_connect_numbers();
+            session_metrics::set_session_active_connections(sessions.len());
 
-        if !matches!(typ, SessionType::FlightRPC) {
-            sessions.insert(session.get_id(), Arc::downgrade(&session));
+            if !matches!(typ, SessionType::FlightRPC) {
+                sessions.insert(session.get_id(), Arc::downgrade(&session));
+            }
         }
 
         if let SessionType::MySQL = typ {
@@ -171,12 +158,7 @@ impl SessionManager {
     }
 
     pub fn destroy_session(&self, session_id: &String) {
-        let config = GlobalConfig::instance();
-        label_counter(
-            METRIC_SESSION_CLOSE_NUMBERS,
-            &config.query.tenant_id,
-            &config.query.cluster_id,
-        );
+        // NOTE: order and scope of lock are very important. It's will cause deadlock
 
         // stop tracking session
         {
@@ -187,11 +169,20 @@ impl SessionManager {
         }
 
         // also need remove mysql_conn_map
-        let mut mysql_conns_map = self.mysql_conn_map.write();
-        for (k, v) in mysql_conns_map.deref_mut().clone() {
-            if &v == session_id {
-                mysql_conns_map.remove(&k);
+        {
+            let mut mysql_conns_map = self.mysql_conn_map.write();
+            for (k, v) in mysql_conns_map.deref_mut().clone() {
+                if &v == session_id {
+                    mysql_conns_map.remove(&k);
+                }
             }
+        }
+
+        {
+            let sessions_count = { self.active_sessions.read().len() };
+
+            session_metrics::incr_session_close_numbers();
+            session_metrics::set_session_active_connections(sessions_count);
         }
     }
 

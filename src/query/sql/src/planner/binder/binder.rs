@@ -34,7 +34,6 @@ use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::UserDefinedFunction;
 use indexmap::IndexMap;
 use log::warn;
 
@@ -43,11 +42,8 @@ use crate::binder::ColumnBindingBuilder;
 use crate::binder::CteInfo;
 use crate::normalize_identifier;
 use crate::optimizer::SExpr;
-use crate::planner::udf_validator::UDFValidator;
-use crate::plans::AlterUDFPlan;
 use crate::plans::CreateFileFormatPlan;
 use crate::plans::CreateRolePlan;
-use crate::plans::CreateUDFPlan;
 use crate::plans::DropFileFormatPlan;
 use crate::plans::DropRolePlan;
 use crate::plans::DropStagePlan;
@@ -185,7 +181,7 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized {
+                    if !cte_info.materialized || cte_info.used_count == 0{
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
@@ -328,7 +324,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles
@@ -350,7 +346,14 @@ impl<'a> Binder {
 
             // Stages
             Statement::ShowStages => self.bind_rewrite_to_query(bind_context, "SELECT name, stage_type, number_of_files, creator, comment FROM system.stages ORDER BY name", RewriteKind::ShowStages).await?,
-            Statement::ListStage { location, pattern } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}', pattern => '{pattern}')").as_str(), RewriteKind::ListStage).await?,
+            Statement::ListStage { location, pattern } => {
+                let pattern = if let Some(pattern) = pattern {
+                    format!(", pattern => '{pattern}'")
+                } else {
+                    "".to_string()
+                };
+                self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})").as_str(), RewriteKind::ListStage).await?
+            },
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
@@ -440,54 +443,8 @@ impl<'a> Binder {
             Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // UDFs
-            Statement::CreateUDF {
-                if_not_exists,
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
-                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    ..Default::default()
-                };
-                validator.verify_definition_expr(definition)?;
-                let udf = UserDefinedFunction {
-                    name: validator.name,
-                    parameters: validator.parameters,
-                    definition: definition.to_string(),
-                    description: description.clone().unwrap_or_default(),
-                };
-
-                Plan::CreateUDF(Box::new(CreateUDFPlan {
-                    if_not_exists: *if_not_exists,
-                    udf,
-                }))
-            }
-            Statement::AlterUDF {
-                udf_name,
-                parameters,
-                definition,
-                description,
-            } => {
-                let mut validator = UDFValidator {
-                    name: udf_name.to_string(),
-                    parameters: parameters.iter().map(|v| v.to_string()).collect(),
-                    ..Default::default()
-                };
-                validator.verify_definition_expr(definition)?;
-                let udf = UserDefinedFunction {
-                    name: validator.name,
-                    parameters: validator.parameters,
-                    definition: definition.to_string(),
-                    description: description.clone().unwrap_or_default(),
-                };
-
-                Plan::AlterUDF(Box::new(AlterUDFPlan {
-                    udf,
-                }))
-            }
+            Statement::CreateUDF(stmt) => self.bind_create_udf(stmt).await?,
+            Statement::AlterUDF(stmt) => self.bind_alter_udf(stmt).await?,
             Statement::DropUDF {
                 if_exists,
                 udf_name,

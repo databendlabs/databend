@@ -387,28 +387,35 @@ impl HttpQuery {
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;
-        let session_conf = self.request.session.clone().unwrap_or_default();
-        let session_conf = if let Some(affect) = &state.affect {
-            Some(session_conf.apply_affect(affect))
+        let session = self.request.session.clone().unwrap_or_default();
+        let session = if let Some(affect) = &state.affect {
+            Some(session.apply_affect(affect))
         } else {
-            Some(session_conf)
+            Some(session)
         };
 
         Ok(HttpQueryResponseInternal {
             data,
             state,
-            session: session_conf,
+            session,
             session_id: self.session_id.clone(),
         })
     }
 
     #[async_backtrace::framed]
     pub async fn get_response_state_only(&self) -> HttpQueryResponseInternal {
+        let state = self.get_state().await;
+        let session = self.request.session.clone().unwrap_or_default();
+        let session = if let Some(affect) = &state.affect {
+            Some(session.apply_affect(affect))
+        } else {
+            Some(session)
+        };
         HttpQueryResponseInternal {
             data: None,
             session_id: self.session_id.clone(),
-            state: self.get_state().await,
-            session: None,
+            state,
+            session,
         }
     }
 

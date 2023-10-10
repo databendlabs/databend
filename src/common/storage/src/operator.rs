@@ -38,11 +38,12 @@ use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
+use common_metrics::load_global_prometheus_registry;
 use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MetricsLayer;
 use opendal::layers::MinitraceLayer;
+use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
@@ -106,12 +107,14 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
-        // Add metrics
-        .layer(MetricsLayer)
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
         .layer(MinitraceLayer)
+        // Add PrometheusClientLayer
+        .layer(PrometheusClientLayer::new(
+            &mut load_global_prometheus_registry(),
+        ))
         .finish();
 
     Ok(op)
@@ -222,6 +225,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     // Endpoint.
     builder.endpoint(&cfg.endpoint_url);
 
+    // Bucket.
+    builder.bucket(&cfg.bucket);
+
     // Region
     if !cfg.region.is_empty() {
         builder.region(&cfg.region);
@@ -240,9 +246,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     builder.security_token(&cfg.security_token);
     builder.role_arn(&cfg.role_arn);
     builder.external_id(&cfg.external_id);
-
-    // Bucket.
-    builder.bucket(&cfg.bucket);
 
     // Root.
     builder.root(&cfg.root);
@@ -416,7 +419,9 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn try_create(sp: &StorageParams) -> common_exception::Result<DataOperator> {
-        let operator = init_operator(sp)?;
+        let sp = sp.clone();
+
+        let operator = init_operator(&sp)?;
 
         // OpenDAL will send a real request to underlying storage to check whether it works or not.
         // If this check failed, it's highly possible that the users have configured it wrongly.

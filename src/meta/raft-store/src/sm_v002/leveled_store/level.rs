@@ -13,166 +13,180 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
-use std::fmt;
+use std::collections::BTreeMap;
 use std::ops::RangeBounds;
-use std::sync::Arc;
 
 use common_meta_types::KVMeta;
 use futures_util::stream::BoxStream;
-use stream_more::KMerge;
-use stream_more::StreamMore;
+use futures_util::StreamExt;
 
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::MapKey;
+use crate::sm_v002::leveled_store::sys_data::SysData;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
+use crate::state_machine::ExpireKey;
 
-/// One level of state machine data.
+impl MapKey for String {
+    type V = Vec<u8>;
+}
+impl MapKey for ExpireKey {
+    type V = String;
+}
+
+/// A single level of state machine data.
 ///
-/// State machine data is constructed from multiple levels of modifications, similar to leveldb.
+/// State machine data is composed of multiple levels.
 #[derive(Debug, Default)]
 pub struct Level {
-    data: LevelData,
+    /// System data(non-user data).
+    sys_data: SysData,
 
-    /// This level is built with additional modifications `data` on top of the previous level.
-    base: Option<Arc<Level>>,
+    /// Generic Key-value store.
+    kv: BTreeMap<String, Marked<Vec<u8>>>,
+
+    /// The expiration queue of generic kv.
+    expire: BTreeMap<ExpireKey, Marked<String>>,
 }
 
 impl Level {
-    pub(crate) fn new(data: LevelData, base: Option<Arc<Self>>) -> Self {
-        Self { data, base }
+    /// Create a new level that is based on this level.
+    pub(crate) fn new_level(&self) -> Self {
+        Self {
+            // sys data are cloned
+            sys_data: self.sys_data.clone(),
+
+            // Large data set is referenced.
+            kv: Default::default(),
+            expire: Default::default(),
+        }
     }
 
-    pub(crate) fn data(&self) -> &LevelData {
-        &self.data
+    pub(in crate::sm_v002) fn sys_data_mut(&mut self) -> &mut SysData {
+        &mut self.sys_data
     }
 
-    pub(crate) fn base(&self) -> Option<&Self> {
-        self.base.as_ref().map(|x| x.as_ref())
+    /// Replace the kv store with a new one.
+    pub(in crate::sm_v002) fn replace_kv(&mut self, kv: BTreeMap<String, Marked<Vec<u8>>>) {
+        self.kv = kv;
     }
 
-    pub fn new_level(&mut self) {
-        let new = Level {
-            data: self.data.new_level(),
-            base: None,
-        };
-
-        let base = std::mem::replace(self, new);
-
-        self.base = Some(Arc::new(base));
-    }
-
-    pub fn data_ref(&self) -> &LevelData {
-        &self.data
-    }
-
-    pub fn data_mut(&mut self) -> &mut LevelData {
-        &mut self.data
-    }
-
-    pub fn get_base(&self) -> Option<Arc<Self>> {
-        self.base.clone()
-    }
-
-    pub(crate) fn replace_base(&mut self, b: Option<Arc<Level>>) {
-        self.base = b;
-    }
-
-    pub fn snapshot(&self) -> Option<Arc<Self>> {
-        self.base.clone()
+    /// Replace the expire queue with a new one.
+    pub(in crate::sm_v002) fn replace_expire(
+        &mut self,
+        expire: BTreeMap<ExpireKey, Marked<String>>,
+    ) {
+        self.expire = expire;
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApiRO<K> for Level
-where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApiRO<K>,
-{
-    type V = <LevelData as MapApiRO<K>>::V;
-
-    async fn get<Q>(&self, key: &Q) -> Marked<Self::V>
+impl MapApiRO<String> for Level {
+    async fn get<Q>(&self, key: &Q) -> Marked<<String as MapKey>::V>
     where
-        K: Borrow<Q>,
+        String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
     {
-        let api = self.data();
-        let got = api.get(key).await;
-
-        if got.is_not_found() {
-            if let Some(base) = self.base() {
-                return base.get(key).await;
-            }
-        }
-        got
+        self.kv.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'a, T: ?Sized, R>(&'a self, range: R) -> BoxStream<'a, (K, Marked<Self::V>)>
+    async fn range<'f, Q, R>(
+        &'f self,
+        range: R,
+    ) -> BoxStream<'f, (String, Marked<<String as MapKey>::V>)>
     where
-        K: 'a,
-        K: Borrow<T> + Clone,
-        Self::V: Unpin,
-        T: Ord,
-        R: RangeBounds<T> + Clone + Send + Sync,
+        String: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let a = self.data().range(range.clone()).await;
-
-        let km = KMerge::by(|a: &(K, Marked<Self::V>), b: &(K, Marked<Self::V>)| {
-            let (k1, v1) = a;
-            let (k2, v2) = b;
-
-            assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
-
-            // Put entries with the same key together, smaller internal-seq first
-            // Tombstone is always greater.
-            (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
-        })
-        .merge(a);
-
-        let km = if let Some(base) = self.base() {
-            let b = base.range(range).await;
-            km.merge(b)
-        } else {
-            km
-        };
-
-        // Merge entries with the same key, keep the one with larger internal-seq
-        let m = km.coalesce(|(k1, v1), (k2, v2)| {
-            if k1 == k2 {
-                Ok((k1, Marked::max(v1, v2)))
-            } else {
-                Err(((k1, v1), (k2, v2)))
-            }
-        });
-
-        Box::pin(m)
+        let it = self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()));
+        futures::stream::iter(it).boxed()
     }
 }
 
 #[async_trait::async_trait]
-impl<K> MapApi<K> for Level
-where
-    K: Ord + fmt::Debug + Send + Sync + Unpin + 'static,
-    LevelData: MapApi<K>,
-{
+impl MapApi<String> for Level {
     async fn set(
         &mut self,
-        key: K,
-        value: Option<(Self::V, Option<KVMeta>)>,
-    ) -> (Marked<Self::V>, Marked<Self::V>)
+        key: String,
+        value: Option<(<String as MapKey>::V, Option<KVMeta>)>,
+    ) -> (Marked<<String as MapKey>::V>, Marked<<String as MapKey>::V>) {
+        // The chance it is the bottom level is very low in a loaded system.
+        // Thus we always tombstone the key if it is None.
+
+        let marked = if let Some((v, meta)) = value {
+            let seq = self.sys_data_mut().next_seq();
+            Marked::new_with_meta(seq, v, meta)
+        } else {
+            // Do not increase the sequence number, just use the max seq for all tombstone.
+            let seq = self.curr_seq();
+            Marked::new_tomb_stone(seq)
+        };
+
+        let prev = (*self).str_map().get(&key).await;
+        self.kv.insert(key, marked.clone());
+        (prev, marked)
+    }
+}
+
+#[async_trait::async_trait]
+impl MapApiRO<ExpireKey> for Level {
+    async fn get<Q>(&self, key: &Q) -> Marked<<ExpireKey as MapKey>::V>
     where
-        K: Ord,
+        ExpireKey: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
     {
-        // Get from this level or the base level.
-        let prev = self.get(&key).await.clone();
+        self.expire.get(key).cloned().unwrap_or(Marked::empty())
+    }
 
-        // No such entry at all, no need to create a tombstone for delete
-        if prev.is_not_found() && value.is_none() {
-            return (prev, Marked::new_tomb_stone(0));
-        }
+    async fn range<'f, Q, R>(
+        &'f self,
+        range: R,
+    ) -> BoxStream<'f, (ExpireKey, Marked<<ExpireKey as MapKey>::V>)>
+    where
+        ExpireKey: Borrow<Q>,
+        Q: Ord + Send + Sync + ?Sized,
+        R: RangeBounds<Q> + Clone + Send + Sync,
+    {
+        let it = self
+            .expire
+            .range(range)
+            .map(|(k, v)| (k.clone(), v.clone()));
 
-        // The data is a single level map and the returned `_prev` is only from that level.
-        let (_prev, inserted) = self.data_mut().set(key, value).await;
-        (prev, inserted)
+        futures::stream::iter(it).boxed()
+    }
+}
+
+#[async_trait::async_trait]
+impl MapApi<ExpireKey> for Level {
+    async fn set(
+        &mut self,
+        key: ExpireKey,
+        value: Option<(<ExpireKey as MapKey>::V, Option<KVMeta>)>,
+    ) -> (
+        Marked<<ExpireKey as MapKey>::V>,
+        Marked<<ExpireKey as MapKey>::V>,
+    ) {
+        // dbg!("set expire", &key, &value);
+
+        let seq = self.curr_seq();
+
+        let marked = if let Some((v, meta)) = value {
+            Marked::from((seq, v, meta))
+        } else {
+            Marked::TombStone { internal_seq: seq }
+        };
+
+        let prev = (*self).expire_map().get(&key).await;
+        self.expire.insert(key, marked.clone());
+        (prev, marked)
+    }
+}
+
+impl AsRef<SysData> for Level {
+    fn as_ref(&self) -> &SysData {
+        &self.sys_data
     }
 }

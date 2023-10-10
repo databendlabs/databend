@@ -51,9 +51,12 @@ use tokio::sync::RwLock;
 use crate::applier::Applier;
 use crate::key_spaces::RaftStoreEntry;
 use crate::sm_v002::leveled_store::level::Level;
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::leveled_map::LeveledMap;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
+use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
 use crate::sm_v002::Importer;
@@ -127,7 +130,7 @@ impl<'a> SMV002KVApi<'a> {
 
 #[derive(Debug, Default)]
 pub struct SMV002 {
-    pub(in crate::sm_v002) top: Level,
+    pub(in crate::sm_v002) levels: LeveledMap,
 
     blocking_config: BlockingConfig,
 
@@ -191,7 +194,7 @@ impl SMV002 {
                 return Ok(());
             }
 
-            sm.replace(Level::new(level_data, None));
+            sm.replace(LeveledMap::new(level_data));
         }
 
         info!(
@@ -202,7 +205,7 @@ impl SMV002 {
         Ok(())
     }
 
-    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<LevelData, MetaBytesError> {
+    pub fn import(data: impl Iterator<Item = RaftStoreEntry>) -> Result<Level, MetaBytesError> {
         let mut importer = Self::new_importer();
 
         for ent in data {
@@ -225,6 +228,11 @@ impl SMV002 {
         &self.blocking_config
     }
 
+    #[allow(dead_code)]
+    pub(crate) fn new_applier(&mut self) -> Applier {
+        Applier::new(self)
+    }
+
     pub async fn apply_entries<'a>(
         &mut self,
         entries: impl IntoIterator<Item = &'a Entry>,
@@ -244,24 +252,8 @@ impl SMV002 {
     ///
     /// It does not check expiration of the returned entry.
     pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = MapApiRO::<String>::get(&self.top, key).await;
+        let got = self.levels.str_map().get(key).await;
         Into::<Option<SeqV>>::into(got)
-    }
-
-    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
-    /// Update or insert a kv entry.
-    ///
-    /// If the input entry has expired, it performs a delete operation.
-    pub(crate) async fn upsert_kv(&mut self, upsert_kv: UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
-        let (prev, result) = self.upsert_kv_primary_index(&upsert_kv).await;
-
-        self.update_expire_index(&upsert_kv.key, &prev, &result)
-            .await;
-
-        let prev = Into::<Option<SeqV>>::into(prev);
-        let result = Into::<Option<SeqV>>::into(result);
-
-        (prev, result)
     }
 
     /// List kv entries by prefix.
@@ -270,7 +262,7 @@ impl SMV002 {
     pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
         let p = prefix.to_string();
         let mut res = Vec::new();
-        let strm = MapApiRO::<String>::range(&self.top, p..).await;
+        let strm = self.levels.str_map().range(p..).await;
 
         {
             let mut strm = std::pin::pin!(strm);
@@ -305,8 +297,9 @@ impl SMV002 {
 
     /// List expiration index by expiration time.
     pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (ExpireKey, String)> + '_ {
-        self.top
-            .range::<ExpireKey, _>(&self.expire_cursor..)
+        self.levels
+            .expire_map()
+            .range(&self.expire_cursor..)
             .await
             // Return only non-deleted records
             .filter_map(|(k, v)| async move {
@@ -316,31 +309,34 @@ impl SMV002 {
     }
 
     pub fn curr_seq(&self) -> u64 {
-        self.top.data_ref().curr_seq()
+        self.levels.writable_ref().curr_seq()
     }
 
     pub fn last_applied_ref(&self) -> &Option<LogId> {
-        self.top.data_ref().last_applied_ref()
+        self.levels.writable_ref().last_applied_ref()
     }
 
     pub fn last_membership_ref(&self) -> &StoredMembership {
-        self.top.data_ref().last_membership_ref()
+        self.levels.writable_ref().last_membership_ref()
     }
 
     pub fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        self.top.data_ref().nodes_ref()
+        self.levels.writable_ref().nodes_ref()
     }
 
     pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.top.data_mut().last_applied_mut()
+        self.levels.writable_mut().sys_data_mut().last_applied_mut()
     }
 
     pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.top.data_mut().last_membership_mut()
+        self.levels
+            .writable_mut()
+            .sys_data_mut()
+            .last_membership_mut()
     }
 
     pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.top.data_mut().nodes_mut()
+        self.levels.writable_mut().sys_data_mut().nodes_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
@@ -353,19 +349,16 @@ impl SMV002 {
     ///
     /// This operation is fast because it does not copy any data.
     pub fn full_snapshot_view(&mut self) -> SnapshotViewV002 {
-        self.top.new_level();
+        let frozen = self.levels.freeze_writable();
 
-        // Safe unwrap: just created new level and it must have a base level.
-        let base = self.top.get_base().unwrap();
-
-        SnapshotViewV002::new(base)
+        SnapshotViewV002::new(frozen.clone())
     }
 
     /// Replace all of the state machine data with the given one.
     /// The input is a multi-level data.
-    pub fn replace(&mut self, level: Level) {
-        let applied = self.top.data_ref().last_applied_ref();
-        let new_applied = level.data_ref().last_applied_ref();
+    pub fn replace(&mut self, level: LeveledMap) {
+        let applied = self.levels.writable_ref().last_applied_ref();
+        let new_applied = level.writable_ref().last_applied_ref();
 
         assert!(
             new_applied >= applied,
@@ -374,7 +367,7 @@ impl SMV002 {
             new_applied
         );
 
-        self.top = level;
+        self.levels = level;
 
         // The installed data may not cleaned up all expired keys, if it is built with an older state machine.
         // So we need to reset the cursor then the next time applying a log it will cleanup all expired.
@@ -384,21 +377,22 @@ impl SMV002 {
     /// Keep the top(writable) level, replace the base level and all levels below it.
     pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
-            Arc::ptr_eq(&self.top.get_base().unwrap(), &snapshot.original()),
+            Arc::ptr_eq(
+                self.levels.frozen_ref().newest().unwrap(),
+                snapshot.original_ref().newest().unwrap()
+            ),
             "the base must not be changed"
         );
 
-        self.top.replace_base(Some(snapshot.top()));
+        self.levels.replace_frozen(snapshot.compacted());
     }
 
     /// It returns 2 entries: the previous one and the new one after upsert.
-    async fn upsert_kv_primary_index(
+    pub(crate) async fn upsert_kv_primary_index(
         &mut self,
         upsert_kv: &UpsertKV,
     ) -> (Marked<Vec<u8>>, Marked<Vec<u8>>) {
-        let prev = MapApiRO::<String>::get(&self.top, &upsert_kv.key)
-            .await
-            .clone();
+        let prev = self.levels.str_map().get(&upsert_kv.key).await.clone();
 
         if upsert_kv.seq.match_seq(prev.seq()).is_err() {
             return (prev.clone(), prev);
@@ -406,18 +400,21 @@ impl SMV002 {
 
         let (prev, mut result) = match &upsert_kv.value {
             Operation::Update(v) => {
-                self.top
+                self.levels
                     .set(
                         upsert_kv.key.clone(),
                         Some((v.clone(), upsert_kv.value_meta.clone())),
                     )
                     .await
             }
-            Operation::Delete => self.top.set(upsert_kv.key.clone(), None).await,
+            Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await,
             Operation::AsIs => {
-                self.top
-                    .update_meta(upsert_kv.key.clone(), upsert_kv.value_meta.clone())
-                    .await
+                MapApiExt::update_meta(
+                    &mut self.levels,
+                    upsert_kv.key.clone(),
+                    upsert_kv.value_meta.clone(),
+                )
+                .await
             }
         };
 
@@ -428,7 +425,7 @@ impl SMV002 {
             // Note that it must update first then delete,
             // in order to keep compatibility with the old state machine.
             // Old SM will just insert an expired record, and that causes the system seq increase by 1.
-            let (_p, r) = self.top.set(upsert_kv.key.clone(), None).await;
+            let (_p, r) = self.levels.set(upsert_kv.key.clone(), None).await;
             result = r;
         };
 
@@ -443,7 +440,7 @@ impl SMV002 {
     /// Update the secondary index for speeding up expiration operation.
     ///
     /// Remove the expiration index for the removed record, and add a new one for the new record.
-    async fn update_expire_index(
+    pub(crate) async fn update_expire_index(
         &mut self,
         key: impl ToString,
         removed: &Marked<Vec<u8>>,
@@ -457,7 +454,7 @@ impl SMV002 {
         // Remove previous expiration index, add a new one.
 
         if let Some(exp_ms) = removed.expire_at_ms() {
-            self.top
+            self.levels
                 .set(ExpireKey::new(exp_ms, removed.internal_seq().seq()), None)
                 .await;
         }
@@ -465,7 +462,7 @@ impl SMV002 {
         if let Some(exp_ms) = added.expire_at_ms() {
             let k = ExpireKey::new(exp_ms, added.internal_seq().seq());
             let v = key.to_string();
-            self.top.set(k, Some((v, None))).await;
+            self.levels.set(k, Some((v, None))).await;
         }
     }
 }

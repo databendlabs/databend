@@ -12,5 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub static METRIC_MYSQL_PROCESSOR_REQUEST_DURATION: &str = "mysql.process_request_duration";
-pub static METRIC_INTERPRETER_USEDTIME: &str = "interpreter.usedtime";
+use std::time::Duration;
+
+use common_metrics::register_histogram_in_milliseconds;
+use common_metrics::Histogram;
+use lazy_static::lazy_static;
+
+lazy_static! {
+    static ref MYSQL_PROCESSOR_REQUEST_DURATION: Histogram =
+        register_histogram_in_milliseconds("mysql_process_request_duration_ms");
+    static ref MYSQL_INTERPRETER_USEDTIME: Histogram =
+        register_histogram_in_milliseconds("mysql_interpreter_usedtime_ms");
+}
+
+pub fn observe_mysql_process_request_duration(duration: Duration) {
+    MYSQL_PROCESSOR_REQUEST_DURATION.observe(duration.as_millis() as f64);
+}
+
+pub fn observe_mysql_interpreter_used_time(duration: Duration) {
+    MYSQL_INTERPRETER_USEDTIME.observe(duration.as_millis() as f64);
+}

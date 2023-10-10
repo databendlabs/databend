@@ -40,6 +40,7 @@ use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
 use common_io::cursor_ext::ReadNumberExt;
+use common_io::parse_bitmap;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
@@ -89,7 +90,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
             ColumnBuilder::String(c) => self.read_string(c, reader, raw),
             ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
             ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
-            ColumnBuilder::Bitmap(c) => self.read_string(c, reader, raw),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, raw),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
             _ => unimplemented!(),
@@ -256,6 +257,20 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         Ok(())
     }
 
+    fn read_bitmap<R: AsRef<[u8]>>(
+        &self,
+        column: &mut StringColumnBuilder,
+        reader: &mut Cursor<R>,
+        raw: bool,
+    ) -> Result<()> {
+        let mut buf = Vec::new();
+        self.read_string_inner(reader, &mut buf, raw)?;
+        let rb = parse_bitmap(&buf)?;
+        rb.serialize_into(&mut column.data).unwrap();
+        column.commit_row();
+        Ok(())
+    }
+
     fn read_variant<R: AsRef<[u8]>>(
         &self,
         column: &mut StringColumnBuilder,
@@ -269,15 +284,12 @@ pub trait FieldDecoderRowBased: FieldDecoder {
                 value.write_to_vec(&mut column.data);
                 column.commit_row();
             }
-            Err(_) => {
+            Err(e) => {
                 if self.common_settings().disable_variant_check {
                     column.put_slice(&buf);
                     column.commit_row();
                 } else {
-                    return Err(ErrorCode::BadBytes(format!(
-                        "Invalid JSON value: {:?}",
-                        String::from_utf8_lossy(&buf)
-                    )));
+                    return Err(ErrorCode::BadBytes(e.to_string()));
                 }
             }
         }

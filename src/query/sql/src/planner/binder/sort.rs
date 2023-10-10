@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use super::ExprContext;
+use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
@@ -30,7 +31,6 @@ use crate::binder::Binder;
 use crate::binder::ColumnBinding;
 use crate::optimizer::SExpr;
 use crate::planner::semantic::GroupingChecker;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
@@ -40,6 +40,7 @@ use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Sort;
 use crate::plans::SortItem;
+use crate::plans::UDFServerCall;
 use crate::BindContext;
 use crate::IndexType;
 use crate::WindowChecker;
@@ -211,11 +212,7 @@ impl Binder {
                     // Remove the entry to avoid bind again in later process (bind_projection).
                     let (index, item) = entry.remove_entry();
                     let mut scalar = item.scalar;
-                    let mut need_group_check = false;
-                    if let ScalarExpr::AggregateFunction(_) = scalar {
-                        need_group_check = true;
-                    }
-                    if from_context.in_grouping || need_group_check {
+                    if from_context.in_grouping {
                         let group_checker = GroupingChecker::new(from_context);
                         scalar = group_checker.resolve(&scalar, None)?;
                     } else if !from_context.windows.window_functions.is_empty() {
@@ -323,28 +320,9 @@ impl Binder {
         match replacement_opt {
             Some(replacement) => Ok(replacement),
             None => match original_scalar {
-                ScalarExpr::AggregateFunction(AggregateFunction {
-                    display_name,
-                    func_name,
-                    distinct,
-                    params,
-                    args,
-                    return_type,
-                }) => {
-                    let args = args
-                        .iter()
-                        .map(|arg| {
-                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    Ok(ScalarExpr::AggregateFunction(AggregateFunction {
-                        display_name: display_name.clone(),
-                        func_name: func_name.clone(),
-                        distinct: *distinct,
-                        params: params.clone(),
-                        args,
-                        return_type: return_type.clone(),
-                    }))
+                aggregate @ ScalarExpr::AggregateFunction(_) => {
+                    let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
+                    rewriter.visit(aggregate)
                 }
                 ScalarExpr::LambdaFunction(lambda_func) => {
                     let args = lambda_func
@@ -400,6 +378,24 @@ impl Binder {
                         argument,
                         target_type: target_type.clone(),
                     }))
+                }
+                ScalarExpr::UDFServerCall(udf) => {
+                    let new_args = udf
+                        .arguments
+                        .iter()
+                        .map(|arg| {
+                            self.rewrite_scalar_with_replacement(bind_context, arg, replacement_fn)
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    Ok(UDFServerCall {
+                        span: udf.span,
+                        func_name: udf.func_name.clone(),
+                        server_addr: udf.server_addr.clone(),
+                        arg_types: udf.arg_types.clone(),
+                        return_type: udf.return_type.clone(),
+                        arguments: new_args,
+                    }
+                    .into())
                 }
                 _ => Ok(original_scalar.clone()),
             },

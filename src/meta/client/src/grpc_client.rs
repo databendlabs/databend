@@ -15,6 +15,8 @@
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -61,10 +63,6 @@ use common_meta_types::MetaHandshakeError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_metrics::label_counter_with_val_and_labels;
-use common_metrics::label_decrement_gauge_with_val_and_labels;
-use common_metrics::label_histogram_with_val;
-use common_metrics::label_increment_gauge_with_val_and_labels;
 use futures::stream::StreamExt;
 use log::as_debug;
 use log::as_display;
@@ -88,6 +86,7 @@ use tonic::Status;
 
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
+use crate::grpc_metrics;
 use crate::message;
 use crate::to_digit_ver;
 use crate::MetaGrpcReq;
@@ -95,14 +94,6 @@ use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
-const META_GRPC_CLIENT_REQUEST_DURATION_MS: &str = "meta_grpc_client_request_duration_ms";
-const META_GRPC_CLIENT_REQUEST_INFLIGHT: &str = "meta_grpc_client_request_inflight";
-const META_GRPC_CLIENT_REQUEST_SUCCESS: &str = "meta_grpc_client_request_success";
-const META_GRPC_CLIENT_REQUEST_FAILED: &str = "meta_grpc_client_request_fail";
-const META_GRPC_MAKE_CLIENT_FAILED: &str = "meta_grpc_make_client_fail";
-const LABEL_ENDPOINT: &str = "endpoint";
-const LABEL_REQUEST: &str = "request";
-const LABEL_ERROR: &str = "error";
 
 #[derive(Debug)]
 struct MetaChannelManager {
@@ -172,20 +163,24 @@ impl ClientHandle {
         Req: Into<message::Request>,
         Result<Resp, E>: TryFrom<message::Response>,
         <Result<Resp, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
-        E: From<MetaClientError>,
+        E: From<MetaClientError> + Debug,
     {
+        static META_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
+
         let request_future = async move {
             let (tx, rx) = oneshot::channel();
             let req = message::ClientWorkerRequest {
+                request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
                 resp_tx: tx,
                 req: req.into(),
             };
 
-            label_increment_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
+            debug!(
+                request = as_debug!(&req);
+                "Meta ClientHandle send request to meta client worker"
             );
+
+            grpc_metrics::incr_meta_grpc_client_request_inflight(1);
 
             let res = self.req_tx.send(req).await.map_err(|e| {
                 let cli_err = MetaClientError::ClientRuntimeError(
@@ -195,20 +190,22 @@ impl ClientHandle {
             });
 
             if let Err(err) = res {
-                label_decrement_gauge_with_val_and_labels(
-                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                    &vec![],
-                    1.0,
+                grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
+
+                error!(
+                    error = as_debug!(&err);
+                    "Meta ClientHandle send request to meta client worker failed"
                 );
 
                 return Err(err);
             }
 
             let res = rx.await.map_err(|e| {
-                label_decrement_gauge_with_val_and_labels(
-                    META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                    &vec![],
-                    1.0,
+                grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
+
+                error!(
+                    error = as_debug!(&e);
+                    "Meta ClientHandle recv response from meta client worker failed"
                 );
 
                 MetaClientError::ClientRuntimeError(
@@ -216,11 +213,7 @@ impl ClientHandle {
                 )
             })?;
 
-            label_decrement_gauge_with_val_and_labels(
-                META_GRPC_CLIENT_REQUEST_INFLIGHT,
-                &vec![],
-                1.0,
-            );
+            grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
             let res: Result<Resp, E> = res
                 .try_into()
                 .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
@@ -390,6 +383,7 @@ impl MetaGrpcClient {
                 continue;
             }
 
+            let request_id = req.request_id;
             let resp_tx = req.resp_tx;
             let req = req.req;
             let req_name = req.name();
@@ -456,6 +450,7 @@ impl MetaGrpcClient {
             };
 
             debug!(
+                request_id = as_debug!(&request_id),
                 resp = as_debug!(&resp);
                 "MetaGrpcClient send response to the handle"
             );
@@ -467,40 +462,36 @@ impl MetaGrpcClient {
 
             if let Some(current_endpoint) = current_endpoint {
                 let elapsed = start.elapsed().as_millis() as f64;
-                label_histogram_with_val(
-                    META_GRPC_CLIENT_REQUEST_DURATION_MS,
-                    &vec![
-                        (LABEL_ENDPOINT, current_endpoint.to_string()),
-                        (LABEL_REQUEST, req_name.to_string()),
-                    ],
+                grpc_metrics::record_meta_grpc_client_request_duration_ms(
+                    &current_endpoint,
+                    req_name,
                     elapsed,
                 );
                 if elapsed > 1000_f64 {
                     warn!(
+                        request_id = as_display!(request_id);
                         "MetaGrpcClient slow request {} to {} takes {} ms: {}",
-                        req_name, current_endpoint, elapsed, req_str,
+                        req_name,
+                        current_endpoint,
+                        elapsed,
+                        req_str,
                     );
                 }
 
                 if let Some(err) = resp.err() {
-                    label_counter_with_val_and_labels(
-                        META_GRPC_CLIENT_REQUEST_FAILED,
-                        &vec![
-                            (LABEL_ENDPOINT, current_endpoint.to_string()),
-                            (LABEL_ERROR, err.to_string()),
-                            (LABEL_REQUEST, req_name.to_string()),
-                        ],
-                        1,
+                    grpc_metrics::incr_meta_grpc_client_request_failed(
+                        &current_endpoint,
+                        req_name,
+                        err,
                     );
-                    error!("MetaGrpcClient error: {:?}", err);
+                    error!(
+                        request_id = as_display!(request_id);
+                        "MetaGrpcClient error: {:?}", err
+                    );
                 } else {
-                    label_counter_with_val_and_labels(
-                        META_GRPC_CLIENT_REQUEST_SUCCESS,
-                        &vec![
-                            (LABEL_ENDPOINT, current_endpoint.to_string()),
-                            (LABEL_REQUEST, req_name.to_string()),
-                        ],
-                        1,
+                    grpc_metrics::incr_meta_grpc_client_request_success(
+                        &current_endpoint,
+                        req_name,
                     );
                 }
             }
@@ -508,6 +499,7 @@ impl MetaGrpcClient {
             let send_res = resp_tx.send(resp);
             if let Err(err) = send_res {
                 error!(
+                    request_id = as_display!(request_id),
                     err = as_debug!(&err);
                     "MetaGrpcClient failed to send response to the handle. recv-end closed"
                 );
@@ -643,11 +635,7 @@ impl MetaGrpcClient {
                     "grpc_client create channel with {} failed, err: {:?}",
                     addr, e
                 );
-                label_counter_with_val_and_labels(
-                    META_GRPC_MAKE_CLIENT_FAILED,
-                    &vec![(LABEL_ENDPOINT, addr.to_string())],
-                    1,
-                );
+                grpc_metrics::incr_meta_grpc_make_client_fail(&addr);
                 Err(e)
             }
         }

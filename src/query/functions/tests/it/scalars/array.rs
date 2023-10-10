@@ -27,6 +27,7 @@ fn test_array() {
 
     test_create(file);
     test_length(file);
+    test_range(file);
     test_get(file);
     test_slice(file);
     test_contains(file);
@@ -72,6 +73,11 @@ fn test_length(file: &mut impl Write) {
     run_ast(file, "length([1, 2, 3])", &[]);
     run_ast(file, "length([true, false])", &[]);
     run_ast(file, "length(['a', 'b', 'c', 'd'])", &[]);
+}
+
+fn test_range(file: &mut impl Write) {
+    run_ast(file, "range(10, 20)", &[]);
+    run_ast(file, "range(10, 500000011)", &[]);
 }
 
 fn test_get(file: &mut impl Write) {
@@ -641,6 +647,9 @@ fn test_array_sort(file: &mut impl Write) {
     run_ast(file, "array_sort_asc_null_first([])", &[]);
     run_ast(file, "array_sort_desc_null_first([])", &[]);
     run_ast(file, "array_sort_asc_null_first(NULL)", &[]);
+    run_ast(file, "array_sort_asc_null_first([NULL, NULL, NULL])", &[]);
+    run_ast(file, "array_sort_desc_null_first([[], [], []])", &[]);
+    run_ast(file, "array_sort_asc_null_first([{}, {}, {}])", &[]);
     run_ast(
         file,
         "array_sort_asc_null_first([8, 20, 1, 2, 3, 4, 5, 6, 7])",

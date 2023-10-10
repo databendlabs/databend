@@ -38,6 +38,9 @@ table_engine_memory_enabled = true
 default_storage_format = 'parquet'
 default_compression = 'zstd'
 
+enable_udf_server = true
+udf_server_allow_list = ['http://0.0.0.0:8815']
+
 [[query.users]]
 name = "root"
 auth_type = "no_password"

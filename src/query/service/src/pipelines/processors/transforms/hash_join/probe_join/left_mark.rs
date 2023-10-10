@@ -15,7 +15,6 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -36,6 +35,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
     ) -> Result<Vec<DataBlock>>
     where
@@ -43,7 +43,7 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let mut max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
@@ -64,7 +64,7 @@ impl HashJoinProbeState {
         // If find join partner, set the marker to true.
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
 
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             if (i & max_block_size) == 0 {
                 max_block_size <<= 1;
 
@@ -75,27 +75,19 @@ impl HashJoinProbeState {
                 }
             }
 
-            let (mut match_count, mut incomplete_ptr) = match self
-                .hash_join_state
-                .hash_join_desc
-                .from_correlated_subquery
-            {
-                true => {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
-                }
-                false => self.probe_key(
-                    hash_table,
-                    key,
-                    valids,
-                    i,
-                    build_indexes_ptr,
-                    matched_num,
-                    max_block_size,
-                ),
-            };
+            let (mut match_count, mut incomplete_ptr) =
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
+                } else {
+                    continue;
+                };
+
             if match_count == 0 {
                 continue;
             }
+
             matched_num += match_count;
             loop {
                 for probed_row in &build_index[0..matched_num] {
@@ -106,7 +98,7 @@ impl HashJoinProbeState {
                 if incomplete_ptr == 0 {
                     break;
                 }
-                (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                (match_count, incomplete_ptr) = hash_table.next_probe(
                     key,
                     incomplete_ptr,
                     build_indexes_ptr,
@@ -128,6 +120,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -136,7 +129,7 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         // `probe_column` is the subquery result column.
         // For sql: select * from t1 where t1.a in (select t2.a from t2); t2.a is the `probe_column`,
         let probe_column = input.get_by_offset(0).value.as_column().unwrap();
@@ -151,7 +144,6 @@ impl HashJoinProbeState {
             *has_null = true;
         }
 
-        let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self
             .hash_join_state
             .hash_join_desc
@@ -163,6 +155,7 @@ impl HashJoinProbeState {
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -176,21 +169,16 @@ impl HashJoinProbeState {
         let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
 
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    continue;
                 };
+
             if match_count == 0 {
                 continue;
             }
@@ -208,7 +196,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes)?)
+                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
                     } else {
                         None
                     };
@@ -218,13 +206,18 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
                     };
                     let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-                    let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+                    let filter = self.get_nullable_filter_column(
+                        &result_block,
+                        other_predicate,
+                        &self.func_ctx,
+                    )?;
                     let filter_viewer =
                         NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
                     let validity = &filter_viewer.validity;
@@ -248,7 +241,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
@@ -288,7 +281,11 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if is_probe_projected {
-            Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+            Some(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_num],
+                string_items_buf,
+            )?)
         } else {
             None
         };
@@ -298,13 +295,15 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 build_num_rows,
+                string_items_buf,
             )?)
         } else {
             None
         };
         let result_block = self.merge_eq_block(probe_block, build_block, matched_num);
 
-        let filter = self.get_nullable_filter_column(&result_block, other_predicate)?;
+        let filter =
+            self.get_nullable_filter_column(&result_block, other_predicate, &self.func_ctx)?;
         let filter_viewer = NullableType::<BooleanType>::try_downcast_column(&filter).unwrap();
         let validity = &filter_viewer.validity;
         let data = &filter_viewer.column;

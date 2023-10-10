@@ -11,13 +11,13 @@ statement ok
 CREATE TABLE t(c1 int) ENGINE = Null
 
 statement ok
-DROP TABLE t ALL
+DROP TABLE t
 
 statement ok
 CREATE TABLE t(c1 int) ENGINE = Fuse
 
 statement ok
-DROP TABLE t ALL
+DROP TABLE t
 
 statement ok
 DROP database db_13_0001

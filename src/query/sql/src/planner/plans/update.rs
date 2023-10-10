@@ -64,11 +64,12 @@ impl UpdatePlan {
         ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
-        use_column_name_index: bool,
+        use_column_name_index: Option<usize>,
+        has_alias: bool,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let column = ColumnBindingBuilder::new(
             PREDICATE_COLUMN_NAME.to_string(),
-            schema.num_fields(),
+            use_column_name_index.unwrap_or_else(|| schema.num_fields()),
             Box::new(DataType::Boolean),
             Visibility::Visible,
         )
@@ -94,7 +95,11 @@ impl UpdatePlan {
                     let mut right = None;
                     for column_binding in self.bind_context.columns.iter() {
                         if BindContext::match_column_binding(
-                            Some(&self.database),
+                            if has_alias {
+                                None
+                            } else {
+                                Some(&self.database)
+                            },
                             Some(&self.table),
                             field.name(),
                             column_binding,
@@ -106,7 +111,13 @@ impl UpdatePlan {
                             break;
                         }
                     }
-                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+
+                    let mut right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
+                    let right_data_type = right.data_type()?;
+                    // cornor case: for merge into, if target_table's fields are not null, when after bind_join, it will
+                    // change into nullable, so we need to cast this.
+                    right = wrap_cast_scalar(&right, &right_data_type, target_type)?;
+
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
                         func_name: "if".to_string(),
@@ -115,7 +126,7 @@ impl UpdatePlan {
                     })
                 };
                 let expr = scalar.as_expr()?.project_column_ref(|col| {
-                    if use_column_name_index {
+                    if use_column_name_index.is_none() {
                         col.column_name.clone()
                     } else {
                         col.index.to_string()

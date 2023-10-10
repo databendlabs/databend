@@ -30,7 +30,6 @@ use common_exception::Result;
 use common_expression::type_check::check_number;
 use common_expression::types::number::NumberScalar;
 use common_expression::types::number::UInt64Type;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
@@ -71,18 +70,13 @@ impl NumbersTable {
         table_args: TableArgs,
     ) -> Result<Arc<dyn TableFunction>> {
         let args = table_args.expect_all_positioned(table_func_name, Some(1))?;
-        let total = check_number(
+        let total = check_number::<_, u64>(
             None,
             &FunctionContext::default(),
-            &Expr::<usize>::Cast {
+            &Expr::<usize>::Constant {
                 span: None,
-                is_try: false,
-                expr: Box::new(Expr::Constant {
-                    span: None,
-                    scalar: args[0].clone(),
-                    data_type: args[0].as_ref().infer_data_type(),
-                }),
-                dest_type: DataType::Number(NumberDataType::UInt64),
+                scalar: args[0].clone(),
+                data_type: args[0].as_ref().infer_data_type(),
             },
             &BUILTIN_FUNCTIONS,
         )?;
@@ -143,7 +137,7 @@ impl Table for NumbersTable {
         let mut limit = None;
 
         if let Some(extras) = &push_downs {
-            if extras.limit.is_some() && extras.filter.is_none() && extras.order_by.is_empty() {
+            if extras.limit.is_some() && extras.filters.is_none() && extras.order_by.is_empty() {
                 // It is allowed to have an error when we can't get sort columns from the expression. For
                 // example 'select number from numbers(10) order by number+4 limit 10', the column 'number+4'
                 // doesn't exist in the numbers table.

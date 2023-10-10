@@ -66,6 +66,7 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             "anyhow",
             format!("{}, source: {:?}", error, error.source()),
+            String::new(),
             Some(Box::new(OtherErrors::AnyHow { error })),
             capture(),
         )
@@ -155,13 +156,27 @@ impl From<bincode::error::DecodeError> for ErrorCode {
 
 impl From<bincode::serde::EncodeError> for ErrorCode {
     fn from(error: bincode::serde::EncodeError) -> Self {
-        ErrorCode::create(1002, "EncodeError", format!("{error:?}"), None, capture())
+        ErrorCode::create(
+            1002,
+            "EncodeError",
+            format!("{error:?}"),
+            String::new(),
+            None,
+            capture(),
+        )
     }
 }
 
 impl From<bincode::serde::DecodeError> for ErrorCode {
     fn from(error: bincode::serde::DecodeError) -> Self {
-        ErrorCode::create(1002, "DecodeError", format!("{error:?}"), None, capture())
+        ErrorCode::create(
+            1002,
+            "DecodeError",
+            format!("{error:?}"),
+            String::new(),
+            None,
+            capture(),
+        )
     }
 }
 
@@ -262,6 +277,7 @@ impl From<SerializedError> for ErrorCode {
             se.code,
             se.name,
             se.message,
+            String::new(),
             None,
             Some(ErrorCodeBacktrace::Serialized(Arc::new(se.backtrace))),
         )
@@ -288,6 +304,7 @@ impl From<tonic::Status> for ErrorCode {
                             serialized_error.code,
                             serialized_error.name,
                             serialized_error.message,
+                            String::new(),
                             None,
                             None,
                         )
@@ -296,6 +313,7 @@ impl From<tonic::Status> for ErrorCode {
                             serialized_error.code,
                             serialized_error.name,
                             serialized_error.message,
+                            String::new(),
                             None,
                             Some(ErrorCodeBacktrace::Serialized(Arc::new(
                                 serialized_error.backtrace,

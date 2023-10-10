@@ -43,7 +43,7 @@ select * from t1 order by a
 
 # Fix dead cycles in PR #11762 (https://github.com/datafuselabs/databend/pull/11762).
 statement ok
-create table t2(a int) cluster by(a+1)
+create table t2(a int) cluster by(a+1) row_per_block=3
 
 statement ok
 insert into t2 values(1),(3)
@@ -82,7 +82,7 @@ select average_overlaps, average_depth, block_depth_histogram from clustering_in
 
 # test trim string
 statement ok
-truncate table t3 purge
+truncate table t3
 
 statement ok
 insert into t3 values(1,'123456780'),(2,'123456781')

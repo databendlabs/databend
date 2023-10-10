@@ -63,7 +63,7 @@ impl Parquet2Table {
     ) -> Result<()> {
         let table_schema: TableSchemaRef = self.table_info.schema();
         let source_projection =
-            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
+            PushDownInfo::projection_of_push_downs(&table_schema, plan.push_downs.as_ref());
 
         // The front of the src_fields are prewhere columns (if exist).
         // The back of the src_fields are remain columns.
@@ -84,11 +84,11 @@ impl Parquet2Table {
         let top_k = plan
             .push_downs
             .as_ref()
-            .map(|p| p.top_k(&table_schema, None, RangeIndex::supported_type))
+            .map(|p| p.top_k(&table_schema, RangeIndex::supported_type))
             .unwrap_or_default();
 
         // Build prewhere info.
-        let mut push_down_prewhere = PushDownInfo::prewhere_of_push_downs(&plan.push_downs);
+        let mut push_down_prewhere = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref());
 
         let top_k = if let Some((prewhere, top_k)) = push_down_prewhere.as_mut().zip(top_k) {
             // If there is a top k, we need to add the top k columns to the prewhere columns.
@@ -147,7 +147,7 @@ impl Parquet2Table {
 
         src_fields.extend_from_slice(remain_reader.output_schema.fields());
         let src_schema = DataSchemaRefExt::create(src_fields);
-        let is_blocking = self.operator.info().can_blocking();
+        let is_blocking = self.operator.info().native_capability().blocking;
 
         let num_deserializer = calc_parallelism(&ctx, plan)?;
         if is_blocking {

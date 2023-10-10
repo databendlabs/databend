@@ -15,7 +15,6 @@
 use std::io::Cursor;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
@@ -23,13 +22,14 @@ use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
 use common_formats::FieldDecoderTSV;
 use common_formats::FileFormatOptionsExt;
-use common_io::cursor_ext::*;
-use common_io::format_diagnostic::verbose_string;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::TsvFileFormatParams;
+use common_storage::FileParseError;
 use log::debug;
 
+use crate::input_formats::error_utils::check_column_end;
+use crate::input_formats::error_utils::get_decode_error_by_pos;
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
@@ -50,30 +50,22 @@ impl InputFormatTSV {
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
-    ) -> std::result::Result<(), String> {
+    ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
             builder.push_default();
+            Ok(())
         } else {
             let mut reader = Cursor::new(col_data);
             if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
-                return Err(format_column_error(
-                    schema,
+                return Err(get_decode_error_by_pos(
                     column_index,
-                    col_data,
+                    schema,
                     &e.message(),
+                    col_data,
                 ));
             };
-            reader.ignore_white_spaces();
-            if reader.must_eof().is_err() {
-                return Err(format_column_error(
-                    schema,
-                    column_index,
-                    col_data,
-                    "bad field end",
-                ));
-            }
+            check_column_end(&mut reader, schema, column_index)
         }
-        Ok(())
     }
 
     fn read_row(
@@ -83,12 +75,12 @@ impl InputFormatTSV {
         columns: &mut Vec<ColumnBuilder>,
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
-    ) -> Result<()> {
+    ) -> std::result::Result<(), FileParseError> {
         let num_columns = columns.len();
         let mut column_index = 0;
         let mut field_start = 0;
         let mut field_end = 0;
-        let mut err_msg = None;
+        let mut error = None;
         let buf_len = buf.len();
         let mut last_is_delimiter = false;
         if let Some(columns_to_read) = columns_to_read {
@@ -96,14 +88,14 @@ impl InputFormatTSV {
                 if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
                 {
                     if columns_to_read.contains(&column_index) {
-                        if let Err(msg) = Self::read_column(
+                        if let Err(e) = Self::read_column(
                             &mut columns[column_index],
                             field_decoder,
                             &buf[field_start..field_end],
                             column_index,
                             schema,
                         ) {
-                            err_msg = Some(msg);
+                            error = Some(e);
                             break;
                         }
                     }
@@ -115,7 +107,7 @@ impl InputFormatTSV {
                 }
                 field_end += 1;
             }
-            if err_msg.is_none() {
+            if error.is_none() {
                 while column_index < num_columns {
                     columns[column_index].push_default();
                     column_index += 1;
@@ -125,14 +117,14 @@ impl InputFormatTSV {
             while field_end <= buf_len && column_index < num_columns {
                 if field_end == buf_len || (buf[field_end] == field_delimiter && !last_is_delimiter)
                 {
-                    if let Err(msg) = Self::read_column(
+                    if let Err(err) = Self::read_column(
                         &mut columns[column_index],
                         field_decoder,
                         &buf[field_start..field_end],
                         column_index,
                         schema,
                     ) {
-                        err_msg = Some(msg);
+                        error = Some(err);
                         break;
                     }
                     column_index += 1;
@@ -143,25 +135,22 @@ impl InputFormatTSV {
                 }
                 field_end += 1;
             }
-            if err_msg.is_none() {
+            if error.is_none() {
                 // expect: field_end > buf_len && column_index == num_columns
                 if column_index < num_columns {
-                    err_msg = Some(format!(
-                        "need {} columns, find {} only",
-                        num_columns, column_index
-                    ));
+                    error = Some(FileParseError::NumberOfColumnsMismatch {
+                        table: num_columns,
+                        file: column_index,
+                    });
                 } else if field_end <= buf_len {
-                    err_msg = Some("too many columns".to_string());
+                    error = Some(FileParseError::NumberOfColumnsMismatch {
+                        table: num_columns,
+                        file: num_columns + 1,
+                    });
                 }
             }
         }
-        if let Some(m) = err_msg {
-            let mut msg = format!("{}, row data: ", m);
-            verbose_string(buf, &mut msg);
-            Err(ErrorCode::BadBytes(msg))
-        } else {
-            Ok(())
-        }
+        if let Some(e) = error { Err(e) } else { Ok(()) }
     }
 }
 
@@ -228,15 +217,13 @@ impl InputFormatTextBase for InputFormatTSV {
                 schema,
                 &builder.projection,
             ) {
-                builder
-                    .ctx
-                    .on_error(
-                        e,
-                        Some((columns, builder.num_rows)),
-                        &mut builder.file_status,
-                        i + batch.start_row_in_split,
-                    )
-                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                builder.ctx.on_error(
+                    e,
+                    Some((columns, builder.num_rows)),
+                    &mut builder.file_status,
+                    &batch.split_info.file.path,
+                    i + batch.start_row_in_split,
+                )?
             } else {
                 builder.num_rows += 1;
                 builder.file_status.num_rows_loaded += 1;
@@ -245,23 +232,4 @@ impl InputFormatTextBase for InputFormatTSV {
         }
         Ok(())
     }
-}
-
-pub fn format_column_error(
-    schema: &TableSchemaRef,
-    column_index: usize,
-    col_data: &[u8],
-    msg: &str,
-) -> String {
-    let mut data = String::new();
-    verbose_string(col_data, &mut data);
-    let field = &schema.fields()[column_index];
-    format!(
-        "fail to decode column {} ({} {}): {}, [column_data]=[{}]",
-        column_index,
-        field.name(),
-        field.data_type(),
-        msg,
-        data
-    )
 }

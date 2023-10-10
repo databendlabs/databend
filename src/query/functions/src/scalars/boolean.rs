@@ -49,11 +49,17 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() < 2 {
             return None;
         }
+        if args_type
+            .iter()
+            .any(|arg_type| arg_type.remove_nullable() != DataType::Boolean)
+        {
+            return None;
+        }
 
         Some(Arc::new(Function {
             signature: FunctionSignature {
                 name: "and_filters".to_string(),
-                args_type: vec![DataType::Nullable(Box::new(DataType::Boolean)); args_type.len()],
+                args_type: args_type.to_vec(),
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
@@ -272,8 +278,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         },
     );
 
-    for src_type in ALL_INTEGER_TYPES {
-        with_integer_mapped_type!(|NUM_TYPE| match src_type {
+    for num_type in ALL_INTEGER_TYPES {
+        with_integer_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "to_boolean",
@@ -307,7 +313,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }),
                     );
 
-                let name = format!("to_{src_type}").to_lowercase();
+                let name = format!("to_{num_type}").to_lowercase();
                 registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                     &name,
                     |_, domain| {
@@ -319,7 +325,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     |val, _| NUM_TYPE::from(val),
                 );
 
-                let name = format!("try_to_{src_type}").to_lowercase();
+                let name = format!("try_to_{num_type}").to_lowercase();
                 registry
                     .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                         &name,
@@ -344,8 +350,8 @@ pub fn register(registry: &mut FunctionRegistry) {
         })
     }
 
-    for src_type in ALL_FLOAT_TYPES {
-        with_float_mapped_type!(|NUM_TYPE| match src_type {
+    for num_type in ALL_FLOAT_TYPES {
+        with_float_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, BooleanType, _, _>(
                     "to_boolean",
@@ -383,7 +389,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                         }),
                     );
 
-                let name = format!("to_{src_type}").to_lowercase();
+                let name = format!("to_{num_type}").to_lowercase();
                 registry.register_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                     &name,
                     |_, domain| {
@@ -409,7 +415,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     },
                 );
 
-                let name = format!("try_to_{src_type}").to_lowercase();
+                let name = format!("try_to_{num_type}").to_lowercase();
                 registry
                     .register_combine_nullable_1_arg::<BooleanType, NumberType<NUM_TYPE>, _, _>(
                         &name,

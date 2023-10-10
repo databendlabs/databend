@@ -29,39 +29,51 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    pub(crate) fn gen_all_number_data_type(&mut self) -> DataType {
+        match self.rng.gen_range(0..=22) {
+            0..=20 => self.gen_number_data_type(),
+            21..=22 => self.gen_decimal_data_type(),
+            _ => unreachable!(),
+        }
+    }
+    pub(crate) fn gen_number_data_type(&mut self) -> DataType {
+        match self.rng.gen_range(0..=20) {
+            0 => DataType::Number(NumberDataType::UInt8),
+            1 => DataType::Number(NumberDataType::UInt16),
+            2 => DataType::Number(NumberDataType::UInt32),
+            3..=8 => DataType::Number(NumberDataType::UInt64),
+            9 => DataType::Number(NumberDataType::Int8),
+            10 => DataType::Number(NumberDataType::Int16),
+            11 => DataType::Number(NumberDataType::Int32),
+            12..=13 => DataType::Number(NumberDataType::Int64),
+            14 => DataType::Number(NumberDataType::Float32),
+            15..=20 => DataType::Number(NumberDataType::Float64),
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn gen_decimal_data_type(&mut self) -> DataType {
+        let precision = self.rng.gen_range(1..=76);
+        let scale = self.rng.gen_range(0..=precision);
+        let size = DecimalSize { precision, scale };
+        if precision <= 38 {
+            DataType::Decimal(DecimalDataType::Decimal128(size))
+        } else {
+            DataType::Decimal(DecimalDataType::Decimal256(size))
+        }
+    }
+
     pub(crate) fn gen_simple_data_type(&mut self) -> DataType {
-        match self.rng.gen_range(0..=9) {
+        match self.rng.gen_range(0..=10) {
             0 => DataType::Null,
             1 => DataType::Boolean,
             2 => DataType::String,
-            3 => match self.rng.gen_range(0..=9) {
-                0 => DataType::Number(NumberDataType::UInt8),
-                1 => DataType::Number(NumberDataType::UInt16),
-                2 => DataType::Number(NumberDataType::UInt32),
-                3 => DataType::Number(NumberDataType::UInt64),
-                4 => DataType::Number(NumberDataType::Int8),
-                5 => DataType::Number(NumberDataType::Int16),
-                6 => DataType::Number(NumberDataType::Int32),
-                7 => DataType::Number(NumberDataType::Int64),
-                8 => DataType::Number(NumberDataType::Float32),
-                9 => DataType::Number(NumberDataType::Float64),
-                _ => unreachable!(),
-            },
-            4 => {
-                let precision = self.rng.gen_range(1..=76);
-                let scale = self.rng.gen_range(0..=precision);
-                let size = DecimalSize { precision, scale };
-                if precision <= 38 {
-                    DataType::Decimal(DecimalDataType::Decimal128(size))
-                } else {
-                    DataType::Decimal(DecimalDataType::Decimal256(size))
-                }
-            }
-            5 => DataType::Timestamp,
-            6 => DataType::Date,
-            7 => DataType::Bitmap,
-            8 => DataType::Variant,
-            9 => {
+            3..=5 => self.gen_all_number_data_type(),
+            6 => DataType::Timestamp,
+            7 => DataType::Date,
+            8 => DataType::Bitmap,
+            9 => DataType::Variant,
+            10 => {
                 let inner_ty = self.gen_simple_data_type();
                 if !inner_ty.is_nullable_or_null() {
                     DataType::Nullable(Box::new(inner_ty))
@@ -79,17 +91,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             1 => DataType::EmptyMap,
             2..=3 => DataType::Array(Box::new(self.gen_data_type())),
             4..=5 => {
-                let key_ty = match self.rng.gen_range(0..=6) {
-                    0 => DataType::Boolean,
-                    1 => DataType::String,
-                    2 => DataType::Number(NumberDataType::UInt64),
-                    3 => DataType::Number(NumberDataType::Int64),
-                    4 => DataType::Number(NumberDataType::Float64),
-                    5 => DataType::Timestamp,
-                    6 => DataType::Date,
+                let key_ty = match self.rng.gen_range(0..=3) {
+                    0 => DataType::String,
+                    1 => DataType::Number(NumberDataType::UInt64),
+                    2 => DataType::Number(NumberDataType::Int64),
+                    3 => DataType::Number(NumberDataType::Float64),
+                    // TODO: boolean, date, timestamp
                     _ => unreachable!(),
                 };
-                let val_ty = self.gen_data_type();
+                let val_ty = key_ty.clone();
                 let inner_ty = DataType::Tuple(vec![key_ty, val_ty]);
                 DataType::Map(Box::new(inner_ty))
             }

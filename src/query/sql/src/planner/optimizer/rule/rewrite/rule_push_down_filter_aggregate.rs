@@ -16,39 +16,36 @@ use std::sync::Arc;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
-use crate::plans::AggregateMode;
 use crate::plans::Filter;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOp::Pattern;
-use crate::plans::RelOperator;
 
-/// Heuristic optimizer runs in a bottom-up recursion fashion. If we match a plan like
-/// Filter-Aggregate-* and push down filter to Filter(Optional)-Aggregate-Filter-*, this will not
-/// work. RuleSplitAggregate will be applied first, since it's bottom up, then this rule, which
-/// cause the plan be like Filter(Optional)-Aggregate-Filter-Aggregate-*, which makes no sense.
-/// Hence we match 2 bundled Aggregate Ops:
-///
-/// Input:  Filter
+/// Input:   Filter
 ///           \
-///          Aggregate(Final)
-///            \
-///          Aggregate(Partial)
+///            Aggregate(Final or Partial)
 ///             \
 ///              *
 ///
-/// Output: Filter(Optional)
+/// Output:
+/// (1)      Aggregate(Final or Partial)
 ///           \
-///          Aggregate(Final)
+///            Filter
 ///             \
-///            Aggregate(Partial)
+///              *
+///
+/// (2)
+///          Filter(remaining)
+///           \
+///            Aggregate(Final or Partial)
+///             \
+///              Filter(pushed down)
 ///               \
-///              Filter
-///                \
-///                 *
+///                *
 pub struct RulePushDownFilterAggregate {
     id: RuleID,
     patterns: Vec<SExpr>,
@@ -72,17 +69,9 @@ impl RulePushDownFilterAggregate {
                         }
                         .into(),
                     ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Aggregate,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_leaf(Arc::new(
-                            PatternPlan { plan_type: Pattern }.into(),
-                        ))),
-                    )),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan { plan_type: Pattern }.into(),
+                    ))),
                 )),
             )],
         }
@@ -96,68 +85,54 @@ impl Rule for RulePushDownFilterAggregate {
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> common_exception::Result<()> {
         let filter: Filter = s_expr.plan().clone().try_into()?;
-        if filter.is_having {
-            let agg_parent = s_expr.child(0)?;
-            let agg_parent_plan: Aggregate = agg_parent.plan().clone().try_into()?;
-            let agg_child = agg_parent.child(0)?;
-            let agg_child_plan: Aggregate = agg_child.plan().clone().try_into()?;
-            if agg_parent_plan.mode == AggregateMode::Final
-                && agg_child_plan.mode == AggregateMode::Partial
+        let aggregate_expr = s_expr.child(0)?;
+        let aggregate: Aggregate = aggregate_expr.plan().clone().try_into()?;
+        let aggregate_child_prop =
+            RelExpr::with_s_expr(aggregate_expr).derive_relational_prop_child(0)?;
+        let aggregate_group_columns = aggregate.group_columns()?;
+        let mut pushed_down_predicates = vec![];
+        let mut remaining_predicates = vec![];
+        for predicate in filter.predicates.into_iter() {
+            let predicate_used_columns = predicate.used_columns();
+            if predicate_used_columns.is_subset(&aggregate_child_prop.output_columns)
+                && predicate_used_columns.is_subset(&aggregate_group_columns)
             {
-                let mut push_predicates = vec![];
-                let mut remaining_predicates = vec![];
-                for predicate in filter.predicates {
-                    let used_columns = predicate.used_columns();
-                    let mut pushable = true;
-                    for col in used_columns {
-                        if !agg_parent_plan.group_columns()?.contains(&col) {
-                            pushable = false;
-                            break;
-                        }
-                    }
-                    if pushable {
-                        push_predicates.push(predicate);
-                    } else {
-                        remaining_predicates.push(predicate);
-                    }
-                }
-                let mut result: SExpr;
-                // No change since nothing can be pushed down.
-                if push_predicates.is_empty() {
-                    result = s_expr.clone();
-                } else {
-                    let filter_push_down_expr = SExpr::create_unary(
-                        Arc::new(RelOperator::Filter(Filter {
-                            predicates: push_predicates,
-                            is_having: false,
-                        })),
-                        Arc::new(agg_child.child(0)?.clone()),
-                    );
-                    let agg_with_filter_push_down_expr = SExpr::create_unary(
-                        Arc::new(RelOperator::Aggregate(agg_parent_plan)),
-                        Arc::new(SExpr::create_unary(
-                            Arc::new(RelOperator::Aggregate(agg_child_plan)),
-                            Arc::new(filter_push_down_expr),
-                        )),
-                    );
-                    // All filters are pushed down.
-                    if remaining_predicates.is_empty() {
-                        result = agg_with_filter_push_down_expr;
-                    } else {
-                        // Partial filter can be pushed down.
-                        result = SExpr::create_unary(
-                            Arc::new(RelOperator::Filter(Filter {
-                                predicates: remaining_predicates,
-                                is_having: true,
-                            })),
-                            Arc::new(agg_with_filter_push_down_expr),
-                        );
-                    }
-                }
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
+                pushed_down_predicates.push(predicate);
+            } else {
+                remaining_predicates.push(predicate)
             }
         }
+        if !pushed_down_predicates.is_empty() {
+            let pushed_down_filter = Filter {
+                predicates: pushed_down_predicates,
+            };
+            let mut result = if remaining_predicates.is_empty() {
+                SExpr::create_unary(
+                    Arc::new(aggregate.into()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(pushed_down_filter.into()),
+                        Arc::new(aggregate_expr.child(0)?.clone()),
+                    )),
+                )
+            } else {
+                let remaining_filter = Filter {
+                    predicates: remaining_predicates,
+                };
+                SExpr::create_unary(
+                    Arc::new(remaining_filter.into()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(aggregate.into()),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(pushed_down_filter.into()),
+                            Arc::new(aggregate_expr.child(0)?.clone()),
+                        )),
+                    )),
+                )
+            };
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
+        }
+
         Ok(())
     }
 

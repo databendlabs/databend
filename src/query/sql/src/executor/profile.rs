@@ -205,6 +205,7 @@ fn flatten_plan_node_profile(
                 attribute: OperatorAttribute::AggregateExpand(AggregateExpandAttribute {
                     group_keys: expand
                         .grouping_sets
+                        .sets
                         .iter()
                         .map(|columns| {
                             format!(
@@ -505,14 +506,14 @@ fn flatten_plan_node_profile(
         }
         PhysicalPlan::MaterializedCte(_) => todo!(),
         PhysicalPlan::DeletePartial(_)
-        | PhysicalPlan::MutationAggregate(_)
+        | PhysicalPlan::CommitSink(_)
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::MergeInto(_)
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)
-        | PhysicalPlan::ReplaceInto(_) => unreachable!(),
-        PhysicalPlan::FinalCommit(_) => unreachable!(),
+        | PhysicalPlan::ReplaceInto(_)
+        | PhysicalPlan::CompactPartial(_) => unreachable!(),
     }
 
     Ok(())

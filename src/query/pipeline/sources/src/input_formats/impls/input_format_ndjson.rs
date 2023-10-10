@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
 use common_expression::TableSchemaRef;
@@ -25,7 +23,9 @@ use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
+use common_storage::FileParseError;
 
+use crate::input_formats::error_utils::truncate_column_data;
 use crate::input_formats::AligningStateRowDelimiter;
 use crate::input_formats::BlockBuilder;
 use crate::input_formats::InputContext;
@@ -44,19 +44,17 @@ impl InputFormatNDJson {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
-    ) -> Result<()> {
-        let mut json: serde_json::Value = serde_json::from_reader(buf)?;
+    ) -> std::result::Result<(), FileParseError> {
+        let mut json: serde_json::Value =
+            serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
+                message: e.to_string(),
+            })?;
         // todo: this is temporary
         if field_decoder.is_select {
             field_decoder
                 .read_field(&mut columns[0], &json)
-                .map_err(|e| {
-                    let value_str = format!("{:?}", json);
-                    ErrorCode::BadBytes(format!(
-                        "fail to decode column $1: {}. value={}",
-                        e,
-                        maybe_truncated(&value_str, 1024),
-                    ))
+                .map_err(|e| FileParseError::InvalidNDJsonRow {
+                    message: e.to_string(),
                 })?;
         } else {
             // if it's not case_sensitive, we convert to lowercase
@@ -67,20 +65,22 @@ impl InputFormatNDJson {
                 }
             }
 
-            for (f, column) in schema.fields().iter().zip(columns.iter_mut()) {
+            for ((column_index, field), column) in
+                schema.fields().iter().enumerate().zip(columns.iter_mut())
+            {
                 let value = if field_decoder.ident_case_sensitive {
-                    &json[f.name().to_owned()]
+                    &json[field.name().to_owned()]
                 } else {
-                    &json[f.name().to_lowercase()]
+                    &json[field.name().to_lowercase()]
                 };
                 field_decoder.read_field(column, value).map_err(|e| {
-                    let value_str = format!("{:?}", value);
-                    ErrorCode::BadBytes(format!(
-                        "{}. column={} value={}",
-                        e,
-                        f.name(),
-                        maybe_truncated(&value_str, 1024),
-                    ))
+                    FileParseError::ColumnDecodeError {
+                        column_index,
+                        column_name: field.name().to_owned(),
+                        column_type: field.data_type.to_string(),
+                        decode_error: e.to_string(),
+                        column_data: truncate_column_data(value.to_string()),
+                    }
                 })?;
             }
         }
@@ -127,15 +127,13 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    builder
-                        .ctx
-                        .on_error(
-                            e,
-                            Some((columns, builder.num_rows)),
-                            &mut builder.file_status,
-                            batch.start_row_in_split + i,
-                        )
-                        .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                    builder.ctx.on_error(
+                        e,
+                        Some((columns, builder.num_rows)),
+                        &mut builder.file_status,
+                        &batch.split_info.file.path,
+                        batch.start_row_in_split + i,
+                    )?
                 } else {
                     builder.num_rows += 1;
                     builder.file_status.num_rows_loaded += 1;
@@ -144,18 +142,5 @@ impl InputFormatTextBase for InputFormatNDJson {
             start = *end;
         }
         Ok(())
-    }
-}
-
-fn maybe_truncated(s: &str, limit: usize) -> Cow<'_, str> {
-    if s.len() > limit {
-        Cow::Owned(format!(
-            "(first {}B of {}B): {}",
-            limit,
-            s.len(),
-            &s[..limit]
-        ))
-    } else {
-        Cow::Borrowed(s)
     }
 }

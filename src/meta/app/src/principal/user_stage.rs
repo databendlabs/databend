@@ -475,6 +475,7 @@ pub struct CopyOptions {
     pub single: bool,
     pub max_file_size: usize,
     pub disable_variant_check: bool,
+    pub return_failed_only: bool,
 }
 
 impl CopyOptions {
@@ -524,6 +525,15 @@ impl CopyOptions {
                         ))
                     })?;
                     self.disable_variant_check = disable_variant_check;
+                }
+                "return_failed_only" => {
+                    let return_failed_only = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!(
+                            "Cannot parse return_failed_only: {} as bool",
+                            v
+                        ))
+                    })?;
+                    self.return_failed_only = return_failed_only;
                 }
                 _ => {
                     if !ignore_unknown {

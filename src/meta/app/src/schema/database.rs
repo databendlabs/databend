@@ -38,6 +38,15 @@ impl Display for DatabaseNameIdent {
     }
 }
 
+impl DatabaseNameIdent {
+    pub fn new(tenant: impl ToString, db_name: impl ToString) -> Self {
+        DatabaseNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatabaseInfo {
     pub ident: DatabaseIdent,
@@ -70,6 +79,12 @@ pub struct DatabaseIdToName {
 impl Display for DatabaseIdToName {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.db_id)
+    }
+}
+
+impl DatabaseIdToName {
+    pub fn new(db_id: u64) -> Self {
+        DatabaseIdToName { db_id }
     }
 }
 

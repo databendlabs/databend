@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 use std::hash::Hash;
 use std::sync::Arc;
 
+use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
 use common_ast::ast::WindowSpec;
@@ -139,6 +140,7 @@ pub struct BindContext {
 
     pub expr_context: ExprContext,
 
+    pub allow_internal_columns: bool,
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
@@ -171,6 +173,7 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             cte_name: None,
             cte_map_ref: Box::default(),
+            allow_internal_columns: true,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -190,6 +193,7 @@ impl BindContext {
             lambda_info: LambdaInfo::default(),
             cte_name: parent.cte_name,
             cte_map_ref: parent.cte_map_ref.clone(),
+            allow_internal_columns: parent.allow_internal_columns,
             in_grouping: false,
             view_info: None,
             srfs: DashMap::new(),
@@ -222,6 +226,10 @@ impl BindContext {
         self.columns.push(column_binding);
     }
 
+    pub fn allow_internal_columns(&mut self, allow: bool) {
+        self.allow_internal_columns = allow;
+    }
+
     /// Apply table alias like `SELECT * FROM t AS t1(a, b, c)`.
     /// This method will rename column bindings according to table alias.
     pub fn apply_table_alias(
@@ -239,7 +247,8 @@ impl BindContext {
                 "table has {} columns available but {} columns specified",
                 self.columns.len(),
                 alias.columns.len()
-            )));
+            ))
+            .set_span(alias.name.span));
         }
         for (index, column_name) in alias
             .columns
@@ -258,16 +267,29 @@ impl BindContext {
         &self,
         database: Option<&str>,
         table: Option<&str>,
-        column: &str,
-        span: Span,
+        column: &Identifier,
         available_aliases: &[(String, ScalarExpr)],
+        name_resolution_ctx: &NameResolutionContext,
     ) -> Result<NameResolutionResult> {
+        let name = &column.name;
+
+        if name_resolution_ctx.deny_column_reference {
+            let err = if column.is_quoted() {
+                ErrorCode::SemanticError(format!(
+                    "invalid identifier {name}, do you mean '{name}'?"
+                ))
+            } else {
+                ErrorCode::SemanticError(format!("invalid identifier {name}"))
+            };
+            return Err(err.set_span(column.span));
+        }
+
         let mut result = vec![];
         // Lookup parent context to resolve outer reference.
         let mut alias_match_count = 0;
         if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
-                if database.is_none() && table.is_none() && column == alias {
+                if database.is_none() && table.is_none() && name == alias {
                     result.push(NameResolutionResult::Alias {
                         alias: alias.clone(),
                         scalar: scalar.clone(),
@@ -278,14 +300,14 @@ impl BindContext {
             }
 
             if alias_match_count == 0 {
-                self.search_bound_columns_recursively(database, table, column, &mut result);
+                self.search_bound_columns_recursively(database, table, name, &mut result);
             }
         } else {
-            self.search_bound_columns_recursively(database, table, column, &mut result);
+            self.search_bound_columns_recursively(database, table, name, &mut result);
 
             if result.is_empty() {
                 for (alias, scalar) in available_aliases {
-                    if database.is_none() && table.is_none() && column == alias {
+                    if database.is_none() && table.is_none() && name == alias {
                         result.push(NameResolutionResult::Alias {
                             alias: alias.clone(),
                             scalar: scalar.clone(),
@@ -298,12 +320,20 @@ impl BindContext {
 
         if result.len() > 1 && !result.iter().all_equal() {
             return Err(ErrorCode::SemanticError(format!(
-                "column {column} reference or alias is ambiguous, please use another alias name",
-            )));
+                "column {name} reference or alias is ambiguous, please use another alias name",
+            ))
+            .set_span(column.span));
         }
 
         if result.is_empty() {
-            Err(ErrorCode::SemanticError(format!("column {column} doesn't exist")).set_span(span))
+            let err = if column.is_quoted() {
+                ErrorCode::SemanticError(format!(
+                    "column {name} doesn't exist, do you mean '{name}'?"
+                ))
+            } else {
+                ErrorCode::SemanticError(format!("column {name} doesn't exist"))
+            };
+            Err(err.set_span(column.span))
         } else {
             Ok(result.remove(0))
         }
@@ -507,6 +537,13 @@ impl BindContext {
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
     ) -> Result<ColumnBinding> {
+        if !self.allow_internal_columns {
+            return Err(ErrorCode::SemanticError(format!(
+                "Internal column `{}` is not allowed in current statement",
+                column_binding.internal_column.column_name()
+            )));
+        }
+
         let column_id = column_binding.internal_column.column_id();
         let (table_index, column_index, new) = match self.bound_internal_columns.entry(column_id) {
             btree_map::Entry::Vacant(e) => {

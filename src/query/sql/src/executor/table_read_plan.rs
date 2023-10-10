@@ -21,6 +21,7 @@ use common_ast::Dialect;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Filters;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -88,9 +89,13 @@ impl ToReadDataSourcePlan for dyn Table {
         let catalog_info = ctx.get_catalog(&catalog).await?.info();
 
         let (statistics, parts) = if let Some(PushDownInfo {
-            filter:
-                Some(RemoteExpr::Constant {
-                    scalar: Scalar::Boolean(false),
+            filters:
+                Some(Filters {
+                    filter:
+                        RemoteExpr::Constant {
+                            scalar: Scalar::Boolean(false),
+                            ..
+                        },
                     ..
                 }),
             ..

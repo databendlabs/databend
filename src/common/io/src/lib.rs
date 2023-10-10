@@ -30,6 +30,7 @@ pub mod prelude;
 mod binary_read;
 mod binary_write;
 
+mod bitmap;
 pub mod cursor_ext;
 mod decimal;
 mod escape;
@@ -38,6 +39,7 @@ mod position;
 mod serialization;
 mod stat_buffer;
 
+pub use bitmap::parse_bitmap;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;

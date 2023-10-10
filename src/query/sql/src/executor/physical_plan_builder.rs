@@ -21,6 +21,7 @@ use std::sync::Arc;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::AggIndexInfo;
+use common_catalog::plan::Filters;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -324,7 +325,6 @@ impl PhysicalPlanBuilder {
                     from_distinct: agg.from_distinct,
                     mode: agg.mode,
                     limit: agg.limit,
-                    grouping_id_index: agg.grouping_id_index,
                     grouping_sets: agg.grouping_sets.clone(),
                 };
 
@@ -335,7 +335,7 @@ impl PhysicalPlanBuilder {
 
                 let result = match &agg.mode {
                     AggregateMode::Partial => {
-                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                        let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
@@ -352,15 +352,6 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg.args.iter().map(|arg| {
-                                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -379,35 +370,52 @@ impl PhysicalPlanBuilder {
                         let settings = self.ctx.get_settings();
                         let group_by_shuffle_mode = settings.get_group_by_shuffle_mode()?;
 
+                        if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
+                            assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
+                            // If the aggregation function argument if a group item,
+                            // we cannot use the group item directly.
+                            // It's because the group item will be wrapped with nullable and fill dummy NULLs (in `AggregateExpand` plan),
+                            // which will cause panic while executing aggregation function.
+                            // To avoid the panic, we will duplicate (`Arc::clone`) original group item columns in `AggregateExpand`,
+                            // we should use these columns instead.
+                            for func in agg_funcs.iter_mut() {
+                                for arg in func.arg_indices.iter_mut() {
+                                    if let Some(pos) = group_items.iter().position(|g| g == arg) {
+                                        *arg = grouping_sets.dup_group_items[pos].0;
+                                    }
+                                }
+                            }
+                        }
+
                         match input {
                             PhysicalPlan::Exchange(PhysicalExchange { input, kind, .. })
                                 if group_by_shuffle_mode == "before_merge" =>
                             {
-                                let aggregate_partial = if !agg.grouping_sets.is_empty() {
-                                    let expand = AggregateExpand {
-                                        plan_id: self.next_plan_id(),
-                                        input,
-                                        group_bys: group_items.clone(),
-                                        grouping_id_index: agg.grouping_id_index,
-                                        grouping_sets: agg.grouping_sets.clone(),
-                                        stat_info: Some(stat_info.clone()),
+                                let aggregate_partial =
+                                    if let Some(grouping_sets) = agg.grouping_sets {
+                                        let expand = AggregateExpand {
+                                            plan_id: self.next_plan_id(),
+                                            input,
+                                            group_bys: group_items.clone(),
+                                            grouping_sets,
+                                            stat_info: Some(stat_info.clone()),
+                                        };
+                                        AggregatePartial {
+                                            plan_id: self.next_plan_id(),
+                                            input: Box::new(PhysicalPlan::AggregateExpand(expand)),
+                                            agg_funcs,
+                                            group_by: group_items,
+                                            stat_info: Some(stat_info),
+                                        }
+                                    } else {
+                                        AggregatePartial {
+                                            plan_id: self.next_plan_id(),
+                                            input,
+                                            agg_funcs,
+                                            group_by: group_items,
+                                            stat_info: Some(stat_info),
+                                        }
                                     };
-                                    AggregatePartial {
-                                        plan_id: self.next_plan_id(),
-                                        input: Box::new(PhysicalPlan::AggregateExpand(expand)),
-                                        agg_funcs,
-                                        group_by: group_items,
-                                        stat_info: Some(stat_info),
-                                    }
-                                } else {
-                                    AggregatePartial {
-                                        plan_id: self.next_plan_id(),
-                                        input,
-                                        agg_funcs,
-                                        group_by: group_items,
-                                        stat_info: Some(stat_info),
-                                    }
-                                };
 
                                 let settings = self.ctx.get_settings();
                                 let efficiently_memory =
@@ -441,13 +449,12 @@ impl PhysicalPlanBuilder {
                                 })
                             }
                             _ => {
-                                if !agg.grouping_sets.is_empty() {
+                                if let Some(grouping_sets) = agg.grouping_sets {
                                     let expand = AggregateExpand {
                                         plan_id: self.next_plan_id(),
                                         input: Box::new(input),
                                         group_bys: group_items.clone(),
-                                        grouping_id_index: agg.grouping_id_index,
-                                        grouping_sets: agg.grouping_sets.clone(),
+                                        grouping_sets,
                                         stat_info: Some(stat_info.clone()),
                                     };
                                     PhysicalPlan::AggregatePartial(AggregatePartial {
@@ -488,7 +495,7 @@ impl PhysicalPlanBuilder {
                             }
                         };
 
-                        let agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
+                        let mut agg_funcs: Vec<AggregateFunctionDesc> = agg.aggregate_functions.iter().map(|v| {
                             if let ScalarExpr::AggregateFunction(agg) = &v.scalar {
                                 Ok(AggregateFunctionDesc {
                                     sig: AggregateFunctionSignature {
@@ -505,15 +512,6 @@ impl PhysicalPlanBuilder {
                                         params: agg.params.clone(),
                                     },
                                     output_column: v.index,
-                                    args: agg.args.iter().map(|arg| {
-                                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                                            input_schema.index_of(&col.column.index.to_string())
-                                        } else {
-                                            Err(ErrorCode::Internal(
-                                                "Aggregate function argument must be a BoundColumnRef".to_string()
-                                            ))
-                                        }
-                                    }).collect::<Result<_>>()?,
                                     arg_indices: agg.args.iter().map(|arg| {
                                         if let ScalarExpr::BoundColumnRef(col) = arg {
                                             Ok(col.column.index)
@@ -528,6 +526,21 @@ impl PhysicalPlanBuilder {
                                 Err(ErrorCode::Internal("Expected aggregate function".to_string()))
                             }
                         }).collect::<Result<_>>()?;
+
+                        if let Some(grouping_sets) = agg.grouping_sets.as_ref() {
+                            // The argument types are wrapped nullable due to `AggregateExpand` plan. We should recover them to original types.
+                            assert_eq!(grouping_sets.dup_group_items.len(), group_items.len() - 1); // ignore `_grouping_id`.
+                            for func in agg_funcs.iter_mut() {
+                                for (arg, ty) in
+                                    func.arg_indices.iter_mut().zip(func.sig.args.iter_mut())
+                                {
+                                    if let Some(pos) = group_items.iter().position(|g| g == arg) {
+                                        *arg = grouping_sets.dup_group_items[pos].0;
+                                        *ty = grouping_sets.dup_group_items[pos].1.clone();
+                                    }
+                                }
+                            }
+                        }
 
                         match input {
                             PhysicalPlan::AggregatePartial(ref partial) => {
@@ -1271,20 +1284,6 @@ impl PhysicalPlanBuilder {
                     params: agg.params.clone(),
                 },
                 output_column: w.index,
-                args: agg
-                    .args
-                    .iter()
-                    .map(|arg| {
-                        if let ScalarExpr::BoundColumnRef(col) = arg {
-                            Ok(col.column.index)
-                        } else {
-                            Err(ErrorCode::Internal(
-                                "Window's aggregate function argument must be a BoundColumnRef"
-                                    .to_string(),
-                            ))
-                        }
-                    })
-                    .collect::<Result<_>>()?,
                 arg_indices: agg
                     .args
                     .iter()
@@ -1888,38 +1887,35 @@ impl PhysicalPlanBuilder {
             .push_down_predicates
             .as_ref()
             .filter(|p| !p.is_empty())
-            .map(
-                |predicates: &Vec<ScalarExpr>| -> Result<RemoteExpr<String>> {
-                    let predicates = predicates
-                        .iter()
-                        .map(|p| {
-                            Ok(p.as_expr()?
-                                .project_column_ref(|col| col.column_name.clone()))
-                        })
-                        .collect::<Result<Vec<_>>>()?;
+            .map(|predicates: &Vec<ScalarExpr>| -> Result<Filters> {
+                let predicates = predicates
+                    .iter()
+                    .map(|p| {
+                        Ok(p.as_expr()?
+                            .project_column_ref(|col| col.column_name.clone()))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
 
-                    let expr = predicates
-                        .into_iter()
-                        .reduce(|lhs, rhs| {
-                            check_function(
-                                None,
-                                "and_filters",
-                                &[],
-                                &[lhs, rhs],
-                                &BUILTIN_FUNCTIONS,
-                            )
-                            .unwrap()
-                        })
-                        .unwrap();
+                let expr = predicates
+                    .into_iter()
+                    .try_reduce(|lhs, rhs| {
+                        check_function(None, "and_filters", &[], &[lhs, rhs], &BUILTIN_FUNCTIONS)
+                    })?
+                    .unwrap();
 
-                    let expr = cast_expr_to_non_null_boolean(expr)?;
-                    let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = cast_expr_to_non_null_boolean(expr)?;
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
-                    is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+                is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
 
-                    Ok(expr.as_remote_expr())
-                },
-            )
+                let inverted_filter =
+                    check_function(None, "not", &[], &[expr.clone()], &BUILTIN_FUNCTIONS)?;
+
+                Ok(Filters {
+                    filter: expr.as_remote_expr(),
+                    inverted_filter: inverted_filter.as_remote_expr(),
+                })
+            })
             .transpose()?;
 
         let prewhere_info = scan
@@ -1973,12 +1969,13 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
+
                 let filter = cast_expr_to_non_null_boolean(
                     predicate
                         .as_expr()?
                         .project_column_ref(|col| col.column_name.clone()),
-                )?
-                .as_remote_expr();
+                )?;
+                let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {
@@ -2042,7 +2039,7 @@ impl PhysicalPlanBuilder {
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
-            filter: push_down_filter,
+            filters: push_down_filter,
             is_deterministic,
             prewhere: prewhere_info,
             limit: scan.limit,

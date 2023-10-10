@@ -116,6 +116,7 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
+use common_meta_types::UpsertKV;
 use log::debug;
 use log::info;
 
@@ -126,6 +127,7 @@ use crate::testing::get_kv_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
 use crate::ShareApi;
+use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
 ///
@@ -277,11 +279,15 @@ impl SchemaApiTestSuite {
             .await?;
 
         suite.table_create_get_drop(&b.build().await).await?;
+        suite
+            .table_drop_without_db_id_to_name(&b.build().await)
+            .await?;
         suite.table_rename(&b.build().await).await?;
         suite.table_update_meta(&b.build().await).await?;
         suite.table_update_mask_policy(&b.build().await).await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
+        suite.table_list_many(&b.build().await).await?;
         suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
@@ -1708,6 +1714,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1734,6 +1741,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 let res = mt.drop_table_by_id(plan).await;
@@ -1750,6 +1758,7 @@ impl SchemaApiTestSuite {
             {
                 let plan = DropTableByIdReq {
                     if_exists: true,
+                    tenant: tenant.to_string(),
                     tb_id,
                 };
                 mt.drop_table_by_id(plan.clone()).await?;
@@ -1762,6 +1771,31 @@ impl SchemaApiTestSuite {
             assert_eq!(expected_tb_count, tb_count.count);
         }
 
+        Ok(())
+    }
+
+    #[minitrace::trace]
+    async fn table_drop_without_db_id_to_name<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
+
+        info!("--- prepare db and table");
+        {
+            util.create_db().await?;
+            let (_tid, _table_meta) = util.create_table().await?;
+        }
+
+        info!("--- drop db-id-to-name mapping to ensure dropping table does not rely on it");
+        {
+            let id_to_name_key = DatabaseIdToName { db_id: util.db_id };
+            util.mt
+                .as_kv_api()
+                .upsert_kv(UpsertKV::delete(id_to_name_key.to_string_key()))
+                .await?;
+        }
+
+        info!("--- drop table to ensure dropping table does not rely on db-id-to-name");
+        util.drop_table_by_id().await?;
         Ok(())
     }
 
@@ -3577,6 +3611,7 @@ impl SchemaApiTestSuite {
 
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3598,6 +3633,7 @@ impl SchemaApiTestSuite {
                 let resp = mt.create_table(req.clone()).await?;
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3673,6 +3709,7 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb1".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3695,6 +3732,7 @@ impl SchemaApiTestSuite {
                 drop_ids_2.push(DroppedId::Table(db_id, resp.table_id, "tb2".to_string()));
                 mt.drop_table_by_id(DropTableByIdReq {
                     if_exists: false,
+                    tenant: tenant.to_string(),
                     tb_id: resp.table_id,
                 })
                 .await?;
@@ -3884,6 +3922,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id,
             })
             .await?;
@@ -3938,6 +3977,7 @@ impl SchemaApiTestSuite {
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id,
             })
             .await?;
@@ -3995,6 +4035,7 @@ impl SchemaApiTestSuite {
             let tb_info = mt.get_table((tenant, db_name, tbl_name).into()).await?;
             mt.drop_table_by_id(DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id: tb_info.ident.table_id,
             })
             .await?;
@@ -4096,6 +4137,7 @@ impl SchemaApiTestSuite {
             // then drop table2
             let drop_plan = DropTableByIdReq {
                 if_exists: false,
+                tenant: tenant.to_string(),
                 tb_id: new_tb_info.ident.table_id,
             };
 
@@ -4405,7 +4447,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn truncate_table<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
         let table_id;
 
@@ -4691,6 +4734,54 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    /// Test listing many tables that exceeds default mget chunk size.
+    #[minitrace::trace]
+    async fn table_list_many<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
+        // Create tables that exceeds the default mget chunk size
+        let n = DEFAULT_MGET_SIZE + 20;
+
+        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
+
+        info!("--- prepare db");
+        {
+            util.create_db().await?;
+        }
+
+        info!("--- create {} tables", n);
+        {
+            for i in 0..n {
+                let table_name = format!("tb_{:0>5}", i);
+
+                let table_meta = util.table_meta();
+                let req = CreateTableReq {
+                    if_not_exists: false,
+                    name_ident: TableNameIdent {
+                        tenant: util.tenant(),
+                        db_name: util.db_name(),
+                        table_name,
+                    },
+                    table_meta: table_meta.clone(),
+                };
+                let resp = util.mt.create_table(req).await?;
+
+                if i % 100 == 0 {
+                    info!("--- created {} tables: {:?}", i, resp);
+                }
+            }
+        }
+
+        info!("--- get_tables");
+        {
+            let res = mt
+                .list_tables(ListTableReq::new(util.tenant(), util.db_name()))
+                .await?;
+            assert_eq!(n, res.len());
+        }
+
+        Ok(())
+    }
+
     #[minitrace::trace]
     async fn table_list_all<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
@@ -4767,7 +4858,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn index_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant = "tenant1";
 
         let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
@@ -4985,7 +5077,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn virtual_column_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn virtual_column_create_list_drop<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let tenant = "tenant1";
 
         let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
@@ -5116,7 +5209,8 @@ impl SchemaApiTestSuite {
     }
 
     #[minitrace::trace]
-    async fn table_lock_revision<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn table_lock_revision<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
         let table_id;
 
@@ -5819,21 +5913,21 @@ impl SchemaApiTestSuite {
 }
 
 struct Util<'a, MT>
-// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
-where MT: SchemaApi
+// where MT: SchemaApi
+where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
 {
     tenant: String,
     db_name: String,
     table_name: String,
     engine: String,
     created_on: DateTime<Utc>,
+    db_id: u64,
     table_id: u64,
     mt: &'a MT,
 }
 
 impl<'a, MT> Util<'a, MT>
-// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
-where MT: SchemaApi
+where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>
 {
     fn new(
         mt: &'a MT,
@@ -5848,6 +5942,7 @@ where MT: SchemaApi
             table_name: tbl_name.to_string(),
             engine: engine.to_string(),
             created_on: Utc::now(),
+            db_id: 0,
             table_id: 0,
             mt,
         }
@@ -5856,6 +5951,7 @@ where MT: SchemaApi
     fn tenant(&self) -> String {
         self.tenant.clone()
     }
+
     fn db_name(&self) -> String {
         self.db_name.clone()
     }
@@ -5889,7 +5985,7 @@ where MT: SchemaApi
         }
     }
 
-    async fn create_db(&self) -> anyhow::Result<()> {
+    async fn create_db(&mut self) -> anyhow::Result<()> {
         let plan = CreateDatabaseReq {
             if_not_exists: false,
             name_ident: DatabaseNameIdent {
@@ -5902,7 +5998,23 @@ where MT: SchemaApi
             },
         };
 
-        self.mt.create_database(plan).await?;
+        let res = self.mt.create_database(plan).await?;
+        self.db_id = res.db_id;
+
+        Ok(())
+    }
+
+    #[allow(dead_code)]
+    async fn drop_db(&self) -> anyhow::Result<()> {
+        let req = DropDatabaseReq {
+            if_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: self.tenant(),
+                db_name: self.db_name(),
+            },
+        };
+
+        self.mt.drop_database(req).await?;
         Ok(())
     }
 
@@ -5923,6 +6035,17 @@ where MT: SchemaApi
         self.table_id = table_id;
 
         Ok((table_id, table_meta))
+    }
+
+    async fn drop_table_by_id(&mut self) -> anyhow::Result<()> {
+        let req = DropTableByIdReq {
+            if_exists: false,
+            tenant: self.tenant(),
+            tb_id: self.table_id,
+        };
+        self.mt.drop_table_by_id(req.clone()).await?;
+
+        Ok(())
     }
 
     async fn update_copied_files(

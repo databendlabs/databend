@@ -81,6 +81,7 @@ impl<'a> Binder {
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
+        context.allow_internal_columns(false);
         let mut scalar_binder = ScalarBinder::new(
             &mut context,
             self.ctx.clone(),
@@ -128,7 +129,6 @@ impl Binder {
 
         let filter = Filter {
             predicates: vec![scalar.clone()],
-            is_having: false,
         };
         debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
         let mut scan = match &*table_expr.plan {
@@ -198,6 +198,12 @@ impl Binder {
                     .process_subquery(scalar, subquery, table_expr.clone())
                     .await?;
                 subquery_desc.push(desc);
+            }
+            ScalarExpr::UDFServerCall(scalar) => {
+                for arg in scalar.arguments.iter() {
+                    self.subquery_desc(arg, table_expr.clone(), subquery_desc)
+                        .await?;
+                }
             }
             ScalarExpr::BoundColumnRef(_)
             | ScalarExpr::ConstantExpr(_)

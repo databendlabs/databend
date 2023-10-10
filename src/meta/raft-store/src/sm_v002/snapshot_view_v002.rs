@@ -23,10 +23,11 @@ use futures_util::StreamExt;
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
-use crate::sm_v002::leveled_store::level::Level;
+use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::static_levels::StaticLevels;
+use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
-use crate::state_machine::ExpireKey;
 use crate::state_machine::ExpireValue;
 use crate::state_machine::MetaSnapshotId;
 use crate::state_machine::StateMachineMetaKey;
@@ -35,30 +36,30 @@ use crate::state_machine::StateMachineMetaValue;
 /// A snapshot view of a state machine, which is static and not affected by further writing to the state machine.
 pub struct SnapshotViewV002 {
     /// The compacted snapshot data.
-    top: Arc<Level>,
+    compacted: StaticLevels,
 
     /// Original non compacted snapshot data.
     ///
     /// This is kept just for debug.
-    original: Arc<Level>,
+    original: StaticLevels,
 }
 
 impl SnapshotViewV002 {
-    pub fn new(top: Arc<Level>) -> Self {
+    pub fn new(top: StaticLevels) -> Self {
         Self {
-            top: top.clone(),
+            compacted: top.clone(),
             original: top,
         }
     }
 
     /// Return the data level of this snapshot
-    pub fn top(&self) -> Arc<Level> {
-        self.top.clone()
+    pub fn compacted(&self) -> StaticLevels {
+        self.compacted.clone()
     }
 
     /// The original, non compacted snapshot data.
-    pub fn original(&self) -> Arc<Level> {
-        self.original.clone()
+    pub fn original_ref(&self) -> &StaticLevels {
+        &self.original
     }
 
     /// Extract metadata of the snapshot.
@@ -67,8 +68,8 @@ impl SnapshotViewV002 {
     // TODO: let the caller specify snapshot id?
     pub fn build_snapshot_meta(&self) -> SnapshotMeta {
         // The top level contains all information we need to build snapshot meta.
-        let top = self.top();
-        let level_data = top.data_ref();
+        let compacted = self.compacted();
+        let level_data = compacted.newest().unwrap().as_ref();
 
         let last_applied = *level_data.last_applied_ref();
         let last_membership = level_data.last_membership_ref().clone();
@@ -83,41 +84,43 @@ impl SnapshotViewV002 {
     }
 
     /// Compact into one level and remove all tombstone record.
-    pub async fn compact(&mut self) {
+    pub async fn compact_mem_levels(&mut self) {
+        if self.compacted.len() <= 1 {
+            return;
+        }
+
         // TODO: use a explicit method to return a compaction base
-        let mut data = self.top.data_ref().new_level();
+        let mut data = self.compacted.newest().unwrap().new_level();
 
         // `range()` will compact tombstone internally
-        let strm = MapApiRO::<String>::range::<String, _>(self.top.as_ref(), ..)
-            .await
-            .filter(|(_k, v)| {
-                let x = !v.is_tomb_stone();
-                async move { x }
-            });
 
-        let btreemap = strm.collect().await;
+        let strm = self.compacted.str_map().range::<String, _>(..).await;
+        let strm = strm.filter(|(_k, v)| {
+            let x = !v.is_tomb_stone();
+            async move { x }
+        });
 
-        data.replace_kv(btreemap);
+        let bt = strm.collect().await;
+
+        data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
-        let strm = MapApiRO::<ExpireKey>::range(self.top.as_ref(), ..)
-            .await
-            .filter(|(_k, v)| {
-                let x = !v.is_tomb_stone();
-                async move { x }
-            });
+        let strm = self.compacted.expire_map().range(..).await;
+        let strm = strm.filter(|(_k, v)| {
+            let x = !v.is_tomb_stone();
+            async move { x }
+        });
 
-        let btreemap = strm.collect().await;
+        let bt = strm.collect().await;
 
-        data.replace_expire(btreemap);
+        data.replace_expire(bt);
 
-        let l = Level::new(data, None);
-        self.top = Arc::new(l);
+        self.compacted = StaticLevels::new([Arc::new(data)]);
     }
 
     /// Export all its data in RaftStoreEntry format.
     pub async fn export(&self) -> impl Stream<Item = RaftStoreEntry> + '_ {
-        let d = self.top.data_ref();
+        let d = self.compacted.newest().unwrap();
 
         let mut sm_meta = vec![];
 
@@ -167,46 +170,44 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let kv_iter = MapApiRO::<String>::range::<String, _>(self.top.as_ref(), ..)
-            .await
-            .filter_map(|(k, v)| async move {
-                if let Marked::Normal {
-                    internal_seq,
-                    value,
-                    meta,
-                } = v
-                {
-                    let seqv = SeqV::with_meta(internal_seq, meta, value);
-                    Some(RaftStoreEntry::GenericKV {
-                        key: k.clone(),
-                        value: seqv,
-                    })
-                } else {
-                    None
-                }
-            });
+        let strm = self.compacted.str_map().range::<String, _>(..).await;
+        let kv_iter = strm.filter_map(|(k, v)| async move {
+            if let Marked::Normal {
+                internal_seq,
+                value,
+                meta,
+            } = v
+            {
+                let seqv = SeqV::with_meta(internal_seq, meta, value);
+                Some(RaftStoreEntry::GenericKV {
+                    key: k.clone(),
+                    value: seqv,
+                })
+            } else {
+                None
+            }
+        });
 
         // expire index
 
-        let expire_iter = MapApiRO::<ExpireKey>::range(self.top.as_ref(), ..)
-            .await
-            .filter_map(|(k, v)| async move {
-                if let Marked::Normal {
-                    internal_seq,
-                    value,
-                    meta: _,
-                } = v
-                {
-                    let ev = ExpireValue::new(value, internal_seq);
+        let strm = self.compacted.expire_map().range(..).await;
+        let expire_iter = strm.filter_map(|(k, v)| async move {
+            if let Marked::Normal {
+                internal_seq,
+                value,
+                meta: _,
+            } = v
+            {
+                let ev = ExpireValue::new(value, internal_seq);
 
-                    Some(RaftStoreEntry::Expire {
-                        key: k.clone(),
-                        value: ev,
-                    })
-                } else {
-                    None
-                }
-            });
+                Some(RaftStoreEntry::Expire {
+                    key: k.clone(),
+                    value: ev,
+                })
+            } else {
+                None
+            }
+        });
 
         futures::stream::iter(sm_meta)
             .chain(kv_iter)

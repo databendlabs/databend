@@ -130,6 +130,7 @@ humantime = "2.1.0"
 indicatif = "0.17.5"
 itertools = "0.10.5"
 jwt-simple = "0.11.0"
+lazy_static = { workspace = true }
 log = { workspace = true }
 lz4 = "1.24.0"
 match-template = "0.0.1"
@@ -140,6 +141,7 @@ once_cell = "1.15.0"
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.4.1", features = ["tls"] }
 parking_lot = "0.12.1"
+parquet = { version = "46.0.0", features = ["async"] }
 paste = "1.0.9"
 petgraph = "0.6.2"
 pin-project-lite = "0.2.9"

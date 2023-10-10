@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod processor_matched_split;
+mod processor_merge_into_matched_and_split;
 mod processor_merge_into_not_matched;
 mod processor_merge_into_split;
 mod transform_matched_mutation_aggregator;
-pub use processor_matched_split::MatchedSplitProcessor;
+pub use processor_merge_into_matched_and_split::MatchedSplitProcessor;
+pub(crate) use processor_merge_into_matched_and_split::RowIdKind;
 pub use processor_merge_into_not_matched::MergeIntoNotMatchedProcessor;
 pub use processor_merge_into_split::MergeIntoSplitProcessor;

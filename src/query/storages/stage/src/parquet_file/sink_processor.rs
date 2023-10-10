@@ -47,7 +47,6 @@ pub struct ParquetFileSink {
 }
 
 impl ParquetFileSink {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         input: Arc<InputPort>,
         table_info: StageTableInfo,
@@ -114,7 +113,13 @@ impl Processor for ParquetFileSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         assert!(!self.output_data.is_empty());
-        let path = unload_path(&self.table_info, &self.uuid, self.group_id, self.batch_id);
+        let path = unload_path(
+            &self.table_info,
+            &self.uuid,
+            self.group_id,
+            self.batch_id,
+            None,
+        );
         let data = mem::take(&mut self.output_data);
         self.data_accessor.write(&path, data).await?;
         self.batch_id += 1;
