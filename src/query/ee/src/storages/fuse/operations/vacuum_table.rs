@@ -96,6 +96,7 @@ pub async fn get_snapshot_referenced_files(
     let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
         format_version: ver,
         snapshot_id: root_snapshot.snapshot_id,
+        table_version: root_snapshot.table_version,
         timestamp: root_snapshot.timestamp,
         segments: HashSet::from_iter(root_snapshot.segments.clone()),
         table_statistics_location: root_snapshot.table_statistics_location.clone(),

@@ -99,7 +99,8 @@ impl FuseTable {
             )))
         })?;
 
-        let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
+        let snapshot_gen =
+            AppendGenerator::new(ctx.clone(), overwrite, Some(self.current_table_version()));
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -126,8 +127,11 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
-        let snapshot_location = location_generator
-            .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+        let snapshot_location = location_generator.gen_snapshot_location(
+            &snapshot.snapshot_id,
+            TableSnapshot::VERSION,
+            snapshot.table_version,
+        )?;
         let need_to_save_statistics =
             snapshot.table_statistics_location.is_some() && table_statistics.is_some();
 
@@ -294,7 +298,6 @@ impl FuseTable {
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
         let default_cluster_key_id = self.cluster_key_id();
-        let snapshot_table_version = self.get_snapshot_table_version().await?;
 
         // holding the reference of latest table during retries
         let mut latest_table_ref: Arc<dyn Table>;
@@ -306,8 +309,10 @@ impl FuseTable {
         ctx.set_status_info("mutation: begin try to commit");
 
         loop {
-            let mut snapshot_tobe_committed =
-                TableSnapshot::from_previous(latest_snapshot.as_ref(), snapshot_table_version);
+            let mut snapshot_tobe_committed = TableSnapshot::from_previous(
+                latest_snapshot.as_ref(),
+                Some(self.current_table_version()),
+            );
 
             let schema = self.schema();
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(

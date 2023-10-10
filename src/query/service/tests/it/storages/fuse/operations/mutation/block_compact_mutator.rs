@@ -39,7 +39,6 @@ use rand::Rng;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use uuid::Uuid;
 
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
@@ -205,6 +204,7 @@ async fn test_safety() -> Result<()> {
 
         let snapshot = TableSnapshot::new(
             &None,
+            None,
             None,
             schema.as_ref().clone(),
             summary,

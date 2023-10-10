@@ -33,6 +33,7 @@ pub fn new_snapshot_id_with_timestamp(timestamp: Option<DateTime<Utc>>) -> Snaps
     }
 }
 
+#[allow(dead_code)]
 pub fn time_from_snapshot_id(snapshot_id: SnapshotId) -> Option<DateTime<Utc>> {
     let timestamp_opt = snapshot_id.get_timestamp().map(|timestamp| {
         let (sec, ns) = timestamp.to_unix();
@@ -42,5 +43,22 @@ pub fn time_from_snapshot_id(snapshot_id: SnapshotId) -> Option<DateTime<Utc>> {
     match timestamp_opt {
         Some(timestamp) => timestamp,
         None => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use chrono::Utc;
+
+    use super::new_snapshot_id_with_timestamp;
+    use crate::meta::snapshot_id::time_from_snapshot_id;
+
+    #[test]
+    fn test_time_from_snapshot_id() -> anyhow::Result<()> {
+        let now = Utc::now();
+        let uuid = new_snapshot_id_with_timestamp(Some(now));
+        assert_eq!(time_from_snapshot_id(uuid), Some(now));
+
+        Ok(())
     }
 }

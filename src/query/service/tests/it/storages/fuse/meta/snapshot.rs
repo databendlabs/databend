@@ -25,7 +25,7 @@ use uuid::Uuid;
 fn default_snapshot() -> TableSnapshot {
     let schema = TableSchema::empty();
     let stats = Default::default();
-    TableSnapshot::new(&None, None, schema, stats, vec![], None, None)
+    TableSnapshot::new(&None, None, None, schema, stats, vec![], None, None)
 }
 
 #[test]
@@ -41,6 +41,7 @@ fn snapshot_timestamp_monotonic_increase() {
     let current = TableSnapshot::new(
         &prev.timestamp,
         prev.prev_snapshot_id,
+        None,
         schema,
         Default::default(),
         vec![],
@@ -63,6 +64,7 @@ fn snapshot_timestamp_time_skew_tolerance() {
     let current = TableSnapshot::new(
         &prev.timestamp,
         prev.prev_snapshot_id,
+        None,
         schema,
         Default::default(),
         vec![],
@@ -97,8 +99,9 @@ fn test_snapshot_v1_to_v4() {
     );
     assert!(v1.timestamp.is_some());
 
-    let v4: TableSnapshot = TableSnapshotV2::from(v1.clone()).into();
-    assert_eq!(v4.format_version, v1.format_version());
-    assert_eq!(v4.snapshot_id, v1.snapshot_id);
-    assert_eq!(v4.timestamp, v1.timestamp);
+    let snapshot: TableSnapshot = TableSnapshotV2::from(v1.clone()).into();
+    assert_eq!(snapshot.format_version, v1.format_version());
+    assert_eq!(snapshot.snapshot_id, v1.snapshot_id);
+    assert_eq!(snapshot.timestamp, v1.timestamp);
+    assert_eq!(snapshot.table_version, None);
 }

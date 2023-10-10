@@ -39,6 +39,7 @@ static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
 static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
+static SNAPSHOT_V5: SnapshotVersion = SnapshotVersion::V5(PhantomData);
 
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
@@ -47,13 +48,15 @@ static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
 pub struct TableMetaLocationGenerator {
     prefix: String,
     part_prefix: String,
+    snapshot_table_version: TableVersion,
 }
 
 impl TableMetaLocationGenerator {
-    pub fn with_prefix(prefix: String) -> Self {
+    pub fn new(prefix: String, snapshot_table_version: TableVersion) -> Self {
         Self {
             prefix,
             part_prefix: "".to_string(),
+            snapshot_table_version,
         }
     }
 
@@ -73,11 +76,12 @@ impl TableMetaLocationGenerator {
     pub fn gen_block_location(&self) -> (Location, Uuid) {
         let part_uuid = Uuid::new_v4();
         let location_path = format!(
-            "{}/{}/{}{}_v{}.parquet",
+            "{}/{}/{}{}_{}_v{}.parquet",
             &self.prefix,
             FUSE_TBL_BLOCK_PREFIX,
             &self.part_prefix,
             part_uuid.as_simple(),
+            self.snapshot_table_version,
             DataBlock::VERSION,
         );
 
@@ -87,10 +91,11 @@ impl TableMetaLocationGenerator {
     pub fn block_bloom_index_location(&self, block_id: &Uuid) -> Location {
         (
             format!(
-                "{}/{}/{}_v{}.parquet",
+                "{}/{}/{}_{}_v{}.parquet",
                 &self.prefix,
                 FUSE_TBL_XOR_BLOOM_INDEX_PREFIX,
                 block_id.as_simple(),
+                self.snapshot_table_version,
                 BlockFilter::VERSION,
             ),
             BlockFilter::VERSION,
@@ -100,21 +105,29 @@ impl TableMetaLocationGenerator {
     pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
-            "{}/{}/{}_v{}.mpk",
+            "{}/{}/{}_{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
             segment_uuid,
+            self.snapshot_table_version,
             SegmentInfo::VERSION,
         )
     }
 
-    pub fn snapshot_location_from_uuid(&self, id: &Uuid, version: u64) -> Result<String> {
+    pub fn gen_snapshot_location(
+        &self,
+        id: &Uuid,
+        version: u64,
+        table_version: Option<TableVersion>,
+    ) -> Result<String> {
         let snapshot_version = SnapshotVersion::try_from(version)?;
-        Ok(snapshot_version.create(id, &self.prefix))
+        Ok(snapshot_version.create(id, &self.prefix, table_version))
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
+        if location.as_ref().ends_with(SNAPSHOT_V5.suffix().as_str()) {
+            SNAPSHOT_V5.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
             SNAPSHOT_V4.version()
         } else if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
             SNAPSHOT_V3.version()
@@ -141,9 +154,10 @@ impl TableMetaLocationGenerator {
         &self,
         id: &Uuid,
         version: u64,
+        table_version: Option<TableVersion>,
     ) -> Result<String> {
         let statistics_version = TableSnapshotStatisticsVersion::try_from(version)?;
-        Ok(statistics_version.create(id, &self.prefix))
+        Ok(statistics_version.create(id, &self.prefix, table_version))
     }
 
     pub fn snapshot_statistics_version(_location: impl AsRef<str>) -> u64 {
@@ -168,19 +182,39 @@ impl TableMetaLocationGenerator {
 }
 
 trait SnapshotLocationCreator {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String;
+    fn create(
+        &self,
+        id: &Uuid,
+        prefix: impl AsRef<str>,
+        table_version: Option<TableVersion>,
+    ) -> String;
     fn suffix(&self) -> String;
 }
 
 impl SnapshotLocationCreator for SnapshotVersion {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        format!(
-            "{}/{}/{}{}",
-            prefix.as_ref(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-            id.simple(),
-            self.suffix(),
-        )
+    fn create(
+        &self,
+        id: &Uuid,
+        prefix: impl AsRef<str>,
+        table_version: Option<TableVersion>,
+    ) -> String {
+        match table_version {
+            Some(table_version) => format!(
+                "{}/{}/{}_{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_PREFIX,
+                id.simple(),
+                table_version,
+                self.suffix(),
+            ),
+            None => format!(
+                "{}/{}/{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_PREFIX,
+                id.simple(),
+                self.suffix(),
+            ),
+        }
     }
 
     fn suffix(&self) -> String {
@@ -197,14 +231,29 @@ impl SnapshotLocationCreator for SnapshotVersion {
 }
 
 impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
-    fn create(&self, id: &Uuid, prefix: impl AsRef<str>) -> String {
-        format!(
-            "{}/{}/{}{}",
-            prefix.as_ref(),
-            FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
-            id.simple(),
-            self.suffix(),
-        )
+    fn create(
+        &self,
+        id: &Uuid,
+        prefix: impl AsRef<str>,
+        table_version: Option<TableVersion>,
+    ) -> String {
+        match table_version {
+            Some(table_version) => format!(
+                "{}/{}/{}_{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
+                id.simple(),
+                table_version,
+                self.suffix(),
+            ),
+            None => format!(
+                "{}/{}/{}{}",
+                prefix.as_ref(),
+                FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX,
+                id.simple(),
+                self.suffix(),
+            ),
+        }
     }
 
     fn suffix(&self) -> String {

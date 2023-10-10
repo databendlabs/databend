@@ -114,7 +114,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use uuid::Uuid;
 use walkdir::WalkDir;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -233,6 +232,7 @@ async fn test_commit_to_meta_server() -> Result<()> {
             let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
             let new_snapshot = TableSnapshot::new(
                 &None,
+                None,
                 None,
                 table.schema().as_ref().clone(),
                 Statistics::default(),

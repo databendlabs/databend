@@ -55,7 +55,7 @@ use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 async fn test_recluster_mutator_block_select() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
-    let location_generator = TableMetaLocationGenerator::with_prefix("_prefix".to_owned());
+    let location_generator = TableMetaLocationGenerator::new("_prefix".to_owned(), 1);
 
     let data_accessor = ctx.get_data_operator()?.operator();
     let seg_writer = SegmentWriter::new(&data_accessor, &location_generator);
@@ -360,7 +360,7 @@ async fn generage_segments(
     default_cluster_key: u32,
     block_per_seg: usize,
 ) -> Result<Vec<(Location, Statistics)>> {
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
+    let location_gen = TableMetaLocationGenerator::new("test/".to_owned(), 1);
     let data_accessor = ctx.get_data_operator()?.operator();
 
     let mut merged_blocks = blocks;

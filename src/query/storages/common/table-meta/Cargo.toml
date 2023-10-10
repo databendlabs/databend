@@ -30,6 +30,8 @@ typetag = "0.2.3"
 zstd = "0.12.3"
 
 [dev-dependencies]
+anyerror = { workspace = true }
+anyhow = { workspace = true }
 common-storages-fuse = { path = "../../fuse" }
 criterion = "0.4"
 pot = "2.0.0"
@@ -38,6 +40,6 @@ pot = "2.0.0"
 dev = ["snap"]
 
 [[bench]]
-name = "bench"
 harness = false
+name = "bench"
 required-features = ["dev"]

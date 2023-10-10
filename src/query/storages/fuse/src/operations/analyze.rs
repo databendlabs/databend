@@ -134,11 +134,12 @@ impl FuseTable {
                 .snapshot_statistics_location_from_uuid(
                     &table_statistics.snapshot_id,
                     table_statistics.format_version(),
+                    Some(self.current_table_version()),
                 )?;
 
             // 4. Save table statistics
-            let snapshot_table_version = self.get_snapshot_table_version().await?;
-            let mut new_snapshot = TableSnapshot::from_previous(&snapshot, snapshot_table_version);
+            let mut new_snapshot =
+                TableSnapshot::from_previous(&snapshot, Some(self.current_table_version()));
             new_snapshot.summary.col_stats = col_stats;
             new_snapshot.summary.cluster_stats = cluster_stats;
             new_snapshot.table_statistics_location = Some(table_statistics_location);

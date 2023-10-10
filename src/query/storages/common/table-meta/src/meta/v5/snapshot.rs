@@ -66,6 +66,8 @@ pub struct TableSnapshot {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
 
+    pub table_version: Option<TableVersion>,
+
     /// timestamp of this snapshot
     //  for backward compatibility, `Option` is used
     pub timestamp: Option<DateTime<Utc>>,
@@ -94,6 +96,7 @@ impl TableSnapshot {
     pub fn new(
         prev_timestamp: &Option<DateTime<Utc>>,
         prev_snapshot_location: SnapshotLocationInfo,
+        table_version: Option<TableVersion>,
         schema: TableSchema,
         summary: Statistics,
         segments: Vec<Location>,
@@ -112,6 +115,7 @@ impl TableSnapshot {
         Self {
             format_version: TableSnapshot::VERSION,
             snapshot_id,
+            table_version,
             timestamp,
             prev_snapshot_id: prev_snapshot_location,
             schema,
@@ -126,6 +130,7 @@ impl TableSnapshot {
         Self::new(
             &None,
             None,
+            None,
             schema,
             Statistics::default(),
             vec![],
@@ -134,19 +139,13 @@ impl TableSnapshot {
         )
     }
 
-    pub fn from_previous(
-        previous: &TableSnapshot,
-        snapshot_table_version: Option<TableVersion>,
-    ) -> Self {
+    pub fn from_previous(previous: &TableSnapshot, table_version: Option<TableVersion>) -> Self {
         let clone = previous.clone();
         // the timestamp of the new snapshot will be adjusted by the `new` method
         Self::new(
             &clone.timestamp,
-            Some((
-                clone.snapshot_id,
-                clone.format_version,
-                snapshot_table_version,
-            )),
+            Some((clone.snapshot_id, clone.format_version, clone.table_version)),
+            table_version,
             clone.schema,
             clone.summary,
             clone.segments,
@@ -227,10 +226,11 @@ impl From<v2::TableSnapshot> for TableSnapshot {
             // carries the format_version of snapshot being converted.
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
+            table_version: None,
             timestamp: s.timestamp,
             prev_snapshot_id,
             schema: s.schema,
-            summary: s.summary.into(),
+            summary: s.summary,
             segments: s.segments,
             cluster_key_meta: s.cluster_key_meta,
             table_statistics_location: s.table_statistics_location,
@@ -252,6 +252,7 @@ where T: Into<v3::TableSnapshot>
             // carries the format_version of snapshot being converted.
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
+            table_version: None,
             timestamp: s.timestamp,
             prev_snapshot_id,
             schema: s.schema.into(),
@@ -265,7 +266,6 @@ where T: Into<v3::TableSnapshot>
 
 impl From<v4::TableSnapshot> for TableSnapshot {
     fn from(s: v4::TableSnapshot) -> Self {
-        let s: v4::TableSnapshot = s.into();
         let prev_snapshot_id = s
             .prev_snapshot_id
             // v4 snapshot file name has no table version, so prev table version is None
@@ -275,6 +275,7 @@ impl From<v4::TableSnapshot> for TableSnapshot {
             // carries the format_version of snapshot being converted.
             format_version: s.format_version,
             snapshot_id: s.snapshot_id,
+            table_version: None,
             timestamp: s.timestamp,
             prev_snapshot_id,
             schema: s.schema,
@@ -292,6 +293,7 @@ impl From<v4::TableSnapshot> for TableSnapshot {
 pub struct TableSnapshotLite {
     pub format_version: FormatVersion,
     pub snapshot_id: SnapshotId,
+    pub table_version: Option<TableVersion>,
     pub timestamp: Option<DateTime<Utc>>,
     pub prev_snapshot_id: SnapshotLocationInfo,
     pub row_count: u64,
@@ -307,6 +309,7 @@ impl From<(&TableSnapshot, FormatVersion)> for TableSnapshotLite {
         TableSnapshotLite {
             format_version: ver,
             snapshot_id: value.snapshot_id,
+            table_version: value.table_version,
             timestamp: value.timestamp,
             prev_snapshot_id: value.prev_snapshot_id,
             row_count: value.summary.row_count,

@@ -152,7 +152,8 @@ impl FuseTable {
         let part_prefix = table_info.meta.part_prefix.clone();
 
         let meta_location_generator =
-            TableMetaLocationGenerator::with_prefix(storage_prefix).with_part_prefix(part_prefix);
+            TableMetaLocationGenerator::new(storage_prefix, table_info.ident.seq)
+                .with_part_prefix(part_prefix);
 
         Ok(Box::new(FuseTable {
             table_info,
@@ -202,16 +203,6 @@ impl FuseTable {
 
     pub fn current_table_version(&self) -> TableVersion {
         self.table_info.ident.seq
-    }
-
-    pub async fn get_snapshot_table_version(&self) -> Result<Option<TableVersion>> {
-        if let Some(location) = self.snapshot_loc().await? {
-            Ok(TableMetaLocationGenerator::location_table_version(
-                &location,
-            ))
-        } else {
-            Ok(None)
-        }
     }
 
     /// Get max page size.
@@ -434,13 +425,12 @@ impl Table for FuseTable {
         let cluster_key_meta = new_table_meta.cluster_key();
         let schema = self.schema().as_ref().clone();
 
-        let prev_table_version = self.get_snapshot_table_version().await?;
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev
             .as_ref()
-            .map(|v| (v.snapshot_id, prev_version, prev_table_version));
+            .map(|v| (v.snapshot_id, prev_version, v.table_version));
         let prev_statistics_location = prev
             .as_ref()
             .and_then(|v| v.table_statistics_location.clone());
@@ -453,6 +443,7 @@ impl Table for FuseTable {
         let new_snapshot = TableSnapshot::new(
             &prev_timestamp,
             prev_snapshot_id,
+            Some(self.current_table_version()),
             schema,
             summary,
             segments,
@@ -487,7 +478,6 @@ impl Table for FuseTable {
 
         let schema = self.schema().as_ref().clone();
 
-        let prev_table_version = self.get_snapshot_table_version().await?;
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
@@ -496,7 +486,7 @@ impl Table for FuseTable {
             .and_then(|v| v.table_statistics_location.clone());
         let prev_snapshot_id = prev
             .as_ref()
-            .map(|v| (v.snapshot_id, prev_version, prev_table_version));
+            .map(|v| (v.snapshot_id, prev_version, v.table_version));
         let (summary, segments) = if let Some(v) = prev {
             (v.summary.clone(), v.segments.clone())
         } else {
@@ -506,6 +496,7 @@ impl Table for FuseTable {
         let new_snapshot = TableSnapshot::new(
             &prev_timestamp,
             prev_snapshot_id,
+            Some(self.current_table_version()),
             schema,
             summary,
             segments,

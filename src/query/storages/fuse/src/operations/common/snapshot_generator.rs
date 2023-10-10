@@ -56,7 +56,6 @@ pub trait SnapshotGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot>;
 }
 
@@ -204,13 +203,15 @@ impl ConflictResolveContext {
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     conflict_resolve_ctx: Option<ConflictResolveContext>,
+    table_version: Option<TableVersion>,
 }
 
 impl MutationGenerator {
-    pub fn new(base_snapshot: Arc<TableSnapshot>) -> Self {
+    pub fn new(base_snapshot: Arc<TableSnapshot>, table_version: Option<TableVersion>) -> Self {
         MutationGenerator {
             base_snapshot,
             conflict_resolve_ctx: None,
+            table_version,
         }
     }
 }
@@ -221,7 +222,6 @@ impl SnapshotGenerator for MutationGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot> {
         let default_cluster_key_id = cluster_key_meta.clone().map(|v| v.0);
 
@@ -265,8 +265,9 @@ impl SnapshotGenerator for MutationGenerator {
                         Some((
                             previous.snapshot_id,
                             previous.format_version,
-                            prev_snapshot_table_version,
+                            previous.table_version,
                         )),
+                        self.table_version,
                         schema,
                         new_summary,
                         new_segments,
@@ -295,15 +296,21 @@ pub struct AppendGenerator {
     leaf_default_values: HashMap<ColumnId, Scalar>,
     overwrite: bool,
     conflict_resolve_ctx: Option<ConflictResolveContext>,
+    table_version: Option<TableVersion>,
 }
 
 impl AppendGenerator {
-    pub fn new(ctx: Arc<dyn TableContext>, overwrite: bool) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        overwrite: bool,
+        table_version: Option<TableVersion>,
+    ) -> Self {
         AppendGenerator {
             ctx,
             leaf_default_values: HashMap::new(),
             overwrite,
             conflict_resolve_ctx: None,
+            table_version,
         }
     }
 
@@ -369,7 +376,6 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        prev_snapshot_table_version: Option<TableVersion>,
     ) -> Result<TableSnapshot> {
         let (snapshot_merged, expected_schema) = self.conflict_resolve_ctx()?;
         if is_column_type_modified(&schema, expected_schema) {
@@ -389,7 +395,7 @@ impl SnapshotGenerator for AppendGenerator {
             prev_snapshot_id = Some((
                 snapshot.snapshot_id,
                 snapshot.format_version,
-                prev_snapshot_table_version,
+                snapshot.table_version,
             ));
             table_statistics_location = snapshot.table_statistics_location.clone();
 
@@ -435,6 +441,7 @@ impl SnapshotGenerator for AppendGenerator {
         Ok(TableSnapshot::new(
             &prev_timestamp,
             prev_snapshot_id,
+            self.table_version,
             schema,
             new_summary,
             new_segments,

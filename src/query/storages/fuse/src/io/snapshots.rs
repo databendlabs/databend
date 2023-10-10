@@ -38,6 +38,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotLite;
+use storages_common_table_meta::meta::TableVersion;
 
 use crate::io::MetaReaders;
 use crate::io::SnapshotHistoryReader;
@@ -47,6 +48,7 @@ use crate::io::TableMetaLocationGenerator;
 pub struct SnapshotLiteExtended {
     pub format_version: u64,
     pub snapshot_id: SnapshotId,
+    pub table_version: Option<TableVersion>,
     pub timestamp: Option<DateTime<Utc>>,
     pub segments: HashSet<Location>,
     pub table_statistics_location: Option<String>,
@@ -281,6 +283,7 @@ impl SnapshotsIO {
         Ok(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: snapshot.snapshot_id,
+            table_version: snapshot.table_version,
             timestamp: snapshot.timestamp,
             segments,
             table_statistics_location,

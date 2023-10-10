@@ -73,8 +73,11 @@ impl SnapshotHistoryReader for TableSnapshotReader {
                                 snapshot.prev_snapshot_id
                             {
                                 let new_ver = prev_version;
-                                let new_loc =
-                                    gen.snapshot_location_from_uuid(&prev_id, prev_version)?;
+                                let new_loc = gen.gen_snapshot_location(
+                                    &prev_id,
+                                    prev_version,
+                                    prev_table_version,
+                                )?;
                                 Ok(Some((
                                     (snapshot, ver),
                                     (reader, gen, Some((new_loc, new_ver))),

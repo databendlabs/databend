@@ -138,6 +138,7 @@ mod tests {
                 let mut snapshot = TableSnapshot::new(
                     &None,
                     None,
+                    None,
                     TableSchema::default(),
                     Statistics::default(),
                     vec![],
@@ -153,6 +154,7 @@ mod tests {
         // current version allowed
         let snapshot = TableSnapshot::new(
             &None,
+            None,
             None,
             TableSchema::default(),
             Statistics::default(),
