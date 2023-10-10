@@ -489,6 +489,24 @@ impl PipelineBuilder {
             }
             output_len
         };
+        // Handle matched and unmatched data separately.
+
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
 
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
@@ -602,6 +620,15 @@ impl PipelineBuilder {
 
         let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+
+        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        let output_lens = self.main_pipeline.output_len();
+        table.cluster_gen_for_append_with_specified_last_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            output_lens - 1,
+        )?;
 
         pipe_items.clear();
         pipe_items.push(table.rowid_aggregate_mutator(

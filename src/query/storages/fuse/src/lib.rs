@@ -20,6 +20,7 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(int_roundings)]
 #![feature(result_option_inspect)]
+#![recursion_limit = "256"]
 
 mod constants;
 mod fuse_lazy_part;
