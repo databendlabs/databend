@@ -6,27 +6,7 @@ on:
       - 'v*'
 
 jobs:
-  publish:
-    runs-on: ubuntu-latest
-    environment:
-      name: crates.io
-      url: https://crates.io/crates/databend-driver
-    steps:
-    - uses: actions/checkout@v4
-    - name: Setup Cargo Release
-      run: |
-        curl -fsSLo /tmp/cargo-release.tar.gz https://github.com/crate-ci/cargo-release/releases/download/v0.24.12/cargo-release-v0.24.12-x86_64-unknown-linux-gnu.tar.gz
-          mkdir -p /tmp/cargo-release
-        tar -C /tmp/cargo-release -xzf /tmp/cargo-release.tar.gz
-        sudo mv /tmp/cargo-release/cargo-release /usr/local/bin
-    - name: Release to crates.io
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-      run: |
-        cargo release publish --execute --no-confirm
-
   build_linux:
-    needs: publish
     name: build ${{ matrix.target }}
     strategy:
       matrix:
@@ -62,7 +42,6 @@ jobs:
         gh release upload ${{ github.ref_name }} dist/bendsql-${{ matrix.target }}.tar.gz --clobber
 
   build_other:
-    needs: publish
     name: build ${{ matrix.target }}
     strategy:
       matrix:
