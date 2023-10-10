@@ -99,6 +99,8 @@ impl AsyncSystemTable for UsersTable {
 
 impl UsersTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
+        // QUERY show user is rewrite to `SELECT name, hostname, auth_type, is_configured FROM system.users ORDER BY name`
+        // If users table column has been modified, need to check the show user query.
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("hostname", TableDataType::String),
