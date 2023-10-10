@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use storages_common_table_meta::meta::BlockMeta;
 
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
@@ -36,10 +37,15 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
 use crate::FuseStorageFormat;
+use crate::MergeIOReadResult;
 
 enum State {
     ReadData(Option<PartInfoPtr>),
-    Concat(Vec<DataBlock>, BlockMetaIndex),
+    Concat {
+        read_res: Vec<MergeIOReadResult>,
+        metas: Vec<Arc<BlockMeta>>,
+        index: BlockMetaIndex,
+    },
     Output(Option<PartInfoPtr>, DataBlock),
     Finish,
 }
@@ -97,7 +103,7 @@ impl Processor for CompactSource {
 
         match self.state {
             State::ReadData(_) => Ok(Event::Async),
-            State::Concat(_, _) => Ok(Event::Sync),
+            State::Concat { .. } => Ok(Event::Sync),
             State::Output(_, _) => {
                 if let State::Output(part, data_block) =
                     std::mem::replace(&mut self.state, State::Finish)
@@ -119,7 +125,23 @@ impl Processor for CompactSource {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
-            State::Concat(blocks, index) => {
+            State::Concat {
+                read_res,
+                metas,
+                index,
+            } => {
+                let blocks = read_res
+                    .into_iter()
+                    .zip(metas.into_iter())
+                    .map(|(data, meta)| {
+                        self.block_reader.deserialize_chunks_with_meta(
+                            &meta,
+                            &self.storage_format,
+                            data,
+                        )
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+
                 // concat blocks.
                 let block = if blocks.len() == 1 {
                     blocks[0].convert_to_full()
@@ -151,7 +173,6 @@ impl Processor for CompactSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {
                 let block_reader = self.block_reader.as_ref();
-                let storage_format = self.storage_format;
 
                 // block read tasks.
                 let mut task_futures = Vec::new();
@@ -174,21 +195,30 @@ impl Processor for CompactSource {
                                 }
 
                                 block_reader
-                                    .read_by_meta(&settings, block.as_ref(), &storage_format)
+                                    .read_columns_data_by_merge_io(
+                                        &settings,
+                                        &block.location.0,
+                                        &block.col_metas,
+                                        &None,
+                                    )
                                     .await
                             });
                         }
 
                         let start = Instant::now();
 
-                        let blocks = futures::future::try_join_all(task_futures).await?;
+                        let read_res = futures::future::try_join_all(task_futures).await?;
                         // Perf.
                         {
                             metrics_inc_compact_block_read_milliseconds(
                                 start.elapsed().as_millis() as u64,
                             );
                         }
-                        self.state = State::Concat(blocks, task.index.clone());
+                        self.state = State::Concat {
+                            read_res,
+                            metas: task.blocks.clone(),
+                            index: task.index.clone(),
+                        };
                     }
                 }
                 Ok(())
