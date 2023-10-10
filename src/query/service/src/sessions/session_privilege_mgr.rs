@@ -22,17 +22,17 @@ pub trait SessionPrivilegeManager {
 
     fn get_current_role(&self) -> Option<RoleInfo>;
 
-    fn get_available_roles(&self) -> Result<RoleInfo>;
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
     // fn show_grants(&self);
 
-    async fn validate_privilege(object: &GrantObject, privilege: Vec<UserPrivilegeType>) -> Result<()>;
+    async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()>;
 
-    async fn validate_owner(object: &GrantObject, user: &UserInfo) -> Result<()>;
+    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
-    async fn check_visible(object: &GrantObject) -> Result<bool>;
+    async fn check_visible(&self, object: &GrantObject) -> Result<bool>;
 }
 
 pub struct SessionPrivilegeManagerImpl {
@@ -104,15 +104,74 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         todo!()
     }
 
-    fn get_available_roles(&self) -> Result<RoleInfo> {
-        todo!()
+    // Returns all the roles the current session has. If the user have been granted auth_role,
+    // the other roles will be ignored.
+    // On executing SET ROLE, the role have to be one of the available roles.
+    #[async_backtrace::framed]
+    async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        let roles = match self.session_ctx.get_auth_role() {
+            Some(auth_role) => vec![auth_role],
+            None => {
+                let current_user = self.get_current_user()?;
+                current_user.grants.roles()
+            }
+        };
+
+        let tenant = self.session_ctx.get_current_tenant();
+        let mut related_roles = RoleCacheManager::instance()
+            .find_related_roles(&tenant, &roles)
+            .await?;
+        related_roles.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(related_roles)
     }
 
-    async fn validate_privilege(object: &GrantObject, privilege: Vec<UserPrivilegeType>) -> Result<()> {
-        todo!()
+    async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()> {
+        // 1. check user's privilege set
+        let current_user = self.get_current_user()?;
+        let user_verified = current_user
+            .grants
+            .verify_privilege(object, privilege.clone());
+        if user_verified {
+            return Ok(());
+        }
+
+        // 2. check the user's roles' privilege set
+        self.ensure_current_role().await?;
+        let available_roles = self.get_all_available_roles().await?;
+        let role_verified = &available_roles
+            .iter()
+            .any(|r| r.grants.verify_privilege(object, privilege.clone()));
+        if *role_verified {
+            return Ok(());
+        }
+
+        if verify_ownership {
+            let object_owner = self.get_object_owner(object).await?;
+            if let Some(owner) = object_owner.as_ref() {
+                for role in &available_roles {
+                    if *role.identity() == *owner.identity() {
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
+        let roles_name = available_roles
+            .iter()
+            .map(|r| r.name.clone())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        Err(ErrorCode::PermissionDenied(format!(
+            "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
+            privilege.clone(),
+            object,
+            &current_user.identity(),
+            roles_name,
+        )))
     }
 
-    async fn validate_owner(object: &GrantObject, user: &UserInfo) -> Result<()> {
+    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()> {
         todo!()
     }
 
@@ -120,7 +179,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         todo!()
     }
 
-    async fn check_visible(object: &GrantObject) -> Result<bool> {
+    async fn check_visible(&self, object: &GrantObject) -> Result<bool> {
         todo!()
     }
 }
