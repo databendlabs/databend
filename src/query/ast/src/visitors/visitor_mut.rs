@@ -381,9 +381,8 @@ pub trait VisitorMut: Sized {
         walk_statement_mut(self, stmt);
     }
 
-    fn visit_copy(&mut self, _copy: &mut CopyStmt) {}
-
-    fn visit_copy_unit(&mut self, _copy_unit: &mut CopyUnit) {}
+    fn visit_copy_into_table(&mut self, _copy: &mut CopyIntoTableStmt) {}
+    fn visit_copy_into_location(&mut self, _copy: &mut CopyIntoLocationStmt) {}
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 

@@ -29,7 +29,6 @@ use common_sql::executor::OnConflictField;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::SelectCtx;
-use common_sql::plans::CopyPlan;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
@@ -42,7 +41,7 @@ use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
-use crate::interpreters::interpreter_copy::CopyInterpreter;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
@@ -284,22 +283,15 @@ impl ReplaceInterpreter {
                 self.connect_query_plan_source(ctx.clone(), plan).await
             }
             InsertInputSource::Stage(plan) => match *plan.clone() {
-                Plan::Copy(copy_plan) => match copy_plan.as_ref() {
-                    CopyPlan::IntoTable(copy_into_table_plan) => {
-                        let interpreter =
-                            CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
-                        let (physical_plan, files) = interpreter
-                            .build_physical_plan(copy_into_table_plan)
-                            .await?;
-                        *purge_info = Some((
-                            files,
-                            copy_into_table_plan.stage_table_info.stage_info.clone(),
-                        ));
-                        Ok((Box::new(physical_plan), None))
-                    }
-                    _ => unreachable!("plan in InsertInputSource::Stage must be CopyIntoTable"),
-                },
-                _ => unreachable!("plan in InsertInputSource::Stag must be Copy"),
+                Plan::CopyIntoTable(copy_plan) => {
+                    let interpreter =
+                        CopyIntoTableInterpreter::try_create(ctx.clone(), copy_plan.clone())?;
+                    let (physical_plan, files) =
+                        interpreter.build_physical_plan(&copy_plan).await?;
+                    *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));
+                    Ok((Box::new(physical_plan), None))
+                }
+                _ => unreachable!("plan in InsertInputSource::Stag must be CopyIntoTable"),
             },
             _ => Err(ErrorCode::Unimplemented(
                 "input source other than literal VALUES and sub queries are NOT supported yet.",

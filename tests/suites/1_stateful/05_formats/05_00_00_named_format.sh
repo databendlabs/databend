@@ -47,7 +47,7 @@ echo "select count(*) from table_parquet" | $MYSQL_CLIENT_CONNECT
 
 # test copy from table
 echo "---copy from table"
-echo "copy into @stage_05_00_00 from table_csv FILE_FORMAT = ( FORMAT_NAME = 'my_csv')  pattern = '.*csv' ;" | $MYSQL_CLIENT_CONNECT
+echo "copy into @stage_05_00_00 from table_csv FILE_FORMAT = ( FORMAT_NAME = 'my_csv');" | $MYSQL_CLIENT_CONNECT
 cat $DATADIR_PATH/*.csv | wc -l | sed 's/ //g'
 
 # test select stage

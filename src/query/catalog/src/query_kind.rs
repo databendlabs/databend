@@ -23,7 +23,7 @@ pub enum QueryKind {
     Unknown,
     Query,
     Explain,
-    Copy,
+    CopyIntoTable,
     Update,
     Insert,
     Other,

@@ -755,7 +755,7 @@ impl TableContext for QueryContext {
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        if matches!(self.get_query_kind(), QueryKind::Copy) {
+        if matches!(self.get_query_kind(), QueryKind::CopyIntoTable) {
             self.shared.copy_status.add_chunk(file_path, file_status);
         }
         Ok(())
