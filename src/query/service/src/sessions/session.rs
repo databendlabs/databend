@@ -40,10 +40,13 @@ use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
 
+use super::session_privilege_mgr::SessionPrivilegeManagerImpl;
+
 pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
+    pub(in crate::sessions) privilege_mgr: SessionPrivilegeManagerImpl,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
     format_settings: FormatSettings,
@@ -57,11 +60,13 @@ impl Session {
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let status = Arc::new(Default::default());
+        let privilege_mgr = SessionPrivilegeManagerImpl::new(session_ctx.clone());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
             status,
             session_ctx,
+            privilege_mgr,
             mysql_connection_id,
             format_settings: FormatSettings::default(),
         }))
@@ -200,44 +205,7 @@ impl Session {
     // ensure_current_role() is called after authentication and before any privilege checks
     #[async_backtrace::framed]
     async fn ensure_current_role(self: &Arc<Self>) -> Result<()> {
-        let tenant = self.get_current_tenant();
-        let public_role = RoleCacheManager::instance()
-            .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
-            .await?
-            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
-
-        // if CURRENT ROLE is not set, take current session's AUTH ROLE
-        let mut current_role_name = self.get_current_role().map(|r| r.name);
-        if current_role_name.is_none() {
-            current_role_name = self.session_ctx.get_auth_role();
-        }
-
-        // if CURRENT ROLE and AUTH ROLE are not set, take current user's DEFAULT ROLE
-        if current_role_name.is_none() {
-            current_role_name = self
-                .session_ctx
-                .get_current_user()
-                .map(|u| u.option.default_role().cloned())
-                .unwrap_or(None)
-        };
-
-        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE are not set, take PUBLIC role
-        let current_role_name =
-            current_role_name.unwrap_or_else(|| BUILTIN_ROLE_PUBLIC.to_string());
-
-        // I can not use the CURRENT ROLE, reset to PUBLIC role
-        let role = self
-            .validate_available_role(&current_role_name)
-            .await
-            .or_else(|e| {
-                if e.code() == ErrorCode::INVALID_ROLE {
-                    Ok(public_role)
-                } else {
-                    Err(e)
-                }
-            })?;
-        self.session_ctx.set_current_role(Some(role));
-        Ok(())
+        todo!()
     }
 
     #[async_backtrace::framed]
