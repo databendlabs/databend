@@ -4,6 +4,8 @@ CREATE USER IF NOT EXISTS 'showuser1' IDENTIFIED BY 'password'
 query TTTI
 SHOW USERS
 ----
+default % no_password YES
+root % no_password YES
 showuser1 % double_sha1_password NO
 
 statement ok
