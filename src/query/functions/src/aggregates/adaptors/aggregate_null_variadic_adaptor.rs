@@ -215,8 +215,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
 
         if NULLABLE_RESULT {
             let flag = reader[reader.len() - 1];
-            self.nested.merge(place, &mut &reader[..reader.len() - 1])?;
-            self.set_flag(place, flag);
+            if flag == 1 {
+                self.set_flag(place, flag);
+                self.nested.merge(place, &mut &reader[..reader.len() - 1])?;
+            }
         } else {
             self.nested.merge(place, reader)?;
         }
