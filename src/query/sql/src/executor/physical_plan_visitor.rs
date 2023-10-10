@@ -366,7 +366,7 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactPartial(plan.clone()))
+        Ok(PhysicalPlan::CompactPartial(Box::new(plan.clone())))
     }
 
     fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
@@ -375,10 +375,10 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::CommitSink(CommitSink {
+        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(input),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_async_sourcer(&mut self, plan: &AsyncSourcerPlan) -> Result<PhysicalPlan> {
@@ -387,26 +387,26 @@ pub trait PhysicalPlanReplacer {
 
     fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+        Ok(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
             input: Box::new(input),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: Box::new(input),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeInto(MergeInto {
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(input),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_merge_into_source(&mut self, plan: &MergeIntoSource) -> Result<PhysicalPlan> {

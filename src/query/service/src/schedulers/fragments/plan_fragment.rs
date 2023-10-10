@@ -423,10 +423,10 @@ struct ReplaceCompactBlock {
 
 impl PhysicalPlanReplacer for ReplaceCompactBlock {
     fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactPartial(CompactPartial {
+        Ok(PhysicalPlan::CompactPartial(Box::new(CompactPartial {
             parts: self.partitions.clone(),
             ..plan.clone()
-        }))
+        })))
     }
 }
 
@@ -453,22 +453,22 @@ struct ReplaceReplaceInto {
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
             segments: self.partitions.clone(),
             block_slots: self.slot.clone(),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+        Ok(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
             input: Box::new(input),
             need_insert: self.need_insert,
             table_is_empty: self.partitions.is_empty(),
             ..plan.clone()
-        }))
+        })))
     }
 }

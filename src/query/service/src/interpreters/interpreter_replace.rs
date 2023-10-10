@@ -263,7 +263,7 @@ impl ReplaceInterpreter {
             vec![]
         };
 
-        root = Box::new(PhysicalPlan::Deduplicate(Deduplicate {
+        root = Box::new(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
             input: root,
             on_conflicts: on_conflicts.clone(),
             bloom_filter_column_indexes: bloom_filter_column_indexes.clone(),
@@ -275,8 +275,8 @@ impl ReplaceInterpreter {
             table_level_range_index,
             need_insert: true,
             delete_when,
-        }));
-        root = Box::new(PhysicalPlan::ReplaceInto(ReplaceInto {
+        })));
+        root = Box::new(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: root,
             block_thresholds: fuse_table.get_block_thresholds(),
             table_info: table_info.clone(),
@@ -291,7 +291,7 @@ impl ReplaceInterpreter {
                 .collect(),
             block_slots: None,
             need_insert: true,
-        }));
+        })));
         if is_distributed {
             root = Box::new(PhysicalPlan::Exchange(Exchange {
                 plan_id: 0,
@@ -301,14 +301,14 @@ impl ReplaceInterpreter {
                 ignore_exchange: false,
             }));
         }
-        root = Box::new(PhysicalPlan::CommitSink(CommitSink {
+        root = Box::new(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: root,
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog.info(),
             mutation_kind: MutationKind::Replace,
             merge_meta: false,
-        }));
+        })));
         Ok((root, purge_info))
     }
 

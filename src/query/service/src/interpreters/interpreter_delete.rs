@@ -313,14 +313,14 @@ impl DeleteInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::CommitSink(CommitSink {
+        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             snapshot,
             table_info,
             catalog_info,
             mutation_kind: MutationKind::Delete,
             merge_meta,
-        }))
+        })))
     }
 }
 

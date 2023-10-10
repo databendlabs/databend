@@ -306,7 +306,7 @@ impl MergeIntoInterpreter {
 
         // recv datablocks from matched upstream and unmatched upstream
         // transform and append dat
-        let merge_into = PhysicalPlan::MergeInto(MergeInto {
+        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(merge_into_source),
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
@@ -320,10 +320,10 @@ impl MergeIntoInterpreter {
                 .into_iter()
                 .enumerate()
                 .collect(),
-        });
+        }));
 
         // build mutation_aggregate
-        let physical_plan = PhysicalPlan::CommitSink(CommitSink {
+        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(merge_into),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
@@ -331,7 +331,7 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
             merge_meta: false,
-        });
+        }));
 
         Ok((physical_plan, table_info.clone()))
     }
