@@ -36,41 +36,37 @@ CREATE AGGREGATING INDEX idx1 AS SELECT b, SUM(a) FROM t1 WHERE b > 3 GROUP BY b
 query T
 EXPLAIN SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ----
-EvalScalar
-├── output columns: [t1.b (#5), sum(a) (#7)]
-├── expressions: [SUM(a) (#6)]
+AggregateFinal
+├── output columns: [SUM(a) (#5), t1.b (#4)]
+├── group by: [b]
+├── aggregate functions: [sum(a)]
 ├── estimated rows: 0.00
-└── AggregateFinal
-    ├── output columns: [SUM(a) (#6), t1.b (#5)]
+└── AggregatePartial
+    ├── output columns: [SUM(a) (#5), #_group_by_key]
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
-    └── AggregatePartial
-        ├── output columns: [SUM(a) (#6), #_group_by_key]
-        ├── group by: [b]
-        ├── aggregate functions: [sum(a)]
+    └── Filter
+        ├── output columns: [t1.a (#3), t1.b (#4)]
+        ├── filters: [t1.b (#4) > 3]
         ├── estimated rows: 0.00
-        └── Filter
-            ├── output columns: [t1.a (#4), t1.b (#5)]
-            ├── filters: [t1.b (#5) > 3]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_index_db.t1
-                ├── output columns: [a (#4), b (#5)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
-                ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
-                ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
-                └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_index_db.t1
+            ├── output columns: [a (#3), b (#4)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [t1.b (#4) > 3], limit: NONE]
+            ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
+            ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
+            └── estimated rows: 0.00
 
 query T
 EXPLAIN SELECT b FROM t1 WHERE b > 3 GROUP BY b
 ----
 AggregateFinal
-├── output columns: [t1.b (#5)]
+├── output columns: [t1.b (#4)]
 ├── group by: [b]
 ├── aggregate functions: []
 ├── estimated rows: 0.00
@@ -80,17 +76,17 @@ AggregateFinal
     ├── aggregate functions: []
     ├── estimated rows: 0.00
     └── Filter
-        ├── output columns: [t1.b (#5)]
-        ├── filters: [t1.b (#5) > 3]
+        ├── output columns: [t1.b (#4)]
+        ├── filters: [t1.b (#4) > 3]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.test_index_db.t1
-            ├── output columns: [b (#5)]
+            ├── output columns: [b (#4)]
             ├── read rows: 0
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
+            ├── push downs: [filters: [t1.b (#4) > 3], limit: NONE]
             ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
             ├── rewritten query: [selection: [index_col_0 (#0)]]
             └── estimated rows: 0.00
@@ -99,31 +95,31 @@ query T
 EXPLAIN SELECT SUM(a) + 1 FROM t1 WHERE b > 3 GROUP BY b
 ----
 EvalScalar
-├── output columns: [(sum(a) + 1) (#7)]
-├── expressions: [SUM(a) (#6) + 1]
+├── output columns: [(sum(a) + 1) (#6)]
+├── expressions: [SUM(a) (#5) + 1]
 ├── estimated rows: 0.00
 └── AggregateFinal
-    ├── output columns: [SUM(a) (#6), t1.b (#5)]
+    ├── output columns: [SUM(a) (#5), t1.b (#4)]
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
     └── AggregatePartial
-        ├── output columns: [SUM(a) (#6), #_group_by_key]
+        ├── output columns: [SUM(a) (#5), #_group_by_key]
         ├── group by: [b]
         ├── aggregate functions: [sum(a)]
         ├── estimated rows: 0.00
         └── Filter
-            ├── output columns: [t1.a (#4), t1.b (#5)]
-            ├── filters: [t1.b (#5) > 3]
+            ├── output columns: [t1.a (#3), t1.b (#4)]
+            ├── filters: [t1.b (#4) > 3]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.t1
-                ├── output columns: [a (#4), b (#5)]
+                ├── output columns: [a (#3), b (#4)]
                 ├── read rows: 0
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
+                ├── push downs: [filters: [t1.b (#4) > 3], limit: NONE]
                 ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                 ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
                 └── estimated rows: 0.00
@@ -132,31 +128,31 @@ query T
 EXPLAIN SELECT SUM(a) + 1 FROM t1 WHERE b > 5 GROUP BY b
 ----
 EvalScalar
-├── output columns: [(sum(a) + 1) (#7)]
-├── expressions: [SUM(a) (#6) + 1]
+├── output columns: [(sum(a) + 1) (#6)]
+├── expressions: [SUM(a) (#5) + 1]
 ├── estimated rows: 0.00
 └── AggregateFinal
-    ├── output columns: [SUM(a) (#6), t1.b (#5)]
+    ├── output columns: [SUM(a) (#5), t1.b (#4)]
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
     └── AggregatePartial
-        ├── output columns: [SUM(a) (#6), #_group_by_key]
+        ├── output columns: [SUM(a) (#5), #_group_by_key]
         ├── group by: [b]
         ├── aggregate functions: [sum(a)]
         ├── estimated rows: 0.00
         └── Filter
-            ├── output columns: [t1.a (#4), t1.b (#5)]
-            ├── filters: [t1.b (#5) > 5]
+            ├── output columns: [t1.a (#3), t1.b (#4)]
+            ├── filters: [t1.b (#4) > 5]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.t1
-                ├── output columns: [a (#4), b (#5)]
+                ├── output columns: [a (#3), b (#4)]
                 ├── read rows: 0
                 ├── read bytes: 0
                 ├── partitions total: 0
                 ├── partitions scanned: 0
-                ├── push downs: [filters: [t1.b (#5) > 5], limit: NONE]
+                ├── push downs: [filters: [t1.b (#4) > 5], limit: NONE]
                 ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                 ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)], filter: index_col_0 (#0) > to_int32(5)]
                 └── estimated rows: 0.00
@@ -164,69 +160,61 @@ EvalScalar
 query T
 EXPLAIN SELECT t1.b, SUM(a) FROM t1 GROUP BY t1.b HAVING SUM(a)=(SELECT SUM(a) FROM t1 t WHERE t1.b=t.b and t.b > 3)
 ----
-EvalScalar
-├── output columns: [t1.b (#5), sum(a) (#7)]
-├── expressions: [SUM(a) (#16)]
+Filter
+├── output columns: [SUM(a) (#5), t1.b (#4)]
+├── filters: [is_true(SUM(a) (#5) = scalar_subquery_11 (#11))]
 ├── estimated rows: 0.00
-└── Filter
-    ├── output columns: [SUM(a) (#16), t1.b (#5)]
-    ├── filters: [is_true(SUM(a) (#16) = scalar_subquery_15 (#15))]
+└── HashJoin
+    ├── output columns: [SUM(a) (#5), t1.b (#4), SUM(a) (#11)]
+    ├── join type: LEFT SINGLE
+    ├── build keys: [b (#10)]
+    ├── probe keys: [CAST(b (#4) AS Int32 NULL)]
+    ├── filters: []
     ├── estimated rows: 0.00
-    └── HashJoin
-        ├── output columns: [SUM(a) (#16), t1.b (#5), sum(a) (#15)]
-        ├── join type: LEFT SINGLE
-        ├── build keys: [b (#13)]
-        ├── probe keys: [CAST(b (#5) AS Int32 NULL)]
-        ├── filters: []
+    ├── AggregateFinal(Build)
+    │   ├── output columns: [SUM(a) (#11), t.b (#10)]
+    │   ├── group by: [b]
+    │   ├── aggregate functions: [sum(a)]
+    │   ├── estimated rows: 0.00
+    │   └── AggregatePartial
+    │       ├── output columns: [SUM(a) (#11), #_group_by_key]
+    │       ├── group by: [b]
+    │       ├── aggregate functions: [sum(a)]
+    │       ├── estimated rows: 0.00
+    │       └── Filter
+    │           ├── output columns: [t.a (#9), t.b (#10)]
+    │           ├── filters: [t.b (#10) > 3]
+    │           ├── estimated rows: 0.00
+    │           └── TableScan
+    │               ├── table: default.test_index_db.t1
+    │               ├── output columns: [a (#9), b (#10)]
+    │               ├── read rows: 0
+    │               ├── read bytes: 0
+    │               ├── partitions total: 0
+    │               ├── partitions scanned: 0
+    │               ├── push downs: [filters: [t.b (#10) > 3], limit: NONE]
+    │               ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
+    │               ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
+    │               └── estimated rows: 0.00
+    └── AggregateFinal(Probe)
+        ├── output columns: [SUM(a) (#5), t1.b (#4)]
+        ├── group by: [b]
+        ├── aggregate functions: [sum(a)]
         ├── estimated rows: 0.00
-        ├── EvalScalar(Build)
-        │   ├── output columns: [t.b (#13), sum(a) (#15)]
-        │   ├── expressions: [SUM(a) (#14)]
-        │   ├── estimated rows: 0.00
-        │   └── AggregateFinal
-        │       ├── output columns: [SUM(a) (#14), t.b (#13)]
-        │       ├── group by: [b]
-        │       ├── aggregate functions: [sum(a)]
-        │       ├── estimated rows: 0.00
-        │       └── AggregatePartial
-        │           ├── output columns: [SUM(a) (#14), #_group_by_key]
-        │           ├── group by: [b]
-        │           ├── aggregate functions: [sum(a)]
-        │           ├── estimated rows: 0.00
-        │           └── Filter
-        │               ├── output columns: [t.a (#12), t.b (#13)]
-        │               ├── filters: [t.b (#13) > 3]
-        │               ├── estimated rows: 0.00
-        │               └── TableScan
-        │                   ├── table: default.test_index_db.t1
-        │                   ├── output columns: [a (#12), b (#13)]
-        │                   ├── read rows: 0
-        │                   ├── read bytes: 0
-        │                   ├── partitions total: 0
-        │                   ├── partitions scanned: 0
-        │                   ├── push downs: [filters: [t.b (#13) > 3], limit: NONE]
-        │                   ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
-        │                   ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
-        │                   └── estimated rows: 0.00
-        └── AggregateFinal(Probe)
-            ├── output columns: [SUM(a) (#16), t1.b (#5)]
+        └── AggregatePartial
+            ├── output columns: [SUM(a) (#5), #_group_by_key]
             ├── group by: [b]
             ├── aggregate functions: [sum(a)]
             ├── estimated rows: 0.00
-            └── AggregatePartial
-                ├── output columns: [SUM(a) (#16), #_group_by_key]
-                ├── group by: [b]
-                ├── aggregate functions: [sum(a)]
-                ├── estimated rows: 0.00
-                └── TableScan
-                    ├── table: default.test_index_db.t1
-                    ├── output columns: [a (#4), b (#5)]
-                    ├── read rows: 0
-                    ├── read bytes: 0
-                    ├── partitions total: 0
-                    ├── partitions scanned: 0
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 0.00
+            └── TableScan
+                ├── table: default.test_index_db.t1
+                ├── output columns: [a (#3), b (#4)]
+                ├── read rows: 0
+                ├── read bytes: 0
+                ├── partitions total: 0
+                ├── partitions scanned: 0
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 0.00
 
 # Disable aggregating index scan
 statement ok
@@ -235,33 +223,29 @@ SET enable_aggregating_index_scan = 0
 query T
 EXPLAIN SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 ----
-EvalScalar
-├── output columns: [t1.b (#1), sum(a) (#3)]
-├── expressions: [SUM(a) (#2)]
+AggregateFinal
+├── output columns: [SUM(a) (#2), t1.b (#1)]
+├── group by: [b]
+├── aggregate functions: [sum(a)]
 ├── estimated rows: 0.00
-└── AggregateFinal
-    ├── output columns: [SUM(a) (#2), t1.b (#1)]
+└── AggregatePartial
+    ├── output columns: [SUM(a) (#2), #_group_by_key]
     ├── group by: [b]
     ├── aggregate functions: [sum(a)]
     ├── estimated rows: 0.00
-    └── AggregatePartial
-        ├── output columns: [SUM(a) (#2), #_group_by_key]
-        ├── group by: [b]
-        ├── aggregate functions: [sum(a)]
+    └── Filter
+        ├── output columns: [t1.a (#0), t1.b (#1)]
+        ├── filters: [t1.b (#1) > 3]
         ├── estimated rows: 0.00
-        └── Filter
-            ├── output columns: [t1.a (#0), t1.b (#1)]
-            ├── filters: [t1.b (#1) > 3]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_index_db.t1
-                ├── output columns: [a (#0), b (#1)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [t1.b (#1) > 3], limit: NONE]
-                └── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_index_db.t1
+            ├── output columns: [a (#0), b (#1)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [t1.b (#1) > 3], limit: NONE]
+            └── estimated rows: 0.00
 
 statement ok
 SET enable_aggregating_index_scan = 1
@@ -275,35 +259,31 @@ CREATE AGGREGATING INDEX idx1 AS SELECT a + 1 from t1
 query T
 EXPLAIN SELECT avg(a + 1) from t1
 ----
-EvalScalar
-├── output columns: [avg((a + 1)) (#7)]
-├── expressions: [avg((a + 1)) (#6)]
+AggregateFinal
+├── output columns: [avg((a + 1)) (#6)]
+├── group by: []
+├── aggregate functions: [avg(avg_arg_0)]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [avg((a + 1)) (#6)]
     ├── group by: []
     ├── aggregate functions: [avg(avg_arg_0)]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [avg((a + 1)) (#6)]
-        ├── group by: []
-        ├── aggregate functions: [avg(avg_arg_0)]
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── output columns: [avg_arg_0 (#5)]
-            ├── expressions: [t1.a (#3) + 1]
-            ├── estimated rows: 0.00
-            └── TableScan
-                ├── table: default.test_index_db.t1
-                ├── output columns: [a (#3)]
-                ├── read rows: 0
-                ├── read bytes: 0
-                ├── partitions total: 0
-                ├── partitions scanned: 0
-                ├── push downs: [filters: [], limit: NONE]
-                ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
-                ├── rewritten query: [selection: [index_col_0 (#0)]]
-                └── estimated rows: 0.00
+    └── EvalScalar
+        ├── output columns: [avg_arg_0 (#5)]
+        ├── expressions: [t1.a (#3) + 1]
+        ├── estimated rows: 0.00
+        └── TableScan
+            ├── table: default.test_index_db.t1
+            ├── output columns: [a (#3)]
+            ├── read rows: 0
+            ├── read bytes: 0
+            ├── partitions total: 0
+            ├── partitions scanned: 0
+            ├── push downs: [filters: [], limit: NONE]
+            ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
+            ├── rewritten query: [selection: [index_col_0 (#0)]]
+            └── estimated rows: 0.00
 
 
 # Should not be rewritten
@@ -432,4 +412,3 @@ USE default
 
 statement ok
 DROP DATABASE IF EXISTS test_virtual_db
-
