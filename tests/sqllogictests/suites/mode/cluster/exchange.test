@@ -167,50 +167,46 @@ query T
 explain select * from (select sum(number) as number from numbers(1) group by number) t, numbers(2) t1 where t.number = t1.number
 ----
 Exchange
-├── output columns: [t1.number (#4), number (#3)]
+├── output columns: [t1.number (#3), sum(number) (#2)]
 ├── exchange type: Merge
 └── HashJoin
-    ├── output columns: [t1.number (#4), number (#3)]
+    ├── output columns: [t1.number (#3), sum(number) (#2)]
     ├── join type: INNER
-    ├── build keys: [t.number (#3)]
-    ├── probe keys: [CAST(t1.number (#4) AS UInt64 NULL)]
+    ├── build keys: [t.number (#2)]
+    ├── probe keys: [CAST(t1.number (#3) AS UInt64 NULL)]
     ├── filters: []
     ├── estimated rows: 2.00
     ├── Exchange(Build)
-    │   ├── output columns: [number (#3)]
-    │   ├── exchange type: Hash(t.number (#3))
-    │   └── EvalScalar
-    │       ├── output columns: [number (#3)]
-    │       ├── expressions: [sum(number) (#2)]
+    │   ├── output columns: [sum(number) (#2), numbers.number (#0)]
+    │   ├── exchange type: Hash(t.number (#2))
+    │   └── AggregateFinal
+    │       ├── output columns: [sum(number) (#2), numbers.number (#0)]
+    │       ├── group by: [number]
+    │       ├── aggregate functions: [sum(number)]
     │       ├── estimated rows: 1.00
-    │       └── AggregateFinal
-    │           ├── output columns: [sum(number) (#2), numbers.number (#0)]
-    │           ├── group by: [number]
-    │           ├── aggregate functions: [sum(number)]
-    │           ├── estimated rows: 1.00
-    │           └── Exchange
+    │       └── Exchange
+    │           ├── output columns: [sum(number) (#2), #_group_by_key]
+    │           ├── exchange type: Hash(_group_by_key)
+    │           └── AggregatePartial
     │               ├── output columns: [sum(number) (#2), #_group_by_key]
-    │               ├── exchange type: Hash(_group_by_key)
-    │               └── AggregatePartial
-    │                   ├── output columns: [sum(number) (#2), #_group_by_key]
-    │                   ├── group by: [number]
-    │                   ├── aggregate functions: [sum(number)]
-    │                   ├── estimated rows: 1.00
-    │                   └── TableScan
-    │                       ├── table: default.system.numbers
-    │                       ├── output columns: [number (#0)]
-    │                       ├── read rows: 1
-    │                       ├── read bytes: 8
-    │                       ├── partitions total: 1
-    │                       ├── partitions scanned: 1
-    │                       ├── push downs: [filters: [], limit: NONE]
-    │                       └── estimated rows: 1.00
+    │               ├── group by: [number]
+    │               ├── aggregate functions: [sum(number)]
+    │               ├── estimated rows: 1.00
+    │               └── TableScan
+    │                   ├── table: default.system.numbers
+    │                   ├── output columns: [number (#0)]
+    │                   ├── read rows: 1
+    │                   ├── read bytes: 8
+    │                   ├── partitions total: 1
+    │                   ├── partitions scanned: 1
+    │                   ├── push downs: [filters: [], limit: NONE]
+    │                   └── estimated rows: 1.00
     └── Exchange(Probe)
-        ├── output columns: [t1.number (#4)]
-        ├── exchange type: Hash(CAST(t1.number (#4) AS UInt64 NULL))
+        ├── output columns: [t1.number (#3)]
+        ├── exchange type: Hash(CAST(t1.number (#3) AS UInt64 NULL))
         └── TableScan
             ├── table: default.system.numbers
-            ├── output columns: [number (#4)]
+            ├── output columns: [number (#3)]
             ├── read rows: 2
             ├── read bytes: 16
             ├── partitions total: 1
@@ -224,11 +220,11 @@ explain fragments select * from (select sum(number) as number from numbers(1) gr
 Fragment 0:
   DataExchange: Shuffle
     ExchangeSink
-    ├── output columns: [t1.number (#4)]
+    ├── output columns: [t1.number (#3)]
     ├── destination fragment: [3]
     └── TableScan
         ├── table: default.system.numbers
-        ├── output columns: [number (#4)]
+        ├── output columns: [number (#3)]
         ├── read rows: 2
         ├── read bytes: 16
         ├── partitions total: 1
@@ -261,45 +257,41 @@ Fragment 1:
 Fragment 2:
   DataExchange: Shuffle
     ExchangeSink
-    ├── output columns: [number (#3)]
+    ├── output columns: [sum(number) (#2), numbers.number (#0)]
     ├── destination fragment: [3]
-    └── EvalScalar
-        ├── output columns: [number (#3)]
-        ├── expressions: [sum(number) (#2)]
+    └── AggregateFinal
+        ├── output columns: [sum(number) (#2), numbers.number (#0)]
+        ├── group by: [number]
+        ├── aggregate functions: [sum(number)]
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [sum(number) (#2), numbers.number (#0)]
-            ├── group by: [number]
-            ├── aggregate functions: [sum(number)]
-            ├── estimated rows: 1.00
-            └── ExchangeSource
-                ├── output columns: [sum(number) (#2), #_group_by_key]
-                └── source fragment: [1]
+        └── ExchangeSource
+            ├── output columns: [sum(number) (#2), #_group_by_key]
+            └── source fragment: [1]
 (empty)
 (empty)
 Fragment 3:
   DataExchange: Merge
     ExchangeSink
-    ├── output columns: [t1.number (#4), number (#3)]
+    ├── output columns: [t1.number (#3), sum(number) (#2)]
     ├── destination fragment: [4]
     └── HashJoin
-        ├── output columns: [t1.number (#4), number (#3)]
+        ├── output columns: [t1.number (#3), sum(number) (#2)]
         ├── join type: INNER
-        ├── build keys: [t.number (#3)]
-        ├── probe keys: [CAST(t1.number (#4) AS UInt64 NULL)]
+        ├── build keys: [t.number (#2)]
+        ├── probe keys: [CAST(t1.number (#3) AS UInt64 NULL)]
         ├── filters: []
         ├── estimated rows: 2.00
         ├── ExchangeSource(Build)
-        │   ├── output columns: [number (#3)]
+        │   ├── output columns: [sum(number) (#2), numbers.number (#0)]
         │   └── source fragment: [2]
         └── ExchangeSource(Probe)
-            ├── output columns: [t1.number (#4)]
+            ├── output columns: [t1.number (#3)]
             └── source fragment: [0]
 (empty)
 (empty)
 Fragment 4:
     ExchangeSource
-    ├── output columns: [t1.number (#4), number (#3)]
+    ├── output columns: [t1.number (#3), sum(number) (#2)]
     └── source fragment: [3]
 (empty)
 
