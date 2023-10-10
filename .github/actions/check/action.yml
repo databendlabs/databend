@@ -19,16 +19,24 @@ runs:
       run: |
         cargo fmt --all -- --check
 
+    - name: Install Check Tools
+      env:
+        GH_TOKEN: ${{ github.token }}
+      shell: bash
+      run: |
+        cargo install cargo-quickinstall
+        cargo quickinstall cargo-machete
+        cargo quickinstall cargo-deny
+
     - name: Machete
       shell: bash
       run: |
-        cargo install cargo-machete --force
         cargo machete
 
-    - name: Audit dependencies
+    - name: Deny Check
       shell: bash
       run: |
-        cargo audit
+        cargo deny check
 
     - name: Clippy
       shell: bash

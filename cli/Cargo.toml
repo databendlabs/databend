@@ -27,7 +27,7 @@ serde = { version = "1.0", features = ["derive"] }
 sqlformat = "0.2"
 strum = "0.25"
 strum_macros = "0.25"
-terminal_size = "0.2"
+terminal_size = "0.3"
 tokio = { version = "1.28", features = [
     "macros",
     "rt",
@@ -36,7 +36,7 @@ tokio = { version = "1.28", features = [
     "parking_lot",
 ] }
 tokio-stream = "0.1"
-toml = "0.7"
+toml = "0.8"
 unicode-segmentation = "1.10"
 url = { version = "2.4", default-features = false }
 
