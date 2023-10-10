@@ -93,7 +93,7 @@ impl Session {
     }
 
     async fn prompt(&self) -> String {
-        if !self.query.is_empty() {
+        if !self.query.trim().is_empty() {
             "> ".to_owned()
         } else {
             let info = self.conn.info().await;
