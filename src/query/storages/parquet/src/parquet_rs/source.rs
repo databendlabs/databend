@@ -75,7 +75,7 @@ impl ParquetSource {
         topk: Arc<Option<TopK>>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
-        let is_copy = matches!(ctx.get_query_kind(), QueryKind::Copy);
+        let is_copy = matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
         let copy_status = ctx.get_copy_status();
 
         let topk_sorter = topk
