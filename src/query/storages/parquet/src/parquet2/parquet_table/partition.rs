@@ -172,7 +172,7 @@ impl Parquet2Table {
                 &file_locations,
                 ctx.get_settings().get_max_threads()? as usize,
                 &ctx.get_copy_status(),
-                matches!(ctx.get_query_kind(), QueryKind::Copy),
+                matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
             )
             .await
     }

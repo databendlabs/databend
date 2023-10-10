@@ -29,7 +29,8 @@ use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
 use crate::interpreters::interpreter_catalog_drop::DropCatalogInterpreter;
-use crate::interpreters::interpreter_copy::CopyInterpreter;
+use crate::interpreters::interpreter_copy_into_location::CopyIntoLocationInterpreter;
+use crate::interpreters::interpreter_copy_into_table::CopyIntoTableInterpreter;
 use crate::interpreters::interpreter_file_format_create::CreateFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_drop::DropFileFormatInterpreter;
 use crate::interpreters::interpreter_file_format_show::ShowFileFormatsInterpreter;
@@ -102,10 +103,13 @@ impl InterpreterFactory {
                 ExplainKind::AnalyzePlan,
             )?)),
 
-            Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreter::try_create(
+            Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
-                *copy_plan.clone(),
+                copy_plan.clone(),
             )?)),
+            Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
+                CopyIntoLocationInterpreter::try_create(ctx, copy_plan.clone())?,
+            )),
             // catalogs
             Plan::ShowCreateCatalog(plan) => Ok(Arc::new(
                 ShowCreateCatalogInterpreter::try_create(ctx, *plan.clone())?,

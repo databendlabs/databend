@@ -3569,6 +3569,10 @@ Functions overloads:
 1 to_unix_timestamp(Timestamp NULL) :: Int64 NULL
 0 to_variant(T0) :: Variant
 1 to_variant(T0 NULL) :: Variant NULL
+0 to_week_of_year(Date) :: UInt32
+1 to_week_of_year(Date NULL) :: UInt32 NULL
+2 to_week_of_year(Timestamp) :: UInt32
+3 to_week_of_year(Timestamp NULL) :: UInt32 NULL
 0 to_year(Date) :: UInt16
 1 to_year(Date NULL) :: UInt16 NULL
 2 to_year(Timestamp) :: UInt16
