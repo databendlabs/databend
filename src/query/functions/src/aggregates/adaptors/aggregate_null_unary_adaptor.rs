@@ -211,8 +211,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         if NULLABLE_RESULT {
             let flag = reader[reader.len() - 1];
             if flag == 1 {
-                self.nested.merge(place, &mut &reader[..reader.len() - 1])?;
                 self.set_flag(place, 1);
+                self.nested.merge(place, &mut &reader[..reader.len() - 1])?;
             }
         } else {
             self.nested.merge(place, reader)?;
@@ -228,8 +228,8 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction for AggregateNullUnaryAdapto
         }
 
         if self.get_flag(rhs) == 1 {
-            self.nested.merge_states(place, rhs)?;
             self.set_flag(place, 1);
+            self.nested.merge_states(place, rhs)?;
         }
 
         Ok(())
