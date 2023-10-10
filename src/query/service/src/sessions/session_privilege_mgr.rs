@@ -14,13 +14,13 @@ use crate::sessions::SessionContext;
 /// SessionPrivilegeManager handles all the things related to privieges in a session.
 #[async_trait::async_trait]
 pub trait SessionPrivilegeManager {
-    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
-
     fn get_current_user(&self) -> Result<UserInfo>;
 
-    async fn set_current_role(&self, role: Option<String>) -> Result<()>;
-
     fn get_current_role(&self) -> Option<RoleInfo>;
+
+    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()>;
+
+    async fn set_current_role(&self, role: Option<String>) -> Result<()>;
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
