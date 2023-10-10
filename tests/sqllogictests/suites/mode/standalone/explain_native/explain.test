@@ -860,78 +860,70 @@ HashJoin
 query T
 explain select count(distinct a) from t1;
 ----
-EvalScalar
-├── output columns: [count() (#3)]
-├── expressions: [count() (#2)]
+AggregateFinal
+├── output columns: [count() (#2)]
+├── group by: []
+├── aggregate functions: [count()]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [count() (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [count() (#2)]
-        ├── group by: []
-        ├── aggregate functions: [count()]
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: []
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [t1.a (#0)]
+        └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [#_group_by_key]
-                ├── group by: [a]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0)]
-                    ├── read rows: 1
-                    ├── read bytes: 18
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0)]
+                ├── read rows: 1
+                ├── read bytes: 18
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
 
 query T
 explain select count_distinct(a) from t1;
 ----
-EvalScalar
-├── output columns: [count() (#3)]
-├── expressions: [count() (#2)]
+AggregateFinal
+├── output columns: [count() (#2)]
+├── group by: []
+├── aggregate functions: [count()]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [count() (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [count() (#2)]
-        ├── group by: []
-        ├── aggregate functions: [count()]
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: []
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [t1.a (#0)]
+        └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [#_group_by_key]
-                ├── group by: [a]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0)]
-                    ├── read rows: 1
-                    ├── read bytes: 18
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0)]
+                ├── read rows: 1
+                ├── read bytes: 18
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
 
 query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)
