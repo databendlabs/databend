@@ -111,7 +111,6 @@ async fn check_final(ep: &EndpointType, final_uri: &str) -> Result<()> {
     Ok(())
 }
 
-#[ignore = "flaky"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_simple_sql() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
@@ -180,7 +179,6 @@ async fn test_simple_sql() -> Result<()> {
     Ok(())
 }
 
-#[ignore = "flaky"]
 #[tokio::test(flavor = "current_thread")]
 async fn test_show_databases() -> Result<()> {
     let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
