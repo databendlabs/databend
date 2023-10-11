@@ -319,7 +319,6 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
         .set_enable_refresh_aggregating_index_after_write(true)?;
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let ctx = fixture.ctx();
-    execute_sql(ctx.clone(), "DROP TABLE IF EXISTS t0").await?;
     // Create table
     execute_sql(
         ctx.clone(),
@@ -329,12 +328,6 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     // Create agg index `index0`
     let index_name = "index0";
-
-    execute_sql(
-        ctx.clone(),
-        &format!("DROP AGGREGATING INDEX IF EXISTS {}", index_name),
-    )
-    .await?;
 
     let index_id0 = create_index(
         ctx.clone(),
@@ -346,12 +339,6 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
 
     // Create agg index `index1`
     let index_name = "index1";
-
-    execute_sql(
-        ctx.clone(),
-        &format!("DROP AGGREGATING INDEX IF EXISTS {}", index_name),
-    )
-    .await?;
 
     let index_id1 = create_index(
         ctx.clone(),
@@ -456,7 +443,6 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let ctx = fixture.ctx();
 
-    execute_sql(ctx.clone(), "DROP TABLE IF EXISTS books").await?;
     // Create table
     execute_sql(
         ctx.clone(),
@@ -466,12 +452,6 @@ async fn test_sync_agg_index_after_copy_into() -> Result<()> {
 
     // Create agg index `index0`
     let index_name = "index0";
-
-    execute_sql(
-        ctx.clone(),
-        &format!("DROP AGGREGATING INDEX IF EXISTS {}", index_name),
-    )
-    .await?;
 
     let index_id0 = create_index(
         ctx.clone(),
