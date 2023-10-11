@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use std::u32::MAX;
+use std::u64::MAX;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
