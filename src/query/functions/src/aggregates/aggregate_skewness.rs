@@ -197,17 +197,17 @@ where T: Number + AsPrimitive<f64>
         serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<SkewnessState>();
-        *state = deserialize_from_slice(reader)?;
-
+        let rhs: SkewnessState = deserialize_from_slice(reader)?;
+        state.merge(&rhs);
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<SkewnessState>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<SkewnessState>();
-        state.merge(rhs);
+        let other = rhs.get::<SkewnessState>();
+        state.merge(other);
         Ok(())
     }
 
