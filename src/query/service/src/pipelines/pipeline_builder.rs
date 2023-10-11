@@ -353,9 +353,11 @@ impl PipelineBuilder {
             )?;
 
             let mut target_schema: DataSchema = table_schema.clone().into();
-            if let Some((_, delete_column)) = delete_when {
-                let delete_column = select_schema.field(*delete_column);
-                target_schema.fields.push(delete_column.clone());
+            if let Some((_, delete_column_idx)) = delete_when {
+                let delete_column = select_schema.field(*delete_column_idx);
+                target_schema
+                    .fields
+                    .insert(*delete_column_idx, delete_column.clone());
             }
             let target_schema = Arc::new(target_schema.clone());
             if target_schema.fields().len() != select_schema.fields().len() {
