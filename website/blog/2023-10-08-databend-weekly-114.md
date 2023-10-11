@@ -78,13 +78,13 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Introducing `DATABEND_DATA_PATH` to Python Binding and Local Mode
 
-Databend's Local mode now allows users to control the storage location of metadata and data files by setting the `DATABEND_DATA_PATH` environment variable.
+Databend's local mode now allows users to control the storage location of metadata and data files by setting the `DATABEND_DATA_PATH` environment variable.
 
 ```shell
 DATABEND_DATA_PATH=/tmp/data/ databend-query local -q "create table abc(a int); insert into abc values(3);"
 ```
 
-The Python Binding of Databend also follows the `DATABEND_DATA_PATH` variable, but it must be defined before using `databend`.
+`DATABEND_DATA_PATH` also works with Databend Python Binding, but it must be defined before using `databend`.
 
 ```python
 import os
@@ -103,18 +103,18 @@ If you are interested in learning more, please check out the resources below:
 We have also made these improvements to Databend that we hope you will find helpful:
 
 - Improved Hash Join, resulting in a 10% performance improvement in certain scenarios.
-- Enhanced parallel execution of MERGE INTO.
+- Enhanced distributed execution of MERGE.
 - Improved CI by using `quickinstall` to install relevant binary tools and executing unit tests with `nextest`.
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Delete files When Dropping Internal Stage
+### Delete Files When Dropping Internal Stage
 
-In Databend, an Internal Stage stores data files within the storage backend specified in `databend-query.toml`. 
+In Databend, an Internal Stage stores data files in the storage backend specified in `databend-query.toml`. 
 
-Considering that users will not be able to access the staged data files after dropping the Internal Stage, it is necessary to consider removing the staged files when dropping the Internal Stage.
+Considering that users will not be able to access the staged files after dropping an Internal Stage, it is necessary to remove the staged files when dropping the Internal Stage.
 
 [Issue #12986 | remove files at the same time of drop internal stage](https://github.com/datafuselabs/databend/issues/12986)
 
