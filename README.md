@@ -13,30 +13,53 @@ Databend Native Client in Rust
 
 ## Installation for BendSQL
 
-* Cargo:
+### Cargo:
+
+[cargo-binstall](https://github.com/cargo-bins/cargo-binstall) is recommended:
+
+```bash
+cargo binstall bendsql
+```
+
+Or alternatively build from source:
+
 ```bash
 cargo install bendsql
 ```
 
-* Homebrew:
+
+### Homebrew:
+
 ```bash
 brew install databendcloud/homebrew-tap/bendsql
 ```
 
-* Apt:
+### Apt:
+
+* Using DEB822-STYLE format on Ubuntu-22.04/Debian-12 and later:
+
+```bash
+sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
+```
+
+* Using old format on Ubuntu-20.04/Debian-11 and earlier:
+
 ```bash
 sudo curl -L -o /usr/share/keyrings/datafuselabs-keyring.gpg https://repo.databend.rs/deb/datafuselabs.gpg
 sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.list https://repo.databend.rs/deb/datafuselabs.list
+```
 
-# or using DEB822-STYLE format in Ubuntu-22.04/Debian-12 and later
-# sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
+Then install bendsql:
 
+```bash
 sudo apt update
 
 sudo apt install bendsql
 ```
 
-* Binary: check for latest release [here](https://github.com/datafuselabs/bendsql/releases)
+### Manually:
+
+Check for latest version on [GitHub Release](https://github.com/datafuselabs/bendsql/releases)
 
 
 ## Usage
@@ -59,14 +82,14 @@ Options:
       --set <SET>                Settings
       --dsn <DSN>                Data source name [env: BENDSQL_DSN=]
   -n, --non-interactive          Force non-interactive mode
-  -q, --query <QUERY>            Query to execute
+      --query=<QUERY>            Query to execute
   -d, --data <DATA>              Data to load, @file or @- for stdin
   -f, --format <FORMAT>          Data format to load [default: csv] [possible values: csv, tsv, ndjson, parquet, xml]
       --format-opt <FORMAT_OPT>  Data format options
   -o, --output <OUTPUT>          Output format [possible values: table, csv, tsv, null]
       --progress                 Show progress for query execution in stderr, only works with output format `table` and `null`.
       --stats                    Show stats after query execution in stderr, only works with non-interactive mode.
-      --time                     Only show execution time without results, will implicitly set output format to `null`.
+      --time[=<TIME>]            Only show execution time without results, will implicitly set output format to `null`. [possible values: local, server]
   -V, --version                  Print version
 ```
 
@@ -189,7 +212,7 @@ see: [Databend Query Settings](https://databend.rs/doc/sql-commands/show/show-se
 
 ## Development
 
-### Cargo fmt, clippy, audit
+### Cargo fmt, clippy, deny
 
 ```bash
 make check
