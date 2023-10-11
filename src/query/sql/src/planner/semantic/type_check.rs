@@ -1962,6 +1962,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(span, "to_day_of_week", vec![], &[arg])
                     .await
             }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_week_of_year", vec![], &[arg])
+                    .await
+            }
         }
     }
 

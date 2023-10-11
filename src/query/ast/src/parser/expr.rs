@@ -730,6 +730,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         },
         |(_, target_type)| ExprElement::PgCast { target_type },
     );
+    let date_part = map(
+        rule! {
+            DATE_PART ~ "(" ~ ^#interval_kind ~ "," ~ ^#subexpr(0) ~ ^")"
+        },
+        |(_, _, field, _, expr, _)| ExprElement::Extract {
+            field,
+            expr: Box::new(expr),
+        },
+    );
     let extract = map(
         rule! {
             EXTRACT ~ "(" ~ ^#interval_kind ~ ^FROM ~ ^#subexpr(0) ~ ^")"
@@ -1045,6 +1054,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #interval: "`INTERVAL ... (YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND | DOY | DOW)`"
             | #pg_cast : "`::<type_name>`"
             | #extract : "`EXTRACT((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND) FROM ...)`"
+            | #date_part : "`DATE_PART((YEAR | QUARTER | MONTH | DAY | HOUR | MINUTE | SECOND), ...)`"
         ),
         rule!(
             #position : "`POSITION(... IN ...)`"
@@ -1398,6 +1408,7 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(IntervalKind::Second, rule! { SECOND }),
         value(IntervalKind::Doy, rule! { DOY }),
         value(IntervalKind::Dow, rule! { DOW }),
+        value(IntervalKind::Week, rule! { WEEK }),
         value(
             IntervalKind::Year,
             rule! { #literal_string_eq_ignore_case("YEAR")  },
@@ -1433,6 +1444,10 @@ pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
         value(
             IntervalKind::Dow,
             rule! { #literal_string_eq_ignore_case("DOW")  },
+        ),
+        value(
+            IntervalKind::Dow,
+            rule! { #literal_string_eq_ignore_case("WEEK")  },
         ),
     ))(i)
 }

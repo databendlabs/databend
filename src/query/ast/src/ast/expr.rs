@@ -40,6 +40,7 @@ pub enum IntervalKind {
     Minute,
     Second,
     Doy,
+    Week,
     Dow,
 }
 
@@ -536,6 +537,7 @@ impl Display for IntervalKind {
             IntervalKind::Second => "SECOND",
             IntervalKind::Doy => "DOY",
             IntervalKind::Dow => "DOW",
+            IntervalKind::Week => "WEEK",
         })
     }
 }
