@@ -53,6 +53,7 @@ pub struct UnbranchedReplaceIntoProcessor {
 }
 
 impl UnbranchedReplaceIntoProcessor {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: &dyn TableContext,
         on_conflict_fields: Vec<OnConflictField>,
