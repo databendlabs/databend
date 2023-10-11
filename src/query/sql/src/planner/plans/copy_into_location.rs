@@ -12,23 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod copy;
-mod data_mask;
-pub mod expr;
-#[allow(clippy::module_inception)]
-mod parser;
-pub mod query;
-pub mod quote;
-mod share;
-mod stage;
-pub mod statement;
-pub mod token;
-pub mod unescape;
+use std::fmt::Debug;
+use std::fmt::Formatter;
 
-pub use parser::parse_comma_separated_exprs;
-pub use parser::parse_comma_separated_idents;
-pub use parser::parse_expr;
-pub use parser::parse_sql;
-pub use parser::parser_values_with_placeholder;
-pub use parser::tokenize_sql;
-pub use token::all_reserved_keywords;
+use common_meta_app::principal::StageInfo;
+
+use crate::plans::Plan;
+
+#[derive(Clone)]
+pub struct CopyIntoLocationPlan {
+    pub stage: Box<StageInfo>,
+    pub path: String,
+    pub from: Box<Plan>,
+}
+
+impl Debug for CopyIntoLocationPlan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Copy into {:?}/{} from {:?}",
+            self.stage, self.path, self.from
+        )?;
+        Ok(())
+    }
+}

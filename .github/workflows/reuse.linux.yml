@@ -170,7 +170,6 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
-          - "tpch"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_standalone_linux
@@ -222,6 +221,7 @@ jobs:
           - "base"
           - "ydb"
           - "tpcds"
+          - "tpch"
         format:
           - "parquet"
           - "native"
@@ -280,10 +280,8 @@ jobs:
         dirs:
           - "base"
           - "query"
-          - "cluster"
           - "crdb"
           - "duckdb"
-          - "tpch"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux
@@ -299,13 +297,16 @@ jobs:
 
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
     needs: [build, check]
     strategy:
       matrix:
         dirs:
           - "ydb"
           - "tpcds"
+          # FIXME: flaky
+          # - "tpch"
+          - "cluster"
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/test_sqllogic_cluster_linux

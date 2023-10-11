@@ -79,7 +79,7 @@ use common_users::UserApiProvider;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 
-use crate::binder::copy::resolve_file_location;
+use crate::binder::copy_into_table::resolve_file_location;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::table_args::bind_table_args;
 use crate::binder::Binder;

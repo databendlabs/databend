@@ -39,7 +39,9 @@ pub enum Statement {
         query: Box<Statement>,
     },
 
-    Copy(CopyStmt),
+    CopyIntoTable(CopyIntoTableStmt),
+    CopyIntoLocation(CopyIntoLocationStmt),
+
     Call(CallStmt),
 
     ShowSettings {
@@ -238,17 +240,23 @@ pub struct StatementMsg {
 impl Statement {
     pub fn to_mask_sql(&self) -> String {
         match self {
-            Statement::Copy(copy) => {
+            Statement::CopyIntoTable(copy) => {
                 let mut copy_clone = copy.clone();
 
-                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.src {
+                if let CopyIntoTableSource::Location(FileLocation::Uri(location)) =
+                    &mut copy_clone.src
+                {
                     location.connection = location.connection.mask()
                 }
+                format!("{}", Statement::CopyIntoTable(copy_clone))
+            }
+            Statement::CopyIntoLocation(copy) => {
+                let mut copy_clone = copy.clone();
 
-                if let CopyUnit::Location(FileLocation::Uri(location)) = &mut copy_clone.dst {
+                if let FileLocation::Uri(location) = &mut copy_clone.dst {
                     location.connection = location.connection.mask()
                 }
-                format!("{}", Statement::Copy(copy_clone))
+                format!("{}", Statement::CopyIntoLocation(copy_clone))
             }
             Statement::CreateStage(stage) => {
                 let mut stage_clone = stage.clone();
@@ -302,7 +310,8 @@ impl Display for Statement {
                 }
             }
             Statement::Update(update) => write!(f, "{update}")?,
-            Statement::Copy(stmt) => write!(f, "{stmt}")?,
+            Statement::CopyIntoTable(stmt) => write!(f, "{stmt}")?,
+            Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
             Statement::ShowSettings { like } => {
                 write!(f, "SHOW SETTINGS")?;
                 if like.is_some() {

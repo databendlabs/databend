@@ -34,7 +34,7 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::optimizer::RESIDUAL_RULES;
-use crate::plans::CopyPlan;
+use crate::plans::CopyIntoLocationPlan;
 use crate::plans::Plan;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -107,34 +107,21 @@ pub fn optimize(
         Plan::ExplainAnalyze { plan } => Ok(Plan::ExplainAnalyze {
             plan: Box::new(optimize(ctx, opt_ctx, *plan)?),
         }),
-        Plan::Copy(v) => {
-            Ok(Plan::Copy(Box::new(match *v {
-                CopyPlan::IntoStage {
-                    stage,
-                    path,
-                    validation_mode,
-                    from,
-                } => {
-                    CopyPlan::IntoStage {
-                        stage,
-                        path,
-                        validation_mode,
-                        // Make sure the subquery has been optimized.
-                        from: Box::new(optimize(ctx, opt_ctx, *from)?),
-                    }
-                }
-                CopyPlan::NoFileToCopy => *v,
-
-                CopyPlan::IntoTable(mut into_table) => {
-                    into_table.enable_distributed = opt_ctx.config.enable_distributed_optimization
-                        && ctx.get_settings().get_enable_distributed_copy()?;
-                    info!(
-                        "after optimization enable_distributed_copy? : {}",
-                        into_table.enable_distributed
-                    );
-                    CopyPlan::IntoTable(into_table)
-                }
-            })))
+        Plan::CopyIntoLocation(CopyIntoLocationPlan { stage, path, from }) => {
+            Ok(Plan::CopyIntoLocation(CopyIntoLocationPlan {
+                stage,
+                path,
+                from: Box::new(optimize(ctx, opt_ctx, *from)?),
+            }))
+        }
+        Plan::CopyIntoTable(mut plan) if !plan.no_file_to_copy => {
+            plan.enable_distributed = opt_ctx.config.enable_distributed_optimization
+                && ctx.get_settings().get_enable_distributed_copy()?;
+            info!(
+                "after optimization enable_distributed_copy? : {}",
+                plan.enable_distributed
+            );
+            Ok(Plan::CopyIntoTable(plan))
         }
         // Passthrough statements.
         _ => Ok(plan),

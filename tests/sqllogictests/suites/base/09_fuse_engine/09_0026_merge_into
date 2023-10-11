@@ -507,5 +507,44 @@ select * from cluster_target;
 3 a 3
 12 b 1
 
+## add more tests
+statement ok
+drop table if exists target_test;
+
+statement ok
+drop table if exists source_test;
+
+statement ok
+create table target_test(a int,b string);
+
+statement ok
+insert into target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+create table source_test(a int,b string,is_databend_deleted bool);
+
+statement ok
+insert into source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
+
+statement ok
+create stage source_parquet file_format = (type = parquet);
+
+statement ok
+remove @source_parquet;
+
+statement ok
+copy into @source_parquet from (select * from source_test);
+
+statement ok
+merge into `target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
+when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
+
+query TT
+select * from target_test order by a;
+----
+3 f
+5 f
+
 statement ok
 set enable_experimental_merge_into = 0;
+
