@@ -1519,7 +1519,6 @@ impl From<&DataType> for ArrowDataType {
                 Box::new(ArrowDataType::LargeBinary),
                 None,
             ),
-
             _ => unreachable!(),
         }
     }
@@ -1651,7 +1650,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
                 fields_type,
             })
         }
-        DataType::Generic(_) | DataType::FixedString(_) => Err(ErrorCode::SemanticError(format!(
+        DataType::Generic(_) => Err(ErrorCode::SemanticError(format!(
             "Cannot create table with type: {}",
             data_type
         ))),

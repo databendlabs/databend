@@ -184,7 +184,6 @@ impl Column {
                 indices,
                 string_items_buf.as_mut(),
             )),
-            Column::FixedString(_) => unreachable!(),
         }
     }
 

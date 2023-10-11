@@ -179,7 +179,6 @@ impl Column {
             Column::Variant(column) => VariantType::upcast_column(Self::take_compact_string_types(
                 column, indices, num_rows,
             )),
-            Column::FixedString(_) => unreachable!(),
         }
     }
 

@@ -63,8 +63,7 @@ impl RowConverter {
             | DataType::Map(_)
             | DataType::Bitmap
             | DataType::Tuple(_)
-            | DataType::Generic(_)
-            | DataType::FixedString(_) => false,
+            | DataType::Generic(_) => false,
             DataType::Nullable(inner) => Self::support_data_type(inner.as_ref()),
             _ => true,
         }

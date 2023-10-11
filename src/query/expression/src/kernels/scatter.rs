@@ -270,7 +270,6 @@ impl Column {
                 indices,
                 scatter_size,
             ),
-            Column::FixedString(_) => unreachable!(),
         }
     }
 

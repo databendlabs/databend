@@ -40,7 +40,6 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::decimal::DecimalDataType;
 use crate::types::decimal::DecimalDomain;
 use crate::types::decimal::DecimalScalar;
-use crate::types::fixed_string::FixedStringColumn;
 use crate::types::map::KvPair;
 use crate::types::nullable::NullableDomain;
 use crate::types::number::NumberColumn;
@@ -181,7 +180,6 @@ impl Debug for Column {
             Column::Nullable(col) => write!(f, "{col:?}"),
             Column::Tuple(fields) => f.debug_tuple("Tuple").field(fields).finish(),
             Column::Variant(col) => write!(f, "{col:?}"),
-            Column::FixedString(col) => write!(f, "{col:?}"),
         }
     }
 }
@@ -393,16 +391,6 @@ impl Debug for StringColumn {
     }
 }
 
-impl Debug for FixedStringColumn {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("FixedStringColumn")
-            .field(
-                "data",
-                &format_args!("0x{}", &hex::encode(self.data().as_slice())),
-            )
-            .finish()
-    }
-}
 impl<Index: ColumnIndex> Display for RawExpr<Index> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -501,7 +489,6 @@ impl Display for DataType {
             }
             DataType::Variant => write!(f, "Variant"),
             DataType::Generic(index) => write!(f, "T{index}"),
-            DataType::FixedString(size) => write!(f, "FixedString({size})"),
         }
     }
 }

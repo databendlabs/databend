@@ -17,7 +17,6 @@ use common_arrow::arrow::buffer::Buffer;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::date::date_to_string;
 use common_expression::types::decimal::DecimalColumn;
-use common_expression::types::fixed_string::FixedStringColumn;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::NumberColumn;
 use common_expression::types::string::StringColumn;
@@ -67,7 +66,6 @@ pub trait FieldEncoderRowBased {
             Column::Bitmap(b) => self.write_bitmap(b, row_index, out_buf, raw),
             Column::Tuple(fields) => self.write_tuple(fields, row_index, out_buf, raw),
             Column::Variant(c) => self.write_variant(c, row_index, out_buf, raw),
-            Column::FixedString(c) => self.write_fixed_string(c, row_index, out_buf, raw),
         }
     }
 
@@ -142,16 +140,6 @@ pub trait FieldEncoderRowBased {
     fn write_string(
         &self,
         column: &StringColumn,
-        row_index: usize,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) {
-        self.write_string_inner(unsafe { column.index_unchecked(row_index) }, out_buf, raw);
-    }
-
-    fn write_fixed_string(
-        &self,
-        column: &FixedStringColumn,
         row_index: usize,
         out_buf: &mut Vec<u8>,
         raw: bool,

@@ -778,7 +778,6 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
                 serialize_column_binary(inner_col, row, row_space);
             }
         }
-        Column::FixedString(_) => unreachable!(),
     }
 }
 

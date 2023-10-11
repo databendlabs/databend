@@ -78,35 +78,19 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
     fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
-        match column {
-            Column::String(c) => {
-                for (place, mut data) in places.iter().zip(c.iter()) {
-                    self.merge(place.next(offset), &mut data)?;
-                }
-            }
-            Column::FixedString(c) => {
-                for (place, mut data) in places.iter().zip(c.iter()) {
-                    self.merge(place.next(offset), &mut data)?;
-                }
-            }
-            _ => unreachable!(),
+        let c = column.as_string().unwrap();
+        for (place, mut data) in places.iter().zip(c.iter()) {
+            self.merge(place.next(offset), &mut data)?;
         }
+
         Ok(())
     }
 
     fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
-        match column {
-            Column::String(c) => {
-                for mut data in c.iter() {
-                    self.merge(place, &mut data)?;
-                }
-            }
-            Column::FixedString(c) => {
-                for mut data in c.iter() {
-                    self.merge(place, &mut data)?;
-                }
-            }
-            _ => unreachable!(),
+        let c = column.as_string().unwrap();
+
+        for mut data in c.iter() {
+            self.merge(place, &mut data)?;
         }
         Ok(())
     }
