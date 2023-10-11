@@ -15,7 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use std::usize::MAX;
+use std::u32::MAX;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
@@ -54,7 +54,7 @@ use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
 // predicate_index should not be conflict with update expr's column_binding's index.
-pub const PREDICATE_COLUMN_INDEX: IndexType = MAX;
+pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
 const DUMMY_COL_INDEX: usize = 1;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
