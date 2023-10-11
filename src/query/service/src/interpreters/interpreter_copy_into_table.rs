@@ -41,8 +41,10 @@ use log::info;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::hook_refresh_agg_index;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::builders::build_commit_data_pipeline;
@@ -302,6 +304,23 @@ impl Interpreter for CopyIntoTableInterpreter {
             trace_ctx,
         )
         .await;
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        {
+            let refresh_agg_index_desc = RefreshAggIndexDesc {
+                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
+                database: self.plan.database_name.clone(),
+                table: self.plan.table_name.clone(),
+            };
+
+            hook_refresh_agg_index(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                refresh_agg_index_desc,
+            )
+            .await?;
+        }
+
         Ok(build_res)
     }
 
