@@ -1575,6 +1575,35 @@ Extract {
 
 
 ---------- Input ----------
+date_part(year, d)
+---------- Output ---------
+DATE_PART(YEAR, d)
+---------- AST ------------
+DatePart {
+    span: Some(
+        0..18,
+    ),
+    kind: Year,
+    expr: ColumnRef {
+        span: Some(
+            16..17,
+        ),
+        database: None,
+        table: None,
+        column: Name(
+            Identifier {
+                name: "d",
+                quote: None,
+                span: Some(
+                    16..17,
+                ),
+            },
+        ),
+    },
+}
+
+
+---------- Input ----------
 position('a' in str)
 ---------- Output ---------
 POSITION('a' IN str)

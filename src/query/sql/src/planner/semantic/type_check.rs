@@ -1042,6 +1042,10 @@ impl<'a> TypeChecker<'a> {
                 span, kind, expr, ..
             } => self.resolve_extract_expr(*span, kind, expr).await?,
 
+            Expr::DatePart {
+                span, kind, expr, ..
+            } => self.resolve_extract_expr(*span, kind, expr).await?,
+
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
                     "Unsupported interval expression yet".to_string(),
@@ -1960,6 +1964,10 @@ impl<'a> TypeChecker<'a> {
             }
             ASTIntervalKind::Dow => {
                 self.resolve_function(span, "to_day_of_week", vec![], &[arg])
+                    .await
+            }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_week_of_year", vec![], &[arg])
                     .await
             }
         }
@@ -3346,6 +3354,13 @@ impl<'a> TypeChecker<'a> {
                     target_type: target_type.clone(),
                 }),
                 Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
+                    span: *span,
+                    kind: *kind,
+                    expr: Box::new(
+                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
+                    ),
+                }),
+                Expr::DatePart { span, kind, expr } => Ok(Expr::DatePart {
                     span: *span,
                     kind: *kind,
                     expr: Box::new(
