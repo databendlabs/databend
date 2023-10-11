@@ -42,7 +42,7 @@ Stay connected with the latest news about Databend.
 
 ### MERGE
 
-The `MERGE` statement will perform `INSERT`, `UPDATE`, or `DELETE` operations on rows within a target table, all in accordance with conditions and matching criteria specified within the statement, using data from a specified source.
+The `MERGE` statement performs `INSERT`, `UPDATE`, or `DELETE` operations on rows within a target table, all in accordance with conditions and matching criteria specified within the statement, using data from a specified source.
 
 ![](https://databend.rs/assets/images/merge-into-single-clause-96616a67419ab6991f8cb16526c81d4b.jpeg)
 
