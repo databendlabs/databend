@@ -14,7 +14,6 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_api::BackgroundApi;
 use common_meta_app::background::BackgroundTaskInfo;
@@ -24,6 +23,7 @@ use common_meta_app::background::ListBackgroundTasksReq;
 use common_users::UserApiProvider;
 use log::debug;
 use poem::web::Json;
+use poem::web::Path;
 use poem::web::Query;
 use poem::IntoResponse;
 use serde::Deserialize;
@@ -93,9 +93,9 @@ async fn load_background_tasks(
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_background_tasks(
+    Path(tenant): Path<String>,
     params: Query<BackgroundTaskQuery>,
 ) -> poem::Result<impl IntoResponse> {
-    let tenant = &GlobalConfig::instance().query.tenant_id;
     debug!(
         "list_background_tasks: tenant: {}, params: {:?}",
         tenant, params
@@ -107,7 +107,7 @@ pub async fn list_background_tasks(
         }));
     }
 
-    let resp = load_background_tasks(tenant, params)
+    let resp = load_background_tasks(&tenant, params)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(resp))
