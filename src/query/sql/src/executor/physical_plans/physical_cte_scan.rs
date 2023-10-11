@@ -23,8 +23,7 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct CteScan {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub cte_idx: (IndexType, IndexType),
     pub output_schema: DataSchemaRef,

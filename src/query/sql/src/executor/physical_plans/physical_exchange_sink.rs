@@ -21,18 +21,18 @@ use crate::executor::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
-    /// A unique id of operator in a `PhysicalPlan` tree.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
-    /// Input schema of exchanged data
+    // Input schema of exchanged data
     pub schema: DataSchemaRef,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
 
-    /// Fragment ID of sink fragment
+    // Fragment ID of sink fragment
     pub destination_fragment_id: usize,
-    /// Addresses of destination nodes
+
+    // Addresses of destination nodes
     pub query_id: String,
     pub ignore_exchange: bool,
 }

@@ -24,19 +24,14 @@ use crate::executor::PhysicalPlan;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RowFetch {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
-
     // cloned from `input`.
     pub source: Box<DataSourcePlan>,
     // projection on the source table schema.
     pub cols_to_fetch: Projection,
-
     pub row_id_col_offset: usize,
-
     pub fetched_fields: Vec<DataField>,
 
     /// Only used for explain

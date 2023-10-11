@@ -22,14 +22,12 @@ use crate::optimizer::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Project {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
     pub projections: Vec<usize>,
 
-    /// Only used for display
+    // Only used for display
     pub columns: ColumnSet,
     pub stat_info: Option<PlanStatsInfo>,
 }

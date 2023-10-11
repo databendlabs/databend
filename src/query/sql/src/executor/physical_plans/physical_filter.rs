@@ -29,17 +29,15 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub projections: ColumnSet,
-
     pub input: Box<PhysicalPlan>,
 
     // Assumption: expression's data type must be `DataType::Boolean`.
     pub predicates: Vec<RemoteExpr>,
 
-    /// Only used for explain
+    // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 

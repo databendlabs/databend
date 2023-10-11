@@ -38,8 +38,7 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct HashJoin {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     // After building the probe key and build key, we apply probe_projections to probe_datablock
     // and build_projections to build_datablock, which can help us reduce memory usage and calls
@@ -64,7 +63,7 @@ pub struct HashJoin {
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
 
-    /// Only used for explain
+    // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 

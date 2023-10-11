@@ -20,11 +20,14 @@ use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::physical_plans::common::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
+use crate::optimizer::SExpr;
+use crate::ColumnSet;
 use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
-    /// A unique id of operator in a `PhysicalPlan` tree.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
 
     pub input: Box<PhysicalPlan>,
@@ -38,10 +41,6 @@ impl Exchange {
         self.input.output_schema()
     }
 }
-
-use crate::executor::PhysicalPlanBuilder;
-use crate::optimizer::SExpr;
-use crate::ColumnSet;
 
 impl PhysicalPlanBuilder {
     pub(crate) async fn build_exchange(

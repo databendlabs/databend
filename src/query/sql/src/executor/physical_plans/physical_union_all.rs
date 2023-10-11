@@ -37,16 +37,14 @@ use crate::Visibility;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct UnionAll {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub left: Box<PhysicalPlan>,
     pub right: Box<PhysicalPlan>,
     pub pairs: Vec<(String, String)>,
     pub schema: DataSchemaRef,
 
-    /// Only used for explain
+    // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 

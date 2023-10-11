@@ -47,6 +47,7 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Window {
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub index: IndexType,
     pub input: Box<PhysicalPlan>,

@@ -35,10 +35,8 @@ use crate::TypeCheck;
 // It's the children of join node
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct RuntimeFilterSource {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub left_side: Box<PhysicalPlan>,
     pub right_side: Box<PhysicalPlan>,
     pub left_runtime_filters: BTreeMap<RuntimeFilterId, RemoteExpr>,

@@ -26,14 +26,13 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregatePartial {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
-    /// Only used for explain
+
+    // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
@@ -67,12 +66,3 @@ impl AggregatePartial {
         Ok(DataSchemaRefExt::create(fields))
     }
 }
-
-// #[async_recursion::async_recursion]
-// #[async_backtrace::framed]
-// pub async fn build_aggregate(
-//     &mut self,
-//     s_expr: &SExpr,
-//     mut required: ColumnSet,
-// ) -> Result<PhysicalPlan> {
-// }

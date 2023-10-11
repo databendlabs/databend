@@ -23,8 +23,7 @@ use crate::ColumnSet;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ConstantTableScan {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub values: Vec<Column>,
     pub num_rows: usize,

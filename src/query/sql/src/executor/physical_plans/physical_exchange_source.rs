@@ -17,13 +17,13 @@ use common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
-    /// A unique id of operator in a `PhysicalPlan` tree.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
 
-    /// Output schema of exchanged data
+    // Output schema of exchanged data
     pub schema: DataSchemaRef,
 
-    /// Fragment ID of source fragment
+    // Fragment ID of source fragment
     pub source_fragment_id: usize,
     pub query_id: String,
 }

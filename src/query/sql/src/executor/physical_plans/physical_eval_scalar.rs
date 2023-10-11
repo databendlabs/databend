@@ -30,11 +30,9 @@ use crate::TypeCheck;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct EvalScalar {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
     pub projections: ColumnSet,
-
     pub input: Box<PhysicalPlan>,
     pub exprs: Vec<(RemoteExpr, IndexType)>,
 

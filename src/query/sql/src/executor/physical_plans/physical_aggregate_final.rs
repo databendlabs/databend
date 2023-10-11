@@ -39,17 +39,15 @@ use crate::ScalarExpr;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFinal {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
     pub plan_id: u32,
-
     pub input: Box<PhysicalPlan>,
     pub group_by: Vec<IndexType>,
     pub agg_funcs: Vec<AggregateFunctionDesc>,
     pub before_group_by_schema: DataSchemaRef,
-
     pub limit: Option<usize>,
-    /// Only used for explain
+
+    // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
