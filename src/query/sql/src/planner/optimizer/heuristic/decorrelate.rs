@@ -682,7 +682,12 @@ impl SubqueryRewriter {
                     if let ScalarExpr::AggregateFunction(AggregateFunction { func_name, .. }) =
                         &scalar
                     {
-                        if func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct")
+                        // For scalar subquery, we'll convert it to single join.
+                        // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
+                        // But for count aggregation function, NULL values should be 0.
+                        if aggregate.aggregate_functions.len() == 1
+                            && (func_name.eq_ignore_ascii_case("count")
+                                || func_name.eq("count_distinct"))
                         {
                             flatten_info.from_count_func = true;
                         }

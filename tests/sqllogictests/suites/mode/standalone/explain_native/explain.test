@@ -207,10 +207,10 @@ DISABLE_VARIANT_CHECK = false
 
 skipif clickhouse
 query T
-explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
 COPY
-INTO 's3://mybucket/data.csv'
+INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
     field_delimiter = ",",
@@ -218,9 +218,7 @@ FILE_FORMAT = (
     skip_header = "1",
     type = "CSV"
 )
-SIZE_LIMIT = 10
-PURGE = false
-DISABLE_VARIANT_CHECK = false
+SINGLE = false
 
 query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
@@ -449,11 +447,11 @@ skipif clickhouse
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 7)
-├── CopyUnit (children 1)
-│   └── Location 's3://mybucket/data.csv'
-├── CopyUnit (children 1)
+CopyIntoTable (children 7)
+├── TO (children 1)
 │   └── TableIdentifier t1
+├── FROM (children 1)
+│   └── Location 's3://mybucket/data.csv'
 ├── FileFormats (children 4)
 │   ├── FileFormat field_delimiter = ","
 │   ├── FileFormat record_delimiter = "\n"

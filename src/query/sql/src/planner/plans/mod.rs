@@ -15,7 +15,7 @@
 mod aggregate;
 mod call;
 mod constant_table_scan;
-mod copy;
+mod copy_into_table;
 mod cte_scan;
 pub mod data_mask;
 mod ddl;
@@ -32,6 +32,7 @@ mod limit;
 mod materialized_cte;
 mod merge_into;
 
+mod copy_into_location;
 pub mod operator;
 mod pattern;
 mod plan;
@@ -49,10 +50,12 @@ mod sort;
 mod union_all;
 mod update;
 mod window;
+
 pub use aggregate::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;
-pub use copy::*;
+pub use copy_into_location::*;
+pub use copy_into_table::*;
 pub use cte_scan::CteScan;
 pub use data_mask::*;
 pub use ddl::*;

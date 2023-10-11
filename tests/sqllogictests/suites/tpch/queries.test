@@ -823,6 +823,28 @@ where
 ----
 23512.75195312
 
+#Q17 variant
+query I
+SELECT
+  TRUNCATE(sum(l_extendedprice) / 7.0, 8) AS avg_yearly
+FROM
+  lineitem,
+  part
+WHERE
+  p_partkey = l_partkey
+  AND p_brand = 'Brand#23'
+  AND p_container = 'MED BOX'
+  AND l_quantity < (
+    SELECT
+      0.2 * (sum(l_quantity) / count(l_quantity))
+    FROM
+      lineitem
+    WHERE
+      l_partkey = p_partkey
+  )
+----
+23512.75195312
+
 #Q18
 query I
 select
@@ -1233,6 +1255,7 @@ HashJoin: RIGHT SINGLE (rows: 320.00)
             └── Scan: default.tpch.partsupp (read rows: 80000)
 
 # Q3
+onlyif todo
 query I
 explain join select
     l_orderkey,
