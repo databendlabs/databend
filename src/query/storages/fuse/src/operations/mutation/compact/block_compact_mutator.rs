@@ -536,19 +536,25 @@ impl CompactTaskBuilder {
                 // The clustering table cannot compact different level blocks.
                 self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, tail);
             } else {
-                let (index, mut blocks) = if latest_flag {
-                    unchanged_blocks
-                        .pop()
-                        .map_or((0, vec![]), |(k, v)| (k, vec![v]))
+                let mut blocks = if latest_flag {
+                    unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
                 } else {
-                    tasks.pop_back().unwrap_or((0, vec![]))
+                    tasks.pop_back().map_or(vec![], |(_, v)| v)
                 };
 
-                blocks.extend(tail);
-                tasks.push_back((index, blocks));
+                let total_rows = blocks.iter().fold(0, |acc, x| acc + x.row_count as usize);
+                let total_size = blocks.iter().fold(0, |acc, x| acc + x.block_size as usize);
+                if self.thresholds.check_for_compact(total_rows, total_size) {
+                    blocks.extend(tail);
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                } else {
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
+                }
             }
         }
 
+        let skip_compact = tasks.is_empty() && segment_indices.len() == 1;
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
@@ -567,6 +573,7 @@ impl CompactTaskBuilder {
                 unchanged_blocks,
                 removed_segment_indexes,
                 removed_segment_summary,
+                skip_compact,
             ),
         ))));
         Ok(partitions)
