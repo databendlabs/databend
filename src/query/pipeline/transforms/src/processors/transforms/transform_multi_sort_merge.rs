@@ -279,14 +279,14 @@ where R: Rows
                             // We copy current cursor for advancing,
                             // and we will use this copied cursor to update the top of the heap at last
                             // (let heap adjust itself without popping and pushing any element).
-                            let mut copied_cursor = cursor.clone();
+                            let mut cursor = cursor.clone();
                             let block_index = self.blocks[input_index].len() - 1;
                             while !cursor.is_finished() && cursor.le(next_cursor) {
                                 // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
                                 self.in_progress_rows.push((
                                     input_index,
                                     block_index,
-                                    copied_cursor.advance(),
+                                    cursor.advance(),
                                 ));
                                 if let Some(limit) = self.limit {
                                     if self.in_progress_rows.len() == limit {
@@ -296,11 +296,11 @@ where R: Rows
                                 }
                             }
 
-                            if !copied_cursor.is_finished() {
+                            if !cursor.is_finished() {
                                 // Update the top of the heap.
                                 // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
                                 // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
-                                self.heap.peek_mut().unwrap().0 = copied_cursor;
+                                self.heap.peek_mut().unwrap().0 = cursor;
                             } else {
                                 // Pop the current `cursor`.
                                 self.heap.pop();
@@ -526,7 +526,7 @@ enum ProcessorState {
     Generated(DataBlock), // Need to push output block to output port.
 }
 
-/// Get the bigger child of the root of the heap.
+/// Find the bigger child of the root of the heap.
 #[inline(always)]
 fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
     debug_assert!(heap.len() >= 2);
