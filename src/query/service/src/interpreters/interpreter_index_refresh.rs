@@ -21,9 +21,11 @@ use common_catalog::plan::Partitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::infer_table_schema;
+use common_expression::infer_schema_type;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::BLOCK_NAME_COL_NAME;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
@@ -301,13 +303,11 @@ impl Interpreter for RefreshIndexInterpreter {
             let index = input_schema.index_of(field.name())?;
             projections.push(index);
         }
-        let num_input_columns = input_schema.num_fields();
         let func_ctx = self.ctx.get_function_context()?;
         build_res.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
-                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -326,10 +326,23 @@ impl Interpreter for RefreshIndexInterpreter {
             })?;
         let block_name_offset = output_schema.index_of(&block_name_col.index.to_string())?;
 
+        let fields = output_schema
+            .fields()
+            .iter()
+            .map(|f| {
+                let pos = select_columns
+                    .iter()
+                    .find(|col| col.index.to_string().eq_ignore_ascii_case(f.name()))
+                    .ok_or_else(|| ErrorCode::Internal("should find the corresponding column"))?;
+                let field_type = infer_schema_type(f.data_type())?;
+                Ok(TableField::new(&pos.column_name, field_type))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         // Build the final sink schema.
-        let mut sink_schema = infer_table_schema(&output_schema)?.as_ref().clone();
+        let mut sink_schema = TableSchema::new(fields);
         if !self.plan.user_defined_block_name {
-            sink_schema.drop_column(&block_name_col.index.to_string())?;
+            sink_schema.drop_column(&block_name_col.column_name)?;
         }
         let sink_schema = Arc::new(sink_schema);
 

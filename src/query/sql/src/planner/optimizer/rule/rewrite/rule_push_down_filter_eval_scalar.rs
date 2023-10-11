@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -91,10 +90,7 @@ impl RulePushDownFilterEvalScalar {
                         return Ok(item.scalar.clone());
                     }
                 }
-                Err(ErrorCode::UnknownColumn(format!(
-                    "Cannot find column to replace `{}`(#{})",
-                    column.column.column_name, column.column.index
-                )))
+                Ok(predicate.clone())
             }
             ScalarExpr::WindowFunction(window) => {
                 let func = match &window.func {

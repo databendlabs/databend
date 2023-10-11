@@ -14,7 +14,6 @@
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
@@ -27,11 +26,10 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
+use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use super::desc::MARKER_KIND_FALSE;
@@ -59,38 +57,6 @@ impl HashJoinProbeState {
             (None, Some(build_block)) => build_block,
             (None, None) => DataBlock::new(vec![], num_rows),
         }
-    }
-
-    #[inline]
-    pub(crate) fn contains<'a, H: HashJoinHashtableLike>(
-        &self,
-        hash_table: &'a H,
-        key: &'a H::Key,
-        valids: &Option<Bitmap>,
-        i: usize,
-    ) -> bool {
-        if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.contains(key);
-        }
-        false
-    }
-
-    #[inline]
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn probe_key<'a, H: HashJoinHashtableLike>(
-        &self,
-        hash_table: &'a H,
-        key: &'a H::Key,
-        valids: &Option<Bitmap>,
-        i: usize,
-        vec_ptr: *mut RowPtr,
-        occupied: usize,
-        max_block_size: usize,
-    ) -> (usize, u64) {
-        if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.probe_hash_table(key, vec_ptr, occupied, max_block_size);
-        }
-        (0, 0)
     }
 
     pub(crate) fn create_marker_block(
@@ -129,16 +95,15 @@ impl HashJoinProbeState {
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
-    // return an (option bitmap, all_true, all_false)
+    // return an (option bitmap, all_true, all_false).
     pub(crate) fn get_other_filters(
         &self,
         merged_block: &DataBlock,
         filter: &Expr,
+        func_ctx: &FunctionContext,
     ) -> Result<(Option<Bitmap>, bool, bool)> {
         let filter = cast_expr_to_non_null_boolean(filter.clone())?;
-
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
             .run(&filter)?
             .try_downcast::<BooleanType>()
@@ -158,10 +123,9 @@ impl HashJoinProbeState {
         &self,
         merged_block: &DataBlock,
         filter: &Expr,
+        func_ctx: &FunctionContext,
     ) -> Result<Column> {
-        let func_ctx = self.ctx.get_function_context()?;
-        let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
-
+        let evaluator = Evaluator::new(merged_block, func_ctx, &BUILTIN_FUNCTIONS);
         let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());

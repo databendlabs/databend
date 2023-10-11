@@ -19,6 +19,7 @@ use std::fmt::Formatter;
 use common_meta_app::schema::CatalogType;
 
 use super::ShowLimit;
+use crate::ast::write_comma_separated_map;
 use crate::ast::Identifier;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -64,10 +65,8 @@ impl Display for CreateCatalogStmt {
         }
         write!(f, " {}", self.catalog_name)?;
         write!(f, " TYPE='{}'", self.catalog_type)?;
-        write!(f, " CONNECTION = (")?;
-        for (k, v) in self.catalog_options.iter() {
-            write!(f, " {}='{}'", k, v)?;
-        }
+        write!(f, " CONNECTION = ( ")?;
+        write_comma_separated_map(f, &self.catalog_options)?;
         write!(f, " )")
     }
 }

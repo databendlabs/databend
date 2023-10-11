@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::io;
 
 use anyerror::AnyError;
 use serde::Deserialize;
@@ -49,6 +50,15 @@ impl MetaStorageError {
     ) -> Self {
         MetaStorageError::SnapshotError(AnyError::new(error).add_context(context))
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaStorageError::BytesError(_) => "BytesError",
+            MetaStorageError::SledError(_) => "SledError",
+            MetaStorageError::SnapshotError(_) => "SnapshotError",
+            MetaStorageError::TransactionConflict => "TransactionConflict",
+        }
+    }
 }
 
 impl From<std::string::FromUtf8Error> for MetaStorageError {
@@ -83,5 +93,11 @@ impl From<UnabortableTransactionError> for MetaStorageError {
             }
             UnabortableTransactionError::Conflict => MetaStorageError::TransactionConflict,
         }
+    }
+}
+
+impl From<MetaStorageError> for io::Error {
+    fn from(e: MetaStorageError) -> Self {
+        io::Error::new(io::ErrorKind::InvalidData, e)
     }
 }

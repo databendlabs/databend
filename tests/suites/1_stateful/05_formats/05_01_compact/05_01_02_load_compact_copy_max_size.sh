@@ -11,7 +11,7 @@ for j in $(seq 1 1000);do
 	printf "0123456789\n" >> "$DATA"
 done
 
-echo "drop table if exists t1 all" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists t1" | $MYSQL_CLIENT_CONNECT
 echo "CREATE TABLE t1
 (
     c0 string

@@ -214,8 +214,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
-        let (_, _) = (ctx, purge);
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let _ = ctx;
         Ok(())
     }
 
@@ -405,7 +405,7 @@ pub enum NavigationPoint {
     TimePoint(DateTime<Utc>),
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct TableStatistics {
     pub num_rows: Option<u64>,
     pub data_size: Option<u64>,

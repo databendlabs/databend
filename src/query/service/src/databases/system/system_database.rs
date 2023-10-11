@@ -70,8 +70,6 @@ impl SystemDatabase {
         let mut map = HashMap::new();
         map.insert("configs".to_string(), true);
         map.insert("clusters".to_string(), true);
-        // Add 2023-08-01 by BohuTANG
-        map.insert("users".to_string(), true);
         map
     }
 

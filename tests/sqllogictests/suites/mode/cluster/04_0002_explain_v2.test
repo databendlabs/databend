@@ -2,10 +2,10 @@ statement ok
 set prefer_broadcast_join = 0
 
 statement ok
-drop table if exists t1 all;
+drop table if exists t1;
 
 statement ok
-drop table if exists t2 all;
+drop table if exists t2;
 
 statement ok
 create table t1(a int not null, b int not null);
@@ -167,17 +167,18 @@ query T
 explain select count(1) as c, count(b) as d, max(a) as e from t1 order by c, e, d limit 10;
 ----
 Limit
-├── output columns: [c (#5), e (#7), d (#6)]
+├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
 ├── limit: 10
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort
-    ├── output columns: [c (#5), e (#7), d (#6)]
-    ├── sort keys: [c ASC NULLS LAST, e ASC NULLS LAST, d ASC NULLS LAST]
+    ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
+    ├── sort keys: [count(1) ASC NULLS LAST, max(a) ASC NULLS LAST, count(b) ASC NULLS LAST]
     ├── estimated rows: 1.00
-    └── EvalScalar
-        ├── output columns: [c (#5), e (#7), d (#6)]
-        ├── expressions: [count(1) (#2), max(a) (#4), count(b) (#3)]
+    └── AggregateFinal
+        ├── output columns: [count(1) (#2), count(b) (#3), max(a) (#4)]
+        ├── group by: []
+        ├── aggregate functions: [count(), count(b), max(a)]
         ├── estimated rows: 1.00
         └── EvalScalar
             ├── output columns: [count(1) (#2), max(a) (#4), count(b) (#3)]

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use common_base::base::tokio::sync::oneshot::Sender;
 use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::GetKVReq;
@@ -36,13 +38,23 @@ use tonic::transport::Channel;
 use crate::grpc_client::AuthInterceptor;
 
 /// A request that is sent by a meta-client handle to its worker.
-#[derive(Debug)]
 pub struct ClientWorkerRequest {
+    pub(crate) request_id: u64,
+
     /// For sending back the response to the handle.
     pub(crate) resp_tx: Sender<Response>,
 
     /// Request body
     pub(crate) req: Request,
+}
+
+impl fmt::Debug for ClientWorkerRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientWorkerRequest")
+            .field("request_id", &self.request_id)
+            .field("req", &self.req)
+            .finish()
+    }
 }
 
 /// Meta-client handle-to-worker request body

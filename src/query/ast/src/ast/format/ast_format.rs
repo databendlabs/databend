@@ -701,12 +701,51 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_copy(&mut self, copy: &'ast CopyStmt) {
+    fn visit_copy_into_table(&mut self, copy: &'ast CopyIntoTableStmt) {
         let mut children = Vec::new();
-        self.visit_copy_unit(&copy.src);
-        children.push(self.children.pop().unwrap());
-        self.visit_copy_unit(&copy.dst);
-        children.push(self.children.pop().unwrap());
+
+        // to
+        self.visit_table_ref(&copy.dst.catalog, &copy.dst.database, &copy.dst.table);
+        let to_node = self.children.pop().unwrap();
+        let to_node = FormatTreeNode::with_children(
+            AstFormatContext::with_children("TO".to_string(), 1),
+            vec![to_node],
+        );
+        children.push(to_node);
+
+        // from
+        let from_node = match &copy.src {
+            CopyIntoTableSource::Location(location) => {
+                FormatTreeNode::new(AstFormatContext::new(format!("Location {}", location)))
+            }
+            CopyIntoTableSource::Query(query) => {
+                self.visit_query(query);
+                FormatTreeNode::with_children(
+                    AstFormatContext::with_children("Query".to_string(), 1),
+                    vec![self.children.pop().unwrap()],
+                )
+            }
+        };
+        let from_node = FormatTreeNode::with_children(
+            AstFormatContext::with_children("FROM".to_string(), 1),
+            vec![from_node],
+        );
+        children.push(from_node);
+
+        // columns
+        if let Some(columns) = &copy.dst_columns {
+            let mut columns_children = Vec::with_capacity(columns.len());
+            for column in columns.iter() {
+                self.visit_identifier(column);
+                columns_children.push(self.children.pop().unwrap());
+            }
+            let columns_name = "Columns".to_string();
+            let columns_format_ctx =
+                AstFormatContext::with_children(columns_name, columns_children.len());
+            let columns_node = FormatTreeNode::with_children(columns_format_ctx, columns_children);
+            children.push(columns_node);
+        }
+
         if let Some(files) = &copy.files {
             let mut files_children = Vec::with_capacity(files.len());
             for file in files.iter() {
@@ -770,46 +809,72 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let disable_variant_check_node = FormatTreeNode::new(disable_variant_check_ctx);
         children.push(disable_variant_check_node);
 
-        let name = "Copy".to_string();
+        let name = "CopyIntoTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 
-    fn visit_copy_unit(&mut self, copy_unit: &'ast CopyUnit) {
-        match copy_unit {
-            CopyUnit::Table {
-                catalog,
-                database,
-                table,
-                columns,
-            } => {
-                self.visit_table_ref(catalog, database, table);
-                if let Some(columns) = columns {
-                    let mut columns_children = Vec::with_capacity(columns.len());
-                    for column in columns.iter() {
-                        self.visit_identifier(column);
-                        columns_children.push(self.children.pop().unwrap());
-                    }
-                    let columns_name = "Columns".to_string();
-                    let columns_format_ctx =
-                        AstFormatContext::with_children(columns_name, columns_children.len());
-                    let columns_node =
-                        FormatTreeNode::with_children(columns_format_ctx, columns_children);
-                    self.children.push(columns_node);
-                }
+    fn visit_copy_into_location(&mut self, copy: &'ast CopyIntoLocationStmt) {
+        let mut children = Vec::new();
+
+        // to
+        let to_node = FormatTreeNode::new(AstFormatContext::new(format!("Location {}", copy.dst)));
+        let to_node = FormatTreeNode::with_children(
+            AstFormatContext::with_children("TO".to_string(), 1),
+            vec![to_node],
+        );
+        children.push(to_node);
+
+        // from
+        let from_node = match &copy.src {
+            CopyIntoLocationSource::Table(table) => {
+                self.visit_table_ref(&table.catalog, &table.database, &table.table);
+                let from_node = self.children.pop().unwrap();
+                FormatTreeNode::with_children(
+                    AstFormatContext::with_children("Table".to_string(), 1),
+                    vec![from_node],
+                )
             }
-            CopyUnit::Location(v) => {
-                let location_format_ctx = AstFormatContext::new(format!("Location {}", v));
-                let location_node = FormatTreeNode::new(location_format_ctx);
-                self.children.push(location_node);
+            CopyIntoLocationSource::Query(query) => {
+                self.visit_query(query);
+                FormatTreeNode::with_children(
+                    AstFormatContext::with_children("Query".to_string(), 1),
+                    vec![self.children.pop().unwrap()],
+                )
             }
-            CopyUnit::Query(query) => self.visit_query(query),
+        };
+        let from_node = FormatTreeNode::with_children(
+            AstFormatContext::with_children("FROM".to_string(), 1),
+            vec![from_node],
+        );
+        children.push(from_node);
+
+        if !copy.file_format.is_empty() {
+            let mut file_formats_children = Vec::with_capacity(copy.file_format.len());
+            for (k, v) in copy.file_format.iter() {
+                let file_format_name = format!("FileFormat {} = {:?}", k, v);
+                let file_format_format_ctx = AstFormatContext::new(file_format_name);
+                let file_format_node = FormatTreeNode::new(file_format_format_ctx);
+                file_formats_children.push(file_format_node);
+            }
+            let file_formats_format_name = "FileFormats".to_string();
+            let files_formats_format_ctx = AstFormatContext::with_children(
+                file_formats_format_name,
+                file_formats_children.len(),
+            );
+            let files_formats_node =
+                FormatTreeNode::with_children(files_formats_format_ctx, file_formats_children);
+            children.push(files_formats_node);
         }
-        let child = self.children.pop().unwrap();
-        let name = "CopyUnit".to_string();
-        let format_ctx = AstFormatContext::with_children(name, 1);
-        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        children.push(FormatTreeNode::new(AstFormatContext::new(format!(
+            "Single {}",
+            copy.single
+        ))));
+
+        let name = "CopyIntoLocation".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 

@@ -39,6 +39,17 @@ pub enum MetaError {
     APIError(#[from] MetaAPIError),
 }
 
+impl MetaError {
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaError::NetworkError(err) => err.name(),
+            MetaError::StorageError(err) => err.name(),
+            MetaError::ClientError(err) => err.name(),
+            MetaError::APIError(err) => err.name(),
+        }
+    }
+}
+
 impl From<tonic::Status> for MetaError {
     fn from(status: tonic::Status) -> Self {
         let net_err = MetaNetworkError::from(status);

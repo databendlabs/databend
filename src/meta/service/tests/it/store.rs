@@ -134,7 +134,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
-    sto.log.append(logs.clone()).await?;
+    sto.log.write().await.append(logs.clone()).await?;
     sto.state_machine.write().await.apply_entries(&logs).await;
 
     let curr_snap = sto.build_snapshot().await?;
@@ -181,7 +181,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
 
     let (logs, want) = snapshot_logs();
 
-    sto.log.append(logs.clone()).await?;
+    sto.log.write().await.append(logs.clone()).await?;
     {
         let mut sm = sto.state_machine.write().await;
         sm.apply_entries(&logs).await;
@@ -226,7 +226,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- feed logs and state machine");
 
-        sto.log.append(logs.clone()).await?;
+        sto.log.write().await.append(logs.clone()).await?;
         sto.state_machine.write().await.apply_entries(&logs).await;
 
         snap = sto.build_snapshot().await?;
@@ -242,8 +242,6 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
 
         info!("--- install snapshot");
         {
-            // TODO(1): remove write_state_machine_id
-            // sto.raft_state.write_state_machine_id(&(0, 0)).await?;
             sto.do_install_snapshot(data).await?;
         }
 

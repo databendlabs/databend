@@ -18,7 +18,7 @@ Databend also offers a variety of functions for converting expressions into diff
 | expr::data_type               | Alias for CAST                                                         | 1::VARCHAR                                          | 1                          |
 | TRY_CAST( expr AS data_type ) | Converts a value from one data type to another. Returns NULL on error. | TRY_CAST(1 AS VARCHAR)                              | 1                          |
 | TO_BITMAP( expr )             | Converts a value to BITMAP data type                                   | TO_BITMAP('1101')                                   | 1101                       |
-| BUILD_BITMAP( expr )          | Converts an array of integers to a BITMAP value                        | BUILD_BITMAP([1,4,5])::String | 1,4,5 |
+| BUILD_BITMAP( expr )          | Converts an array of positive integers to a BITMAP value                        | BUILD_BITMAP([1,4,5])::String | 1,4,5 |
 | TO_BOOLEAN( expr )            | Converts a value to BOOLEAN data type                                  | TO_BOOLEAN('true')                                  | 1                          |
 | TO_FLOAT32( expr )            | Converts a value to FLOAT32 data type                                  | TO_FLOAT32('1.2')                                   | 1.2                        |
 | TO_FLOAT64( expr )            | Converts a value to FLOAT64 data type                                  | TO_FLOAT64('1.2')                                   | 1.2                        |
