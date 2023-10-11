@@ -197,6 +197,7 @@ impl TableMutationAggregator {
                         v.insert(BlockMutations {
                             replaced_blocks: extras.unchanged_blocks,
                             deleted_blocks: vec![],
+                            skip_compact: extras.skip_compact,
                         });
                     }
                 }
@@ -351,8 +352,11 @@ impl TableMutationAggregator {
                 };
 
                 // re-calculate the segment statistics
-                let new_summary =
+                let mut new_summary =
                     reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);
+                if segment_mutation.skip_compact {
+                    new_summary.perfect_block_count = new_summary.block_count;
+                }
                 // create new segment info
                 let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
@@ -390,6 +394,7 @@ impl TableMutationAggregator {
 struct BlockMutations {
     replaced_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
     deleted_blocks: Vec<BlockIndex>,
+    skip_compact: bool,
 }
 
 impl BlockMutations {
@@ -397,6 +402,7 @@ impl BlockMutations {
         BlockMutations {
             replaced_blocks: vec![(block_idx, block_meta)],
             deleted_blocks: vec![],
+            skip_compact: false,
         }
     }
 
@@ -404,6 +410,7 @@ impl BlockMutations {
         BlockMutations {
             replaced_blocks: vec![],
             deleted_blocks: vec![block_idx],
+            skip_compact: false,
         }
     }
 
