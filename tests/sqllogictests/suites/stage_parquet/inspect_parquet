@@ -1,0 +1,10 @@
+query 
+select * from infer_schema('@data/parquet/tuple.parquet')
+----
+created_by
+num_columns:
+num_rows
+num_row_groups
+serialized_size
+max_row_groups_size_compressed
+max_row_groups_size_uncompressed
