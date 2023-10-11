@@ -609,7 +609,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
 
     execute_sql(
         fixture.ctx(),
-        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s"),
+        &format!("CREATE AGGREGATING INDEX {index_name} AS SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s"),
     )
         .await?;
 
@@ -623,7 +623,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
     // Query with index
     let plan = plan_sql(
         fixture.ctx(),
-        "SELECT SUBSTRING(a, 1, 1) as s, avg(length(a)), min(a) from t GROUP BY s",
+        "SELECT SUBSTRING(a, 1, 1) as s, sum(length(a)), min(a) from t GROUP BY s",
     )
     .await?;
 
@@ -637,7 +637,7 @@ async fn test_index_scan_agg_args_are_expression_impl(format: &str) -> Result<()
             "| Column 0 | Column 1 | Column 2 |",
             "+----------+----------+----------+",
             "| '1'      | 1        | '1'      |",
-            "| '2'      | 2.5      | '21'     |",
+            "| '2'      | 5        | '21'     |",
             "+----------+----------+----------+",
         ],
     )
