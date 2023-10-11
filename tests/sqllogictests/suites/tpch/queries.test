@@ -1255,7 +1255,7 @@ HashJoin: RIGHT SINGLE (rows: 320.00)
             └── Scan: default.tpch.partsupp (read rows: 80000)
 
 # Q3
-only if todo
+onlyif todo
 query I
 explain join select
     l_orderkey,
