@@ -87,7 +87,7 @@ echo "optimize table fuse_test_compaction compact" | $MYSQL_CLIENT_CONNECT
 echo "checking that after compaction the table still contains {1,2}"
 echo "select c from fuse_test_compaction order by c" | $MYSQL_CLIENT_CONNECT
 
-echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 3 exist"
+echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 5 exist"
 echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c " | $MYSQL_CLIENT_CONNECT
 
 echo "checking the version and location of snapshots s2 is correct"
@@ -144,7 +144,7 @@ echo "optimize table t2 compact segment" | $MYSQL_CLIENT_CONNECT
 # grab the id of s6
 FST_SNAPSHOT_S6_ID=$(echo "select snapshot_id from fuse_snapshot('default','t2') limit 1" | $MYSQL_CLIENT_CONNECT)
 
-echo "check segments after compaction, there should be 2 segments, a version v2 and a version v3"
+echo "check segments after compaction, there should be 2 segments, a version v2 and a version v5"
 echo "select count() c, format_version v from fuse_segment('default', 't2', '$FST_SNAPSHOT_S6_ID') group by v order by v " | $MYSQL_CLIENT_CONNECT
 
 echo "check table contains {1,2,3,4} after compaction"
