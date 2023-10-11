@@ -998,7 +998,9 @@ impl MetaNode {
         &self,
         req: ForwardRequest,
     ) -> Result<ForwardResponse, MetaAPIError> {
-        debug!(target = as_display!(&req.forward_to_leader), req = as_debug!(&req); "handle_forwardable_request");
+        debug!(target = as_display!(&req.forward_to_leader),
+               req = as_debug!(&req);
+               "handle_forwardable_request");
 
         let forward = req.forward_to_leader;
 

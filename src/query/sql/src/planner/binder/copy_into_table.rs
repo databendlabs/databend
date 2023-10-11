@@ -226,7 +226,7 @@ impl<'a> Binder {
             self.bind_copy_from_query_into_table(bind_ctx, plan, &select_list, &None)
                 .await
         } else {
-            Ok(Plan::CopyIntoTable(plan))
+            Ok(Plan::CopyIntoTable(Box::new(plan)))
         }
     }
 
@@ -326,7 +326,7 @@ impl<'a> Binder {
 
         if need_copy_file_infos.is_empty() {
             plan.no_file_to_copy = true;
-            return Ok(Plan::CopyIntoTable(plan));
+            return Ok(Plan::CopyIntoTable(Box::new(plan)));
         }
         plan.stage_table_info.files_to_copy = Some(need_copy_file_infos.clone());
 
@@ -371,7 +371,7 @@ impl<'a> Binder {
             ignore_result: false,
             formatted_ast: None,
         }));
-        Ok(Plan::CopyIntoTable(plan))
+        Ok(Plan::CopyIntoTable(Box::new(plan)))
     }
 
     #[async_backtrace::framed]
