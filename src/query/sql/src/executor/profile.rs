@@ -35,9 +35,9 @@ use common_profile::WindowAttribute;
 use itertools::Itertools;
 
 use crate::executor::format::pretty_display_agg_desc;
-use crate::executor::FragmentKind;
+use crate::executor::physical_plans::common::FragmentKind;
+use crate::executor::physical_plans::physical_window::WindowFunction;
 use crate::executor::PhysicalPlan;
-use crate::executor::WindowFunction;
 use crate::planner::Metadata;
 use crate::MetadataRef;
 
