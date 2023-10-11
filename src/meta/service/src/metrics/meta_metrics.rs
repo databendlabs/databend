@@ -424,6 +424,14 @@ pub mod raft_metrics {
                 .observe(v);
         }
 
+        pub fn incr_snapshot_recv_status_from_peer(addr: String, success: bool) {
+            if success {
+                incr_snapshot_recv_failure_from_peer(addr);
+            } else {
+                incr_snapshot_recv_success_from_peer(addr);
+            }
+        }
+
         pub fn incr_snapshot_recv_failure_from_peer(addr: String) {
             RAFT_METRICS
                 .snapshot_recv_failures

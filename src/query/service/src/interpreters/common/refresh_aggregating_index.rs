@@ -20,6 +20,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
+use common_meta_types::MetaId;
 use common_pipeline_core::Pipeline;
 use common_sql::plans::RefreshIndexPlan;
 use common_sql::BindContext;
@@ -40,7 +41,6 @@ pub struct RefreshAggIndexDesc {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub table_id: u64,
 }
 
 pub async fn hook_refresh_agg_index(
@@ -75,15 +75,16 @@ pub async fn hook_refresh_agg_index(
 
 async fn generate_refresh_index_plan(
     ctx: Arc<QueryContext>,
-    desc: RefreshAggIndexDesc,
+    catalog: &str,
+    table_id: MetaId,
 ) -> Result<Vec<RefreshIndexPlan>> {
     let segment_locs = ctx.get_segment_locations()?;
-    let catalog = ctx.get_catalog(&desc.catalog).await?;
+    let catalog = ctx.get_catalog(catalog).await?;
     let mut plans = vec![];
     let indexes = catalog
         .list_indexes_by_table_id(ListIndexesByIdReq {
             tenant: ctx.get_tenant(),
-            table_id: desc.table_id,
+            table_id,
         })
         .await?;
 
@@ -139,7 +140,11 @@ async fn build_refresh_index_plan(
 }
 
 async fn refresh_agg_index(ctx: Arc<QueryContext>, desc: RefreshAggIndexDesc) -> Result<()> {
-    let plans = generate_refresh_index_plan(ctx.clone(), desc).await?;
+    let table_id = ctx
+        .get_table(&desc.catalog, &desc.database, &desc.table)
+        .await?
+        .get_id();
+    let plans = generate_refresh_index_plan(ctx.clone(), &desc.catalog, table_id).await?;
     let mut tasks = Vec::with_capacity(std::cmp::min(
         ctx.get_settings().get_max_threads()? as usize,
         plans.len(),

@@ -50,6 +50,7 @@ pub struct DPhpy {
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
+    // non-equi conditions
     filters: HashSet<Filter>,
 }
 

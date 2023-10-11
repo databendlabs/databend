@@ -21,6 +21,7 @@ use bumpalo::Bump;
 use common_catalog::plan::AggIndexMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
@@ -45,9 +46,6 @@ pub struct PartialSingleStateAggregator {
     places: Vec<StateAddr>,
     arg_indices: Vec<Vec<usize>>,
     funcs: Vec<AggregateFunctionRef>,
-
-    /// A temporary place to hold aggregating state from index data.
-    temp_places: Vec<StateAddr>,
 }
 
 impl PartialSingleStateAggregator {
@@ -66,7 +64,6 @@ impl PartialSingleStateAggregator {
         let place: StateAddr = arena.alloc_layout(layout).into();
         let temp_place: StateAddr = arena.alloc_layout(layout).into();
         let mut places = Vec::with_capacity(params.offsets_aggregate_states.len());
-        let mut temp_places = Vec::with_capacity(params.offsets_aggregate_states.len());
 
         for (idx, func) in params.aggregate_functions.iter().enumerate() {
             let arg_place = place.next(params.offsets_aggregate_states[idx]);
@@ -75,7 +72,6 @@ impl PartialSingleStateAggregator {
 
             let state_place = temp_place.next(params.offsets_aggregate_states[idx]);
             func.init_state(state_place);
-            temp_places.push(state_place);
         }
 
         Ok(AccumulatingTransformer::create(
@@ -86,7 +82,6 @@ impl PartialSingleStateAggregator {
                 places,
                 funcs: params.aggregate_functions.clone(),
                 arg_indices: params.aggregate_functions_arguments.clone(),
-                temp_places,
             },
         ))
     }
@@ -127,18 +122,8 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
                     .unwrap()
                     .as_string()
                     .unwrap();
-                let state_place = self.temp_places[idx];
                 for (_, mut raw_state) in agg_state.iter().enumerate() {
-                    func.deserialize(state_place, &mut raw_state)?;
-                    func.merge(place, state_place)?;
-                    if func.need_manual_drop_state() {
-                        unsafe {
-                            // State may allocate memory out of the arena,
-                            // drop state to avoid memory leak.
-                            func.drop_state(state_place);
-                        }
-                        func.init_state(state_place);
-                    }
+                    func.merge(place, &mut raw_state)?;
                 }
             } else {
                 func.accumulate(place, &arg_columns, None, block.num_rows())?;
@@ -183,7 +168,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 pub struct FinalSingleStateAggregator {
     arena: Bump,
     layout: Layout,
-    to_merge_places: Vec<Vec<StateAddr>>,
+    to_merge_data: Vec<Vec<StringColumn>>,
     funcs: Vec<AggregateFunctionRef>,
     offsets_aggregate_states: Vec<usize>,
 }
@@ -208,7 +193,7 @@ impl FinalSingleStateAggregator {
                 arena,
                 layout,
                 funcs: params.aggregate_functions.clone(),
-                to_merge_places: vec![vec![]; params.aggregate_functions.len()],
+                to_merge_data: vec![vec![]; params.aggregate_functions.len()],
                 offsets_aggregate_states: params.offsets_aggregate_states.clone(),
             },
         ))
@@ -234,17 +219,14 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
     fn transform(&mut self, block: DataBlock) -> Result<Vec<DataBlock>> {
         if !block.is_empty() {
             let block = block.convert_to_full();
-            let places = self.new_places();
 
-            for (index, func) in self.funcs.iter().enumerate() {
+            for (index, _) in self.funcs.iter().enumerate() {
                 let binary_array = block.get_by_offset(index).value.as_column().unwrap();
                 let binary_array = binary_array.as_string().ok_or_else(|| {
                     ErrorCode::IllegalDataType("binary array should be string type")
                 })?;
 
-                let mut data = unsafe { binary_array.index_unchecked(0) };
-                func.deserialize(places[index], &mut data)?;
-                self.to_merge_places[index].push(places[index]);
+                self.to_merge_data[index].push(binary_array.clone());
             }
         }
 
@@ -268,8 +250,9 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             for (index, func) in self.funcs.iter().enumerate() {
                 let main_place = main_places[index];
 
-                for place in self.to_merge_places[index].iter() {
-                    func.merge(main_place, *place)?;
+                for col in self.to_merge_data[index].iter() {
+                    let mut data = unsafe { col.index_unchecked(0) };
+                    func.merge(main_place, &mut data)?;
                 }
 
                 let array = aggr_values[index].borrow_mut();
@@ -289,14 +272,6 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             }
 
             generate_data_block = vec![DataBlock::new_from_columns(columns)];
-        }
-
-        for (places, func) in self.to_merge_places.iter().zip(self.funcs.iter()) {
-            if func.need_manual_drop_state() {
-                for place in places {
-                    unsafe { func.drop_state(*place) }
-                }
-            }
         }
 
         Ok(generate_data_block)

@@ -359,17 +359,19 @@ where T: Number + AsPrimitive<f64>
         let state = place.get::<QuantileTDigestState>();
         serialize_into_buf(writer, state)
     }
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
-        let state = place.get::<QuantileTDigestState>();
-        *state = deserialize_from_slice(reader)?;
 
-        Ok(())
-    }
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileTDigestState>();
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        state.merge(rhs)
+        let mut rhs: QuantileTDigestState = deserialize_from_slice(reader)?;
+        state.merge(&mut rhs)
     }
+
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+        let state = place.get::<QuantileTDigestState>();
+        let other = rhs.get::<QuantileTDigestState>();
+        state.merge(other)
+    }
+
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
         state.merge_result(builder, self.levels.clone())
