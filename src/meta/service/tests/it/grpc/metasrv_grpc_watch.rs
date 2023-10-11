@@ -26,6 +26,7 @@ use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::Event;
+use common_meta_types::protobuf::KvMeta;
 use common_meta_types::protobuf::SeqV;
 use common_meta_types::protobuf::TxnRequest;
 use common_meta_types::protobuf::WatchRequest;
@@ -146,40 +147,25 @@ async fn test_watch() -> anyhow::Result<()> {
             // set a->a
             Event {
                 key: key_a.clone(),
-                current: Some(SeqV {
-                    seq,
-                    data: val_a.clone(),
-                }),
+                current: Some(SeqV::new(seq, val_a.clone())),
                 prev: None,
             },
             // set b->b
             Event {
                 key: key_b.clone(),
-                current: Some(SeqV {
-                    seq: seq + 2,
-                    data: val_b.clone(),
-                }),
+                current: Some(SeqV::new(seq + 2, val_b.clone())),
                 prev: None,
             },
             // update b->new
             Event {
                 key: key_b.clone(),
-                current: Some(SeqV {
-                    seq: seq + 3,
-                    data: val_new.clone(),
-                }),
-                prev: Some(SeqV {
-                    seq: seq + 2,
-                    data: val_b.clone(),
-                }),
+                current: Some(SeqV::new(seq + 3, val_new.clone())),
+                prev: Some(SeqV::new(seq + 2, val_b.clone())),
             },
             // delete b
             Event {
                 key: key_b.clone(),
-                prev: Some(SeqV {
-                    seq: seq + 3,
-                    data: val_new.clone(),
-                }),
+                prev: Some(SeqV::new(seq + 3, val_new.clone())),
                 current: None,
             },
         ];
@@ -216,19 +202,13 @@ async fn test_watch() -> anyhow::Result<()> {
             // delete 1 first time
             Event {
                 key: key.clone(),
-                prev: Some(SeqV {
-                    seq: seq + 1,
-                    data: val.clone(),
-                }),
+                prev: Some(SeqV::new(seq + 1, val.clone())),
                 current: None,
             },
             // delete 1 second time
             Event {
                 key: key.clone(),
-                prev: Some(SeqV {
-                    seq: seq + 2,
-                    data: val_new.clone(),
-                }),
+                prev: Some(SeqV::new(seq + 2, val_new.clone())),
                 current: None,
             },
         ];
@@ -318,26 +298,17 @@ async fn test_watch() -> anyhow::Result<()> {
         let watch_events = vec![
             Event {
                 key: txn_key.clone(),
-                current: Some(SeqV {
-                    seq: seq + 2,
-                    data: txn_val,
-                }),
+                current: Some(SeqV::with_meta(seq + 2, Some(KvMeta::default()), txn_val)),
                 prev: None,
             },
             Event {
                 key: s(delete_key),
-                prev: Some(SeqV {
-                    seq,
-                    data: b(delete_key),
-                }),
+                prev: Some(SeqV::new(seq, b(delete_key))),
                 current: None,
             },
             Event {
                 key: s(watch_delete_by_prefix_key),
-                prev: Some(SeqV {
-                    seq: seq + 1,
-                    data: b(watch_delete_by_prefix_key),
-                }),
+                prev: Some(SeqV::new(seq + 1, b(watch_delete_by_prefix_key))),
                 current: None,
             },
         ];
@@ -441,7 +412,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
         // 32 expired keys are auto cleaned.
         for i in 0..(32 + 1) {
             let k = format!("w_auto_gc_{}", i);
-            let want = del_event(&k, 1 + i, &k);
+            let want = del_event(&k, 1 + i, &k, Some(KvMeta::new_expire(expire - 10)));
             let msg = client_stream.message().await?.unwrap();
             assert_eq!(Some(want), msg.event);
         }
@@ -450,11 +421,26 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
 
         let seq = 34;
         let watch_events = vec![
-            del_event("w_b1", seq, "w_b1"),              // expired
-            del_event("w_b2", seq + 1, "w_b2"),          // expired
-            del_event("w_b3a", seq + 2, "w_b3a"),        // expired
-            add_event("w_b1", seq + 4, "w_b1_override"), // override
-            del_event("w_b3b", seq + 3, "w_b3b"),        // expired
+            del_event("w_b1", seq, "w_b1", Some(KvMeta::new_expire(expire - 5))), // expired
+            del_event(
+                "w_b2",
+                seq + 1,
+                "w_b2",
+                Some(KvMeta::new_expire(expire - 5)),
+            ), // expired
+            del_event(
+                "w_b3a",
+                seq + 2,
+                "w_b3a",
+                Some(KvMeta::new_expire(expire - 5)),
+            ), // expired
+            add_event("w_b1", seq + 4, "w_b1_override", Some(KvMeta::default())), // override
+            del_event(
+                "w_b3b",
+                seq + 3,
+                "w_b3b",
+                Some(KvMeta::new_expire(expire + 5)),
+            ), // expired
         ];
 
         for ev in watch_events {
@@ -543,25 +529,25 @@ fn b(x: &str) -> Vec<u8> {
 }
 
 /// Build a protobuf defined `SeqV`.
-fn pb_seqv(seq: u64, data: &str) -> Option<SeqV> {
-    Some(SeqV { seq, data: b(data) })
+fn pb_seqv(seq: u64, data: &str, meta: Option<KvMeta>) -> Option<SeqV> {
+    Some(SeqV::with_meta(seq, meta, b(data)))
 }
 
 /// Build an event represent a delete operation: i.e., prev is Some, result is None
-fn del_event(key: &str, prev_seq: u64, prev_val: &str) -> Event {
+fn del_event(key: &str, prev_seq: u64, prev_val: &str, prev_meta: Option<KvMeta>) -> Event {
     Event {
         key: s(key),
-        prev: pb_seqv(prev_seq, prev_val),
+        prev: pb_seqv(prev_seq, prev_val, prev_meta),
         current: None,
     }
 }
 
 /// Build an event represent an add operation: i.e., prev is None, result is Some
-fn add_event(key: &str, res_seq: u64, res_val: &str) -> Event {
+fn add_event(key: &str, res_seq: u64, res_val: &str, meta: Option<KvMeta>) -> Event {
     Event {
         key: s(key),
         prev: None,
-        current: pb_seqv(res_seq, res_val),
+        current: pb_seqv(res_seq, res_val, meta),
     }
 }
 
