@@ -338,7 +338,7 @@ impl<'a> Applier<'a> {
 
     async fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
         let sv = self.sm.get_kv(&get.key).await;
-        let value = sv.map(Self::into_pb_seq_v);
+        let value = sv.map(pb::SeqV::from);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
             value,
@@ -359,7 +359,7 @@ impl<'a> Applier<'a> {
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: if put.prev_value {
-                prev.map(Self::into_pb_seq_v)
+                prev.map(pb::SeqV::from)
             } else {
                 None
             },
@@ -387,7 +387,7 @@ impl<'a> Applier<'a> {
             key: delete.key.clone(),
             success: is_deleted,
             prev_value: if delete.prev_value {
-                prev.map(Self::into_pb_seq_v)
+                prev.map(pb::SeqV::from)
             } else {
                 None
             },
@@ -500,14 +500,6 @@ impl<'a> Applier<'a> {
                 }
             },
             _ => 0,
-        }
-    }
-
-    /// Convert SeqV defined in rust types to SeqV defined in protobuf.
-    fn into_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
-        pb::SeqV {
-            seq: seq_v.seq,
-            data: seq_v.data,
         }
     }
 }

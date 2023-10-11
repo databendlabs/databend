@@ -26,7 +26,6 @@ use common_meta_types::protobuf::Event;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::Change;
-use common_meta_types::SeqV;
 use log::info;
 use log::warn;
 use prost::Message;
@@ -163,8 +162,8 @@ impl EventDispatcher {
             let resp = WatchResponse {
                 event: Some(Event {
                     key: k.to_string(),
-                    current: current.clone().map(to_pb_seq_v),
-                    prev: prev.clone().map(to_pb_seq_v),
+                    current: current.clone().map(pb::SeqV::from),
+                    prev: prev.clone().map(pb::SeqV::from),
                 }),
             };
 
@@ -249,13 +248,5 @@ impl EventDispatcher {
 impl StateMachineSubscriber for DispatcherSender {
     fn kv_changed(&self, change: Change<Vec<u8>, String>) {
         let _ = self.0.send(WatchEvent::KVChange(change));
-    }
-}
-
-/// Convert SeqV defined in rust types to SeqV defined in protobuf.
-fn to_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
-    pb::SeqV {
-        seq: seq_v.seq,
-        data: seq_v.data,
     }
 }

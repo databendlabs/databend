@@ -16,9 +16,14 @@ syntax = "proto3";
 
 package meta;
 
+message KVMeta {
+  optional uint64 expire_at = 1;
+}
+
 message SeqV {
   uint64 seq = 1;
   bytes data = 2;
+  optional KVMeta meta = 3;
 }
 
 // Get request and response

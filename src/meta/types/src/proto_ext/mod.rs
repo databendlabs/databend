@@ -14,4 +14,5 @@
 
 //! Extend protobuf generated code with some useful methods.
 
+mod seq_v_ext;
 mod txn_ext;
