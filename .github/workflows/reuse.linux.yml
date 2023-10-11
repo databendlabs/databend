@@ -304,8 +304,7 @@ jobs:
         dirs:
           - "ydb"
           - "tpcds"
-          # FIXME: flaky
-          # - "tpch"
+          - "tpch"
           - "cluster"
     steps:
       - uses: actions/checkout@v4
