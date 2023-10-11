@@ -339,6 +339,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
+        let mut delete_column_idx = 0;
         if let Some(SelectCtx {
             select_column_bindings,
             select_schema,
@@ -353,11 +354,12 @@ impl PipelineBuilder {
             )?;
 
             let mut target_schema: DataSchema = table_schema.clone().into();
-            if let Some((_, delete_column_idx)) = delete_when {
-                let delete_column = select_schema.field(*delete_column_idx);
+            if let Some((_, delete_column)) = delete_when {
+                delete_column_idx = select_schema.index_of(delete_column.as_str())?;
+                let delete_column = select_schema.field(delete_column_idx).clone();
                 target_schema
                     .fields
-                    .insert(*delete_column_idx, delete_column.clone());
+                    .insert(delete_column_idx, delete_column);
             }
             let target_schema = Arc::new(target_schema.clone());
             if target_schema.fields().len() != select_schema.fields().len() {
@@ -410,7 +412,10 @@ impl PipelineBuilder {
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
         let delete_when = if let Some((remote_expr, delete_column)) = delete_when {
-            Some((remote_expr.as_expr(&BUILTIN_FUNCTIONS), *delete_column))
+            Some((
+                remote_expr.as_expr(&BUILTIN_FUNCTIONS),
+                delete_column.clone(),
+            ))
         } else {
             None
         };
@@ -424,7 +429,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
-                delete_when,
+                delete_when.map(|(expr, _)| (expr, delete_column_idx)),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -437,7 +442,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
-                delete_when.map(|(_, idx)| idx),
+                delete_when.map(|_| delete_column_idx),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());

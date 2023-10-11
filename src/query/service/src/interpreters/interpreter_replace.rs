@@ -219,6 +219,14 @@ impl ReplaceInterpreter {
                 ));
             }
             let delete_column = columns.iter().next().unwrap();
+            let column_bindings = &bind_context.columns;
+            let delete_column_binding = column_bindings.iter().find(|c| c.index == *delete_column);
+            if delete_column_binding.is_none() {
+                return Err(ErrorCode::BadArguments(
+                    "Delete must have one column in predicate",
+                ));
+            }
+            let delete_column_name = delete_column_binding.unwrap().column_name.clone();
             let filter = cast_expr_to_non_null_boolean(
                 scalar.as_expr()?.project_column_ref(|col| col.index),
             )?;
@@ -231,7 +239,7 @@ impl ReplaceInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
-            Some((filter, *delete_column))
+            Some((filter, delete_column_name))
         } else {
             None
         };
