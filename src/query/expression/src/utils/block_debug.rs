@@ -177,46 +177,17 @@ fn create_box_table(
     };
 
     let mut res_vec: Vec<Vec<String>> = vec![];
-    let top_collection = results.first().unwrap();
-    let top_rows = top_collection.num_rows().min(top_rows);
-    if bottom_rows == 0 {
-        for block in results {
-            for row in 0..block.num_rows() {
-                let mut v = vec![];
-                for block_entry in block.columns() {
-                    let value = block_entry.value.index(row).unwrap().to_string();
-                    if replace_newline {
-                        v.push(value.to_string().replace('\n', "\\n"));
-                    } else {
-                        v.push(value.to_string());
-                    }
-                }
-                res_vec.push(v);
-            }
-        }
-    } else {
-        let bottom_collection = results.last().unwrap();
-        for row in 0..top_rows {
-            let mut v = vec![];
-            for block_entry in top_collection.columns() {
-                let value = block_entry.value.index(row).unwrap().to_string();
-                if replace_newline {
-                    v.push(value.to_string().replace('\n', "\\n"));
-                } else {
-                    v.push(value.to_string());
-                }
-            }
-            res_vec.push(v);
-        }
-        let take_num = if bottom_collection.num_rows() > bottom_rows {
-            bottom_collection.num_rows() - bottom_rows
-        } else {
-            0
-        };
 
-        for row in take_num..bottom_collection.num_rows() {
+    let mut rows = 0;
+    for block in results {
+        for row in 0..block.num_rows() {
+            rows += 1;
+            if rows > top_rows && rows <= row_count - bottom_rows {
+                continue;
+            }
+
             let mut v = vec![];
-            for block_entry in top_collection.columns() {
+            for block_entry in block.columns() {
                 let value = block_entry.value.index(row).unwrap().to_string();
                 if replace_newline {
                     v.push(value.to_string().replace('\n', "\\n"));

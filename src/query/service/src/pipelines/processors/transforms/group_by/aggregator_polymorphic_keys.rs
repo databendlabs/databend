@@ -582,7 +582,6 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
 
         let arena = std::mem::replace(&mut cell.arena, Area::create());
         cell.arena_holders.push(ArenaHolder::create(Some(arena)));
-        let temp_values = cell.temp_values.to_vec();
         let arena_holders = cell.arena_holders.to_vec();
 
         let _old_dropper = cell._dropper.clone().unwrap();
@@ -594,7 +593,6 @@ impl<Method: HashMethodBounds> PartitionedHashMethod<Method> {
         // create new HashTableCell before take_old_dropper - may double free memory
         let _old_dropper = cell._dropper.take();
         let mut cell = HashTableCell::create(partitioned_hashtable, _new_dropper);
-        cell.temp_values = temp_values;
         cell.arena_holders = arena_holders;
         Ok(cell)
     }

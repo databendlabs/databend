@@ -285,7 +285,7 @@ impl ReplaceInterpreter {
             InsertInputSource::Stage(plan) => match *plan.clone() {
                 Plan::CopyIntoTable(copy_plan) => {
                     let interpreter =
-                        CopyIntoTableInterpreter::try_create(ctx.clone(), copy_plan.clone())?;
+                        CopyIntoTableInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
                     let (physical_plan, files) =
                         interpreter.build_physical_plan(&copy_plan).await?;
                     *purge_info = Some((files, copy_plan.stage_table_info.stage_info.clone()));

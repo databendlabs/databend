@@ -9,6 +9,7 @@ on:
       - edited
       - ready_for_review
       - converted_to_draft
+  merge_group:
 
 permissions:
   pull-requests: write
@@ -17,17 +18,23 @@ permissions:
 jobs:
   title:
     runs-on: ubuntu-latest
-    if: '!github.event.pull_request.draft'
     steps:
       - name: Check PR title if not sematic
         uses: actions/github-script@v6
+        id: check
         with:
           script: |
+            if (!context.payload.pull_request) {
+              core.info('PR payload is null');
+              core.setOutput('title', 'ignore');
+              return;
+            }
             const title = context.payload.pull_request.title;
             const regex = /^(rfc|feat|fix|refactor|ci|docs|chore)(\([a-z0-9-]+\))?:/;
             const m = title.match(regex);
             if (!m) {
-              core.setFailed('PR title is not semantic');
+              core.error('PR title is not semantic');
+              core.setOutput('title', 'not-semantic');
               return;
             }
             const prType = m[1];
@@ -63,15 +70,16 @@ jobs:
               issue_number: context.issue.number,
               labels: [label],
             });
+            core.setOutput('title', 'semantic');
       - name: Delete Comment
-        if: success()
+        if: steps.check.outputs.title == 'semantic'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-title'
           delete: true
       - name: Comment on PR
-        if: failure()
+        if: steps.check.outputs.title == 'not-semantic'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
@@ -102,26 +110,34 @@ jobs:
 
   cla:
     runs-on: ubuntu-latest
-    if: '!github.event.pull_request.draft'
     steps:
       - name: Check CLA if not signed
         uses: actions/github-script@v6
+        id: check
         with:
           script: |
+            if (!context.payload.pull_request) {
+              core.info('PR payload is null');
+              core.setOutput('cla', 'ignore');
+              return;
+            }
             const body = context.payload.pull_request.body;
             const regex = /I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\//;
             if (!regex.test(body)) {
-              core.setFailed('CLA is not signed');
+              core.error('CLA is not signed');
+              core.setOutput('cla', 'not-signed');
+            } else {
+              core.setOutput('cla', 'signed');
             }
       - name: Delete Comment
-        if: success()
+        if: steps.check.outputs.cla == 'signed'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
           identifier: 'pr-assistant-cla'
           delete: true
       - name: Comment on PR
-        if: failure()
+        if: steps.check.outputs.cla == 'not-signed'
         uses: everpcpc/comment-on-pr-action@v1
         with:
           token: ${{ github.token }}
