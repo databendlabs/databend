@@ -542,19 +542,25 @@ impl CompactTaskBuilder {
                     tasks.pop_back().map_or(vec![], |(_, v)| v)
                 };
 
-                let total_rows = blocks.iter().fold(0, |acc, x| acc + x.row_count as usize);
-                let total_size = blocks.iter().fold(0, |acc, x| acc + x.block_size as usize);
+                let tail_rows = tail.iter().fold(0, |acc, x| acc + x.row_count as usize);
+                let tail_size = tail.iter().fold(0, |acc, x| acc + x.block_size as usize);
+                let total_rows = blocks
+                    .iter()
+                    .fold(tail_rows, |acc, x| acc + x.row_count as usize);
+                let total_size = blocks
+                    .iter()
+                    .fold(tail_size, |acc, x| acc + x.block_size as usize);
                 if self.thresholds.check_for_compact(total_rows, total_size) {
                     blocks.extend(tail);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                 } else {
+                    // blocks > 2N
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
                 }
             }
         }
 
-        let skip_compact = tasks.is_empty() && segment_indices.len() == 1;
         let mut removed_segment_indexes = segment_indices;
         let segment_idx = removed_segment_indexes.pop().unwrap();
         let mut partitions: Vec<PartInfoPtr> = Vec::with_capacity(tasks.len() + 1);
@@ -573,7 +579,6 @@ impl CompactTaskBuilder {
                 unchanged_blocks,
                 removed_segment_indexes,
                 removed_segment_summary,
-                skip_compact,
             ),
         ))));
         Ok(partitions)

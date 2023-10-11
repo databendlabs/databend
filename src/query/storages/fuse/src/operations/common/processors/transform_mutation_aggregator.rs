@@ -31,6 +31,7 @@ use common_sql::executor::MutationKind;
 use itertools::Itertools;
 use log::debug;
 use log::info;
+use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
@@ -197,7 +198,6 @@ impl TableMutationAggregator {
                         v.insert(BlockMutations {
                             replaced_blocks: extras.unchanged_blocks,
                             deleted_blocks: vec![],
-                            skip_compact: extras.skip_compact,
                         });
                     }
                 }
@@ -308,6 +308,7 @@ impl TableMutationAggregator {
             let op = self.dal.clone();
             let location_gen = self.location_gen.clone();
 
+            let mut all_perfect = false;
             tasks.push(async move {
                 let (new_blocks, origin_summary) = if let Some(loc) = location {
                     // read the old segment
@@ -342,6 +343,9 @@ impl TableMutationAggregator {
                 } else {
                     // use by compact.
                     assert!(segment_mutation.deleted_blocks.is_empty());
+                    // There are more than 1 blocks, mains that the blocks can no longer be compacted.
+                    // They can be marked as perfect blocks.
+                    all_perfect = segment_mutation.replaced_blocks.len() > 1;
                     let new_blocks = segment_mutation
                         .replaced_blocks
                         .into_iter()
@@ -351,17 +355,24 @@ impl TableMutationAggregator {
                     (new_blocks, None)
                 };
 
+                let location = location_gen.gen_segment_info_location();
                 // re-calculate the segment statistics
                 let mut new_summary =
                     reduce_block_metas(&new_blocks, thresholds, default_cluster_key_id);
-                if segment_mutation.skip_compact {
-                    new_summary.perfect_block_count = new_summary.block_count;
+                if all_perfect {
+                    // To fix issue #13217.
+                    if new_summary.block_count > new_summary.perfect_block_count {
+                        warn!(
+                            "compact: generate new segment: {}, perfect_block_count: {}, block_count: {}",
+                            location, new_summary.perfect_block_count, new_summary.block_count,
+                        );
+                        new_summary.perfect_block_count = new_summary.block_count;
+                    }
                 }
                 // create new segment info
                 let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                 // write the segment info.
-                let location = location_gen.gen_segment_info_location();
                 let serialized_segment = SerializedSegment {
                     path: location.clone(),
                     segment: Arc::new(new_segment),
@@ -394,7 +405,6 @@ impl TableMutationAggregator {
 struct BlockMutations {
     replaced_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
     deleted_blocks: Vec<BlockIndex>,
-    skip_compact: bool,
 }
 
 impl BlockMutations {
@@ -402,7 +412,6 @@ impl BlockMutations {
         BlockMutations {
             replaced_blocks: vec![(block_idx, block_meta)],
             deleted_blocks: vec![],
-            skip_compact: false,
         }
     }
 
@@ -410,7 +419,6 @@ impl BlockMutations {
         BlockMutations {
             replaced_blocks: vec![],
             deleted_blocks: vec![block_idx],
-            skip_compact: false,
         }
     }
 
