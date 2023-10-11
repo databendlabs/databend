@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::intrinsics::unlikely;
 use std::sync::Arc;
 use std::vec;
 
@@ -40,7 +39,6 @@ use log::info;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_cell::AggregateHashTableDropper;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
-use crate::pipelines::processors::transforms::group_by::Area;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
 use crate::pipelines::processors::transforms::group_by::PartitionedHashMethod;
 use crate::pipelines::processors::transforms::group_by::PolymorphicKeysHelper;
@@ -102,35 +100,6 @@ impl TryFrom<Arc<QueryContext>> for AggregateSettings {
                 spilling_bytes_threshold_per_proc => spilling_bytes_threshold_per_proc,
             },
         })
-    }
-}
-
-/// A owned temporary memory.
-struct TempMemory {
-    place: StateAddr,
-    arena: Area,
-}
-
-impl TempMemory {
-    /// Create a lazy memory wh ich will not be allocated until the first time it is used.
-    fn create_lazy() -> Self {
-        let arena = Area::create();
-        Self {
-            place: StateAddr::new(0),
-            arena,
-        }
-    }
-
-    #[inline(always)]
-    fn alloc_layout(&mut self, params: &AggregatorParams) {
-        if unlikely(self.place.addr() == 0) {
-            self.place = params.alloc_layout(&mut self.arena);
-        }
-    }
-
-    #[inline(always)]
-    fn place(&self) -> &StateAddr {
-        &self.place
     }
 }
 
@@ -231,11 +200,9 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
     #[inline(always)]
     #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
-    fn execute_agg_index_block(&mut self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
-        self.temp_memory.alloc_layout(&self.params);
+    fn execute_agg_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-        let temp_place = self.temp_memory.place();
 
         for index in 0..aggregate_functions.len() {
             // Aggregation states are in the back of the block.
