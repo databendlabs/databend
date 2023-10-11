@@ -2556,8 +2556,8 @@ catalog channel catalog_pageAAAAAAAALHCBAAAA 712.50 0.00 -250.50
 catalog channel catalog_pageAAAAAAAALKPAAAAA 2395.69 0.00 -2898.62
 
 # Q6
-# onlyif mysql
-# query I
+onlyif mysql
+query I
 SELECT a.ca_state state,
        count(*) cnt
 FROM customer_address a ,
