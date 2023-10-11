@@ -23,8 +23,10 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
@@ -263,8 +265,20 @@ impl QueryContext {
         ua.clone()
     }
 
+    pub fn get_query_duration_ms(&self) -> i64 {
+        let query_start_time = convert_query_log_timestamp(self.shared.created_time);
+        let finish_time = *self.shared.finish_time.read();
+        let finish_time = finish_time.unwrap_or_else(SystemTime::now);
+        let finish_time = convert_query_log_timestamp(finish_time);
+        (finish_time - query_start_time) / 1_000
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn set_finish_time(&self, time: SystemTime) {
+        *self.shared.finish_time.write() = Some(time)
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
@@ -782,4 +796,10 @@ impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
+}
+
+pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
+    time.duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::new(0, 0))
+        .as_micros() as i64
 }
