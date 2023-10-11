@@ -36,9 +36,9 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_users::GrantObjectVisibilityChecker;
 use log::warn;
 
-use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
