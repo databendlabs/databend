@@ -230,17 +230,17 @@ where
         serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        *state = deserialize_from_slice(reader)?;
-
+        let rhs: AggregateCovarianceState = deserialize_from_slice(reader)?;
+        state.merge(&rhs);
         Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<AggregateCovarianceState>();
-        let rhs = rhs.get::<AggregateCovarianceState>();
-        state.merge(rhs);
+        let other = rhs.get::<AggregateCovarianceState>();
+        state.merge(other);
         Ok(())
     }
 

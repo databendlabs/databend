@@ -110,9 +110,6 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
 
     params: Arc<AggregatorParams>,
-
-    /// A temporary place to hold aggregating state from index data.
-    temp_place: StateAddr,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -143,7 +140,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 params,
                 hash_table,
                 settings: AggregateSettings::try_from(ctx)?,
-                temp_place: StateAddr::new(0),
             },
         ))
     }
@@ -220,19 +216,9 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .unwrap()
                 .as_string()
                 .unwrap();
-            let state_place = self.temp_place.next(offset);
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
-                function.deserialize(state_place, &mut raw_state)?;
-                function.merge(place.next(offset), state_place)?;
-                if function.need_manual_drop_state() {
-                    unsafe {
-                        // State may allocate memory out of the arena,
-                        // drop state to avoid memory leak.
-                        function.drop_state(state_place);
-                    }
-                    function.init_state(state_place);
-                }
+                function.merge(place.next(offset), &mut raw_state)?;
             }
         }
 
@@ -277,9 +263,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
 
                     if is_agg_index_block {
-                        if self.temp_place.addr() == 0 {
-                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
-                        }
                         self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)
@@ -300,9 +283,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                     }
 
                     if is_agg_index_block {
-                        if self.temp_place.addr() == 0 {
-                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
-                        }
                         self.execute_agg_index_block(&block, &places)
                     } else {
                         Self::execute(&self.params, &block, &places)

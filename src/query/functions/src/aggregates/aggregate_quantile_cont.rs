@@ -213,17 +213,16 @@ where T: Number + AsPrimitive<f64>
         serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileContState>();
-        *state = deserialize_from_slice(reader)?;
-
-        Ok(())
+        let rhs: QuantileContState = deserialize_from_slice(reader)?;
+        state.merge(&rhs)
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<QuantileContState>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<QuantileContState>();
-        state.merge(rhs)
+        let other = rhs.get::<QuantileContState>();
+        state.merge(other)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
