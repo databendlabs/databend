@@ -109,7 +109,6 @@ pub struct CompactExtraInfo {
     pub unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
     pub removed_segment_indexes: Vec<SegmentIndex>,
     pub removed_segment_summary: Statistics,
-    pub skip_compact: bool,
 }
 
 impl CompactExtraInfo {
@@ -118,14 +117,12 @@ impl CompactExtraInfo {
         unchanged_blocks: Vec<(BlockIndex, Arc<BlockMeta>)>,
         removed_segment_indexes: Vec<SegmentIndex>,
         removed_segment_summary: Statistics,
-        skip_compact: bool,
     ) -> Self {
         CompactExtraInfo {
             segment_index,
             unchanged_blocks,
             removed_segment_indexes,
             removed_segment_summary,
-            skip_compact,
         }
     }
 
