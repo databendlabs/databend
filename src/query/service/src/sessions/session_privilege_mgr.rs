@@ -253,6 +253,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
     #[async_backtrace::framed]
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        // TODO(liyz): is it check the visibility according onwerships?
         Ok(GrantObjectVisibilityChecker::new(
             &self.get_current_user()?,
             &self.get_all_available_roles().await?,
