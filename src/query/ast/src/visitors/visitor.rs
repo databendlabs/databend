@@ -366,9 +366,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_explain(&mut self, _kind: &'ast ExplainKind, _query: &'ast Statement) {}
 
-    fn visit_copy(&mut self, _copy: &'ast CopyStmt) {}
-
-    fn visit_copy_unit(&mut self, _copy_unit: &'ast CopyUnit) {}
+    fn visit_copy_into_table(&mut self, _copy: &'ast CopyIntoTableStmt) {}
+    fn visit_copy_into_location(&mut self, _copy: &'ast CopyIntoLocationStmt) {}
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 

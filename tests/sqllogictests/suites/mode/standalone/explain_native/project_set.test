@@ -13,34 +13,30 @@ insert into fold_count values([1,2,3,4], 'x');
 query T
 explain select count() from (select unnest(id), c1 from fold_count)
 ----
-EvalScalar
-├── output columns: [count() (#5)]
-├── expressions: [count() (#4)]
+AggregateFinal
+├── output columns: [count() (#4)]
+├── group by: []
+├── aggregate functions: [count()]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [count() (#4)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [count() (#4)]
-        ├── group by: []
-        ├── aggregate functions: [count()]
+    └── ProjectSet
+        ├── output columns: [unnest (#2)]
         ├── estimated rows: 1.00
-        └── ProjectSet
-            ├── output columns: [unnest (#2)]
-            ├── estimated rows: 1.00
-            ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL) NULL))
-            └── TableScan
-                ├── table: default.default.fold_count
-                ├── output columns: [id (#0)]
-                ├── read rows: 1
-                ├── read bytes: 43
-                ├── partitions total: 1
-                ├── partitions scanned: 1
-                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 1.00
+        ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL) NULL))
+        └── TableScan
+            ├── table: default.default.fold_count
+            ├── output columns: [id (#0)]
+            ├── read rows: 1
+            ├── read bytes: 43
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [], limit: NONE]
+            └── estimated rows: 1.00
 
 statement ok
 drop table fold_count;

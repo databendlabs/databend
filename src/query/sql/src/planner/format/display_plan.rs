@@ -46,7 +46,8 @@ impl Plan {
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
-            Plan::Copy(plan) => Ok(format!("{:?}", plan)),
+            Plan::CopyIntoTable(plan) => Ok(format!("{:?}", plan)),
+            Plan::CopyIntoLocation(plan) => Ok(format!("{:?}", plan)),
 
             // catalog
             Plan::ShowCreateCatalog(show_create_catalog) => {
