@@ -105,7 +105,7 @@ impl InterpreterFactory {
 
             Plan::CopyIntoTable(copy_plan) => Ok(Arc::new(CopyIntoTableInterpreter::try_create(
                 ctx,
-                copy_plan.clone(),
+                *copy_plan.clone(),
             )?)),
             Plan::CopyIntoLocation(copy_plan) => Ok(Arc::new(
                 CopyIntoLocationInterpreter::try_create(ctx, copy_plan.clone())?,

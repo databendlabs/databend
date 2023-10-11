@@ -148,7 +148,7 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
-    CopyIntoTable(CopyIntoTablePlan),
+    CopyIntoTable(Box<CopyIntoTablePlan>),
     CopyIntoLocation(CopyIntoLocationPlan),
 
     // Call is rewrite into Query
