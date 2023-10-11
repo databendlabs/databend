@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -25,6 +26,7 @@ use common_sql::optimizer::SExpr;
 use common_sql::planner::plans::Plan;
 use common_sql::plans::RelOperator;
 use common_sql::Planner;
+use common_storages_fuse::TableContext;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::expects_ok;
@@ -64,8 +66,14 @@ async fn test_index_scan_agg_args_are_expression() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuzz() -> Result<()> {
-    test_fuzz_impl("parquet").await?;
-    test_fuzz_impl("native").await
+    test_fuzz_impl("parquet", false).await?;
+    test_fuzz_impl("native", false).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuzz_with_spill() -> Result<()> {
+    test_fuzz_impl("parquet", true).await?;
+    test_fuzz_impl("native", true).await
 }
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
@@ -1038,12 +1046,29 @@ fn get_test_suites() -> Vec<TestSuite> {
     ]
 }
 
-async fn test_fuzz_impl(format: &str) -> Result<()> {
+async fn test_fuzz_impl(format: &str, spill: bool) -> Result<()> {
     let test_suites = get_test_suites();
+    let spill_settings = if spill {
+        Some(HashMap::from([
+            ("spilling_memory_ratio".to_string(), "100".to_string()),
+            (
+                "spilling_bytes_threshold_per_proc".to_string(),
+                "1".to_string(),
+            ),
+        ]))
+    } else {
+        None
+    };
 
     for num_blocks in [1, 10] {
         for num_rows_per_block in [1, 50] {
             let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
+            if let Some(s) = spill_settings.as_ref() {
+                let settings = ctx.get_settings();
+                // Make sure the operator will spill the aggregation.
+                settings.set_batch_settings(s)?;
+            }
+
             let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
             // Prepare table and data
             // Create random engine table to generate random data.
@@ -1085,8 +1110,8 @@ async fn test_fuzz_impl(format: &str) -> Result<()> {
             }
 
             // Clear data
-            execute_sql(fixture.ctx(), "DROP TABLE rt ALL").await?;
-            execute_sql(fixture.ctx(), "DROP TABLE t ALL").await?;
+            execute_sql(fixture.ctx(), "DROP TABLE rt").await?;
+            execute_sql(fixture.ctx(), "DROP TABLE t").await?;
         }
     }
     Ok(())

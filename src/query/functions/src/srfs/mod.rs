@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::AnyType;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::Function;
@@ -31,6 +32,7 @@ use jsonb::array_values;
 use jsonb::jsonpath::parse_json_path;
 use jsonb::jsonpath::Mode as SelectorMode;
 use jsonb::jsonpath::Selector;
+use jsonb::object_each;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.properties.insert(
@@ -165,6 +167,80 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         }))
     });
+
+    registry.properties.insert(
+        "json_array_elements".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+    registry.register_function_factory("json_array_elements", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_array_elements".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Variant))]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
+                    let arg = args[0].clone().to_owned();
+                    (0..ctx.num_rows)
+                        .map(|row| match arg.index(row).unwrap() {
+                            ScalarRef::Null => {
+                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
+                            }
+                            ScalarRef::Variant(val) => {
+                                unnest_variant_array(val, row, max_nums_per_row)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .collect()
+                }),
+            },
+        }))
+    });
+
+    registry.properties.insert(
+        "json_each".to_string(),
+        FunctionProperty::default().kind(FunctionKind::SRF),
+    );
+    registry.register_function_factory("json_each", |_, args_type| {
+        if args_type.len() != 1 {
+            return None;
+        }
+        if args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "json_each".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Tuple(vec![DataType::Nullable(Box::new(DataType::Tuple(
+                    vec![DataType::String, DataType::Variant],
+                )))]),
+            },
+            eval: FunctionEval::SRF {
+                eval: Box::new(|args, ctx, max_nums_per_row| {
+                    let arg = args[0].clone().to_owned();
+                    (0..ctx.num_rows)
+                        .map(|row| match arg.index(row).unwrap() {
+                            ScalarRef::Null => {
+                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
+                            }
+                            ScalarRef::Variant(val) => {
+                                unnest_variant_obj(val, row, max_nums_per_row)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .collect()
+                }),
+            },
+        }))
+    });
 }
 
 fn build_unnest(
@@ -201,19 +277,7 @@ fn build_unnest(
                                 (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
                             }
                             ScalarRef::Variant(val) => {
-                                let mut len = 0;
-                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
-                                if let Some(vals) = array_values(val) {
-                                    len = vals.len();
-                                    max_nums_per_row[row] =
-                                        std::cmp::max(max_nums_per_row[row], len);
-                                    for val in vals {
-                                        builder.put_slice(&val);
-                                        builder.commit_row();
-                                    }
-                                }
-                                let col = Column::Variant(builder.build()).wrap_nullable(None);
-                                (Value::Column(Column::Tuple(vec![col])), len)
+                                unnest_variant_array(val, row, max_nums_per_row)
                             }
                             _ => unreachable!(),
                         })
@@ -276,5 +340,59 @@ fn build_unnest(
                 }),
             },
         }),
+    }
+}
+
+fn unnest_variant_array(
+    val: &[u8],
+    row: usize,
+    max_nums_per_row: &mut [usize],
+) -> (Value<AnyType>, usize) {
+    match array_values(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut builder = StringColumnBuilder::with_capacity(0, 0);
+
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for val in vals {
+                builder.put_slice(&val);
+                builder.commit_row();
+            }
+
+            let col = Column::Variant(builder.build()).wrap_nullable(None);
+            (Value::Column(Column::Tuple(vec![col])), len)
+        }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
+    }
+}
+
+fn unnest_variant_obj(
+    val: &[u8],
+    row: usize,
+    max_nums_per_row: &mut [usize],
+) -> (Value<AnyType>, usize) {
+    match object_each(val) {
+        Some(vals) if !vals.is_empty() => {
+            let len = vals.len();
+            let mut val_builder = StringColumnBuilder::with_capacity(0, 0);
+            let mut key_builder = StringColumnBuilder::with_capacity(0, 0);
+
+            max_nums_per_row[row] = std::cmp::max(max_nums_per_row[row], len);
+
+            for (key, val) in vals {
+                key_builder.put_slice(&key);
+                key_builder.commit_row();
+                val_builder.put_slice(&val);
+                val_builder.commit_row();
+            }
+
+            let key_col = Column::String(key_builder.build());
+            let val_col = Column::Variant(val_builder.build());
+            let tuple_col = Column::Tuple(vec![key_col, val_col]).wrap_nullable(None);
+
+            (Value::Column(Column::Tuple(vec![tuple_col])), len)
+        }
+        _ => (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0),
     }
 }

@@ -12,10 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use common_hashtable::RowPtr;
 use itertools::Itertools;
 
+use crate::kernels::take::BIT_MASK;
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
@@ -24,6 +31,7 @@ use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableColumnVec;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -114,6 +122,7 @@ impl DataBlock {
         build_columns_data_type: &[DataType],
         indices: &[RowPtr],
         result_size: usize,
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Self {
         let num_columns = build_columns.len();
         let result_columns = (0..num_columns)
@@ -124,6 +133,7 @@ impl DataBlock {
                     data_type.clone(),
                     indices,
                     result_size,
+                    string_items_buf,
                 );
                 BlockEntry::new(data_type.clone(), Value::Column(column))
             })
@@ -569,6 +579,7 @@ impl Column {
         data_type: DataType,
         indices: &[RowPtr],
         result_size: usize,
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
     ) -> Column {
         match &columns {
             ColumnVec::Null { .. } => Column::Null { len: result_size },
@@ -576,40 +587,48 @@ impl Column {
             ColumnVec::EmptyMap { .. } => Column::EmptyMap { len: result_size },
             ColumnVec::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumnVec::NUM_TYPE(columns) => {
-                    let builder = NumberType::<NUM_TYPE>::create_builder(result_size, &[]);
-                    Self::take_block_vec_value_types::<NumberType<NUM_TYPE>>(
-                        columns, builder, indices,
-                    )
+                    let builder = Self::take_block_vec_primitive_types(columns, indices);
+                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
                 }
             }),
             ColumnVec::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
                 DecimalColumnVec::DECIMAL_TYPE(columns, size) => {
-                    let mut builder = Vec::with_capacity(result_size);
-                    for row_ptr in indices {
-                        let val = unsafe {
-                            columns[row_ptr.chunk_index as usize]
-                                .get_unchecked(row_ptr.row_index as usize)
-                        };
-                        builder.push(*val);
-                    }
+                    let builder = Self::take_block_vec_primitive_types(columns, indices);
                     Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
             }),
             ColumnVec::Boolean(columns) => {
-                let builder = BooleanType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<BooleanType>(columns, builder, indices)
+                Column::Boolean(Self::take_block_vec_boolean_types(columns, indices))
             }
-            ColumnVec::String(columns) => {
-                let builder = StringType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<StringType>(columns, builder, indices)
-            }
+            ColumnVec::String(columns) => StringType::upcast_column(
+                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+            ),
             ColumnVec::Timestamp(columns) => {
-                let builder = TimestampType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<TimestampType>(columns, builder, indices)
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
+                Column::Timestamp(ts)
             }
             ColumnVec::Date(columns) => {
-                let builder = DateType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<DateType>(columns, builder, indices)
+                let builder = Self::take_block_vec_primitive_types(columns, indices);
+                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
+                Column::Date(d)
             }
             ColumnVec::Array(columns) => {
                 let data_type = data_type.as_array().unwrap();
@@ -639,10 +658,9 @@ impl Column {
                     columns, builder, indices,
                 )
             }
-            ColumnVec::Bitmap(columns) => {
-                let builder = BitmapType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<BitmapType>(columns, builder, indices)
-            }
+            ColumnVec::Bitmap(columns) => BitmapType::upcast_column(
+                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+            ),
             ColumnVec::Nullable(columns) => {
                 let inner_data_type = data_type.as_nullable().unwrap();
                 let inner_column = Self::take_column_vec_indices(
@@ -650,6 +668,7 @@ impl Column {
                     *inner_data_type.clone(),
                     indices,
                     result_size,
+                    string_items_buf,
                 );
 
                 let inner_bitmap = Self::take_column_vec_indices(
@@ -657,6 +676,7 @@ impl Column {
                     DataType::Boolean,
                     indices,
                     result_size,
+                    string_items_buf,
                 );
 
                 Column::Nullable(Box::new(NullableColumn {
@@ -675,16 +695,111 @@ impl Column {
                             ty.clone(),
                             indices,
                             result_size,
+                            string_items_buf,
                         )
                     })
                     .collect();
 
                 Column::Tuple(fields)
             }
-            ColumnVec::Variant(columns) => {
-                let builder = VariantType::create_builder(result_size, &[]);
-                Self::take_block_vec_value_types::<VariantType>(columns, builder, indices)
+            ColumnVec::Variant(columns) => StringType::upcast_column(
+                Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
+            ),
+        }
+    }
+
+    pub fn take_block_vec_primitive_types<T>(col: &[Buffer<T>], indices: &[RowPtr]) -> Vec<T>
+    where T: Copy {
+        let num_rows = indices.len();
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        builder.extend(indices.iter().map(|row_ptr| unsafe {
+            col.get_unchecked(row_ptr.chunk_index as usize)[row_ptr.row_index as usize]
+        }));
+        builder
+    }
+
+    pub fn take_block_vec_string_types<'a>(
+        col: &'a [StringColumn],
+        indices: &[RowPtr],
+        string_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> StringColumn {
+        let num_rows = indices.len();
+
+        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
+        // can be reused, we will not re-allocate memory.
+        let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
+            Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
+            _ => Some(Vec::with_capacity(num_rows)),
+        };
+        let items = match items.is_some() {
+            true => items.as_mut().unwrap(),
+            false => string_items_buf.unwrap(),
+        };
+
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        let mut data_size = 0;
+
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            *offsets.get_unchecked_mut(0) = 0;
+            for (i, row_ptr) in indices.iter().enumerate() {
+                let item =
+                    col[row_ptr.chunk_index as usize].index_unchecked(row_ptr.row_index as usize);
+                data_size += item.len() as u64;
+                *items.get_unchecked_mut(i) = (item.as_ptr() as u64, item.len());
+                *offsets.get_unchecked_mut(i + 1) = data_size;
             }
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
+        }
+
+        // Build [`data`].
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let mut data_ptr = data.as_mut_ptr();
+
+        unsafe {
+            for (str_ptr, len) in items.iter() {
+                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
+            }
+            set_vec_len_by_ptr(&mut data, data_ptr);
+        }
+
+        StringColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {
+        let num_rows = indices.len();
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let mut builder_len = 0;
+        let mut unset_bits = 0;
+        let mut value = 0;
+        let mut i = 0;
+
+        unsafe {
+            for row_ptr in indices.iter() {
+                if col[row_ptr.chunk_index as usize].get_bit_unchecked(row_ptr.row_index as usize) {
+                    value |= BIT_MASK[i % 8];
+                } else {
+                    unset_bits += 1;
+                }
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+            if i % 8 != 0 {
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
+            }
+            builder.set_len(builder_len);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
         }
     }
 

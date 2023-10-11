@@ -79,6 +79,8 @@ pub async fn build_local_pipeline(
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let pipeline = PipelineBuilder::create(
+        ctx.get_function_context()?,
+        ctx.get_settings(),
         ctx.clone(),
         enable_profiling,
         SharedProcessorProfiles::default(),

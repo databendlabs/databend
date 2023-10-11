@@ -148,7 +148,7 @@ impl NativeDeserializeDataTransform {
             };
 
         let top_k = top_k.map(|top_k| {
-            let index = src_schema.index_of(top_k.order_by.name()).unwrap();
+            let index = src_schema.index_of(top_k.field.name()).unwrap();
             let sorter = TopKSorter::new(top_k.limit, top_k.asc);
 
             if !prewhere_columns.contains(&index) {
@@ -648,7 +648,7 @@ impl Processor for NativeDeserializeDataTransform {
                             Some(array) => {
                                 let array = array?;
                                 self.read_columns.push(*index);
-                                let data_type = top_k.order_by.data_type().into();
+                                let data_type = top_k.field.data_type().into();
                                 let col = Column::from_arrow(array.as_ref(), &data_type);
 
                                 arrays.push((*index, array));

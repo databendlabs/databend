@@ -27,7 +27,7 @@ use crate::executor::AggregateFunctionDesc;
 use crate::executor::AggregatePartial;
 use crate::executor::CommitSink;
 use crate::executor::ConstantTableScan;
-use crate::executor::CopyIntoTable;
+use crate::executor::CopyIntoTablePhysicalPlan;
 use crate::executor::CteScan;
 use crate::executor::DeletePartial;
 use crate::executor::DistributedInsertSelect;
@@ -246,7 +246,7 @@ fn append_profile_info(
     }
 }
 
-fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
+fn copy_into_table(plan: &CopyIntoTablePhysicalPlan) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "CopyIntoTable: {}",
         plan.table_info

@@ -173,7 +173,7 @@ where
             let block_idx = cursor.input_index;
             if heap.is_empty() {
                 // If there is no other block in the heap, we can drain the whole block.
-                while output_size > 0 && !cursor.is_finished() {
+                while !cursor.is_finished() {
                     output_indices.push((block_idx, cursor.advance()));
                 }
             } else {
@@ -181,15 +181,15 @@ where
                 // If the last row of current block is smaller than the next cursor,
                 // we can drain the whole block.
                 if cursor.last().le(&next_cursor.current()) {
-                    while output_size > 0 && !cursor.is_finished() {
+                    while !cursor.is_finished() {
                         output_indices.push((block_idx, cursor.advance()));
                     }
                 } else {
-                    while output_size > 0 && !cursor.is_finished() && cursor.le(next_cursor) {
+                    while !cursor.is_finished() && cursor.le(next_cursor) {
                         // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
                         output_indices.push((block_idx, cursor.advance()));
                     }
-                    if output_size > 0 && !cursor.is_finished() {
+                    if !cursor.is_finished() {
                         heap.push(Reverse(cursor));
                     }
                 }

@@ -62,8 +62,7 @@ async fn test_null_table() -> Result<()> {
 
     // truncate.
     {
-        let purge = false;
-        table.truncate(ctx, purge).await?;
+        table.truncate(ctx).await?;
     }
 
     Ok(())
