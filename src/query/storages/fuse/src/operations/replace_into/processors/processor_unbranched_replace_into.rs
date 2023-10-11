@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -48,6 +49,7 @@ pub struct UnbranchedReplaceIntoProcessor {
     output_data_merge_into_action: Option<DataBlock>,
 
     target_table_empty: bool,
+    delete_column: Option<usize>,
 }
 
 impl UnbranchedReplaceIntoProcessor {
@@ -59,6 +61,7 @@ impl UnbranchedReplaceIntoProcessor {
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+        delete_column: Option<usize>,
     ) -> Result<Self> {
         let replace_into_mutator = ReplaceIntoMutator::try_create(
             ctx,
@@ -78,6 +81,7 @@ impl UnbranchedReplaceIntoProcessor {
             input_data: None,
             output_data_merge_into_action: None,
             target_table_empty,
+            delete_column,
         })
     }
 
@@ -146,8 +150,15 @@ impl Processor for UnbranchedReplaceIntoProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(mut data_block) = self.input_data.take() {
             let start = Instant::now();
+            if let Some(delete_column) = self.delete_column {
+                let column_num = data_block.num_columns();
+                let projections = (0..column_num)
+                    .filter(|i| *i != delete_column)
+                    .collect::<HashSet<_>>();
+                data_block = data_block.project(&projections);
+            }
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
             if !self.target_table_empty {

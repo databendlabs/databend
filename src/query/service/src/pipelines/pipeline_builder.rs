@@ -437,6 +437,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|(_, idx)| idx),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
