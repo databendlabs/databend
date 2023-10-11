@@ -34,7 +34,6 @@ use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use common_users::GrantObjectVisibilityChecker;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -183,9 +182,7 @@ impl ColumnsTable {
         }
 
         let tenant = ctx.get_tenant();
-        let user = ctx.get_current_user()?;
-        let roles = ctx.get_current_available_roles().await?;
-        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
+        let visibility_checker = ctx.get_visibility_checker().await?;
 
         let final_dbs: Vec<String> = databases
             .iter()

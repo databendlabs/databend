@@ -32,7 +32,6 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
-use common_users::GrantObjectVisibilityChecker;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -69,9 +68,7 @@ impl AsyncSystemTable for DatabasesTable {
         let mut db_id = vec![];
         let mut owners: Vec<Option<Vec<u8>>> = vec![];
 
-        let user = ctx.get_current_user()?;
-        let roles = ctx.get_current_available_roles().await?;
-        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
+        let visibility_checker = ctx.get_visibility_checker().await?;
 
         for (ctl_name, catalog) in catalogs.into_iter() {
             let databases = catalog.list_databases(tenant.as_str()).await?;

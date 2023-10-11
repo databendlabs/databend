@@ -71,6 +71,7 @@ use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
+use common_users::GrantObjectVisibilityChecker;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -488,8 +489,8 @@ impl TableContext for QueryContext {
         self.shared.get_current_role()
     }
 
-    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        self.shared.session.get_all_available_roles().await
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.shared.session.get_visibility_checker().await
     }
 
     fn get_fuse_version(&self) -> String {

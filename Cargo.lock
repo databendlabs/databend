@@ -1841,6 +1841,7 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
+ "common-users",
  "dashmap",
  "dyn-clone",
  "goldenfile",
