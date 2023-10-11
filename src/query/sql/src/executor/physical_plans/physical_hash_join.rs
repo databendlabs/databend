@@ -19,12 +19,13 @@ use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
+use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::Exchange;
-use crate::executor::HashJoin;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::ColumnSet;
@@ -34,6 +35,44 @@ use crate::plans::JoinType;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct HashJoin {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    // After building the probe key and build key, we apply probe_projections to probe_datablock
+    // and build_projections to build_datablock, which can help us reduce memory usage and calls
+    // of expensive functions (take_compacted_indices and gather), after processing other_conditions,
+    // we will use projections for final column elimination.
+    pub projections: ColumnSet,
+    pub probe_projections: ColumnSet,
+    pub build_projections: ColumnSet,
+
+    pub build: Box<PhysicalPlan>,
+    pub probe: Box<PhysicalPlan>,
+    pub build_keys: Vec<RemoteExpr>,
+    pub probe_keys: Vec<RemoteExpr>,
+    pub non_equi_conditions: Vec<RemoteExpr>,
+    pub join_type: JoinType,
+    pub marker_index: Option<IndexType>,
+    pub from_correlated_subquery: bool,
+    // Use the column of probe side to construct build side column.
+    // (probe index, (is probe column nullable, is build column nullable))
+    pub probe_to_build: Vec<(usize, (bool, bool))>,
+    pub output_schema: DataSchemaRef,
+    // It means that join has a corresponding runtime filter
+    pub contain_runtime_filter: bool,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl HashJoin {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(self.output_schema.clone())
+    }
+}
 
 impl PhysicalPlanBuilder {
     pub async fn build_hash_join(
