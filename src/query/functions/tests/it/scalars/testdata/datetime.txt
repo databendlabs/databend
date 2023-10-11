@@ -2620,6 +2620,15 @@ output domain  : {7..=7}
 output         : 7
 
 
+ast            : to_week_of_year(to_date(18875))
+raw expr       : to_week_of_year(to_date(18875))
+checked expr   : to_week_of_year<Date>(to_date<Int64>(to_int64<UInt16>(18875_u16)))
+optimized expr : 35_u32
+output type    : UInt32
+output domain  : {35..=35}
+output         : 35
+
+
 ast            : to_yyyymm(a)
 raw expr       : to_yyyymm(a::Date)
 checked expr   : to_yyyymm<Date>(a)
@@ -2818,6 +2827,28 @@ evaluation (internal):
 +--------+------------------+
 
 
+ast            : to_week_of_year(a)
+raw expr       : to_week_of_year(a::Date)
+checked expr   : to_week_of_year<Date>(a)
+evaluation:
++--------+--------------+------------------+
+|        | a            | Output           |
++--------+--------------+------------------+
+| Type   | Date         | UInt32           |
+| Domain | {-100..=100} | {0..=4294967295} |
+| Row 0  | '1969-09-23' | 39               |
+| Row 1  | '1970-01-01' | 1                |
+| Row 2  | '1970-04-11' | 15               |
++--------+--------------+------------------+
+evaluation (internal):
++--------+---------------------+
+| Column | Data                |
++--------+---------------------+
+| a      | [-100, 0, 100]      |
+| Output | UInt32([39, 1, 15]) |
++--------+---------------------+
+
+
 ast            : to_yyyymm(to_timestamp(1630812366))
 raw expr       : to_yyyymm(to_timestamp(1630812366))
 checked expr   : to_yyyymm<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
@@ -2897,6 +2928,15 @@ optimized expr : 7_u8
 output type    : UInt8
 output domain  : {7..=7}
 output         : 7
+
+
+ast            : to_week_of_year(to_timestamp(1630812366))
+raw expr       : to_week_of_year(to_timestamp(1630812366))
+checked expr   : to_week_of_year<Timestamp>(to_timestamp<Int64>(to_int64<UInt32>(1630812366_u32)))
+optimized expr : 35_u32
+output type    : UInt32
+output domain  : {35..=35}
+output         : 35
 
 
 ast            : to_hour(to_timestamp(1630812366))
@@ -3122,6 +3162,28 @@ evaluation (internal):
 | a      | [-100, 0, 100]   |
 | Output | UInt8([3, 4, 4]) |
 +--------+------------------+
+
+
+ast            : to_week_of_year(a)
+raw expr       : to_week_of_year(a::Timestamp)
+checked expr   : to_week_of_year<Timestamp>(a)
+evaluation:
++--------+------------------------------+------------------+
+|        | a                            | Output           |
++--------+------------------------------+------------------+
+| Type   | Timestamp                    | UInt32           |
+| Domain | {-100..=100}                 | {0..=4294967295} |
+| Row 0  | '1969-12-31 23:59:59.999900' | 1                |
+| Row 1  | '1970-01-01 00:00:00.000000' | 1                |
+| Row 2  | '1970-01-01 00:00:00.000100' | 1                |
++--------+------------------------------+------------------+
+evaluation (internal):
++--------+-------------------+
+| Column | Data              |
++--------+-------------------+
+| a      | [-100, 0, 100]    |
+| Output | UInt32([1, 1, 1]) |
++--------+-------------------+
 
 
 ast            : to_hour(a)

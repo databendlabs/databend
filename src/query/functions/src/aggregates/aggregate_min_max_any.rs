@@ -27,6 +27,8 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
+use common_io::prelude::deserialize_from_slice;
+use common_io::prelude::serialize_into_buf;
 use ethnum::i256;
 
 use super::aggregate_function_factory::AggregateFunctionDescription;

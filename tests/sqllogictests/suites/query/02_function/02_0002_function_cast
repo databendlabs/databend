@@ -440,6 +440,11 @@ SELECT count(distinct a) FROM (SELECT rand()::string AS a FROM numbers(10))
 ----
 10
 
+query T
+SELECT to_variant(to_bitmap('100,200,300'));
+----
+[100,200,300]
+
 statement ok
 drop table if exists t
 
