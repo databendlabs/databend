@@ -35,9 +35,7 @@ use super::aggregate_sum::DecimalSumState;
 use super::aggregate_sum::NumberSumState;
 use super::aggregate_sum::SumState;
 use super::deserialize_fixed_state;
-
 use super::serialize_fixed_state;
-
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
