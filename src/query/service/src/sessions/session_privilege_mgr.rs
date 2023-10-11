@@ -27,17 +27,16 @@ use crate::sessions::SessionContext;
 
 /// SessionPrivilegeManager handles all the things related to privieges in a session. On validating a privilege,
 /// we have the following requirements:
-/// 
-/// - An user can have multiple privileges & roles assigned. Each privilege is related to a grant object, 
+///
+/// - An user can have multiple privileges & roles assigned. Each privilege is related to a grant object,
 ///   which might be a database, table, stage, task, warehouse, etc.
 /// - An role is a collection of the privileges, and each role can have multiple roles granted, which forms
 ///   an role hierarchy. The higher level role has all the privileges inherited from the lower level roles.
 /// - There're two special roles in the role role hierarchy: PUBLIC and ACCOUNT_ADMIN. PUBLIC is by default
 ///   granted to every role, and ACCOUNT_ADMIN is by default have all the roles granted.
-/// - Each grant object has an owner, which is a role. The owner role has all the privileges on the grant 
+/// - Each grant object has an owner, which is a role. The owner role has all the privileges on the grant
 ///   object, and can grant the privileges to other roles. Each session have a CURRENT ROLE, in this session,
 ///   all the newly created objects (databases/tables) will have the CURRENT ROLE as the owner.
-/// 
 #[async_trait::async_trait]
 pub trait SessionPrivilegeManager {
     fn get_current_user(&self) -> Result<UserInfo>;
@@ -251,7 +250,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         }
     }
 
-    async fn check_visible(&self, object: &GrantObject) -> Result<bool> {
+    async fn check_visible(&self, _object: &GrantObject) -> Result<bool> {
         todo!()
     }
 }
