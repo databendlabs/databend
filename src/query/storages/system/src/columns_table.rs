@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -29,10 +28,6 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::RoleInfo;
-use common_meta_app::principal::UserGrantSet;
-use common_meta_app::principal::UserInfo;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;

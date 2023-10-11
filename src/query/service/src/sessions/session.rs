@@ -26,6 +26,7 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
 use common_settings::ChangeValue;
 use common_settings::Settings;
+use common_users::GrantObjectVisibilityChecker;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -239,6 +240,11 @@ impl Session {
         self.privilege_mgr
             .validate_privilege(object, privilege, verify_ownership)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr.get_visibility_checker().await
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {

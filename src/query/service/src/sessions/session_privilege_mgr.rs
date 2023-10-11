@@ -20,6 +20,7 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
+use common_users::GrantObjectVisibilityChecker;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
 
@@ -58,7 +59,7 @@ pub trait SessionPrivilegeManager {
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
-    async fn check_visible(&self, object: &GrantObject) -> Result<bool>;
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
 
     // fn show_grants(&self);
 }
@@ -250,7 +251,11 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         }
     }
 
-    async fn check_visible(&self, _object: &GrantObject) -> Result<bool> {
-        todo!()
+    #[async_backtrace::framed]
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        Ok(GrantObjectVisibilityChecker::new(
+            &self.get_current_user()?,
+            &self.get_all_available_roles().await?,
+        ))
     }
 }
