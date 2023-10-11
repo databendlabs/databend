@@ -32,7 +32,6 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-
 use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;

@@ -172,25 +172,24 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
 
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
+    let mut places = Vec::with_capacity(keys_len);
     for group_entity in hashtable.iter() {
-        let place = Into::<StateAddr>::into(*group_entity.get());
-
-        for (idx, func) in funcs.iter().enumerate() {
-            let arg_place = place.next(offsets_aggregate_states[idx]);
-
-            func.serialize(arg_place, &mut state_builders[idx].data)?;
-            state_builders[idx].commit_row();
-        }
-
+        places.push(Into::<StateAddr>::into(*group_entity.get()));
         group_key_builder.append_value(group_entity.key());
     }
 
     let mut columns = Vec::with_capacity(state_builders.len() + 1);
+    for (idx, func) in funcs.iter().enumerate() {
+        func.batch_serialize(
+            &places,
+            offsets_aggregate_states[idx],
+            &mut state_builders[idx],
+        )?;
+    }
 
     for builder in state_builders.into_iter() {
         columns.push(Column::String(builder.build()));
     }
-
     columns.push(group_key_builder.finish());
     Ok(DataBlock::new_from_columns(columns))
 }

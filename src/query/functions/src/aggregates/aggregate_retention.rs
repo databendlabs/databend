@@ -26,7 +26,6 @@ use common_expression::types::ValueType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-
 use serde::Deserialize;
 use serde::Serialize;
 

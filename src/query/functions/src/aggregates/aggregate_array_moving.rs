@@ -41,7 +41,6 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
-
 use ethnum::i256;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
