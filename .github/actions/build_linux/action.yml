@@ -43,22 +43,22 @@ runs:
       run: |
         case ${{ inputs.target }} in
           x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2 --cfg uuid_unstable"
+            flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2 --cfg uuid_unstable"
+            flags="-C target-feature=+sse4.2"
             ;;
           aarch64-unknown-linux-gnu)
-            flags="--cfg uuid_unstable"
+            flags=""
             ;;
           aarch64-unknown-linux-musl)
-            flags="--cfg uuid_unstable"
+            flags=""
             ;;
           *)
-            flags="--cfg uuid_unstable"
+            flags=""
             ;;
         esac
-        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
+        echo "RUSTFLAGS=${flags} --cfg uuid_unstable -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 

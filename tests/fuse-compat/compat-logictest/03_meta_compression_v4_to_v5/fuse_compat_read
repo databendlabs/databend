@@ -8,11 +8,11 @@ select count() from fuse_snapshot('default', 'fuse_test_snapshots');
 ----
 3
 
-# 2. all of them are of version 3
+# 2. all of them are of version 4
 query I
 select distinct format_version from fuse_snapshot('default', 'fuse_test_snapshots');
 ----
-3
+4
 
 # 3. insert a new snapshot, and verify that it is of version 4
 statement ok
@@ -23,7 +23,7 @@ query I
 select count() as c, format_version as v from fuse_snapshot('default', 'fuse_test_snapshots') group by v order by c;
 ----
 1 5
-3 3
+3 4
 
 # 4. verify table data
 query I
