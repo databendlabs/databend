@@ -307,6 +307,7 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_agg_index() -> Result<()> {
+    test_sync_agg_index_after_update().await?;
     test_sync_agg_index_after_insert().await?;
     test_sync_agg_index_after_copy_into().await?;
 
@@ -432,6 +433,124 @@ async fn test_sync_agg_index_after_insert() -> Result<()> {
     // check index1
     let indexes_1 = collect_file_names(&agg_index_path_1)?;
     assert_eq!(blocks, indexes_1);
+
+    Ok(())
+}
+
+async fn test_sync_agg_index_after_update() -> Result<()> {
+    let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
+    ctx.get_settings()
+        .set_enable_refresh_aggregating_index_after_write(true)?;
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let ctx = fixture.ctx();
+    // Create table
+    execute_sql(
+        ctx.clone(),
+        "CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'",
+    )
+    .await?;
+
+    // Create agg index `index0`
+    let index_name = "index0";
+
+    let index_id0 = create_index(
+        ctx.clone(),
+        index_name,
+        "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
+        true,
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(
+        ctx.clone(),
+        "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    let block_path = find_block_path(&root)?.unwrap();
+    let blocks = collect_file_names(&block_path)?;
+
+    // Get aggregating index files
+    let agg_index_path_0 = find_agg_index_path(&root, index_id0)?.unwrap();
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+
+    assert_eq!(blocks, indexes_0);
+
+    // Check aggregating index_0 is correct.
+    {
+        let res = execute_sql(
+            ctx.clone(),
+            "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 GROUP BY b",
+        )
+        .await?;
+        let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+
+        let agg_res = execute_sql(
+            ctx.clone(),
+            &format!(
+                "SELECT * FROM 'fs://{}'",
+                agg_index_path_0.join(&indexes_0[0]).to_str().unwrap()
+            ),
+        )
+        .await?;
+        let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
+
+        assert_two_blocks_sorted_eq_with_name(
+            "test_sync_agg_index_after_insert",
+            &data_blocks,
+            &agg_data_blocks,
+        );
+    }
+
+    // Update
+    execute_sql(ctx.clone(), "UPDATE t0 SET c = 2 WHERE b = 2").await?;
+
+    let first_block = blocks[0].clone();
+    let first_agg_index = indexes_0[0].clone();
+
+    let blocks = collect_file_names(&block_path)?;
+
+    // check index0
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+    assert_eq!(blocks, indexes_0);
+
+    // Check aggregating index_0 is correct after update.
+    {
+        let updated_block = blocks
+            .iter()
+            .find(|b| !b.eq_ignore_ascii_case(&first_block))
+            .unwrap();
+        let updated_agg_index = indexes_0
+            .iter()
+            .find(|i| !i.eq_ignore_ascii_case(&first_agg_index))
+            .unwrap();
+        let res = execute_sql(
+            ctx.clone(),
+            &format!(
+                "SELECT b, SUM_STATE(a) from 'fs://{}' WHERE c > 1 GROUP BY b",
+                block_path.join(updated_block).to_str().unwrap()
+            ),
+        )
+        .await?;
+        let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+
+        let agg_res = execute_sql(
+            ctx.clone(),
+            &format!(
+                "SELECT * FROM 'fs://{}'",
+                agg_index_path_0.join(updated_agg_index).to_str().unwrap()
+            ),
+        )
+        .await?;
+        let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
+
+        assert_two_blocks_sorted_eq_with_name(
+            "test_sync_agg_index_after_insert",
+            &data_blocks,
+            &agg_data_blocks,
+        );
+    }
 
     Ok(())
 }
