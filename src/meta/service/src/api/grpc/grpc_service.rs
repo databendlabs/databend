@@ -90,6 +90,66 @@ impl MetaServiceImpl {
         })?;
         Ok(claim)
     }
+
+    #[minitrace::trace]
+    async fn handle_kv_api(&self, request: Request<RaftRequest>) -> Result<RaftReply, Status> {
+        let req: MetaGrpcReq = request.try_into()?;
+        info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+
+        let t0 = Instant::now();
+
+        let m = &self.meta_node;
+        let reply = match &req {
+            MetaGrpcReq::UpsertKV(a) => {
+                let res = m.upsert_kv(a.clone()).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::GetKV(a) => {
+                let res = m.get_kv(&a.key).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::MGetKV(a) => {
+                let res = m.mget_kv(&a.keys).await;
+                RaftReply::from(res)
+            }
+            MetaGrpcReq::ListKV(a) => {
+                let res = m.prefix_list_kv(&a.prefix).await;
+                RaftReply::from(res)
+            }
+        };
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
+
+        network_metrics::incr_request_result(reply.error.is_empty());
+
+        Ok(reply)
+    }
+
+    #[minitrace::trace]
+    async fn handle_txn(&self, request: Request<TxnRequest>) -> Result<TxnReply, Status> {
+        let request = request.into_inner();
+
+        info!("{}: Receive txn_request: {}", func_name!(), request);
+
+        let ret = self.meta_node.transaction(request).await;
+
+        let body = match ret {
+            Ok(resp) => TxnReply {
+                success: resp.success,
+                error: "".to_string(),
+                responses: resp.responses,
+            },
+            Err(err) => TxnReply {
+                success: false,
+                error: serde_json::to_string(&err).expect("fail to serialize"),
+                responses: vec![],
+            },
+        };
+
+        network_metrics::incr_request_result(body.error.is_empty());
+
+        Ok(body)
+    }
 }
 
 impl NamedService for MetaServiceImpl {
@@ -159,48 +219,15 @@ impl MetaService for MetaServiceImpl {
         }
     }
 
-    async fn kv_api(&self, r: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &r);
+    async fn kv_api(&self, request: Request<RaftRequest>) -> Result<Response<RaftReply>, Status> {
+        self.check_token(request.metadata())?;
 
-        let reply = async {
-            self.check_token(r.metadata())?;
-            network_metrics::incr_recv_bytes(r.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
 
-            let req: MetaGrpcReq = r.try_into()?;
-            info!("{}: Received MetaGrpcReq: {:?}", func_name!(), req);
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let reply = self.handle_kv_api(request).in_span(root).await?;
 
-            let t0 = Instant::now();
-
-            let m = &self.meta_node;
-            let reply = match &req {
-                MetaGrpcReq::UpsertKV(a) => {
-                    let res = m.upsert_kv(a.clone()).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::GetKV(a) => {
-                    let res = m.get_kv(&a.key).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::MGetKV(a) => {
-                    let res = m.mget_kv(&a.keys).await;
-                    RaftReply::from(res)
-                }
-                MetaGrpcReq::ListKV(a) => {
-                    let res = m.prefix_list_kv(&a.prefix).await;
-                    RaftReply::from(res)
-                }
-            };
-
-            let elapsed = t0.elapsed();
-            info!("Handled(elapsed: {:?}) MetaGrpcReq: {:?}", elapsed, req);
-
-            Ok::<_, Status>(reply)
-        }
-        .in_span(root)
-        .await?;
-
-        network_metrics::incr_request_result(reply.error.is_empty());
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
@@ -210,38 +237,17 @@ impl MetaService for MetaServiceImpl {
         &self,
         request: Request<TxnRequest>,
     ) -> Result<Response<TxnReply>, Status> {
+        self.check_token(request.metadata())?;
+
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let _guard = RequestInFlight::guard();
+
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
-        async {
-            self.check_token(request.metadata())?;
-            network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-            let _guard = RequestInFlight::guard();
+        let reply = self.handle_txn(request).in_span(root).await?;
 
-            let request = request.into_inner();
+        network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
-            info!("{}: Receive txn_request: {}", func_name!(), request);
-
-            let ret = self.meta_node.transaction(request).await;
-            network_metrics::incr_request_result(ret.is_ok());
-
-            let body = match ret {
-                Ok(resp) => TxnReply {
-                    success: resp.success,
-                    error: "".to_string(),
-                    responses: resp.responses,
-                },
-                Err(err) => TxnReply {
-                    success: false,
-                    error: serde_json::to_string(&err).expect("fail to serialize"),
-                    responses: vec![],
-                },
-            };
-
-            network_metrics::incr_sent_bytes(body.encoded_len() as u64);
-
-            Ok(Response::new(body))
-        }
-        .in_span(root)
-        .await
+        Ok(Response::new(reply))
     }
 
     type ExportStream = Pin<Box<dyn Stream<Item = Result<ExportedChunk, Status>> + Send + 'static>>;

@@ -27,10 +27,16 @@ macro_rules! key {
 lazy_static! {
     static ref MERGE_INTO_REPLACE_BLOCKS_COUNTER: Counter =
         register_counter(key!("merge_into_replace_blocks_counter"));
+    static ref MERGE_INTO_REPLACE_BLOCKS_ROWS_COUNTER: Counter =
+        register_counter(key!("merge_into_replace_blocks_rows_counter"));
     static ref MERGE_INTO_DELETED_BLOCKS_COUNTER: Counter =
         register_counter(key!("merge_into_deleted_blocks_counter"));
+    static ref MERGE_INTO_DELETED_BLOCKS_ROWS_COUNTER: Counter =
+        register_counter(key!("merge_into_deleted_blocks_rows_counter"));
     static ref MERGE_INTO_APPEND_BLOCKS_COUNTER: Counter =
         register_counter(key!("merge_into_append_blocks_counter"));
+    static ref MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER: Counter =
+        register_counter(key!("merge_into_append_blocks_rows_counter"));
     static ref MERGE_INTO_MATCHED_ROWS: Counter = register_counter(key!("merge_into_matched_rows"));
     static ref MERGE_INTO_UNMATCHED_ROWS: Counter =
         register_counter(key!("merge_into_unmatched_rows"));
@@ -50,13 +56,25 @@ pub fn metrics_inc_merge_into_replace_blocks_counter(c: u32) {
     MERGE_INTO_REPLACE_BLOCKS_COUNTER.inc_by(c as u64);
 }
 
+pub fn metrics_inc_merge_into_replace_blocks_rows_counter(c: u32) {
+    MERGE_INTO_REPLACE_BLOCKS_ROWS_COUNTER.inc_by(c as u64);
+}
+
 pub fn metrics_inc_merge_into_deleted_blocks_counter(c: u32) {
     MERGE_INTO_DELETED_BLOCKS_COUNTER.inc_by(c as u64);
+}
+
+pub fn metrics_inc_merge_into_deleted_blocks_rows_counter(c: u32) {
+    MERGE_INTO_DELETED_BLOCKS_ROWS_COUNTER.inc_by(c as u64);
 }
 
 // used to record append new blocks in matched split and not match insert.
 pub fn metrics_inc_merge_into_append_blocks_counter(c: u32) {
     MERGE_INTO_APPEND_BLOCKS_COUNTER.inc_by(c as u64);
+}
+
+pub fn metrics_inc_merge_into_append_blocks_rows_counter(c: u32) {
+    MERGE_INTO_APPEND_BLOCKS_ROWS_COUNTER.inc_by(c as u64);
 }
 
 // matched_rows and not unmatched_rows is used in the join phase of merge_source.

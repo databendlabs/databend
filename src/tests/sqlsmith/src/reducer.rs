@@ -62,12 +62,16 @@ pub(crate) async fn try_reduce_query(
                 select_stmt = reduced_select_stmt;
             }
         }
+        if select_stmt.window_list.is_none() && reduced_query.with.is_some() {
+            reduced_query.with = None;
+            if execute_reduce_query(conn.clone(), code, &reduced_query).await {
+                query = reduced_query.clone();
+            }
+        }
         let select_list = select_stmt.select_list.clone();
-        let mut reduced_select_list = vec![];
         let mut reduced_select_stmt = select_stmt.clone();
         for item in &select_list {
-            reduced_select_list.push(item.clone());
-            reduced_select_stmt.select_list = reduced_select_list.clone();
+            reduced_select_stmt.select_list = vec![item.clone()];
             reduced_query.body = SetExpr::Select(reduced_select_stmt.clone());
             if execute_reduce_query(conn.clone(), code, &reduced_query).await {
                 select_stmt = reduced_select_stmt;

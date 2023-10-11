@@ -16,9 +16,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::plan::StageTableInfo;
-use common_catalog::table::AppendMode;
 use common_exception::Result;
-use common_expression::infer_table_schema;
 use common_expression::types::Int32Type;
 use common_expression::types::StringType;
 use common_expression::BlockThresholds;
@@ -29,17 +27,14 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
 use common_expression::FromOptData;
 use common_expression::SendableDataBlockStream;
-use common_meta_app::principal::StageInfo;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
-use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
 use common_storages_stage::StageTable;
 use log::debug;
 use log::info;
@@ -50,25 +45,24 @@ use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
-use crate::pipelines::builders::build_append2table_with_commit_pipeline;
 use crate::pipelines::builders::build_commit_data_pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::sql::plans::CopyPlan;
+use crate::sql::plans::CopyIntoTablePlan;
 use crate::sql::plans::Plan;
 use crate::stream::DataBlockStream;
 
-pub struct CopyInterpreter {
+pub struct CopyIntoTableInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CopyPlan,
+    plan: CopyIntoTablePlan,
 }
 
-impl CopyInterpreter {
-    /// Create a CopyInterpreter with context and [`CopyPlan`].
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<Self> {
-        Ok(CopyInterpreter { ctx, plan })
+impl CopyIntoTableInterpreter {
+    /// Create a CopyInterpreter with context and [`CopyIntoTablePlan`].
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CopyIntoTablePlan) -> Result<Self> {
+        Ok(CopyIntoTableInterpreter { ctx, plan })
     }
 
     #[async_backtrace::framed]
@@ -108,42 +102,6 @@ impl CopyInterpreter {
         let data_schema = DataSchemaRefExt::create(fields);
 
         Ok((select_interpreter, data_schema))
-    }
-
-    /// Build a pipeline for local copy into stage.
-    #[async_backtrace::framed]
-    async fn build_local_copy_into_stage_pipeline(
-        &self,
-        stage: &StageInfo,
-        path: &str,
-        query: &Plan,
-    ) -> Result<PipelineBuildResult> {
-        let (select_interpreter, data_schema) = self.build_query(query).await?;
-        let plan = select_interpreter.build_physical_plan().await?;
-        let mut build_res = select_interpreter.build_pipeline(plan).await?;
-        let table_schema = infer_table_schema(&data_schema)?;
-        let stage_table_info = StageTableInfo {
-            schema: table_schema,
-            stage_info: stage.clone(),
-            files_info: StageFilesInfo {
-                path: path.to_string(),
-                files: None,
-                pattern: None,
-            },
-            files_to_copy: None,
-            is_select: false,
-        };
-        let to_table = StageTable::try_create(stage_table_info)?;
-        build_append2table_with_commit_pipeline(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            to_table,
-            data_schema,
-            None,
-            false,
-            AppendMode::Normal,
-        )?;
-        Ok(build_res)
     }
 
     fn set_status(&self, status: &str) {
@@ -195,7 +153,7 @@ impl CopyInterpreter {
             CopyIntoTableSource::Stage(read_source_plan)
         };
 
-        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+        let mut root = PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTablePhysicalPlan {
             catalog_info: plan.catalog_info.clone(),
             required_values_schema: plan.required_values_schema.clone(),
             values_consts: plan.values_consts.clone(),
@@ -254,10 +212,12 @@ impl CopyInterpreter {
     }
 
     fn get_copy_into_table_result(&self) -> Result<Vec<DataBlock>> {
-        let return_all = match self.plan.copy_into_table_options() {
-            None => return Ok(vec![]),
-            Some(o) => !o.return_failed_only,
-        };
+        let return_all = !self
+            .plan
+            .stage_table_info
+            .stage_info
+            .copy_options
+            .return_failed_only;
         let cs = self.ctx.get_copy_status();
 
         let mut results = cs.files.iter().collect::<Vec<_>>();
@@ -298,15 +258,15 @@ impl CopyInterpreter {
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CopyInterpreter {
+impl Interpreter for CopyIntoTableInterpreter {
     fn name(&self) -> &str {
-        "CopyInterpreterV2"
+        "CopyIntoTableInterpreterV2"
     }
 
-    #[minitrace::trace(name = "copy_interpreter_execute_v2")]
+    #[minitrace::trace(name = "copy_into_table_interpreter_execute_v2")]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_interpreter_execute_v2");
+        debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_table_interpreter_execute_v2");
 
         let start = Instant::now();
 
@@ -314,58 +274,44 @@ impl Interpreter for CopyInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        match &self.plan {
-            CopyPlan::IntoTable(plan) => {
-                let (physical_plan, files) = self.build_physical_plan(plan).await?;
-                let mut build_res = build_query_pipeline_without_render_result_set(
-                    &self.ctx,
-                    &physical_plan,
-                    false,
-                )
-                .await?;
-                build_commit_data_pipeline(&self.ctx, &mut build_res.main_pipeline, plan, &files)
-                    .await?;
-
-                let compact_target = CompactTargetTableDescription {
-                    catalog: plan.catalog_info.name_ident.catalog_name.clone(),
-                    database: plan.database_name.clone(),
-                    table: plan.table_name.clone(),
-                };
-
-                let trace_ctx = CompactHookTraceCtx {
-                    start,
-                    operation_name: "copy_into".to_owned(),
-                };
-
-                hook_compact(
-                    self.ctx.clone(),
-                    &mut build_res.main_pipeline,
-                    compact_target,
-                    trace_ctx,
-                )
-                .await;
-                Ok(build_res)
-            }
-            CopyPlan::IntoStage {
-                stage, from, path, ..
-            } => {
-                self.build_local_copy_into_stage_pipeline(stage, path, from)
-                    .await
-            }
-            CopyPlan::NoFileToCopy => Ok(PipelineBuildResult::create()),
+        if self.plan.no_file_to_copy {
+            return Ok(PipelineBuildResult::create());
         }
+        let (physical_plan, files) = self.build_physical_plan(&self.plan).await?;
+        let mut build_res =
+            build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
+                .await?;
+        build_commit_data_pipeline(&self.ctx, &mut build_res.main_pipeline, &self.plan, &files)
+            .await?;
+
+        let compact_target = CompactTargetTableDescription {
+            catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
+            database: self.plan.database_name.clone(),
+            table: self.plan.table_name.clone(),
+        };
+
+        let trace_ctx = CompactHookTraceCtx {
+            start,
+            operation_name: "copy_into_table".to_owned(),
+        };
+
+        hook_compact(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            compact_target,
+            trace_ctx,
+        )
+        .await;
+        Ok(build_res)
     }
 
     fn inject_result(&self) -> Result<SendableDataBlockStream> {
-        let blocks = match &self.plan {
-            CopyPlan::NoFileToCopy => {
-                vec![DataBlock::empty_with_schema(self.plan.schema())]
-            }
-            CopyPlan::IntoTable(p) if !p.from_attachment => self.get_copy_into_table_result()?,
-            _ => {
-                vec![]
-            }
+        let blocks = if self.plan.no_file_to_copy {
+            vec![DataBlock::empty_with_schema(self.plan.schema())]
+        } else {
+            self.get_copy_into_table_result()?
         };
+
         Ok(Box::pin(DataBlockStream::create(None, blocks)))
     }
 }
