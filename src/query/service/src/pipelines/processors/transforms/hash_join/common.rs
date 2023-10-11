@@ -27,7 +27,6 @@ use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
-use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
@@ -187,32 +186,21 @@ impl HashJoinState {
     }
 }
 
-pub(crate) fn set_validity(column: &BlockEntry, num_rows: usize, validity: &Bitmap) -> BlockEntry {
+pub(crate) fn set_true_validity(
+    column: &BlockEntry,
+    num_rows: usize,
+    true_validity: &Bitmap,
+) -> BlockEntry {
     let (value, data_type) = (&column.value, &column.data_type);
     let col = value.convert_to_full_column(data_type, num_rows);
-
-    if matches!(col, Column::Null { .. }) {
+    if matches!(col, Column::Null { .. }) || col.as_nullable().is_some() {
         column.clone()
-    } else if let Some(col) = col.as_nullable() {
-        if col.len() == 0 {
-            return BlockEntry::new(data_type.clone(), Value::Scalar(Scalar::Null));
-        }
-        // It's possible validity is longer than col.
-        let diff_len = validity.len() - col.validity.len();
-        let mut new_validity = MutableBitmap::with_capacity(validity.len());
-        for (b1, b2) in validity.iter().zip(col.validity.iter()) {
-            new_validity.push(b1 & b2);
-        }
-        new_validity.extend_constant(diff_len, false);
-        let col = Column::Nullable(Box::new(NullableColumn {
-            column: col.column.clone(),
-            validity: new_validity.into(),
-        }));
-        BlockEntry::new(data_type.clone(), Value::Column(col))
     } else {
+        let mut validity = true_validity.clone();
+        validity.slice(0, num_rows);
         let col = Column::Nullable(Box::new(NullableColumn {
-            column: col.clone(),
-            validity: validity.clone(),
+            column: col,
+            validity,
         }));
         BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
     }
