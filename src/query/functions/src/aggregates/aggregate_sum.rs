@@ -44,7 +44,9 @@ use serde::Serialize;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::deserialize_fixed_state;
 use super::deserialize_state;
+use super::serialize_fixed_state;
 use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
@@ -342,13 +344,22 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_state(writer, state)
+        if self.serialize_size_per_row().is_some() {
+            serialize_fixed_state(writer, state)
+        } else {
+            serialize_state(writer, state)
+        }
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_state(reader)?;
-        state.merge(&rhs)
+        if self.serialize_size_per_row().is_some() {
+            let rhs: State = deserialize_fixed_state(reader)?;
+            state.merge(&rhs)
+        } else {
+            let rhs: State = deserialize_state(reader)?;
+            state.merge(&rhs)
+        }
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {

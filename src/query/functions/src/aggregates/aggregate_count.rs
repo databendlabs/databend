@@ -28,8 +28,8 @@ use common_expression::Scalar;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
-use super::deserialize_state;
-use super::serialize_state;
+use super::deserialize_fixed_state;
+use super::serialize_fixed_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_variadic_arguments;
 
@@ -154,12 +154,12 @@ impl AggregateFunction for AggregateCountFunction {
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        serialize_state(writer, &state.count)
+        serialize_fixed_state(writer, &state.count)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateCountState>();
-        let other: u64 = deserialize_state(reader)?;
+        let other: u64 = deserialize_fixed_state(reader)?;
         state.count += other;
         Ok(())
     }
