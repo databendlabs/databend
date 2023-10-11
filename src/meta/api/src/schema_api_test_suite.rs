@@ -127,6 +127,7 @@ use crate::testing::get_kv_data;
 use crate::DatamaskApi;
 use crate::SchemaApi;
 use crate::ShareApi;
+use crate::DEFAULT_MGET_SIZE;
 
 /// Test suite of `SchemaApi`.
 ///
@@ -286,7 +287,7 @@ impl SchemaApiTestSuite {
         suite.table_update_mask_policy(&b.build().await).await?;
         suite.table_upsert_option(&b.build().await).await?;
         suite.table_list(&b.build().await).await?;
-        suite.table_list_30_000(&b.build().await).await?;
+        suite.table_list_many(&b.build().await).await?;
         suite.table_list_all(&b.build().await).await?;
         suite
             .table_drop_undrop_list_history(&b.build().await)
@@ -4733,11 +4734,12 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
-    /// Test listing 30,000 tables
+    /// Test listing many tables that exceeds default mget chunk size.
     #[minitrace::trace]
-    async fn table_list_30_000<MT>(&self, mt: &MT) -> anyhow::Result<()>
+    async fn table_list_many<MT>(&self, mt: &MT) -> anyhow::Result<()>
     where MT: SchemaApi + kvapi::AsKVApi<Error = MetaError> {
-        let n = 30_000;
+        // Create tables that exceeds the default mget chunk size
+        let n = DEFAULT_MGET_SIZE + 20;
 
         let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
 

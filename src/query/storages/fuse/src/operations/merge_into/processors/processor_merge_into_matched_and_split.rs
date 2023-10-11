@@ -37,6 +37,7 @@ use common_sql::evaluator::BlockOperator;
 use common_sql::executor::MatchExpr;
 use common_storage::metrics::merge_into::merge_into_matched_operation_milliseconds;
 use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_counter;
+use common_storage::metrics::merge_into::metrics_inc_merge_into_append_blocks_rows_counter;
 
 use crate::operations::merge_into::mutator::DeleteByExprMutator;
 use crate::operations::merge_into::mutator::UpdateByExprMutator;
@@ -247,12 +248,13 @@ impl Processor for MatchedSplitProcessor {
                             .delete_mutator
                             .delete_by_expr(current_block)?;
 
+                        // delete all
+                        if !row_ids.is_empty() {
+                            row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
+                            self.output_data_row_id_data.push(row_ids);
+                        }
+
                         if stage_block.is_empty() {
-                            // delete all
-                            if !row_ids.is_empty() {
-                                row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
-                                self.output_data_row_id_data.push(row_ids);
-                            }
                             return Ok(());
                         }
                         current_block = stage_block;
@@ -278,6 +280,7 @@ impl Processor for MatchedSplitProcessor {
                 };
                 current_block = op.execute(&self.ctx.get_function_context()?, current_block)?;
                 metrics_inc_merge_into_append_blocks_counter(1);
+                metrics_inc_merge_into_append_blocks_rows_counter(current_block.num_rows() as u32);
                 current_block =
                     current_block.add_meta(Some(Box::new(self.target_table_schema.clone())))?;
                 self.output_data_updated_data = Some(current_block);

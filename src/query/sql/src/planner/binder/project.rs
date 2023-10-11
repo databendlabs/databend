@@ -22,12 +22,15 @@ use common_ast::ast::QualifiedName;
 use common_ast::ast::SelectTarget;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Dialect;
+use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
 use super::AggregateInfo;
+use crate::binder::aggregate::find_replaced_aggregate_function;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::ExprContext;
@@ -49,6 +52,14 @@ use crate::plans::SubqueryType;
 use crate::IndexType;
 use crate::WindowChecker;
 
+struct RemoveIdentifierQuote;
+
+impl VisitorMut for RemoveIdentifierQuote {
+    fn visit_identifier(&mut self, ident: &mut Identifier) {
+        ident.quote = None
+    }
+}
+
 impl Binder {
     pub fn analyze_projection(
         &mut self,
@@ -61,15 +72,24 @@ impl Binder {
             // This item is a grouping sets item, its data type should be nullable.
             let is_grouping_sets_item = agg_info.grouping_sets.is_some()
                 && agg_info.group_items_map.contains_key(&item.scalar);
-            let mut column_binding = if let ScalarExpr::BoundColumnRef(ref column_ref) = item.scalar
-            {
-                let mut column_binding = column_ref.column.clone();
-                // We should apply alias for the ColumnBinding, since it comes from table
-                column_binding.column_name = item.alias.clone();
-                column_binding
-            } else {
-                self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+
+            let mut column_binding = match &item.scalar {
+                ScalarExpr::BoundColumnRef(column_ref) => {
+                    let mut column_binding = column_ref.column.clone();
+                    // We should apply alias for the ColumnBinding, since it comes from table
+                    column_binding.column_name = item.alias.clone();
+                    column_binding
+                }
+                ScalarExpr::AggregateFunction(agg) => {
+                    // Replace to bound column to reduce duplicate derived column bindings.
+                    debug_assert!(!is_grouping_sets_item);
+                    find_replaced_aggregate_function(agg_info, agg, &item.alias).unwrap()
+                }
+                _ => {
+                    self.create_derived_column_binding(item.alias.clone(), item.scalar.data_type()?)
+                }
             };
+
             if is_grouping_sets_item {
                 column_binding.data_type = Box::new(column_binding.data_type.wrap_nullable());
             }
@@ -253,7 +273,12 @@ impl Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => format!("{:#}", expr).to_lowercase(),
+                        None => {
+                            let mut expr = expr.clone();
+                            let mut remove_quote_visitor = RemoveIdentifierQuote;
+                            walk_expr_mut(&mut remove_quote_visitor, &mut expr);
+                            format!("{:#}", expr).to_lowercase()
+                        }
                     };
 
                     prev_aliases.push((expr_name.clone(), bound_expr.clone()));

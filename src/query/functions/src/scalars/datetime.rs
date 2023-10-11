@@ -943,6 +943,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
             ToNumberImpl::eval_date::<ToDayOfWeek, _>(val, ctx.func_ctx.tz)
         }),
     );
+    registry.register_passthrough_nullable_1_arg::<DateType, UInt32Type, _, _>(
+        "to_week_of_year",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<DateType, UInt32Type>(|val, ctx| {
+            ToNumberImpl::eval_date::<ToWeekOfYear, _>(val, ctx.func_ctx.tz)
+        }),
+    );
     // timestamp
     registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _, _>(
         "to_yyyymm",
@@ -1012,6 +1019,13 @@ fn register_to_number_functions(registry: &mut FunctionRegistry) {
         |_, _| FunctionDomain::Full,
         vectorize_1_arg::<TimestampType, UInt8Type>(|val, ctx| {
             ToNumberImpl::eval_timestamp::<ToDayOfWeek, _>(val, ctx.func_ctx.tz)
+        }),
+    );
+    registry.register_passthrough_nullable_1_arg::<TimestampType, UInt32Type, _, _>(
+        "to_week_of_year",
+        |_, _| FunctionDomain::Full,
+        vectorize_1_arg::<TimestampType, UInt32Type>(|val, ctx| {
+            ToNumberImpl::eval_timestamp::<ToWeekOfYear, _>(val, ctx.func_ctx.tz)
         }),
     );
     registry.register_passthrough_nullable_1_arg::<TimestampType, Int64Type, _, _>(

@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
-use common_sql::plans::CopyPlan;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
 
@@ -601,31 +600,24 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter], false)
                     .await?;
             }
-            Plan::Copy(plan) => match plan.as_ref() {
-                CopyPlan::IntoTable(plan) => {
-                    session
-                        .validate_privilege(
-                            &GrantObject::Table(
-                                plan.catalog_info.catalog_name().to_string(),
-                                plan.database_name.to_string(),
-                                plan.table_name.to_string(),
-                            ),
-                            vec![UserPrivilegeType::Insert],
-                            true,
-                        )
-                        .await?;
-                }
-                CopyPlan::IntoStage { .. } => {
-                    session
-                        .validate_privilege(
-                            &GrantObject::Global,
-                            vec![UserPrivilegeType::Super],
-                            false,
-                        )
-                        .await?;
-                }
-                CopyPlan::NoFileToCopy => {}
-            },
+            Plan::CopyIntoTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog_info.catalog_name().to_string(),
+                            plan.database_name.to_string(),
+                            plan.table_name.to_string(),
+                        ),
+                        vec![UserPrivilegeType::Insert],
+                        true,
+                    )
+                    .await?;
+            }
+            Plan::CopyIntoLocation(_plan) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                    .await?;
+            }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
             | Plan::DropShareEndpoint(_)

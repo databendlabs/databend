@@ -319,6 +319,13 @@ impl<'a> AggregateRewriter<'a> {
     /// add the replaced aggregate function and the arguments into `AggregateInfo`.
     fn replace_aggregate_function(&mut self, aggregate: &AggregateFunction) -> Result<ScalarExpr> {
         let agg_info = &mut self.bind_context.aggregate_info;
+
+        if let Some(column) =
+            find_replaced_aggregate_function(agg_info, aggregate, &aggregate.display_name)
+        {
+            return Ok(BoundColumnRef { span: None, column }.into());
+        }
+
         let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(aggregate.args.len());
 
         for (i, arg) in aggregate.args.iter().enumerate() {
@@ -921,4 +928,27 @@ impl Binder {
             Ok((scalar.clone(), scalar.data_type()?))
         }
     }
+}
+
+/// Replace [`AggregateFunction`] with a [`ColumnBinding`] if the function is already replaced.
+pub fn find_replaced_aggregate_function(
+    agg_info: &AggregateInfo,
+    agg: &AggregateFunction,
+    new_name: &str,
+) -> Option<ColumnBinding> {
+    agg_info
+        .aggregate_functions_map
+        .get(&agg.display_name)
+        .map(|i| {
+            // This expression is already replaced.
+            let scalar_item = &agg_info.aggregate_functions[*i];
+            debug_assert_eq!(scalar_item.scalar.data_type().unwrap(), *agg.return_type);
+            ColumnBindingBuilder::new(
+                new_name.to_string(),
+                scalar_item.index,
+                agg.return_type.clone(),
+                Visibility::Visible,
+            )
+            .build()
+        })
 }

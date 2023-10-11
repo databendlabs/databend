@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
@@ -43,6 +44,9 @@ use table_lock::TableLockHandlerWrapper;
 
 use super::Interpreter;
 use super::InterpreterPtr;
+use crate::interpreters::common::hook_compact;
+use crate::interpreters::common::CompactHookTraceCtx;
+use crate::interpreters::common::CompactTargetTableDescription;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -67,6 +71,7 @@ impl Interpreter for MergeIntoInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let start = Instant::now();
         let (physical_plan, table_info) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
@@ -75,6 +80,26 @@ impl Interpreter for MergeIntoInterpreter {
         // Add table lock heartbeat before execution.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
+
+        // hook compact
+        let compact_target = CompactTargetTableDescription {
+            catalog: self.plan.catalog.clone(),
+            database: self.plan.database.clone(),
+            table: self.plan.table.clone(),
+        };
+
+        let compact_hook_trace_ctx = CompactHookTraceCtx {
+            start,
+            operation_name: "merge_into".to_owned(),
+        };
+
+        hook_compact(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            compact_target,
+            compact_hook_trace_ctx,
+        )
+        .await;
 
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
