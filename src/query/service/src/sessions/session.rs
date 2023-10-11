@@ -31,14 +31,14 @@ use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionStatus;
 use crate::sessions::SessionType;
-use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
-use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 
 pub struct Session {
     pub(in crate::sessions) id: String,
@@ -204,7 +204,9 @@ impl Session {
     // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
     #[async_backtrace::framed]
     pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
-        self.privilege_mgr.set_current_role(Some(role_name.to_string())).await
+        self.privilege_mgr
+            .set_current_role(Some(role_name.to_string()))
+            .await
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
@@ -234,8 +236,10 @@ impl Session {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
-        self.privilege_mgr.validate_privilege(object, privilege, verify_ownership).await
-   }
+        self.privilege_mgr
+            .validate_privilege(object, privilege, verify_ownership)
+            .await
+    }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {
         self.session_ctx.get_settings()

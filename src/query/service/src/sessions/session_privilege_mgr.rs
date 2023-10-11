@@ -6,8 +6,8 @@ use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
-use common_users::BUILTIN_ROLE_PUBLIC;
 use common_users::RoleCacheManager;
+use common_users::BUILTIN_ROLE_PUBLIC;
 
 use crate::sessions::SessionContext;
 
@@ -24,15 +24,20 @@ pub trait SessionPrivilegeManager {
 
     async fn get_all_available_roles(&self) -> Result<Vec<RoleInfo>>;
 
-    async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()>;
-
-    // fn show_grants(&self);
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: Vec<UserPrivilegeType>,
+        verify_ownership: bool,
+    ) -> Result<()>;
 
     async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
     async fn check_visible(&self, object: &GrantObject) -> Result<bool>;
+
+    // fn show_grants(&self);
 }
 
 pub struct SessionPrivilegeManagerImpl {
@@ -87,10 +92,7 @@ impl SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn get_object_owner(
-        self: &Arc<Self>,
-        owner: &GrantObject,
-    ) -> Result<Option<RoleInfo>> {
+    async fn get_object_owner(self: &Arc<Self>, owner: &GrantObject) -> Result<Option<RoleInfo>> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         // return true only if grant object owner is the role itself
@@ -100,17 +102,12 @@ impl SessionPrivilegeManagerImpl {
 
 #[async_trait::async_trait]
 impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
-
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
     // HTTP handler, clickhouse query handler, mysql query handler. auth_role represents the role
     // granted by external authenticator, it will over write the current user's granted roles, and
     // becomes the CURRENT ROLE if not set X-DATABEND-ROLE.
     #[async_backtrace::framed]
-    async fn set_authed_user(
-        &self,
-        user: UserInfo,
-        auth_role: Option<String>,
-    ) -> Result<()> {
+    async fn set_authed_user(&self, user: UserInfo, auth_role: Option<String>) -> Result<()> {
         self.session_ctx.set_current_user(user);
         self.session_ctx.set_auth_role(auth_role);
         self.ensure_current_role().await?;
@@ -129,8 +126,8 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
     fn get_current_user(&self) -> Result<UserInfo> {
         self.session_ctx
-        .get_current_user()
-        .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
+            .get_current_user()
+            .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
     }
 
     fn get_current_role(&self) -> Option<RoleInfo> {
@@ -159,7 +156,12 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn validate_privilege(&self, object: &GrantObject, privilege: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()> {
+    async fn validate_privilege(
+        &self,
+        object: &GrantObject,
+        privilege: Vec<UserPrivilegeType>,
+        verify_ownership: bool,
+    ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
         let user_verified = current_user
