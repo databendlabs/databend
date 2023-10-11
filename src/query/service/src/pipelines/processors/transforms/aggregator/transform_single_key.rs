@@ -21,7 +21,6 @@ use bumpalo::Bump;
 use common_catalog::plan::AggIndexMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
-
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
