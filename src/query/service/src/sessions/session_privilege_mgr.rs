@@ -43,8 +43,6 @@ pub trait SessionPrivilegeManager {
         verify_ownership: bool,
     ) -> Result<()>;
 
-    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()>;
-
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
     async fn check_visible(&self, object: &GrantObject) -> Result<bool>;
@@ -237,10 +235,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
                 )))
             }
         }
-    }
-
-    async fn validate_owner(&self, object: &GrantObject, user: &UserInfo) -> Result<()> {
-        todo!()
     }
 
     async fn check_visible(&self, object: &GrantObject) -> Result<bool> {
