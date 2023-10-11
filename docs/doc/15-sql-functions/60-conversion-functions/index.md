@@ -4,7 +4,7 @@ title: 'Conversion Functions'
 
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.1.39"/>
+<FunctionDescription description="Introduced or updated: v1.2.150"/>
 
 Below is a list of functions that allow you to convert an expression from one data type to another.
 
@@ -32,5 +32,5 @@ Databend also offers a variety of functions for converting expressions into diff
 | TO_UINT16( expr )             | Converts a value to UINT16 data type                                   | TO_UINT16('123')                                    | 123                        |
 | TO_UINT32( expr )             | Converts a value to UINT32 data type                                   | TO_UINT32('123')                                    | 123                        |
 | TO_UINT64( expr )             | Converts a value to UINT64 data type                                   | TO_UINT64('123')                                    | 123                        |
-
+| TO_VARIANT( expr )            | Converts a value to VARIANT data type | TO_VARIANT(TO_BITMAP('100,200,300')) | [100,200,300] |
 

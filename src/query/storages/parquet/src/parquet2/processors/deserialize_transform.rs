@@ -128,7 +128,7 @@ impl Parquet2DeserializeTransform {
                 remain_reader,
                 partition_pruner,
 
-                is_copy: matches!(ctx.get_query_kind(), QueryKind::Copy),
+                is_copy: matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
                 copy_status: ctx.get_copy_status(),
             },
         )))

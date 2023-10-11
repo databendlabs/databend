@@ -39,7 +39,7 @@
     "docusaurus-plugin-devserver": "^1.0.6",
     "docusaurus-plugin-sass": "^0.2.1",
     "node": "^17.7.2",
-    "plugin-image-zoom": "^1.1.0",
+    "plugin-image-zoom": "^1.2.0",
     "prism-react-renderer": "^1.2.1",
     "rc-table": "^7.27.1",
     "rc-texty": "^0.2.0",

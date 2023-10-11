@@ -323,11 +323,9 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;"#,
+                )"#,
         r#"COPY INTO '@my_stage/my data'
-                FROM mytable
-                size_limit=10;"#,
+                FROM mytable;"#,
         r#"COPY INTO @my_stage
                 FROM mytable
                 FILE_FORMAT = (
@@ -335,8 +333,7 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;"#,
+                );"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CREDENTIALS = (
@@ -387,8 +384,7 @@ fn test_statement() {
                 )
                 size_limit=10
                 disable_variant_check=true;"#,
-        r#"copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)"#,
-        r#"COPY INTO books FROM 's3://databend/books.csv' 
+        r#"COPY INTO books FROM 's3://databend/books.csv'
                 CONNECTION = (
                     ENDPOINT_URL = 'http://localhost:9000/',
                     ACCESS_KEY_ID = 'ROOTUSER',
