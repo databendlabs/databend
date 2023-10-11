@@ -9,6 +9,7 @@ on:
     branches:
       - main
     paths-ignore:
+      - ".github/**"
       - "docs/**"
       - "website/**"
       - "**.md"
@@ -16,8 +17,6 @@ on:
       - "scripts/setup/**"
       - ".devcontainer/**"
   merge_group:
-    types:
-      - checks_requested
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -37,3 +36,11 @@ jobs:
     with:
       build_profile: debug
       runner_provider: gcp
+
+  ready:
+    runs-on: ubuntu-latest
+    needs:
+      - linux
+      - linux_hive
+    steps:
+      - run: echo "ready"

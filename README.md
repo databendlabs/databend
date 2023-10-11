@@ -116,7 +116,7 @@ docker run --net=host  datafuselabs/databend
 - [Connecting to Databend with BendSQL](https://databend.rs/doc/sql-clients/bendsql)
 - [Connecting to Databend with JDBC](https://databend.rs/doc/sql-clients/jdbc)
 - [Connecting to Databend with MySQL-Compatible Clients](https://databend.rs/doc/sql-clients/mysql)
-  
+
 </details>
 
 <details>
@@ -129,7 +129,7 @@ docker run --net=host  datafuselabs/databend
 - [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
 - [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
 - [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
- 
+
 </details>
 
 <details>
@@ -223,7 +223,7 @@ docker run --net=host  datafuselabs/databend
 
 - [How to Create Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/create-mask-policy)
 - [How to Drop Data Masking Policy](https://databend.rs/doc/sql-commands/ddl/mask-policy/drop-mask-policy)
- 
+
 </details>
 
 <details>
@@ -274,7 +274,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## License
 
-Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt). 
+Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt).
 
 When contributing to Databend, you can find the relevant license header in each file.
 

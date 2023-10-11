@@ -22,7 +22,9 @@ use common_ast::ast::QualifiedName;
 use common_ast::ast::SelectTarget;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Dialect;
+use common_ast::VisitorMut;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -49,6 +51,14 @@ use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::IndexType;
 use crate::WindowChecker;
+
+struct RemoveIdentifierQuote;
+
+impl VisitorMut for RemoveIdentifierQuote {
+    fn visit_identifier(&mut self, ident: &mut Identifier) {
+        ident.quote = None
+    }
+}
 
 impl Binder {
     pub fn analyze_projection(
@@ -263,7 +273,12 @@ impl Binder {
                     // If alias is not specified, we will generate a name for the scalar expression.
                     let expr_name = match alias {
                         Some(alias) => normalize_identifier(alias, &self.name_resolution_ctx).name,
-                        None => format!("{:#}", expr).to_lowercase(),
+                        None => {
+                            let mut expr = expr.clone();
+                            let mut remove_quote_visitor = RemoveIdentifierQuote;
+                            walk_expr_mut(&mut remove_quote_visitor, &mut expr);
+                            format!("{:#}", expr).to_lowercase()
+                        }
                     };
 
                     prev_aliases.push((expr_name.clone(), bound_expr.clone()));

@@ -248,12 +248,13 @@ impl Processor for MatchedSplitProcessor {
                             .delete_mutator
                             .delete_by_expr(current_block)?;
 
+                        // delete all
+                        if !row_ids.is_empty() {
+                            row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
+                            self.output_data_row_id_data.push(row_ids);
+                        }
+
                         if stage_block.is_empty() {
-                            // delete all
-                            if !row_ids.is_empty() {
-                                row_ids = row_ids.add_meta(Some(Box::new(RowIdKind::Delete)))?;
-                                self.output_data_row_id_data.push(row_ids);
-                            }
                             return Ok(());
                         }
                         current_block = stage_block;
