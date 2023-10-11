@@ -305,7 +305,6 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
     Ok(())
 }
 
-#[ignore = "flaky"]
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_agg_index() -> Result<()> {
     let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
