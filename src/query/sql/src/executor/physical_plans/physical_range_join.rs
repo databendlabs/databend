@@ -22,11 +22,9 @@ use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
+use crate::executor::explain::PlanStatsInfo;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
-use crate::executor::RangeJoin;
-use crate::executor::RangeJoinCondition;
-use crate::executor::RangeJoinType;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -34,6 +32,47 @@ use crate::optimizer::SExpr;
 use crate::plans::JoinType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RangeJoin {
+    // A unique id of operator in a `PhysicalPlan` tree, only used for display.
+    pub plan_id: u32,
+    pub left: Box<PhysicalPlan>,
+    pub right: Box<PhysicalPlan>,
+    // The first two conditions: (>, >=, <, <=)
+    // Condition's left/right side only contains one table's column
+    pub conditions: Vec<RangeJoinCondition>,
+    // The other conditions
+    pub other_conditions: Vec<RemoteExpr>,
+    // Now only support inner join, will support left/right join later
+    pub join_type: JoinType,
+    pub range_join_type: RangeJoinType,
+
+    // Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl RangeJoin {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.left.output_schema()?.fields().clone();
+        fields.extend(self.right.output_schema()?.fields().clone());
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub enum RangeJoinType {
+    IEJoin,
+    Merge,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RangeJoinCondition {
+    pub left_expr: RemoteExpr,
+    pub right_expr: RemoteExpr,
+    // "gt" | "lt" | "gte" | "lte"
+    pub operator: String,
+}
 
 impl PhysicalPlanBuilder {
     pub async fn build_range_join(
