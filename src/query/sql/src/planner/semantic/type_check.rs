@@ -3090,7 +3090,7 @@ impl<'a> TypeChecker<'a> {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = table_data_type
+            } = table_data_type.remove_nullable()
             {
                 let (span, path) = paths.pop_front().unwrap();
                 match path {

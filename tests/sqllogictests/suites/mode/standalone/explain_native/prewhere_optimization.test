@@ -98,7 +98,7 @@ TableScan
 ├── read bytes: 0
 ├── partitions total: 0
 ├── partitions scanned: 0
-├── push downs: [filters: [is_true(get(1)(CAST(t_where_optimizer.s (#1) AS Tuple(Int32 NULL, Int32 NULL) NULL)) > 0)], limit: NONE]
+├── push downs: [filters: [t_where_optimizer.s:a (#2) > 0], limit: NONE]
 └── estimated rows: 0.00
 
 statement ok
