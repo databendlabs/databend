@@ -458,10 +458,10 @@ struct ReplaceReclusterSource {
 
 impl PhysicalPlanReplacer for ReplaceReclusterSource {
     fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReclusterSource(ReclusterSource {
+        Ok(PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
             tasks: vec![self.task.clone()],
             ..plan.clone()
-        }))
+        })))
     }
 }
 

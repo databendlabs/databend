@@ -230,11 +230,11 @@ pub fn build_recluster_physical_plan(
     removed_segment_summary: Statistics,
 ) -> Result<PhysicalPlan> {
     let is_distributed = tasks.len() > 1;
-    let mut root = PhysicalPlan::ReclusterSource(ReclusterSource {
+    let mut root = PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
         tasks,
         table_info: table_info.clone(),
         catalog_info: catalog_info.clone(),
-    });
+    }));
 
     if is_distributed {
         root = PhysicalPlan::Exchange(Exchange {
@@ -246,7 +246,7 @@ pub fn build_recluster_physical_plan(
         });
     }
 
-    Ok(PhysicalPlan::ReclusterSink(ReclusterSink {
+    Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
         input: Box::new(root),
         table_info,
         catalog_info,
@@ -254,5 +254,5 @@ pub fn build_recluster_physical_plan(
         remained_blocks,
         removed_segment_indexes,
         removed_segment_summary,
-    }))
+    })))
 }
