@@ -85,7 +85,7 @@ impl Interpreter for DropTableInterpreter {
                 // thus if we do not refresh the table instance, `truncate` will fail
                 let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
                 let maybe_fuse_table = FuseTable::try_from_table(latest.as_ref());
-                // if target table if os type FuseTable, purge history
+                // if target table if of type FuseTable, purge its historical data
                 // otherwise, plain truncate
                 if let Ok(fuse_table) = maybe_fuse_table {
                     let purge = true;
