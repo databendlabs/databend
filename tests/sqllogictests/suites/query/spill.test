@@ -4,7 +4,7 @@ statement ok
 set disable_join_reorder = 1;
 
 statement ok
-set join_spilling_threshold = 1;
+set join_spilling_threshold = 0;
 
 statement ok
 create table t3(a int);
@@ -65,7 +65,7 @@ statement ok
 create table t3 as select number as a from numbers(1000000);
 
 statement ok
-set join_spilling_threshold = 100;
+set join_spilling_threshold = 0;
 
 query I
 select count() from t3 inner join numbers(1000000) on t3.a = number;
@@ -74,7 +74,7 @@ select count() from t3 inner join numbers(1000000) on t3.a = number;
 
 onlyif mysql
 statement ok
-set join_spilling_threshold = 1024 * 1024 * 1;
+set join_spilling_threshold = 0;
 
 onlyif mysql
 query I
