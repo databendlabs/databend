@@ -9,7 +9,7 @@ See also: [DROP TABLE](20-ddl-drop-table.md)
 ## Syntax
 
 ```sql
-TRUNCATE TABLE [db.]table_name [PURGE]
+TRUNCATE TABLE [db.]table_name
 ```
 
 ## Examples
@@ -50,10 +50,4 @@ FROM
   test_truncate
 
 0 row in 0.017 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
-
-root@localhost> TRUNCATE TABLE test_truncate PURGE;
-
-TRUNCATE TABLE test_truncate PURGE
-
-0 row in 0.118 sec. Processed 0 rows, 0B (0 rows/s, 0B/s)
 ```

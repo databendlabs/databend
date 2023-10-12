@@ -1462,7 +1462,6 @@ TruncateTable(
                 15..16,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1493,7 +1492,6 @@ TruncateTable(
                 19..20,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2359,7 +2357,6 @@ TruncateTable(
                 15..19,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2388,7 +2385,6 @@ TruncateTable(
                 23..27,
             ),
         },
-        purge: false,
     },
 )
 

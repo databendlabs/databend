@@ -468,7 +468,6 @@ pub struct TruncateTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub purge: bool,
 }
 
 impl Display for TruncateTableStmt {
@@ -481,10 +480,6 @@ impl Display for TruncateTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if self.purge {
-            write!(f, " PURGE")?;
-        }
-
         Ok(())
     }
 }
