@@ -191,11 +191,22 @@ impl<'a> Applier<'a> {
         Change::new(prev, result).into()
     }
 
+    // TODO(1): when get an applier, pass in a now_ms to ensure all expired are cleaned.
+    /// Update or insert a kv entry.
+    ///
+    /// If the input entry has expired, it performs a delete operation.
     #[minitrace::trace]
-    async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
+    pub(crate) async fn upsert_kv(&mut self, upsert_kv: &UpsertKV) -> (Option<SeqV>, Option<SeqV>) {
         debug!(upsert_kv = as_debug!(upsert_kv); "upsert_kv");
 
-        let (prev, result) = self.sm.upsert_kv(upsert_kv.clone()).await;
+        let (prev, result) = self.sm.upsert_kv_primary_index(upsert_kv).await;
+
+        self.sm
+            .update_expire_index(&upsert_kv.key, &prev, &result)
+            .await;
+
+        let prev = Into::<Option<SeqV>>::into(prev);
+        let result = Into::<Option<SeqV>>::into(result);
 
         debug!(
             "applied UpsertKV: {:?}; prev: {:?}; result: {:?}",
@@ -209,7 +220,6 @@ impl<'a> Applier<'a> {
     }
 
     #[minitrace::trace]
-
     async fn apply_txn(&mut self, req: &TxnRequest) -> AppliedState {
         debug!(txn = as_display!(req); "apply txn cmd");
 
@@ -328,7 +338,7 @@ impl<'a> Applier<'a> {
 
     async fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
         let sv = self.sm.get_kv(&get.key).await;
-        let value = sv.map(Self::into_pb_seq_v);
+        let value = sv.map(pb::SeqV::from);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
             value,
@@ -349,7 +359,7 @@ impl<'a> Applier<'a> {
         let put_resp = TxnPutResponse {
             key: put.key.clone(),
             prev_value: if put.prev_value {
-                prev.map(Self::into_pb_seq_v)
+                prev.map(pb::SeqV::from)
             } else {
                 None
             },
@@ -377,7 +387,7 @@ impl<'a> Applier<'a> {
             key: delete.key.clone(),
             success: is_deleted,
             prev_value: if delete.prev_value {
-                prev.map(Self::into_pb_seq_v)
+                prev.map(pb::SeqV::from)
             } else {
                 None
             },
@@ -445,9 +455,7 @@ impl<'a> Applier<'a> {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);
 
-                self.sm.upsert_kv(UpsertKV::delete(key.clone())).await;
-                // dbg!("clean_expired", &key, &curr);
-                self.push_change(key, curr, None);
+                self.upsert_kv(&UpsertKV::delete(key.clone())).await;
             } else {
                 unreachable!(
                     "trying to remove un-cleanable: {}, {}, kv-entry: {:?}",
@@ -492,14 +500,6 @@ impl<'a> Applier<'a> {
                 }
             },
             _ => 0,
-        }
-    }
-
-    /// Convert SeqV defined in rust types to SeqV defined in protobuf.
-    fn into_pb_seq_v(seq_v: SeqV) -> pb::SeqV {
-        pb::SeqV {
-            seq: seq_v.seq,
-            data: seq_v.data,
         }
     }
 }

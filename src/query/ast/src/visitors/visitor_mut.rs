@@ -94,7 +94,7 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_is_null(&mut self, _span: Span, expr: &mut Expr, _not: bool) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_is_distinct_from(
@@ -104,14 +104,14 @@ pub trait VisitorMut: Sized {
         right: &mut Expr,
         _not: bool,
     ) {
-        walk_expr_mut(self, left);
-        walk_expr_mut(self, right);
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
     }
 
     fn visit_in_list(&mut self, _span: Span, expr: &mut Expr, list: &mut [Expr], _not: bool) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
         for expr in list {
-            walk_expr_mut(self, expr);
+            Self::visit_expr(self, expr);
         }
     }
 
@@ -122,7 +122,7 @@ pub trait VisitorMut: Sized {
         subquery: &mut Query,
         _not: bool,
     ) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
         walk_query_mut(self, subquery);
     }
 
@@ -134,9 +134,9 @@ pub trait VisitorMut: Sized {
         high: &mut Expr,
         _not: bool,
     ) {
-        walk_expr_mut(self, expr);
-        walk_expr_mut(self, low);
-        walk_expr_mut(self, high);
+        Self::visit_expr(self, expr);
+        Self::visit_expr(self, low);
+        Self::visit_expr(self, high);
     }
 
     fn visit_binary_op(
@@ -146,12 +146,12 @@ pub trait VisitorMut: Sized {
         left: &mut Expr,
         right: &mut Expr,
     ) {
-        walk_expr_mut(self, left);
-        walk_expr_mut(self, right);
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
     }
 
     fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_cast(
@@ -161,20 +161,20 @@ pub trait VisitorMut: Sized {
         _target_type: &mut TypeName,
         _pg_style: bool,
     ) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_try_cast(&mut self, _span: Span, expr: &mut Expr, _target_type: &mut TypeName) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_extract(&mut self, _span: Span, _kind: &mut IntervalKind, expr: &mut Expr) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_position(&mut self, _span: Span, substr_expr: &mut Expr, str_expr: &mut Expr) {
-        walk_expr_mut(self, substr_expr);
-        walk_expr_mut(self, str_expr);
+        Self::visit_expr(self, substr_expr);
+        Self::visit_expr(self, str_expr);
     }
 
     fn visit_substring(
@@ -184,11 +184,11 @@ pub trait VisitorMut: Sized {
         substring_from: &mut Box<Expr>,
         substring_for: &mut Option<Box<Expr>>,
     ) {
-        walk_expr_mut(self, expr);
-        walk_expr_mut(self, substring_from);
+        Self::visit_expr(self, expr);
+        Self::visit_expr(self, substring_from);
 
         if let Some(substring_for) = substring_for {
-            walk_expr_mut(self, substring_for);
+            Self::visit_expr(self, substring_for);
         }
     }
 
@@ -198,10 +198,10 @@ pub trait VisitorMut: Sized {
         expr: &mut Expr,
         trim_where: &mut Option<(TrimWhere, Box<Expr>)>,
     ) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
 
         if let Some((_, trim_where_expr)) = trim_where {
-            walk_expr_mut(self, trim_where_expr);
+            Self::visit_expr(self, trim_where_expr);
         }
     }
 
@@ -216,10 +216,10 @@ pub trait VisitorMut: Sized {
                 Window::WindowSpec(spec) => {
                     spec.partition_by
                         .iter_mut()
-                        .for_each(|expr| walk_expr_mut(self, expr));
+                        .for_each(|expr| Self::visit_expr(self, expr));
                     spec.order_by
                         .iter_mut()
-                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+                        .for_each(|expr| Self::visit_expr(self, &mut expr.expr));
 
                     if let Some(frame) = &mut spec.window_frame {
                         self.visit_frame_bound(&mut frame.start_bound);
@@ -232,7 +232,7 @@ pub trait VisitorMut: Sized {
 
     fn visit_tuple(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
-            walk_expr_mut(self, elem);
+            Self::visit_expr(self, elem);
         }
     }
 
@@ -242,13 +242,13 @@ pub trait VisitorMut: Sized {
         _span: Span,
         _distinct: bool,
         _name: &mut Identifier,
-        args: &mut [Expr],
-        _params: &mut [Literal],
+        args: &mut Vec<Expr>,
+        _params: &mut Vec<Literal>,
         over: &mut Option<Window>,
         lambda: &mut Option<Lambda>,
     ) {
         for arg in args.iter_mut() {
-            walk_expr_mut(self, arg);
+            Self::visit_expr(self, arg);
         }
 
         if let Some(over) = over {
@@ -259,10 +259,10 @@ pub trait VisitorMut: Sized {
                 Window::WindowSpec(spec) => {
                     spec.partition_by
                         .iter_mut()
-                        .for_each(|expr| walk_expr_mut(self, expr));
+                        .for_each(|expr| Self::visit_expr(self, expr));
                     spec.order_by
                         .iter_mut()
-                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+                        .for_each(|expr| Self::visit_expr(self, &mut expr.expr));
 
                     if let Some(frame) = &mut spec.window_frame {
                         self.visit_frame_bound(&mut frame.start_bound);
@@ -272,14 +272,14 @@ pub trait VisitorMut: Sized {
             }
         }
         if let Some(lambda) = lambda {
-            walk_expr_mut(self, &mut lambda.expr)
+            Self::visit_expr(self, &mut lambda.expr)
         }
     }
 
     fn visit_frame_bound(&mut self, bound: &mut WindowFrameBound) {
         match bound {
-            WindowFrameBound::Preceding(Some(expr)) => walk_expr_mut(self, expr.as_mut()),
-            WindowFrameBound::Following(Some(expr)) => walk_expr_mut(self, expr.as_mut()),
+            WindowFrameBound::Preceding(Some(expr)) => Self::visit_expr(self, expr.as_mut()),
+            WindowFrameBound::Following(Some(expr)) => Self::visit_expr(self, expr.as_mut()),
             _ => {}
         }
     }
@@ -293,19 +293,19 @@ pub trait VisitorMut: Sized {
         else_result: &mut Option<Box<Expr>>,
     ) {
         if let Some(operand) = operand {
-            walk_expr_mut(self, operand);
+            Self::visit_expr(self, operand);
         }
 
         for condition in conditions.iter_mut() {
-            walk_expr_mut(self, condition);
+            Self::visit_expr(self, condition);
         }
 
         for result in results.iter_mut() {
-            walk_expr_mut(self, result);
+            Self::visit_expr(self, result);
         }
 
         if let Some(else_result) = else_result {
-            walk_expr_mut(self, else_result);
+            Self::visit_expr(self, else_result);
         }
     }
 
@@ -323,24 +323,24 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_map_access(&mut self, _span: Span, expr: &mut Expr, _accessor: &mut MapAccessor) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_array(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
-            walk_expr_mut(self, elem);
+            Self::visit_expr(self, elem);
         }
     }
 
     fn visit_map(&mut self, _span: Span, kvs: &mut [(Literal, Expr)]) {
         for (key_expr, val_expr) in kvs {
             self.visit_literal(_span, key_expr);
-            walk_expr_mut(self, val_expr);
+            Self::visit_expr(self, val_expr);
         }
     }
 
     fn visit_interval(&mut self, _span: Span, expr: &mut Expr, _unit: &mut IntervalKind) {
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_date_add(
@@ -350,8 +350,8 @@ pub trait VisitorMut: Sized {
         interval: &mut Expr,
         date: &mut Expr,
     ) {
-        walk_expr_mut(self, date);
-        walk_expr_mut(self, interval);
+        Self::visit_expr(self, date);
+        Self::visit_expr(self, interval);
     }
 
     fn visit_date_sub(
@@ -361,12 +361,12 @@ pub trait VisitorMut: Sized {
         interval: &mut Expr,
         date: &mut Expr,
     ) {
-        walk_expr_mut(self, date);
-        walk_expr_mut(self, interval);
+        Self::visit_expr(self, date);
+        Self::visit_expr(self, interval);
     }
 
     fn visit_date_trunc(&mut self, _span: Span, _unit: &mut IntervalKind, date: &mut Expr) {
-        walk_expr_mut(self, date);
+        Self::visit_expr(self, date);
     }
 
     fn visit_statement(&mut self, statement: &mut Statement) {
@@ -381,9 +381,8 @@ pub trait VisitorMut: Sized {
         walk_statement_mut(self, stmt);
     }
 
-    fn visit_copy(&mut self, _copy: &mut CopyStmt) {}
-
-    fn visit_copy_unit(&mut self, _copy_unit: &mut CopyUnit) {}
+    fn visit_copy_into_table(&mut self, _copy: &mut CopyIntoTableStmt) {}
+    fn visit_copy_into_location(&mut self, _copy: &mut CopyIntoLocationStmt) {}
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
@@ -622,7 +621,7 @@ pub trait VisitorMut: Sized {
 
     fn visit_order_by(&mut self, order_by: &mut OrderByExpr) {
         let OrderByExpr { expr, .. } = order_by;
-        walk_expr_mut(self, expr);
+        Self::visit_expr(self, expr);
     }
 
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
@@ -644,19 +643,19 @@ pub trait VisitorMut: Sized {
         }
 
         if let Some(selection) = selection {
-            walk_expr_mut(self, selection);
+            Self::visit_expr(self, selection);
         }
 
         match group_by {
             Some(GroupBy::Normal(exprs)) => {
                 for expr in exprs {
-                    walk_expr_mut(self, expr);
+                    Self::visit_expr(self, expr);
                 }
             }
             Some(GroupBy::GroupingSets(sets)) => {
                 for set in sets {
                     for expr in set {
-                        walk_expr_mut(self, expr);
+                        Self::visit_expr(self, expr);
                     }
                 }
             }
@@ -664,7 +663,7 @@ pub trait VisitorMut: Sized {
         }
 
         if let Some(having) = having {
-            walk_expr_mut(self, having);
+            Self::visit_expr(self, having);
         }
     }
 

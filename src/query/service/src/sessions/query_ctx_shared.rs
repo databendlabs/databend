@@ -58,8 +58,12 @@ pub struct QueryContextShared {
     pub(in crate::sessions) scan_progress: Arc<Progress>,
     /// write_progress for write/commit metrics of datablocks (uncompressed)
     pub(in crate::sessions) write_progress: Arc<Progress>,
-    /// Record how many bytes/rows have been spilled.
-    pub(in crate::sessions) spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in join.
+    pub(in crate::sessions) join_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in agg.
+    pub(in crate::sessions) agg_spill_progress: Arc<Progress>,
+    /// Record how many bytes/rows have been spilled in group by
+    pub(in crate::sessions) group_by_spill_progress: Arc<Progress>,
     /// result_progress for metrics of result datablocks (uncompressed)
     pub(in crate::sessions) result_progress: Arc<Progress>,
     pub(in crate::sessions) error: Arc<Mutex<Option<ErrorCode>>>,
@@ -77,6 +81,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
+    // now it is only set in query_log::log_query_finished
+    pub(in crate::sessions) finish_time: RwLock<Option<SystemTime>>,
     // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
     // We use this field to count maximum of one error found per data file.
     #[allow(clippy::type_complexity)]
@@ -122,6 +128,7 @@ impl QueryContextShared {
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
+            finish_time: Default::default(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
             copy_status: Arc::new(Default::default()),
@@ -131,7 +138,9 @@ impl QueryContextShared {
             status: Arc::new(RwLock::new("null".to_string())),
             user_agent: Arc::new(RwLock::new("null".to_string())),
             materialized_cte_tables: Arc::new(Default::default()),
-            spill_progress: Arc::new(Progress::create()),
+            join_spill_progress: Arc::new(Progress::create()),
+            agg_spill_progress: Arc::new(Progress::create()),
+            group_by_spill_progress: Arc::new(Progress::create()),
         }))
     }
 

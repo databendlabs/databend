@@ -523,18 +523,18 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
             "generate_series" | "range" => {
-                let mut gen_expr = || -> (TableDataType, Expr) {
-                    let idx = self.rng.gen_range(0..=2);
+                let idx = self.rng.gen_range(0..=2);
+                let mut gen_expr = |idx: i32| -> (TableDataType, Expr) {
                     match idx {
                         0 => {
                             let arg = Expr::Literal {
                                 span: None,
-                                lit: Literal::UInt64(self.rng.gen_range(0..=1000000)),
+                                lit: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
                             };
                             (TableDataType::Timestamp, Expr::FunctionCall {
                                 span: None,
                                 distinct: false,
-                                name: Identifier::from_name("to_date".to_string()),
+                                name: Identifier::from_name("to_timestamp".to_string()),
                                 args: vec![arg],
                                 params: vec![],
                                 window: None,
@@ -544,12 +544,12 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         1 => {
                             let arg = Expr::Literal {
                                 span: None,
-                                lit: Literal::UInt64(self.rng.gen_range(0..=10000000000000)),
+                                lit: Literal::UInt64(self.rng.gen_range(0..=1000000)),
                             };
                             (TableDataType::Date, Expr::FunctionCall {
                                 span: None,
                                 distinct: false,
-                                name: Identifier::from_name("to_timestamp".to_string()),
+                                name: Identifier::from_name("to_date".to_string()),
                                 args: vec![arg],
                                 params: vec![],
                                 window: None,
@@ -566,13 +566,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         _ => unreachable!(),
                     }
                 };
-                let (ty1, param1) = gen_expr();
-                let (_, param2) = gen_expr();
+                let (ty1, param1) = gen_expr(idx);
+                let (_, param2) = gen_expr(idx);
                 let table = Table {
                     name: name.to_string(),
                     schema: TableSchemaRefExt::create(vec![TableField::new(name, ty1)]),
                 };
-                let (_, param3) = gen_expr();
+                let (_, param3) = gen_expr(2);
                 self.bound_table(table);
 
                 TableReference::TableFunction {

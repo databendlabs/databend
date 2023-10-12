@@ -26,13 +26,14 @@ use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
 use common_settings::ChangeValue;
 use common_settings::Settings;
-use common_users::RoleCacheManager;
-use common_users::BUILTIN_ROLE_PUBLIC;
+use common_users::GrantObjectVisibilityChecker;
 use log::debug;
 use parking_lot::RwLock;
 
 use crate::clusters::ClusterDiscovery;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManager;
+use crate::sessions::session_privilege_mgr::SessionPrivilegeManagerImpl;
 use crate::sessions::QueryContext;
 use crate::sessions::QueryContextShared;
 use crate::sessions::SessionContext;
@@ -44,6 +45,7 @@ pub struct Session {
     pub(in crate::sessions) id: String,
     pub(in crate::sessions) typ: RwLock<SessionType>,
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
+    pub(in crate::sessions) privilege_mgr: SessionPrivilegeManagerImpl,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
     format_settings: FormatSettings,
@@ -57,11 +59,13 @@ impl Session {
         mysql_connection_id: Option<u32>,
     ) -> Result<Arc<Session>> {
         let status = Arc::new(Default::default());
+        let privilege_mgr = SessionPrivilegeManagerImpl::new(session_ctx.clone());
         Ok(Arc::new(Session {
             id,
             typ: RwLock::new(typ),
             status,
             session_ctx,
+            privilege_mgr,
             mysql_connection_id,
             format_settings: FormatSettings::default(),
         }))
@@ -176,9 +180,7 @@ impl Session {
     }
 
     pub fn get_current_user(self: &Arc<Self>) -> Result<UserInfo> {
-        self.session_ctx
-            .get_current_user()
-            .ok_or_else(|| ErrorCode::AuthenticateFailure("unauthenticated"))
+        self.privilege_mgr.get_current_user()
     }
 
     // set_authed_user() is called after authentication is passed in various protocol handlers, like
@@ -191,90 +193,30 @@ impl Session {
         user: UserInfo,
         auth_role: Option<String>,
     ) -> Result<()> {
-        self.session_ctx.set_current_user(user);
-        self.session_ctx.set_auth_role(auth_role);
-        self.ensure_current_role().await?;
-        Ok(())
-    }
-
-    // ensure_current_role() is called after authentication and before any privilege checks
-    #[async_backtrace::framed]
-    async fn ensure_current_role(self: &Arc<Self>) -> Result<()> {
-        let tenant = self.get_current_tenant();
-        let public_role = RoleCacheManager::instance()
-            .find_role(&tenant, BUILTIN_ROLE_PUBLIC)
-            .await?
-            .unwrap_or_else(|| RoleInfo::new(BUILTIN_ROLE_PUBLIC));
-
-        // if CURRENT ROLE is not set, take current session's AUTH ROLE
-        let mut current_role_name = self.get_current_role().map(|r| r.name);
-        if current_role_name.is_none() {
-            current_role_name = self.session_ctx.get_auth_role();
-        }
-
-        // if CURRENT ROLE and AUTH ROLE are not set, take current user's DEFAULT ROLE
-        if current_role_name.is_none() {
-            current_role_name = self
-                .session_ctx
-                .get_current_user()
-                .map(|u| u.option.default_role().cloned())
-                .unwrap_or(None)
-        };
-
-        // if CURRENT ROLE, AUTH ROLE and DEFAULT ROLE are not set, take PUBLIC role
-        let current_role_name =
-            current_role_name.unwrap_or_else(|| BUILTIN_ROLE_PUBLIC.to_string());
-
-        // I can not use the CURRENT ROLE, reset to PUBLIC role
-        let role = self
-            .validate_available_role(&current_role_name)
-            .await
-            .or_else(|e| {
-                if e.code() == ErrorCode::INVALID_ROLE {
-                    Ok(public_role)
-                } else {
-                    Err(e)
-                }
-            })?;
-        self.session_ctx.set_current_role(Some(role));
-        Ok(())
+        self.privilege_mgr.set_authed_user(user, auth_role).await
     }
 
     #[async_backtrace::framed]
     pub async fn validate_available_role(self: &Arc<Self>, role_name: &str) -> Result<RoleInfo> {
-        let available_roles = self.get_all_available_roles().await?;
-        let role = available_roles.iter().find(|r| r.name == role_name);
-        match role {
-            Some(role) => Ok(role.clone()),
-            None => {
-                let available_role_names = available_roles
-                    .iter()
-                    .map(|r| r.name.clone())
-                    .collect::<Vec<_>>()
-                    .join(",");
-                Err(ErrorCode::InvalidRole(format!(
-                    "Invalid role {} for current session, available: {}",
-                    role_name, available_role_names,
-                )))
-            }
-        }
+        self.privilege_mgr.validate_available_role(role_name).await
     }
 
     // Only the available role can be set as current role. The current role can be set by the SET
     // ROLE statement, or by the X-DATABEND-ROLE header in HTTP protocol (not implemented yet).
     #[async_backtrace::framed]
     pub async fn set_current_role_checked(self: &Arc<Self>, role_name: &str) -> Result<()> {
-        let role = self.validate_available_role(role_name).await?;
-        self.session_ctx.set_current_role(Some(role));
-        Ok(())
+        self.privilege_mgr
+            .set_current_role(Some(role_name.to_string()))
+            .await
     }
 
     pub fn get_current_role(self: &Arc<Self>) -> Option<RoleInfo> {
-        self.session_ctx.get_current_role()
+        self.privilege_mgr.get_current_role()
     }
 
-    pub fn unset_current_role(self: &Arc<Self>) {
-        self.session_ctx.set_current_role(None)
+    #[async_backtrace::framed]
+    pub async fn unset_current_role(self: &Arc<Self>) -> Result<()> {
+        self.privilege_mgr.set_current_role(None).await
     }
 
     // Returns all the roles the current session has. If the user have been granted auth_role,
@@ -282,31 +224,7 @@ impl Session {
     // On executing SET ROLE, the role have to be one of the available roles.
     #[async_backtrace::framed]
     pub async fn get_all_available_roles(self: &Arc<Self>) -> Result<Vec<RoleInfo>> {
-        let roles = match self.session_ctx.get_auth_role() {
-            Some(auth_role) => vec![auth_role],
-            None => {
-                let current_user = self.get_current_user()?;
-                current_user.grants.roles()
-            }
-        };
-
-        let tenant = self.get_current_tenant();
-        let mut related_roles = RoleCacheManager::instance()
-            .find_related_roles(&tenant, &roles)
-            .await?;
-        related_roles.sort_by(|a, b| a.name.cmp(&b.name));
-        Ok(related_roles)
-    }
-
-    #[async_backtrace::framed]
-    pub async fn get_object_owner(
-        self: &Arc<Self>,
-        owner: &GrantObject,
-    ) -> Result<Option<RoleInfo>> {
-        let role_mgr = RoleCacheManager::instance();
-        let tenant = self.get_current_tenant();
-        // return true only if grant object owner is the role itself
-        role_mgr.find_object_owner(&tenant, owner).await
+        self.privilege_mgr.get_all_available_roles().await
     }
 
     #[async_backtrace::framed]
@@ -319,50 +237,14 @@ impl Session {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
+        self.privilege_mgr
+            .validate_privilege(object, privilege, verify_ownership)
+            .await
+    }
 
-        // 1. check user's privilege set
-        let current_user = self.get_current_user()?;
-        let user_verified = current_user
-            .grants
-            .verify_privilege(object, privilege.clone());
-        if user_verified {
-            return Ok(());
-        }
-
-        // 2. check the user's roles' privilege set
-        self.ensure_current_role().await?;
-        let available_roles = self.get_all_available_roles().await?;
-        let role_verified = &available_roles
-            .iter()
-            .any(|r| r.grants.verify_privilege(object, privilege.clone()));
-        if *role_verified {
-            return Ok(());
-        }
-
-        if verify_ownership {
-            let object_owner = self.get_object_owner(object).await?;
-            if let Some(owner) = object_owner.as_ref() {
-                for role in &available_roles {
-                    if *role.identity() == *owner.identity() {
-                        return Ok(());
-                    }
-                }
-            }
-        }
-
-        let roles_name = available_roles
-            .iter()
-            .map(|r| r.name.clone())
-            .collect::<Vec<_>>()
-            .join(",");
-
-        Err(ErrorCode::PermissionDenied(format!(
-            "Permission denied, privilege {:?} is required on {} for user {} with roles [{}]",
-            privilege.clone(),
-            object,
-            &current_user.identity(),
-            roles_name,
-        )))
+    #[async_backtrace::framed]
+    pub async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.privilege_mgr.get_visibility_checker().await
     }
 
     pub fn get_settings(self: &Arc<Self>) -> Arc<Settings> {

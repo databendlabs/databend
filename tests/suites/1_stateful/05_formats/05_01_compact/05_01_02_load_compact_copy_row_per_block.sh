@@ -32,7 +32,8 @@ echo "set global input_read_buffer_size = 1048576" | $MYSQL_CLIENT_CONNECT
 echo "---row_count"
 echo "select count(*) from t1" | $MYSQL_CLIENT_CONNECT
 
+# table will be auto compacted after copy into, thus we need to limit the result of fuse_snapshot to 1
 echo "---block_count"
-echo "select block_count from fuse_snapshot('default','t1')" | $MYSQL_CLIENT_CONNECT
+echo "select block_count from fuse_snapshot('default','t1') limit 1" | $MYSQL_CLIENT_CONNECT
 
 echo "drop table if exists t1" | $MYSQL_CLIENT_CONNECT

@@ -45,6 +45,7 @@ use common_io::prelude::*;
 use ethnum::i256;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
+use serde::Deserialize;
 use serde::Serialize;
 
 use super::aggregate_function::AggregateFunction;
@@ -56,9 +57,10 @@ use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::assert_variadic_params;
 use crate::BUILTIN_FUNCTIONS;
 
-#[derive(Default, Debug)]
-pub struct NumberArrayMovingSumState<T: Number, TSum: Number> {
+#[derive(Default, Debug, Deserialize, Serialize)]
+pub struct NumberArrayMovingSumState<T, TSum> {
     values: Vec<T>,
+    #[serde(skip)]
     _t: PhantomData<TSum>,
 }
 
@@ -137,7 +139,7 @@ where
     }
 
     #[inline(always)]
-    fn merge(&mut self, other: &mut Self) -> Result<()> {
+    fn merge(&mut self, other: &Self) -> Result<()> {
         self.values.extend_from_slice(&other.values);
         Ok(())
     }
@@ -200,8 +202,8 @@ where
     }
 }
 
-#[derive(Default)]
-pub struct DecimalArrayMovingSumState<T: Decimal> {
+#[derive(Default, Deserialize, Serialize)]
+pub struct DecimalArrayMovingSumState<T> {
     pub values: Vec<T>,
 }
 
@@ -313,7 +315,7 @@ where T: Decimal
     }
 
     #[inline(always)]
-    fn merge(&mut self, other: &mut Self) -> Result<()> {
+    fn merge(&mut self, other: &Self) -> Result<()> {
         self.values.extend_from_slice(&other.values);
         Ok(())
     }
@@ -454,18 +456,20 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
+        let rhs: State = deserialize_from_slice(reader)?;
+
+        state.merge(&rhs)
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<State>();
-        state.merge(rhs)
+        let other = rhs.get::<State>();
+        state.merge(other)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {
@@ -646,18 +650,20 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        state.serialize(writer)
+        serialize_into_buf(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        state.deserialize(reader)
+        let rhs: State = deserialize_from_slice(reader)?;
+
+        state.merge(&rhs)
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<State>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<State>();
-        state.merge(rhs)
+        let other = rhs.get::<State>();
+        state.merge(other)
     }
 
     fn merge_result(&self, place: StateAddr, builder: &mut ColumnBuilder) -> Result<()> {

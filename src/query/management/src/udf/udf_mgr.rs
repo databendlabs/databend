@@ -133,8 +133,10 @@ impl UdfApi for UdfMgr {
         let values = self.kv_api.prefix_list_kv(&self.udf_prefix).await?;
 
         let mut udfs = Vec::with_capacity(values.len());
-        for (_, value) in values {
-            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || "")?;
+        for (name, value) in values {
+            let udf = deserialize_struct(&value.data, ErrorCode::IllegalUDFFormat, || {
+                format!("udf {name} is corrupt")
+            })?;
             udfs.push(udf);
         }
         Ok(udfs)

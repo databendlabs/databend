@@ -29,6 +29,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
+        RuleID::NormalizeAggregate,
         RuleID::EliminateFilter,
         RuleID::MergeFilter,
         RuleID::InferFilter,
@@ -60,13 +61,16 @@ pub static RESIDUAL_RULES: Lazy<Vec<RuleID>> =
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
 pub struct HeuristicOptimizer {
-    func_ctx: FunctionContext,
+    _func_ctx: FunctionContext,
     metadata: MetadataRef,
 }
 
 impl HeuristicOptimizer {
     pub fn new(func_ctx: FunctionContext, metadata: MetadataRef) -> Self {
-        HeuristicOptimizer { func_ctx, metadata }
+        HeuristicOptimizer {
+            _func_ctx: func_ctx,
+            metadata,
+        }
     }
 
     pub fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
@@ -99,8 +103,7 @@ impl HeuristicOptimizer {
         let mut s_expr = s_expr.clone();
 
         for rule_id in rules {
-            let rule =
-                RuleFactory::create_rule(*rule_id, self.metadata.clone(), self.func_ctx.clone())?;
+            let rule = RuleFactory::create_rule(*rule_id, self.metadata.clone())?;
             let mut state = TransformResult::new();
             if rule
                 .patterns()

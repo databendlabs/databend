@@ -237,7 +237,7 @@ impl FuseTable {
             .as_ref()
             .filter(|_| self.is_native()) // Only native format supports topk push down.
             .and_then(|p| p.top_k(self.schema().as_ref(), RangeIndex::supported_type))
-            .map(|topk| field_default_value(ctx.clone(), &topk.order_by).map(|d| (topk, d)))
+            .map(|topk| field_default_value(ctx.clone(), &topk.field).map(|d| (topk, d)))
             .transpose()?;
 
         let (mut statistics, parts) =
@@ -284,11 +284,11 @@ impl FuseTable {
                 block_metas.sort_by(|a, b| {
                     let a =
                         a.1.col_stats
-                            .get(&top_k.column_id)
+                            .get(&top_k.field.column_id)
                             .unwrap_or(&default_stats);
                     let b =
                         b.1.col_stats
-                            .get(&top_k.column_id)
+                            .get(&top_k.field.column_id)
                             .unwrap_or(&default_stats);
                     (a.min().as_ref(), a.max().as_ref()).cmp(&(b.min().as_ref(), b.max().as_ref()))
                 });
@@ -296,11 +296,11 @@ impl FuseTable {
                 block_metas.sort_by(|a, b| {
                     let a =
                         a.1.col_stats
-                            .get(&top_k.column_id)
+                            .get(&top_k.field.column_id)
                             .unwrap_or(&default_stats);
                     let b =
                         b.1.col_stats
-                            .get(&top_k.column_id)
+                            .get(&top_k.field.column_id)
                             .unwrap_or(&default_stats);
                     (b.max().as_ref(), b.min().as_ref()).cmp(&(a.max().as_ref(), a.min().as_ref()))
                 });
@@ -454,7 +454,7 @@ impl FuseTable {
 
         let sort_min_max = top_k.as_ref().map(|(top_k, default)| {
             meta.col_stats
-                .get(&top_k.column_id)
+                .get(&top_k.field.column_id)
                 .map(|stat| (stat.min().clone(), stat.max().clone()))
                 .unwrap_or((default.clone(), default.clone()))
         });
@@ -494,7 +494,7 @@ impl FuseTable {
         let create_on = meta.create_on;
 
         let sort_min_max = top_k.map(|(top_k, default)| {
-            let stat = meta.col_stats.get(&top_k.column_id);
+            let stat = meta.col_stats.get(&top_k.field.column_id);
             stat.map(|stat| (stat.min().clone(), stat.max().clone()))
                 .unwrap_or((default.clone(), default))
         });

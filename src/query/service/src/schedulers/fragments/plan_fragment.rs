@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
 use common_sql::executor::CompactPartial;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeletePartial;
@@ -395,24 +395,29 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &CopyIntoTable) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(
+        &mut self,
+        plan: &CopyIntoTablePhysicalPlan,
+    ) -> Result<PhysicalPlan> {
         match &plan.source {
             CopyIntoTableSource::Query(query_ctx) => {
                 let input = self.replace(&query_ctx.plan)?;
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
-                    source: CopyIntoTableSource::Query(Box::new(QuerySource {
-                        plan: input,
-                        ..*query_ctx.clone()
-                    })),
-                    ..plan.clone()
-                })))
+                Ok(PhysicalPlan::CopyIntoTable(Box::new(
+                    CopyIntoTablePhysicalPlan {
+                        source: CopyIntoTableSource::Query(Box::new(QuerySource {
+                            plan: input,
+                            ..*query_ctx.clone()
+                        })),
+                        ..plan.clone()
+                    },
+                )))
             }
-            CopyIntoTableSource::Stage(_) => {
-                Ok(PhysicalPlan::CopyIntoTable(Box::new(CopyIntoTable {
+            CopyIntoTableSource::Stage(_) => Ok(PhysicalPlan::CopyIntoTable(Box::new(
+                CopyIntoTablePhysicalPlan {
                     source: CopyIntoTableSource::Stage(Box::new(self.source.clone())),
                     ..plan.clone()
-                })))
-            }
+                },
+            ))),
         }
     }
 }
@@ -423,10 +428,10 @@ struct ReplaceCompactBlock {
 
 impl PhysicalPlanReplacer for ReplaceCompactBlock {
     fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactPartial(CompactPartial {
+        Ok(PhysicalPlan::CompactPartial(Box::new(CompactPartial {
             parts: self.partitions.clone(),
             ..plan.clone()
-        }))
+        })))
     }
 }
 
@@ -453,22 +458,22 @@ struct ReplaceReplaceInto {
 impl PhysicalPlanReplacer for ReplaceReplaceInto {
     fn replace_replace_into(&mut self, plan: &ReplaceInto) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: Box::new(input),
             need_insert: self.need_insert,
             segments: self.partitions.clone(),
             block_slots: self.slot.clone(),
             ..plan.clone()
-        }))
+        })))
     }
 
     fn replace_deduplicate(&mut self, plan: &Deduplicate) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::Deduplicate(Deduplicate {
+        Ok(PhysicalPlan::Deduplicate(Box::new(Deduplicate {
             input: Box::new(input),
             need_insert: self.need_insert,
             table_is_empty: self.partitions.is_empty(),
             ..plan.clone()
-        }))
+        })))
     }
 }

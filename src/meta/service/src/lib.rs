@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![feature(generators)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;
 pub mod configs;
 pub mod export;
+pub(crate) mod grpc_helper;
 pub mod message;
 pub mod meta_service;
 pub mod metrics;

@@ -19,6 +19,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::DropTableByIdReq;
 use common_sql::plans::DropTablePlan;
+use common_storages_fuse::FuseTable;
 use common_storages_share::save_share_spec;
 use common_storages_view::view_table::VIEW_ENGINE;
 
@@ -80,11 +81,18 @@ impl Interpreter for DropTableInterpreter {
 
             // if `plan.all`, truncate, then purge the historical data
             if self.plan.all {
-                let purge = true;
                 // the above `catalog.drop_table` operation changed the table meta version,
                 // thus if we do not refresh the table instance, `truncate` will fail
                 let latest = tbl.as_ref().refresh(self.ctx.as_ref()).await?;
-                latest.truncate(self.ctx.clone(), purge).await?
+                let maybe_fuse_table = FuseTable::try_from_table(latest.as_ref());
+                // if target table if of type FuseTable, purge its historical data
+                // otherwise, plain truncate
+                if let Ok(fuse_table) = maybe_fuse_table {
+                    let purge = true;
+                    fuse_table.do_truncate(self.ctx.clone(), purge).await?
+                } else {
+                    latest.truncate(self.ctx.clone()).await?
+                }
             }
 
             if let Some((spec_vec, share_table_info)) = resp.spec_vec {

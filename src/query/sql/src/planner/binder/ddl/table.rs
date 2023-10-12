@@ -971,7 +971,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge,
         } = stmt;
 
         let (catalog, database, table) =
@@ -981,7 +980,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge: *purge,
         })))
     }
 

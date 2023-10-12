@@ -14,6 +14,8 @@
 
 use std::ops::Range;
 
+use roaring::RoaringTreemap;
+
 use super::date::date_to_string;
 use super::number::NumberScalar;
 use super::timestamp::timestamp_to_string;
@@ -223,7 +225,14 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
             return;
         }
         ScalarRef::Bitmap(b) => {
-            buf.extend_from_slice(b);
+            jsonb::Value::Array(
+                RoaringTreemap::deserialize_from(b)
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.into())
+                    .collect(),
+            )
+            .write_to_vec(buf);
             return;
         }
         ScalarRef::Tuple(fields) => {

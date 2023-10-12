@@ -14,7 +14,6 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_config::GlobalConfig;
 use common_exception::Result;
 use common_meta_api::BackgroundApi;
 use common_meta_app::background::BackgroundTaskInfo;
@@ -24,16 +23,17 @@ use common_meta_app::background::ListBackgroundTasksReq;
 use common_users::UserApiProvider;
 use log::debug;
 use poem::web::Json;
+use poem::web::Path;
 use poem::web::Query;
 use poem::IntoResponse;
 use serde::Deserialize;
 use serde::Serialize;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BackgroundTaskQuery {
-    timestamp: DateTime<Utc>,
-    table_id: u64,
-    task_state: BackgroundTaskState,
-    task_type: BackgroundTaskType,
+    timestamp: Option<DateTime<Utc>>,
+    table_id: Option<u64>,
+    task_state: Option<BackgroundTaskState>,
+    task_type: Option<BackgroundTaskType>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -53,23 +53,33 @@ async fn load_background_tasks(
             tenant: tenant.to_string(),
         })
         .await?;
+    debug!(
+        "list_background_tasks: tenant: {}, candidate tasks: {}",
+        tenant,
+        tasks.len()
+    );
     let mut task_infos = Vec::with_capacity(tasks.len());
     for (_, name, task) in tasks {
-        if task.task_state != params.task_state {
+        if params.task_state.is_some() && task.task_state != *params.task_state.as_ref().unwrap() {
             continue;
         }
-        if task.task_type != params.task_type {
+        if params.task_type.is_some() && task.task_type != *params.task_type.as_ref().unwrap() {
             continue;
         }
         if task.task_type == BackgroundTaskType::COMPACTION {
             if task.compaction_task_stats.is_none() {
                 continue;
             }
-            if task.compaction_task_stats.as_ref().unwrap().table_id != params.table_id {
+            if params.table_id.is_some()
+                && task.compaction_task_stats.as_ref().unwrap().table_id != params.table_id.unwrap()
+            {
                 continue;
             }
         }
-        if task.last_updated.is_some() && task.last_updated.unwrap() < params.timestamp {
+        if params.timestamp.as_ref().is_some()
+            && task.last_updated.is_some()
+            && task.last_updated.unwrap() < params.timestamp.unwrap()
+        {
             continue;
         }
         task_infos.push((name, task));
@@ -83,9 +93,9 @@ async fn load_background_tasks(
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn list_background_tasks(
+    Path(tenant): Path<String>,
     params: Query<BackgroundTaskQuery>,
 ) -> poem::Result<impl IntoResponse> {
-    let tenant = &GlobalConfig::instance().query.tenant_id;
     debug!(
         "list_background_tasks: tenant: {}, params: {:?}",
         tenant, params
@@ -97,7 +107,7 @@ pub async fn list_background_tasks(
         }));
     }
 
-    let resp = load_background_tasks(tenant, params)
+    let resp = load_background_tasks(&tenant, params)
         .await
         .map_err(poem::error::InternalServerError)?;
     Ok(Json(resp))

@@ -13,9 +13,13 @@
 // limitations under the License.
 
 mod predicate;
+mod read_policy;
 mod reader;
 mod row_group;
 mod topk;
+mod utils;
 
-pub use reader::ParquetRSReader;
+pub use read_policy::*;
+pub use reader::ParquetRSFullReader;
 pub use reader::ParquetRSReaderBuilder;
+pub use reader::ParquetRSRowGroupReader;

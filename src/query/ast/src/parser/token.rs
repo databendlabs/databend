@@ -415,6 +415,8 @@ pub enum TokenKind {
     DATE,
     #[token("DATE_ADD", ignore(ascii_case))]
     DATE_ADD,
+    #[token("DATE_PART", ignore(ascii_case))]
+    DATE_PART,
     #[token("DATE_SUB", ignore(ascii_case))]
     DATE_SUB,
     #[token("DATE_TRUNC", ignore(ascii_case))]
@@ -449,6 +451,8 @@ pub enum TokenKind {
     DOUBLE,
     #[token("DOW", ignore(ascii_case))]
     DOW,
+    #[token("WEEK", ignore(ascii_case))]
+    WEEK,
     #[token("DOY", ignore(ascii_case))]
     DOY,
     #[token("DOWNLOAD", ignore(ascii_case))]
@@ -746,6 +750,8 @@ pub enum TokenKind {
     RENAME,
     #[token("REPLACE", ignore(ascii_case))]
     REPLACE,
+    #[token("RETURN_FAILED_ONLY", ignore(ascii_case))]
+    RETURN_FAILED_ONLY,
     #[token("MERGE", ignore(ascii_case))]
     MERGE,
     #[token("MATCHED", ignore(ascii_case))]
@@ -958,8 +964,6 @@ pub enum TokenKind {
     VIEW,
     #[token("VIRTUAL", ignore(ascii_case))]
     VIRTUAL,
-    #[token("WEEK", ignore(ascii_case))]
-    WEEK,
     #[token("WHEN", ignore(ascii_case))]
     WHEN,
     #[token("WHERE", ignore(ascii_case))]
@@ -1123,6 +1127,7 @@ impl TokenKind {
             | TokenKind::END
             | TokenKind::EXISTS
             | TokenKind::EXTRACT
+            | TokenKind::DATE_PART
             | TokenKind::FALSE
             | TokenKind::FLOAT
             // | TokenKind::FOREIGN

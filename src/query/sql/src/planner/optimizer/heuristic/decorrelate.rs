@@ -245,7 +245,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: left_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -262,7 +261,6 @@ impl SubqueryRewriter {
                 Arc::new(
                     Filter {
                         predicates: right_filters,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -577,11 +575,7 @@ impl SubqueryRewriter {
                     predicates.push(self.flatten_scalar(predicate, correlated_columns)?);
                 }
 
-                let filter_plan = Filter {
-                    predicates,
-                    is_having: filter.is_having,
-                }
-                .into();
+                let filter_plan = Filter { predicates }.into();
                 Ok(SExpr::create_unary(
                     Arc::new(filter_plan),
                     Arc::new(flatten_plan),
@@ -688,7 +682,12 @@ impl SubqueryRewriter {
                     if let ScalarExpr::AggregateFunction(AggregateFunction { func_name, .. }) =
                         &scalar
                     {
-                        if func_name.eq_ignore_ascii_case("count") || func_name.eq("count_distinct")
+                        // For scalar subquery, we'll convert it to single join.
+                        // Single join is similar to left outer join, if there isn't matched row in the right side, we'll add NULL value for the right side.
+                        // But for count aggregation function, NULL values should be 0.
+                        if aggregate.aggregate_functions.len() == 1
+                            && (func_name.eq_ignore_ascii_case("count")
+                                || func_name.eq("count_distinct"))
                         {
                             flatten_info.from_count_func = true;
                         }

@@ -180,7 +180,7 @@ impl PartitionPruner {
                 let min_max = self
                     .top_k
                     .as_ref()
-                    .filter(|(tk, _)| tk.column_id as usize == *index)
+                    .filter(|(tk, _)| tk.leaf_id == *index)
                     .zip(row_group_stats.as_ref())
                     .map(|((_, offset), stats)| {
                         let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();

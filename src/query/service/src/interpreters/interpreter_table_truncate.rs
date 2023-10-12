@@ -27,7 +27,6 @@ use crate::sessions::TableContext;
 
 pub struct TruncateTableInterpreter {
     ctx: Arc<QueryContext>,
-    purge: bool,
     table_name: String,
     catalog_name: String,
     database_name: String,
@@ -39,7 +38,6 @@ impl TruncateTableInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: TruncateTablePlan) -> Result<Self> {
         Ok(TruncateTableInterpreter {
             ctx,
-            purge: plan.purge,
             table_name: plan.table,
             catalog_name: plan.catalog,
             database_name: plan.database,
@@ -50,7 +48,6 @@ impl TruncateTableInterpreter {
     pub fn from_flight(ctx: Arc<QueryContext>, packet: TruncateTablePacket) -> Result<Self> {
         Ok(TruncateTableInterpreter {
             ctx,
-            purge: packet.purge,
             table_name: packet.table_name,
             catalog_name: packet.catalog_name,
             database_name: packet.database_name,
@@ -84,14 +81,13 @@ impl Interpreter for TruncateTableInterpreter {
                         self.table_name.clone(),
                         self.catalog_name.clone(),
                         self.database_name.clone(),
-                        self.purge,
                     );
                     truncate_packet.commit(conf.as_ref(), timeout).await?;
                 }
             }
         }
 
-        table.truncate(self.ctx.clone(), self.purge).await?;
+        table.truncate(self.ctx.clone()).await?;
         Ok(PipelineBuildResult::create())
     }
 }

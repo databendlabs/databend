@@ -82,7 +82,6 @@ impl FuseTable {
                 })
                 .await?;
 
-            // best effort to remove the table's copied files.
             catalog
                 .truncate_table(&self.table_info, TruncateTableReq {
                     table_id,

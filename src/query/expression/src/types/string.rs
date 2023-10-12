@@ -208,6 +208,7 @@ impl StringColumn {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
         &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }

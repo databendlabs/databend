@@ -105,10 +105,10 @@ statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'
 
 statement ok
-SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = '2023-03-02 00:00:00'
 
 statement ok
 DROP DATABASE IF EXISTS showtabstat
 
 statement error 1003
-SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'
+SHOW TABLE STATUS FROM showtabstat WHERE Create_time = '2023-03-02 00:00:00'
