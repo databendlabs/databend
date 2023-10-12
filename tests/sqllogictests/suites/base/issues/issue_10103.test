@@ -34,10 +34,10 @@ SELECT ts FROM test_ts_table LIMIT 1
 2023-02-19 11:18:01.000000
 
 statement ok
-drop table test_table
+drop table test_table all
 
 statement ok
-drop table test_ts_table
+drop table test_ts_table all
 
 statement ok
 drop stage test_10103

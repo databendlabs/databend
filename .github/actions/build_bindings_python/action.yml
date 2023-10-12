@@ -24,32 +24,24 @@ runs:
       id: toolchain
       shell: bash
       run: |
-        bash ./scripts/setup/dev_setup.sh -yb
         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
         echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
-
-    # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
-    - name: Expose GitHub Runtime
-      uses: crazy-max/ghaction-github-runtime@v2
-      if: env.RUNNER_PROVIDER == 'github'
 
     - name: Get opts
       id: opts
       shell: bash
       run: |
-        echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
-        if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+        if [[ -z "${{ inputs.version }}" ]]; then
           echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
-          echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
         else
           echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
-          echo "BUILD_PROFILE=release" >> $GITHUB_ENV
         fi
 
     - name: Cross setup for macOS
       if: endsWith(inputs.target, '-darwin')
       shell: bash
       run: |
+        bash ./scripts/setup/dev_setup.sh -yb
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
         echo "JEMALLOC_SYS_WITH_MALLOC_CONF=oversize_threshold:0,dirty_decay_ms:5000,muzzy_decay_ms:5000" >> $GITHUB_ENV
 
@@ -63,7 +55,7 @@ runs:
         # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
         rustup-components: rust-std rustfmt
         args: ${{ steps.opts.outputs.BUILD_ARGS }}
-        docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
+        docker-options: --env RUSTC_WRAPPER=sccache --env SCCACHE_GCS_RW_MODE=READ_WRITE --env SCCACHE_GCS_BUCKET=databend-ci --env SCCACHE_GCS_KEY_PREFIX=cache/sccache/
         before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
     - name: Run tests
@@ -74,9 +66,3 @@ runs:
         pip install dist/*.whl
         pip install pytest pyarrow pandas polars
         pytest -v tests/*
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: dist
-        path: src/bendpy/dist/*.whl

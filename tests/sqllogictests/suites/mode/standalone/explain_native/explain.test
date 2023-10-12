@@ -1,8 +1,8 @@
 statement ok
-drop table if exists t1
+drop table if exists t1 all
 
 statement ok
-drop table if exists t2
+drop table if exists t2 all
 
 statement ok
 create table t1 as select number as a, number as b from numbers(1)
