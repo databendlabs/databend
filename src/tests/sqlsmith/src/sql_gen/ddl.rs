@@ -24,6 +24,7 @@ use common_ast::ast::NullableConstraint;
 use common_ast::ast::TypeName;
 use rand::Rng;
 
+use super::Table;
 use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
@@ -145,6 +146,38 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             TypeName::Nullable(Box::new(ty))
         } else {
             ty
+        }
+    }
+
+    pub fn gen_data_type_name(&mut self) -> (TypeName, Option<NullableConstraint>) {
+        let i = self.rng.gen_range(0..=36);
+        if i <= 17 {
+            (
+                SIMPLE_COLUMN_TYPES[i].clone(),
+                Some(NullableConstraint::NotNull),
+            )
+        } else if i <= 35 {
+            (
+                SIMPLE_COLUMN_TYPES[i - 18].clone(),
+                Some(NullableConstraint::Null),
+            )
+        } else {
+            // TODO: add nested data types
+            let depth = self.rng.gen_range(1..=3);
+            (self.gen_nested_type(depth), None)
+        }
+    }
+
+    pub fn gen_new_column(&mut self, table: &Table) -> ColumnDefinition {
+        let field_num = table.schema.num_fields();
+        let new_column_name = Identifier::from_name(format!("cc{:?}", field_num));
+        let (data_type, nullable_constraint) = self.gen_data_type_name();
+        ColumnDefinition {
+            name: new_column_name,
+            data_type,
+            expr: None,
+            comment: None,
+            nullable_constraint,
         }
     }
 
