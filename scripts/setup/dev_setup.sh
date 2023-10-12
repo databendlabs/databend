@@ -580,7 +580,7 @@ if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 		cargo install cargo-quickinstall
 		cargo quickinstall cargo-binstall
 		while read -r tool; do
-			cargo binstall "$tool"
+			cargo binstall -y "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
 
