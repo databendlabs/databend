@@ -22,6 +22,7 @@ common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-users = { path = "../users" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 arrow-schema = { version = "46.0.0", features = ["serde"] }

@@ -482,7 +482,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         DataType::Timestamp
                     };
                     let expr = self.gen_expr(&expr_ty);
-                    let kind = match self.rng.gen_range(0..=6) {
+                    let kind = match self.rng.gen_range(0..=9) {
                         0 => IntervalKind::Year,
                         1 => IntervalKind::Quarter,
                         2 => IntervalKind::Month,
@@ -492,6 +492,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         6 => IntervalKind::Second,
                         7 => IntervalKind::Doy,
                         8 => IntervalKind::Dow,
+                        9 => IntervalKind::Week,
                         _ => unreachable!(),
                     };
                     Expr::Extract {

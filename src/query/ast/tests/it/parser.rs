@@ -687,6 +687,7 @@ fn test_expr() {
         r#"TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))"#,
         r#"trim(leading 'abc' from 'def')"#,
         r#"extract(year from d)"#,
+        r#"date_part(year, d)"#,
         r#"position('a' in str)"#,
         r#"substring(a from b for c)"#,
         r#"substring(a, b, c)"#,
