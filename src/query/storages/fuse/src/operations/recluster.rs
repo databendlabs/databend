@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::runtime::TrySpawn;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -27,12 +26,14 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_expression::TableSchemaRef;
+use common_meta_app::schema::CatalogInfo;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::ReclusterSink;
+use common_sql::executor::ReclusterTask;
 use common_sql::BloomIndexColumns;
-use log::info;
 use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::CompactSegmentInfo;
@@ -54,36 +55,15 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
-    /// The flow of Pipeline is as follows:
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
-    // └──────────┘     └───────────────┘     └─────────┘    │
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
-    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
-    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
-    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
-    // └──────────┘     └───────────────┘     └─────────┘                                             │
-    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
-    // │         ┌──────────────┐
-    // │    ┌───►│SerializeBlock├───┐
-    // │    │    └──────────────┘   │
-    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────────┐     ┌──────────┐
-    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│TableMutationAggr├────►│CommitSink│
-    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────────┘     └──────────┘
-    //      │    ┌──────────────┐   │
-    //      └───►│SerializeBlock├───┘
-    //           └──────────────┘
     #[async_backtrace::framed]
-    pub(crate) async fn do_recluster(
+    pub(crate) async fn build_recluster_mutator(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
         limit: Option<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<u64> {
+    ) -> Result<Option<ReclusterMutator>> {
         if self.cluster_key_meta.is_none() {
-            return Ok(0);
+            return Ok(None);
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -91,9 +71,16 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(0);
+            return Ok(None);
         };
 
+        let mut nodes_num = 1;
+        let cluster = ctx.get_cluster();
+        if !cluster.is_empty() {
+            nodes_num = cluster.nodes.len();
+        }
+
+        let schema = self.schema();
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let block_thresholds = self.get_block_thresholds();
         let block_per_seg =
@@ -108,9 +95,11 @@ impl FuseTable {
             .min(64.0);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
+            schema,
             threshold,
             block_thresholds,
             default_cluster_key_id,
+            nodes_num,
         )?;
 
         let segment_locations = snapshot.segments.clone();
@@ -119,8 +108,7 @@ impl FuseTable {
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
 
-        let mut need_recluster = false;
-        for chunk in segment_locations.chunks(limit) {
+        'F: for chunk in segment_locations.chunks(limit) {
             // read segments.
             let compact_segments = Self::segment_pruning(
                 &ctx,
@@ -153,8 +141,7 @@ impl FuseTable {
                     }
 
                     if mutator.target_select(vec![compact_segment]).await? {
-                        need_recluster = true;
-                        break;
+                        break 'F;
                     }
                 }
             } else {
@@ -162,51 +149,31 @@ impl FuseTable {
                 selected_segs.into_iter().for_each(|i| {
                     selected_segments.push(compact_segments[i].clone());
                 });
-                need_recluster = mutator.target_select(selected_segments).await?;
-            }
-
-            if need_recluster {
-                break;
+                if mutator.target_select(selected_segments).await? {
+                    break;
+                }
             }
         }
 
-        let block_metas: Vec<_> = mutator
-            .take_blocks()
-            .iter()
-            .map(|meta| (None, meta.clone()))
-            .collect();
-        let block_count = block_metas.len();
-        if block_count < 2 {
-            return Ok(0);
-        }
+        Ok(Some(mutator))
+    }
 
-        // Status.
-        {
-            let status = format!(
-                "recluster: select block files: {}, total bytes: {}, total rows: {}",
-                block_count, mutator.total_bytes, mutator.total_rows,
-            );
-            ctx.set_status_info(&status);
-            info!("{}", status);
-        }
-
-        let (statistics, parts) = self.read_partitions_with_metas(
-            ctx.clone(),
-            self.table_info.schema(),
-            None,
-            &block_metas,
-            block_count,
-            PruningStatistics::default(),
-        )?;
+    pub fn build_recluster_source(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        task: ReclusterTask,
+        catalog_info: CatalogInfo,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let block_thresholds = self.get_block_thresholds();
         let table_info = self.get_table_info();
-        let catalog_info = ctx.get_catalog(table_info.catalog()).await?.info();
-        let description = statistics.get_description(&table_info.desc);
+        let description = task.stats.get_description(&table_info.desc);
         let plan = DataSourcePlan {
             catalog_info,
             source_info: DataSourceInfo::TableSource(table_info.clone()),
             output_schema: table_info.schema(),
-            parts,
-            statistics,
+            parts: task.parts,
+            statistics: task.stats,
             description,
             tbl_args: self.table_args(),
             push_downs: None,
@@ -220,7 +187,7 @@ impl FuseTable {
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds, None)?;
+            self.get_cluster_stats_gen(ctx.clone(), task.level + 1, block_thresholds, None)?;
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
@@ -237,12 +204,12 @@ impl FuseTable {
         }
 
         // merge sort
-        let block_num = mutator
+        let block_num = task
             .total_bytes
             .div_ceil(block_thresholds.max_bytes_per_block);
         let final_block_size = std::cmp::min(
             // estimate block_size based on max_bytes_per_block.
-            mutator.total_rows / block_num,
+            task.total_rows / block_num,
             block_thresholds.max_rows_per_block,
         );
         let partial_block_size = if pipeline.output_len() > 1 {
@@ -277,8 +244,11 @@ impl FuseTable {
             None,
         )?;
 
-        let output_block_num = mutator.total_rows.div_ceil(final_block_size);
-        let max_threads = std::cmp::min(max_threads, output_block_num);
+        let output_block_num = task.total_rows.div_ceil(final_block_size);
+        let max_threads = std::cmp::min(
+            ctx.get_settings().get_max_threads()? as usize,
+            output_block_num,
+        );
         pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             let proc = TransformSerializeBlock::try_create(
@@ -289,22 +259,30 @@ impl FuseTable {
                 cluster_stats_gen.clone(),
             )?;
             proc.into_processor()
-        })?;
+        })
+    }
 
+    pub fn build_recluster_sink(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: ReclusterSink,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
         pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
             let aggregator = ReclusterAggregator::new(
-                &mutator,
-                self.get_operator(),
-                self.meta_location_generator().clone(),
-                block_per_seg,
+                self,
+                ctx.clone(),
+                plan.remained_blocks.clone(),
+                plan.removed_segment_indexes.clone(),
+                plan.removed_segment_summary.clone(),
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))
         })?;
 
-        let snapshot_gen = MutationGenerator::new(snapshot);
+        let snapshot_gen = MutationGenerator::new(plan.snapshot);
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,
@@ -316,8 +294,7 @@ impl FuseTable {
                 true,
                 None,
             )
-        })?;
-        Ok(block_count as u64)
+        })
     }
 
     pub async fn segment_pruning(

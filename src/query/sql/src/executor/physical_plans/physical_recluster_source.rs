@@ -12,22 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
-use storages_common_table_meta::meta::TableSnapshot;
 
-use crate::executor::physical_plans::common::MutationKind;
-use crate::executor::PhysicalPlan;
-
-// TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CommitSink {
-    pub input: Box<PhysicalPlan>,
-    pub snapshot: Arc<TableSnapshot>,
+pub struct ReclusterTask {
+    pub parts: Partitions,
+    pub stats: PartStatistics,
+    pub total_rows: usize,
+    pub total_bytes: usize,
+    pub level: i32,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReclusterSource {
+    pub tasks: Vec<ReclusterTask>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    pub mutation_kind: MutationKind,
-    pub merge_meta: bool,
 }

@@ -58,6 +58,7 @@ enum State {
     DeleteLeaf,
     ReplaceInto,
     Compact,
+    Recluster,
     Other,
 }
 
@@ -185,6 +186,15 @@ impl PhysicalPlanReplacer for Fragmenter {
         }
     }
 
+    fn replace_recluster_source(
+        &mut self,
+        plan: &common_sql::executor::ReclusterSource,
+    ) -> Result<PhysicalPlan> {
+        self.state = State::Recluster;
+
+        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
+    }
+
     fn replace_compact_partial(
         &mut self,
         plan: &common_sql::executor::CompactPartial,
@@ -265,6 +275,7 @@ impl PhysicalPlanReplacer for Fragmenter {
             State::Other => FragmentType::Intermediate,
             State::ReplaceInto => FragmentType::ReplaceInto,
             State::Compact => FragmentType::Compact,
+            State::Recluster => FragmentType::Recluster,
         };
         self.state = State::Other;
         let exchange = Self::get_exchange(

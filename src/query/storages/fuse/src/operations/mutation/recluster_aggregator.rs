@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::runtime::execute_futures_in_parallel;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -39,10 +40,12 @@ use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
-use crate::operations::ReclusterMutator;
 use crate::statistics::reduce_block_metas;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
+use crate::FuseTable;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct ReclusterAggregator {
     ctx: Arc<dyn TableContext>,
@@ -138,21 +141,25 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
 
 impl ReclusterAggregator {
     pub fn new(
-        mutator: &ReclusterMutator,
-        dal: Operator,
-        location_gen: TableMetaLocationGenerator,
-        block_per_seg: usize,
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        merged_blocks: Vec<Arc<BlockMeta>>,
+        removed_segment_indexes: Vec<usize>,
+        removed_statistics: Statistics,
     ) -> Self {
+        let block_per_seg =
+            table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+        let default_cluster_key = table.cluster_key_meta.clone().unwrap().0;
         ReclusterAggregator {
-            ctx: mutator.ctx.clone(),
-            dal,
-            location_gen,
-            default_cluster_key: mutator.cluster_key_id,
-            block_thresholds: mutator.block_thresholds,
+            ctx,
+            dal: table.get_operator(),
+            location_gen: table.meta_location_generator().clone(),
+            default_cluster_key,
+            block_thresholds: table.get_block_thresholds(),
             block_per_seg,
-            merged_blocks: mutator.remained_blocks.clone(),
-            removed_segment_indexes: mutator.removed_segment_indexes.clone(),
-            removed_statistics: mutator.removed_segment_summary.clone(),
+            merged_blocks,
+            removed_segment_indexes,
+            removed_statistics,
             start_time: Instant::now(),
             abort_operation: AbortOperation::default(),
         }

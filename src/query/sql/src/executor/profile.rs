@@ -513,7 +513,9 @@ fn flatten_plan_node_profile(
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)
         | PhysicalPlan::ReplaceInto(_)
-        | PhysicalPlan::CompactPartial(_) => unreachable!(),
+        | PhysicalPlan::CompactPartial(_)
+        | PhysicalPlan::ReclusterSource(_)
+        | PhysicalPlan::ReclusterSink(_) => unreachable!(),
     }
 
     Ok(())

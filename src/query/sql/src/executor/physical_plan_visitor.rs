@@ -42,6 +42,8 @@ use crate::executor::physical_plans::physical_merge_into::MergeIntoSource;
 use crate::executor::physical_plans::physical_project::Project;
 use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
+use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
+use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
@@ -87,7 +89,21 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
+            PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
+            PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
         }
+    }
+
+    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
+    }
+
+    fn replace_recluster_sink(&mut self, plan: &ReclusterSink) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
@@ -472,7 +488,11 @@ impl PhysicalPlan {
                 PhysicalPlan::TableScan(_)
                 | PhysicalPlan::AsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
-                | PhysicalPlan::ConstantTableScan(_) => {}
+                | PhysicalPlan::ConstantTableScan(_)
+                | PhysicalPlan::ReclusterSource(_)
+                | PhysicalPlan::ExchangeSource(_)
+                | PhysicalPlan::CompactPartial(_)
+                | PhysicalPlan::DeletePartial(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -510,7 +530,6 @@ impl PhysicalPlan {
                 PhysicalPlan::Exchange(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::ExchangeSource(_) => {}
                 PhysicalPlan::ExchangeSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -541,8 +560,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::CompactPartial(_) => {}
-                PhysicalPlan::DeletePartial(_) => {}
+                PhysicalPlan::ReclusterSink(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
                 PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
