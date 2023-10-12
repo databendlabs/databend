@@ -58,6 +58,7 @@ use crate::IndexType;
 use crate::Metadata;
 use crate::ScalarExpr;
 use crate::TableInternalColumn;
+use crate::TypeCheck;
 use crate::VirtualColumn;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
@@ -340,7 +341,7 @@ impl PhysicalPlanBuilder {
                 let predicates = predicates
                     .iter()
                     .map(|p| {
-                        p.as_raw_expr()?
+                        p.as_raw_expr()
                             .project_column_ref(|col| col.column_name.clone())
                             .type_check(&data_schema)
                     })
@@ -420,10 +421,12 @@ impl PhysicalPlanBuilder {
                     })
                     .expect("there should be at least one predicate in prewhere");
 
-                let filter =
-                    cast_expr_to_non_null_boolean(predicate.as_raw_expr().project_column_ref(
-                        |col| col.column_name.clone().type_check(&data_schema)?,
-                    ))?;
+                let filter = cast_expr_to_non_null_boolean(
+                    predicate
+                        .as_raw_expr()
+                        .project_column_ref(|col| col.column_name.clone())
+                        .type_check(&data_schema)?,
+                )?;
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 

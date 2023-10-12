@@ -86,7 +86,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| {
                     let expr = scalar
-                        .resolve_and_check(input_schema.as_ref())?
+                        .type_check(input_schema.as_ref())?
                         .project_column_ref(|index| {
                             input_schema.index_of(&index.to_string()).unwrap()
                         });
