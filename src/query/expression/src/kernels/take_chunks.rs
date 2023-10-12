@@ -771,6 +771,19 @@ impl Column {
 
     pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {
         let num_rows = indices.len();
+        // Fast path: avoid iterating column to generate a new bitmap.
+        for bitmap in col.iter() {
+            // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
+            // we can just slice it.
+            if num_rows <= bitmap.len()
+                && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+            {
+                let mut bitmap = bitmap.clone();
+                bitmap.slice(0, num_rows);
+                return bitmap;
+            }
+        }
+
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
         let mut builder_len = 0;
