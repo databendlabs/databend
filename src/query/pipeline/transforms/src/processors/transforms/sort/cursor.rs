@@ -17,6 +17,7 @@ use std::cmp::Ordering;
 use super::rows::Rows;
 
 /// A cursor point to a certain row in a data block.
+#[derive(Clone)]
 pub struct Cursor<R: Rows> {
     pub input_index: usize,
     pub row_index: usize,
@@ -83,16 +84,5 @@ impl<R: Rows> Eq for Cursor<R> {}
 impl<R: Rows> PartialOrd for Cursor<R> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-impl<R: Clone + Rows> Clone for Cursor<R> {
-    fn clone(&self) -> Self {
-        Self {
-            input_index: self.input_index,
-            row_index: self.row_index,
-            num_rows: self.num_rows,
-            rows: self.rows.clone(),
-        }
     }
 }
