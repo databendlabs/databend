@@ -23,8 +23,10 @@ use std::str::FromStr;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 use std::time::Instant;
 use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
 use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
@@ -71,6 +73,7 @@ use common_storages_parquet::Parquet2Table;
 use common_storages_parquet::ParquetRSTable;
 use common_storages_result_cache::ResultScan;
 use common_storages_stage::StageTable;
+use common_users::GrantObjectVisibilityChecker;
 use common_users::UserApiProvider;
 use dashmap::mapref::multiple::RefMulti;
 use dashmap::DashMap;
@@ -263,8 +266,20 @@ impl QueryContext {
         ua.clone()
     }
 
+    pub fn get_query_duration_ms(&self) -> i64 {
+        let query_start_time = convert_query_log_timestamp(self.shared.created_time);
+        let finish_time = *self.shared.finish_time.read();
+        let finish_time = finish_time.unwrap_or_else(SystemTime::now);
+        let finish_time = convert_query_log_timestamp(finish_time);
+        (finish_time - query_start_time) / 1_000
+    }
+
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn set_finish_time(&self, time: SystemTime) {
+        *self.shared.finish_time.write() = Some(time)
     }
 
     pub fn evict_table_from_cache(&self, catalog: &str, database: &str, table: &str) -> Result<()> {
@@ -488,8 +503,8 @@ impl TableContext for QueryContext {
         self.shared.get_current_role()
     }
 
-    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
-        self.shared.session.get_all_available_roles().await
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
+        self.shared.session.get_visibility_checker().await
     }
 
     fn get_fuse_version(&self) -> String {
@@ -755,7 +770,7 @@ impl TableContext for QueryContext {
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {
-        if matches!(self.get_query_kind(), QueryKind::Copy) {
+        if matches!(self.get_query_kind(), QueryKind::CopyIntoTable) {
             self.shared.copy_status.add_chunk(file_path, file_status);
         }
         Ok(())
@@ -782,4 +797,10 @@ impl std::fmt::Debug for QueryContext {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.get_current_user())
     }
+}
+
+pub fn convert_query_log_timestamp(time: SystemTime) -> i64 {
+    time.duration_since(UNIX_EPOCH)
+        .unwrap_or(Duration::new(0, 0))
+        .as_micros() as i64
 }

@@ -49,7 +49,6 @@ use jwt_simple::algorithms::RSAKeyPairLike;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::claims::NoCustomClaims;
 use jwt_simple::prelude::Clock;
-use num::ToPrimitive;
 use poem::http::header;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -559,8 +558,6 @@ async fn test_insert() -> Result<()> {
     Ok(())
 }
 
-// Wait for https://github.com/datafuselabs/databend/issues/7831 to be fixed, then remove ignore
-#[ignore]
 #[tokio::test(flavor = "current_thread")]
 async fn test_query_log() -> Result<()> {
     let config = ConfigBuilder::create().build();
@@ -574,23 +571,37 @@ async fn test_query_log() -> Result<()> {
         .with(session_middleware);
 
     let sql = "create table t1(a int)";
-    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 10).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_none(), "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Succeeded);
     assert!(result.data.is_empty(), "{:?}", result);
+    let result_type_2 = result;
 
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert!(result.error.is_some(), "{:?}", result);
-    assert!(result.next_uri.is_none(), "{:?}", result);
+    assert_eq!(result.state, ExecuteStateKind::Failed);
+    let result_type_3 = result;
 
-    let sql = "select query_text, exception_code, exception_text, stack_trace  from system.query_log where log_type=3";
+    let sql = "select query_text, query_duration_ms from system.query_log where log_type=2";
+    let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
+    assert_eq!(status, StatusCode::OK, "{:?}", result);
+    assert_eq!(
+        result.data[0][1].as_str().unwrap(),
+        result_type_2.stats.running_time_ms.to_string(),
+    );
+
+    let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=3";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
     assert!(
-        result.data[0][0].as_str().unwrap().contains("create table"),
+        result.data[0][0]
+            .as_str()
+            .unwrap()
+            .to_lowercase()
+            .contains("create table"),
         "{:?}",
         result
     );
@@ -604,22 +615,23 @@ async fn test_query_log() -> Result<()> {
         result
     );
     assert_eq!(
-        result.data[0][1].as_u64().unwrap(),
-        ErrorCode::TableAlreadyExists("").code().to_u64().unwrap(),
+        result.data[0][1].as_str().unwrap(),
+        ErrorCode::TableAlreadyExists("").code().to_string(),
         "{:?}",
         result
     );
-    assert!(
-        result.data[0][3].as_str().unwrap().to_lowercase().contains(
-            if std::env::var("RUST_BACKTRACE").is_ok() {
-                "backtrace"
-            } else {
-                "<disabled>"
-            }
-        ),
+    assert_eq!(
+        result.data[0][4].as_str().unwrap(),
+        result_type_3.stats.running_time_ms.to_string(),
         "{:?}",
         result
     );
+    Ok(())
+}
+#[tokio::test(flavor = "current_thread")]
+async fn test_query_log_killed() -> Result<()> {
+    let config = ConfigBuilder::create().build();
+    let _guard = TestGlobalServices::setup(config.clone()).await?;
 
     let session_middleware =
         HTTPSessionMiddleware::create(HttpHandlerKind::Query, AuthMgr::instance());
@@ -637,7 +649,7 @@ async fn test_query_log() -> Result<()> {
     let response = get_uri(&ep, result.kill_uri.as_ref().unwrap()).await;
     assert_eq!(response.status(), StatusCode::OK, "{:?}", result);
 
-    let sql = "select query_text, exception_code, exception_text, stack_trace from system.query_log where log_type=4";
+    let sql = "select query_text, exception_code, exception_text, stack_trace, query_duration_ms from system.query_log where log_type=4";
     let (status, result) = post_sql_to_endpoint(&ep, sql, 3).await?;
     assert_eq!(status, StatusCode::OK, "{:?}", result);
     assert_eq!(result.data.len(), 1, "{:?}", result);
@@ -656,8 +668,8 @@ async fn test_query_log() -> Result<()> {
         result
     );
     assert_eq!(
-        result.data[0][1].as_u64().unwrap(),
-        ErrorCode::AbortedQuery("").code().to_u64().unwrap(),
+        result.data[0][1].as_str().unwrap(),
+        ErrorCode::AbortedQuery("").code().to_string(),
         "{:?}",
         result
     );

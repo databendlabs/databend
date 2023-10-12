@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 use std::time::SystemTime;
 
 use common_base::base::tokio::sync::RwLock;
@@ -111,12 +109,11 @@ pub struct ExecuteStopped {
     pub stats: Progresses,
     pub affect: Option<QueryAffect>,
     pub reason: Result<()>,
-    pub stop_time: Instant,
+    pub query_duration_ms: i64,
 }
 
 pub struct Executor {
     pub query_id: String,
-    pub start_time: Instant,
     pub state: ExecuteState,
 }
 
@@ -137,10 +134,12 @@ impl Executor {
         }
     }
 
-    pub fn elapsed(&self) -> Duration {
+    pub fn get_query_duration_ms(&self) -> i64 {
         match &self.state {
-            Starting(_) | Running(_) => Instant::now() - self.start_time,
-            Stopped(f) => f.stop_time - self.start_time,
+            Starting(ExecuteStarting { ctx }) | Running(ExecuteRunning { ctx, .. }) => {
+                ctx.get_query_duration_ms()
+            }
+            Stopped(f) => f.query_duration_ms,
         }
     }
 
@@ -179,7 +178,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Default::default(),
                     reason,
-                    stop_time: Instant::now(),
+                    query_duration_ms: s.ctx.get_query_duration_ms(),
                     affect: Default::default(),
                 }))
             }
@@ -198,7 +197,7 @@ impl Executor {
                 guard.state = Stopped(Box::new(ExecuteStopped {
                     stats: Progresses::from_context(&r.ctx),
                     reason,
-                    stop_time: Instant::now(),
+                    query_duration_ms: r.ctx.get_query_duration_ms(),
                     affect: r.ctx.get_affect(),
                 }))
             }

@@ -59,5 +59,7 @@ async fn test_meta_embedded_single() -> anyhow::Result<()> {
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
     ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
-    BackgroundApiTestSuite::test_single_node(builder).await
+    BackgroundApiTestSuite::test_single_node(builder).await?;
+
+    Ok(())
 }

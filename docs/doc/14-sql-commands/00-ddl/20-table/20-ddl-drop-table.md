@@ -18,6 +18,9 @@ DROP TABLE [IF EXISTS] [db.]name
 :::caution
 
 `DROP TABLE` only remove the table schema from meta service, we do not remove the underlying data from the storage.
+If you want to delete the data and table all, please use:
+
+`DROP TABLE <table_name> ALL;`
 
 :::
 

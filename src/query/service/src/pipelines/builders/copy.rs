@@ -29,7 +29,7 @@ use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::metrics::copy::metrics_inc_copy_purge_files_cost_milliseconds;
@@ -49,7 +49,7 @@ use crate::sessions::QueryContext;
 pub fn build_append_data_pipeline(
     ctx: Arc<QueryContext>,
     main_pipeline: &mut Pipeline,
-    plan: &CopyIntoTable,
+    plan: &CopyIntoTablePhysicalPlan,
     source_schema: Arc<DataSchema>,
     to_table: Arc<dyn Table>,
 ) -> Result<()> {

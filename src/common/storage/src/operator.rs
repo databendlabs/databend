@@ -39,6 +39,7 @@ use common_meta_app::storage::StorageRedisConfig;
 use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
 use common_metrics::load_global_prometheus_registry;
+use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -234,12 +235,9 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
-        return Err(Error::new(
-            ErrorKind::InvalidInput,
-            anyhow!(
-                "region for s3 storage is not set and failed to auto detect, please check and set it manually"
-            ),
-        ));
+        warn!(
+            "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
+        )
     }
 
     // Credential.

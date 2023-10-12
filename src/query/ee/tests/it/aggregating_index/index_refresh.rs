@@ -307,14 +307,21 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_agg_index() -> Result<()> {
+    test_sync_agg_index_after_insert().await?;
+    test_sync_agg_index_after_copy_into().await?;
+
+    Ok(())
+}
+
+async fn test_sync_agg_index_after_insert() -> Result<()> {
     let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
     ctx.get_settings()
         .set_enable_refresh_aggregating_index_after_write(true)?;
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
-
+    let ctx = fixture.ctx();
     // Create table
     execute_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'",
     )
     .await?;
@@ -323,7 +330,7 @@ async fn test_sync_agg_index() -> Result<()> {
     let index_name = "index0";
 
     let index_id0 = create_index(
-        fixture.ctx(),
+        ctx.clone(),
         index_name,
         "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
         true,
@@ -334,7 +341,7 @@ async fn test_sync_agg_index() -> Result<()> {
     let index_name = "index1";
 
     let index_id1 = create_index(
-        fixture.ctx(),
+        ctx.clone(),
         index_name,
         "SELECT a, SUM(b) from t0 WHERE c > 1 GROUP BY a",
         true,
@@ -343,7 +350,7 @@ async fn test_sync_agg_index() -> Result<()> {
 
     // Insert data
     execute_sql(
-        fixture.ctx(),
+        ctx.clone(),
         "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
     )
     .await?;
@@ -364,14 +371,14 @@ async fn test_sync_agg_index() -> Result<()> {
     // Check aggregating index_0 is correct.
     {
         let res = execute_sql(
-            fixture.ctx(),
+            ctx.clone(),
             "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 GROUP BY b",
         )
         .await?;
         let data_blocks: Vec<DataBlock> = res.try_collect().await?;
 
         let agg_res = execute_sql(
-            fixture.ctx(),
+            ctx.clone(),
             &format!(
                 "SELECT * FROM 'fs://{}'",
                 agg_index_path_0.join(&indexes_0[0]).to_str().unwrap()
@@ -380,20 +387,24 @@ async fn test_sync_agg_index() -> Result<()> {
         .await?;
         let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
 
-        assert_two_blocks_sorted_eq_with_name("refresh index", &data_blocks, &agg_data_blocks);
+        assert_two_blocks_sorted_eq_with_name(
+            "test_sync_agg_index_after_insert",
+            &data_blocks,
+            &agg_data_blocks,
+        );
     }
 
     // Check aggregating index_1 is correct.
     {
         let res = execute_sql(
-            fixture.ctx(),
+            ctx.clone(),
             "SELECT a, SUM_STATE(b) from t0 WHERE c > 1 GROUP BY a",
         )
         .await?;
         let data_blocks: Vec<DataBlock> = res.try_collect().await?;
 
         let agg_res = execute_sql(
-            fixture.ctx(),
+            ctx.clone(),
             &format!(
                 "SELECT * FROM 'fs://{}'",
                 agg_index_path_1.join(&indexes_1[0]).to_str().unwrap()
@@ -402,11 +413,15 @@ async fn test_sync_agg_index() -> Result<()> {
         .await?;
         let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
 
-        assert_two_blocks_sorted_eq_with_name("refresh index", &data_blocks, &agg_data_blocks);
+        assert_two_blocks_sorted_eq_with_name(
+            "test_sync_agg_index_after_insert",
+            &data_blocks,
+            &agg_data_blocks,
+        );
     }
 
     // Insert more data with insert into ... select ...
-    execute_sql(fixture.ctx(), "INSERT INTO t0 SELECT * FROM t0").await?;
+    execute_sql(ctx.clone(), "INSERT INTO t0 SELECT * FROM t0").await?;
 
     let blocks = collect_file_names(&block_path)?;
 
@@ -417,6 +432,72 @@ async fn test_sync_agg_index() -> Result<()> {
     // check index1
     let indexes_1 = collect_file_names(&agg_index_path_1)?;
     assert_eq!(blocks, indexes_1);
+
+    Ok(())
+}
+
+async fn test_sync_agg_index_after_copy_into() -> Result<()> {
+    let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
+    ctx.get_settings()
+        .set_enable_refresh_aggregating_index_after_write(true)?;
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+    let ctx = fixture.ctx();
+
+    // Create table
+    execute_sql(
+        ctx.clone(),
+        "CREATE TABLE books (title VARCHAR, author VARCHAR, date VARCHAR) storage_format = 'parquet'",
+    )
+        .await?;
+
+    // Create agg index `index0`
+    let index_name = "index0";
+
+    let index_id0 = create_index(
+        ctx.clone(),
+        index_name,
+        "SELECT MAX(title) from books",
+        true,
+    )
+    .await?;
+
+    // Copy into data
+    execute_sql(
+        ctx.clone(),
+        "COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);",
+    )
+        .await?;
+
+    let block_path = find_block_path(&root)?.unwrap();
+    let blocks = collect_file_names(&block_path)?;
+
+    // Get aggregating index files
+    let agg_index_path_0 = find_agg_index_path(&root, index_id0)?.unwrap();
+    let indexes_0 = collect_file_names(&agg_index_path_0)?;
+
+    assert_eq!(blocks, indexes_0);
+
+    // Check aggregating index_0 is correct.
+    {
+        let res = execute_sql(ctx.clone(), "SELECT MAX_STATE(title) from books").await?;
+        let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+
+        let agg_res = execute_sql(
+            ctx.clone(),
+            &format!(
+                "SELECT * FROM 'fs://{}'",
+                agg_index_path_0.join(&indexes_0[0]).to_str().unwrap()
+            ),
+        )
+        .await?;
+        let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
+
+        assert_two_blocks_sorted_eq_with_name(
+            "test_sync_agg_index_after_copy_into",
+            &data_blocks,
+            &agg_data_blocks,
+        );
+    }
 
     Ok(())
 }

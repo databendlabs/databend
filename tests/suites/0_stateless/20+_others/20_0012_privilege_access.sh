@@ -113,9 +113,9 @@ echo "GRANT SELECT ON system.fuse_block TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
 
 ## Drop table.
-echo "drop table default.t20_0012" | $MYSQL_CLIENT_CONNECT
-echo "drop table default.t20_0012_a" | $MYSQL_CLIENT_CONNECT
-echo "drop table default.t20_0012_b" | $MYSQL_CLIENT_CONNECT
+echo "drop table default.t20_0012 all" | $MYSQL_CLIENT_CONNECT
+echo "drop table default.t20_0012_a all" | $MYSQL_CLIENT_CONNECT
+echo "drop table default.t20_0012_b all" | $MYSQL_CLIENT_CONNECT
 echo "drop view default2.v_t20_0012" | $MYSQL_CLIENT_CONNECT
 
 ## Drop database.

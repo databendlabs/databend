@@ -1,5 +1,5 @@
 statement ok
-drop table if exists t
+drop table if exists t all
 
 statement ok
 set timezone = 'UTC'
@@ -993,3 +993,18 @@ query T
 select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
 ----
 2022-02-04 00:58:59.000000
+
+query I
+select to_week_of_year('2017-01-01');
+----
+52
+
+query I
+SELECT to_week_of_year('1900-12-31 23:59:59.999900');
+----
+1
+
+query I
+SELECT to_week_of_year('2016-01-02T23:39:20.123-07:00');
+----
+53

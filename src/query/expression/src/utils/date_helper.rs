@@ -427,9 +427,17 @@ pub struct ToMinute;
 pub struct ToSecond;
 pub struct ToUnixTimestamp;
 
+pub struct ToWeekOfYear;
+
 impl ToNumber<u32> for ToYYYYMM {
     fn to_number(dt: &DateTime<Tz>) -> u32 {
         dt.year() as u32 * 100 + dt.month()
+    }
+}
+
+impl ToNumber<u32> for ToWeekOfYear {
+    fn to_number(dt: &DateTime<Tz>) -> u32 {
+        dt.iso_week().week()
     }
 }
 

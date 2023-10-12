@@ -262,6 +262,15 @@ impl Column {
     pub fn take_boolean_types<I>(col: &Bitmap, indices: &[I]) -> Bitmap
     where I: common_arrow::arrow::types::Index {
         let num_rows = indices.len();
+        // Fast path: avoid iterating column to generate a new bitmap.
+        // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
+        // we can just slice it.
+        if num_rows <= col.len() && (col.unset_bits() == 0 || col.unset_bits() == col.len()) {
+            let mut bitmap = col.clone();
+            bitmap.slice(0, num_rows);
+            return bitmap;
+        }
+
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
         let mut builder_len = 0;

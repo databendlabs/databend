@@ -2,7 +2,7 @@ statement ok
 use default
 
 statement ok
-drop table if exists t1
+drop table if exists t1 all
 
 statement ok
 create table t1(a integer, b integer, c integer, d integer, e integer)
@@ -30,4 +30,4 @@ order by col1,col5,col3,col2,col4
 106     1   333  1067   109
 
 statement ok
-drop table if exists t1
+drop table if exists t1 all

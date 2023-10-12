@@ -14,9 +14,7 @@
 
 use std::fmt::Write;
 use std::sync::Arc;
-use std::time::Duration;
 use std::time::SystemTime;
-use std::time::UNIX_EPOCH;
 
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -28,6 +26,7 @@ use log::error;
 use log::info;
 use serde_json;
 
+use crate::sessions::convert_query_log_timestamp;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -187,6 +186,7 @@ impl InterpreterQueryLog {
     }
 
     pub fn log_finish(ctx: &QueryContext, now: SystemTime, err: Option<ErrorCode>) -> Result<()> {
+        ctx.set_finish_time(now);
         // User.
         let handler_type = ctx.get_current_session().get_type().to_string();
         let tenant_id = GlobalConfig::instance().query.tenant_id.clone();
@@ -206,7 +206,7 @@ impl InterpreterQueryLog {
         let event_time = convert_query_log_timestamp(now);
         let event_date = (event_time / (24 * 3_600_000_000)) as i32;
         let query_start_time = convert_query_log_timestamp(ctx.get_created_time());
-        let query_duration_ms = (event_time - query_start_time) / 1_000;
+        let query_duration_ms = ctx.get_query_duration_ms();
         let data_metrics = ctx.get_data_metrics();
 
         let written_rows = ctx.get_write_progress_value().rows as u64;
@@ -315,10 +315,4 @@ impl InterpreterQueryLog {
             extra: "".to_string(),
         })
     }
-}
-
-fn convert_query_log_timestamp(time: SystemTime) -> i64 {
-    time.duration_since(UNIX_EPOCH)
-        .unwrap_or(Duration::new(0, 0))
-        .as_micros() as i64
 }
