@@ -103,6 +103,7 @@ use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::table_test_fixture::execute_query;
@@ -493,7 +494,7 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>> {
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
     }
 

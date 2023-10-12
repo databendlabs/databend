@@ -59,7 +59,7 @@ impl Interpreter for DropRoleInterpreter {
         let session = self.ctx.get_current_session();
         if let Some(current_role) = session.get_current_role() {
             if current_role.name == role_name {
-                session.unset_current_role();
+                session.unset_current_role().await?;
             }
         }
 
