@@ -578,8 +578,9 @@ if [[ "$INSTALL_CHECK_TOOLS" == "true" ]]; then
 	if [[ -f scripts/setup/rust-tools.txt ]]; then
 		export RUSTFLAGS="-C target-feature=-crt-static"
 		cargo install cargo-quickinstall
+		cargo quickinstall cargo-binstall
 		while read -r tool; do
-			cargo quickinstall "$tool"
+			cargo binstall "$tool"
 		done <scripts/setup/rust-tools.txt
 	fi
 
