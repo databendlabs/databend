@@ -266,6 +266,8 @@ impl AccessChecker for PrivilegeAccess {
                         true,
                     )
                     .await?;
+                // TODO(liyz): need only check the create privilege on the target database? the target
+                // table may still not existed yet.
                 session
                     .validate_privilege(
                         &GrantObject::Table(

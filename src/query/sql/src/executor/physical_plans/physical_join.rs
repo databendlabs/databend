@@ -15,15 +15,16 @@
 use common_exception::Result;
 
 use crate::binder::JoinPredicate;
+use crate::executor::explain::PlanStatsInfo;
+use crate::executor::PhysicalPlan;
+use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
 use crate::plans::JoinType;
+use crate::ColumnSet;
 use crate::ScalarExpr;
-
-pub mod hash_join;
-pub mod range_join;
 
 pub enum PhysicalJoinType {
     Hash,
@@ -95,4 +96,64 @@ fn check_condition(
         }
     }
     other_conditions.push(expr.clone());
+}
+
+impl PhysicalPlanBuilder {
+    pub(crate) async fn build_join(
+        &mut self,
+        s_expr: &SExpr,
+        join: &crate::plans::Join,
+        required: ColumnSet,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        // 1. Prune unused Columns.
+        let column_projections = required.clone().into_iter().collect::<Vec<_>>();
+        let others_required = join
+            .non_equi_conditions
+            .iter()
+            .fold(required.clone(), |acc, v| {
+                acc.union(&v.used_columns()).cloned().collect()
+            });
+        let pre_column_projections = others_required.clone().into_iter().collect::<Vec<_>>();
+        // Include columns referenced in left conditions and right conditions.
+        let left_required = join
+            .left_conditions
+            .iter()
+            .fold(required.clone(), |acc, v| {
+                acc.union(&v.used_columns()).cloned().collect()
+            })
+            .union(&others_required)
+            .cloned()
+            .collect();
+        let right_required = join
+            .right_conditions
+            .iter()
+            .fold(required, |acc, v| {
+                acc.union(&v.used_columns()).cloned().collect()
+            })
+            .union(&others_required)
+            .cloned()
+            .collect();
+
+        // 2. Build physical plan.
+        // Choose physical join type by join conditions
+        let physical_join = physical_join(join, s_expr)?;
+        match physical_join {
+            PhysicalJoinType::Hash => {
+                self.build_hash_join(
+                    join,
+                    s_expr,
+                    (left_required, right_required),
+                    pre_column_projections,
+                    column_projections,
+                    stat_info,
+                )
+                .await
+            }
+            PhysicalJoinType::RangeJoin(range, other) => {
+                self.build_range_join(s_expr, left_required, right_required, range, other)
+                    .await
+            }
+        }
+    }
 }
