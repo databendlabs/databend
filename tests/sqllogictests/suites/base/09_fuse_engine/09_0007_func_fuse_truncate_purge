@@ -25,12 +25,12 @@ select count(*) from fuse_snapshot('db_09_0007', 't')
 3
 
 statement ok
-truncate table `t`
+truncate table `t` purge
 
 query I
 select count(*) from fuse_snapshot('db_09_0007', 't')
 ----
-4
+1
 
 statement ok
 select * from t

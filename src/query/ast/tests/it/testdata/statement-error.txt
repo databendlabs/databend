@@ -109,7 +109,7 @@ error:
   --> SQL:1:21
   |
 1 | truncate table a.b.c.d
-  |                     ^ expected `FORMAT` or `;`
+  |                     ^ expected `PURGE`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -121,7 +121,7 @@ error:
 1 | truncate a
   | -------- ^ expected `TABLE`
   | |         
-  | while parsing `TRUNCATE TABLE [<database>.]<table>`
+  | while parsing `TRUNCATE TABLE [<database>.]<table> [PURGE]`
 
 
 ---------- Input ----------

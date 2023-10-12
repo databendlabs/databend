@@ -105,4 +105,4 @@ for i in "${hits_statements[@]}"; do
 done
 
 ## Clean up
-echo "drop table if exists hits;" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists hits all;" | $MYSQL_CLIENT_CONNECT

@@ -77,7 +77,7 @@ async fn test_fuse_snapshot_analyze_and_truncate() -> Result<()> {
             .get_table(ctx.get_tenant().as_str(), &db, &tbl)
             .await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        fuse_table.truncate(ctx).await?;
+        fuse_table.truncate(ctx, false).await?;
     }
 
     // optimize after truncate table, ts file location will become None

@@ -214,8 +214,8 @@ pub trait Table: Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
-        let _ = ctx;
+    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
+        let (_, _) = (ctx, purge);
         Ok(())
     }
 
