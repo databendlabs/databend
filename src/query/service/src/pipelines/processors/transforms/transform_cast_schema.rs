@@ -57,7 +57,6 @@ where Self: Transform
                     display_name: from.name().clone(),
                 };
                 if from != to {
-                    println!("from: {:?}, to: {:?}", from, to);
                     Expr::Cast {
                         span: None,
                         is_try: false,
