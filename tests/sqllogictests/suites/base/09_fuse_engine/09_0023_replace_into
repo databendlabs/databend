@@ -433,9 +433,68 @@ select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
 statement ok
 drop table t;
 
+# delete when
+
+statement ok
+drop table if exists t;
+
+statement ok
+drop table if exists s;
+
+statement ok
+create table t(c int);
+
+statement ok
+create table s(c1 int , c2 int);
+
+statement ok
+insert into s values(1,2), (3, 4);
+
+# column c1 used for delete, column c2 used for insert or update
+statement ok
+replace into t on(c) delete when c1 = 1 select * from s;
+
+query I
+select * from t;
+----
+4
+
+statement ok
+replace into t on(c) delete when c1 = 0 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+4
+
+statement ok
+replace into t on(c) delete when c1 = 3 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+
+# column c2 used for delete, column c1 used for insert or update
+statement ok
+replace into t on(c) delete when c2 = 0 select * from s;
+
+query I
+select * from t order by c;
+----
+1
+2
+3
+
+statement ok
+replace into t on(c) delete when c2 = 2 select * from s;
+
+query I
+select * from t order by c;
+----
+2
+3
+
 statement ok
 DROP DATABASE db_09_0023
-
-
-
-

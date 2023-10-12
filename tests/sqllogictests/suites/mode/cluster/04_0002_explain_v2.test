@@ -2,10 +2,10 @@ statement ok
 set prefer_broadcast_join = 0
 
 statement ok
-drop table if exists t1;
+drop table if exists t1 all;
 
 statement ok
-drop table if exists t2;
+drop table if exists t2 all;
 
 statement ok
 create table t1(a int not null, b int not null);

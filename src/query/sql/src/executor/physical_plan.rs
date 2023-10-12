@@ -91,16 +91,16 @@ pub enum PhysicalPlan {
 
     /// Replace
     AsyncSourcer(AsyncSourcerPlan),
-    Deduplicate(Deduplicate),
-    ReplaceInto(ReplaceInto),
+    Deduplicate(Box<Deduplicate>),
+    ReplaceInto(Box<ReplaceInto>),
 
     /// MergeInto
     MergeIntoSource(MergeIntoSource),
-    MergeInto(MergeInto),
+    MergeInto(Box<MergeInto>),
 
     /// Compact
-    CompactPartial(CompactPartial),
-    CommitSink(CommitSink),
+    CompactPartial(Box<CompactPartial>),
+    CommitSink(Box<CommitSink>),
 }
 
 impl PhysicalPlan {
