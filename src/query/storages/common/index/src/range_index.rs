@@ -83,6 +83,7 @@ impl RangeIndex {
             .into_iter()
             .map(|(name, ty)| {
                 let column_ids = self.schema.leaf_columns_of(&name);
+                assert!(!column_ids.is_empty());
                 let stats = column_ids
                     .iter()
                     .filter_map(|column_id| match stats.get(column_id) {
