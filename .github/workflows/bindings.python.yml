@@ -36,13 +36,11 @@ jobs:
           version: ${{ inputs.tag }}
       - name: Publish to PyPI
         if: inputs.tag
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --skip-existing *
-          working-directory: src/bendpy
+          skip-existing: true
+          password: ${{ secrets.PYPI_PASSWORD }}
+          packages-dir: src/bendpy/dist
 
   macos:
     if: inputs.tag
@@ -63,10 +61,8 @@ jobs:
           version: ${{ inputs.tag }}
       - name: Publish to PyPI
         if: inputs.tag
-        env:
-          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
-        uses: PyO3/maturin-action@v1
+        uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          command: upload
-          args: --skip-existing *
-          working-directory: src/bendpy
+          skip-existing: true
+          password: ${{ secrets.PYPI_PASSWORD }}
+          packages-dir: src/bendpy/dist
