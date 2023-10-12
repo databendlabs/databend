@@ -996,7 +996,7 @@ impl MetaNode {
     #[minitrace::trace]
     pub async fn handle_forwardable_request(
         &self,
-        req: ForwardRequest,
+        req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaAPIError> {
         debug!(target = as_display!(&req.forward_to_leader),
                req = as_debug!(&req);
@@ -1177,7 +1177,7 @@ impl MetaNode {
     pub async fn forward_to(
         &self,
         node_id: &NodeId,
-        req: ForwardRequest,
+        req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, ForwardRPCError> {
         debug!("forward_to: {} {:?}", node_id, req);
 

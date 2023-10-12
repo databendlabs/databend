@@ -81,14 +81,14 @@ pub enum ForwardRequestBody {
 
 /// A request that is forwarded from one raft node to another
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct ForwardRequest {
+pub struct ForwardRequest<T> {
     /// Forward the request to leader if the node received this request is not leader.
     pub forward_to_leader: u64,
 
-    pub body: ForwardRequestBody,
+    pub body: T,
 }
 
-impl ForwardRequest {
+impl<T> ForwardRequest<T> {
     pub fn decr_forward(&mut self) {
         self.forward_to_leader -= 1;
     }
@@ -111,7 +111,7 @@ pub enum ForwardResponse {
     ListKV(ListKVReply),
 }
 
-impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
+impl tonic::IntoRequest<RaftRequest> for ForwardRequest<ForwardRequestBody> {
     fn into_request(self) -> tonic::Request<RaftRequest> {
         let mes = RaftRequest {
             data: serde_json::to_string(&self).expect("fail to serialize"),
@@ -120,7 +120,7 @@ impl tonic::IntoRequest<RaftRequest> for ForwardRequest {
     }
 }
 
-impl TryFrom<RaftRequest> for ForwardRequest {
+impl TryFrom<RaftRequest> for ForwardRequest<ForwardRequestBody> {
     type Error = tonic::Status;
 
     fn try_from(mes: RaftRequest) -> Result<Self, Self::Error> {

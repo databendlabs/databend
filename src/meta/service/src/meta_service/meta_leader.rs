@@ -69,7 +69,7 @@ impl<'a> MetaLeader<'a> {
     #[minitrace::trace]
     pub async fn handle_request(
         &self,
-        req: ForwardRequest,
+        req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
         debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
