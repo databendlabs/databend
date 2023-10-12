@@ -30,6 +30,7 @@ tokio-retry = "0.3"
 tokio-stream = "0.1"
 tokio-util = { version = "0.7", features = ["io-util"] }
 url = { version = "2.4", default-features = false }
+uuid = { version = "1.4", features = ["v4"] }
 
 [dev-dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }

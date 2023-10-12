@@ -51,7 +51,7 @@ impl Connection for RestAPIConnection {
     async fn exec(&self, sql: &str) -> Result<i64> {
         let mut resp = self.client.start_query(sql).await?;
         while let Some(next_uri) = resp.next_uri {
-            resp = self.client.query_page(&next_uri).await?;
+            resp = self.client.query_page(&resp.id, &next_uri).await?;
         }
         Ok(resp.stats.progresses.write_progress.rows as i64)
     }
@@ -76,7 +76,11 @@ impl Connection for RestAPIConnection {
         let resp = self.client.start_query(sql).await?;
         let resp = self.wait_for_data(resp).await?;
         match resp.kill_uri {
-            Some(uri) => self.client.kill_query(&uri).await.map_err(|e| e.into()),
+            Some(uri) => self
+                .client
+                .kill_query(&resp.id, &uri)
+                .await
+                .map_err(|e| e.into()),
             None => Err(Error::InvalidResponse("kill_uri is empty".to_string())),
         }?;
         let schema = resp.schema.try_into()?;
@@ -146,7 +150,7 @@ impl<'o> RestAPIConnection {
         // preserve schema since it is no included in the final response
         let schema = result.schema;
         while let Some(next_uri) = result.next_uri {
-            result = self.client.query_page(&next_uri).await?;
+            result = self.client.query_page(&result.id, &next_uri).await?;
             if !result.data.is_empty() {
                 break;
             }
@@ -177,6 +181,7 @@ pub struct RestAPIRows {
     client: APIClient,
     schema: SchemaRef,
     data: VecDeque<Vec<String>>,
+    query_id: String,
     next_uri: Option<String>,
     next_page: Option<PageFut>,
 }
@@ -186,6 +191,7 @@ impl RestAPIRows {
         let schema: Schema = resp.schema.try_into()?;
         let rows = Self {
             client,
+            query_id: resp.id,
             next_uri: resp.next_uri,
             schema: Arc::new(schema.clone()),
             data: resp.data.into(),
@@ -207,6 +213,7 @@ impl Stream for RestAPIRows {
             Some(ref mut next_page) => match Pin::new(next_page).poll(cx) {
                 Poll::Ready(Ok(resp)) => {
                     self.data = resp.data.into();
+                    self.query_id = resp.id;
                     self.next_uri = resp.next_uri;
                     self.next_page = None;
                     let ss = ServerStats::from(resp.stats);
@@ -225,8 +232,12 @@ impl Stream for RestAPIRows {
                 Some(ref next_uri) => {
                     let client = self.client.clone();
                     let next_uri = next_uri.clone();
+                    let query_id = self.query_id.clone();
                     self.next_page = Some(Box::pin(async move {
-                        client.query_page(&next_uri).await.map_err(|e| e.into())
+                        client
+                            .query_page(&query_id, &next_uri)
+                            .await
+                            .map_err(|e| e.into())
                     }));
                     self.poll_next(cx)
                 }

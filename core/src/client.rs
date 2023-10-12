@@ -35,6 +35,11 @@ use crate::{
     response::{QueryError, QueryResponse},
 };
 
+const HEADER_QUERY_ID: &str = "X-DATABEND-QUERY-ID";
+const HEADER_TENANT: &str = "X-DATABEND-TENANT";
+const HEADER_WAREHOUSE: &str = "X-DATABEND-WAREHOUSE";
+const HEADER_STAGE_NAME: &str = "X-DATABEND-STAGE-NAME";
+
 static VERSION: Lazy<String> = Lazy::new(|| {
     let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
     version.to_string()
@@ -159,6 +164,10 @@ impl APIClient {
         guard.clone()
     }
 
+    fn gen_query_id(&self) -> String {
+        uuid::Uuid::new_v4().to_string()
+    }
+
     pub async fn handle_session(&self, session: &Option<SessionConfig>) {
         let mut session_settings = self.session_settings.lock().await;
         if let Some(session) = &session {
@@ -188,7 +197,8 @@ impl APIClient {
             .with_pagination(self.make_pagination())
             .with_session(session_settings);
         let endpoint = self.endpoint.join("v1/query")?;
-        let headers = self.make_headers().await?;
+        let query_id = self.gen_query_id();
+        let headers = self.make_headers(&query_id).await?;
         let mut resp = self
             .cli
             .post(endpoint.clone())
@@ -228,9 +238,9 @@ impl APIClient {
         Ok(resp)
     }
 
-    pub async fn query_page(&self, next_uri: &str) -> Result<QueryResponse> {
+    pub async fn query_page(&self, query_id: &str, next_uri: &str) -> Result<QueryResponse> {
         let endpoint = self.endpoint.join(next_uri)?;
-        let headers = self.make_headers().await?;
+        let headers = self.make_headers(query_id).await?;
         let retry_strategy = ExponentialBackoff::from_millis(10).map(jitter).take(3);
         let req = || async {
             self.cli
@@ -260,9 +270,9 @@ impl APIClient {
         }
     }
 
-    pub async fn kill_query(&self, kill_uri: &str) -> Result<()> {
+    pub async fn kill_query(&self, query_id: &str, kill_uri: &str) -> Result<()> {
         let endpoint = self.endpoint.join(kill_uri)?;
-        let headers = self.make_headers().await?;
+        let headers = self.make_headers(query_id).await?;
         let resp = self
             .cli
             .post(endpoint.clone())
@@ -284,9 +294,9 @@ impl APIClient {
         if let Some(next_uri) = &resp.next_uri {
             let schema = resp.schema;
             let mut data = resp.data;
-            let mut resp = self.query_page(next_uri).await?;
+            let mut resp = self.query_page(&resp.id, next_uri).await?;
             while let Some(next_uri) = &resp.next_uri {
-                resp = self.query_page(next_uri).await?;
+                resp = self.query_page(&resp.id, next_uri).await?;
                 data.append(&mut resp.data);
             }
             resp.schema = schema;
@@ -345,15 +355,16 @@ impl APIClient {
         Some(pagination)
     }
 
-    async fn make_headers(&self) -> Result<HeaderMap> {
+    async fn make_headers(&self, query_id: &str) -> Result<HeaderMap> {
         let mut headers = HeaderMap::new();
         if let Some(tenant) = &self.tenant {
-            headers.insert("X-DATABEND-TENANT", tenant.parse()?);
+            headers.insert(HEADER_TENANT, tenant.parse()?);
         }
         let warehouse = self.warehouse.lock().await;
         if let Some(warehouse) = &*warehouse {
-            headers.insert("X-DATABEND-WAREHOUSE", warehouse.parse()?);
+            headers.insert(HEADER_WAREHOUSE, warehouse.parse()?);
         }
+        headers.insert(HEADER_QUERY_ID, query_id.parse()?);
         Ok(headers)
     }
 
@@ -375,7 +386,8 @@ impl APIClient {
             .with_session(session_settings)
             .with_stage_attachment(stage_attachment);
         let endpoint = self.endpoint.join("v1/query")?;
-        let headers = self.make_headers().await?;
+        let query_id = self.gen_query_id();
+        let headers = self.make_headers(&query_id).await?;
 
         let mut resp = self
             .cli
@@ -462,8 +474,9 @@ impl APIClient {
     ) -> Result<()> {
         let endpoint = self.endpoint.join("v1/upload_to_stage")?;
         let location = StageLocation::try_from(stage)?;
-        let mut headers = self.make_headers().await?;
-        headers.insert("stage_name", location.name.parse()?);
+        let query_id = self.gen_query_id();
+        let mut headers = self.make_headers(&query_id).await?;
+        headers.insert(HEADER_STAGE_NAME, location.name.parse()?);
         let stream = Body::wrap_stream(ReaderStream::new(data));
         let part = Part::stream_with_length(stream, size).file_name(location.path);
         let form = Form::new().part("upload", part);
