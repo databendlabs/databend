@@ -340,6 +340,7 @@ impl PipelineBuilder {
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         self.build_pipeline(input)?;
         let mut delete_column_idx = 0;
+        let mut opt_modified_schema = None;
         if let Some(SelectCtx {
             select_column_bindings,
             select_schema,
@@ -360,6 +361,7 @@ impl PipelineBuilder {
                 target_schema
                     .fields
                     .insert(delete_column_idx, delete_column);
+                opt_modified_schema = Some(Arc::new(target_schema.clone()));
             }
             let target_schema = Arc::new(target_schema.clone());
             if target_schema.fields().len() != select_schema.fields().len() {
@@ -393,6 +395,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
+            opt_modified_schema,
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;
@@ -471,7 +474,7 @@ impl PipelineBuilder {
         let block_thresholds = table.get_block_thresholds();
 
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
         // this TransformSerializeBlock is just used to get block_builder
         let block_builder = TransformSerializeBlock::try_create(
@@ -710,7 +713,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -980,7 +983,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),

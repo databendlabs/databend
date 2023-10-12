@@ -101,7 +101,7 @@ impl FuseTable {
         let block_thresholds = self.get_block_thresholds();
         // sort
         let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, None)?;
 
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
