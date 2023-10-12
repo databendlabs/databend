@@ -543,7 +543,7 @@ impl CompactTaskBuilder {
                 };
 
                 let (total_rows, total_size) =
-                    blocks.iter().chain(tail.iter()).fold((0, 0), |acc, x| {
+                    blocks.iter().chain(tail.iter()).fold((0, 0), |mut acc, x| {
                         acc.0 += x.row_count as usize;
                         acc.1 += x.block_size as usize;
                         acc
