@@ -17,16 +17,21 @@ use std::sync::Arc;
 #[cfg(feature = "flight-sql")]
 use arrow_schema::{DataType as ArrowDataType, Field as ArrowField, SchemaRef as ArrowSchemaRef};
 
+// Extension types defined by Databend
+#[cfg(feature = "flight-sql")]
+pub(crate) const EXTENSION_KEY: &str = "Extension";
+#[cfg(feature = "flight-sql")]
+pub(crate) const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
+#[cfg(feature = "flight-sql")]
+pub(crate) const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
+#[cfg(feature = "flight-sql")]
+pub(crate) const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
+#[cfg(feature = "flight-sql")]
+pub(crate) const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
+
 use databend_client::response::SchemaField as APISchemaField;
 
 use crate::error::{Error, Result};
-
-// Extension types defined by Databend
-pub(crate) const EXTENSION_KEY: &str = "Extension";
-pub(crate) const ARROW_EXT_TYPE_EMPTY_ARRAY: &str = "EmptyArray";
-pub(crate) const ARROW_EXT_TYPE_EMPTY_MAP: &str = "EmptyMap";
-pub(crate) const ARROW_EXT_TYPE_VARIANT: &str = "Variant";
-pub(crate) const ARROW_EXT_TYPE_BITMAP: &str = "Bitmap";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NumberDataType {

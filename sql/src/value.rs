@@ -19,15 +19,8 @@ use crate::{
     error::{ConvertError, Error, Result},
     schema::{DecimalDataType, DecimalSize},
 };
-use itertools::join;
-use roaring::RoaringTreemap;
-use std::fmt::Write;
 
-use crate::schema::ARROW_EXT_TYPE_BITMAP;
-use crate::schema::ARROW_EXT_TYPE_EMPTY_ARRAY;
-use crate::schema::ARROW_EXT_TYPE_EMPTY_MAP;
-use crate::schema::ARROW_EXT_TYPE_VARIANT;
-use crate::schema::EXTENSION_KEY;
+use std::fmt::Write;
 
 // Thu 1970-01-01 is R.D. 719163
 const DAYS_FROM_CE: i32 = 719_163;
@@ -35,6 +28,10 @@ const NULL_VALUE: &str = "NULL";
 
 #[cfg(feature = "flight-sql")]
 use {
+    crate::schema::{
+        ARROW_EXT_TYPE_BITMAP, ARROW_EXT_TYPE_EMPTY_ARRAY, ARROW_EXT_TYPE_EMPTY_MAP,
+        ARROW_EXT_TYPE_VARIANT, EXTENSION_KEY,
+    },
     arrow_array::{
         Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Decimal128Array,
         Decimal256Array, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
@@ -220,10 +217,10 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                     }
                     return match array.as_any().downcast_ref::<LargeBinaryArray>() {
                         Some(array) => {
-                            let rb = RoaringTreemap::deserialize_from(array.value(seq))
+                            let rb = roaring::RoaringTreemap::deserialize_from(array.value(seq))
                                 .expect("failed to deserialize bitmap");
                             let raw = rb.into_iter().collect::<Vec<_>>();
-                            let s = join(raw.iter(), ",");
+                            let s = itertools::join(raw.iter(), ",");
                             Ok(Value::Bitmap(s))
                         }
                         None => Err(ConvertError::new("bitmap", format!("{:?}", array)).into()),
