@@ -99,6 +99,8 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
 use common_sql::executor::RangeJoin;
+use common_sql::executor::ReclusterSink;
+use common_sql::executor::ReclusterSource;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
@@ -288,6 +290,12 @@ impl PipelineBuilder {
             PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
+            }
+            PhysicalPlan::ReclusterSource(recluster_source) => {
+                self.build_recluster_source(recluster_source)
+            }
+            PhysicalPlan::ReclusterSink(recluster_sink) => {
+                self.build_recluster_sink(recluster_sink)
             }
         }
     }
@@ -902,6 +910,41 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_recluster_source(&mut self, recluster_source: &ReclusterSource) -> Result<()> {
+        if recluster_source.tasks.len() != 1 {
+            return Err(ErrorCode::Internal(
+                "A node can only execute one recluster task".to_string(),
+            ));
+        }
+
+        let table = self.ctx.build_table_by_table_info(
+            &recluster_source.catalog_info,
+            &recluster_source.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        table.build_recluster_source(
+            self.ctx.clone(),
+            recluster_source.tasks[0].clone(),
+            recluster_source.catalog_info.clone(),
+            &mut self.main_pipeline,
+        )
+    }
+
+    fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {
+        self.build_pipeline(&recluster_sink.input)?;
+
+        let table = self.ctx.build_table_by_table_info(
+            &recluster_sink.catalog_info,
+            &recluster_sink.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        table.build_recluster_sink(self.ctx.clone(), recluster_sink, &mut self.main_pipeline)
+    }
+
     fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
         let table = self.ctx.build_table_by_table_info(
             &compact_block.catalog_info,
@@ -1020,8 +1063,7 @@ impl PipelineBuilder {
             plan.snapshot.clone(),
             plan.mutation_kind,
             plan.merge_meta,
-        )?;
-        Ok(())
+        )
     }
 
     fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {

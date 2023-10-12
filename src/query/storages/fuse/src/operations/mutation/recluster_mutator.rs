@@ -36,6 +36,7 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::table_functions::cmp_with_null;
@@ -51,8 +52,9 @@ pub struct ReclusterMutator {
     pub(crate) schema: TableSchemaRef,
     pub(crate) max_tasks: usize,
 
+    pub snapshot: Arc<TableSnapshot>,
     pub tasks: Vec<ReclusterTask>,
-    pub recluster_blocks_count: usize,
+    pub recluster_blocks_count: u64,
     pub remained_blocks: Vec<Arc<BlockMeta>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,
@@ -61,6 +63,7 @@ pub struct ReclusterMutator {
 impl ReclusterMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
+        snapshot: Arc<TableSnapshot>,
         schema: TableSchemaRef,
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
@@ -74,6 +77,7 @@ impl ReclusterMutator {
             block_thresholds,
             cluster_key_id,
             max_tasks,
+            snapshot,
             tasks: Vec::new(),
             remained_blocks: Vec::new(),
             recluster_blocks_count: 0,
@@ -257,7 +261,7 @@ impl ReclusterMutator {
             level,
         };
         self.tasks.push(task);
-        self.recluster_blocks_count += block_metas.len();
+        self.recluster_blocks_count += block_metas.len() as u64;
     }
 
     pub fn select_segments(

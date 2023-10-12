@@ -56,7 +56,7 @@ use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
     #[async_backtrace::framed]
-    pub(crate) async fn build_recluster_mutator(
+    pub async fn build_recluster_mutator(
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
@@ -95,6 +95,7 @@ impl FuseTable {
             .min(64.0);
         let mut mutator = ReclusterMutator::try_create(
             ctx.clone(),
+            snapshot.clone(),
             schema,
             threshold,
             block_thresholds,
@@ -265,7 +266,7 @@ impl FuseTable {
     pub fn build_recluster_sink(
         &self,
         ctx: Arc<dyn TableContext>,
-        plan: ReclusterSink,
+        plan: &ReclusterSink,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         pipeline.try_resize(1)?;
@@ -282,7 +283,7 @@ impl FuseTable {
             )))
         })?;
 
-        let snapshot_gen = MutationGenerator::new(plan.snapshot);
+        let snapshot_gen = MutationGenerator::new(plan.snapshot.clone());
         pipeline.add_sink(|input| {
             CommitSink::try_create(
                 self,

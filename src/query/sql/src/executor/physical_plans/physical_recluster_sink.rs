@@ -14,6 +14,8 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -23,8 +25,11 @@ use crate::executor::PhysicalPlan;
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ReclusterSink {
     pub input: Box<PhysicalPlan>,
+
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+
     pub snapshot: Arc<TableSnapshot>,
-    pub recluster_blocks_count: usize,
     pub remained_blocks: Vec<Arc<BlockMeta>>,
     pub removed_segment_indexes: Vec<usize>,
     pub removed_segment_summary: Statistics,

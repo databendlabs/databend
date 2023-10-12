@@ -177,7 +177,7 @@ impl PlanFragment {
                 .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
         }
 
-        Ok(fragment_actions)
+        Ok(())
     }
 
     fn redistribute_delete_leaf(
@@ -208,7 +208,7 @@ impl PlanFragment {
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
-        Ok(fragment_actions)
+        Ok(())
     }
 
     fn redistribute_replace_into(
@@ -265,7 +265,7 @@ impl PlanFragment {
                 }
             }
         }
-        Ok(fragment_actions)
+        Ok(())
     }
 
     fn redistribute_compact(
@@ -296,7 +296,7 @@ impl PlanFragment {
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
-        Ok(fragment_actions)
+        Ok(())
     }
 
     fn redistribute_recluster(
@@ -313,7 +313,7 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
 
-        let tasks = recluster.tasks;
+        let tasks = recluster.tasks.clone();
         let executors = Fragmenter::get_executors(ctx);
         if tasks.len() > executors.len() {
             return Err(ErrorCode::Internal(format!(
@@ -322,13 +322,15 @@ impl PlanFragment {
                 executors.len()
             )));
         }
+
         for (task, executor) in tasks.into_iter().zip(executors.into_iter()) {
             let mut plan = self.plan.clone();
             let mut replace_recluster = ReplaceReclusterSource { task };
             plan = replace_recluster.replace(&plan)?;
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
-        Ok(fragment_actions)
+
+        Ok(())
     }
 
     fn reshuffle<T: Clone>(
@@ -456,10 +458,10 @@ struct ReplaceReclusterSource {
 
 impl PhysicalPlanReplacer for ReplaceReclusterSource {
     fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
+        Ok(PhysicalPlan::ReclusterSource(ReclusterSource {
             tasks: vec![self.task.clone()],
             ..plan.clone()
-        })))
+        }))
     }
 }
 
