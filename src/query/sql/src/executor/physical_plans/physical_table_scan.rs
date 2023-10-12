@@ -304,7 +304,6 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
         has_virtual_column: bool,
     ) -> Result<PushDownInfo> {
-        let data_schema: DataSchema = table_schema.into();
         let metadata = self.metadata.read().clone();
         let projection = Self::build_projection(
             &metadata,
@@ -343,7 +342,7 @@ impl PhysicalPlanBuilder {
                     .map(|p| {
                         p.as_raw_expr()
                             .project_column_ref(|col| col.column_name.clone())
-                            .type_check(&data_schema)
+                            .type_check(table_schema)
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -425,7 +424,7 @@ impl PhysicalPlanBuilder {
                     predicate
                         .as_raw_expr()
                         .project_column_ref(|col| col.column_name.clone())
-                        .type_check(&data_schema)?,
+                        .type_check(table_schema)?,
                 )?;
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);

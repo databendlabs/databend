@@ -22,6 +22,7 @@ use common_expression::ColumnIndex;
 use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::RawExpr;
+use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
@@ -56,9 +57,17 @@ impl TypeProvider<IndexType> for DataSchema {
 }
 
 impl TypeProvider<String> for DataSchema {
-    fn get_type(&self, column_id: &String) -> Result<DataType> {
-        let column = self.field_with_name(column_id)?;
+    fn get_type(&self, column_name: &String) -> Result<DataType> {
+        let column = self.field_with_name(column_name)?;
         Ok(column.data_type().clone())
+    }
+}
+
+impl TypeProvider<String> for TableSchema {
+    fn get_type(&self, column_name: &String) -> Result<DataType> {
+        let flatten_schema = self.flatten_schema();
+        let column = flatten_schema.field_with_name(column_name)?;
+        Ok(column.data_type().into())
     }
 }
 

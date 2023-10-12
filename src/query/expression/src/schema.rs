@@ -627,7 +627,7 @@ impl TableSchema {
         }
     }
 
-    /// project with inner columns by path.
+    /// Project with inner columns by path.
     pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
@@ -638,6 +638,17 @@ impl TableSchema {
             .map(|path| Self::traverse_paths(schema_fields, path, &column_ids).unwrap())
             .collect();
 
+        Self {
+            fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
+    /// Flatten all leaf columns in the order of column id.
+    pub fn flatten_schema(&self) -> Self {
+        let mut fields = self.leaf_fields();
+        fields.sort_by_key(|f| f.column_id());
         Self {
             fields,
             metadata: self.metadata.clone(),
