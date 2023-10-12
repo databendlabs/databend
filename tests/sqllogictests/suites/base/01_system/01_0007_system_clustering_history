@@ -1,5 +1,5 @@
 statement ok
-drop table if exists tbl_01_0007
+drop table if exists tbl_01_0007 all
 
 statement ok
 create table tbl_01_0007(a int not null) cluster by(a)

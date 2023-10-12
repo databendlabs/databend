@@ -578,14 +578,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ALL?
         },
-        |(_, _, opt_if_exists, (catalog, database, table))| {
+        |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
             Statement::DropTable(DropTableStmt {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
+                all: opt_all.is_some(),
             })
         },
     );

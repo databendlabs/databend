@@ -1513,6 +1513,7 @@ DropTable(
                 11..12,
             ),
         },
+        all: false,
     },
 )
 
@@ -1544,6 +1545,7 @@ DropTable(
                 23..26,
             ),
         },
+        all: false,
     },
 )
 
@@ -2404,6 +2406,7 @@ DropTable(
                 11..17,
             ),
         },
+        all: false,
     },
 )
 
@@ -2425,6 +2428,7 @@ DropTable(
                 21..27,
             ),
         },
+        all: false,
     },
 )
 

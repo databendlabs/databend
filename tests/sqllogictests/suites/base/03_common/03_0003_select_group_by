@@ -75,7 +75,7 @@ statement ok
 DROP table t
 
 statement ok
-drop table if exists t_datetime
+drop table if exists t_datetime all
 
 statement ok
 CREATE TABLE t_datetime(created_at Date, created_time DateTime, count Int32)
