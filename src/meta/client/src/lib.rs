@@ -64,6 +64,9 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///
 /// - 2023-05-07: since 1.1.32:
 ///   Meta service: add: TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
+///
+/// - 2023-10-11: since TODO(wait for merge to main):
+///   Meta service: add: pb::SeqV.meta field to support record expiration.
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
     minor: 1,
