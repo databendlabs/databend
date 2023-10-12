@@ -21,6 +21,8 @@ jobs:
       any_src_changed: ${{ steps.src.outputs.any_changed }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Check Source File Changes
         uses: tj-actions/changed-files@v39
         id: src

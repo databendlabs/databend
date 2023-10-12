@@ -40,6 +40,7 @@ use common_storage::DataOperator;
 use common_storage::FileStatus;
 use common_storage::StageFileInfo;
 use common_storage::StorageMetrics;
+use common_users::GrantObjectVisibilityChecker;
 use dashmap::DashMap;
 use parking_lot::RwLock;
 use storages_common_table_meta::meta::Location;
@@ -150,7 +151,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
-    async fn get_current_available_roles(&self) -> Result<Vec<RoleInfo>>;
+    async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;
     fn get_tenant(&self) -> String;
