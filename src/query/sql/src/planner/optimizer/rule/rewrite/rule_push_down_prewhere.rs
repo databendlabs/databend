@@ -70,15 +70,19 @@ impl RulePushDownPrewhere {
         match expr {
             ScalarExpr::BoundColumnRef(column) => {
                 if let Some(index) = &column.column.table_index {
-                    if table_index == *index
-                        && (column.column.visibility == Visibility::InVisible
-                            || schema.index_of(column.column.column_name.as_str()).is_ok())
-                    {
+                    if table_index == *index || column.column.visibility == Visibility::InVisible {
+                        #[cfg(debug_assertions)]
+                        if column.column.visibility == Visibility::Visible {
+                            // As the pattern is Filter-Scan, the visible columns must be in the table.
+                            // NOTES: inner column of a nested type could be an invisible column.
+                            schema.index_of(column.column.column_name.as_str())?;
+                        }
+
                         columns.insert(column.column.index);
                         return Ok(());
                     }
                 }
-                return Err(ErrorCode::Unimplemented("Column is not in the table"));
+                return Err(ErrorCode::BadArguments("Column is not in the table"));
             }
             ScalarExpr::FunctionCall(func) => {
                 for arg in func.arguments.iter() {
@@ -110,12 +114,12 @@ impl RulePushDownPrewhere {
         table_index: IndexType,
         schema: &TableSchemaRef,
         expr: &ScalarExpr,
-    ) -> Option<ColumnSet> {
+    ) -> Result<ColumnSet> {
         let mut columns = ColumnSet::new();
         // columns in subqueries are not considered
-        Self::collect_columns_impl(table_index, schema, expr, &mut columns).ok()?;
+        Self::collect_columns_impl(table_index, schema, expr, &mut columns)?;
 
-        Some(columns)
+        Ok(columns)
     }
 
     pub fn prewhere_optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
@@ -134,13 +138,8 @@ impl RulePushDownPrewhere {
 
         // filter.predicates are already split by AND
         for pred in filter.predicates.iter() {
-            match Self::collect_columns(get.table_index, &table.schema(), pred) {
-                Some(columns) => {
-                    prewhere_pred.push(pred.clone());
-                    prewhere_columns.extend(&columns);
-                }
-                None => return Ok(s_expr.clone()),
-            }
+            let columns = Self::collect_columns(get.table_index, &table.schema(), pred)?;
+            prewhere_columns.extend(&columns);
         }
 
         if !prewhere_pred.is_empty() {
