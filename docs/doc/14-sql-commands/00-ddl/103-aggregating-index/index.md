@@ -8,7 +8,7 @@ import EEFeature from '@site/src/components/EEFeature';
 
 ### Why Aggregating Index?
 
-The aggregating index's primary function is to boost query performance, particularly in scenarios involving data filtering and selection. It achieves this by precomputing and storing query results separately in blocks, eliminating the need to scan the entire table and thereby speeding up data retrieval.
+The primary purpose of the aggregating index is to enhance query performance, especially in scenarios involving aggregation queries such as MIN, MAX, and SUM. It achieves this by precomputing and storing query results separately in blocks, eliminating the need to scan the entire table and thereby speeding up data retrieval.
 
 The feature also incorporates a refresh mechanism that enables you to update and save the latest query results as needed, ensuring that the query responses consistently reflect the most current data. This manual control allows you to maintain data accuracy and reliability by refreshing the results when deemed necessary.
 
@@ -18,7 +18,7 @@ Please note the following when creating aggregating indexes:
 
 - The query filter scope defined when creating aggregating indexes should either match or encompass the scope of your actual queries.
 
-- Aggregating indexes only work for single-table queries. To confirm if an aggregating index works for a query, use the [EXPLAIN](../../90-explain-cmds/explain.md) command to analyze the query.
+- To confirm if an aggregating index works for a query, use the [EXPLAIN](../../90-explain-cmds/explain.md) command to analyze the query.
 
 Databend recommends refreshing an aggregating index before executing a query that relies on it to retrieve the most up-to-date data (while Databend Cloud automatically refreshes aggregating indexes for you). If you no longer need an aggregating index, consider deleting it. Please note that deleting an aggregating index does NOT remove the associated storage blocks. To delete the blocks as well, use the [VACUUM TABLE](../20-table/91-vacuum-table.md) command. To disable the aggregating indexing feature, set 'enable_aggregating_index_scan' to 0.
 
@@ -38,52 +38,64 @@ CREATE TABLE agg(a int, b int, c int);
 INSERT INTO agg VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5);
 
 -- Create an aggregating index
-CREATE AGGREGATING INDEX my_agg_index AS SELECT c + 1 FROM agg;
+CREATE AGGREGATING INDEX my_agg_index AS SELECT MIN(a), MAX(c) FROM agg;
 
 -- Refresh the aggregating index
 REFRESH AGGREGATING INDEX my_agg_index;
 
 -- Verify if the aggregating index works
-EXPLAIN SELECT to_string(c + 1) FROM agg;
+EXPLAIN SELECT MIN(a), MAX(c) FROM agg;
 
-explain                                                                                                           |
-------------------------------------------------------------------------------------------------------------------+
-EvalScalar                                                                                                        |
-├── output columns: [to_string((c + 1)) (#7)]                                                                     |
-├── expressions: [to_string(agg.c (#6) + 1)]                                                                      |
-├── estimated rows: 4.00                                                                                          |
-└── TableScan                                                                                                     |
-    ├── table: default.default.agg                                                                                |
-    ├── output columns: [c (#6)]                                                                                  |
-    ├── read rows: 4                                                                                              |
-    ├── read bytes: 33                                                                                            |
-    ├── partitions total: 1                                                                                       |
-    ├── partitions scanned: 1                                                                                     |
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]|
-    ├── push downs: [filters: [], limit: NONE]                                                                    |
-    ├── aggregating index: [SELECT (c + 1) FROM default.agg]                                                      |
-    ├── rewritten query: [selection: [to_string(index_col_0 (#0))]]                                               |
-    └── estimated rows: 4.00                                                                                      |
+explain                                                                                                               |
+----------------------------------------------------------------------------------------------------------------------+
+AggregateFinal                                                                                                        |
+├── output columns: [MIN(a) (#8), MAX(c) (#9)]                                                                        |
+├── group by: []                                                                                                      |
+├── aggregate functions: [min(a), max(c)]                                                                             |
+├── estimated rows: 1.00                                                                                              |
+└── AggregatePartial                                                                                                  |
+    ├── output columns: [MIN(a) (#8), MAX(c) (#9)]                                                                    |
+    ├── group by: []                                                                                                  |
+    ├── aggregate functions: [min(a), max(c)]                                                                         |
+    ├── estimated rows: 1.00                                                                                          |
+    └── TableScan                                                                                                     |
+        ├── table: default.default.agg                                                                                |
+        ├── output columns: [a (#5), c (#7)]                                                                          |
+        ├── read rows: 4                                                                                              |
+        ├── read bytes: 61                                                                                            |
+        ├── partitions total: 1                                                                                       |
+        ├── partitions scanned: 1                                                                                     |
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]|
+        ├── push downs: [filters: [], limit: NONE]                                                                    |
+        ├── aggregating index: [SELECT MIN(a), MAX(c) FROM default.agg]                                               |
+        ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]                                        |
+        └── estimated rows: 4.00                                                                                      |
 
 -- Delete the aggregating index
 DROP AGGREGATING INDEX my_agg_index;
 
-EXPLAIN SELECT to_string(c + 1) FROM agg;
+EXPLAIN SELECT MIN(a), MAX(c) FROM agg;
 
-explain                                                                                                           |
-------------------------------------------------------------------------------------------------------------------+
-EvalScalar                                                                                                        |
-├── output columns: [to_string((c + 1)) (#3)]                                                                     |
-├── expressions: [to_string(agg.c (#2) + 1)]                                                                      |
-├── estimated rows: 4.00                                                                                          |
-└── TableScan                                                                                                     |
-    ├── table: default.default.agg                                                                                |
-    ├── output columns: [c (#2)]                                                                                  |
-    ├── read rows: 4                                                                                              |
-    ├── read bytes: 33                                                                                            |
-    ├── partitions total: 1                                                                                       |
-    ├── partitions scanned: 1                                                                                     |
-    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]|
-    ├── push downs: [filters: [], limit: NONE]                                                                    |
-    └── estimated rows: 4.00                                                                                      |
+explain                                                                                                               |
+----------------------------------------------------------------------------------------------------------------------+
+AggregateFinal                                                                                                        |
+├── output columns: [MIN(a) (#3), MAX(c) (#4)]                                                                        |
+├── group by: []                                                                                                      |
+├── aggregate functions: [min(a), max(c)]                                                                             |
+├── estimated rows: 1.00                                                                                              |
+└── AggregatePartial                                                                                                  |
+    ├── output columns: [MIN(a) (#3), MAX(c) (#4)]                                                                    |
+    ├── group by: []                                                                                                  |
+    ├── aggregate functions: [min(a), max(c)]                                                                         |
+    ├── estimated rows: 1.00                                                                                          |
+    └── TableScan                                                                                                     |
+        ├── table: default.default.agg                                                                                |
+        ├── output columns: [a (#0), c (#2)]                                                                          |
+        ├── read rows: 4                                                                                              |
+        ├── read bytes: 61                                                                                            |
+        ├── partitions total: 1                                                                                       |
+        ├── partitions scanned: 1                                                                                     |
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]|
+        ├── push downs: [filters: [], limit: NONE]                                                                    |
+        └── estimated rows: 4.00                                                                                      |
 ```

@@ -22,11 +22,11 @@ CREATE AGGREGATING INDEX <index_name> AS SELECT ...
 
 - The query filter scope defined when creating aggregating indexes should either match or encompass the scope of your actual queries.
 
-- Aggregating indexes only work for single-table queries. To confirm if an aggregating index works for a query, use the [EXPLAIN](../../90-explain-cmds/explain.md) command to analyze the query.
+- To confirm if an aggregating index works for a query, use the [EXPLAIN](../../90-explain-cmds/explain.md) command to analyze the query.
 
 ## Examples
 
-This example creates an aggregating index named *my_agg_index* for the query "SELECT c + 1 FROM agg":
+This example creates an aggregating index named *my_agg_index* for the query "SELECT MIN(a), MAX(c) FROM agg":
 
 ```sql
 -- Prepare data
@@ -34,5 +34,5 @@ CREATE TABLE agg(a int, b int, c int);
 INSERT INTO agg VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5);
 
 -- Create an aggregating index
-CREATE AGGREGATING INDEX my_agg_index AS SELECT c + 1 FROM agg;
+CREATE AGGREGATING INDEX my_agg_index AS SELECT MIN(a), MAX(c) FROM agg;
 ```
