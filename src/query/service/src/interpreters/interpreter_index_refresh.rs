@@ -150,7 +150,7 @@ impl RefreshIndexInterpreter {
         } else {
             let mut source = source.remove(0);
             let partitions = match segments {
-                Some(segment_locs) => {
+                Some(segment_locs) if !segment_locs.is_empty() => {
                     let segment_locations = create_segment_location_vector(segment_locs, None);
                     self.get_partitions_with_given_segments(
                         &source,
@@ -160,7 +160,7 @@ impl RefreshIndexInterpreter {
                     )
                     .await?
                 }
-                None => self.get_partitions(&source, fuse_table, dal).await?,
+                Some(_) | None => self.get_partitions(&source, fuse_table, dal).await?,
             };
             if let Some(parts) = partitions {
                 source.parts = parts;

@@ -307,8 +307,8 @@ async fn test_refresh_agg_index_with_limit() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_sync_agg_index() -> Result<()> {
-    test_sync_agg_index_after_update().await?;
     test_sync_agg_index_after_insert().await?;
+    test_sync_agg_index_after_update().await?;
     test_sync_agg_index_after_copy_into().await?;
 
     Ok(())
@@ -497,7 +497,7 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
         let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
 
         assert_two_blocks_sorted_eq_with_name(
-            "test_sync_agg_index_after_insert",
+            "test_sync_agg_index_after_update",
             &data_blocks,
             &agg_data_blocks,
         );
@@ -546,7 +546,7 @@ async fn test_sync_agg_index_after_update() -> Result<()> {
         let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
 
         assert_two_blocks_sorted_eq_with_name(
-            "test_sync_agg_index_after_insert",
+            "test_sync_agg_index_after_update",
             &data_blocks,
             &agg_data_blocks,
         );

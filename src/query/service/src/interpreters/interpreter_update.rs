@@ -203,9 +203,9 @@ impl Interpreter for UpdateInterpreter {
         // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
         {
             let refresh_agg_index_desc = RefreshAggIndexDesc {
-                catalog: self.plan.catalog.clone(),
-                database: self.plan.database.clone(),
-                table: self.plan.table.clone(),
+                catalog: catalog_name.to_string(),
+                database: db_name.to_string(),
+                table: tbl_name.to_string(),
             };
 
             hook_refresh_agg_index(

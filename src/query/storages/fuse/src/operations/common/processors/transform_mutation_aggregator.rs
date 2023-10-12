@@ -237,6 +237,8 @@ impl TableMutationAggregator {
                     for result in results {
                         if let Some((location, summary)) = result.new_segment_info {
                             // replace the old segment location with the new one.
+                            self.ctx
+                                .add_segment_location((location.clone(), SegmentInfo::VERSION))?;
                             self.abort_operation.add_segment(location.clone());
                             merge_statistics_mut(
                                 &mut merged_statistics,
