@@ -23,7 +23,7 @@ TO_WEEK_OF_YEAR(<expr>)
 
 ## Return Type
 
-Returns an integer that represents the week number within a year, with numbering starting from 1.
+Returns an integer that represents the week number within a year, with numbering ranging from 1 to 53.
 
 ## Examples
 
