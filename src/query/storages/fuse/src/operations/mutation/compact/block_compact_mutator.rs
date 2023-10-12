@@ -536,16 +536,26 @@ impl CompactTaskBuilder {
                 // The clustering table cannot compact different level blocks.
                 self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, tail);
             } else {
-                let (index, mut blocks) = if latest_flag {
-                    unchanged_blocks
-                        .pop()
-                        .map_or((0, vec![]), |(k, v)| (k, vec![v]))
+                let mut blocks = if latest_flag {
+                    unchanged_blocks.pop().map_or(vec![], |(_, v)| vec![v])
                 } else {
-                    tasks.pop_back().unwrap_or((0, vec![]))
+                    tasks.pop_back().map_or(vec![], |(_, v)| v)
                 };
 
-                blocks.extend(tail);
-                tasks.push_back((index, blocks));
+                let (total_rows, total_size) =
+                    blocks.iter().chain(tail.iter()).fold((0, 0), |mut acc, x| {
+                        acc.0 += x.row_count as usize;
+                        acc.1 += x.block_size as usize;
+                        acc
+                    });
+                if self.thresholds.check_for_compact(total_rows, total_size) {
+                    blocks.extend(tail);
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                } else {
+                    // blocks > 2N
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
+                    self.build_task(&mut tasks, &mut unchanged_blocks, block_idx + 1, tail);
+                }
             }
         }
 

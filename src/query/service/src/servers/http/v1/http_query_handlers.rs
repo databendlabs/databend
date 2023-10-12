@@ -83,7 +83,7 @@ impl QueryError {
 pub struct QueryStats {
     #[serde(flatten)]
     pub progresses: Progresses,
-    pub running_time_ms: f64,
+    pub running_time_ms: i64,
 }
 
 #[derive(Serialize, Deserialize, Debug)]

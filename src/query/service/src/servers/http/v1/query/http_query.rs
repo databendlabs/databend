@@ -172,7 +172,7 @@ pub struct StageAttachmentConf {
 
 #[derive(Debug, Clone)]
 pub struct ResponseState {
-    pub running_time_ms: f64,
+    pub running_time_ms: i64,
     pub progresses: Progresses,
     pub state: ExecuteStateKind,
     pub affect: Option<QueryAffect>,
@@ -315,10 +315,8 @@ impl HttpQuery {
         };
 
         let (block_sender, block_receiver) = sized_spsc(request.pagination.max_rows_in_buffer);
-        let start_time = Instant::now();
         let state = Arc::new(RwLock::new(Executor {
             query_id: query_id.clone(),
-            start_time,
             state: ExecuteState::Starting(ExecuteStarting { ctx: ctx.clone() }),
         }));
         let block_sender_closer = block_sender.closer();
@@ -349,7 +347,7 @@ impl HttpQuery {
                     let state = ExecuteStopped {
                         stats: Progresses::default(),
                         reason: Err(e.clone()),
-                        stop_time: Instant::now(),
+                        query_duration_ms: ctx_clone.get_query_duration_ms(),
                         affect: ctx_clone.get_affect(),
                     };
                     info!(
@@ -424,7 +422,7 @@ impl HttpQuery {
         let state = self.state.read().await;
         let (exe_state, err) = state.state.extract();
         ResponseState {
-            running_time_ms: state.elapsed().as_secs_f64() * 1000.0,
+            running_time_ms: state.get_query_duration_ms(),
             progresses: state.get_progress(),
             state: exe_state,
             error: err,
