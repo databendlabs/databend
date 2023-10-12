@@ -2,7 +2,7 @@
 title: TRUNCATE TABLE
 ---
 
-Removes all data from a table while preserving the table's schema. It deletes all rows in the table, making it an empty table with the same columns and constraints. Please note that, it does not release the disk space allocated to the table. To release the disk space, include the PURGE option, which is used to release the disk space allocated to the table when the truncate operation is performed.
+Removes all data from a table while preserving the table's schema. It deletes all rows in the table, making it an empty table with the same columns and constraints. Please note that, it does not release the disk space allocated to the table.
 
 See also: [DROP TABLE](20-ddl-drop-table.md)
 
