@@ -1042,6 +1042,10 @@ impl<'a> TypeChecker<'a> {
                 span, kind, expr, ..
             } => self.resolve_extract_expr(*span, kind, expr).await?,
 
+            Expr::DatePart {
+                span, kind, expr, ..
+            } => self.resolve_extract_expr(*span, kind, expr).await?,
+
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
                     "Unsupported interval expression yet".to_string(),
@@ -1962,6 +1966,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(span, "to_day_of_week", vec![], &[arg])
                     .await
             }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_week_of_year", vec![], &[arg])
+                    .await
+            }
         }
     }
 
@@ -2147,6 +2155,8 @@ impl<'a> TypeChecker<'a> {
             "array_reduce",
             "to_variant",
             "try_to_variant",
+            "greatest",
+            "least",
         ]
     }
 
@@ -2511,6 +2521,26 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
                     .await
+            }
+            ("greatest", args) => {
+                let (array, _) = *self
+                    .resolve_function(span, "array", vec![], args)
+                    .await
+                    .ok()?;
+                Some(
+                    self.resolve_scalar_function_call(span, "array_max", vec![], vec![array])
+                        .await,
+                )
+            }
+            ("least", args) => {
+                let (array, _) = *self
+                    .resolve_function(span, "array", vec![], args)
+                    .await
+                    .ok()?;
+                Some(
+                    self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
+                        .await,
+                )
             }
             _ => None,
         }
@@ -3346,6 +3376,13 @@ impl<'a> TypeChecker<'a> {
                     target_type: target_type.clone(),
                 }),
                 Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
+                    span: *span,
+                    kind: *kind,
+                    expr: Box::new(
+                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
+                    ),
+                }),
+                Expr::DatePart { span, kind, expr } => Ok(Expr::DatePart {
                     span: *span,
                     kind: *kind,
                     expr: Box::new(
