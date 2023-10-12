@@ -20,7 +20,7 @@ Please note the following when creating aggregating indexes:
 
 - Aggregating indexes only work for single-table queries. To confirm if an aggregating index works for a query, use the [EXPLAIN](../../90-explain-cmds/explain.md) command to analyze the query.
 
-Databend recommends refreshing an aggregating index before executing a query that relies on it to retrieve the most up-to-date data. If you no longer need an aggregating index, consider deleting it. Please note that deleting an aggregating index does NOT remove the associated storage blocks. To delete the blocks as well, use the [VACUUM TABLE](../20-table/91-vacuum-table.md) command. To disable the aggregating indexing feature, set 'enable_aggregating_index_scan' to 0.
+Databend recommends refreshing an aggregating index before executing a query that relies on it to retrieve the most up-to-date data (while Databend Cloud automatically refreshes aggregating indexes for you). If you no longer need an aggregating index, consider deleting it. Please note that deleting an aggregating index does NOT remove the associated storage blocks. To delete the blocks as well, use the [VACUUM TABLE](../20-table/91-vacuum-table.md) command. To disable the aggregating indexing feature, set 'enable_aggregating_index_scan' to 0.
 
 ### Implementing Aggregating Index
 
@@ -29,6 +29,8 @@ Databend provides the following commands to manage aggregating indexes:
 <IndexOverviewList />
 
 ### Usage Example
+
+This example demonstrates the utilization of aggregating indexes and illustrates their impact on the query execution plan.
 
 ```sql
 -- Prepare data

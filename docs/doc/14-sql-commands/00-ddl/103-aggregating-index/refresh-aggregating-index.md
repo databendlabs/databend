@@ -12,6 +12,10 @@ import EEFeature from '@site/src/components/EEFeature';
 
 Refreshes an aggregating index to update its stored results. Databend recommends refreshing an aggregating index before executing a query that relies on it to retrieve the most up-to-date data.
 
+:::note
+When using Databend Cloud, manual execution of this refresh command is unnecessary, as the system automatically handles index updates for you.
+:::
+
 ## Syntax
 
 ```sql
