@@ -40,10 +40,10 @@ tokio = { version = "1.28", features = ["macros"] }
 tokio-stream = "0.1"
 url = { version = "2.4", default-features = false }
 
-arrow = { version = "46.0" }
-arrow-flight = { version = "46.0", features = ["flight-sql-experimental"], optional = true }
-arrow-schema = { version = "46.0", optional = true }
-tonic = { version = "0.9", default-features = false, features = [
+arrow = { version = "47.0" }
+arrow-flight = { version = "47.0", features = ["flight-sql-experimental"], optional = true }
+arrow-schema = { version = "47.0", optional = true }
+tonic = { version = "0.10", default-features = false, features = [
     "transport",
     "codegen",
     "tls",

@@ -61,13 +61,13 @@ impl std::fmt::Display for Error {
             #[cfg(feature = "flight-sql")]
             Error::Arrow(e) => {
                 let msg = match e {
-                    arrow_schema::ArrowError::IoError(err) => {
+                    arrow_schema::ArrowError::IoError(msg, _) => {
                         static START: &str = "Code:";
                         static END: &str = ". at";
 
-                        let message_index = err.find(START).unwrap_or(0);
-                        let message_end_index = err.find(END).unwrap_or(err.len());
-                        let message = &err[message_index..message_end_index];
+                        let message_index = msg.find(START).unwrap_or(0);
+                        let message_end_index = msg.find(END).unwrap_or(msg.len());
+                        let message = &msg[message_index..message_end_index];
                         message.replace("\\n", "\n")
                     }
                     other => format!("{}", other),
