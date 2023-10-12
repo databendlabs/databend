@@ -542,14 +542,12 @@ impl CompactTaskBuilder {
                     tasks.pop_back().map_or(vec![], |(_, v)| v)
                 };
 
-                let tail_rows = tail.iter().fold(0, |acc, x| acc + x.row_count as usize);
-                let tail_size = tail.iter().fold(0, |acc, x| acc + x.block_size as usize);
-                let total_rows = blocks
-                    .iter()
-                    .fold(tail_rows, |acc, x| acc + x.row_count as usize);
-                let total_size = blocks
-                    .iter()
-                    .fold(tail_size, |acc, x| acc + x.block_size as usize);
+                let (total_rows, total_size) =
+                    blocks.iter().chain(tail.iter()).fold((0, 0), |acc, x| {
+                        acc.0 += x.row_count as usize;
+                        acc.1 += x.block_size as usize;
+                        acc
+                    });
                 if self.thresholds.check_for_compact(total_rows, total_size) {
                     blocks.extend(tail);
                     self.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
