@@ -343,7 +343,7 @@ impl TableMutationAggregator {
                 } else {
                     // use by compact.
                     assert!(segment_mutation.deleted_blocks.is_empty());
-                    // There are more than 1 blocks, mains that the blocks can no longer be compacted.
+                    // There are more than 1 blocks, means that the blocks can no longer be compacted.
                     // They can be marked as perfect blocks.
                     all_perfect = segment_mutation.replaced_blocks.len() > 1;
                     let new_blocks = segment_mutation
