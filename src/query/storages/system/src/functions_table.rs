@@ -62,7 +62,7 @@ impl AsyncSystemTable for FunctionsTable {
                 .map(|name| name.to_string()),
         );
         scalar_func_names.extend(
-            common_ast::ast::Expr::all_funciton_like_syntaxes()
+            common_ast::ast::Expr::all_function_like_syntaxes()
                 .iter()
                 .map(|name| name.to_lowercase()),
         );

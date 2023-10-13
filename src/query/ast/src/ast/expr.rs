@@ -531,7 +531,7 @@ impl Expr {
         }
     }
 
-    pub fn all_funciton_like_syntaxes() -> &'static [&'static str] {
+    pub fn all_function_like_syntaxes() -> &'static [&'static str] {
         &[
             "CAST",
             "TRY_CAST",
