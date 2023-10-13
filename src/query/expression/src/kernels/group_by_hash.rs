@@ -229,6 +229,8 @@ impl HashMethod for HashMethodSingleString {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSerializer {}
 
+const BATCH_SERIALIZE_BYTES_LIMIT: usize = 16 * 1024 * 1024; // 16 MB
+
 impl HashMethod for HashMethodSerializer {
     type HashKey = [u8];
 
@@ -243,17 +245,13 @@ impl HashMethod for HashMethodSerializer {
         group_columns: &[(Column, DataType)],
         num_rows: usize,
     ) -> Result<KeysState> {
-        // The serialize_size is equal to the number of bytes required by serialization.
-        let mut serialize_size = 0;
-        let mut serialize_columns = Vec::with_capacity(group_columns.len());
-        for (column, _) in group_columns {
-            serialize_size += column.serialize_size();
-            serialize_columns.push(column.clone());
-        }
-        Ok(KeysState::Column(Column::String(serialize_column(
-            &serialize_columns,
-            num_rows,
-            serialize_size,
+        let columns = group_columns
+            .iter()
+            .map(|(col, _)| col.clone())
+            .collect::<Vec<_>>();
+
+        Ok(KeysState::Column(Column::String(serialize_columns(
+            &columns, num_rows,
         ))))
     }
 
@@ -299,28 +297,19 @@ impl HashMethod for HashMethodDictionarySerializer {
     ) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
         let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-        let mut serialize_columns = Vec::new();
+        let mut columns = Vec::new();
         for (group_column, _) in group_columns {
             match group_column {
                 Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
                 }
-                _ => serialize_columns.push(group_column.clone()),
+                _ => columns.push(group_column.clone()),
             }
         }
 
-        if !serialize_columns.is_empty() {
-            // The serialize_size is equal to the number of bytes required by serialization.
-            let mut serialize_size = 0;
-            for column in serialize_columns.iter() {
-                serialize_size += column.serialize_size();
-            }
-            dictionary_columns.push(serialize_column(
-                &serialize_columns,
-                num_rows,
-                serialize_size,
-            ));
+        if !columns.is_empty() {
+            dictionary_columns.push(serialize_columns(&columns, num_rows));
         }
 
         let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
@@ -700,12 +689,30 @@ fn build(
     Ok(())
 }
 
+fn serialize_columns(columns: &[Column], num_rows: usize) -> StringColumn {
+    let max_bytes_per_row = columns
+        .iter()
+        .map(|col| col.max_serialize_size_per_row())
+        .sum::<usize>();
+
+    if max_bytes_per_row * num_rows <= BATCH_SERIALIZE_BYTES_LIMIT {
+        // To serialize a column in batch, we need to preallocate a deterministic memory space for each row of the target column at once.
+        // Therefore, we choose the maximum row memory of columns to guranntee that the memory of the serialized column will not exceed it.
+        serialize_columns_in_batch(&columns, num_rows, max_bytes_per_row)
+    } else {
+        // If the memory consumption exceed the limit, we degragde to a lower memory consumption plan.
+        serialize_columns_no_batch(&columns, num_rows)
+    }
+}
+
 /// The serialize_size is equal to the number of bytes required by serialization.
-pub fn serialize_column(
-    columns: &[Column],
-    num_rows: usize,
-    serialize_size: usize,
-) -> StringColumn {
+fn serialize_columns_no_batch(columns: &[Column], num_rows: usize) -> StringColumn {
+    // The serialize_size is equal to the number of bytes required by serialization.
+    let serialize_size = columns
+        .iter()
+        .map(|col| col.serialize_size())
+        .sum::<usize>();
+
     // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
     // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
     let mut data: Vec<u8> = Vec::with_capacity(serialize_size);
@@ -776,6 +783,104 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
         Column::Tuple(fields) => {
             for inner_col in fields.iter() {
                 serialize_column_binary(inner_col, row, row_space);
+            }
+        }
+    }
+}
+
+/// The batch version of [`serialize_columns_no_batch`]. Try to leverage SIMD to improve performance.
+///
+/// To serialize a column in batch, we need to preallocate a deterministic memory space for each row of the target column at once.
+pub fn serialize_columns_in_batch(
+    columns: &[Column],
+    num_rows: usize,
+    max_bytes_per_row: usize,
+) -> StringColumn {
+    let mut data: Vec<u8> = Vec::with_capacity(num_rows * max_bytes_per_row);
+
+    unsafe {
+        // Construct the pointer of each row in `data`.
+        let ptr = data.as_mut_ptr();
+        let mut keys = (0..num_rows).into_iter().map(|i| ptr.add(i)).collect();
+
+        for col in columns {
+            serialize_column_binary_in_batch(&mut keys, col);
+        }
+    }
+
+    let offsets: Vec<u64> = (0..num_rows + 1)
+        .into_iter()
+        .map(|i| (i * max_bytes_per_row) as u64)
+        .collect();
+    StringColumn::new(data.into(), offsets.into())
+}
+
+/// The batch version of [`serialize_column_binary`]. Try to leverage SIMD to improve performance.
+///
+/// # Safety
+///
+/// The serialized size of each row in `column` should not exceed `column.max_serialize_size_per_row()`.
+unsafe fn serialize_column_binary_in_batch(dst: &mut Vec<*mut u8>, column: &Column) {
+    debug_assert_eq!(dst.len(), column.len());
+    match column {
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
+        Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
+            NumberColumn::NUM_TYPE(col) => {
+                for (key, val) in dst.iter_mut().zip(col.iter()) {
+                    store_advance(val, key);
+                }
+            }
+        }),
+        Column::Decimal(col) => {
+            with_decimal_mapped_type!(|DECIMAL_TYPE| match col {
+                DecimalColumn::DECIMAL_TYPE(col, _) => {
+                    for (key, val) in dst.iter_mut().zip(col.iter()) {
+                        store_advance(val, key);
+                    }
+                }
+            })
+        }
+        Column::Boolean(col) => {
+            for (key, val) in dst.iter_mut().zip(col.iter()) {
+                store_advance(&val, key);
+            }
+        }
+        Column::Timestamp(col) => {
+            for (key, val) in dst.iter_mut().zip(col.iter()) {
+                store_advance(val, key);
+            }
+        }
+        Column::Date(col) => {
+            for (key, val) in dst.iter_mut().zip(col.iter()) {
+                store_advance(val, key);
+            }
+        }
+        Column::Nullable(col) => {
+            for (key, val) in dst.iter_mut().zip(col.validity.iter()) {
+                store_advance(&val, key);
+            }
+            serialize_column_binary_in_batch(dst, &col.column)
+        }
+        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
+            for (key, val) in dst.iter_mut().zip(v.iter()) {
+                let len = val.len();
+                store_advance(&(len as u64), key);
+                copy_advance_aligned(val.as_ptr(), key, len);
+            }
+        }
+        Column::Array(array) | Column::Map(array) => {
+            for (key, offsets) in dst.iter_mut().zip(array.offsets.windows(2)) {
+                let len = offsets[1] - offsets[0];
+                store_advance(&len, key);
+            }
+            for (row, (key, col)) in dst.iter_mut().zip(array.iter()).enumerate() {
+                // Degrade to serialize_column_binary
+                serialize_column_binary(&col, row, key)
+            }
+        }
+        Column::Tuple(fields) => {
+            for inner_col in fields.iter() {
+                serialize_column_binary_in_batch(dst, inner_col);
             }
         }
     }
