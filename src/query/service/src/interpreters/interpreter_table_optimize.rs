@@ -90,12 +90,12 @@ impl OptimizeTableInterpreter {
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.is_lazy;
-        let mut root = PhysicalPlan::CompactPartial(CompactPartial {
+        let mut root = PhysicalPlan::CompactPartial(Box::new(CompactPartial {
             parts,
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),
             column_ids: snapshot.schema.to_leaf_column_id_set(),
-        });
+        }));
 
         if is_distributed {
             root = PhysicalPlan::Exchange(Exchange {
@@ -107,14 +107,14 @@ impl OptimizeTableInterpreter {
             });
         }
 
-        Ok(PhysicalPlan::CommitSink(CommitSink {
+        Ok(PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(root),
             table_info,
             catalog_info,
             snapshot,
             mutation_kind: MutationKind::Compact,
             merge_meta,
-        }))
+        })))
     }
 
     async fn build_pipeline(

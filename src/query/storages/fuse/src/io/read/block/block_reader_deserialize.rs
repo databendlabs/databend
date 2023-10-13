@@ -32,6 +32,7 @@ use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
 use crate::FusePartInfo;
 use crate::FuseStorageFormat;
+use crate::MergeIOReadResult;
 
 pub enum DeserializedArray<'a> {
     Cached(&'a Arc<SizedColumnArray>),
@@ -102,15 +103,22 @@ impl BlockReader {
         meta: &BlockMeta,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        let columns_meta = &meta.col_metas;
-
         // Get the merged IO read result.
         let merge_io_read_result = self
-            .read_columns_data_by_merge_io(settings, &meta.location.0, columns_meta, &None)
+            .read_columns_data_by_merge_io(settings, &meta.location.0, &meta.col_metas, &None)
             .await?;
 
+        self.deserialize_chunks_with_meta(meta, storage_format, merge_io_read_result)
+    }
+
+    pub fn deserialize_chunks_with_meta(
+        &self,
+        meta: &BlockMeta,
+        storage_format: &FuseStorageFormat,
+        data: MergeIOReadResult,
+    ) -> Result<DataBlock> {
         // Get the columns chunk.
-        let column_chunks = merge_io_read_result.columns_chunks()?;
+        let column_chunks = data.columns_chunks()?;
 
         let num_rows = meta.row_count as usize;
 
@@ -119,7 +127,7 @@ impl BlockReader {
                 &meta.location.0,
                 num_rows,
                 &meta.compression,
-                columns_meta,
+                &meta.col_metas,
                 column_chunks,
                 None,
             ),
@@ -127,7 +135,7 @@ impl BlockReader {
                 &meta.location.0,
                 num_rows,
                 &meta.compression,
-                columns_meta,
+                &meta.col_metas,
                 column_chunks,
                 None,
             ),

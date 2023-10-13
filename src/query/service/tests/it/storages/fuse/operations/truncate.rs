@@ -145,7 +145,7 @@ async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::
     append_data(s1_table_to_be_truncated.clone()).await?;
     let s2_table_to_appended = fixture.latest_default_table().await?;
 
-    // 4. perform `truncate purge` operation on s1
+    // 4. perform `truncate` operation on s1
     let r = s1_table_to_be_truncated.truncate(ctx.clone()).await;
     // version mismatched, and `truncate purge` should result in error (but nothing should have been removed)
     assert!(r.is_err());

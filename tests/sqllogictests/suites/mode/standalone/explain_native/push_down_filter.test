@@ -134,56 +134,52 @@ AggregateFinal
     ├── aggregate functions: []
     ├── estimated rows: 0.00
     └── UnionAll
-        ├── output columns: [t.id (#0), de (#10)]
+        ├── output columns: [t.id (#0), de (#8)]
         ├── estimated rows: 0.00
         ├── EvalScalar
-        │   ├── output columns: [t.id (#0), de (#10)]
-        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#9)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#9)) AS Int64 NULL), true, 0, NULL)]
+        │   ├── output columns: [t.id (#0), de (#8)]
+        │   ├── expressions: [if(CAST(is_not_null(sum(tb.de) (#7)) AS Boolean NULL), CAST(assume_not_null(sum(tb.de) (#7)) AS Int64 NULL), true, 0, NULL)]
         │   ├── estimated rows: 0.00
         │   └── AggregateFinal
-        │       ├── output columns: [sum(tb.de) (#9), t.id (#0)]
+        │       ├── output columns: [sum(tb.de) (#7), t.id (#0)]
         │       ├── group by: [id]
-        │       ├── aggregate functions: [sum(de)]
+        │       ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │       ├── estimated rows: 0.00
         │       └── AggregatePartial
-        │           ├── output columns: [sum(tb.de) (#9), #_group_by_key]
+        │           ├── output columns: [sum(tb.de) (#7), #_group_by_key]
         │           ├── group by: [id]
-        │           ├── aggregate functions: [sum(de)]
+        │           ├── aggregate functions: [sum(sum(coalesce(t3.val, 0)))]
         │           ├── estimated rows: 0.00
         │           └── HashJoin
-        │               ├── output columns: [t.id (#0), de (#6)]
+        │               ├── output columns: [t.id (#0), sum(coalesce(t3.val, 0)) (#5)]
         │               ├── join type: LEFT OUTER
         │               ├── build keys: [tb.sid (#1)]
         │               ├── probe keys: [t.id (#0)]
         │               ├── filters: []
         │               ├── estimated rows: 0.00
-        │               ├── EvalScalar(Build)
-        │               │   ├── output columns: [t2.sid (#1), de (#6)]
-        │               │   ├── expressions: [sum(coalesce(t3.val, 0)) (#5)]
+        │               ├── AggregateFinal(Build)
+        │               │   ├── output columns: [sum(coalesce(t3.val, 0)) (#5), t2.sid (#1)]
+        │               │   ├── group by: [sid]
+        │               │   ├── aggregate functions: [sum(sum_arg_0)]
         │               │   ├── estimated rows: 0.00
-        │               │   └── AggregateFinal
-        │               │       ├── output columns: [sum(coalesce(t3.val, 0)) (#5), t2.sid (#1)]
+        │               │   └── AggregatePartial
+        │               │       ├── output columns: [sum(coalesce(t3.val, 0)) (#5), #_group_by_key]
         │               │       ├── group by: [sid]
         │               │       ├── aggregate functions: [sum(sum_arg_0)]
         │               │       ├── estimated rows: 0.00
-        │               │       └── AggregatePartial
-        │               │           ├── output columns: [sum(coalesce(t3.val, 0)) (#5), #_group_by_key]
-        │               │           ├── group by: [sid]
-        │               │           ├── aggregate functions: [sum(sum_arg_0)]
+        │               │       └── EvalScalar
+        │               │           ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
+        │               │           ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
         │               │           ├── estimated rows: 0.00
-        │               │           └── EvalScalar
-        │               │               ├── output columns: [t2.sid (#1), sum_arg_0 (#4)]
-        │               │               ├── expressions: [if(CAST(is_not_null(t3.val (#2)) AS Boolean NULL), CAST(assume_not_null(t3.val (#2)) AS Int32 NULL), true, 0, NULL)]
-        │               │               ├── estimated rows: 0.00
-        │               │               └── TableScan
-        │               │                   ├── table: default.default.t2
-        │               │                   ├── output columns: [sid (#1), val (#2)]
-        │               │                   ├── read rows: 0
-        │               │                   ├── read bytes: 0
-        │               │                   ├── partitions total: 0
-        │               │                   ├── partitions scanned: 0
-        │               │                   ├── push downs: [filters: [], limit: NONE]
-        │               │                   └── estimated rows: 0.00
+        │               │           └── TableScan
+        │               │               ├── table: default.default.t2
+        │               │               ├── output columns: [sid (#1), val (#2)]
+        │               │               ├── read rows: 0
+        │               │               ├── read bytes: 0
+        │               │               ├── partitions total: 0
+        │               │               ├── partitions scanned: 0
+        │               │               ├── push downs: [filters: [], limit: NONE]
+        │               │               └── estimated rows: 0.00
         │               └── TableScan(Probe)
         │                   ├── table: default.default.t1
         │                   ├── output columns: [id (#0)]
@@ -194,15 +190,15 @@ AggregateFinal
         │                   ├── push downs: [filters: [is_true(t1.id (#0) = 1)], limit: NONE]
         │                   └── estimated rows: 0.00
         └── EvalScalar
-            ├── output columns: [t.id (#11), de (#14)]
-            ├── expressions: [CAST(de (#13) AS Int64 NULL)]
+            ├── output columns: [t.id (#9), de (#12)]
+            ├── expressions: [CAST(de (#11) AS Int64 NULL)]
             ├── estimated rows: 0.00
             └── EvalScalar
-                ├── output columns: [t.id (#11), de (#13)]
+                ├── output columns: [t.id (#9), de (#11)]
                 ├── expressions: [0]
                 ├── estimated rows: 0.00
                 └── AggregateFinal
-                    ├── output columns: [t.id (#11)]
+                    ├── output columns: [t.id (#9)]
                     ├── group by: [id]
                     ├── aggregate functions: []
                     ├── estimated rows: 0.00
@@ -213,12 +209,12 @@ AggregateFinal
                         ├── estimated rows: 0.00
                         └── TableScan
                             ├── table: default.default.t1
-                            ├── output columns: [id (#11)]
+                            ├── output columns: [id (#9)]
                             ├── read rows: 0
                             ├── read bytes: 0
                             ├── partitions total: 0
                             ├── partitions scanned: 0
-                            ├── push downs: [filters: [is_true(t1.id (#11) = 1)], limit: NONE]
+                            ├── push downs: [filters: [is_true(t1.id (#9) = 1)], limit: NONE]
                             └── estimated rows: 0.00
 
 statement ok

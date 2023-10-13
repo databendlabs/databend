@@ -52,10 +52,10 @@ order by
     l_returnflag,
     l_linestatus;
 ----
-A F 3774200.00 5320753880.69 5054096266.6828 5256751331.449234 25.5375 36002.1238 0.0501 147790
-N F 95257.00 133737795.84 127132372.6512 132286291.229445 25.3006 35521.3269 0.0493 3765
-N O 7459297.00 10512270008.90 9986238338.3847 10385578376.585467 25.5455 36000.9246 0.0500 292000
-R F 3785523.00 5337950526.47 5071818532.9420 5274405503.049367 25.5259 35994.0292 0.0499 148301
+A F 3774200.00 5320753880.69 5054096266.6828 5256751331.449234 25.53758711 36002.12382901 0.05014459 147790
+N F 95257.00 133737795.84 127132372.6512 132286291.229445 25.30066401 35521.32691633 0.04939442 3765
+N O 7459297.00 10512270008.90 9986238338.3847 10385578376.585467 25.54553767 36000.92468801 0.05009595 292000
+R F 3785523.00 5337950526.47 5071818532.9420 5274405503.049367 25.52594385 35994.02921403 0.04998927 148301
 
 # Q2
 query I
@@ -823,6 +823,28 @@ where
 ----
 23512.75195312
 
+#Q17 variant
+query I
+SELECT
+  TRUNCATE(sum(l_extendedprice) / 7.0, 8) AS avg_yearly
+FROM
+  lineitem,
+  part
+WHERE
+  p_partkey = l_partkey
+  AND p_brand = 'Brand#23'
+  AND p_container = 'MED BOX'
+  AND l_quantity < (
+    SELECT
+      0.2 * (sum(l_quantity) / count(l_quantity))
+    FROM
+      lineitem
+    WHERE
+      l_partkey = p_partkey
+  )
+----
+23512.75195312
+
 #Q18
 query I
 select
@@ -1198,13 +1220,13 @@ order by
     s_name,
     p_partkey;
 ----
-HashJoin: RIGHT SINGLE (rows: 320.00)
+HashJoin: RIGHT SINGLE
 ├── Build
-│   └── HashJoin: INNER (rows: 320.00)
+│   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER (rows: 200.00)
+│       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── HashJoin: INNER (rows: 5.00)
+│       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
 │       │       │       │   └── Scan: default.tpch.region (read rows: 5)
 │       │       │       └── Probe
@@ -1212,17 +1234,17 @@ HashJoin: RIGHT SINGLE (rows: 320.00)
 │       │       └── Probe
 │       │           └── Scan: default.tpch.supplier (read rows: 1000)
 │       └── Probe
-│           └── HashJoin: INNER (rows: 1600.00)
+│           └── HashJoin: INNER
 │               ├── Build
 │               │   └── Scan: default.tpch.part (read rows: 20000)
 │               └── Probe
 │                   └── Scan: default.tpch.partsupp (read rows: 80000)
 └── Probe
-    └── HashJoin: INNER (rows: 16000.00)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 200.00)
+        │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── HashJoin: INNER (rows: 5.00)
+        │       │   └── HashJoin: INNER
         │       │       ├── Build
         │       │       │   └── Scan: default.tpch.region (read rows: 5)
         │       │       └── Probe
@@ -1258,9 +1280,9 @@ order by
     o_orderdate
 limit 5;
 ----
-HashJoin: INNER (rows: 178970.16)
+HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER (rows: 44700.00)
+│   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch.customer (read rows: 15000)
 │       └── Probe
@@ -1292,7 +1314,7 @@ group by
 order by
     o_orderpriority;
 ----
-HashJoin: RIGHT SEMI (rows: 6001.23)
+HashJoin: RIGHT SEMI
 ├── Build
 │   └── Scan: default.tpch.orders (read rows: 150000)
 └── Probe
@@ -1325,19 +1347,19 @@ group by
 order by
     revenue desc;
 ----
-HashJoin: INNER (rows: 25224.93)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.customer (read rows: 15000)
 └── Probe
-    └── HashJoin: INNER (rows: 25224.93)
+    └── HashJoin: INNER
         ├── Build
         │   └── Scan: default.tpch.orders (read rows: 150000)
         └── Probe
-            └── HashJoin: INNER (rows: 120114.40)
+            └── HashJoin: INNER
                 ├── Build
-                │   └── HashJoin: INNER (rows: 200.00)
+                │   └── HashJoin: INNER
                 │       ├── Build
-                │       │   └── HashJoin: INNER (rows: 5.00)
+                │       │   └── HashJoin: INNER
                 │       │       ├── Build
                 │       │       │   └── Scan: default.tpch.region (read rows: 5)
                 │       │       └── Probe
@@ -1403,19 +1425,19 @@ order by
     cust_nation,
     l_year;
 ----
-HashJoin: INNER (rows: 1882.65)
+HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER (rows: 78.40)
+│   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch.nation (read rows: 25)
 │       └── Probe
 │           └── Scan: default.tpch.supplier (read rows: 1000)
 └── Probe
-    └── HashJoin: INNER (rows: 24013.34)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 11760.00)
+        │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── HashJoin: INNER (rows: 1176.00)
+        │       │   └── HashJoin: INNER
         │       │       ├── Build
         │       │       │   └── Scan: default.tpch.nation (read rows: 25)
         │       │       └── Probe
@@ -1465,25 +1487,25 @@ group by
 order by
     o_year;
 ----
-HashJoin: INNER (rows: 440.36)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.nation (read rows: 25)
 └── Probe
-    └── HashJoin: INNER (rows: 440.36)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 440.36)
+        │   └── HashJoin: INNER
         │       ├── Build
-        │       │   └── HashJoin: INNER (rows: 5.00)
+        │       │   └── HashJoin: INNER
         │       │       ├── Build
         │       │       │   └── Scan: default.tpch.region (read rows: 5)
         │       │       └── Probe
         │       │           └── Scan: default.tpch.nation (read rows: 25)
         │       └── Probe
-        │           └── HashJoin: INNER (rows: 2201.82)
+        │           └── HashJoin: INNER
         │               ├── Build
-        │               │   └── HashJoin: INNER (rows: 2201.82)
+        │               │   └── HashJoin: INNER
         │               │       ├── Build
-        │               │       │   └── HashJoin: INNER (rows: 4003.33)
+        │               │       │   └── HashJoin: INNER
         │               │       │       ├── Build
         │               │       │       │   └── Scan: default.tpch.part (read rows: 20000)
         │               │       │       └── Probe
@@ -1530,21 +1552,21 @@ order by
     sum_profit
 limit 5;
 ----
-HashJoin: INNER (rows: 480400.00)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.partsupp (read rows: 80000)
 └── Probe
-    └── HashJoin: INNER (rows: 120100.00)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 1000.00)
+        │   └── HashJoin: INNER
         │       ├── Build
         │       │   └── Scan: default.tpch.nation (read rows: 25)
         │       └── Probe
         │           └── Scan: default.tpch.supplier (read rows: 1000)
         └── Probe
-            └── HashJoin: INNER (rows: 120100.00)
+            └── HashJoin: INNER
                 ├── Build
-                │   └── HashJoin: INNER (rows: 120100.00)
+                │   └── HashJoin: INNER
                 │       ├── Build
                 │       │   └── Scan: default.tpch.part (read rows: 20000)
                 │       └── Probe
@@ -1586,13 +1608,13 @@ group by
 order by
     revenue desc limit 5;
 ----
-HashJoin: INNER (rows: 30033.74)
+HashJoin: INNER
 ├── Build
-│   └── HashJoin: INNER (rows: 7501.28)
+│   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch.nation (read rows: 25)
 │       └── Probe
-│           └── HashJoin: INNER (rows: 7501.28)
+│           └── HashJoin: INNER
 │               ├── Build
 │               │   └── Scan: default.tpch.orders (read rows: 150000)
 │               └── Probe
@@ -1630,11 +1652,11 @@ group by
 order by
     value desc limit 100;
 ----
-RangeJoin: INNER (rows: 3200.00)
+RangeJoin: INNER
 ├── Left
-│   └── HashJoin: INNER (rows: 3200.00)
+│   └── HashJoin: INNER
 │       ├── Build
-│       │   └── HashJoin: INNER (rows: 40.00)
+│       │   └── HashJoin: INNER
 │       │       ├── Build
 │       │       │   └── Scan: default.tpch.nation (read rows: 25)
 │       │       └── Probe
@@ -1642,9 +1664,9 @@ RangeJoin: INNER (rows: 3200.00)
 │       └── Probe
 │           └── Scan: default.tpch.partsupp (read rows: 80000)
 └── Right
-    └── HashJoin: INNER (rows: 3200.00)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 40.00)
+        │   └── HashJoin: INNER
         │       ├── Build
         │       │   └── Scan: default.tpch.nation (read rows: 25)
         │       └── Probe
@@ -1683,7 +1705,7 @@ group by
 order by
     l_shipmode;
 ----
-HashJoin: INNER (rows: 120100.00)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Probe
@@ -1715,7 +1737,7 @@ order by
     custdist desc,
     c_count desc;
 ----
-HashJoin: RIGHT OUTER (rows: 120000.00)
+HashJoin: RIGHT OUTER
 ├── Build
 │   └── Scan: default.tpch.customer (read rows: 15000)
 └── Probe
@@ -1737,7 +1759,7 @@ where
   and l_shipdate >= to_date('1995-09-01')
   and l_shipdate < add_months(to_date('1995-09-01'), 1);
 ----
-HashJoin: INNER (rows: 12012.09)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Probe
@@ -1776,11 +1798,11 @@ where
 order by
     s_suppkey;
 ----
-HashJoin: INNER (rows: 80.00)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Probe
-    └── HashJoin: INNER (rows: 80.00)
+    └── HashJoin: INNER
         ├── Build
         │   └── Scan: default.tpch.lineitem (read rows: 600572)
         └── Probe
@@ -1823,11 +1845,11 @@ MaterializedCte: 0
 ├── Left
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Right
-    └── HashJoin: INNER (rows: 80.00)
+    └── HashJoin: INNER
         ├── Build
         │   └── CteScan: 0, sub index: 2
         └── Probe
-            └── HashJoin: INNER (rows: 80.00)
+            └── HashJoin: INNER
                 ├── Build
                 │   └── CteScan: 0, sub index: 1
                 └── Probe
@@ -1867,11 +1889,11 @@ order by
     p_size
 limit 20;
 ----
-HashJoin: RIGHT MARK (rows: 16000.00)
+HashJoin: RIGHT MARK
 ├── Build
 │   └── Scan: default.tpch.supplier (read rows: 1000)
 └── Probe
-    └── HashJoin: INNER (rows: 16000.00)
+    └── HashJoin: INNER
         ├── Build
         │   └── Scan: default.tpch.part (read rows: 20000)
         └── Probe
@@ -1897,9 +1919,9 @@ where
             l_partkey = p_partkey
 );
 ----
-HashJoin: RIGHT SINGLE (rows: 15012.50)
+HashJoin: RIGHT SINGLE
 ├── Build
-│   └── HashJoin: INNER (rows: 15012.50)
+│   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch.part (read rows: 20000)
 │       └── Probe
@@ -1942,13 +1964,13 @@ order by
     o_totalprice desc,
     o_orderdate;
 ----
-HashJoin: LEFT SEMI (rows: 120114.40)
+HashJoin: LEFT SEMI
 ├── Build
 │   └── Scan: default.tpch.lineitem (read rows: 600572)
 └── Probe
-    └── HashJoin: INNER (rows: 600572.00)
+    └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER (rows: 150000.00)
+        │   └── HashJoin: INNER
         │       ├── Build
         │       │   └── Scan: default.tpch.customer (read rows: 15000)
         │       └── Probe
@@ -2028,7 +2050,7 @@ where
         )
 ;
 ----
-HashJoin: INNER (rows: 69216.03)
+HashJoin: INNER
 ├── Build
 │   └── Scan: default.tpch.part (read rows: 20000)
 └── Probe
@@ -2074,17 +2096,17 @@ where
 order by
     s_name;
 ----
-HashJoin: RIGHT SEMI (rows: 40.00)
+HashJoin: RIGHT SEMI
 ├── Build
-│   └── HashJoin: INNER (rows: 40.00)
+│   └── HashJoin: INNER
 │       ├── Build
 │       │   └── Scan: default.tpch.nation (read rows: 25)
 │       └── Probe
 │           └── Scan: default.tpch.supplier (read rows: 1000)
 └── Probe
-    └── HashJoin: RIGHT SINGLE (rows: 16000.00)
+    └── HashJoin: RIGHT SINGLE
         ├── Build
-        │   └── HashJoin: LEFT SEMI (rows: 16000.00)
+        │   └── HashJoin: LEFT SEMI
         │       ├── Build
         │       │   └── Scan: default.tpch.part (read rows: 20000)
         │       └── Probe
@@ -2134,15 +2156,15 @@ order by
     numwait desc,
     s_name;
 ----
-HashJoin: RIGHT ANTI (rows: 4804.58)
+HashJoin: RIGHT ANTI
 ├── Build
-│   └── HashJoin: RIGHT SEMI (rows: 4804.58)
+│   └── HashJoin: RIGHT SEMI
 │       ├── Build
-│       │   └── HashJoin: INNER (rows: 4804.58)
+│       │   └── HashJoin: INNER
 │       │       ├── Build
-│       │       │   └── HashJoin: INNER (rows: 4804.58)
+│       │       │   └── HashJoin: INNER
 │       │       │       ├── Build
-│       │       │       │   └── HashJoin: INNER (rows: 40.00)
+│       │       │       │   └── HashJoin: INNER
 │       │       │       │       ├── Build
 │       │       │       │       │   └── Scan: default.tpch.nation (read rows: 25)
 │       │       │       │       └── Probe
@@ -2196,9 +2218,9 @@ group by
 order by
     cntrycode;
 ----
-HashJoin: RIGHT ANTI (rows: 3000.00)
+HashJoin: RIGHT ANTI
 ├── Build
-│   └── RangeJoin: INNER (rows: 3000.00)
+│   └── RangeJoin: INNER
 │       ├── Left
 │       │   └── Scan: default.tpch.customer (read rows: 15000)
 │       └── Right

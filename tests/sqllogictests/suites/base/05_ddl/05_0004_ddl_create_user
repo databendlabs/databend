@@ -47,6 +47,9 @@ statement error 2202
 CREATE USER 'test-f' IDENTIFIED BY 'password'
 
 statement ok
+SHOW USERS
+
+statement ok
 DROP USER IF EXISTS 'test-a'
 
 statement ok

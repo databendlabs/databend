@@ -33,6 +33,7 @@ use log::info;
 use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
@@ -360,6 +361,12 @@ where F: SnapshotGenerator + Send + 'static
                         let duration = self.start_time.elapsed();
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
+                        }
+                        for segment in self.abort_operation.segments.iter() {
+                            self.ctx.add_segment_location((
+                                segment.to_string(),
+                                SegmentInfo::VERSION,
+                            ))?;
                         }
                         metrics_inc_commit_milliseconds(duration.as_millis());
                         self.heartbeat.shutdown().await?;

@@ -32,7 +32,6 @@ pub struct HashTableCell<T: HashMethodBounds, V: Send + Sync + 'static> {
     pub hashtable: T::HashTable<V>,
     pub arena: Area,
     pub arena_holders: Vec<ArenaHolder>,
-    pub temp_values: Vec<<T::HashTable<V> as HashtableLike>::Value>,
     pub _dropper: Option<Arc<dyn HashTableDropper<T, V>>>,
 }
 
@@ -44,10 +43,6 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> Drop for HashTableCell<T, V>
     fn drop(&mut self) {
         if let Some(dropper) = self._dropper.take() {
             dropper.destroy(&mut self.hashtable);
-
-            for value in &self.temp_values {
-                dropper.destroy_value(value)
-            }
         }
     }
 }
@@ -60,7 +55,6 @@ impl<T: HashMethodBounds, V: Send + Sync + 'static> HashTableCell<T, V> {
         HashTableCell::<T, V> {
             hashtable: inner,
             arena_holders: vec![],
-            temp_values: vec![],
             _dropper: Some(_dropper),
             arena: Area::create(),
         }

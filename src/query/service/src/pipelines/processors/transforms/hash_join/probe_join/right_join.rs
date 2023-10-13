@@ -17,14 +17,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
@@ -114,7 +113,7 @@ impl HashJoinProbeState {
                         let nullable_columns = probe_block
                             .columns()
                             .iter()
-                            .map(|c| set_validity(c, max_block_size, true_validity))
+                            .map(|c| set_true_validity(c, max_block_size, true_validity))
                             .collect::<Vec<_>>();
                         Some(DataBlock::new(nullable_columns, max_block_size))
                     } else {
@@ -253,15 +252,12 @@ impl HashJoinProbeState {
             )?;
 
             // The join type is right join, we need to wrap nullable for probe side.
-            let mut validity = MutableBitmap::new();
-            validity.extend_constant(matched_num, true);
-            let validity: Bitmap = validity.into();
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| set_validity(c, probe_block.num_rows(), &validity))
+                .map(|c| set_true_validity(c, matched_num, true_validity))
                 .collect::<Vec<_>>();
-            Some(DataBlock::new(nullable_columns, validity.len()))
+            Some(DataBlock::new(nullable_columns, matched_num))
         } else {
             None
         };

@@ -81,6 +81,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
+    // now it is only set in query_log::log_query_finished
+    pub(in crate::sessions) finish_time: RwLock<Option<SystemTime>>,
     // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
     // We use this field to count maximum of one error found per data file.
     #[allow(clippy::type_complexity)]
@@ -126,6 +128,7 @@ impl QueryContextShared {
             executor: Arc::new(RwLock::new(Weak::new())),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
+            finish_time: Default::default(),
             on_error_map: Arc::new(RwLock::new(None)),
             on_error_mode: Arc::new(RwLock::new(None)),
             copy_status: Arc::new(Default::default()),

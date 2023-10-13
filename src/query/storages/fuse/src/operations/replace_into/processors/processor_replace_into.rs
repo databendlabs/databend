@@ -14,16 +14,23 @@
 
 use std::any::Any;
 use std::collections::HashMap;
+use std::collections::HashSet;
+use std::ops::Not;
 use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::BooleanType;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
+use common_expression::Value;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
@@ -34,6 +41,7 @@ use common_pipeline_core::processors::Processor;
 use common_sql::executor::OnConflictField;
 use storages_common_table_meta::meta::ColumnStatistics;
 
+use crate::metrics::metrics_inc_replace_append_blocks_rows;
 use crate::metrics::metrics_inc_replace_block_number_input;
 use crate::metrics::metrics_inc_replace_process_input_block_time_ms;
 use crate::operations::replace_into::mutator::mutator_replace_into::ReplaceIntoMutator;
@@ -51,20 +59,24 @@ pub struct ReplaceIntoProcessor {
     output_data_append: Option<DataBlock>,
 
     target_table_empty: bool,
+    delete_when: Option<(Expr, usize)>,
+    ctx: Arc<dyn TableContext>,
 }
 
 impl ReplaceIntoProcessor {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
-        ctx: &dyn TableContext,
+        ctx: Arc<dyn TableContext>,
         on_conflict_fields: Vec<OnConflictField>,
         cluster_keys: Vec<RemoteExpr<String>>,
         bloom_filter_column_indexes: Vec<FieldIndex>,
         table_schema: &TableSchema,
         target_table_empty: bool,
         table_range_idx: HashMap<ColumnId, ColumnStatistics>,
+        delete_when: Option<(Expr, usize)>,
     ) -> Result<Self> {
         let replace_into_mutator = ReplaceIntoMutator::try_create(
-            ctx,
+            ctx.as_ref(),
             on_conflict_fields,
             cluster_keys,
             bloom_filter_column_indexes,
@@ -84,6 +96,8 @@ impl ReplaceIntoProcessor {
             output_data_merge_into_action: None,
             output_data_append: None,
             target_table_empty,
+            delete_when,
+            ctx,
         })
     }
 
@@ -164,8 +178,34 @@ impl Processor for ReplaceIntoProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
+        if let Some(mut data_block) = self.input_data.take() {
             let start = Instant::now();
+            let mut filter = None;
+            let mut all_delete = false;
+            if let Some((expr, delete_column)) = &self.delete_when {
+                let expr = expr.project_column_ref(|_| *delete_column);
+                let func_ctx = self.ctx.get_function_context()?;
+                let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let predicates = evaluator
+                    .run(&expr)
+                    .map_err(|e| e.add_message("eval filter failed:"))?
+                    .try_downcast::<BooleanType>()
+                    .unwrap();
+                match predicates {
+                    Value::Scalar(scalar) => {
+                        all_delete = scalar;
+                    }
+                    Value::Column(column) => {
+                        filter = Some(column.not());
+                    }
+                }
+
+                let column_num = data_block.num_columns();
+                let projections = (0..column_num)
+                    .filter(|i| i != delete_column)
+                    .collect::<HashSet<_>>();
+                data_block = data_block.project(&projections);
+            };
             let merge_into_action = self.replace_into_mutator.process_input_block(&data_block)?;
             metrics_inc_replace_process_input_block_time_ms(start.elapsed().as_millis() as u64);
             metrics_inc_replace_block_number_input(1);
@@ -173,7 +213,20 @@ impl Processor for ReplaceIntoProcessor {
                 self.output_data_merge_into_action =
                     Some(DataBlock::empty_with_meta(Box::new(merge_into_action)));
             }
-            self.output_data_append = Some(data_block);
+
+            if all_delete {
+                return Ok(());
+            }
+
+            if let Some(filter) = filter {
+                data_block = data_block.filter_with_bitmap(&filter)?;
+            }
+
+            metrics_inc_replace_append_blocks_rows(data_block.num_rows() as u64);
+
+            if data_block.num_rows() > 0 {
+                self.output_data_append = Some(data_block);
+            }
             return Ok(());
         }
 

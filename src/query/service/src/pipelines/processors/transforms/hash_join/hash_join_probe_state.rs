@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
@@ -46,7 +45,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
@@ -169,12 +168,7 @@ impl HashJoinProbeState {
             let nullable_columns = input
                 .columns()
                 .iter()
-                .map(|c| {
-                    let mut validity = MutableBitmap::new();
-                    validity.extend_constant(input.num_rows(), true);
-                    let validity: Bitmap = validity.into();
-                    set_validity(c, validity.len(), &validity)
-                })
+                .map(|c| set_true_validity(c, input.num_rows(), &probe_state.true_validity))
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
@@ -456,22 +450,11 @@ impl HashJoinProbeState {
 
                 if self.hash_join_state.hash_join_desc.join_type == JoinType::Full {
                     let num_rows = unmatched_build_block.num_rows();
-                    let nullable_unmatched_build_columns = if num_rows == max_block_size {
-                        unmatched_build_block
-                            .columns()
-                            .iter()
-                            .map(|c| set_validity(c, num_rows, true_validity))
-                            .collect::<Vec<_>>()
-                    } else {
-                        let mut validity = MutableBitmap::new();
-                        validity.extend_constant(num_rows, true);
-                        let validity: Bitmap = validity.into();
-                        unmatched_build_block
-                            .columns()
-                            .iter()
-                            .map(|c| set_validity(c, num_rows, &validity))
-                            .collect::<Vec<_>>()
-                    };
+                    let nullable_unmatched_build_columns = unmatched_build_block
+                        .columns()
+                        .iter()
+                        .map(|c| set_true_validity(c, num_rows, true_validity))
+                        .collect::<Vec<_>>();
                     unmatched_build_block =
                         DataBlock::new(nullable_unmatched_build_columns, num_rows);
                 };

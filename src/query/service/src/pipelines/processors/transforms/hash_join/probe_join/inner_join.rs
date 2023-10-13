@@ -15,8 +15,6 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -27,7 +25,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -120,16 +118,11 @@ impl HashJoinProbeState {
                                 (true, false) => {
                                     result_block.get_by_offset(*index).clone().remove_nullable()
                                 }
-                                (false, true) => {
-                                    let mut validity = MutableBitmap::new();
-                                    validity.extend_constant(result_block.num_rows(), true);
-                                    let validity: Bitmap = validity.into();
-                                    set_validity(
-                                        result_block.get_by_offset(*index),
-                                        validity.len(),
-                                        &validity,
-                                    )
-                                }
+                                (false, true) => set_true_validity(
+                                    result_block.get_by_offset(*index),
+                                    result_block.num_rows(),
+                                    &probe_state.true_validity,
+                                ),
                             };
                             result_block.add_column(entry);
                         }
@@ -195,16 +188,11 @@ impl HashJoinProbeState {
                         (true, false) => {
                             result_block.get_by_offset(*index).clone().remove_nullable()
                         }
-                        (false, true) => {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(result_block.num_rows(), true);
-                            let validity: Bitmap = validity.into();
-                            set_validity(
-                                result_block.get_by_offset(*index),
-                                validity.len(),
-                                &validity,
-                            )
-                        }
+                        (false, true) => set_true_validity(
+                            result_block.get_by_offset(*index),
+                            result_block.num_rows(),
+                            &probe_state.true_validity,
+                        ),
                     };
                     result_block.add_column(entry);
                 }

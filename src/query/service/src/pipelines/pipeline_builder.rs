@@ -79,7 +79,7 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
@@ -331,14 +331,16 @@ impl PipelineBuilder {
             table_level_range_index,
             table_schema,
             need_insert,
+            delete_when,
         } = deduplicate;
 
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
-        let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
+        let mut delete_column_idx = 0;
+        let mut opt_modified_schema = None;
         if let Some(SelectCtx {
             select_column_bindings,
             select_schema,
@@ -351,6 +353,22 @@ impl PipelineBuilder {
                 &mut self.main_pipeline,
                 false,
             )?;
+
+            let mut target_schema: DataSchema = table_schema.clone().into();
+            if let Some((_, delete_column)) = delete_when {
+                delete_column_idx = select_schema.index_of(delete_column.as_str())?;
+                let delete_column = select_schema.field(delete_column_idx).clone();
+                target_schema
+                    .fields
+                    .insert(delete_column_idx, delete_column);
+                opt_modified_schema = Some(Arc::new(target_schema.clone()));
+            }
+            let target_schema = Arc::new(target_schema.clone());
+            if target_schema.fields().len() != select_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "The number of columns in the target table is different from the number of columns in the SELECT clause",
+                ));
+            }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
@@ -370,13 +388,14 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            target_schema.clone(),
+            Arc::new(table_schema.clone().into()),
         )?;
 
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
+            opt_modified_schema,
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;
@@ -395,16 +414,25 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
+        let delete_when = if let Some((remote_expr, delete_column)) = delete_when {
+            Some((
+                remote_expr.as_expr(&BUILTIN_FUNCTIONS),
+                delete_column.clone(),
+            ))
+        } else {
+            None
+        };
         let cluster_keys = table.cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
-                self.ctx.as_ref(),
+                self.ctx.clone(),
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|(expr, _)| (expr, delete_column_idx)),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -417,6 +445,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|_| delete_column_idx),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -445,7 +474,7 @@ impl PipelineBuilder {
         let block_thresholds = table.get_block_thresholds();
 
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
         // this TransformSerializeBlock is just used to get block_builder
         let block_builder = TransformSerializeBlock::try_create(
@@ -471,6 +500,24 @@ impl PipelineBuilder {
             }
             output_len
         };
+        // Handle matched and unmatched data separately.
+
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
 
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
@@ -585,6 +632,15 @@ impl PipelineBuilder {
         let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
+        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        let output_lens = self.main_pipeline.output_len();
+        table.cluster_gen_for_append_with_specified_last_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            output_lens - 1,
+        )?;
+
         pipe_items.clear();
         pipe_items.push(table.rowid_aggregate_mutator(
             self.ctx.clone(),
@@ -657,7 +713,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -813,7 +869,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+    fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
         let to_table =
             self.ctx
                 .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
@@ -927,7 +983,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
