@@ -24,7 +24,7 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_tracing::func_name;
 use minitrace::prelude::*;
-use tonic::codegen::futures_core::Stream;
+use tokio_stream::Stream;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
