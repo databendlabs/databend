@@ -212,7 +212,7 @@ impl BloomIndex {
                             map_column.values.values
                         })
                         .collect::<Vec<_>>();
-                    let column = Column::concat(&source_columns);
+                    let column = Column::concat_columns(&source_columns)?;
 
                     if Self::check_large_string(&column) {
                         continue;
@@ -231,7 +231,7 @@ impl BloomIndex {
                             value.convert_to_full_column(field_type, block.num_rows())
                         })
                         .collect::<Vec<_>>();
-                    let column = Column::concat(&source_columns);
+                    let column = Column::concat_columns(&source_columns)?;
 
                     if Self::check_large_string(&column) {
                         continue;
