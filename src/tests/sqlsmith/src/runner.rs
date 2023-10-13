@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::time::Duration;
 
 use common_ast::ast::CreateTableSource;
@@ -138,6 +139,14 @@ impl Runner {
         let conn = self.client.get_conn().await.unwrap();
         let row_count = 50;
 
+        async fn check_timeout<F>(future: F, sql: String)
+        where F: Future {
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), future).await {
+                tracing::info!("sql: {}", sql);
+                let err = format!("sql timeout: {}", e);
+                tracing::error!(err);
+            }
+        }
         for table in &tables {
             let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
@@ -145,15 +154,11 @@ impl Runner {
             conn.exec(&insert_sql).await.unwrap();
             let update_sql = generator.gen_update(table).to_string();
             tracing::info!("update_sql: {}", update_sql);
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
-                check_res(conn.exec(&update_sql).await)
-            })
-            .await
-            {
-                tracing::info!("update_sql: {}", update_sql);
-                let err = format!("update_sql timeout: {}", e);
-                tracing::error!(err);
-            }
+            check_timeout(
+                async { check_res(conn.exec(&update_sql.clone()).await) },
+                update_sql.clone(),
+            )
+            .await;
             let delete_stmt = generator.gen_delete(table);
             let delete_sql = delete_stmt.to_string();
             tracing::info!("delete_sql: {}", delete_sql);
@@ -198,31 +203,29 @@ impl Runner {
             let mut try_reduce = false;
             let mut err_code = 0;
             let mut err = String::new();
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
-                if let Err(e) = conn.exec(&query_sql).await {
-                    if let Error::Api(ClientError::InvalidResponse(err)) = &e {
-                        // TODO: handle Syntax and Semantic errors
-                        err_code = err.code;
-                        if err_code == 1005 || err_code == 1065 {
-                            return;
+            check_timeout(
+                async {
+                    if let Err(e) = conn.exec(&query_sql).await {
+                        if let Error::Api(ClientError::InvalidResponse(err)) = &e {
+                            // TODO: handle Syntax and Semantic errors
+                            err_code = err.code;
+                            if err_code == 1005 || err_code == 1065 {
+                                return;
+                            }
+                            if KNOWN_ERRORS
+                                .iter()
+                                .any(|known_err| err.message.starts_with(known_err))
+                            {
+                                return;
+                            }
                         }
-                        if KNOWN_ERRORS
-                            .iter()
-                            .any(|known_err| err.message.starts_with(known_err))
-                        {
-                            return;
-                        }
+                        err = format!("error: {}", e);
+                        try_reduce = true;
                     }
-                    err = format!("error: {}", e);
-                    try_reduce = true;
-                }
-            })
-            .await
-            {
-                tracing::info!("query_sql: {}", query_sql);
-                let err = format!("query timeout: {}", e);
-                tracing::error!(err);
-            }
+                },
+                query_sql.clone(),
+            )
+            .await;
             if try_reduce {
                 let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
                 tracing::info!("query_sql: {}", reduced_query.to_string());
