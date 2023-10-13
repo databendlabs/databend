@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use chrono_tz::Tz;
 use common_ast::ast::AddColumnOption;
 use common_ast::ast::AlterTableAction;
@@ -43,7 +45,15 @@ use roaring::RoaringTreemap;
 use crate::sql_gen::SqlGenerator;
 use crate::sql_gen::Table;
 
-impl<'a, R: Rng> SqlGenerator<'a, R> {
+enum MutTableAction {
+    RenameTable(String),
+    AddColumn((AddColumnOption, ColumnDefinition)),
+    RenameColumn((Identifier, Identifier)),
+    ModifyColumnDataType(ColumnDefinition),
+    DropColumn(Identifier),
+}
+
+impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
     pub(crate) fn gen_insert(&mut self, table: &Table, row_count: usize) -> InsertStmt {
         let table_name = Identifier::from_name(table.name.clone());
         let data_types = table
@@ -81,23 +91,68 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         table.schema.fields[field_index].clone()
     }
 
-    // generate alter table statement, and insert statement of new column(if any)
+    fn from_column_to_field(column: &ColumnDefinition) -> TableField {
+        let not_null = Self::is_column_not_null(column);
+        let data_type = resolve_type_name(&column.data_type, not_null).unwrap();
+        TableField::new(&column.name.name, data_type)
+    }
+
+    fn mut_table(table: &mut Table, action: MutTableAction) {
+        let mut new_schema = table.schema.as_ref().clone();
+        match action {
+            MutTableAction::RenameTable(name) => table.name = name,
+            MutTableAction::AddColumn((add_column_option, column)) => {
+                let field = Self::from_column_to_field(&column);
+
+                match add_column_option {
+                    AddColumnOption::End => new_schema.fields.push(field),
+                    AddColumnOption::First => new_schema.fields.insert(0, field),
+                    AddColumnOption::After(after_column) => {
+                        let field_index = new_schema.column_id_of(&after_column.name).unwrap();
+                        new_schema.fields.insert(field_index as usize, field);
+                    }
+                }
+            }
+            MutTableAction::RenameColumn((old_column, new_column)) => {
+                let field_index = new_schema.column_id_of(&old_column.name).unwrap();
+                let field = &mut new_schema.fields[field_index as usize];
+                field.name = new_column.name;
+            }
+            MutTableAction::ModifyColumnDataType(column) => {
+                let field_index = new_schema.index_of(&column.name.name).unwrap();
+                let field = &mut new_schema.fields[field_index];
+                let new_field = Self::from_column_to_field(&column);
+                field.data_type = new_field.data_type;
+            }
+            MutTableAction::DropColumn(column) => {
+                let field_index = new_schema.index_of(&column.name).unwrap();
+                new_schema.fields.remove(field_index);
+            }
+        }
+
+        table.schema = Arc::new(new_schema);
+    }
+
+    // generate alter table statement, new table schema and insert statement of new column(if any)
     pub(crate) fn gen_alter(
         &mut self,
         table: &Table,
         row_count: usize,
-    ) -> Option<(AlterTableStmt, Option<InsertStmt>)> {
+    ) -> Option<(AlterTableStmt, Table, Option<InsertStmt>)> {
         if self.rng.gen_bool(0.3) {
             return None;
         }
-        let (action, new_column) = match self.rng.gen_range(0..=4) {
+        let mut new_table = table.clone();
+        let (action, new_column, mut_action) = match self.rng.gen_range(0..=4) {
             0 => {
-                let new_table = format!("{}_{}", table.name, self.rng.gen_range(0..10));
+                let new_table_name =
+                    format!("{}_{}", table.name.clone(), self.rng.gen_range(0..10));
                 (
                     AlterTableAction::RenameTable {
-                        new_table: Identifier::from_name(new_table),
+                        new_table: Identifier::from_name(new_table_name.clone()),
                     },
                     None,
+                    MutTableAction::RenameTable(new_table_name),
                 )
             }
             1 => {
@@ -115,9 +170,10 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 (
                     AlterTableAction::AddColumn {
                         column: column.clone(),
-                        option,
+                        option: option.clone(),
                     },
-                    Some(column),
+                    Some(column.clone()),
+                    MutTableAction::AddColumn((option, column)),
                 )
             }
             2 => {
@@ -126,10 +182,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 let new_column = self.gen_new_column(table).name;
                 (
                     AlterTableAction::RenameColumn {
-                        old_column,
-                        new_column,
+                        old_column: old_column.clone(),
+                        new_column: new_column.clone(),
                     },
                     None,
+                    MutTableAction::RenameColumn((old_column, new_column)),
                 )
             }
             3 => {
@@ -149,16 +206,25 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                             new_column.clone(),
                         ]),
                     },
-                    Some(new_column),
+                    Some(new_column.clone()),
+                    MutTableAction::ModifyColumnDataType(new_column),
                 )
             }
             4 => {
                 let field = self.random_select_field(table);
                 let column = Identifier::from_name(field.name);
-                (AlterTableAction::DropColumn { column }, None)
+                (
+                    AlterTableAction::DropColumn {
+                        column: column.clone(),
+                    },
+                    None,
+                    MutTableAction::DropColumn(column),
+                )
             }
             _ => unreachable!(),
         };
+
+        Self::mut_table(&mut new_table, mut_action);
 
         let insert_stmt_opt = if let Some(new_column) = new_column {
             let not_null = Self::is_column_not_null(&new_column);
@@ -198,6 +264,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 action,
                 table_reference,
             },
+            new_table,
             insert_stmt_opt,
         ))
     }
