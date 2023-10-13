@@ -332,6 +332,12 @@ create table t_with_bloom_index(a int, b int) bloom_index_columns='b'
 statement ok
 drop table if exists t_with_bloom_index;
 
+statement ok
+create table t_nest_type(a int, b array(int not null));
+
+statement ok
+drop table if exists t_nest_type;
+
 statement error 1301
 create table t_row_per_block(a int) row_per_block = 100000000000;
 
