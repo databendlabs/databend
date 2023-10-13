@@ -325,7 +325,6 @@ impl MergeIntoInterpreter {
                 .into_iter()
                 .enumerate()
                 .collect(),
-            snapshot_loc: fuse_table.snapshot_loc().await?,
         }));
 
         // build mutation_aggregate
