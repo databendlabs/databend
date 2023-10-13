@@ -35,6 +35,7 @@ use crate::optimizer::SExpr;
 use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::optimizer::RESIDUAL_RULES;
 use crate::plans::CopyIntoLocationPlan;
+use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::IndexType;
 use crate::MetadataRef;
@@ -122,6 +123,24 @@ pub fn optimize(
                 plan.enable_distributed
             );
             Ok(Plan::CopyIntoTable(plan))
+        }
+        Plan::MergeInto(plan) => {
+            // try to optimize distributed join
+            if opt_ctx.config.enable_distributed_optimization
+                && ctx.get_settings().get_enable_distributed_merge_into()?
+            {
+                // Todo(JackTan25): We should use optimizer to make a decision to use
+                // left join and right join
+                // input is a Join_SExpr
+                let optimized_distributed_join_sexpr =
+                    optimize_distributed_query(ctx.clone(), &*plan.input)?;
+                Ok(Plan::MergeInto(Box::new(MergeInto {
+                    input: Box::new(optimized_distributed_join_sexpr),
+                    ..*plan
+                })))
+            } else {
+                Ok(Plan::MergeInto(plan))
+            }
         }
         // Passthrough statements.
         _ => Ok(plan),
