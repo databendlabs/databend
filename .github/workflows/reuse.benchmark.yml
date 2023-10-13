@@ -94,7 +94,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
@@ -132,7 +132,7 @@ jobs:
   comment:
     needs: cloud
     if: inputs.source == 'pr'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
@@ -183,7 +183,7 @@ jobs:
   archive:
     needs: cloud
     if: inputs.source == 'release'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         dataset:

@@ -61,8 +61,10 @@ jobs:
           version: ${{ inputs.tag }}
       - name: Publish to PyPI
         if: inputs.tag
-        uses: pypa/gh-action-pypi-publish@release/v1
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
+        uses: PyO3/maturin-action@v1
         with:
-          skip-existing: true
-          password: ${{ secrets.PYPI_PASSWORD }}
-          packages-dir: src/bendpy/dist
+          command: upload
+          args: --skip-existing *
+          working-directory: src/bendpy/dist
