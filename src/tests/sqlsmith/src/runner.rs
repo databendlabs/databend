@@ -136,12 +136,29 @@ impl Runner {
         let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
+        let row_count = 50;
 
         for table in &tables {
-            let insert_stmt = generator.gen_insert(table, 50);
+            let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
+            let alter_stmt_opt = generator.gen_alter(table, row_count);
+            if let Some((alter_stmt, insert_stmt_opt)) = alter_stmt_opt {
+                let alter_sql = alter_stmt.to_string();
+                tracing::info!("alter_sql: {}", alter_sql);
+                if let Err(err) = conn.exec(&alter_sql).await {
+                    tracing::info!("alter_sql err: {}", err);
+                    continue;
+                }
+                if let Some(insert_stmt) = insert_stmt_opt {
+                    let insert_sql = insert_stmt.to_string();
+                    tracing::info!("after alter insert_sql: {}", insert_sql);
+                    if let Err(err) = conn.exec(&insert_sql).await {
+                        tracing::info!("after alter insert_sql err: {}", err);
+                    }
+                }
+            }
         }
         generator.tables = tables;
 
