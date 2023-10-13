@@ -85,6 +85,7 @@ impl DataBlock {
                     .collect::<Vec<_>>();
                 BlockEntry::new(
                     blocks[0].get_by_offset(i).data_type.clone(),
+                    // Safe to unwrap() because columns.len() > 0;
                     Value::Column(Column::concat_columns(&columns).unwrap()),
                 )
             })
