@@ -3031,6 +3031,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "chrono",
+ "common-ast",
  "common-base",
  "common-building",
  "common-catalog",
