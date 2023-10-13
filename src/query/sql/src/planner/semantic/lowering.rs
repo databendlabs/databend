@@ -65,7 +65,7 @@ impl TypeProvider<String> for DataSchema {
 
 impl TypeProvider<String> for TableSchema {
     fn get_type(&self, column_name: &String) -> Result<DataType> {
-        let flatten_schema = self.flatten_schema();
+        let flatten_schema = self.flatten_leaf_columns();
         let column = flatten_schema.field_with_name(column_name)?;
         Ok(column.data_type().into())
     }
