@@ -15,5 +15,6 @@
 #![deny(unused_crate_dependencies)]
 #![feature(core_intrinsics)]
 #![feature(int_roundings)]
+#![feature(binary_heap_as_slice)]
 
 pub mod processors;

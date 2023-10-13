@@ -7,11 +7,7 @@ select version();
 SQL
 
 cat <<SQL | bendsql
-DROP TABLE IF EXISTS hits;
-SQL
-
-cat <<SQL | bendsql
-VACUUM DROP TABLE retain 0 hours;
+DROP TABLE IF EXISTS hits ALL;
 SQL
 
 cat <<SQL | bendsql

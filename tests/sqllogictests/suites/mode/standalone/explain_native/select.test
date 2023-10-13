@@ -16,7 +16,7 @@ explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 Filter
 ├── output columns: [numbers.number (#0)]
-├── filters: [t1.number (#0) = 1]
+├── filters: [numbers.number (#0) = 1]
 ├── estimated rows: 0.20
 └── TableScan
     ├── table: default.system.numbers
@@ -25,7 +25,7 @@ Filter
     ├── read bytes: 8
     ├── partitions total: 1
     ├── partitions scanned: 1
-    ├── push downs: [filters: [t1.number (#0) = 1], limit: NONE]
+    ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
     └── estimated rows: 1.00
 
 query T
@@ -58,7 +58,7 @@ EvalScalar
 ├── estimated rows: 0.20
 └── Filter
     ├── output columns: [numbers.number (#0)]
-    ├── filters: [t1.a (#0) = 1]
+    ├── filters: [numbers.number (#0) = 1]
     ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.system.numbers
@@ -67,7 +67,7 @@ EvalScalar
         ├── read bytes: 8
         ├── partitions total: 1
         ├── partitions scanned: 1
-        ├── push downs: [filters: [t1.a (#0) = 1], limit: NONE]
+        ├── push downs: [filters: [numbers.number (#0) = 1], limit: NONE]
         └── estimated rows: 1.00
 
 query T

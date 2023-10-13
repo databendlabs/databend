@@ -125,6 +125,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ #dot_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
+            ~ (DELETE ~ WHEN ~ ^#expr)?
             ~ #insert_source
         },
         |(
@@ -134,6 +135,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             (catalog, database, table),
             opt_columns,
             (_, _, _, on_conflict_columns, _),
+            opt_delete_when,
             source,
         )| {
             Statement::Replace(ReplaceStmt {
@@ -146,6 +148,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                     .map(|(_, columns, _)| columns)
                     .unwrap_or_default(),
                 source,
+                delete_when: opt_delete_when.map(|(_, _, expr)| expr),
             })
         },
     );
@@ -575,14 +578,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let drop_table = map(
         rule! {
-            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3
+            DROP ~ TABLE ~ ( IF ~ ^EXISTS )? ~ #dot_separated_idents_1_to_3 ~ ALL?
         },
-        |(_, _, opt_if_exists, (catalog, database, table))| {
+        |(_, _, opt_if_exists, (catalog, database, table), opt_all)| {
             Statement::DropTable(DropTableStmt {
                 if_exists: opt_if_exists.is_some(),
                 catalog,
                 database,
                 table,
+                all: opt_all.is_some(),
             })
         },
     );

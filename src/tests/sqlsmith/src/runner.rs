@@ -146,6 +146,7 @@ impl Runner {
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
+
             let alter_stmt_opt = generator.gen_alter(table, row_count);
             if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
                 let alter_sql = alter_stmt.to_string();

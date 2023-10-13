@@ -2,7 +2,7 @@ statement ok
 use default
 
 statement ok
-drop table if exists t1
+drop table if exists t1 all
 
 statement ok
 create table t1(a integer, b integer, c integer, d integer, e integer)
