@@ -209,6 +209,9 @@ impl Processor for ExchangeShuffleTransform {
                     self.finished_inputs += 1;
                     input.status = PortStatus::Finished;
                 }
+
+                self.wakeup_outputs();
+                self.wakeup_inputs();
             } else if input.port.has_data() {
                 if !self.buffer.is_full() {
                     self.take_input_data_into_buffer(*input_index);
