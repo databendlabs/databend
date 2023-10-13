@@ -1,5 +1,5 @@
 query 
-select * from infer_schema('@data/parquet/tuple.parquet')
+select * from inspect_parquet('@data/parquet/tuple.parquet')
 ----
 created_by
 num_columns:
