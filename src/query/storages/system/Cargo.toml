@@ -15,6 +15,7 @@ test = false
 enable-histogram-metrics = ["common-metrics/enable-histogram"]
 
 [dependencies]
+common-ast = { path = "../../ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-config = { path = "../../config" }
