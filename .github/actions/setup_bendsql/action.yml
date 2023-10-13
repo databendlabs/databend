@@ -6,7 +6,6 @@ runs:
     - name: Download and Install
       shell: bash
       run: |
-        sudo curl -L -o /etc/apt/sources.list.d/datafuselabs.sources https://repo.databend.rs/deb/datafuselabs.sources
-        sudo apt update
-        sudo apt install -y bendsql
+        curl -Lo /tmp/bendsql.deb https://github.com/datafuselabs/bendsql/releases/download/v0.9.0/bendsql_0.9.0_amd64.deb
+        sudo dpkg -i /tmp/bendsql.deb
         bendsql --version
