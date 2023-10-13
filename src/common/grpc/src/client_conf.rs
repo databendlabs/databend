@@ -38,7 +38,7 @@ pub struct RpcClientConf {
     /// AutoSyncInterval is the interval to update endpoints with its latest members.
     /// None disables auto-sync.
     pub auto_sync_interval: Option<Duration>,
-    pub unhealth_endpoint_evict_time: Duration,
+    pub unhealthy_endpoint_evict_time: Duration,
 }
 
 impl RpcClientConf {
