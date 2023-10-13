@@ -143,21 +143,51 @@ impl Runner {
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
+            let update_sql = generator.gen_update(table).to_string();
+            tracing::info!("update_sql: {}", update_sql);
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
+                check_res(conn.exec(&update_sql).await)
+            })
+            .await
+            {
+                tracing::info!("update_sql: {}", update_sql);
+                let err = format!("update_sql timeout: {}", e);
+                tracing::error!(err);
+            }
+            let delete_stmt = generator.gen_delete(table);
+            let delete_sql = delete_stmt.to_string();
+            tracing::info!("delete_sql: {}", delete_sql);
+            check_res(conn.exec(&delete_sql).await);
             let alter_stmt_opt = generator.gen_alter(table, row_count);
             if let Some((alter_stmt, insert_stmt_opt)) = alter_stmt_opt {
                 let alter_sql = alter_stmt.to_string();
                 tracing::info!("alter_sql: {}", alter_sql);
                 if let Err(err) = conn.exec(&alter_sql).await {
-                    tracing::info!("alter_sql err: {}", err);
+                    tracing::error!("alter_sql err: {}", err);
                     continue;
                 }
                 if let Some(insert_stmt) = insert_stmt_opt {
                     let insert_sql = insert_stmt.to_string();
                     tracing::info!("after alter insert_sql: {}", insert_sql);
                     if let Err(err) = conn.exec(&insert_sql).await {
-                        tracing::info!("after alter insert_sql err: {}", err);
+                        tracing::error!("after alter insert_sql err: {}", err);
                     }
                 }
+            }
+        }
+        fn check_res(res: databend_driver::Result<i64>) {
+            if let Err(Error::Api(ClientError::InvalidResponse(err))) = res {
+                if err.code == 1005 || err.code == 1065 {
+                    return;
+                }
+                if KNOWN_ERRORS
+                    .iter()
+                    .any(|known_err| err.message.starts_with(known_err))
+                {
+                    return;
+                }
+                let err = format!("sql exec err: {}", err.message);
+                tracing::error!(err);
             }
         }
         generator.tables = tables;
@@ -183,7 +213,6 @@ impl Runner {
                             return;
                         }
                     }
-
                     err = format!("error: {}", e);
                     try_reduce = true;
                 }
