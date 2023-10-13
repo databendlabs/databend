@@ -530,6 +530,21 @@ impl Expr {
             | Expr::DateTrunc { span, .. } => *span,
         }
     }
+
+    pub fn all_funciton_like_syntaxes() -> &'static [&'static str] {
+        &[
+            "CAST",
+            "TRY_CAST",
+            "EXTRACT",
+            "DATE_PART",
+            "POSITION",
+            "SUBSTRING",
+            "TRIM",
+            "DATE_ADD",
+            "DATE_SUB",
+            "DATE_TRUNC",
+        ]
+    }
 }
 
 impl Display for IntervalKind {
