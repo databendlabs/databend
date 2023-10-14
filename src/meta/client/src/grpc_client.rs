@@ -299,7 +299,7 @@ impl MetaGrpcClient {
             &conf.password,
             conf.timeout,
             conf.auto_sync_interval,
-            conf.unhealth_endpoint_evict_time,
+            conf.unhealthy_endpoint_evict_time,
             conf.tls_conf.clone(),
         )
     }
@@ -311,7 +311,7 @@ impl MetaGrpcClient {
         password: &str,
         timeout: Option<Duration>,
         auto_sync_interval: Option<Duration>,
-        unhealth_endpoint_evict_time: Duration,
+        unhealthy_endpoint_evict_time: Duration,
         conf: Option<RpcClientTlsConfig>,
     ) -> Result<Arc<ClientHandle>, MetaClientError> {
         Self::endpoints_non_empty(&endpoints)?;
@@ -340,7 +340,7 @@ impl MetaGrpcClient {
             conn_pool: Pool::new(mgr, Duration::from_millis(50)),
             endpoints: Mutex::new(endpoints),
             current_endpoint: Arc::new(Mutex::new(None)),
-            unhealthy_endpoints: Mutex::new(TtlHashMap::new(unhealth_endpoint_evict_time)),
+            unhealthy_endpoints: Mutex::new(TtlHashMap::new(unhealthy_endpoint_evict_time)),
             auto_sync_interval,
             username: username.to_string(),
             password: password.to_string(),

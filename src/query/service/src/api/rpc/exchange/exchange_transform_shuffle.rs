@@ -166,6 +166,11 @@ impl Processor for ExchangeShuffleTransform {
                     self.finished_outputs += 1;
                     output.status = PortStatus::Finished;
                 }
+
+                self.buffer.clear(*output_index);
+
+                self.wakeup_inputs();
+                self.wakeup_outputs();
             } else if output.port.can_push() {
                 if !self.buffer.is_empty(*output_index) {
                     let data_block = self.buffer.pop(*output_index).unwrap();
@@ -204,6 +209,9 @@ impl Processor for ExchangeShuffleTransform {
                     self.finished_inputs += 1;
                     input.status = PortStatus::Finished;
                 }
+
+                self.wakeup_outputs();
+                self.wakeup_inputs();
             } else if input.port.has_data() {
                 if !self.buffer.is_full() {
                     self.take_input_data_into_buffer(*input_index);
@@ -256,9 +264,12 @@ impl ExchangeShuffleTransform {
             let output = &mut self.outputs[*waiting_output];
 
             if output.port.is_finished() {
-                self.finished_outputs += 1;
+                if output.status != PortStatus::Finished {
+                    self.finished_outputs += 1;
+                    output.status = PortStatus::Finished;
+                }
+
                 self.buffer.clear(*waiting_output);
-                output.status = PortStatus::Finished;
                 continue;
             }
 
