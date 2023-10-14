@@ -71,16 +71,6 @@ impl Interpreter for UpdateInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         // refresh table.
         let tbl = self
             .ctx
@@ -88,6 +78,7 @@ impl Interpreter for UpdateInterpreter {
             .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
+        let table_info = tbl.get_table_info().clone();
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -172,6 +163,12 @@ impl Interpreter for UpdateInterpreter {
                 ComputedColumn,
             )?;
         }
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
