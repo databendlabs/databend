@@ -39,7 +39,7 @@ pub struct Args {
     pass: String,
 
     /// The number of test cases to generate.
-    #[clap(long, default_value = "100")]
+    #[clap(long, default_value = "500")]
     count: usize,
 }
 

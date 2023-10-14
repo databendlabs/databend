@@ -137,7 +137,7 @@ impl Runner {
         let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
-        let row_count = 50;
+        let row_count = 10;
 
         async fn check_timeout<F>(future: F, sql: String)
         where F: Future {
@@ -207,9 +207,12 @@ impl Runner {
                 async {
                     if let Err(e) = conn.exec(&query_sql).await {
                         if let Error::Api(ClientError::InvalidResponse(err)) = &e {
-                            // TODO: handle Syntax and Semantic errors
-                            err_code = err.code;
-                            if err_code == 1005 || err_code == 1065 {
+                            // TODO: handle Syntax, Semantic and InvalidArgument errors
+                            if err.code == 1005
+                                || err.code == 1065
+                                || err.code == 2004
+                                || err.code == 1010
+                            {
                                 return;
                             }
                             if KNOWN_ERRORS
@@ -218,6 +221,7 @@ impl Runner {
                             {
                                 return;
                             }
+                            err_code = err.code;
                         }
                         err = format!("error: {}", e);
                         try_reduce = true;
@@ -227,8 +231,9 @@ impl Runner {
             )
             .await;
             if try_reduce {
+                tracing::info!("query_sql: {}", query_sql);
                 let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
-                tracing::info!("query_sql: {}", reduced_query.to_string());
+                tracing::info!("reduced query_sql: {}", reduced_query.to_string());
                 tracing::error!(err);
             }
         }
