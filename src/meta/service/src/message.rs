@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use anyerror::AnyError;
 use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::GetKVReq;
 use common_meta_kvapi::kvapi::ListKVReply;
@@ -22,6 +23,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::Endpoint;
 use common_meta_types::LogEntry;
+use common_meta_types::MetaAPIError;
 use common_meta_types::NodeId;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Default, Clone, PartialEq, Eq)]
@@ -91,6 +93,33 @@ pub struct ForwardRequest<T> {
 impl<T> ForwardRequest<T> {
     pub fn decr_forward(&mut self) {
         self.forward_to_leader -= 1;
+    }
+
+    /// Return a new request that will be forwarded to the leader.
+    ///
+    /// If the max forward number is reached, it returns an error.
+    pub fn next(&self) -> Result<Self, MetaAPIError>
+    where T: Clone {
+        self.ensure_forwardable()?;
+
+        let mut next = self.clone();
+        next.decr_forward();
+
+        Ok(next)
+    }
+
+    pub fn ensure_forwardable(&self) -> Result<(), MetaAPIError> {
+        if self.can_forward() {
+            Ok(())
+        } else {
+            Err(MetaAPIError::CanNotForward(AnyError::error(
+                "max number of forward reached",
+            )))
+        }
+    }
+
+    pub fn can_forward(&self) -> bool {
+        self.forward_to_leader > 0
     }
 }
 
