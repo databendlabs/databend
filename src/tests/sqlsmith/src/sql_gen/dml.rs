@@ -21,7 +21,10 @@ use common_ast::ast::Identifier;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::NullableConstraint;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::ast::UpdateExpr;
+use common_ast::ast::UpdateStmt;
 use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Column;
@@ -65,6 +68,71 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             source,
             // TODO
             overwrite: false,
+        }
+    }
+
+    pub(crate) fn gen_delete(&mut self, table: &Table) -> Statement {
+        let table_reference = TableReference::Table {
+            span: Span::default(),
+            catalog: None,
+            database: None,
+            table: Identifier::from_name(table.name.clone()),
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        };
+        let selection = if self.rng.gen_bool(0.5) {
+            None
+        } else {
+            Some(self.gen_expr(&DataType::Boolean))
+        };
+
+        Statement::Delete {
+            hints: None,
+            table_reference,
+            selection,
+        }
+    }
+
+    pub(crate) fn gen_update(&mut self, table: &Table) -> UpdateStmt {
+        let data_types = table
+            .schema
+            .fields()
+            .iter()
+            .map(|f| (Identifier::from_name(&f.name), (&f.data_type).into()))
+            .collect::<Vec<(Identifier, DataType)>>();
+        let table = TableReference::Table {
+            span: Span::default(),
+            catalog: None,
+            database: None,
+            table: Identifier::from_name(table.name.clone()),
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        };
+        let selection = if self.rng.gen_bool(0.8) {
+            None
+        } else {
+            Some(self.gen_expr(&DataType::Boolean))
+        };
+
+        let update_list = {
+            let mut res = vec![];
+            for (col_name, ty) in data_types.iter().take(self.rng.gen_range(1..=5)) {
+                res.push(UpdateExpr {
+                    name: col_name.clone(),
+                    expr: self.gen_scalar_value(ty),
+                });
+            }
+            res
+        };
+        UpdateStmt {
+            hints: None,
+            table,
+            update_list,
+            selection,
         }
     }
 

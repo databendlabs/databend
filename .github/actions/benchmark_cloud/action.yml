@@ -38,8 +38,8 @@ runs:
     - name: Install script dependencies
       shell: bash
       run: |
-        sudo apt-get update -y
-        sudo apt install -y python3
+        sudo apt-get update -yq
+        sudo apt-get install -yq python3
 
     - name: Run Benchmark
       working-directory: benchmark/clickbench

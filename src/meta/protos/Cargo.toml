@@ -18,7 +18,7 @@ tonic = { workspace = true }
 
 [build-dependencies]
 lenient_semver = "0.4.2"
-prost-build = "0.11.1"
+prost-build = { workspace = true }
 semver = { workspace = true }
 tonic-build = { workspace = true }
 
