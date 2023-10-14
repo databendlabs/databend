@@ -232,8 +232,14 @@ pub enum TokenKind {
     RBrace,
     #[token("->")]
     RArrow,
+    #[token("->>")]
+    RDoubleArrow,
     #[token("=>")]
     FatRArrow,
+    #[token("#>")]
+    JsonGetByKeyPath,
+    #[token("#>>")]
+    JsonGetByKeyPathString,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -1080,6 +1086,7 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | RDoubleArrow
                 | FatRArrow
                 | BitWiseXor
                 | BitWiseNot
@@ -1095,6 +1102,8 @@ impl TokenKind {
                 | L2DISTANCE
                 | Placeholder
                 | EOI
+                | JsonGetByKeyPath
+                | JsonGetByKeyPathString
         )
     }
 

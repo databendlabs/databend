@@ -28,6 +28,7 @@ use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
 use common_expression::types::AnyType;
+use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -63,6 +64,7 @@ use jsonb::as_str;
 use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::get_by_index;
+use jsonb::get_by_keypath;
 use jsonb::get_by_name;
 use jsonb::get_by_path;
 use jsonb::get_by_path_array;
@@ -228,6 +230,50 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry
+        .register_combine_nullable_2_arg::<VariantType, ArrayType<StringType>, VariantType, _, _>(
+            "get_by_keypath",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<
+                VariantType,
+                ArrayType<StringType>,
+                NullableType<VariantType>,
+            >(|val, keypath, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match get_by_keypath(val, keypath.iter()) {
+                    Some(v) => output.push(&v),
+                    None => output.push_null(),
+                }
+            }),
+        );
+
+    registry
+        .register_combine_nullable_2_arg::<VariantType, ArrayType<StringType>, StringType, _, _>(
+            "get_by_keypath_string",
+            |_, _, _| FunctionDomain::MayThrow,
+            vectorize_with_builder_2_arg::<
+                VariantType,
+                ArrayType<StringType>,
+                NullableType<StringType>,
+            >(|val, keypath, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match get_by_keypath(val, keypath.iter()) {
+                    Some(v) => output.push(to_string(&v).as_bytes()),
+                    None => output.push_null(),
+                }
+            }),
+        );
+
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get",
         |_, _, _| FunctionDomain::MayThrow,
@@ -317,6 +363,67 @@ pub fn register(registry: &mut FunctionRegistry) {
                             ),
                         );
                         output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, StringType, StringType, _, _>(
+        "get_string",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<VariantType, StringType, NullableType<StringType>>(
+            |val, name, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                match std::str::from_utf8(name) {
+                    Ok(name) => match get_by_name(val, name, false) {
+                        Some(v) => {
+                            output.push(to_string(&v).as_bytes());
+                        }
+                        None => output.push_null(),
+                    },
+                    Err(err) => {
+                        ctx.set_error(
+                            output.len(),
+                            format!(
+                                "Unable convert name '{}' to string: {}",
+                                &String::from_utf8_lossy(name),
+                                err
+                            ),
+                        );
+                        output.push_null();
+                    }
+                }
+            },
+        ),
+    );
+
+    registry.register_combine_nullable_2_arg::<VariantType, Int64Type, StringType, _, _>(
+        "get_string",
+        |_, _, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<VariantType, Int64Type, NullableType<StringType>>(
+            |val, idx, output, ctx| {
+                if let Some(validity) = &ctx.validity {
+                    if !validity.get_bit(output.len()) {
+                        output.push_null();
+                        return;
+                    }
+                }
+                if idx < 0 || idx > i32::MAX.into() {
+                    output.push_null();
+                } else {
+                    match get_by_index(val, idx as usize) {
+                        Some(v) => {
+                            output.push(to_string(&v).as_bytes());
+                        }
+                        None => {
+                            output.push_null();
+                        }
                     }
                 }
             },
@@ -461,7 +568,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-
+    
     registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "json_extract_path_text",
         |_, _, _| FunctionDomain::MayThrow,

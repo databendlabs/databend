@@ -433,8 +433,11 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
-
     L2Distance,
+    JsonGet,
+    JsonGetString,
+    JsonGetByKeyPath,
+    JsonGetByKeyPathString,
 }
 
 impl BinaryOperator {
@@ -462,6 +465,10 @@ impl BinaryOperator {
             BinaryOperator::BitwiseShiftRight => "bit_shift_right".to_string(),
             BinaryOperator::Caret => "pow".to_string(),
             BinaryOperator::L2Distance => "l2_distance".to_string(),
+            BinaryOperator::JsonGet => "get".to_string(),
+            BinaryOperator::JsonGetString => "get_string".to_string(),
+            BinaryOperator::JsonGetByKeyPath => "get_by_keypath".to_string(),
+            BinaryOperator::JsonGetByKeyPathString => "get_by_keypath_string".to_string(),
             _ => {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
@@ -700,6 +707,18 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::L2Distance => {
                 write!(f, "<->")
+            }
+            BinaryOperator::JsonGet => {
+                write!(f, "->")
+            }
+            BinaryOperator::JsonGetString => {
+                write!(f, "->>")
+            }
+            BinaryOperator::JsonGetByKeyPath => {
+                write!(f, "#>")
+            }
+            BinaryOperator::JsonGetByKeyPathString => {
+                write!(f, "#>>")
             }
         }
     }

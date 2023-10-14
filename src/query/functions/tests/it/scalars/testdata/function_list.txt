@@ -1653,10 +1653,18 @@ Functions overloads:
 12 get FACTORY
 13 get FACTORY
 14 get FACTORY
+0 get_by_keypath(Variant, Array(String)) :: Variant NULL
+1 get_by_keypath(Variant NULL, Array(String) NULL) :: Variant NULL
+0 get_by_keypath_string(Variant, Array(String)) :: String NULL
+1 get_by_keypath_string(Variant NULL, Array(String) NULL) :: String NULL
 0 get_ignore_case(Variant, String) :: Variant NULL
 1 get_ignore_case(Variant NULL, String NULL) :: Variant NULL
 0 get_path(Variant, String) :: Variant NULL
 1 get_path(Variant NULL, String NULL) :: Variant NULL
+0 get_string(Variant, String) :: String NULL
+1 get_string(Variant NULL, String NULL) :: String NULL
+2 get_string(Variant, Int64) :: String NULL
+3 get_string(Variant NULL, Int64 NULL) :: String NULL
 0 great_circle_angle(Float64, Float64, Float64, Float64) :: Float32
 1 great_circle_angle(Float64 NULL, Float64 NULL, Float64 NULL, Float64 NULL) :: Float32 NULL
 0 great_circle_distance(Float64, Float64, Float64, Float64) :: Float32
