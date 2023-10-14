@@ -38,25 +38,25 @@
 
 **Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to Snowflake. In Databend, everything is distributed execution.
 
-- **🌐Cloud-Agnostic**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
+- **🌐 Cloud-Agnostic**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
 
-- **⚡Performance-Driven**: Built with Rust and leveraging advanced technologies like SIMD and vectorized query processing, Databend ensures [exceptional analytic speeds](https://benchmark.clickhouse.com/), outperforming traditional cloud data warehouses.
+- **⚡ Performance-Driven**: Built with Rust and leveraging advanced technologies like SIMD and vectorized query processing, Databend ensures [exceptional analytic speeds](https://benchmark.clickhouse.com/), outperforming traditional cloud data warehouses.
 
-- **📈Cost-Efficient Elasticity**: With its unique architecture, Databend decouples storage and computation. You can dynamically scale based on your needs, optimizing costs and performance.
+- **📈 Cost-Efficient Elasticity**: With its unique architecture, Databend decouples storage and computation. You can dynamically scale based on your needs, optimizing costs and performance.
 
-- **🔄Simplified Data Management**: Say goodbye to traditional ETL complications. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
+- **🔄 Simplified Data Management**: Say goodbye to traditional ETL complications. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
 
-- **🏡Lakehouse Design**: Combining data lake scalability with data warehouse efficiency, Databend smoothly integrates with Hive and Iceberg, granting the best of both domains.
+- **🏡 Lakehouse Design**: Combining data lake scalability with data warehouse efficiency, Databend smoothly integrates with Hive and Iceberg, granting the best of both domains.
 
-- **🕰Snapshot and MVCC**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
+- **🕰 Snapshot and MVCC**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
 
-- **📑Rich Data Support**: Whether it's semi-structured data like JSON, CSV, or Parquet, or data types like ARRAY, TUPLE, or MAP, Databend handles them with ease.
+- **📑 Rich Data Support**: Whether it's semi-structured data like JSON, CSV, or Parquet, or data types like ARRAY, TUPLE, or MAP, Databend handles them with ease.
 
-- **🤖AI-Integrated Analytics**: Elevate your data analytics with integrated AI capabilities, opening new avenues for insights.
+- **🤖 AI-Integrated Analytics**: Elevate your data analytics with integrated AI capabilities, opening new avenues for insights.
 
-- **👥Open Source & Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
+- **👥 Open Source & Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
 
-## 📐Architecture
+## 📐 Architecture
 
 ![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
 
@@ -80,7 +80,7 @@ To run Databend quickly:
 docker run --net=host  datafuselabs/databend
 ```
 
-## 🚀Getting Started
+## 🚀 Getting Started
 
 <details>
 <summary>Deploying Databend</summary>
@@ -130,17 +130,15 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Visualize Tools with Databend</summary>
 
-- [Metabase](https://databend.rs/doc/integrations/metabase)
-- [Tableau](https://databend.rs/doc/integrations/tableau)
-- [Grafana](https://databend.rs/doc/integrations/grafana)
-- [Jupyter Notebook](https://databend.rs/doc/integrations/jupyter)
-- [Deepnote](https://databend.rs/doc/integrations/deepnote)
-- [MindsDB](https://databend.rs/doc/integrations/mindsdb)
-- [Redash](https://databend.rs/doc/integrations/redash)
+- [Metabase](https://databend.rs/doc/visualize/metabase)
+- [Tableau](https://databend.rs/doc/visualize/tableau)
+- [Grafana](https://databend.rs/doc/visualize/grafana)
+- [Jupyter Notebook](https://databend.rs/doc/visualize/jupyter)
+- [Deepnote](https://databend.rs/doc/visualize/deepnote)
+- [MindsDB](https://databend.rs/doc/visualize/mindsdb)
+- [Redash](https://databend.rs/doc/visualize/redash)
 
 </details>
-
-
 
 <details>
 <summary>Managing Users</summary>
@@ -234,7 +232,7 @@ Here are some resources to help you get started:
 - [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
 
 
-## 👥Community
+## 👥 Community
 
 For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
 
@@ -256,7 +254,7 @@ Stay updated with Databend's development journey. Here are our roadmap milestone
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 
 
-## 📜License
+## 📜 License
 
 Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt).
 
@@ -265,7 +263,7 @@ When contributing to Databend, you can find the relevant license header in each 
 For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/enterprise/license).
 
 
-## 🙏Acknowledgement
+## 🙏 Acknowledgement
 
 - **Inspiration**: Databend's design draws inspiration from industry leaders [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
 
