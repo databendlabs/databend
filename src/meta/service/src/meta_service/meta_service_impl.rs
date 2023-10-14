@@ -28,6 +28,7 @@ use tokio_stream::Stream;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
 
@@ -61,7 +62,7 @@ impl RaftService for RaftServiceImpl {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
 
         async {
-            let forward_req: ForwardRequest = GrpcHelper::parse_req(request)?;
+            let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
 
             let res = self.meta_node.handle_forwardable_request(forward_req).await;
 
