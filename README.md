@@ -38,14 +38,14 @@
 
 **Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to Snowflake. In Databend, everything is distributed execution.
 
-- **🌐Cloud-Agnostic**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io). 
- 
+- **🌐Cloud-Agnostic**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
+
 - **⚡Performance-Driven**: Built with Rust and leveraging advanced technologies like SIMD and vectorized query processing, Databend ensures [exceptional analytic speeds](https://benchmark.clickhouse.com/), outperforming traditional cloud data warehouses.
 
 - **📈Cost-Efficient Elasticity**: With its unique architecture, Databend decouples storage and computation. You can dynamically scale based on your needs, optimizing costs and performance.
 
 - **🔄Simplified Data Management**: Say goodbye to traditional ETL complications. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
- 
+
 - **🏡Lakehouse Design**: Combining data lake scalability with data warehouse efficiency, Databend smoothly integrates with Hive and Iceberg, granting the best of both domains.
 
 - **🕰Snapshot and MVCC**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
@@ -56,12 +56,12 @@
 
 - **👥Open Source & Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
 
-## Architecture
+## 📐Architecture
 
 ![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
 
 
-## Try Databend
+## 🚀 Try Databend
 
 ### 1. Databend Serverless Cloud
 
@@ -80,7 +80,7 @@ To run Databend quickly:
 docker run --net=host  datafuselabs/databend
 ```
 
-## Getting Started
+## 🚀Getting Started
 
 <details>
 <summary>Deploying Databend</summary>
@@ -224,36 +224,39 @@ docker run --net=host  datafuselabs/databend
 </details>
 
 
-## Contributing
+## 🤝 Contributing
 
-Databend is an open source project, you can help with ideas, code, or documentation, we appreciate any efforts that help us to make the project better!
-Once the code is merged, your name will be stored in the **system.contributors** table forever.
+Databend thrives on community contributions! Whether it's through ideas, code, or documentation, every effort helps in enhancing our project. As a token of our appreciation, once your code is merged, your name will be eternally preserved in the **system.contributors** table.
 
-To get started with contributing:
+Here are some resources to help you get started:
 
 - [Building Databend From Source](https://databend.rs/doc/contributing/building-from-source)
 - [The First Good Pull Request](https://databend.rs/doc/contributing/good-pr)
 
 
-## Community
+## 👥Community
 
-For general help in using Databend, please refer to the official documentation. For additional help, you can use one of these channels to ask a question:
+For guidance on using Databend, we recommend starting with the official documentation. If you need further assistance, explore the following community channels:
 
 - [Slack](https://link.databend.rs/join-slack) (For live discussion with the Community)
 - [GitHub](https://github.com/datafuselabs/databend) (Feature/Bug reports, Contributions)
 - [Twitter](https://twitter.com/DatabendLabs) (Get the news fast)
 - [I'm feeling lucky](https://link.databend.rs/i-m-feeling-lucky) (Pick up a good first issue now!)
 
-## Roadmap
 
-- [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
-- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
-- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
-- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
-- [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
+## 🛣️ Roadmap
+
+Stay updated with Databend's development journey. Here are our roadmap milestones:
+
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
+- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
+- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
+- [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
+- [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 
-## License
+
+## 📜License
 
 Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt).
 
@@ -261,8 +264,11 @@ When contributing to Databend, you can find the relevant license header in each 
 
 For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/enterprise/license).
 
-## Acknowledgement
 
-- Databend is inspired by [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
-- Databend's computing model is based on [Arrow2](https://github.com/jorgecarleitao/arrow2), Arrow2 is a faster and safer implementation of the Apache Arrow Columnar Format.
-- The [documentation website](https://databend.rs) is hosted by [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
+## 🙏Acknowledgement
+
+- **Inspiration**: Databend's design draws inspiration from industry leaders [ClickHouse](https://github.com/clickhouse/clickhouse) and [Snowflake](https://docs.snowflake.com/en/user-guide/intro-key-concepts.html#snowflake-architecture).
+
+- **Computing Model**: Our computing foundation is built upon [Arrow2](https://github.com/jorgecarleitao/arrow2), a faster and more secure rendition of the Apache Arrow Columnar Format.
+
+- **Documentation Hosting**: The [Databend documentation website](https://databend.rs) proudly runs on [Vercel](https://vercel.com/?utm_source=databend&utm_campaign=oss).
