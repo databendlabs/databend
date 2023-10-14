@@ -100,8 +100,8 @@ impl Column {
         let (_, size) = columns.size_hint();
 
         match size {
-            None => return Err(ErrorCode::EmptyData("Can't concat empty columns")),
-            Some(1) => return Ok(columns.next().unwrap()),
+            None => Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            Some(1) => Ok(columns.next().unwrap()),
             _ => Ok(Self::concat_none_empty(columns)),
         }
     }
