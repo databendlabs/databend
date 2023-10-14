@@ -21,7 +21,10 @@ use common_ast::ast::Identifier;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::NullableConstraint;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::ast::UpdateExpr;
+use common_ast::ast::UpdateStmt;
 use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Column;
@@ -68,6 +71,71 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
+    pub(crate) fn gen_delete(&mut self, table: &Table) -> Statement {
+        let table_reference = TableReference::Table {
+            span: Span::default(),
+            catalog: None,
+            database: None,
+            table: Identifier::from_name(table.name.clone()),
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        };
+        let selection = if self.rng.gen_bool(0.5) {
+            None
+        } else {
+            Some(self.gen_expr(&DataType::Boolean))
+        };
+
+        Statement::Delete {
+            hints: None,
+            table_reference,
+            selection,
+        }
+    }
+
+    pub(crate) fn gen_update(&mut self, table: &Table) -> UpdateStmt {
+        let data_types = table
+            .schema
+            .fields()
+            .iter()
+            .map(|f| (Identifier::from_name(&f.name), (&f.data_type).into()))
+            .collect::<Vec<(Identifier, DataType)>>();
+        let table = TableReference::Table {
+            span: Span::default(),
+            catalog: None,
+            database: None,
+            table: Identifier::from_name(table.name.clone()),
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        };
+        let selection = if self.rng.gen_bool(0.8) {
+            None
+        } else {
+            Some(self.gen_expr(&DataType::Boolean))
+        };
+
+        let update_list = {
+            let mut res = vec![];
+            for (col_name, ty) in data_types.iter().take(self.rng.gen_range(1..=5)) {
+                res.push(UpdateExpr {
+                    name: col_name.clone(),
+                    expr: self.gen_scalar_value(ty),
+                });
+            }
+            res
+        };
+        UpdateStmt {
+            hints: None,
+            table,
+            update_list,
+            selection,
+        }
+    }
+
     fn is_column_not_null(column: &ColumnDefinition) -> bool {
         match column.nullable_constraint {
             Some(NullableConstraint::NotNull) => true,
@@ -77,7 +145,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn random_select_field(&mut self, table: &Table) -> TableField {
-        let field_index = self.rng.gen_range(0..=table.schema.num_fields());
+        let field_index = self.rng.gen_range(0..table.schema.num_fields());
         table.schema.fields[field_index].clone()
     }
 
@@ -90,6 +158,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         if self.rng.gen_bool(0.3) {
             return None;
         }
+
         let (action, new_column) = match self.rng.gen_range(0..=4) {
             0 => {
                 let new_table = format!("{}_{}", table.name, self.rng.gen_range(0..10));
@@ -101,7 +170,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 )
             }
             1 => {
-                let column = self.gen_new_column(table);
+                let column = self.gen_new_column();
                 let option = match self.rng.gen_range(0..=2) {
                     0 => AddColumnOption::End,
                     1 => AddColumnOption::First,
@@ -123,7 +192,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             2 => {
                 let field = self.random_select_field(table);
                 let old_column = Identifier::from_name(field.name);
-                let new_column = self.gen_new_column(table).name;
+                let new_column = self.gen_new_column().name;
                 (
                     AlterTableAction::RenameColumn {
                         old_column,
@@ -135,7 +204,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             3 => {
                 let field = self.random_select_field(table);
                 let name = Identifier::from_name(field.name);
-                let (data_type, nullable_constraint) = self.gen_data_type_name();
+                let (data_type, nullable_constraint) = self.gen_data_type_name(None);
                 let new_column = ColumnDefinition {
                     name,
                     data_type,

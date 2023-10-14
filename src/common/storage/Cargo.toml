@@ -19,7 +19,7 @@ common-meta-app = { path = "../../meta/app" }
 common-metrics = { path = "../metrics" }
 
 anyhow = { workspace = true }
-arrow-schema = "46.0.0"
+arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 bytes = { workspace = true }
@@ -32,7 +32,7 @@ log = { workspace = true }
 metrics = "0.20.1"
 opendal = { workspace = true }
 ordered-float = { workspace = true }
-parquet = "46.0.0"
+parquet = { workspace = true }
 regex = "1.8.1"
 reqwest = { workspace = true }
 serde = { workspace = true }

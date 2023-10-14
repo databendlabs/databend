@@ -19,6 +19,7 @@ use std::time::Duration;
 use arrow_flight::flight_descriptor::DescriptorType;
 use arrow_flight::flight_service_server::FlightService;
 use arrow_flight::sql::server::FlightSqlService;
+use arrow_flight::sql::server::PeekableFlightDataStream;
 use arrow_flight::sql::ActionBeginSavepointRequest;
 use arrow_flight::sql::ActionBeginSavepointResult;
 use arrow_flight::sql::ActionBeginTransactionRequest;
@@ -52,7 +53,6 @@ use arrow_flight::sql::ProstMessageExt;
 use arrow_flight::sql::SqlInfo;
 use arrow_flight::sql::TicketStatementQuery;
 use arrow_flight::Action;
-use arrow_flight::FlightData;
 use arrow_flight::FlightDescriptor;
 use arrow_flight::FlightEndpoint;
 use arrow_flight::FlightInfo;
@@ -497,7 +497,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_put_statement_update(
         &self,
         ticket: CommandStatementUpdate,
-        request: Request<Streaming<FlightData>>,
+        request: Request<PeekableFlightDataStream>,
     ) -> Result<i64, Status> {
         let session = self.get_session(&request)?;
         let query = ticket.query;
@@ -518,7 +518,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_put_prepared_statement_query(
         &self,
         query: CommandPreparedStatementQuery,
-        request: Request<Streaming<FlightData>>,
+        request: Request<PeekableFlightDataStream>,
     ) -> Result<Response<<Self as FlightService>::DoPutStream>, Status> {
         let session = self.get_session(&request)?;
         let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
@@ -544,7 +544,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_put_prepared_statement_update(
         &self,
         query: CommandPreparedStatementUpdate,
-        request: Request<Streaming<FlightData>>,
+        request: Request<PeekableFlightDataStream>,
     ) -> Result<i64, Status> {
         let session = self.get_session(&request)?;
         let handle = Uuid::from_slice(query.prepared_statement_handle.as_ref())
@@ -665,7 +665,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
     async fn do_put_substrait_plan(
         &self,
         _query: CommandStatementSubstraitPlan,
-        _request: Request<Streaming<FlightData>>,
+        _request: Request<PeekableFlightDataStream>,
     ) -> std::result::Result<i64, Status> {
         unimplemented!()
     }
