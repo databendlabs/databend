@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::iter::TrustedLen;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -68,7 +69,7 @@ impl DataBlock {
                         .all_equal()
                 );
 
-                let columns = blocks
+                let columns: Vec<_> = blocks
                     .iter()
                     .map(|block| {
                         let entry = &block.get_by_offset(i);
@@ -82,14 +83,14 @@ impl DataBlock {
                             Value::Column(c) => c.clone(),
                         }
                     })
-                    .collect::<Vec<_>>();
-                BlockEntry::new(
+                    .collect();
+                Ok(BlockEntry::new(
                     blocks[0].get_by_offset(i).data_type.clone(),
                     // Safe to unwrap() because columns.len() > 0;
-                    Value::Column(Column::concat_columns(&columns).unwrap()),
-                )
+                    Value::Column(Column::concat_columns(columns.iter())?),
+                ))
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
 
         let num_rows = blocks.iter().map(|c| c.num_rows()).sum();
 
@@ -98,15 +99,21 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn concat_columns(columns: &[Column]) -> Result<Column> {
-        match columns.len() {
-            0 => Err(ErrorCode::EmptyData("Can't concat empty columns")),
-            1 => Ok(columns[0].clone()),
-            _ => Ok(Self::concat(columns.iter())),
+    pub fn concat_columns<'a, I: Iterator<Item = &'a Column> + TrustedLen + Clone>(
+        mut columns: I,
+    ) -> Result<Column> {
+        let (_, size) = columns.size_hint();
+
+        match size {
+            None => return Err(ErrorCode::EmptyData("Can't concat empty columns")),
+            Some(1) => return Ok(columns.next().cloned().unwrap()),
+            _ => Ok(Self::concat_none_empty(columns)),
         }
     }
 
-    pub fn concat(columns: std::slice::Iter<'_, Column>) -> Column {
+    pub fn concat_none_empty<'a, I: Iterator<Item = &'a Column> + TrustedLen + Clone>(
+        columns: I,
+    ) -> Column {
         let mut columns_iter_clone = columns.clone();
         let first_column = columns_iter_clone.next().unwrap();
         let capacity = columns_iter_clone.fold(first_column.len(), |acc, x| acc + x.len());
@@ -303,7 +310,7 @@ impl Column {
                     .clone()
                     .map(|col| col.as_nullable().unwrap().column.clone())
                     .collect_vec();
-                let column = Self::concat(column.iter());
+                let column = Self::concat_none_empty(column.iter());
                 let validity = Column::Boolean(Self::concat_boolean_types(
                     columns.map(|col| &col.as_nullable().unwrap().validity),
                     capacity,
@@ -318,7 +325,7 @@ impl Column {
                             .clone()
                             .map(|col| col.as_tuple().unwrap()[idx].clone())
                             .collect_vec();
-                        Self::concat(column.iter())
+                        Self::concat_none_empty(column.iter())
                     })
                     .collect();
                 Column::Tuple(fields)
