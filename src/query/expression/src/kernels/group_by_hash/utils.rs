@@ -176,7 +176,11 @@ unsafe fn serialize_column_vec(dst: &mut Vec<KeysRef>, column: &Column) {
             for (key, val) in dst.iter_mut().zip(col.validity.iter()) {
                 store(&val, key.writer(1));
             }
-            serialize_column_vec_with_bitmap(dst, &col.column, &col.validity)
+            if col.validity.unset_bits() == 0 {
+                serialize_column_vec(dst, &col.column)
+            } else {
+                serialize_column_vec_with_bitmap(dst, &col.column, &col.validity)
+            }
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for (key, val) in dst.iter_mut().zip(v.iter()) {
@@ -215,6 +219,7 @@ unsafe fn serialize_column_vec_with_bitmap(
     bitmap: &Bitmap,
 ) {
     debug_assert_eq!(dst.len(), column.len());
+    debug_assert_eq!(dst.len(), bitmap.len());
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
@@ -247,14 +252,14 @@ unsafe fn serialize_column_vec_with_bitmap(
         Column::Timestamp(col) => {
             for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
                 if v {
-                    store(&val, key.writer(8));
+                    store(val, key.writer(8));
                 }
             }
         }
         Column::Date(col) => {
             for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
                 if v {
-                    store(&val, key.writer(4));
+                    store(val, key.writer(4));
                 }
             }
         }
