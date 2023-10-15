@@ -81,7 +81,6 @@ impl DataBlock {
                 });
                 Ok(BlockEntry::new(
                     blocks[0].get_by_offset(i).data_type.clone(),
-                    // Safe to unwrap() because columns.len() > 0;
                     Value::Column(Column::concat_columns(columns_iter)?),
                 ))
             })
@@ -98,7 +97,6 @@ impl Column {
         mut columns: I,
     ) -> Result<Column> {
         let (_, size) = columns.size_hint();
-
         match size {
             None => Err(ErrorCode::EmptyData("Can't concat empty columns")),
             Some(1) => Ok(columns.next().unwrap()),
@@ -303,9 +301,9 @@ impl Column {
             Column::Nullable(_) => {
                 let column: Vec<Column> = columns
                     .clone()
-                    .map(|col| col.into_nullable().unwrap().column.clone())
+                    .map(|col| col.into_nullable().unwrap().column)
                     .collect();
-                let column = Self::concat_none_empty(column.iter().cloned());
+                let column = Self::concat_none_empty(column.into_iter());
                 let validity = Column::Boolean(Self::concat_boolean_types(
                     columns.map(|col| col.into_nullable().unwrap().validity),
                     capacity,
@@ -320,7 +318,7 @@ impl Column {
                             .clone()
                             .map(|col| col.into_tuple().unwrap()[idx].clone())
                             .collect();
-                        Self::concat_none_empty(column.iter().cloned())
+                        Self::concat_none_empty(column.into_iter())
                     })
                     .collect();
                 Column::Tuple(fields)
