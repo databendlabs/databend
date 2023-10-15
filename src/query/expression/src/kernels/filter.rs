@@ -19,9 +19,9 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
-use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::copy_aligned_advance;
 use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
+use crate::kernels::utils::store_aligned_advance;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -257,7 +257,7 @@ impl Column {
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
                     if n >= offset {
-                        copy_advance_aligned(values_ptr.add(n - offset), &mut ptr, 1);
+                        copy_aligned_advance(values_ptr.add(n - offset), &mut ptr, 1);
                     }
                     mask = mask & (mask - 1);
                 }
@@ -274,26 +274,26 @@ impl Column {
                     continuous_selected += CHUNK_SIZE;
                 } else {
                     if continuous_selected > 0 {
-                        copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
+                        copy_aligned_advance(values_ptr, &mut ptr, continuous_selected);
                         values_ptr = values_ptr.add(continuous_selected);
                         continuous_selected = 0;
                     }
                     while mask != 0 {
                         let n = mask.trailing_zeros() as usize;
-                        copy_advance_aligned(values_ptr.add(n), &mut ptr, 1);
+                        copy_aligned_advance(values_ptr.add(n), &mut ptr, 1);
                         mask = mask & (mask - 1);
                     }
                     values_ptr = values_ptr.add(CHUNK_SIZE);
                 }
             }
             if continuous_selected > 0 {
-                copy_advance_aligned(values_ptr, &mut ptr, continuous_selected);
+                copy_aligned_advance(values_ptr, &mut ptr, continuous_selected);
                 values_ptr = values_ptr.add(continuous_selected);
             }
 
             for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
                 if is_selected {
-                    copy_advance_aligned(values_ptr.add(i), &mut ptr, 1);
+                    copy_aligned_advance(values_ptr.add(i), &mut ptr, 1);
                 }
             }
 
@@ -324,7 +324,7 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            store_aligned_advance::<u64>(0, &mut offsets_ptr);
             let mut idx = 0;
             let (mut slice, offset, mut length) = filter.as_slice();
             if offset > 0 {
@@ -335,8 +335,8 @@ impl Column {
                         let start = *values_offset.get_unchecked(n - offset) as usize;
                         let len = *values_offset.get_unchecked(n - offset + 1) as usize - start;
                         data_size += len as u64;
-                        store_advance_aligned(data_size, &mut offsets_ptr);
-                        store_advance_aligned(
+                        store_aligned_advance(data_size, &mut offsets_ptr);
+                        store_aligned_advance(
                             (values_data_ptr.add(start) as u64, len),
                             &mut items_ptr,
                         );
@@ -359,14 +359,14 @@ impl Column {
                         let start = *values_offset.get_unchecked(idx) as usize;
                         let len = *values_offset.get_unchecked(idx + continuous_selected) as usize
                             - start;
-                        store_advance_aligned(
+                        store_aligned_advance(
                             (values_data_ptr.add(start) as u64, len),
                             &mut items_ptr,
                         );
                         for i in 0..continuous_selected {
                             data_size += *values_offset.get_unchecked(idx + i + 1)
                                 - *values_offset.get_unchecked(idx + i);
-                            store_advance_aligned(data_size, &mut offsets_ptr);
+                            store_aligned_advance(data_size, &mut offsets_ptr);
                         }
                         idx += continuous_selected;
                         continuous_selected = 0;
@@ -376,11 +376,11 @@ impl Column {
                         let start = *values_offset.get_unchecked(idx + n) as usize;
                         let len = *values_offset.get_unchecked(idx + n + 1) as usize - start;
                         data_size += len as u64;
-                        store_advance_aligned(
+                        store_aligned_advance(
                             (values_data_ptr.add(start) as u64, len),
                             &mut items_ptr,
                         );
-                        store_advance_aligned(data_size, &mut offsets_ptr);
+                        store_aligned_advance(data_size, &mut offsets_ptr);
                         mask = mask & (mask - 1);
                     }
                     idx += CHUNK_SIZE;
@@ -389,11 +389,11 @@ impl Column {
             if continuous_selected > 0 {
                 let start = *values_offset.get_unchecked(idx) as usize;
                 let len = *values_offset.get_unchecked(idx + continuous_selected) as usize - start;
-                store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                store_aligned_advance((values_data_ptr.add(start) as u64, len), &mut items_ptr);
                 for i in 0..continuous_selected {
                     data_size += *values_offset.get_unchecked(idx + i + 1)
                         - *values_offset.get_unchecked(idx + i);
-                    store_advance_aligned(data_size, &mut offsets_ptr);
+                    store_aligned_advance(data_size, &mut offsets_ptr);
                 }
                 idx += continuous_selected;
             }
@@ -403,8 +403,8 @@ impl Column {
                     let start = *values_offset.get_unchecked(idx + i) as usize;
                     let len = *values_offset.get_unchecked(idx + i + 1) as usize - start;
                     data_size += len as u64;
-                    store_advance_aligned((values_data_ptr.add(start) as u64, len), &mut items_ptr);
-                    store_advance_aligned(data_size, &mut offsets_ptr);
+                    store_aligned_advance((values_data_ptr.add(start) as u64, len), &mut items_ptr);
+                    store_aligned_advance(data_size, &mut offsets_ptr);
                 }
             }
             set_vec_len_by_ptr(&mut items, items_ptr);
@@ -417,7 +417,7 @@ impl Column {
 
         unsafe {
             for (str_ptr, len) in items.iter() {
-                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
+                copy_aligned_advance(*str_ptr as *const u8, &mut data_ptr, *len);
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
         }

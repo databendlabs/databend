@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
 
-use super::utils::serialize_column;
+use super::utils::serialize_columns;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
@@ -44,28 +44,24 @@ impl HashMethod for HashMethodDictionarySerializer {
     ) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
         let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-        let mut serialize_columns = Vec::new();
+        let mut columns = Vec::new();
         for (group_column, _) in group_columns {
             match group_column {
                 Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
                 }
-                _ => serialize_columns.push(group_column.clone()),
+                _ => columns.push(group_column.clone()),
             }
         }
 
-        if !serialize_columns.is_empty() {
+        if !columns.is_empty() {
             // The serialize_size is equal to the number of bytes required by serialization.
             let mut serialize_size = 0;
-            for column in serialize_columns.iter() {
+            for column in columns.iter() {
                 serialize_size += column.serialize_size();
             }
-            dictionary_columns.push(serialize_column(
-                &serialize_columns,
-                num_rows,
-                serialize_size,
-            ));
+            dictionary_columns.push(serialize_columns(&columns, num_rows, serialize_size));
         }
 
         let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());

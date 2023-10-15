@@ -19,11 +19,14 @@
 ///   bytes must *not* overlap with the region of memory beginning at `ptr`
 ///   with the same size.
 #[inline(always)]
+pub unsafe fn store<T>(val: &T, ptr: *mut u8) {
+    std::ptr::copy_nonoverlapping(val as *const T as *const u8, ptr, std::mem::size_of::<T>())
+}
+
+#[inline(always)]
 pub unsafe fn store_advance<T>(val: &T, ptr: &mut *mut u8) {
-    unsafe {
-        std::ptr::copy_nonoverlapping(val as *const T as *const u8, *ptr, std::mem::size_of::<T>());
-        *ptr = ptr.add(std::mem::size_of::<T>())
-    }
+    store(val, *ptr);
+    *ptr = ptr.add(std::mem::size_of::<T>())
 }
 
 /// # Safety
@@ -31,11 +34,14 @@ pub unsafe fn store_advance<T>(val: &T, ptr: &mut *mut u8) {
 /// * `ptr` must be [valid] for writes.
 /// * `ptr` must be properly aligned.
 #[inline(always)]
-pub unsafe fn store_advance_aligned<T>(val: T, ptr: &mut *mut T) {
-    unsafe {
-        std::ptr::write(*ptr, val);
-        *ptr = ptr.add(1)
-    }
+pub unsafe fn store_aligned<T>(val: T, ptr: *mut T) {
+    std::ptr::write(ptr, val);
+}
+
+#[inline(always)]
+pub unsafe fn store_aligned_advance<T>(val: T, ptr: &mut *mut T) {
+    store_aligned(val, *ptr);
+    *ptr = ptr.add(1)
 }
 
 /// # Safety
@@ -47,11 +53,14 @@ pub unsafe fn store_advance_aligned<T>(val: T, ptr: &mut *mut T) {
 ///   bytes must *not* overlap with the region of memory beginning at `ptr` with the
 ///   same size.
 #[inline(always)]
-pub unsafe fn copy_advance_aligned<T>(src: *const T, ptr: &mut *mut T, count: usize) {
-    unsafe {
-        std::ptr::copy_nonoverlapping(src, *ptr, count);
-        *ptr = ptr.add(count);
-    }
+pub unsafe fn copy_aligned<T>(src: *const T, ptr: *mut T, count: usize) {
+    std::ptr::copy_nonoverlapping(src, ptr, count);
+}
+
+#[inline(always)]
+pub unsafe fn copy_aligned_advance<T>(src: *const T, ptr: &mut *mut T, count: usize) {
+    copy_aligned(src, *ptr, count);
+    *ptr = ptr.add(count);
 }
 
 /// # Safety
@@ -60,7 +69,5 @@ pub unsafe fn copy_advance_aligned<T>(src: *const T, ptr: &mut *mut T, count: us
 ///    less than or equal to the capacity of Vec.
 #[inline(always)]
 pub unsafe fn set_vec_len_by_ptr<T>(vec: &mut Vec<T>, ptr: *const T) {
-    unsafe {
-        vec.set_len((ptr as usize - vec.as_ptr() as usize) / std::mem::size_of::<T>());
-    }
+    vec.set_len((ptr as usize - vec.as_ptr() as usize) / std::mem::size_of::<T>());
 }

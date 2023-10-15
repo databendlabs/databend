@@ -15,7 +15,7 @@
 use common_exception::Result;
 use common_hashtable::FastHash;
 
-use super::utils::serialize_column;
+use super::utils::serialize_columns;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
@@ -41,13 +41,13 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
         let mut serialize_size = 0;
-        let mut serialize_columns = Vec::with_capacity(group_columns.len());
+        let mut columns = Vec::with_capacity(group_columns.len());
         for (column, _) in group_columns {
             serialize_size += column.serialize_size();
-            serialize_columns.push(column.clone());
+            columns.push(column.clone());
         }
-        Ok(KeysState::Column(Column::String(serialize_column(
-            &serialize_columns,
+        Ok(KeysState::Column(Column::String(serialize_columns(
+            &columns,
             num_rows,
             serialize_size,
         ))))

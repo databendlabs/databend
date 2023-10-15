@@ -15,9 +15,9 @@
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
-use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::copy_aligned_advance;
 use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance_aligned;
+use crate::kernels::utils::store_aligned_advance;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -198,7 +198,7 @@ impl Column {
         unsafe {
             for (index, cnt) in indices.iter() {
                 if *cnt == 1 {
-                    copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                    copy_aligned_advance(col_ptr.add(*index as usize), &mut ptr, 1);
                     continue;
                 }
 
@@ -207,10 +207,10 @@ impl Column {
                 // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
                 let max_segment = 1 << (31 - cnt.leading_zeros());
                 let base_ptr = ptr;
-                copy_advance_aligned(col_ptr.add(*index as usize), &mut ptr, 1);
+                copy_aligned_advance(col_ptr.add(*index as usize), &mut ptr, 1);
                 let mut cur_segment = 1;
                 while cur_segment < max_segment {
-                    copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
+                    copy_aligned_advance(base_ptr, &mut ptr, cur_segment);
                     cur_segment <<= 1;
                 }
 
@@ -219,7 +219,7 @@ impl Column {
                 //  ^^^^ ---> ^^^^
                 remain = *cnt as usize - max_segment;
                 if remain > 0 {
-                    copy_advance_aligned(base_ptr, &mut ptr, remain);
+                    copy_aligned_advance(base_ptr, &mut ptr, remain);
                 }
             }
             set_vec_len_by_ptr(&mut builder, ptr);
@@ -245,13 +245,13 @@ impl Column {
 
         // Build [`offset`] and calculate `data_size` required by [`data`].
         unsafe {
-            store_advance_aligned::<u64>(0, &mut offsets_ptr);
+            store_aligned_advance::<u64>(0, &mut offsets_ptr);
             for (index, cnt) in indices.iter() {
                 let item = col.index_unchecked(*index as usize);
-                store_advance_aligned((item, *cnt), &mut items_ptr);
+                store_aligned_advance((item, *cnt), &mut items_ptr);
                 for _ in 0..*cnt {
                     data_size += item.len() as u64;
-                    store_advance_aligned(data_size, &mut offsets_ptr);
+                    store_aligned_advance(data_size, &mut offsets_ptr);
                 }
             }
             set_vec_len_by_ptr(&mut offsets, offsets_ptr);
@@ -267,7 +267,7 @@ impl Column {
             for (item, cnt) in items {
                 let len = item.len();
                 if cnt == 1 {
-                    copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
+                    copy_aligned_advance(item.as_ptr(), &mut data_ptr, len);
                     continue;
                 }
 
@@ -277,10 +277,10 @@ impl Column {
                 let max_bit_num = 1 << (31 - cnt.leading_zeros());
                 let max_segment = max_bit_num * len;
                 let base_data_ptr = data_ptr;
-                copy_advance_aligned(item.as_ptr(), &mut data_ptr, len);
+                copy_aligned_advance(item.as_ptr(), &mut data_ptr, len);
                 let mut cur_segment = len;
                 while cur_segment < max_segment {
-                    copy_advance_aligned(base_data_ptr, &mut data_ptr, cur_segment);
+                    copy_aligned_advance(base_data_ptr, &mut data_ptr, cur_segment);
                     cur_segment <<= 1;
                 }
 
@@ -289,7 +289,7 @@ impl Column {
                 //  ^^^^ ---> ^^^^
                 remain = cnt as usize - max_bit_num;
                 if remain > 0 {
-                    copy_advance_aligned(base_data_ptr, &mut data_ptr, remain * len);
+                    copy_aligned_advance(base_data_ptr, &mut data_ptr, remain * len);
                 }
             }
             set_vec_len_by_ptr(&mut data, data_ptr);

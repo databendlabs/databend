@@ -21,7 +21,7 @@ use common_hashtable::RowPtr;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::copy_aligned_advance;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -761,7 +761,7 @@ impl Column {
 
         unsafe {
             for (str_ptr, len) in items.iter() {
-                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
+                copy_aligned_advance(*str_ptr as *const u8, &mut data_ptr, *len);
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
         }

@@ -21,7 +21,7 @@ use common_exception::Result;
 use itertools::Itertools;
 
 use crate::kernels::take::BIT_MASK;
-use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::copy_aligned_advance;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -293,7 +293,7 @@ impl Column {
         unsafe {
             for col in cols.iter() {
                 let col_data = col.data().as_slice();
-                copy_advance_aligned(col_data.as_ptr(), &mut data_ptr, col_data.len());
+                copy_aligned_advance(col_data.as_ptr(), &mut data_ptr, col_data.len());
             }
             set_vec_len_by_ptr(&mut data, data_ptr);
         }
