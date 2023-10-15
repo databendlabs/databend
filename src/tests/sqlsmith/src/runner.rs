@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::future::Future;
 use std::time::Duration;
 
 use common_ast::ast::CreateTableSource;
@@ -136,12 +137,63 @@ impl Runner {
         let table_stmts = generator.gen_base_tables();
         let tables = self.create_base_table(table_stmts).await.unwrap();
         let conn = self.client.get_conn().await.unwrap();
+        let row_count = 10;
 
+        async fn check_timeout<F>(future: F, sql: String)
+        where F: Future {
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), future).await {
+                tracing::info!("sql: {}", sql);
+                let err = format!("sql timeout: {}", e);
+                tracing::error!(err);
+            }
+        }
         for table in &tables {
-            let insert_stmt = generator.gen_insert(table, 50);
+            let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
+            let update_sql = generator.gen_update(table).to_string();
+            tracing::info!("update_sql: {}", update_sql);
+            check_timeout(
+                async { check_res(conn.exec(&update_sql.clone()).await) },
+                update_sql.clone(),
+            )
+            .await;
+            let delete_stmt = generator.gen_delete(table);
+            let delete_sql = delete_stmt.to_string();
+            tracing::info!("delete_sql: {}", delete_sql);
+            check_res(conn.exec(&delete_sql).await);
+            let alter_stmt_opt = generator.gen_alter(table, row_count);
+            if let Some((alter_stmt, insert_stmt_opt)) = alter_stmt_opt {
+                let alter_sql = alter_stmt.to_string();
+                tracing::info!("alter_sql: {}", alter_sql);
+                if let Err(err) = conn.exec(&alter_sql).await {
+                    tracing::error!("alter_sql err: {}", err);
+                    continue;
+                }
+                if let Some(insert_stmt) = insert_stmt_opt {
+                    let insert_sql = insert_stmt.to_string();
+                    tracing::info!("after alter insert_sql: {}", insert_sql);
+                    if let Err(err) = conn.exec(&insert_sql).await {
+                        tracing::error!("after alter insert_sql err: {}", err);
+                    }
+                }
+            }
+        }
+        fn check_res(res: databend_driver::Result<i64>) {
+            if let Err(Error::Api(ClientError::InvalidResponse(err))) = res {
+                if err.code == 1005 || err.code == 1065 {
+                    return;
+                }
+                if KNOWN_ERRORS
+                    .iter()
+                    .any(|known_err| err.message.starts_with(known_err))
+                {
+                    return;
+                }
+                let err = format!("sql exec err: {}", err.message);
+                tracing::error!(err);
+            }
         }
         generator.tables = tables;
 
@@ -151,35 +203,37 @@ impl Runner {
             let mut try_reduce = false;
             let mut err_code = 0;
             let mut err = String::new();
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), async {
-                if let Err(e) = conn.exec(&query_sql).await {
-                    if let Error::Api(ClientError::InvalidResponse(err)) = &e {
-                        // TODO: handle Syntax and Semantic errors
-                        err_code = err.code;
-                        if err_code == 1005 || err_code == 1065 {
-                            return;
+            check_timeout(
+                async {
+                    if let Err(e) = conn.exec(&query_sql).await {
+                        if let Error::Api(ClientError::InvalidResponse(err)) = &e {
+                            // TODO: handle Syntax, Semantic and InvalidArgument errors
+                            if err.code == 1005
+                                || err.code == 1065
+                                || err.code == 2004
+                                || err.code == 1010
+                            {
+                                return;
+                            }
+                            if KNOWN_ERRORS
+                                .iter()
+                                .any(|known_err| err.message.starts_with(known_err))
+                            {
+                                return;
+                            }
+                            err_code = err.code;
                         }
-                        if KNOWN_ERRORS
-                            .iter()
-                            .any(|known_err| err.message.starts_with(known_err))
-                        {
-                            return;
-                        }
+                        err = format!("error: {}", e);
+                        try_reduce = true;
                     }
-
-                    err = format!("error: {}", e);
-                    try_reduce = true;
-                }
-            })
-            .await
-            {
-                tracing::info!("query_sql: {}", query_sql);
-                let err = format!("query timeout: {}", e);
-                tracing::error!(err);
-            }
+                },
+                query_sql.clone(),
+            )
+            .await;
             if try_reduce {
+                tracing::info!("query_sql: {}", query_sql);
                 let reduced_query = try_reduce_query(conn.clone(), err_code, query).await;
-                tracing::info!("query_sql: {}", reduced_query.to_string());
+                tracing::info!("reduced query_sql: {}", reduced_query.to_string());
                 tracing::error!(err);
             }
         }

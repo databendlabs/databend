@@ -63,7 +63,7 @@ pub fn is_internal_column_id(column_id: ColumnId) -> bool {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct DataSchema {
-    pub(crate) fields: Vec<DataField>,
+    pub fields: Vec<DataField>,
     pub(crate) metadata: BTreeMap<String, String>,
 }
 

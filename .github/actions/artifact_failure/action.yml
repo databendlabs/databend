@@ -19,6 +19,7 @@ runs:
             docker logs "$line" > .databend/docker/"$line".log
         done
 
+        mkdir -p target
         find -type d -name .databend -print0 | xargs -0 tar -zcf target/failure-${{ inputs.name }}.tar.gz
     - uses: actions/upload-artifact@v3
       with:

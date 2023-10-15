@@ -668,6 +668,83 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't12') limit 
 
 
 
+# For PR#13210
+statement ok
+create table t13(a int) row_per_block=10 block_per_segment=2;
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('db_09_0008', 't13')
+----
+1 14
+1 7
+1 7
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('db_09_0008', 't13')
+----
+2 21
+1 7
+1 7
+
+statement ok
+optimize table t13 compact limit 2
+
+query II
+select block_count, row_count from fuse_segment('db_09_0008', 't13')
+----
+2 21
+1 14
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact
+
+query I
+select row_count from fuse_block('db_09_0008', 't13')
+----
+14
+14
+14
+
+statement ok
+insert into t13 select number from numbers(7)
+
+statement ok
+optimize table t13 compact
+
+query I
+select row_count from fuse_block('db_09_0008', 't13')
+----
+14
+14
+7
+14
+
+
+
 statement ok
 DROP TABLE m
 
@@ -709,6 +786,9 @@ DROP TABLE t11
 
 statement ok
 DROP TABLE t12
+
+statement ok
+DROP TABLE t13
 
 statement ok
 DROP DATABASE db_09_0008

@@ -666,6 +666,7 @@ impl Binder {
             catalog,
             database,
             table,
+            all,
         } = stmt;
 
         let tenant = self.ctx.get_tenant();
@@ -678,6 +679,7 @@ impl Binder {
             catalog,
             database,
             table,
+            all: *all,
         })))
     }
 

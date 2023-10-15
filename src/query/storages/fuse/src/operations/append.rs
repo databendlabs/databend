@@ -21,6 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -71,7 +72,7 @@ impl FuseTable {
         }
 
         let cluster_stats_gen =
-            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds, None)?;
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 ctx.clone(),
@@ -93,18 +94,21 @@ impl FuseTable {
         block_thresholds: BlockThresholds,
         specified_last_len: usize,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds)?;
+        let cluster_stats_gen =
+            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, None)?;
         let output_lens = pipeline.output_len();
         let items1 = create_dummy_items(output_lens - specified_last_len, output_lens);
         let items2 = create_dummy_items(output_lens - specified_last_len, output_lens);
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
+            let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
             let mut builder = pipeline.add_transform_with_specified_len(
                 move |input, output| {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
+                        num_input_columns,
                         func_ctx2.clone(),
                         operators.clone(),
                     )))
@@ -149,17 +153,21 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
     ) -> Result<ClusterStatsGenerator> {
-        let cluster_stats_gen = self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds)?;
+        let cluster_stats_gen =
+            self.get_cluster_stats_gen(ctx.clone(), 0, block_thresholds, modified_schema)?;
 
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
+            let num_input_columns = self.table_info.schema().fields().len();
             let func_ctx2 = cluster_stats_gen.func_ctx.clone();
 
             pipeline.add_transform(move |input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     func_ctx2.clone(),
                     operators.clone(),
                 )))
@@ -195,15 +203,15 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         level: i32,
         block_thresholds: BlockThresholds,
+        modified_schema: Option<Arc<DataSchema>>,
     ) -> Result<ClusterStatsGenerator> {
         let cluster_keys = self.cluster_keys(ctx.clone());
         if cluster_keys.is_empty() {
             return Ok(ClusterStatsGenerator::default());
         }
 
-        let input_schema = self.table_info.schema();
-        let mut merged: Vec<DataField> =
-            input_schema.fields().iter().map(DataField::from).collect();
+        let input_schema = modified_schema.unwrap_or(DataSchema::from(self.schema()).into());
+        let mut merged: Vec<DataField> = input_schema.fields().clone();
 
         let mut cluster_key_index = Vec::with_capacity(cluster_keys.len());
         let mut extra_key_num = 0;
