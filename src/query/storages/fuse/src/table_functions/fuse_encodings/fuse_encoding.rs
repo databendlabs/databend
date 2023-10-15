@@ -22,11 +22,9 @@ use common_arrow::native::stat::PageInfo;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
-use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt32Type;
@@ -201,9 +199,9 @@ impl<'a> FuseEncoding<'a> {
                 "uncompressed_size",
                 TableDataType::Number(NumberDataType::UInt32),
             ),
-            TableField::new("L1", TableDataType::String),
+            TableField::new("level_one", TableDataType::String),
             TableField::new(
-                "L2",
+                "level_two",
                 TableDataType::Nullable(Box::new(TableDataType::String)),
             ),
         ])
