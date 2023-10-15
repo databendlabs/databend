@@ -301,10 +301,11 @@ impl Column {
                 capacity,
             )),
             Column::Nullable(_) => {
-                let column_iter = columns
+                let column: Vec<Column> = columns
                     .clone()
-                    .map(|col| col.into_nullable().unwrap().column.clone());
-                let column = Self::concat_none_empty(column_iter);
+                    .map(|col| col.into_nullable().unwrap().column.clone())
+                    .collect();
+                let column = Self::concat_none_empty(column.iter().cloned());
                 let validity = Column::Boolean(Self::concat_boolean_types(
                     columns.map(|col| col.into_nullable().unwrap().validity),
                     capacity,
@@ -315,10 +316,11 @@ impl Column {
             Column::Tuple(fields) => {
                 let fields = (0..fields.len())
                     .map(|idx| {
-                        let column_iter = columns
+                        let column: Vec<Column> = columns
                             .clone()
-                            .map(|col| col.into_tuple().unwrap()[idx].clone());
-                        Self::concat_none_empty(column_iter)
+                            .map(|col| col.into_tuple().unwrap()[idx].clone())
+                            .collect();
+                        Self::concat_none_empty(column.iter().cloned())
                     })
                     .collect();
                 Column::Tuple(fields)
