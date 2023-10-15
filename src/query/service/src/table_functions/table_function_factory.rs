@@ -148,6 +148,7 @@ impl TableFunctionFactory {
             "infer_schema".to_string(),
             (next_id(), Arc::new(InferSchemaTable::create)),
         );
+        
         creators.insert(
             "list_stage".to_string(),
             (next_id(), Arc::new(ListStageTable::create)),
