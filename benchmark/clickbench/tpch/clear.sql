@@ -1,9 +1,8 @@
-drop table customer;
-drop table lineitem;
-drop table nation;
-drop table orders;
-drop table partsupp;
-drop table part;
-drop table region;
-drop table supplier;
-VACUUM DROP TABLE retain 0 hours;
+drop table customer all;
+drop table lineitem all;
+drop table nation all;
+drop table orders all;
+drop table partsupp all;
+drop table part all;
+drop table region all;
+drop table supplier all;

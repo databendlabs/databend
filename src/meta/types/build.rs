@@ -127,6 +127,10 @@ fn build_proto() {
             "Event",
             "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
         )
+        .type_attribute(
+            "KVMeta",
+            "#[derive(Eq, serde::Serialize, serde::Deserialize)]",
+        )
         .compile_with_config(config, &protos, &[&proto_dir])
         .unwrap();
 }

@@ -38,7 +38,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use log::warn;
 
-use crate::columns_table::GrantObjectVisibilityChecker;
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
 use crate::util::find_eq_filter;
@@ -116,9 +115,7 @@ where TablesTable<T>: HistoryAware
 
         let mut database_tables = vec![];
 
-        let user = ctx.get_current_user()?;
-        let roles = ctx.get_current_available_roles().await?;
-        let visibility_checker = GrantObjectVisibilityChecker::new(&user, &roles);
+        let visibility_checker = ctx.get_visibility_checker().await?;
 
         for (ctl_name, ctl) in ctls.into_iter() {
             let mut dbs = Vec::new();

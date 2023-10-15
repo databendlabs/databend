@@ -13,34 +13,25 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
-use std::ptr::NonNull;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 use ethnum::U256;
 use micromarshal::Marshal;
 
-use crate::kernels::utils::copy_advance_aligned;
-use crate::kernels::utils::set_vec_len_by_ptr;
-use crate::kernels::utils::store_advance;
-use crate::kernels::utils::store_advance_aligned;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
-use crate::types::string::StringColumn;
-use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
@@ -51,44 +42,8 @@ use crate::with_integer_mapped_type;
 use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
-
-#[derive(Debug)]
-pub enum KeysState {
-    Column(Column),
-    U128(Buffer<u128>),
-    U256(Buffer<u256>),
-    Dictionary {
-        columns: Vec<StringColumn>,
-        keys_point: Vec<NonNull<[u8]>>,
-        dictionaries: Vec<DictionaryKeys>,
-    },
-}
-
-unsafe impl Send for KeysState {}
-
-unsafe impl Sync for KeysState {}
-
-pub trait HashMethod: Clone + Sync + Send + 'static {
-    type HashKey: ?Sized + Eq + FastHash + Debug;
-
-    type HashKeyIter<'a>: Iterator<Item = &'a Self::HashKey> + TrustedLen
-    where Self: 'a;
-
-    fn name(&self) -> String;
-
-    fn build_keys_state(
-        &self,
-        group_columns: &[(Column, DataType)],
-        rows: usize,
-    ) -> Result<KeysState>;
-
-    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
-
-    fn build_keys_iter_and_hashes<'a>(
-        &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)>;
-}
+use crate::HashMethod;
+use crate::KeysState;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -96,276 +51,6 @@ pub type HashMethodKeysU32 = HashMethodFixedKeys<u32>;
 pub type HashMethodKeysU64 = HashMethodFixedKeys<u64>;
 pub type HashMethodKeysU128 = HashMethodFixedKeys<u128>;
 pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
-
-/// These methods are `generic` method to generate hash key,
-/// that is the 'numeric' or 'binary` representation of each column value as hash key.
-#[derive(Clone, Debug)]
-pub enum HashMethodKind {
-    Serializer(HashMethodSerializer),
-    DictionarySerializer(HashMethodDictionarySerializer),
-    SingleString(HashMethodSingleString),
-    KeysU8(HashMethodKeysU8),
-    KeysU16(HashMethodKeysU16),
-    KeysU32(HashMethodKeysU32),
-    KeysU64(HashMethodKeysU64),
-    KeysU128(HashMethodKeysU128),
-    KeysU256(HashMethodKeysU256),
-}
-
-#[macro_export]
-macro_rules! with_hash_method {
-    ( | $t:tt | $($tail:tt)* ) => {
-        match_template::match_template! {
-            $t = [Serializer, SingleString, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256, DictionarySerializer],
-            $($tail)*
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! with_join_hash_method {
-    ( | $t:tt | $($tail:tt)* ) => {
-        match_template::match_template! {
-            $t = [Serializer, SingleString, KeysU8, KeysU16,
-            KeysU32, KeysU64, KeysU128, KeysU256],
-            $($tail)*
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! with_mappedhash_method {
-    ( | $t:tt | $($tail:tt)* ) => {
-        match_template::match_template! {
-            $t = [
-                Serializer => HashMethodSerializer,
-                SingleString => HashMethodSingleString,
-                KeysU8 => HashMethodKeysU8,
-                KeysU16 => HashMethodKeysU16,
-                KeysU32 => HashMethodKeysU32,
-                KeysU64 => HashMethodKeysU64,
-                KeysU128 => HashMethodKeysU128,
-                KeysU256 => HashMethodKeysU256,
-                DictionarySerializer => HashMethodDictionarySerializer
-            ],
-            $($tail)*
-        }
-    }
-}
-
-impl HashMethodKind {
-    pub fn name(&self) -> String {
-        with_hash_method!(|T| match self {
-            HashMethodKind::T(v) => v.name(),
-        })
-    }
-
-    pub fn data_type(&self) -> DataType {
-        match self {
-            HashMethodKind::Serializer(_) => DataType::String,
-            HashMethodKind::SingleString(_) => DataType::String,
-            HashMethodKind::KeysU8(_) => DataType::Number(NumberDataType::UInt8),
-            HashMethodKind::KeysU16(_) => DataType::Number(NumberDataType::UInt16),
-            HashMethodKind::KeysU32(_) => DataType::Number(NumberDataType::UInt32),
-            HashMethodKind::KeysU64(_) => DataType::Number(NumberDataType::UInt64),
-            HashMethodKind::KeysU128(_) => {
-                DataType::Decimal(DecimalDataType::Decimal128(i128::default_decimal_size()))
-            }
-            HashMethodKind::KeysU256(_) => {
-                DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
-            }
-            HashMethodKind::DictionarySerializer(_) => DataType::String,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HashMethodSingleString {}
-
-impl HashMethod for HashMethodSingleString {
-    type HashKey = [u8];
-
-    type HashKeyIter<'a> = StringIterator<'a>;
-
-    fn name(&self) -> String {
-        "SingleString".to_string()
-    }
-
-    fn build_keys_state(
-        &self,
-        group_columns: &[(Column, DataType)],
-        _rows: usize,
-    ) -> Result<KeysState> {
-        Ok(KeysState::Column(group_columns[0].0.clone()))
-    }
-
-    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
-        match keys_state {
-            KeysState::Column(Column::String(col))
-            | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => Ok(col.iter()),
-            _ => unreachable!(),
-        }
-    }
-
-    fn build_keys_iter_and_hashes<'a>(
-        &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        match keys_state {
-            KeysState::Column(Column::String(col))
-            | KeysState::Column(Column::Variant(col))
-            | KeysState::Column(Column::Bitmap(col)) => {
-                let mut hashes = Vec::with_capacity(col.len());
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
-                Ok((col.iter(), hashes))
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct HashMethodSerializer {}
-
-impl HashMethod for HashMethodSerializer {
-    type HashKey = [u8];
-
-    type HashKeyIter<'a> = StringIterator<'a>;
-
-    fn name(&self) -> String {
-        "Serializer".to_string()
-    }
-
-    fn build_keys_state(
-        &self,
-        group_columns: &[(Column, DataType)],
-        num_rows: usize,
-    ) -> Result<KeysState> {
-        // The serialize_size is equal to the number of bytes required by serialization.
-        let mut serialize_size = 0;
-        let mut serialize_columns = Vec::with_capacity(group_columns.len());
-        for (column, _) in group_columns {
-            serialize_size += column.serialize_size();
-            serialize_columns.push(column.clone());
-        }
-        Ok(KeysState::Column(Column::String(serialize_column(
-            &serialize_columns,
-            num_rows,
-            serialize_size,
-        ))))
-    }
-
-    fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
-        match key_state {
-            KeysState::Column(Column::String(col)) => Ok(col.iter()),
-            _ => unreachable!(),
-        }
-    }
-
-    fn build_keys_iter_and_hashes<'a>(
-        &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        match keys_state {
-            KeysState::Column(Column::String(col)) => {
-                let mut hashes = Vec::with_capacity(col.len());
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
-                Ok((col.iter(), hashes))
-            }
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HashMethodDictionarySerializer {
-    pub dict_keys: usize,
-}
-
-impl HashMethod for HashMethodDictionarySerializer {
-    type HashKey = DictionaryKeys;
-    type HashKeyIter<'a> = std::slice::Iter<'a, DictionaryKeys>;
-
-    fn name(&self) -> String {
-        "DictionarySerializer".to_string()
-    }
-
-    fn build_keys_state(
-        &self,
-        group_columns: &[(Column, DataType)],
-        num_rows: usize,
-    ) -> Result<KeysState> {
-        // fixed type serialize one column to dictionary
-        let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-        let mut serialize_columns = Vec::new();
-        for (group_column, _) in group_columns {
-            match group_column {
-                Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
-                    debug_assert_eq!(v.len(), num_rows);
-                    dictionary_columns.push(v.clone());
-                }
-                _ => serialize_columns.push(group_column.clone()),
-            }
-        }
-
-        if !serialize_columns.is_empty() {
-            // The serialize_size is equal to the number of bytes required by serialization.
-            let mut serialize_size = 0;
-            for column in serialize_columns.iter() {
-                serialize_size += column.serialize_size();
-            }
-            dictionary_columns.push(serialize_column(
-                &serialize_columns,
-                num_rows,
-                serialize_size,
-            ));
-        }
-
-        let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
-        let mut points = Vec::with_capacity(num_rows * dictionary_columns.len());
-
-        for row in 0..num_rows {
-            let start = points.len();
-
-            for dictionary_column in &dictionary_columns {
-                points.push(NonNull::from(unsafe {
-                    dictionary_column.index_unchecked(row)
-                }));
-            }
-
-            keys.push(DictionaryKeys::create(&points[start..]))
-        }
-
-        Ok(KeysState::Dictionary {
-            dictionaries: keys,
-            keys_point: points,
-            columns: dictionary_columns,
-        })
-    }
-
-    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
-        match keys_state {
-            KeysState::Dictionary { dictionaries, .. } => Ok(dictionaries.iter()),
-            _ => unreachable!(),
-        }
-    }
-
-    fn build_keys_iter_and_hashes<'a>(
-        &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        match keys_state {
-            KeysState::Dictionary { dictionaries, .. } => {
-                let mut hashes = Vec::with_capacity(dictionaries.len());
-                hashes.extend(dictionaries.iter().map(|key| key.fast_hash()));
-                Ok((dictionaries.iter(), hashes))
-            }
-            _ => unreachable!(),
-        }
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct HashMethodFixedKeys<T> {
@@ -698,87 +383,6 @@ fn build(
     fixed_hash(col, ty, writer, step, nulls)?;
     *offsize += size;
     Ok(())
-}
-
-/// The serialize_size is equal to the number of bytes required by serialization.
-pub fn serialize_column(
-    columns: &[Column],
-    num_rows: usize,
-    serialize_size: usize,
-) -> StringColumn {
-    // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
-    // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
-    let mut data: Vec<u8> = Vec::with_capacity(serialize_size);
-    let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
-    let mut data_ptr = data.as_mut_ptr();
-    let mut offsets_ptr = offsets.as_mut_ptr();
-    let mut offset = 0;
-
-    unsafe {
-        store_advance_aligned::<u64>(0, &mut offsets_ptr);
-        for i in 0..num_rows {
-            let old_ptr = data_ptr;
-            for col in columns.iter() {
-                serialize_column_binary(col, i, &mut data_ptr);
-            }
-            offset += data_ptr as u64 - old_ptr as u64;
-            store_advance_aligned::<u64>(offset, &mut offsets_ptr);
-        }
-        set_vec_len_by_ptr(&mut data, data_ptr);
-        set_vec_len_by_ptr(&mut offsets, offsets_ptr);
-    }
-
-    StringColumn::new(data.into(), offsets.into())
-}
-
-/// This function must be consistent with the `push_binary` function of `src/query/expression/src/values.rs`.
-/// # Safety
-///
-/// * The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
-    match column {
-        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
-        Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
-            NumberColumn::NUM_TYPE(v) => {
-                store_advance::<NUM_TYPE>(&v[row], row_space);
-            }
-        }),
-        Column::Decimal(v) => {
-            with_decimal_mapped_type!(|DECIMAL_TYPE| match v {
-                DecimalColumn::DECIMAL_TYPE(v, _) => {
-                    store_advance::<DECIMAL_TYPE>(&v[row], row_space);
-                }
-            })
-        }
-        Column::Boolean(v) => store_advance::<bool>(&v.get_bit(row), row_space),
-        Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            let value = unsafe { v.index_unchecked(row) };
-            let len = value.len();
-            store_advance::<u64>(&(len as u64), row_space);
-            copy_advance_aligned::<u8>(value.as_ptr(), row_space, len);
-        }
-        Column::Timestamp(v) => store_advance::<i64>(&v[row], row_space),
-        Column::Date(v) => store_advance::<i32>(&v[row], row_space),
-        Column::Array(array) | Column::Map(array) => {
-            let data = array.index(row).unwrap();
-            store_advance::<u64>(&(data.len() as u64), row_space);
-            for i in 0..data.len() {
-                serialize_column_binary(&data, i, row_space);
-            }
-        }
-        Column::Nullable(c) => {
-            let valid = c.validity.get_bit(row);
-            store_advance::<bool>(&valid, row_space);
-            if valid {
-                serialize_column_binary(&c.column, row, row_space);
-            }
-        }
-        Column::Tuple(fields) => {
-            for inner_col in fields.iter() {
-                serialize_column_binary(inner_col, row, row_space);
-            }
-        }
-    }
 }
 
 // Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.

@@ -99,7 +99,8 @@ impl FuseTable {
                 };
                 ctx.get_write_progress().incr(&progress_values);
                 // deleting the whole table... just a truncate
-                return self.do_truncate(ctx.clone()).await.map(|_| None);
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
             Some(filters) => filters,
         };
@@ -121,7 +122,8 @@ impl FuseTable {
                 ctx.get_write_progress().incr(&progress_values);
 
                 // deleting the whole table... just a truncate
-                return self.do_truncate(ctx.clone()).await.map(|_| None);
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
         }
         Ok(Some(snapshot.clone()))

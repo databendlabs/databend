@@ -54,7 +54,7 @@ use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
@@ -171,11 +171,10 @@ impl HashJoinBuildState {
             let mut validity = MutableBitmap::new();
             validity.extend_constant(data_block.num_rows(), true);
             let validity: Bitmap = validity.into();
-
             let nullable_columns = data_block
                 .columns()
                 .iter()
-                .map(|c| set_validity(c, validity.len(), &validity))
+                .map(|c| set_true_validity(c, validity.len(), &validity))
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }

@@ -1,5 +1,5 @@
 statement ok
-drop table if exists tt
+drop table if exists tt all
 
 statement ok
 set timezone='UTC'

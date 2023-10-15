@@ -408,8 +408,15 @@ impl Binder {
             let mut values = Vec::with_capacity(default_schema.num_fields());
             let update_columns_star = update_columns_star.unwrap();
             for idx in 0..default_schema.num_fields() {
-                values.push(update_columns_star.get(&idx).unwrap().clone());
+                let scalar = update_columns_star.get(&idx).unwrap().clone();
+                // cast expr
+                values.push(wrap_cast_scalar(
+                    &scalar,
+                    &scalar.data_type()?,
+                    &DataType::from(default_schema.field(idx).data_type()),
+                )?);
             }
+
             Ok(UnmatchedEvaluator {
                 source_schema: Arc::new(Arc::new(default_schema).into()),
                 condition,
@@ -423,7 +430,6 @@ impl Binder {
             }
 
             let mut values = Vec::with_capacity(clause.insert_operation.values.len());
-
             // we need to get source schema, and use it for filling columns.
             let source_schema = if let Some(fields) = clause.insert_operation.columns.clone() {
                 self.schema_project(&table_schema, &fields)?
