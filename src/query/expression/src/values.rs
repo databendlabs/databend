@@ -16,8 +16,6 @@ use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
 use std::ops::Range;
-use std::backtrace::Backtrace;
-
 
 use base64::engine::general_purpose;
 use base64::prelude::*;
@@ -1978,7 +1976,7 @@ impl ColumnBuilder {
                 //     RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
                 let rb = match RoaringTreemap::deserialize_from(*b) {
                     Ok(map) => map,
-                    Err(_) => panic!()
+                    Err(_) => panic!(),
                 };
                 let mut buf = vec![];
                 rb.serialize_into(&mut buf)
