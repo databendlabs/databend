@@ -21,9 +21,8 @@ use common_expression::DataSchemaRef;
 use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunctionRef;
 use common_functions::aggregates::StateAddr;
+use common_hashtable::Area;
 use common_sql::IndexType;
-
-use crate::pipelines::processors::transforms::group_by::Area;
 
 pub struct AggregatorParams {
     pub input_schema: DataSchemaRef,

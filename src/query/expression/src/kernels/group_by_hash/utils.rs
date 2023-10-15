@@ -117,17 +117,12 @@ pub fn serialize_columns_vec(
     columns: &[Column],
     num_rows: usize,
     max_bytes_per_row: usize,
-    buffer: &mut Vec<u8>,
+    buffer: *mut u8,
 ) -> Vec<KeysRef> {
-    // To serialize columns in batch, we need to preallocate a deterministic memory space for each row of the target column at once.
-    if buffer.capacity() < num_rows * max_bytes_per_row {
-        buffer.reserve(num_rows * max_bytes_per_row - buffer.capacity());
-    }
     unsafe {
         // Construct the pointer of each row in `data`.
-        let ptr = buffer.as_mut_ptr();
         let mut keys = (0..num_rows)
-            .map(|i| KeysRef::new(ptr.add(i * max_bytes_per_row)))
+            .map(|i| KeysRef::new(buffer.add(i * max_bytes_per_row)))
             .collect();
 
         for col in columns {

@@ -35,6 +35,10 @@ impl Area {
     pub fn alloc_layout(&mut self, layout: Layout) -> NonNull<u8> {
         self.bump.alloc_layout(layout)
     }
+
+    pub fn reset(&mut self) {
+        self.bump.reset();
+    }
 }
 
 unsafe impl Send for Area {}

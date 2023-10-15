@@ -23,6 +23,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_hashtable::Area;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -101,6 +102,9 @@ pub struct TransformPartialGroupBy<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
     group_columns: Vec<IndexType>,
     settings: GroupBySettings,
+
+    // Only used when the hash method is serializer.
+    keys_state_area: Area,
 }
 
 impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
@@ -124,6 +128,7 @@ impl<Method: HashMethodBounds> TransformPartialGroupBy<Method> {
                 hash_table,
                 group_columns: params.group_columns.clone(),
                 settings: GroupBySettings::try_from(ctx)?,
+                keys_state_area: Area::create(),
             },
         ))
     }
@@ -147,9 +152,11 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self
-                .method
-                .mutable_build_keys_state(&group_columns, rows_num)?;
+            let state = self.method.build_keys_state_with_arena(
+                &group_columns,
+                rows_num,
+                &mut self.keys_state_area,
+            )?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),

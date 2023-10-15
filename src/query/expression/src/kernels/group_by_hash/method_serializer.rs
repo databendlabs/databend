@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::alloc::Layout;
 use std::iter::TrustedLen;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::Area;
 use common_hashtable::FastHash;
 
 use super::keys_ref::KeysRef;
@@ -64,10 +67,11 @@ impl HashMethod for HashMethodSerializer {
         ))))
     }
 
-    fn mutable_build_keys_state(
-        &mut self,
+    fn build_keys_state_with_arena(
+        &self,
         group_columns: &[(Column, DataType)],
         num_rows: usize,
+        arena: &mut Area,
     ) -> Result<KeysState> {
         // We choose the maximum row memory of columns to guranntee that the memory of the serialized column will not exceed it.
         let mut max_bytes_per_row = 0;
@@ -78,14 +82,23 @@ impl HashMethod for HashMethodSerializer {
                 col.clone()
             })
             .collect::<Vec<_>>();
+        let total_bytes = max_bytes_per_row * num_rows;
 
-        if max_bytes_per_row * num_rows > BATCH_SERIALIZE_BYTES_LIMIT {
+        if total_bytes > BATCH_SERIALIZE_BYTES_LIMIT {
             // If the memory consumption exceed the limit, we degragde to non-batch serialization,
             // which will not use the buffer.
             self.build_keys_state(group_columns, num_rows)
         } else {
-            let keys_ref =
-                serialize_columns_vec(&columns, num_rows, max_bytes_per_row, &mut self.buffer);
+            // To serialize columns in batch, we need to preallocate a deterministic memory space for each row of the target column at once.
+            arena.reset();
+            let buffer = arena
+                .alloc_layout(
+                    Layout::array::<u8>(total_bytes)
+                        .map_err(|e| ErrorCode::Internal(format!("Unable to alloc layout: {e}")))?,
+                )
+                .as_ptr();
+
+            let keys_ref = serialize_columns_vec(&columns, num_rows, max_bytes_per_row, buffer);
             Ok(KeysState::KeysRef(keys_ref))
         }
     }

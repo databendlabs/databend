@@ -22,6 +22,7 @@
 
 extern crate core;
 
+mod arena;
 mod container;
 mod hashjoin_hashtable;
 mod hashjoin_string_hashtable;
@@ -41,6 +42,7 @@ mod table_empty;
 mod traits;
 mod utils;
 
+pub use arena::*;
 pub use table0::Entry as HashtableEntry;
 pub use traits::EntryMutRefLike as HashtableEntryMutRefLike;
 pub use traits::EntryRefLike as HashtableEntryRefLike;

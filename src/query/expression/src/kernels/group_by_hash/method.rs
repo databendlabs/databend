@@ -18,6 +18,7 @@ use std::ptr::NonNull;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
+use common_hashtable::Area;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
 use ethnum::i256;
@@ -71,11 +72,11 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
         rows: usize,
     ) -> Result<KeysState>;
 
-    /// Some hash methods may need to modify the inner data while building the keys state (such as [`HashMethodSerializer`]).
-    fn mutable_build_keys_state(
-        &mut self,
+    fn build_keys_state_with_arena(
+        &self,
         group_columns: &[(Column, DataType)],
         rows: usize,
+        _arena: &mut Area,
     ) -> Result<KeysState> {
         self.build_keys_state(group_columns, rows)
     }

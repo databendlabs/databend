@@ -28,6 +28,7 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;
 use common_functions::aggregates::StateAddrs;
+use common_hashtable::Area;
 use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableLike;
 use common_pipeline_core::processors::port::InputPort;
@@ -110,6 +111,9 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
 
     params: Arc<AggregatorParams>,
+
+    // Only used when the hash method is serializer.
+    keys_state_area: Area,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -140,6 +144,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 params,
                 hash_table,
                 settings: AggregateSettings::try_from(ctx)?,
+                keys_state_area: Area::create(),
             },
         ))
     }
@@ -244,9 +249,11 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self
-                .method
-                .mutable_build_keys_state(&group_columns, rows_num)?;
+            let state = self.method.build_keys_state_with_arena(
+                &group_columns,
+                rows_num,
+                &mut self.keys_state_area,
+            )?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),
