@@ -74,6 +74,14 @@ impl InspectParquetTable {
                 .into_string()
                 .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
         )?;
+        if let Some(name) = uri.strip_prefix('@') {
+            uri = name.to_string();
+        } else {
+            return Err(ErrorCode::BadArguments(format!(
+                "location must start with @, but got {}",
+                v
+            )));
+        }
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
