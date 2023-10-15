@@ -1,5 +1,5 @@
 statement ok
-drop table if exists t1
+drop table if exists t1 all
 
 statement ok
 create table t1(a integer null, b integer null, c integer null, d integer null, e integer null)

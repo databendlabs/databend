@@ -16,6 +16,7 @@ use common_exception::Result;
 use common_expression::serialize::read_decimal;
 use common_expression::serialize::read_decimal_with_size;
 use common_expression::type_check::common_super_type;
+use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
@@ -142,5 +143,21 @@ fn test_decimal_common_type() {
         }));
         let r = common_super_type(l, b, &[]);
         assert_eq!(r, Some(expected));
+    }
+}
+
+#[test]
+fn test_float_to_128() {
+    let cases = vec![
+        (123.456, 123),
+        (-123.456, -123),
+        (0.0, 0),
+        (0.123, 0),
+        (-0.123, 0),
+    ];
+
+    for (a, b) in cases {
+        let r = i128::from_float(a);
+        assert_eq!(r, b);
     }
 }

@@ -331,14 +331,16 @@ impl PipelineBuilder {
             table_level_range_index,
             table_schema,
             need_insert,
+            delete_when,
         } = deduplicate;
 
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
-        let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
+        let mut delete_column_idx = 0;
+        let mut opt_modified_schema = None;
         if let Some(SelectCtx {
             select_column_bindings,
             select_schema,
@@ -351,6 +353,22 @@ impl PipelineBuilder {
                 &mut self.main_pipeline,
                 false,
             )?;
+
+            let mut target_schema: DataSchema = table_schema.clone().into();
+            if let Some((_, delete_column)) = delete_when {
+                delete_column_idx = select_schema.index_of(delete_column.as_str())?;
+                let delete_column = select_schema.field(delete_column_idx).clone();
+                target_schema
+                    .fields
+                    .insert(delete_column_idx, delete_column);
+                opt_modified_schema = Some(Arc::new(target_schema.clone()));
+            }
+            let target_schema = Arc::new(target_schema.clone());
+            if target_schema.fields().len() != select_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "The number of columns in the target table is different from the number of columns in the SELECT clause",
+                ));
+            }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
@@ -370,13 +388,14 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            target_schema.clone(),
+            Arc::new(table_schema.clone().into()),
         )?;
 
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
+            opt_modified_schema,
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;
@@ -395,16 +414,25 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
+        let delete_when = if let Some((remote_expr, delete_column)) = delete_when {
+            Some((
+                remote_expr.as_expr(&BUILTIN_FUNCTIONS),
+                delete_column.clone(),
+            ))
+        } else {
+            None
+        };
         let cluster_keys = table.cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
-                self.ctx.as_ref(),
+                self.ctx.clone(),
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|(expr, _)| (expr, delete_column_idx)),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -417,6 +445,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|_| delete_column_idx),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -445,7 +474,7 @@ impl PipelineBuilder {
         let block_thresholds = table.get_block_thresholds();
 
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
         // this TransformSerializeBlock is just used to get block_builder
         let block_builder = TransformSerializeBlock::try_create(
@@ -684,7 +713,7 @@ impl PipelineBuilder {
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -954,7 +983,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
@@ -1174,10 +1203,12 @@ impl PipelineBuilder {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
+        let num_input_columns = input_schema.num_fields();
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -1249,10 +1280,12 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
+            let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     self.func_ctx.clone(),
                     ops.clone(),
                 )))
@@ -1309,6 +1342,7 @@ impl PipelineBuilder {
                 ))
             })?;
 
+        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
@@ -1316,6 +1350,7 @@ impl PipelineBuilder {
                     expr: predicate.clone(),
                 }],
                 self.func_ctx.clone(),
+                num_input_columns,
             );
 
             if self.enable_profiling {
@@ -1338,10 +1373,12 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
+        let num_input_columns = project.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 self.func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
@@ -1353,6 +1390,7 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
+        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
@@ -1368,8 +1406,14 @@ impl PipelineBuilder {
             projections: Some(eval_scalar.projections.clone()),
         };
 
+        let num_input_columns = input_schema.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1401,8 +1445,14 @@ impl PipelineBuilder {
                 .collect(),
         };
 
+        let num_input_columns = project_set.input.output_schema()?.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1426,8 +1476,15 @@ impl PipelineBuilder {
         let funcs = lambda.lambda_funcs.clone();
         let op = BlockOperator::LambdaMap { funcs };
 
+        let input_schema = lambda.input.output_schema()?;
+        let num_input_columns = input_schema.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1893,6 +1950,7 @@ impl PipelineBuilder {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
+                        input_schema.num_fields(),
                         self.func_ctx.clone(),
                         vec![BlockOperator::Project {
                             projection: projection.clone(),

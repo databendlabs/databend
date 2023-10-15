@@ -47,6 +47,7 @@ use crate::meta_service::raftmeta::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
+use crate::request_handling::Handler;
 use crate::store::RaftStore;
 
 /// The container of APIs of the leader in a meta service cluster.
@@ -58,18 +59,12 @@ pub struct MetaLeader<'a> {
     raft: &'a MetaRaft,
 }
 
-impl<'a> MetaLeader<'a> {
-    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
-        MetaLeader {
-            sto: &meta_node.sto,
-            raft: &meta_node.raft,
-        }
-    }
-
+#[async_trait::async_trait]
+impl<'a> Handler<ForwardRequestBody> for MetaLeader<'a> {
     #[minitrace::trace]
-    pub async fn handle_request(
+    async fn handle(
         &self,
-        req: ForwardRequest,
+        req: ForwardRequest<ForwardRequestBody>,
     ) -> Result<ForwardResponse, MetaOperationError> {
         debug!(req = as_debug!(&req), target = req.forward_to_leader; "handle_forwardable_req");
 
@@ -104,6 +99,15 @@ impl<'a> MetaLeader<'a> {
                 let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
+        }
+    }
+}
+
+impl<'a> MetaLeader<'a> {
+    pub fn new(meta_node: &'a MetaNode) -> MetaLeader {
+        MetaLeader {
+            sto: &meta_node.sto,
+            raft: &meta_node.raft,
         }
     }
 

@@ -31,7 +31,7 @@ SELECT COUNT() FROM test_table
 4
 
 statement ok
-drop table test_table
+drop table test_table all
 
 statement ok
 drop stage test

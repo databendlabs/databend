@@ -175,7 +175,8 @@ impl FuseTable {
         )?;
 
         // sort
-        let cluster_stats_gen = self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds)?;
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, thresholds, None)?;
         pipeline.add_transform(
             |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
                 let proc = TransformSerializeBlock::try_create(

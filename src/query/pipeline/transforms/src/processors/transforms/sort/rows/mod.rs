@@ -37,7 +37,7 @@ where Self: Sized
 
 /// Rows can be compared.
 pub trait Rows
-where Self: Sized
+where Self: Sized + Clone
 {
     type Item<'a>: Ord
     where Self: 'a;

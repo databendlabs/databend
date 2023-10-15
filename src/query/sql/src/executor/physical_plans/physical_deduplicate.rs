@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use common_expression::ColumnId;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
@@ -38,6 +39,7 @@ pub struct Deduplicate {
     pub select_ctx: Option<SelectCtx>,
     pub table_level_range_index: HashMap<ColumnId, ColumnStatistics>,
     pub need_insert: bool,
+    pub delete_when: Option<(RemoteExpr, String)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

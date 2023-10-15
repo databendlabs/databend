@@ -97,14 +97,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
                 ];
 
-                let estimated_rows = if let Some(info) = &plan.stat_info {
+                let _estimated_rows = if let Some(info) = &plan.stat_info {
                     format!("{0:.2}", info.estimated_rows)
                 } else {
                     String::from("None")
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} (rows: {})", plan.join_type, estimated_rows),
+                    format!("HashJoin: {}", plan.join_type),
                     children,
                 ))
             }
@@ -117,14 +117,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
                 ];
 
-                let estimated_rows = if let Some(info) = &plan.stat_info {
+                let _estimated_rows = if let Some(info) = &plan.stat_info {
                     format!("{0:.2}", info.estimated_rows)
                 } else {
                     String::from("none")
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {} (rows: {})", plan.join_type, estimated_rows),
+                    format!("RangeJoin: {}", plan.join_type,),
                     children,
                 ))
             }

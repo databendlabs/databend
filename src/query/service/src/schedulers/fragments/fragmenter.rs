@@ -154,10 +154,10 @@ impl PhysicalPlanReplacer for Fragmenter {
         let input = self.replace(&plan.input)?;
         self.state = State::ReplaceInto;
 
-        Ok(PhysicalPlan::ReplaceInto(ReplaceInto {
+        Ok(PhysicalPlan::ReplaceInto(Box::new(ReplaceInto {
             input: Box::new(input),
             ..plan.clone()
-        }))
+        })))
     }
 
     //  TODO(Sky): remove rebudant code
@@ -191,7 +191,7 @@ impl PhysicalPlanReplacer for Fragmenter {
     ) -> Result<PhysicalPlan> {
         self.state = State::Compact;
 
-        Ok(PhysicalPlan::CompactPartial(plan.clone()))
+        Ok(PhysicalPlan::CompactPartial(Box::new(plan.clone())))
     }
 
     fn replace_delete_partial(
