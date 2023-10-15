@@ -147,7 +147,9 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
 
         unsafe {
             let rows_num = block.num_rows();
-            let state = self.method.build_keys_state(&group_columns, rows_num)?;
+            let state = self
+                .method
+                .mutable_build_keys_state(&group_columns, rows_num)?;
 
             match &mut self.hash_table {
                 HashTable::MovedOut => unreachable!(),

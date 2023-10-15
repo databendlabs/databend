@@ -15,6 +15,7 @@
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
+use std::ops::Add;
 use std::ops::Range;
 
 use base64::engine::general_purpose;
@@ -1839,6 +1840,38 @@ impl Column {
             Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
             Column::Nullable(c) => c.column.serialize_size() + c.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
+        }
+    }
+
+    pub fn max_serialize_size_per_row(&self) -> usize {
+        match self {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => 0,
+            Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
+                NumberColumn::NUM_TYPE(_) => {
+                    std::mem::size_of::<NUM_TYPE>()
+                }
+            }),
+            Column::Date(_) => 4,
+            Column::Timestamp(_) => 8,
+            Column::Decimal(DecimalColumn::Decimal128(_, _)) => 16,
+            Column::Decimal(DecimalColumn::Decimal256(_, _)) => 32,
+            Column::Boolean(_) => 1,
+            Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => {
+                // 8 bytes for serializing the length.
+                col.iter().map(|c| c.len()).max().unwrap_or_default().add(8)
+            }
+            Column::Array(col) | Column::Map(col) => {
+                // Serialization of this types will degrade to the non-batch version,
+                // so we only need the maximum of the serialize size of the inner columns.
+                // 8 bytes for serializing the length.
+                col.iter()
+                    .map(|c| c.serialize_size())
+                    .max()
+                    .unwrap_or_default()
+                    .add(8)
+            }
+            Column::Nullable(c) => c.column.max_serialize_size_per_row() + 1,
+            Column::Tuple(fields) => fields.iter().map(|f| f.max_serialize_size_per_row()).sum(),
         }
     }
 

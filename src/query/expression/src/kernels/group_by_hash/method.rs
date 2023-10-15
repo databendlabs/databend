@@ -23,6 +23,7 @@ use common_hashtable::FastHash;
 use ethnum::i256;
 use ethnum::u256;
 
+use super::keys_ref::KeysRef;
 use crate::types::decimal::Decimal;
 use crate::types::string::StringColumn;
 use crate::types::DataType;
@@ -41,6 +42,7 @@ use crate::HashMethodSingleString;
 
 #[derive(Debug)]
 pub enum KeysState {
+    KeysRef(Vec<KeysRef>),
     Column(Column),
     U128(Buffer<u128>),
     U256(Buffer<u256>),
@@ -68,6 +70,15 @@ pub trait HashMethod: Clone + Sync + Send + 'static {
         group_columns: &[(Column, DataType)],
         rows: usize,
     ) -> Result<KeysState>;
+
+    /// Some hash methods may need to modify the inner data while building the keys state (such as [`HashMethodSerializer`]).
+    fn mutable_build_keys_state(
+        &mut self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState> {
+        self.build_keys_state(group_columns, rows)
+    }
 
     fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>>;
 

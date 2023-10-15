@@ -44,24 +44,24 @@ impl HashMethod for HashMethodDictionarySerializer {
     ) -> Result<KeysState> {
         // fixed type serialize one column to dictionary
         let mut dictionary_columns = Vec::with_capacity(group_columns.len());
-        let mut columns = Vec::new();
+        let mut other_columns = Vec::new();
         for (group_column, _) in group_columns {
             match group_column {
                 Column::String(v) | Column::Variant(v) | Column::Bitmap(v) => {
                     debug_assert_eq!(v.len(), num_rows);
                     dictionary_columns.push(v.clone());
                 }
-                _ => columns.push(group_column.clone()),
+                _ => other_columns.push(group_column.clone()),
             }
         }
 
-        if !columns.is_empty() {
+        if !other_columns.is_empty() {
             // The serialize_size is equal to the number of bytes required by serialization.
             let mut serialize_size = 0;
-            for column in columns.iter() {
+            for column in other_columns.iter() {
                 serialize_size += column.serialize_size();
             }
-            dictionary_columns.push(serialize_columns(&columns, num_rows, serialize_size));
+            dictionary_columns.push(serialize_columns(&other_columns, num_rows, serialize_size));
         }
 
         let mut keys = Vec::with_capacity(num_rows * dictionary_columns.len());
