@@ -105,10 +105,11 @@ impl Table for FuseEncodingTable {
     }
 
     fn table_args(&self) -> Option<TableArgs> {
-        let mut args = Vec::new();
-        args.push(string_literal(self.arg_database_name.as_str()));
-        args.push(string_literal(self.arg_table_name.as_str()));
-        args.push(string_literal(self.arg_column_name.as_str()));
+        let args = vec![
+            string_literal(self.arg_database_name.as_str()),
+            string_literal(self.arg_table_name.as_str()),
+            string_literal(self.arg_column_name.as_str()),
+        ];
         Some(TableArgs::new_positioned(args))
     }
 

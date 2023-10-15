@@ -1096,12 +1096,10 @@ impl TableField {
     }
 
     pub fn is_nested(&self) -> bool {
-        match self.data_type {
-            TableDataType::Tuple { .. } => true,
-            TableDataType::Array(_) => true,
-            TableDataType::Map(_) => true,
-            _ => false,
-        }
+        matches!(
+            self.data_type,
+            TableDataType::Tuple { .. } | TableDataType::Array(_) | TableDataType::Map(_)
+        )
     }
 }
 

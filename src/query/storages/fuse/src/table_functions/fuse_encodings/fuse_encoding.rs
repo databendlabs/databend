@@ -24,30 +24,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
-use common_expression::types::UInt32Type;
-use common_expression::types::UInt64Type;
-use common_expression::BlockEntry;
-use common_expression::Column;
 use common_expression::DataBlock;
-use common_expression::FromData;
-use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
-use common_expression::Value;
-use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::BlockReader;
-use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::SegmentsIO;
-use crate::io::SnapshotHistoryReader;
 use crate::sessions::TableContext;
 use crate::FuseTable;
 
@@ -153,7 +141,10 @@ impl<'a> FuseEncoding<'a> {
             l1.commit_row();
             let l2_encoding = match &p.body {
                 PageBody::Dict(dict) => Some(encoding_to_string(&dict.indices.body)),
-                PageBody::Freq(freq) => freq.exceptions.as_ref().map(|e| encoding_to_string(&e.body)),
+                PageBody::Freq(freq) => freq
+                    .exceptions
+                    .as_ref()
+                    .map(|e| encoding_to_string(&e.body)),
                 _ => None,
             };
             if let Some(l2_encoding) = l2_encoding {
