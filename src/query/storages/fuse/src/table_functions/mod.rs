@@ -15,6 +15,7 @@
 mod clustering_information;
 mod fuse_blocks;
 mod fuse_columns;
+mod fuse_encoding;
 mod fuse_segments;
 mod fuse_snapshots;
 mod fuse_statistics;

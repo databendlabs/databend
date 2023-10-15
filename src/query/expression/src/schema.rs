@@ -1094,6 +1094,15 @@ impl TableField {
     pub fn is_nullable_or_null(&self) -> bool {
         self.data_type.is_nullable_or_null()
     }
+
+    pub fn is_nested(&self) -> bool {
+        match self.data_type {
+            TableDataType::Tuple { .. } => true,
+            TableDataType::Array(_) => true,
+            TableDataType::Map(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl From<&TableDataType> for DataType {
