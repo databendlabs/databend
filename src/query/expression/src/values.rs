@@ -1861,7 +1861,7 @@ impl Column {
                 col.iter().map(|c| c.len()).max().unwrap_or_default().add(8)
             }
             Column::Array(col) | Column::Map(col) => {
-                // Serialization of this types will degrade to the non-batch version,
+                // Vectorized serialization of these types will degrade to the non-vectorized version,
                 // so we only need the maximum of the serialize size of the inner columns.
                 // 8 bytes for serializing the length.
                 col.iter()

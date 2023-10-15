@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use ethnum::i256;
 
 use super::keys_ref::KeysRef;
@@ -47,7 +48,7 @@ pub fn serialize_columns(
         for i in 0..num_rows {
             let old_ptr = data_ptr;
             for col in columns.iter() {
-                serialize_column_binary(col, i, &mut data_ptr);
+                serialize_column(col, i, &mut data_ptr);
             }
             offset += data_ptr as u64 - old_ptr as u64;
             store_aligned_advance::<u64>(offset, &mut offsets_ptr);
@@ -63,7 +64,7 @@ pub fn serialize_columns(
 /// # Safety
 ///
 /// * The size of the memory pointed by `row_space` is equal to the number of bytes required by serialization.
-pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &mut *mut u8) {
+unsafe fn serialize_column(column: &Column, row: usize, row_space: &mut *mut u8) {
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
         Column::Number(v) => with_number_mapped_type!(|NUM_TYPE| match v {
@@ -91,28 +92,28 @@ pub unsafe fn serialize_column_binary(column: &Column, row: usize, row_space: &m
             let data = array.index(row).unwrap();
             store_advance::<u64>(&(data.len() as u64), row_space);
             for i in 0..data.len() {
-                serialize_column_binary(&data, i, row_space);
+                serialize_column(&data, i, row_space);
             }
         }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
             store_advance::<bool>(&valid, row_space);
             if valid {
-                serialize_column_binary(&c.column, row, row_space);
+                serialize_column(&c.column, row, row_space);
             }
         }
         Column::Tuple(fields) => {
             for inner_col in fields.iter() {
-                serialize_column_binary(inner_col, row, row_space);
+                serialize_column(inner_col, row, row_space);
             }
         }
     }
 }
 
-/// The batch version of [`serialize_columns`]. Try to leverage SIMD to improve performance.
+/// The vectorized version of [`serialize_columns`]. Try to leverage SIMD to improve performance.
 ///
 /// To serialize a column in batch, we need to preallocate a deterministic memory space for each row of the target column at once.
-pub fn serialize_columns_in_batch(
+pub fn serialize_columns_vec(
     columns: &[Column],
     num_rows: usize,
     max_bytes_per_row: usize,
@@ -130,18 +131,18 @@ pub fn serialize_columns_in_batch(
             .collect();
 
         for col in columns {
-            serialize_column_binary_in_batch(&mut keys, col);
+            serialize_column_vec(&mut keys, col);
         }
         keys
     }
 }
 
-/// The batch version of [`serialize_column_binary`]. Try to leverage SIMD to improve performance.
+/// The vectorized version of [`serialize_column`]. Try to leverage SIMD to improve performance.
 ///
 /// # Safety
 ///
 /// The serialized size of each row in `column` should not exceed `column.max_serialize_size_per_row()`.
-unsafe fn serialize_column_binary_in_batch(dst: &mut Vec<KeysRef>, column: &Column) {
+unsafe fn serialize_column_vec(dst: &mut Vec<KeysRef>, column: &Column) {
     debug_assert_eq!(dst.len(), column.len());
     match column {
         Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
@@ -180,7 +181,7 @@ unsafe fn serialize_column_binary_in_batch(dst: &mut Vec<KeysRef>, column: &Colu
             for (key, val) in dst.iter_mut().zip(col.validity.iter()) {
                 store(&val, key.writer(1));
             }
-            serialize_column_binary_in_batch(dst, &col.column)
+            serialize_column_vec_with_bitmap(dst, &col.column, &col.validity)
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
             for (key, val) in dst.iter_mut().zip(v.iter()) {
@@ -194,18 +195,113 @@ unsafe fn serialize_column_binary_in_batch(dst: &mut Vec<KeysRef>, column: &Colu
                 let len = offsets[1] - offsets[0];
                 store(&len, key.writer(8));
             }
-            for (row, (key, col)) in dst.iter_mut().zip(array.iter()).enumerate() {
+            for (key, col) in dst.iter_mut().zip(array.iter()) {
                 // Degrade to serialize_column_binary.
                 // We need to calculate the new length manually.
                 let mut temp = key.writer(0);
-                serialize_column_binary(&col, row, &mut temp);
+                for i in 0..col.len() {
+                    serialize_column(&col, i, &mut temp);
+                }
                 let new_len = temp as usize - key.get() as usize;
                 key.set_len(new_len);
             }
         }
         Column::Tuple(fields) => {
             for inner_col in fields.iter() {
-                serialize_column_binary_in_batch(dst, inner_col);
+                serialize_column_vec(dst, inner_col);
+            }
+        }
+    }
+}
+
+unsafe fn serialize_column_vec_with_bitmap(
+    dst: &mut Vec<KeysRef>,
+    column: &Column,
+    bitmap: &Bitmap,
+) {
+    debug_assert_eq!(dst.len(), column.len());
+    match column {
+        Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {}
+        Column::Number(col) => with_number_mapped_type!(|NUM_TYPE| match col {
+            NumberColumn::NUM_TYPE(col) => {
+                for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                    if v {
+                        store(val, key.writer(std::mem::size_of::<NUM_TYPE>()));
+                    }
+                }
+            }
+        }),
+        Column::Decimal(col) => {
+            with_decimal_mapped_type!(|DECIMAL_TYPE| match col {
+                DecimalColumn::DECIMAL_TYPE(col, _) => {
+                    for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                        if v {
+                            store(val, key.writer(std::mem::size_of::<DECIMAL_TYPE>()));
+                        }
+                    }
+                }
+            })
+        }
+        Column::Boolean(col) => {
+            for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                if v {
+                    store(&val, key.writer(1));
+                }
+            }
+        }
+        Column::Timestamp(col) => {
+            for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                if v {
+                    store(&val, key.writer(8));
+                }
+            }
+        }
+        Column::Date(col) => {
+            for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                if v {
+                    store(&val, key.writer(4));
+                }
+            }
+        }
+        Column::Nullable(_) => {
+            unreachable!("Nullable column cannot be wrapped by nullable.")
+        }
+        Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => {
+            for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+                if v {
+                    let len = val.len();
+                    store(&(len as u64), key.writer(8));
+                    copy_aligned(val.as_ptr(), key.writer(len), len);
+                }
+            }
+        }
+        Column::Array(array) | Column::Map(array) => {
+            for ((key, offsets), v) in dst
+                .iter_mut()
+                .zip(array.offsets.windows(2))
+                .zip(bitmap.iter())
+            {
+                if v {
+                    let len = offsets[1] - offsets[0];
+                    store(&len, key.writer(8));
+                }
+            }
+            for ((key, col), v) in dst.iter_mut().zip(array.iter()).zip(bitmap.iter()) {
+                if v {
+                    // Degrade to serialize_column_binary.
+                    // We need to calculate the new length manually.
+                    let mut temp = key.writer(0);
+                    for i in 0..col.len() {
+                        serialize_column(&col, i, &mut temp);
+                    }
+                    let new_len = temp as usize - key.get() as usize;
+                    key.set_len(new_len);
+                }
+            }
+        }
+        Column::Tuple(fields) => {
+            for inner_col in fields.iter() {
+                serialize_column_vec_with_bitmap(dst, inner_col, bitmap);
             }
         }
     }

@@ -20,7 +20,7 @@ use common_hashtable::FastHash;
 use super::keys_ref::KeysRef;
 use super::keys_ref::KeysRefIterator;
 use super::utils::serialize_columns;
-use super::utils::serialize_columns_in_batch;
+use super::utils::serialize_columns_vec;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
@@ -85,7 +85,7 @@ impl HashMethod for HashMethodSerializer {
             self.build_keys_state(group_columns, num_rows)
         } else {
             let keys_ref =
-                serialize_columns_in_batch(&columns, num_rows, max_bytes_per_row, &mut self.buffer);
+                serialize_columns_vec(&columns, num_rows, max_bytes_per_row, &mut self.buffer);
             Ok(KeysState::KeysRef(keys_ref))
         }
     }
