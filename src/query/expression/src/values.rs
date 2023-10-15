@@ -1976,7 +1976,10 @@ impl ColumnBuilder {
                 //     RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
                 let rb = match RoaringTreemap::deserialize_from(*b) {
                     Ok(map) => map,
-                    Err(_) => panic!(),
+                    Err(_) => {
+                        assert_eq!(1, 2);
+                        panic!()
+                    }
                 };
                 let mut buf = vec![];
                 rb.serialize_into(&mut buf)
