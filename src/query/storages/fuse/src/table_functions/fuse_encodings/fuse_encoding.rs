@@ -22,15 +22,24 @@ use common_arrow::native::stat::PageInfo;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
+use common_expression::types::NullableType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
+use common_expression::types::UInt32Type;
+use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::FromData;
+use common_expression::FromOptData;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
+use common_expression::Value;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::BlockReader;
@@ -128,6 +137,7 @@ impl<'a> FuseEncoding<'a> {
 
     #[async_backtrace::framed]
     async fn to_block(&self, pages_info: &[PageInfo]) -> Result<DataBlock> {
+        let num_row = pages_info.len();
         let mut validity_size = Vec::with_capacity(pages_info.len());
         let mut compressed_size = Vec::with_capacity(pages_info.len());
         let mut uncompressed_size = Vec::with_capacity(pages_info.len());
@@ -153,7 +163,28 @@ impl<'a> FuseEncoding<'a> {
                 l2.push_null();
             }
         }
-        todo!()
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt32))),
+                    Value::Column(UInt32Type::from_opt_data(validity_size)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Column(UInt32Type::from_data(compressed_size)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Column(UInt32Type::from_data(uncompressed_size)),
+                ),
+                BlockEntry::new(DataType::String, Value::Column(Column::String(l1.build()))),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::String)),
+                    Value::Column(Column::Nullable(Box::new(l2.build().upcast()))),
+                ),
+            ],
+            num_row,
+        ))
     }
 
     pub fn schema() -> Arc<TableSchema> {
