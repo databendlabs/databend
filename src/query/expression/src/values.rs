@@ -1977,7 +1977,7 @@ impl ColumnBuilder {
                 let rb = match RoaringTreemap::deserialize_from(*b) {
                     Ok(map) => map,
                     Err(_) => {
-                        assert_eq!(1, 2);
+                        assert_eq!(&[3], *b);
                         panic!()
                     }
                 };
