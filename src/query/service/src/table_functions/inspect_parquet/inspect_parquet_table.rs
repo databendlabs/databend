@@ -80,7 +80,7 @@ impl InspectParquetTable {
                 uri
             )));
         }
-        uri = uri.strip_prefix('@').try_into().unwrap();
+        uri = uri.strip_prefix('@').unwrap().to_string();
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
