@@ -75,13 +75,13 @@ impl InspectParquetTable {
                 .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
         )?;
         if uri.starts_with('@') {
-            println!("The string starts with '@'");
-        } 
-        if let Some(name) = uri.strip_prefix('@') {
             return Err(ErrorCode::BadArguments(format!(
                 "location must start with @, but got {}",
                 uri
             )));
+        }
+        if let Some(name) = uri.strip_prefix('@') {
+            uri = name.to_string();
         } else {
             return Err(ErrorCode::BadArguments(format!(
                 "location must start with @, but got {}",
