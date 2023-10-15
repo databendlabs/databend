@@ -14,7 +14,6 @@
 
 mod async_crash_me;
 mod infer_schema;
-mod inspect_parquet;
 mod list_stage;
 mod numbers;
 mod openai;
