@@ -97,7 +97,6 @@ impl Column {
         mut columns: I,
     ) -> Result<Column> {
         let (_, size) = columns.size_hint();
-
         match size {
             None => Err(ErrorCode::EmptyData("Can't concat empty columns")),
             Some(1) => Ok(columns.next().unwrap()),
