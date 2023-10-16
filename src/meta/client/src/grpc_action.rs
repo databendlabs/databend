@@ -28,8 +28,10 @@ use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::InvalidArgument;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use log::debug;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -67,16 +69,19 @@ impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
     }
 }
 
-impl TryInto<Request<RaftRequest>> for MetaGrpcReq {
-    type Error = serde_json::Error;
-
-    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
+impl MetaGrpcReq {
+    pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
         let raft_request = RaftRequest {
-            data: serde_json::to_string(&self)?,
+            data: serde_json::to_string(self)
+                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
         };
 
-        let request = tonic::Request::new(raft_request);
-        Ok(request)
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        Ok(raft_request)
     }
 }
 
