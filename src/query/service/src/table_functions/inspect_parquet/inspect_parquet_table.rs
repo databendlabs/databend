@@ -74,7 +74,12 @@ impl InspectParquetTable {
                 .into_string()
                 .map_err(|_| ErrorCode::BadArguments("Expected string argument."))?,
         )?;
-        if !file_path.starts_with('@') {
+        if file_path.starts_with('@') {
+            return Err(ErrorCode::BadArguments(format!(
+                "stage path must start with @@, but got {}",
+                file_path
+            )));
+        }else{
             return Err(ErrorCode::BadArguments(format!(
                 "stage path must start with @, but got {}",
                 file_path
