@@ -58,6 +58,26 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
 impl FuseTable {
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
+    // │         ┌──────────────┐
+    // │    ┌───►│SerializeBlock├───┐
+    // │    │    └──────────────┘   │
+    // │    │    ┌──────────────┐   │    ┌─────────┐    ┌────────────────┐     ┌─────────────┐     ┌──────────┐
+    // └───►│───►│SerializeBlock├───┤───►│Resize(1)├───►│SerializeSegment├────►│ReclusterAggr├────►│CommitSink│
+    //      │    └──────────────┘   │    └─────────┘    └────────────────┘     └─────────────┘     └──────────┘
+    //      │    ┌──────────────┐   │
+    //      └───►│SerializeBlock├───┘
+    //           └──────────────┘
     #[async_backtrace::framed]
     pub async fn build_recluster_mutator(
         &self,
