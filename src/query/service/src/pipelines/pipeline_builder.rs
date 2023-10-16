@@ -60,6 +60,7 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::EmptySource;
 use common_pipeline_sources::OneBlockSource;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
@@ -911,25 +912,27 @@ impl PipelineBuilder {
     }
 
     fn build_recluster_source(&mut self, recluster_source: &ReclusterSource) -> Result<()> {
-        if recluster_source.tasks.len() != 1 {
-            return Err(ErrorCode::Internal(
+        match recluster_source.tasks.len() {
+            0 => self.main_pipeline.add_source(EmptySource::create, 1),
+            1 => {
+                let table = self.ctx.build_table_by_table_info(
+                    &recluster_source.catalog_info,
+                    &recluster_source.table_info,
+                    None,
+                )?;
+                let table = FuseTable::try_from_table(table.as_ref())?;
+
+                table.build_recluster_source(
+                    self.ctx.clone(),
+                    recluster_source.tasks[0].clone(),
+                    recluster_source.catalog_info.clone(),
+                    &mut self.main_pipeline,
+                )
+            }
+            _ => Err(ErrorCode::Internal(
                 "A node can only execute one recluster task".to_string(),
-            ));
+            )),
         }
-
-        let table = self.ctx.build_table_by_table_info(
-            &recluster_source.catalog_info,
-            &recluster_source.table_info,
-            None,
-        )?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-
-        table.build_recluster_source(
-            self.ctx.clone(),
-            recluster_source.tasks[0].clone(),
-            recluster_source.catalog_info.clone(),
-            &mut self.main_pipeline,
-        )
     }
 
     fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {

@@ -323,9 +323,10 @@ impl PlanFragment {
             )));
         }
 
-        for (task, executor) in tasks.into_iter().zip(executors.into_iter()) {
+        let task_reshuffle = Self::reshuffle(executors, tasks)?;
+        for (executor, tasks) in task_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
-            let mut replace_recluster = ReplaceReclusterSource { task };
+            let mut replace_recluster = ReplaceReclusterSource { tasks };
             plan = replace_recluster.replace(&plan)?;
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -453,13 +454,13 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
 }
 
 struct ReplaceReclusterSource {
-    pub task: ReclusterTask,
+    pub tasks: Vec<ReclusterTask>,
 }
 
 impl PhysicalPlanReplacer for ReplaceReclusterSource {
     fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
         Ok(PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
-            tasks: vec![self.task.clone()],
+            tasks: self.tasks.clone(),
             ..plan.clone()
         })))
     }

@@ -18,7 +18,6 @@ use std::time::SystemTime;
 
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -75,13 +74,6 @@ impl Interpreter for ReclusterTableInterpreter {
         let max_threads = settings.get_max_threads()? as usize;
         let recluster_timeout_secs = settings.get_recluster_timeout_secs()?;
 
-        // Status.
-        {
-            let status = "recluster: begin to run recluster";
-            ctx.set_status_info(status);
-            info!("{}", status);
-        }
-
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
             // prepare the filter expression
@@ -107,9 +99,10 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
-        let mut table = self
-            .ctx
-            .get_table(&plan.catalog, &plan.database, &plan.table)
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let mut table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
         let mut times = 0;
@@ -135,6 +128,13 @@ impl Interpreter for ReclusterTableInterpreter {
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
                 )));
+            }
+
+            // Status.
+            {
+                let status = "recluster: begin to run recluster";
+                ctx.set_status_info(status);
+                info!("{}", status);
             }
 
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -203,7 +203,9 @@ impl Interpreter for ReclusterTableInterpreter {
             }
 
             // refresh table.
-            table = table.as_ref().refresh(self.ctx.as_ref()).await?;
+            table = catalog
+                .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                .await?;
         }
 
         if block_count != 0 {

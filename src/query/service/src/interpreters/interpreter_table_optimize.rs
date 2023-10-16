@@ -18,7 +18,6 @@ use std::time::SystemTime;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
-use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
@@ -124,9 +123,10 @@ impl OptimizeTableInterpreter {
         target: CompactTarget,
         need_purge: bool,
     ) -> Result<PipelineBuildResult> {
-        let mut table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let mut table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
         let table_info = table.get_table_info().clone();
@@ -190,7 +190,9 @@ impl OptimizeTableInterpreter {
                 executor.execute()?;
 
                 // refresh table.
-                table = table.as_ref().refresh(self.ctx.as_ref()).await?;
+                table = catalog
+                    .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                    .await?;
             }
 
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;

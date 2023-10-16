@@ -236,9 +236,7 @@ impl FuseTable {
         }
 
         // merge sort
-        let block_num = task
-            .total_bytes
-            .div_ceil(block_thresholds.max_bytes_per_block);
+        let block_num = std::cmp::max(task.total_bytes / block_thresholds.max_bytes_per_block, 1);
         let final_block_size = std::cmp::min(
             // estimate block_size based on max_bytes_per_block.
             task.total_rows / block_num,
