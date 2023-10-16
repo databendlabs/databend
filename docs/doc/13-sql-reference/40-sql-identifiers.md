@@ -1,21 +1,28 @@
 ---
-title: SQL IDENTIFIERS
+title: SQL Identifiers
 sidebar_label: SQL Identifiers
 ---
 
-SQL identifiers are names given to various database objects like tables, views, and databases. 
+SQL identifiers are names used for different elements within Databend, such as tables, views, and databases.
 
-The following are examples of SQL identifiers:
-
-## Requirement
-
-Unquoted object identifiers:
+## Unquoted Identifiers
 
 * Begin with a Unicode letter (A-Z, a-z) or an underscore (_). Subsequent characters can only be letters, underscores, digits (0-9), or dollar signs ($).
 
 * In default, Are stored and resolved as lowercase characters (e.g. ID is stored and resolved as id).
 
-Double-quoted object Identifiers:
+If an identifier is not enclosed in double quotes, it must begin with a letter or underscore (_) and cannot contain extended characters or blank spaces.
+
+The following are all examples of valid identifiers; however, in default, the case of the characters in these identifiers would not be preserved:
+
+```
+myidentifier
+MyIdentifier1
+My$identifier
+_my_identifier
+```
+
+## Double-quoted Identifiers
 
 * The identifier can contain and can even start with any ASCII character from the blank character (32) to the tilde (126).
 
@@ -32,23 +39,7 @@ databend :) desc ` with""TestQuote""`;
 +-------+------+------+---------+-------+
 | id    | INT  | NO   | 0       |       |
 +-------+------+------+---------+-------+
-
 ```
-
-### Unquoted Identifiers
-
-If an identifier is not enclosed in double quotes, it must begin with a letter or underscore (_) and cannot contain extended characters or blank spaces.
-
-The following are all examples of valid identifiers; however, in default, the case of the characters in these identifiers would not be preserved:
-
-```
-myidentifier
-MyIdentifier1
-My$identifier
-_my_identifier
-```
-
-### Double-quoted Identifiers
 
 In default, Double-quoted identifiers are case-sensitive and can start with and contain any valid characters, including:
 
