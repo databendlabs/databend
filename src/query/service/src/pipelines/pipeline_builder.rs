@@ -94,7 +94,6 @@ use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoAppend;
 use common_sql::executor::MergeIntoRowIdApply;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::PhysicalPlan;
@@ -291,9 +290,6 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::MergeIntoAppend(merge_into_append) => {
-                self.build_merge_into_append(merge_into_append)
-            }
             PhysicalPlan::MergeIntoRowIdApply(merge_into_row_id_apply) => {
                 self.build_merge_into_row_id_apply(merge_into_row_id_apply)
             }
@@ -309,14 +305,52 @@ impl PipelineBuilder {
         Ok(cast_needed)
     }
 
-    fn build_merge_into_append(&mut self, _merge_into_append: &MergeIntoAppend) -> Result<()> {
-        todo!()
-    }
-
     fn build_merge_into_row_id_apply(
         &mut self,
-        _merge_into_row_id_apply: &MergeIntoRowIdApply,
+        merge_into_row_id_apply: &MergeIntoRowIdApply,
     ) -> Result<()> {
+        let MergeIntoRowIdApply {
+            input,
+            table_info,
+            catalog_info,
+
+            segments,
+        } = merge_into_row_id_apply;
+        // recieve rowids and MutationLogs
+        self.build_pipeline(input)?;
+        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
+        let tbl = self
+            .ctx
+            .build_table_by_table_info(catalog_info, table_info, None)?;
+
+        let table = FuseTable::try_from_table(tbl.as_ref())?;
+
+        let block_thresholds = table.get_block_thresholds();
+
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
+
+        // this TransformSerializeBlock is just used to get block_builder
+        let block_builder = TransformSerializeBlock::try_create(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            cluster_stats_gen.clone(),
+        )?
+        .get_block_builder();
+
+        let max_threads = self.settings.get_max_threads()?;
+        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+
+        pipe_items.push(table.rowid_aggregate_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
+            segments.clone(),
+            true,
+        )?);
+
         todo!()
     }
 
@@ -485,6 +519,8 @@ impl PipelineBuilder {
         } = merge_into;
 
         self.build_pipeline(input)?;
+
+        let apply_row_id = segments.is_some();
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -512,6 +548,7 @@ impl PipelineBuilder {
             table,
             block_thresholds,
         );
+
         let get_output_len = |pipe_items: &Vec<PipeItem>| -> usize {
             let mut output_len = 0;
             for item in pipe_items.iter() {
@@ -661,12 +698,20 @@ impl PipelineBuilder {
         )?;
 
         pipe_items.clear();
-        pipe_items.push(table.rowid_aggregate_mutator(
-            self.ctx.clone(),
-            block_builder,
-            io_request_semaphore,
-            segments.clone(),
-        )?);
+
+        // standalone execution
+        if apply_row_id {
+            pipe_items.push(table.rowid_aggregate_mutator(
+                self.ctx.clone(),
+                block_builder,
+                io_request_semaphore,
+                segments.clone().unwrap(),
+                false,
+            )?);
+        } else {
+            // distributed exectution
+            pipe_items.push(create_dummy_item())
+        }
 
         for _ in 0..self.main_pipeline.output_len() - 1 {
             let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -686,9 +731,9 @@ impl PipelineBuilder {
         ));
 
         // resize block ports
-        // aggregate_mutator port               aggregate_mutator port
-        // serialize_block port0     ======>
-        // serialize_block port1                serialize_block port
+        // aggregate_mutator port/dummy_item port               aggregate_mutator port/ dummy_item (this depends on apply_row_id)
+        // serialize_block port0                    ======>
+        // serialize_block port1                                serialize_block port
         // .......
         ranges.clear();
         ranges.push(vec![0]);
@@ -704,6 +749,13 @@ impl PipelineBuilder {
             serialize_segment_transform.into_pipe_item(),
         ];
 
+        // apply_row_id: true
+        //      output_port0: MutationLogs
+        //      output_port1: MutationLogs
+        //
+        // apply_row_id: false
+        //      output_port0: row_ids
+        //      output_port1: MutationLogs
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),

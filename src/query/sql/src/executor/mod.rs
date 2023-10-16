@@ -57,7 +57,6 @@ pub use physical_plans::physical_limit::Limit;
 pub use physical_plans::physical_materialized_cte::MaterializedCte;
 pub use physical_plans::physical_merge_into::MatchExpr;
 pub use physical_plans::physical_merge_into::MergeInto;
-pub use physical_plans::physical_merge_into::MergeIntoAppend;
 pub use physical_plans::physical_merge_into::MergeIntoRowIdApply;
 pub use physical_plans::physical_merge_into::MergeIntoSource;
 pub use physical_plans::physical_project::Project;

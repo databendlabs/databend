@@ -29,7 +29,6 @@ use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Exchange;
 use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoAppend;
 use common_sql::executor::MergeIntoRowIdApply;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationKind;
@@ -322,6 +321,13 @@ impl MergeIntoInterpreter {
                 .insert(*field_index, join_output_schema.index_of(value).unwrap());
         }
 
+        let segments = base_snapshot
+            .segments
+            .clone()
+            .into_iter()
+            .enumerate()
+            .collect();
+
         let commit_input = if exchange.is_none() {
             // recv datablocks from matched upstream and unmatched upstream
             // transform and append dat
@@ -333,15 +339,10 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments: base_snapshot
-                    .segments
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .collect(),
+                segments: Some(segments),
             }))
         } else {
-            let merge_append = PhysicalPlan::MergeIntoAppend(Box::new(MergeIntoAppend {
+            let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(merge_into_source),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
@@ -349,12 +350,7 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments: base_snapshot
-                    .segments
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .collect(),
+                segments: None,
             }));
             let exchange = exchange.unwrap();
             PhysicalPlan::MergeIntoRowIdApply(Box::new(MergeIntoRowIdApply {
@@ -365,6 +361,9 @@ impl MergeIntoInterpreter {
                     keys: exchange.keys,
                     ignore_exchange: exchange.ignore_exchange,
                 })),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                segments,
             }))
         };
 

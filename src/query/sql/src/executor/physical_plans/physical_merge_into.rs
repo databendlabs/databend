@@ -32,7 +32,6 @@ pub struct MergeIntoSource {
     pub row_id_idx: u32,
 }
 
-// Todo:(JackTan25) replace MergeInto with MergeIntoAppend and MergeIntoRowIdApply
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeInto {
     pub input: Box<PhysicalPlan>,
@@ -46,26 +45,13 @@ pub struct MergeInto {
     // used to record the index of target table's field in merge_source_schema
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     pub row_id_idx: usize,
-    pub segments: Vec<(usize, Location)>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoAppend {
-    pub input: Box<PhysicalPlan>,
-    pub table_info: TableInfo,
-    pub catalog_info: CatalogInfo,
-    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
-    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
-    // the first option stands for the condition
-    // the second option stands for update/delete
-    pub matched: MatchExpr,
-    // used to record the index of target table's field in merge_source_schema
-    pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
-    pub row_id_idx: usize,
-    pub segments: Vec<(usize, Location)>,
+    pub segments: Option<Vec<(usize, Location)>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct MergeIntoRowIdApply {
     pub input: Box<PhysicalPlan>,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    pub segments: Vec<(usize, Location)>,
 }

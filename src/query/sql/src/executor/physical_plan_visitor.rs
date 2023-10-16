@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 
-use super::MergeIntoAppend;
 use super::MergeIntoRowIdApply;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
@@ -87,7 +86,6 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
-            PhysicalPlan::MergeIntoAppend(plan) => self.replace_merge_into_append(plan),
             PhysicalPlan::MergeIntoRowIdApply(plan) => self.replace_merge_into_row_id_apply(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
@@ -426,14 +424,6 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_merge_into_append(&mut self, plan: &MergeIntoAppend) -> Result<PhysicalPlan> {
-        let input = self.replace(&plan.input)?;
-        Ok(PhysicalPlan::MergeIntoAppend(Box::new(MergeIntoAppend {
-            input: Box::new(input),
-            ..plan.clone()
-        })))
-    }
-
     fn replace_merge_into_row_id_apply(
         &mut self,
         plan: &MergeIntoRowIdApply,
@@ -583,9 +573,7 @@ impl PhysicalPlan {
                 PhysicalPlan::MergeInto(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::MergeIntoAppend(plan) => {
-                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
-                }
+
                 PhysicalPlan::MergeIntoRowIdApply(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
