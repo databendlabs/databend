@@ -47,6 +47,11 @@ impl BlockThresholds {
     }
 
     #[inline]
+    pub fn check_perfect_block(&self, row_count: usize, block_size: usize) -> bool {
+        row_count <= self.max_rows_per_block && self.check_large_enough(row_count, block_size)
+    }
+
+    #[inline]
     pub fn check_large_enough(&self, row_count: usize, block_size: usize) -> bool {
         row_count >= self.min_rows_per_block || block_size >= self.max_bytes_per_block
     }

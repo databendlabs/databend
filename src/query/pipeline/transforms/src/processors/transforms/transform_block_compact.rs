@@ -63,7 +63,7 @@ impl Compactor for BlockCompactor {
         // perfect block
         if self
             .thresholds
-            .check_large_enough(block.num_rows(), block.memory_size())
+            .check_perfect_block(block.num_rows(), block.memory_size())
         {
             res.push(block);
             blocks.remove(size - 1);
@@ -109,7 +109,7 @@ impl Compactor for BlockCompactor {
             // Perfect block, no need to compact
             if self
                 .thresholds
-                .check_large_enough(block.num_rows(), block.memory_size())
+                .check_perfect_block(block.num_rows(), block.memory_size())
             {
                 res.push(block.clone());
             } else {
