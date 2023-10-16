@@ -36,6 +36,7 @@ use storages_common_table_meta::meta::Versioned;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
+use crate::metrics::metrics_inc_recluster_write_block_nums;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
@@ -76,6 +77,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
             self.merged_blocks.push(Arc::new(meta));
             // Refresh status
             {
+                metrics_inc_recluster_write_block_nums();
                 let status = format!(
                     "recluster: generate new blocks:{}, cost:{} sec",
                     self.abort_operation.blocks.len(),

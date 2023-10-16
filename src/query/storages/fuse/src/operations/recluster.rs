@@ -38,6 +38,9 @@ use log::warn;
 use opendal::Operator;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
+use crate::metrics::metrics_inc_recluster_block_bytes_to_read;
+use crate::metrics::metrics_inc_recluster_block_nums_to_read;
+use crate::metrics::metrics_inc_recluster_row_nums_to_read;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TransformSerializeBlock;
@@ -166,6 +169,7 @@ impl FuseTable {
         catalog_info: CatalogInfo,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let recluster_block_nums = task.parts.len();
         let block_thresholds = self.get_block_thresholds();
         let table_info = self.get_table_info();
         let description = task.stats.get_description(&table_info.desc);
@@ -186,6 +190,12 @@ impl FuseTable {
 
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
+
+        {
+            metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);
+            metrics_inc_recluster_block_bytes_to_read(task.total_bytes as u64);
+            metrics_inc_recluster_row_nums_to_read(task.total_rows as u64);
+        }
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), task.level + 1, block_thresholds, None)?;
