@@ -642,7 +642,7 @@ impl TableSchema {
             mut fields: impl Iterator<Item = (&String, &TableDataType)>,
         ) -> Option<TableDataType> {
             let (field_name, rest_path) = path
-                .split_once(":")
+                .split_once(':')
                 .map(|(field_name, rest_path)| (field_name, Some(rest_path)))
                 .unwrap_or((path, None));
 
