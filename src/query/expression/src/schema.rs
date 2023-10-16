@@ -634,48 +634,6 @@ impl TableSchema {
         }
     }
 
-    /// Returns the data type of the column with the given name,
-    /// support map access to tuple and variant fields, e.g. `a:b:c`.
-    pub fn type_of_name(&self, name: &str) -> Result<TableDataType> {
-        fn find_in_fields(
-            path: &str,
-            mut fields: impl Iterator<Item = (&String, &TableDataType)>,
-        ) -> Option<TableDataType> {
-            let (field_name, rest_path) = path
-                .split_once(':')
-                .map(|(field_name, rest_path)| (field_name, Some(rest_path)))
-                .unwrap_or((path, None));
-
-            let field_ty = fields
-                .find(|(name, _)| name.as_str() == field_name)
-                .map(|(_, ty)| ty)?;
-
-            let result_ty = if let Some(rest_path) = rest_path {
-                let is_nullable = field_ty.is_nullable();
-                let ty = match field_ty.remove_nullable() {
-                    TableDataType::Tuple {
-                        fields_type,
-                        fields_name,
-                    } => find_in_fields(rest_path, fields_name.iter().zip(&fields_type))?,
-                    TableDataType::Variant => TableDataType::Variant,
-                    _ => return None,
-                };
-                if is_nullable { ty.wrap_nullable() } else { ty }
-            } else {
-                field_ty.clone()
-            };
-
-            Some(result_ty)
-        }
-
-        find_in_fields(name, self.fields.iter().map(|f| (&f.name, &f.data_type))).ok_or_else(|| {
-            ErrorCode::BadArguments(format!(
-                "Unable to get type of path \"{}\". Valid fields: {:?}",
-                name, &self.fields
-            ))
-        })
-    }
-
     // Returns all inner column ids of the given column, including itself,
     // only tuple columns may have inner fields, like `a.1`, `a:b`.
     pub fn leaf_columns_of(&self, col_name: &String) -> Vec<ColumnId> {

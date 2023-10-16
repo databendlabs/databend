@@ -22,7 +22,6 @@ use common_expression::ColumnIndex;
 use common_expression::DataSchema;
 use common_expression::Expr;
 use common_expression::RawExpr;
-use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::ColumnBindingBuilder;
@@ -49,6 +48,12 @@ impl TypeProvider<IndexType> for Metadata {
     }
 }
 
+impl TypeProvider<ColumnBinding> for Metadata {
+    fn get_type(&self, column_id: &ColumnBinding) -> Result<DataType> {
+        self.get_type(&column_id.index)
+    }
+}
+
 impl TypeProvider<IndexType> for DataSchema {
     fn get_type(&self, column_id: &IndexType) -> Result<DataType> {
         let column = self.field_with_name(&column_id.to_string())?;
@@ -60,13 +65,6 @@ impl TypeProvider<String> for DataSchema {
     fn get_type(&self, column_name: &String) -> Result<DataType> {
         let column = self.field_with_name(column_name)?;
         Ok(column.data_type().clone())
-    }
-}
-
-impl TypeProvider<String> for TableSchema {
-    fn get_type(&self, column_name: &String) -> Result<DataType> {
-        let ty = self.type_of_name(column_name)?;
-        Ok((&ty).into())
     }
 }
 

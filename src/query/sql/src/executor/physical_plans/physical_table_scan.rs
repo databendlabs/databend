@@ -339,9 +339,9 @@ impl PhysicalPlanBuilder {
                 let predicates = predicates
                     .iter()
                     .map(|p| {
-                        p.as_raw_expr()
-                            .project_column_ref(|col| col.column_name.clone())
-                            .type_check(table_schema)
+                        Ok(p.as_raw_expr()
+                            .type_check(&metadata)?
+                            .project_column_ref(|col| col.column_name.clone()))
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -422,8 +422,8 @@ impl PhysicalPlanBuilder {
                 let filter = cast_expr_to_non_null_boolean(
                     predicate
                         .as_raw_expr()
-                        .project_column_ref(|col| col.column_name.clone())
-                        .type_check(table_schema)?,
+                        .type_check(&metadata)?
+                        .project_column_ref(|col| col.column_name.clone()),
                 )?;
                 let filter = filter.as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
