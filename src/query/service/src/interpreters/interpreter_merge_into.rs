@@ -27,7 +27,10 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
+use common_sql::executor::Exchange;
 use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoAppend;
+use common_sql::executor::MergeIntoRowIdApply;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
@@ -139,11 +142,21 @@ impl MergeIntoInterpreter {
             field_index_map,
             ..
         } = &self.plan;
+
         let table_name = table.clone();
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
         // build source for MergeInto
-        let join_input = builder.build(input, *columns_set.clone()).await?;
+        let mut join_input = builder.build(input, *columns_set.clone()).await?;
+
+        // check distributed execution
+        let exchange = if let PhysicalPlan::Exchange(exchange) = join_input {
+            // remove top exchange
+            join_input = *exchange.input.clone();
+            Some(exchange)
+        } else {
+            None
+        };
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
@@ -309,27 +322,55 @@ impl MergeIntoInterpreter {
                 .insert(*field_index, join_output_schema.index_of(value).unwrap());
         }
 
-        // recv datablocks from matched upstream and unmatched upstream
-        // transform and append dat
-        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
-            input: Box::new(merge_into_source),
-            table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
-            unmatched,
-            matched,
-            field_index_of_input_schema,
-            row_id_idx,
-            segments: base_snapshot
-                .segments
-                .clone()
-                .into_iter()
-                .enumerate()
-                .collect(),
-        }));
+        let commit_input = if exchange.is_none() {
+            // recv datablocks from matched upstream and unmatched upstream
+            // transform and append dat
+            PhysicalPlan::MergeInto(Box::new(MergeInto {
+                input: Box::new(merge_into_source),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched,
+                matched,
+                field_index_of_input_schema,
+                row_id_idx,
+                segments: base_snapshot
+                    .segments
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .collect(),
+            }))
+        } else {
+            let merge_append = PhysicalPlan::MergeIntoAppend(Box::new(MergeIntoAppend {
+                input: Box::new(merge_into_source),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched,
+                matched,
+                field_index_of_input_schema,
+                row_id_idx,
+                segments: base_snapshot
+                    .segments
+                    .clone()
+                    .into_iter()
+                    .enumerate()
+                    .collect(),
+            }));
+            let exchange = exchange.unwrap();
+            PhysicalPlan::MergeIntoRowIdApply(Box::new(MergeIntoRowIdApply {
+                input: Box::new(PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(merge_append),
+                    kind: exchange.kind,
+                    keys: exchange.keys,
+                    ignore_exchange: exchange.ignore_exchange,
+                })),
+            }))
+        };
 
         // build mutation_aggregate
         let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(merge_into),
+            input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),

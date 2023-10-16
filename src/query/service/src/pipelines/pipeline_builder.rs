@@ -94,6 +94,8 @@ use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoAppend;
+use common_sql::executor::MergeIntoRowIdApply;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -289,6 +291,12 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
+            PhysicalPlan::MergeIntoAppend(merge_into_append) => {
+                self.build_merge_into_append(merge_into_append)
+            }
+            PhysicalPlan::MergeIntoRowIdApply(merge_into_row_id_apply) => {
+                self.build_merge_into_row_id_apply(merge_into_row_id_apply)
+            }
         }
     }
 
@@ -299,6 +307,17 @@ impl PipelineBuilder {
         // check if cast needed
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
+    }
+
+    fn build_merge_into_append(&mut self, _merge_into_append: &MergeIntoAppend) -> Result<()> {
+        todo!()
+    }
+
+    fn build_merge_into_row_id_apply(
+        &mut self,
+        _merge_into_row_id_apply: &MergeIntoRowIdApply,
+    ) -> Result<()> {
+        todo!()
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {

@@ -17,6 +17,8 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
 
+use super::MergeIntoAppend;
+use super::MergeIntoRowIdApply;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
@@ -97,6 +99,8 @@ pub enum PhysicalPlan {
     /// MergeInto
     MergeIntoSource(MergeIntoSource),
     MergeInto(Box<MergeInto>),
+    MergeIntoAppend(Box<MergeIntoAppend>),
+    MergeIntoRowIdApply(Box<MergeIntoRowIdApply>),
 
     /// Compact
     CompactPartial(Box<CompactPartial>),
@@ -134,6 +138,8 @@ impl PhysicalPlan {
             PhysicalPlan::DeletePartial(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSource(_)
+            | PhysicalPlan::MergeIntoAppend(_)
+            | PhysicalPlan::MergeIntoRowIdApply(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
@@ -175,6 +181,8 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
+            PhysicalPlan::MergeIntoRowIdApply(_) => todo!(),
+            PhysicalPlan::MergeIntoAppend(_) => todo!(),
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
@@ -215,6 +223,8 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(_) => "Replace".to_string(),
             PhysicalPlan::MergeInto(_) => "MergeInto".to_string(),
             PhysicalPlan::MergeIntoSource(_) => "MergeIntoSource".to_string(),
+            PhysicalPlan::MergeIntoAppend(_) => "MergeIntoAppend".to_string(),
+            PhysicalPlan::MergeIntoRowIdApply(_) => "MergeIntoRowIdApply".to_string(),
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
@@ -266,6 +276,10 @@ impl PhysicalPlan {
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoAppend(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::MergeIntoRowIdApply(plan) => {
+                Box::new(std::iter::once(plan.input.as_ref()))
+            }
             PhysicalPlan::MaterializedCte(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
@@ -305,6 +319,8 @@ impl PhysicalPlan {
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::MergeIntoAppend(_)
+            | PhysicalPlan::MergeIntoRowIdApply(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::CteScan(_) => None,
