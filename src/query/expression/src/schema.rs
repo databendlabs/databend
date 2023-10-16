@@ -177,11 +177,6 @@ impl DataSchema {
         false
     }
 
-    pub fn fields_map(&self) -> BTreeMap<FieldIndex, DataField> {
-        let x = self.fields().iter().cloned().enumerate();
-        x.collect::<BTreeMap<_, _>>()
-    }
-
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
     pub fn field(&self, i: FieldIndex) -> &DataField {
@@ -551,11 +546,6 @@ impl TableSchema {
         self.fields[i].name = new_name.to_string();
     }
 
-    pub fn fields_map(&self) -> BTreeMap<FieldIndex, TableField> {
-        let x = self.fields().iter().cloned().enumerate();
-        x.collect::<BTreeMap<_, _>>()
-    }
-
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
     pub fn field(&self, i: FieldIndex) -> &TableField {
@@ -644,56 +634,46 @@ impl TableSchema {
         }
     }
 
-    /// Flatten all columns that user can directly refer to, e.g., `a`, `a:b`.
-    pub fn flatten_referable_columns(&self) -> Self {
-        fn collect_in_field(
-            field: &TableField,
-            fields: &mut Vec<TableField>,
-            is_nullable: bool,
-            next_column_id: &mut ColumnId,
-        ) {
-            let ty = field.data_type();
-            let is_nullable = ty.is_nullable() || is_nullable;
+    /// Returns the data type of the column with the given name,
+    /// support map access to tuple and variant fields, e.g. `a:b:c`.
+    pub fn type_of_name(&self, name: &str) -> Result<TableDataType> {
+        fn find_in_fields(
+            path: &str,
+            mut fields: impl Iterator<Item = (&String, &TableDataType)>,
+        ) -> Option<TableDataType> {
+            let (field_name, rest_path) = path
+                .split_once(":")
+                .map(|(field_name, rest_path)| (field_name, Some(rest_path)))
+                .unwrap_or((path, None));
 
-            if let TableDataType::Tuple {
-                fields_type,
-                fields_name,
-            } = ty.remove_nullable()
-            {
-                for (name, ty) in fields_name.iter().zip(fields_type) {
-                    collect_in_field(
-                        &TableField::new_from_column_id(
-                            &format!("{}:{}", field.name(), name),
-                            ty.clone(),
-                            *next_column_id,
-                        ),
-                        fields,
-                        is_nullable,
-                        next_column_id,
-                    );
-                }
-            }
+            let field_ty = fields
+                .find(|(name, _)| name.as_str() == field_name)
+                .map(|(_, ty)| ty)?;
 
-            *next_column_id += 1;
-            let mut field = field.clone();
-            if is_nullable {
-                field.data_type = field.data_type.wrap_nullable();
-            }
-            fields.push(field)
+            let result_ty = if let Some(rest_path) = rest_path {
+                let is_nullable = field_ty.is_nullable();
+                let ty = match field_ty.remove_nullable() {
+                    TableDataType::Tuple {
+                        fields_type,
+                        fields_name,
+                    } => find_in_fields(rest_path, fields_name.iter().zip(&fields_type))?,
+                    TableDataType::Variant => TableDataType::Variant,
+                    _ => return None,
+                };
+                if is_nullable { ty.wrap_nullable() } else { ty }
+            } else {
+                field_ty.clone()
+            };
+
+            Some(result_ty)
         }
 
-        let mut fields = Vec::new();
-        for field in self.fields() {
-            let mut next_column_id = field.column_id;
-            collect_in_field(field, &mut fields, false, &mut next_column_id);
-        }
-        fields.sort_by_key(|f| f.column_id());
-
-        Self {
-            fields,
-            metadata: self.metadata.clone(),
-            next_column_id: self.next_column_id,
-        }
+        find_in_fields(name, self.fields.iter().map(|f| (&f.name, &f.data_type))).ok_or_else(|| {
+            ErrorCode::BadArguments(format!(
+                "Unable to get type of path \"{}\". Valid fields: {:?}",
+                name, &self.fields
+            ))
+        })
     }
 
     // Returns all inner column ids of the given column, including itself,

@@ -22,5 +22,6 @@ query I
 select * from t_1 NATURAL FULL OUTER JOIN t_2 where t_1.c0;
 ----
 
+
 statement ok
 DROP DATABASE databend0
