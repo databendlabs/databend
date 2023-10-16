@@ -19,12 +19,12 @@
 ///   bytes must *not* overlap with the region of memory beginning at `ptr`
 ///   with the same size.
 #[inline(always)]
-pub unsafe fn store<T>(val: &T, ptr: *mut u8) {
+pub unsafe fn store<T: 'static>(val: &T, ptr: *mut u8) {
     std::ptr::copy_nonoverlapping(val as *const T as *const u8, ptr, std::mem::size_of::<T>())
 }
 
 #[inline(always)]
-pub unsafe fn store_advance<T>(val: &T, ptr: &mut *mut u8) {
+pub unsafe fn store_advance<T: 'static>(val: &T, ptr: &mut *mut u8) {
     store(val, *ptr);
     *ptr = ptr.add(std::mem::size_of::<T>())
 }

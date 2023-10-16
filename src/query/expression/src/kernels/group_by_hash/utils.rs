@@ -121,9 +121,10 @@ pub fn serialize_columns_vec(
 ) -> Vec<KeysRef> {
     unsafe {
         // Construct the pointer of each row in `data`.
-        let mut keys = (0..num_rows)
-            .map(|i| KeysRef::new(buffer.add(i * max_bytes_per_row)))
-            .collect();
+        let mut keys = Vec::with_capacity(num_rows);
+        for i in 0..num_rows {
+            keys.push(KeysRef::new(buffer.add(i * max_bytes_per_row)));
+        }
 
         for col in columns {
             serialize_column_vec(&mut keys, col);
@@ -183,10 +184,15 @@ unsafe fn serialize_column_vec(dst: &mut Vec<KeysRef>, column: &Column) {
             }
         }
         Column::String(v) | Column::Bitmap(v) | Column::Variant(v) => {
-            for (key, val) in dst.iter_mut().zip(v.iter()) {
-                let len = val.len();
+            let offsets = v.offsets().as_slice();
+            let data_ptr = v.data().as_slice().as_ptr();
+            let mut start_offset = *offsets.get_unchecked(0) as usize;
+            for (key, end_offset) in dst.iter_mut().zip(offsets.iter().skip(1)) {
+                let end_offset = *end_offset as usize;
+                let len = end_offset - start_offset;
                 store(&(len as u64), key.writer(8));
-                copy_aligned(val.as_ptr(), key.writer(len), len);
+                copy_aligned(data_ptr.add(start_offset), key.writer(len), len);
+                start_offset = end_offset;
             }
         }
         Column::Array(array) | Column::Map(array) => {
@@ -267,11 +273,15 @@ unsafe fn serialize_column_vec_with_bitmap(
             unreachable!("Nullable column cannot be wrapped by nullable.")
         }
         Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => {
-            for ((key, val), v) in dst.iter_mut().zip(col.iter()).zip(bitmap.iter()) {
+            let offsets = col.offsets().as_slice();
+            let data_ptr = col.data().as_slice().as_ptr();
+            for ((key, offsets), v) in dst.iter_mut().zip(offsets.windows(2)).zip(bitmap.iter()) {
                 if v {
-                    let len = val.len();
+                    let start_offset = *offsets.get_unchecked(0) as usize;
+                    let end_offset = *offsets.get_unchecked(1) as usize;
+                    let len = end_offset - start_offset;
                     store(&(len as u64), key.writer(8));
-                    copy_aligned(val.as_ptr(), key.writer(len), len);
+                    copy_aligned(data_ptr.add(start_offset), key.writer(len), len);
                 }
             }
         }

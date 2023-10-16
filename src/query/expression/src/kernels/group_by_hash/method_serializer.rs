@@ -53,13 +53,11 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<KeysState> {
         // The serialize_size is equal to the number of bytes required by serialization.
         let mut serialize_size = 0;
-        let columns = group_columns
-            .iter()
-            .map(|(col, _)| {
-                serialize_size += col.serialize_size();
-                col.clone()
-            })
-            .collect::<Vec<_>>();
+        let mut columns = Vec::with_capacity(group_columns.len());
+        for (col, _) in group_columns {
+            serialize_size += col.serialize_size();
+            columns.push(col.clone());
+        }
         Ok(KeysState::Column(Column::String(serialize_columns(
             &columns,
             num_rows,
@@ -75,13 +73,11 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<KeysState> {
         // We choose the maximum row memory of columns to guranntee that the memory of the serialized column will not exceed it.
         let mut max_bytes_per_row = 0;
-        let columns = group_columns
-            .iter()
-            .map(|(col, _)| {
-                max_bytes_per_row += col.max_serialize_size_per_row();
-                col.clone()
-            })
-            .collect::<Vec<_>>();
+        let mut columns = Vec::with_capacity(group_columns.len());
+        for (col, _) in group_columns {
+            max_bytes_per_row += col.max_serialize_size_per_row();
+            columns.push(col.clone());
+        }
         let total_bytes = max_bytes_per_row * num_rows;
 
         if total_bytes > BATCH_SERIALIZE_BYTES_LIMIT {
