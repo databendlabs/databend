@@ -17,6 +17,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
@@ -27,6 +28,7 @@ use common_storage::StageFilesInfo;
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq)]
 pub struct StageTableInfo {
     pub schema: TableSchemaRef,
+    pub default_values: Option<Vec<Scalar>>,
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,

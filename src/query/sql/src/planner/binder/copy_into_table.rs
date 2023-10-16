@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -38,15 +39,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Evaluator;
 use common_expression::Scalar;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageInfo;
 use common_storage::StageFilesInfo;
 use common_users::UserApiProvider;
+use indexmap::IndexMap;
 use log::debug;
 use parking_lot::RwLock;
 
@@ -60,6 +65,7 @@ use crate::plans::ValidationMode;
 use crate::BindContext;
 use crate::Metadata;
 use crate::NameResolutionContext;
+use crate::ScalarBinder;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -102,6 +108,9 @@ impl<'a> Binder {
                     .map_err(ErrorCode::SyntaxException)?;
 
                 let stage_schema = infer_table_schema(&required_values_schema)?;
+                let default_values = self
+                    .prepare_default_values(bind_context, &required_values_schema)
+                    .await?;
 
                 let plan = CopyIntoTablePlan {
                     catalog_info,
@@ -117,6 +126,7 @@ impl<'a> Binder {
                         stage_info,
                         files_to_copy: None,
                         is_select: false,
+                        default_values: Some(default_values),
                     },
                     values_consts: vec![],
                     required_source_schema: required_values_schema.clone(),
@@ -154,6 +164,9 @@ impl<'a> Binder {
                     }
                     .into(),
                 );
+                let default_values = self
+                    .prepare_default_values(bind_context, &required_values_schema)
+                    .await?;
                 let plan = CopyIntoTablePlan {
                     no_file_to_copy: false,
                     catalog_info,
@@ -170,6 +183,7 @@ impl<'a> Binder {
                         stage_info,
                         files_to_copy: None,
                         is_select: false,
+                        default_values: Some(default_values),
                     },
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
@@ -284,6 +298,10 @@ impl<'a> Binder {
 
         let stage_schema = infer_table_schema(&data_schema)?;
 
+        let default_values = self
+            .prepare_default_values(bind_context, &data_schema)
+            .await?;
+
         let plan = CopyIntoTablePlan {
             catalog_info,
             database_name,
@@ -300,6 +318,7 @@ impl<'a> Binder {
                 stage_info,
                 files_to_copy: None,
                 is_select: false,
+                default_values: Some(default_values),
             },
             write_mode,
             query: None,
@@ -451,6 +470,32 @@ impl<'a> Binder {
             )
             .await?;
         Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
+    }
+
+    async fn prepare_default_values(
+        &mut self,
+        bind_context: &mut BindContext,
+        data_schema: &DataSchemaRef,
+    ) -> Result<Vec<Scalar>> {
+        let mut scalar_binder = ScalarBinder::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            HashMap::new(),
+            Box::new(IndexMap::new()),
+        );
+        let func_ctx = self.ctx.get_function_context()?;
+        let input = DataBlock::empty();
+        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+
+        let mut values = vec![];
+        for field in &data_schema.fields {
+            let expr = scalar_binder.get_default_value(field, data_schema).await?;
+            values.push(evaluator.run(&expr)?.as_scalar().unwrap().clone());
+        }
+        Ok(values)
     }
 }
 
