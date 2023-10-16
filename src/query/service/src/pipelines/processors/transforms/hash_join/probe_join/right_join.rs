@@ -17,14 +17,13 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
@@ -35,6 +34,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -43,11 +43,12 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         let true_validity = &probe_state.true_validity;
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let mut matched_num = 0;
         let mut result_blocks = vec![];
@@ -73,16 +74,19 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = self.probe_key(
-                hash_table,
-                key,
-                valids,
-                i,
-                local_build_indexes_ptr,
-                matched_num,
-                max_block_size,
-            );
+        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+            let (mut match_count, mut incomplete_ptr) = if valids.map_or(true, |v| v.get_bit(i)) {
+                hash_table.next_probe(
+                    key,
+                    *ptr,
+                    local_build_indexes_ptr,
+                    matched_num,
+                    max_block_size,
+                )
+            } else {
+                continue;
+            };
+
             if match_count == 0 {
                 continue;
             }
@@ -102,13 +106,14 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        let probe_block = DataBlock::take(input, local_probe_indexes)?;
+                        let probe_block =
+                            DataBlock::take(input, local_probe_indexes, string_items_buf)?;
 
                         // The join type is right join, we need to wrap nullable for probe side.
                         let nullable_columns = probe_block
                             .columns()
                             .iter()
-                            .map(|c| set_validity(c, max_block_size, true_validity))
+                            .map(|c| set_true_validity(c, max_block_size, true_validity))
                             .collect::<Vec<_>>();
                         Some(DataBlock::new(nullable_columns, max_block_size))
                     } else {
@@ -120,6 +125,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
@@ -157,6 +163,7 @@ impl HashJoinProbeState {
                                     .other_predicate
                                     .as_ref()
                                     .unwrap(),
+                                &self.func_ctx,
                             )?;
 
                             if all_true {
@@ -210,7 +217,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
@@ -238,18 +245,19 @@ impl HashJoinProbeState {
         }
 
         let probe_block = if is_probe_projected {
-            let probe_block = DataBlock::take(input, &local_probe_indexes[0..matched_num])?;
+            let probe_block = DataBlock::take(
+                input,
+                &local_probe_indexes[0..matched_num],
+                string_items_buf,
+            )?;
 
             // The join type is right join, we need to wrap nullable for probe side.
-            let mut validity = MutableBitmap::new();
-            validity.extend_constant(matched_num, true);
-            let validity: Bitmap = validity.into();
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| set_validity(c, probe_block.num_rows(), &validity))
+                .map(|c| set_true_validity(c, matched_num, true_validity))
                 .collect::<Vec<_>>();
-            Some(DataBlock::new(nullable_columns, validity.len()))
+            Some(DataBlock::new(nullable_columns, matched_num))
         } else {
             None
         };
@@ -259,6 +267,7 @@ impl HashJoinProbeState {
                 build_columns,
                 build_columns_data_type,
                 build_num_rows,
+                string_items_buf,
             )?)
         } else {
             None
@@ -293,6 +302,7 @@ impl HashJoinProbeState {
                         .other_predicate
                         .as_ref()
                         .unwrap(),
+                    &self.func_ctx,
                 )?;
 
                 if all_true {

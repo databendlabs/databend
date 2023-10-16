@@ -15,6 +15,7 @@
 mod clustering_information;
 mod fuse_blocks;
 mod fuse_columns;
+mod fuse_encodings;
 mod fuse_segments;
 mod fuse_snapshots;
 mod fuse_statistics;
@@ -28,6 +29,8 @@ pub use fuse_blocks::FuseBlock;
 pub use fuse_blocks::FuseBlockTable;
 pub use fuse_columns::FuseColumn;
 pub use fuse_columns::FuseColumnTable;
+pub use fuse_encodings::FuseEncoding;
+pub use fuse_encodings::FuseEncodingTable;
 pub use fuse_segments::FuseSegment;
 pub use fuse_segments::FuseSegmentTable;
 pub use fuse_snapshots::FuseSnapshot;

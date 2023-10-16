@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::FunctionContext;
 
 use super::rewrite::RuleCommuteJoin;
 use super::rewrite::RuleEliminateEvalScalar;
@@ -31,6 +30,7 @@ use super::rewrite::RuleTryApplyAggIndex;
 use crate::optimizer::rule::rewrite::RuleEliminateFilter;
 use crate::optimizer::rule::rewrite::RuleMergeEvalScalar;
 use crate::optimizer::rule::rewrite::RuleMergeFilter;
+use crate::optimizer::rule::rewrite::RuleNormalizeAggregate;
 use crate::optimizer::rule::rewrite::RulePushDownFilterProjectSet;
 use crate::optimizer::rule::rewrite::RulePushDownFilterScan;
 use crate::optimizer::rule::rewrite::RulePushDownFilterSort;
@@ -51,11 +51,7 @@ use crate::MetadataRef;
 pub struct RuleFactory;
 
 impl RuleFactory {
-    pub fn create_rule(
-        id: RuleID,
-        metadata: MetadataRef,
-        _func_ctx: FunctionContext,
-    ) -> Result<RulePtr> {
+    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
@@ -78,6 +74,7 @@ impl RuleFactory {
             RuleID::MergeEvalScalar => Ok(Box::new(RuleMergeEvalScalar::new())),
             RuleID::MergeFilter => Ok(Box::new(RuleMergeFilter::new())),
             RuleID::NormalizeScalarFilter => Ok(Box::new(RuleNormalizeScalarFilter::new())),
+            RuleID::NormalizeAggregate => Ok(Box::new(RuleNormalizeAggregate::new())),
             RuleID::SplitAggregate => Ok(Box::new(RuleSplitAggregate::new())),
             RuleID::FoldCountAggregate => Ok(Box::new(RuleFoldCountAggregate::new())),
             RuleID::NormalizeDisjunctiveFilter => {

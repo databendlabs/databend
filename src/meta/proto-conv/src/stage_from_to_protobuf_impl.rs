@@ -134,6 +134,7 @@ impl FromToProto for mt::principal::CopyOptions {
             single: p.single,
             max_file_size,
             disable_variant_check: p.disable_variant_check,
+            return_failed_only: p.return_failed_only,
         })
     }
 
@@ -163,6 +164,7 @@ impl FromToProto for mt::principal::CopyOptions {
             single: self.single,
             max_file_size,
             disable_variant_check: self.disable_variant_check,
+            return_failed_only: self.return_failed_only,
         })
     }
 }

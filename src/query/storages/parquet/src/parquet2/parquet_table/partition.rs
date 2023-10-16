@@ -97,7 +97,7 @@ impl Parquet2Table {
             let offset = projected_column_nodes
                 .column_nodes
                 .iter()
-                .position(|node| node.leaf_indices[0] == top_k.column_id as usize)
+                .position(|node| node.leaf_indices[0] == top_k.leaf_id)
                 .unwrap();
             (top_k, offset)
         });
@@ -172,7 +172,7 @@ impl Parquet2Table {
                 &file_locations,
                 ctx.get_settings().get_max_threads()? as usize,
                 &ctx.get_copy_status(),
-                matches!(ctx.get_query_kind(), QueryKind::Copy),
+                matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable),
             )
             .await
     }

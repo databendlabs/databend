@@ -44,7 +44,6 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::CommittedLeaderId;
-use common_meta_types::ConnectionError;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardRPCError;
 use common_meta_types::ForwardToLeader;
@@ -86,10 +85,14 @@ use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
 use crate::meta_service::errors::grpc_error_to_network_err;
+use crate::meta_service::forwarder::MetaForwarder;
 use crate::meta_service::meta_leader::MetaLeader;
 use crate::meta_service::RaftServiceImpl;
 use crate::metrics::server_metrics;
 use crate::network::Network;
+use crate::request_handling::Forwarder;
+use crate::request_handling::Handler;
+use crate::request_handling::MetaRequest;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
 use crate::watcher::DispatcherSender;
@@ -994,13 +997,18 @@ impl MetaNode {
     }
 
     #[minitrace::trace]
-    pub async fn handle_forwardable_request(
+    pub async fn handle_forwardable_request<Req>(
         &self,
-        req: ForwardRequest,
-    ) -> Result<ForwardResponse, MetaAPIError> {
-        debug!(target = as_display!(&req.forward_to_leader), req = as_debug!(&req); "handle_forwardable_request");
-
-        let forward = req.forward_to_leader;
+        req: ForwardRequest<Req>,
+    ) -> Result<Req::Resp, MetaAPIError>
+    where
+        Req: MetaRequest,
+        for<'a> MetaLeader<'a>: Handler<Req>,
+        for<'a> MetaForwarder<'a>: Forwarder<Req>,
+    {
+        debug!(target = as_display!(&req.forward_to_leader),
+               req = as_debug!(&req);
+               "handle_forwardable_request");
 
         let mut n_retry = 20;
         let mut slp = Duration::from_millis(200);
@@ -1012,7 +1020,7 @@ impl MetaNode {
             // Handle the request locally or return a ForwardToLeader error
             let op_err = match assume_leader_res {
                 Ok(leader) => {
-                    let res = leader.handle_request(req.clone()).await;
+                    let res = leader.handle(req.clone()).await;
                     match res {
                         Ok(x) => return Ok(x),
                         Err(e) => e,
@@ -1029,21 +1037,15 @@ impl MetaNode {
                 }
             };
 
-            if forward == 0 {
-                return Err(MetaAPIError::CanNotForward(AnyError::error(
-                    "max number of forward reached",
-                )));
-            }
-
             let leader_id = to_leader.leader_id.ok_or_else(|| {
                 MetaAPIError::CanNotForward(AnyError::error("need to forward but no known leader"))
             })?;
 
-            let mut req_cloned = req.clone();
-            // Avoid infinite forward
-            req_cloned.decr_forward();
+            let req_cloned = req.next()?;
 
-            let res = self.forward_to(&leader_id, req_cloned).await;
+            let f = MetaForwarder::new(self);
+            let res = f.forward(leader_id, req_cloned).await;
+
             let forward_err = match res {
                 Ok(x) => {
                     return Ok(x);
@@ -1169,44 +1171,6 @@ impl MetaNode {
             // Note that when it returns, `changed()` will mark the most recent value as **seen**.
             rx.changed().await?;
         }
-    }
-
-    #[minitrace::trace]
-    pub async fn forward_to(
-        &self,
-        node_id: &NodeId,
-        req: ForwardRequest,
-    ) -> Result<ForwardResponse, ForwardRPCError> {
-        debug!("forward_to: {} {:?}", node_id, req);
-
-        let endpoint = self
-            .sto
-            .get_node_endpoint(node_id)
-            .await
-            .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
-
-        let client = RaftServiceClient::connect(format!("http://{}", endpoint))
-            .await
-            .map_err(|e| {
-                MetaNetworkError::ConnectionError(ConnectionError::new(
-                    e,
-                    format!("address: {}", endpoint),
-                ))
-            })?;
-
-        let mut client = client
-            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
-
-        let resp = client.forward(req).await.map_err(|e| {
-            MetaNetworkError::from(e)
-                .add_context(format!("target: {}, endpoint: {}", node_id, endpoint))
-        })?;
-        let raft_mes = resp.into_inner();
-
-        let res: Result<ForwardResponse, MetaAPIError> = reply_to_api_result(raft_mes);
-        let resp = res?;
-        Ok(resp)
     }
 
     pub(crate) async fn add_watcher(

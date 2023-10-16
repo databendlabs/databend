@@ -12,17 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::utils::copy_advance_aligned;
+use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
-use crate::types::decimal::Decimal128Type;
-use crate::types::decimal::Decimal256Type;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
@@ -32,6 +37,7 @@ use crate::types::NumberType;
 use crate::types::StringType;
 use crate::types::ValueType;
 use crate::types::VariantType;
+use crate::with_decimal_type;
 use crate::with_number_mapped_type;
 use crate::BlockEntry;
 use crate::Column;
@@ -39,9 +45,17 @@ use crate::ColumnBuilder;
 use crate::DataBlock;
 use crate::Value;
 
+pub const BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+
 impl DataBlock {
-    pub fn take<I>(&self, indices: &[I]) -> Result<Self>
-    where I: common_arrow::arrow::types::Index {
+    pub fn take<I>(
+        &self,
+        indices: &[I],
+        string_items_buf: &mut Option<Vec<(u64, usize)>>,
+    ) -> Result<Self>
+    where
+        I: common_arrow::arrow::types::Index,
+    {
         if indices.is_empty() {
             return Ok(self.slice(0..0));
         }
@@ -55,7 +69,7 @@ impl DataBlock {
                 }
                 Value::Column(c) => BlockEntry::new(
                     entry.data_type.clone(),
-                    Value::Column(Column::take(c, indices)),
+                    Value::Column(Column::take(c, indices, string_items_buf)),
                 ),
             })
             .collect();
@@ -69,54 +83,55 @@ impl DataBlock {
 }
 
 impl Column {
-    pub fn take<I>(&self, indices: &[I]) -> Self
+    pub fn take<I>(&self, indices: &[I], string_items_buf: &mut Option<Vec<(u64, usize)>>) -> Self
     where I: common_arrow::arrow::types::Index {
         match self {
             Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
                 self.slice(0..indices.len())
             }
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
-                NumberColumn::NUM_TYPE(values) =>
-                    Self::take_arg_types::<NumberType<NUM_TYPE>, _>(values, indices),
+                NumberColumn::NUM_TYPE(values) => {
+                    let builder = Self::take_primitive_types(values, indices);
+                    <NumberType<NUM_TYPE>>::upcast_column(<NumberType<NUM_TYPE>>::column_from_vec(
+                        builder,
+                        &[],
+                    ))
+                }
             }),
-            Column::Decimal(column) => match column {
-                DecimalColumn::Decimal128(values, size) => {
-                    let mut builder = Decimal128Type::create_builder(indices.len(), &[]);
-                    for index in indices {
-                        Decimal128Type::push_item(&mut builder, unsafe {
-                            Decimal128Type::index_column_unchecked(values, index.to_usize())
-                        });
-                    }
-                    let column = Decimal128Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal128(column, *size))
+            Column::Decimal(column) => with_decimal_type!(|DECIMAL_TYPE| match column {
+                DecimalColumn::DECIMAL_TYPE(values, size) => {
+                    let builder = Self::take_primitive_types(values, indices);
+                    Column::Decimal(DecimalColumn::DECIMAL_TYPE(builder.into(), *size))
                 }
-                DecimalColumn::Decimal256(values, size) => {
-                    let mut builder = Decimal256Type::create_builder(indices.len(), &[]);
-                    for index in indices {
-                        Decimal256Type::push_item(&mut builder, unsafe {
-                            Decimal256Type::index_column_unchecked(values, index.to_usize())
-                        });
-                    }
-                    let column = Decimal256Type::build_column(builder);
-                    Column::Decimal(DecimalColumn::Decimal256(column, *size))
-                }
-            },
-            Column::Boolean(bm) => Self::take_arg_types::<BooleanType, _>(bm, indices),
-            Column::String(column) => Self::take_arg_types::<StringType, _>(column, indices),
+            }),
+            Column::Boolean(bm) => Column::Boolean(Self::take_boolean_types(bm, indices)),
+            Column::String(column) => StringType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
             Column::Timestamp(column) => {
-                let ts = Self::take_arg_types::<NumberType<i64>, _>(column, indices)
-                    .into_number()
-                    .unwrap()
-                    .into_int64()
-                    .unwrap();
+                let builder = Self::take_primitive_types(column, indices);
+                let ts = <NumberType<i64>>::upcast_column(<NumberType<i64>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int64()
+                .unwrap();
                 Column::Timestamp(ts)
             }
             Column::Date(column) => {
-                let d = Self::take_arg_types::<NumberType<i32>, _>(column, indices)
-                    .into_number()
-                    .unwrap()
-                    .into_int32()
-                    .unwrap();
+                let builder = Self::take_primitive_types(column, indices);
+                let d = <NumberType<i32>>::upcast_column(<NumberType<i32>>::column_from_vec(
+                    builder,
+                    &[],
+                ))
+                .into_number()
+                .unwrap()
+                .into_int32()
+                .unwrap();
                 Column::Date(d)
             }
             Column::Array(column) => {
@@ -144,33 +159,148 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::take_value_types::<MapType<AnyType, AnyType>, _>(&column, builder, indices)
             }
-            Column::Bitmap(column) => Self::take_arg_types::<BitmapType, _>(column, indices),
+            Column::Bitmap(column) => BitmapType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
             Column::Nullable(c) => {
-                let column = c.column.take(indices);
-                let validity = Self::take_arg_types::<BooleanType, _>(&c.validity, indices);
+                let column = c.column.take(indices, string_items_buf);
+                let validity = Column::Boolean(Self::take_boolean_types(&c.validity, indices));
                 Column::Nullable(Box::new(NullableColumn {
                     column,
                     validity: BooleanType::try_downcast_column(&validity).unwrap(),
                 }))
             }
             Column::Tuple(fields) => {
-                let fields = fields.iter().map(|c| c.take(indices)).collect();
+                let fields = fields
+                    .iter()
+                    .map(|c| c.take(indices, string_items_buf))
+                    .collect();
                 Column::Tuple(fields)
             }
-            Column::Variant(column) => Self::take_arg_types::<VariantType, _>(column, indices),
+            Column::Variant(column) => VariantType::upcast_column(Self::take_string_types(
+                column,
+                indices,
+                string_items_buf.as_mut(),
+            )),
         }
     }
 
-    fn take_arg_types<T: ArgType, I>(col: &T::Column, indices: &[I]) -> Column
-    where I: common_arrow::arrow::types::Index {
-        let mut builder = T::create_builder(indices.len(), &[]);
-        for index in indices {
-            T::push_item(&mut builder, unsafe {
-                T::index_column_unchecked(col, index.to_usize())
-            });
+    pub fn take_primitive_types<T, I>(col: &Buffer<T>, indices: &[I]) -> Vec<T>
+    where
+        T: Copy,
+        I: common_arrow::arrow::types::Index,
+    {
+        let num_rows = indices.len();
+        let mut builder: Vec<T> = Vec::with_capacity(num_rows);
+        let col = col.as_slice();
+        builder.extend(
+            indices
+                .iter()
+                .map(|index| unsafe { *col.get_unchecked(index.to_usize()) }),
+        );
+        builder
+    }
+
+    pub fn take_string_types<'a, I>(
+        col: &'a StringColumn,
+        indices: &[I],
+        string_items_buf: Option<&mut Vec<(u64, usize)>>,
+    ) -> StringColumn
+    where
+        I: common_arrow::arrow::types::Index,
+    {
+        let num_rows = indices.len();
+
+        // Each element of `items` is (string pointer(u64), string length), if `string_items_buf`
+        // can be reused, we will not re-allocate memory.
+        let mut items: Option<Vec<(u64, usize)>> = match &string_items_buf {
+            Some(string_items_buf) if string_items_buf.capacity() >= num_rows => None,
+            _ => Some(Vec::with_capacity(num_rows)),
+        };
+        let items = match items.is_some() {
+            true => items.as_mut().unwrap(),
+            false => string_items_buf.unwrap(),
+        };
+
+        // [`StringColumn`] consists of [`data`] and [`offset`], we build [`data`] and [`offset`] respectively,
+        // and then call `StringColumn::new(data.into(), offsets.into())` to create [`StringColumn`].
+        let col_offset = col.offsets().as_slice();
+        let col_data_ptr = col.data().as_slice().as_ptr();
+        let mut offsets: Vec<u64> = Vec::with_capacity(num_rows + 1);
+        let mut data_size = 0;
+
+        // Build [`offset`] and calculate `data_size` required by [`data`].
+        unsafe {
+            *offsets.get_unchecked_mut(0) = 0;
+            for (i, index) in indices.iter().enumerate() {
+                let start = *col_offset.get_unchecked(index.to_usize()) as usize;
+                let len = *col_offset.get_unchecked(index.to_usize() + 1) as usize - start;
+                data_size += len as u64;
+                *items.get_unchecked_mut(i) = (col_data_ptr.add(start) as u64, len);
+                *offsets.get_unchecked_mut(i + 1) = data_size;
+            }
+            items.set_len(num_rows);
+            offsets.set_len(num_rows + 1);
         }
-        let column = T::build_column(builder);
-        T::upcast_column(column)
+
+        // Build [`data`].
+        let mut data: Vec<u8> = Vec::with_capacity(data_size as usize);
+        let mut data_ptr = data.as_mut_ptr();
+
+        unsafe {
+            for (str_ptr, len) in items.iter() {
+                copy_advance_aligned(*str_ptr as *const u8, &mut data_ptr, *len);
+            }
+            set_vec_len_by_ptr(&mut data, data_ptr);
+        }
+
+        StringColumn::new(data.into(), offsets.into())
+    }
+
+    pub fn take_boolean_types<I>(col: &Bitmap, indices: &[I]) -> Bitmap
+    where I: common_arrow::arrow::types::Index {
+        let num_rows = indices.len();
+        // Fast path: avoid iterating column to generate a new bitmap.
+        // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
+        // we can just slice it.
+        if num_rows <= col.len() && (col.unset_bits() == 0 || col.unset_bits() == col.len()) {
+            let mut bitmap = col.clone();
+            bitmap.slice(0, num_rows);
+            return bitmap;
+        }
+
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let mut builder_len = 0;
+        let mut unset_bits = 0;
+        let mut value = 0;
+        let mut i = 0;
+
+        unsafe {
+            for index in indices.iter() {
+                if col.get_bit_unchecked(index.to_usize()) {
+                    value |= BIT_MASK[i % 8];
+                } else {
+                    unset_bits += 1;
+                }
+                i += 1;
+                if i % 8 == 0 {
+                    *builder.get_unchecked_mut(builder_len) = value;
+                    builder_len += 1;
+                    value = 0;
+                }
+            }
+            if i % 8 != 0 {
+                *builder.get_unchecked_mut(builder_len) = value;
+                builder_len += 1;
+            }
+            builder.set_len(builder_len);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 
     fn take_value_types<T: ValueType, I>(

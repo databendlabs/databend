@@ -99,7 +99,7 @@ impl ParquetRSTable {
             self.read_options,
         )?);
 
-        let copy_status = if matches!(ctx.get_query_kind(), QueryKind::Copy) {
+        let copy_status = if matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable) {
             Some(ctx.get_copy_status())
         } else {
             None
@@ -407,7 +407,7 @@ fn prune_and_generate_partitions(
                 topk.as_ref()
                     .zip(row_group_level_stats.as_ref())
                     .map(|(t, stats)| {
-                        let stat = &stats[rg][&t.column_id];
+                        let stat = &stats[rg][&(t.leaf_id as u32)];
                         (stat.min.clone(), stat.max.clone())
                     });
 

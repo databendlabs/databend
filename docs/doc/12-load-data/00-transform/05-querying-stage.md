@@ -3,7 +3,7 @@ title: Querying Staged Files
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.1.65"/>
+<FunctionDescription description="Introduced or updated: v1.2.148"/>
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 

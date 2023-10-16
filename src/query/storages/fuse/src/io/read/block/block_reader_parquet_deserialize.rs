@@ -336,7 +336,7 @@ impl BlockReader {
                                            Suppose the name of table is T
                                             ~~~
                                             create table tmp_t as select * from T;
-                                            drop table T;
+                                            drop table T all;
                                             alter table tmp_t rename to T;
                                             ~~~
                                         Please note that the history of table T WILL BE LOST.

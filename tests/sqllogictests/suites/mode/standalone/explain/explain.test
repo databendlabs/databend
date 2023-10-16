@@ -1,8 +1,8 @@
 statement ok
-drop table if exists t1
+drop table if exists t1 all
 
 statement ok
-drop table if exists t2
+drop table if exists t2 all
 
 statement ok
 create table t1 as select number as a, number as b from numbers(1)
@@ -219,10 +219,10 @@ DISABLE_VARIANT_CHECK = false
 
 skipif clickhouse
 query T
-explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10
+explain syntax copy into 's3://mybucket/data.csv' from t1 file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 ----
 COPY
-INTO 's3://mybucket/data.csv'
+INTO Uri(UriLocation { protocol: "s3", name: "mybucket", path: "/data.csv", part_prefix: "", connection: Connection { visited_keys: {}, conns: {} } })
 FROM t1
 FILE_FORMAT = (
     field_delimiter = ",",
@@ -230,9 +230,7 @@ FILE_FORMAT = (
     skip_header = "1",
     type = "CSV"
 )
-SIZE_LIMIT = 10
-PURGE = false
-DISABLE_VARIANT_CHECK = false
+SINGLE = false
 
 query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
@@ -461,11 +459,11 @@ skipif clickhouse
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 7)
-├── CopyUnit (children 1)
-│   └── Location 's3://mybucket/data.csv'
-├── CopyUnit (children 1)
+CopyIntoTable (children 7)
+├── TO (children 1)
 │   └── TableIdentifier t1
+├── FROM (children 1)
+│   └── Location 's3://mybucket/data.csv'
 ├── FileFormats (children 4)
 │   ├── FileFormat field_delimiter = ","
 │   ├── FileFormat record_delimiter = "\n"
@@ -908,78 +906,70 @@ HashJoin
 query 
 explain select count(distinct a) from t1;
 ----
-EvalScalar
-├── output columns: [count() (#3)]
-├── expressions: [count() (#2)]
+AggregateFinal
+├── output columns: [count() (#2)]
+├── group by: []
+├── aggregate functions: [count()]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [count() (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [count() (#2)]
-        ├── group by: []
-        ├── aggregate functions: [count()]
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: []
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [t1.a (#0)]
+        └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [#_group_by_key]
-                ├── group by: [a]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0)]
-                    ├── read rows: 1
-                    ├── read bytes: 39
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0)]
+                ├── read rows: 1
+                ├── read bytes: 39
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
 
 query 
 explain select count_distinct(a) from t1;
 ----
-EvalScalar
-├── output columns: [count() (#3)]
-├── expressions: [count() (#2)]
+AggregateFinal
+├── output columns: [count() (#2)]
+├── group by: []
+├── aggregate functions: [count()]
 ├── estimated rows: 1.00
-└── AggregateFinal
+└── AggregatePartial
     ├── output columns: [count() (#2)]
     ├── group by: []
     ├── aggregate functions: [count()]
     ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── output columns: [count() (#2)]
-        ├── group by: []
-        ├── aggregate functions: [count()]
+    └── AggregateFinal
+        ├── output columns: [t1.a (#0)]
+        ├── group by: [a]
+        ├── aggregate functions: []
         ├── estimated rows: 1.00
-        └── AggregateFinal
-            ├── output columns: [t1.a (#0)]
+        └── AggregatePartial
+            ├── output columns: [#_group_by_key]
             ├── group by: [a]
             ├── aggregate functions: []
             ├── estimated rows: 1.00
-            └── AggregatePartial
-                ├── output columns: [#_group_by_key]
-                ├── group by: [a]
-                ├── aggregate functions: []
-                ├── estimated rows: 1.00
-                └── TableScan
-                    ├── table: default.default.t1
-                    ├── output columns: [a (#0)]
-                    ├── read rows: 1
-                    ├── read bytes: 39
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+            └── TableScan
+                ├── table: default.default.t1
+                ├── output columns: [a (#0)]
+                ├── read rows: 1
+                ├── read bytes: 39
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                └── estimated rows: 1.00
 
 query 
 explain select * from (values(1, 'a'),(2, 'b')) t(c1,c2)

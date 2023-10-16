@@ -262,7 +262,6 @@ impl Binder {
                 Arc::new(
                     Filter {
                         predicates: left_push_down,
-                        is_having: false,
                     }
                     .into(),
                 ),
@@ -275,7 +274,6 @@ impl Binder {
                 Arc::new(
                     Filter {
                         predicates: right_push_down,
-                        is_having: false,
                     }
                     .into(),
                 ),

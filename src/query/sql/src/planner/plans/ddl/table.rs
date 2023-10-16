@@ -84,6 +84,7 @@ pub struct DropTablePlan {
     pub database: String,
     /// The table name
     pub table: String,
+    pub all: bool,
 }
 
 impl DropTablePlan {

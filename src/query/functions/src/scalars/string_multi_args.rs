@@ -877,6 +877,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
         if let Err(err) = regexp::validate_regexp_arguments("regexp_substr", pos, occur, None) {
             ctx.set_error(builder.len(), err);
             StringType::push_default(&mut builder);
+            validity.push(false);
             continue;
         }
 
@@ -898,6 +899,7 @@ fn regexp_substr_fn(args: &[ValueRef<AnyType>], ctx: &mut EvalContext) -> Value<
                 Err(err) => {
                     ctx.set_error(builder.len(), err);
                     StringType::push_default(&mut builder);
+                    validity.push(false);
                     continue;
                 }
             }

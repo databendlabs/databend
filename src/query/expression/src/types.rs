@@ -185,6 +185,15 @@ impl DataType {
         matches!(self, DataType::Timestamp | DataType::Date)
     }
 
+    #[inline]
+    pub fn is_string_column(&self) -> bool {
+        match self {
+            DataType::String | DataType::Bitmap | DataType::Variant => true,
+            DataType::Nullable(ty) => ty.is_string_column(),
+            _ => false,
+        }
+    }
+
     pub fn numeric_byte_size(&self) -> Result<usize, String> {
         match self {
             DataType::Number(NumberDataType::UInt8) | DataType::Number(NumberDataType::Int8) => {

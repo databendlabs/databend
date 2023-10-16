@@ -261,19 +261,25 @@ where R: Rows
         // Need to pop data to in_progress_rows.
         // Use `>=` because some of the input ports may be finished, but the data is still in the heap.
         while self.heap.len() >= nums_active_inputs && !need_output {
-            match self.heap.pop() {
-                Some(Reverse(mut cursor)) => {
+            match self.heap.peek() {
+                Some(Reverse(cursor)) => {
                     let input_index = cursor.input_index;
-                    if self.heap.is_empty() {
+                    if self.heap.len() == 1 {
+                        let cursor = self.heap.pop().unwrap().0;
                         // If there is no other block in the heap, we can drain the whole block.
                         need_output = self.drain_cursor(cursor);
                     } else {
-                        let next_cursor = &self.heap.peek().unwrap().0;
-                        // If the last row of current block is smaller than the next cursor,
-                        // we can drain the whole block.
+                        let next_cursor = &find_bigger_child_of_root(&self.heap).0;
                         if cursor.last().le(&next_cursor.current()) {
+                            // If the last row of current block is smaller than the next cursor,
+                            // we can drain the whole block.
+                            let cursor = self.heap.pop().unwrap().0;
                             need_output = self.drain_cursor(cursor);
                         } else {
+                            // We copy current cursor for advancing,
+                            // and we will use this copied cursor to update the top of the heap at last
+                            // (let heap adjust itself without popping and pushing any element).
+                            let mut cursor = cursor.clone();
                             let block_index = self.blocks[input_index].len() - 1;
                             while !cursor.is_finished() && cursor.le(next_cursor) {
                                 // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
@@ -289,9 +295,15 @@ where R: Rows
                                     }
                                 }
                             }
+
                             if !cursor.is_finished() {
-                                self.heap.push(Reverse(cursor));
+                                // Update the top of the heap.
+                                // `self.heap.peek_mut` will return a `PeekMut` object which allows us to modify the top element of the heap.
+                                // The heap will adjust itself automatically when the `PeekMut` object is dropped (RAII).
+                                self.heap.peek_mut().unwrap().0 = cursor;
                             } else {
+                                // Pop the current `cursor`.
+                                self.heap.pop();
                                 // We have read all rows of this block, need to read a new one.
                                 self.cursor_finished[input_index] = true;
                             }
@@ -512,4 +524,16 @@ enum ProcessorState {
     Output,
     // Need to generate output block.
     Generated(DataBlock), // Need to push output block to output port.
+}
+
+/// Find the bigger child of the root of the heap.
+#[inline(always)]
+fn find_bigger_child_of_root<T: Ord>(heap: &BinaryHeap<T>) -> &T {
+    debug_assert!(heap.len() >= 2);
+    let slice = heap.as_slice();
+    if heap.len() == 2 {
+        &slice[1]
+    } else {
+        (&slice[1]).max(&slice[2])
+    }
 }

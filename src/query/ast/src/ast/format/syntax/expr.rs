@@ -173,6 +173,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(RcDoc::space())
             .append(pretty_expr(*expr))
             .append(RcDoc::text(")")),
+        Expr::DatePart {
+            kind: field, expr, ..
+        } => RcDoc::text("DATE_PART(")
+            .append(RcDoc::text(field.to_string()))
+            .append(RcDoc::space())
+            .append(RcDoc::text(","))
+            .append(RcDoc::space())
+            .append(pretty_expr(*expr))
+            .append(RcDoc::text(")")),
         Expr::Position {
             substr_expr,
             str_expr,

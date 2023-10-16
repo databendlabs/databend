@@ -68,6 +68,7 @@ use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
+use common_settings::Settings;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::AggregateExpand;
@@ -78,7 +79,7 @@ use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
 use common_sql::executor::CompactPartial;
 use common_sql::executor::ConstantTableScan;
-use common_sql::executor::CopyIntoTable;
+use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
@@ -183,6 +184,8 @@ pub struct PipelineBuilder {
 
     main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
+    func_ctx: FunctionContext,
+    settings: Arc<Settings>,
 
     // Used in runtime filter source
     pub join_state: Option<Arc<HashJoinBuildState>>,
@@ -199,6 +202,8 @@ pub struct PipelineBuilder {
 
 impl PipelineBuilder {
     pub fn create(
+        func_ctx: FunctionContext,
+        settings: Arc<Settings>,
         ctx: Arc<QueryContext>,
         enable_profiling: bool,
         prof_span_set: SharedProcessorProfiles,
@@ -206,6 +211,8 @@ impl PipelineBuilder {
         PipelineBuilder {
             enable_profiling,
             ctx,
+            func_ctx,
+            settings,
             pipelines: vec![],
             join_state: None,
             main_pipeline: Pipeline::create(),
@@ -289,13 +296,6 @@ impl PipelineBuilder {
         select_schema: Arc<DataSchema>,
         output_schema: Arc<DataSchema>,
     ) -> Result<bool> {
-        // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
-        }
-
         // check if cast needed
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
@@ -305,11 +305,16 @@ impl PipelineBuilder {
         let MergeIntoSource { input, row_id_idx } = merge_into_source;
 
         self.build_pipeline(input)?;
-        self.main_pipeline.try_resize(1)?;
-        let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+        // merge into's parallism depends on the join probe number.
+        let mut items = Vec::with_capacity(self.main_pipeline.output_len());
+        let output_len = self.main_pipeline.output_len();
+        for _ in 0..output_len {
+            let merge_into_split_processor = MergeIntoSplitProcessor::create(*row_id_idx, false)?;
+            items.push(merge_into_split_processor.into_pipe_item());
+        }
 
         self.main_pipeline
-            .add_pipe(merge_into_split_processor.into_pipe());
+            .add_pipe(Pipe::create(output_len, output_len * 2, items));
 
         Ok(())
     }
@@ -326,28 +331,45 @@ impl PipelineBuilder {
             table_level_range_index,
             table_schema,
             need_insert,
+            delete_when,
         } = deduplicate;
 
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(tbl.as_ref())?;
-        let target_schema: Arc<DataSchema> = Arc::new(table_schema.clone().into());
         self.build_pipeline(input)?;
+        let mut delete_column_idx = 0;
+        let mut opt_modified_schema = None;
         if let Some(SelectCtx {
             select_column_bindings,
             select_schema,
         }) = select_ctx
         {
             PipelineBuilder::render_result_set(
-                &self.ctx.get_function_context()?,
+                &self.func_ctx,
                 input.output_schema()?,
                 select_column_bindings,
                 &mut self.main_pipeline,
                 false,
             )?;
+
+            let mut target_schema: DataSchema = table_schema.clone().into();
+            if let Some((_, delete_column)) = delete_when {
+                delete_column_idx = select_schema.index_of(delete_column.as_str())?;
+                let delete_column = select_schema.field(delete_column_idx).clone();
+                target_schema
+                    .fields
+                    .insert(delete_column_idx, delete_column);
+                opt_modified_schema = Some(Arc::new(target_schema.clone()));
+            }
+            let target_schema = Arc::new(target_schema.clone());
+            if target_schema.fields().len() != select_schema.fields().len() {
+                return Err(ErrorCode::BadArguments(
+                    "The number of columns in the target table is different from the number of columns in the SELECT clause",
+                ));
+            }
             if Self::check_schema_cast(select_schema.clone(), target_schema.clone())? {
-                let func_ctx = self.ctx.get_function_context()?;
                 self.main_pipeline.add_transform(
                     |transform_input_port, transform_output_port| {
                         TransformCastSchema::try_create(
@@ -355,7 +377,7 @@ impl PipelineBuilder {
                             transform_output_port,
                             select_schema.clone(),
                             target_schema.clone(),
-                            func_ctx.clone(),
+                            self.func_ctx.clone(),
                         )
                     },
                 )?;
@@ -366,13 +388,14 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             tbl.clone(),
-            target_schema.clone(),
+            Arc::new(table_schema.clone().into()),
         )?;
 
         let _ = table.cluster_gen_for_append(
             self.ctx.clone(),
             &mut self.main_pipeline,
             table.get_block_thresholds(),
+            opt_modified_schema,
         )?;
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
         self.main_pipeline.try_resize(1)?;
@@ -391,16 +414,25 @@ impl PipelineBuilder {
         // (1) -> output_port_merge_into_action
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
+        let delete_when = if let Some((remote_expr, delete_column)) = delete_when {
+            Some((
+                remote_expr.as_expr(&BUILTIN_FUNCTIONS),
+                delete_column.clone(),
+            ))
+        } else {
+            None
+        };
         let cluster_keys = table.cluster_keys(self.ctx.clone());
         if *need_insert {
             let replace_into_processor = ReplaceIntoProcessor::create(
-                self.ctx.as_ref(),
+                self.ctx.clone(),
                 on_conflicts.clone(),
                 cluster_keys,
                 bloom_filter_column_indexes.clone(),
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|(expr, _)| (expr, delete_column_idx)),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -413,6 +445,7 @@ impl PipelineBuilder {
                 table_schema.as_ref(),
                 *table_is_empty,
                 table_level_range_index.clone(),
+                delete_when.map(|_| delete_column_idx),
             )?;
             self.main_pipeline
                 .add_pipe(replace_into_processor.into_pipe());
@@ -431,40 +464,27 @@ impl PipelineBuilder {
             row_id_idx,
             segments,
         } = merge_into;
+
         self.build_pipeline(input)?;
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
-        let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-            unmatched.clone(),
-            input.output_schema()?,
-            self.ctx.get_function_context()?,
-        )?;
-
-        let matched_split_processor = MatchedSplitProcessor::create(
-            self.ctx.clone(),
-            *row_id_idx,
-            matched.clone(),
-            field_index_of_input_schema.clone(),
-            input.output_schema()?,
-            Arc::new(DataSchema::from(tbl.schema())),
-        )?;
 
         let table = FuseTable::try_from_table(tbl.as_ref())?;
         let block_thresholds = table.get_block_thresholds();
 
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
-        // append data for unmatched data
-        let serialize_block_transform = TransformSerializeBlock::try_create(
+        // this TransformSerializeBlock is just used to get block_builder
+        let block_builder = TransformSerializeBlock::try_create(
             self.ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             table,
-            cluster_stats_gen,
-        )?;
-        let block_builder = serialize_block_transform.get_block_builder();
+            cluster_stats_gen.clone(),
+        )?
+        .get_block_builder();
 
         let serialize_segment_transform = TransformSerializeSegment::new(
             self.ctx.clone(),
@@ -480,19 +500,97 @@ impl PipelineBuilder {
             }
             output_len
         };
-        let pipe_items = vec![
-            matched_split_processor.into_pipe_item(),
-            merge_into_not_matched_processor.into_pipe_item(),
-        ];
+        // Handle matched and unmatched data separately.
 
+        //                                                                                 +-----------------------------+-+
+        //                                    +-----------------------+     Matched        |                             +-+
+        //                                    |                       +---+--------------->|    MatchedSplitProcessor    |
+        //                                    |                       |   |                |                             +-+
+        // +----------------------+           |                       +---+                +-----------------------------+-+
+        // |   MergeIntoSource    +---------->|MergeIntoSplitProcessor|
+        // +----------------------+           |                       +---+                +-----------------------------+
+        //                                    |                       |   | NotMatched     |                             +-+
+        //                                    |                       +---+--------------->| MergeIntoNotMatchedProcessor| |
+        //                                    +-----------------------+                    |                             +-+
+        //                                                                                 +-----------------------------+
+        // Note: here the output_port of MatchedSplitProcessor are arranged in the following order
+        // (0) -> output_port_row_id
+        // (1) -> output_port_updated
+
+        // Outputs from MatchedSplitProcessor's output_port_updated and MergeIntoNotMatchedProcessor's output_port are merged and processed uniformly by the subsequent ResizeProcessor
+
+        // receive matched data and not matched data parallelly.
+        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
+        for _ in (0..self.main_pipeline.output_len()).step_by(2) {
+            let matched_split_processor = MatchedSplitProcessor::create(
+                self.ctx.clone(),
+                *row_id_idx,
+                matched.clone(),
+                field_index_of_input_schema.clone(),
+                input.output_schema()?,
+                Arc::new(DataSchema::from(tbl.schema())),
+            )?;
+
+            let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                unmatched.clone(),
+                input.output_schema()?,
+                self.func_ctx.clone(),
+            )?;
+
+            pipe_items.push(matched_split_processor.into_pipe_item());
+            pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+        }
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
-            pipe_items,
+            pipe_items.clone(),
         ));
 
-        self.main_pipeline
-            .resize_partial_one(vec![vec![0], vec![1, 2]])?;
+        // row_id port0_1
+        // matched update data port0_2
+        // not macthed insert data port0_3
+        // row_id port1_1
+        // matched update data port1_2
+        // not macthed insert data port1_3
+        // ......
+        assert_eq!(self.main_pipeline.output_len() % 3, 0);
+
+        // merge rowid and serialize_blocks
+        let mut ranges = Vec::with_capacity(self.main_pipeline.output_len() / 3 * 2);
+        for idx in (0..self.main_pipeline.output_len()).step_by(3) {
+            ranges.push(vec![idx]);
+            ranges.push(vec![idx + 1, idx + 2]);
+        }
+        self.main_pipeline.resize_partial_one(ranges.clone())?;
+        assert_eq!(self.main_pipeline.output_len() % 2, 0);
+
+        // shuffle outputs and resize row_id
+        // ----------------------------------------------------------------------
+        // row_id port0_1               row_id port0_1
+        // data port0_2                 row_id port1_1              row_id port
+        // row_id port1_1   ======>     ......           ======>
+        // data port1_2                 data port0_2                data port0
+        // ......                       data port1_2                data port1
+        // ......                       .....                       .....
+        // ----------------------------------------------------------------------
+        let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            rules.push(idx);
+            rules.push(idx + self.main_pipeline.output_len() / 2);
+        }
+        self.main_pipeline.reorder_inputs(rules);
+        // resize row_id
+        ranges.clear();
+        let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            vec.push(idx);
+        }
+        ranges.push(vec.clone());
+        for idx in 0..(self.main_pipeline.output_len() / 2) {
+            ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
+        }
+        self.main_pipeline.resize_partial_one(ranges.clone())?;
+
         // fill default columns
         let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
@@ -505,9 +603,8 @@ impl PipelineBuilder {
                     tbl.clone(),
                 )
             },
-            1,
+            self.main_pipeline.output_len() - 1,
         )?;
-
         builder.add_items_prepend(vec![create_dummy_item()]);
         self.main_pipeline.add_pipe(builder.finalize());
 
@@ -526,30 +623,62 @@ impl PipelineBuilder {
                         computed_schema.clone(),
                     )
                 },
-                1,
+                self.main_pipeline.output_len() - 1,
             )?;
             builder.add_items_prepend(vec![create_dummy_item()]);
             self.main_pipeline.add_pipe(builder.finalize());
         }
 
-        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let max_threads = self.settings.get_max_threads()?;
         let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
-        let pipe_items = vec![
-            table.matched_mutator(
+        // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
+        let output_lens = self.main_pipeline.output_len();
+        table.cluster_gen_for_append_with_specified_last_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            output_lens - 1,
+        )?;
+
+        pipe_items.clear();
+        pipe_items.push(table.rowid_aggregate_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
+            segments.clone(),
+        )?);
+
+        for _ in 0..self.main_pipeline.output_len() - 1 {
+            let serialize_block_transform = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
-                block_builder,
-                io_request_semaphore,
-                segments.clone(),
-            )?,
-            serialize_block_transform.into_pipe_item(),
-        ];
+                InputPort::create(),
+                OutputPort::create(),
+                table,
+                cluster_stats_gen.clone(),
+            )?;
+            pipe_items.push(serialize_block_transform.into_pipe_item());
+        }
 
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
             pipe_items,
         ));
+
+        // resize block ports
+        // aggregate_mutator port               aggregate_mutator port
+        // serialize_block port0     ======>
+        // serialize_block port1                serialize_block port
+        // .......
+        ranges.clear();
+        ranges.push(vec![0]);
+        vec.clear();
+        for idx in 0..self.main_pipeline.output_len() - 1 {
+            vec.push(idx + 1);
+        }
+        ranges.push(vec);
+        self.main_pipeline.resize_partial_one(ranges)?;
 
         let pipe_items = vec![
             create_dummy_item(),
@@ -577,14 +706,14 @@ impl PipelineBuilder {
             block_slots,
             need_insert,
         } = replace;
-        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let max_threads = self.settings.get_max_threads()?;
         let segment_partition_num = std::cmp::min(segments.len(), max_threads as usize);
         let table = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds)?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, *block_thresholds, None)?;
         self.build_pipeline(input)?;
         // connect to broadcast processor and append transform
         let serialize_block_transform = TransformSerializeBlock::try_create(
@@ -612,7 +741,7 @@ impl PipelineBuilder {
                 .add_pipe(Pipe::create(1, segment_partition_num, vec![
                     broadcast_processor.into_pipe_item(),
                 ]));
-            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let max_threads = self.settings.get_max_threads()?;
             let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             let merge_into_operation_aggregators = table.merge_into_mutators(
@@ -693,7 +822,7 @@ impl PipelineBuilder {
             // setup the dummy transform
             pipe_items.push(serialize_segment_transform.into_pipe_item());
 
-            let max_threads = self.ctx.get_settings().get_max_threads()?;
+            let max_threads = self.settings.get_max_threads()?;
             let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
             // setup the merge into operation aggregators
@@ -723,10 +852,9 @@ impl PipelineBuilder {
     }
 
     fn build_async_sourcer(&mut self, async_sourcer: &AsyncSourcerPlan) -> Result<()> {
-        let settings = self.ctx.get_settings();
         self.main_pipeline.add_source(
             |output| {
-                let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+                let name_resolution_ctx = NameResolutionContext::try_from(self.settings.as_ref())?;
                 let inner = ValueSource::new(
                     async_sourcer.value_data.clone(),
                     self.ctx.clone(),
@@ -741,7 +869,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_copy_into_table(&mut self, copy: &CopyIntoTable) -> Result<()> {
+    fn build_copy_into_table(&mut self, copy: &CopyIntoTablePhysicalPlan) -> Result<()> {
         let to_table =
             self.ctx
                 .build_table_by_table_info(&copy.catalog_info, &copy.table_info, None)?;
@@ -749,7 +877,7 @@ impl PipelineBuilder {
             CopyIntoTableSource::Query(input) => {
                 self.build_pipeline(&input.plan)?;
                 Self::render_result_set(
-                    &self.ctx.get_function_context()?,
+                    &self.func_ctx,
                     input.plan.output_schema()?,
                     &input.result_columns,
                     &mut self.main_pipeline,
@@ -855,7 +983,7 @@ impl PipelineBuilder {
             &mut self.main_pipeline,
         )?;
         let cluster_stats_gen =
-            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds(), None)?;
         self.main_pipeline.add_transform(|input, output| {
             let proc = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
@@ -920,7 +1048,7 @@ impl PipelineBuilder {
         state: Arc<RangeJoinState>,
     ) -> Result<()> {
         self.build_pipeline(&range_join.left)?;
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = self.settings.get_max_threads()? as usize;
         self.main_pipeline.try_resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformRangeJoinLeft::create(input, output, state.clone());
@@ -944,6 +1072,8 @@ impl PipelineBuilder {
     ) -> Result<()> {
         let right_side_context = QueryContext::create_from(self.ctx.clone());
         let mut right_side_builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
             right_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
@@ -995,6 +1125,8 @@ impl PipelineBuilder {
     ) -> Result<()> {
         let build_side_context = QueryContext::create_from(self.ctx.clone());
         let mut build_side_builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
             build_side_context,
             self.enable_profiling,
             self.proc_profs.clone(),
@@ -1009,6 +1141,7 @@ impl PipelineBuilder {
         let restore_barrier = Barrier::new(output_len);
         let build_state = HashJoinBuildState::try_create(
             self.ctx.clone(),
+            self.func_ctx.clone(),
             &hash_join_plan.build_keys,
             &hash_join_plan.build_projections,
             join_state,
@@ -1017,7 +1150,7 @@ impl PipelineBuilder {
         )?;
 
         let create_sink_processor = |input| {
-            let spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+            let spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
                 Some(Box::new(BuildSpillState::create(
                     self.ctx.clone(),
                     spill_coordinator.clone(),
@@ -1147,15 +1280,13 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
-            let func_ctx = self.ctx.get_function_context()?;
-
             let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
                     num_input_columns,
-                    func_ctx.clone(),
+                    self.func_ctx.clone(),
                     ops.clone(),
                 )))
             })?;
@@ -1165,7 +1296,7 @@ impl PipelineBuilder {
     }
 
     fn build_cte_scan(&mut self, cte_scan: &CteScan) -> Result<()> {
-        let max_threads = self.ctx.get_settings().get_max_threads()?;
+        let max_threads = self.settings.get_max_threads()?;
         self.main_pipeline.add_source(
             |output| {
                 MaterializedCteSource::create(
@@ -1218,7 +1349,7 @@ impl PipelineBuilder {
                     projections: filter.projections.clone(),
                     expr: predicate.clone(),
                 }],
-                self.ctx.get_function_context()?,
+                self.func_ctx.clone(),
                 num_input_columns,
             );
 
@@ -1242,16 +1373,13 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
-        let func_ctx = self.ctx.get_function_context()?;
-
         let num_input_columns = project.input.output_schema()?.num_fields();
-
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
                 num_input_columns,
-                func_ctx.clone(),
+                self.func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
                 }],
@@ -1278,13 +1406,14 @@ impl PipelineBuilder {
             projections: Some(eval_scalar.projections.clone()),
         };
 
-        let func_ctx = self.ctx.get_function_context()?;
-
         let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1316,13 +1445,14 @@ impl PipelineBuilder {
                 .collect(),
         };
 
-        let func_ctx = self.ctx.get_function_context()?;
-
         let num_input_columns = project_set.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1347,13 +1477,14 @@ impl PipelineBuilder {
         let op = BlockOperator::LambdaMap { funcs };
 
         let input_schema = lambda.input.output_schema()?;
-        let func_ctx = self.ctx.get_function_context()?;
-
         let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1448,9 +1579,7 @@ impl PipelineBuilder {
             });
         }
 
-        // let is_standalone = self.ctx.get_cluster().is_empty();
-        let settings = self.ctx.get_settings();
-        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
@@ -1586,8 +1715,7 @@ impl PipelineBuilder {
             return Ok(());
         }
 
-        let settings = self.ctx.get_settings();
-        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+        let efficiently_memory = self.settings.get_efficiently_memory_group_by()?;
 
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
@@ -1823,7 +1951,7 @@ impl PipelineBuilder {
                         input,
                         output,
                         input_schema.num_fields(),
-                        self.ctx.get_function_context()?,
+                        self.func_ctx.clone(),
                         vec![BlockOperator::Project {
                             projection: projection.clone(),
                         }],
@@ -1865,8 +1993,8 @@ impl PipelineBuilder {
         limit: Option<usize>,
         after_exchange: bool,
     ) -> Result<()> {
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        let block_size = self.settings.get_max_block_size()? as usize;
+        let max_threads = self.settings.get_max_threads()? as usize;
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
@@ -1928,12 +2056,12 @@ impl PipelineBuilder {
     fn build_join_probe(&mut self, join: &HashJoin, state: Arc<HashJoinState>) -> Result<()> {
         self.build_pipeline(&join.probe)?;
 
-        let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        let func_ctx = self.ctx.get_function_context()?;
+        let max_block_size = self.settings.get_max_block_size()? as usize;
         let barrier = Barrier::new(self.main_pipeline.output_len());
         let restore_barrier = Barrier::new(self.main_pipeline.output_len());
         let probe_state = Arc::new(HashJoinProbeState::create(
             self.ctx.clone(),
+            self.func_ctx.clone(),
             state,
             &join.probe_projections,
             &join.probe_keys,
@@ -1943,9 +2071,13 @@ impl PipelineBuilder {
             barrier,
             restore_barrier,
         )?);
+        let mut has_string_column = false;
+        for filed in join.output_schema()?.fields() {
+            has_string_column |= filed.data_type().is_string_column();
+        }
 
         self.main_pipeline.add_transform(|input, output| {
-            let probe_spill_state = if self.ctx.get_settings().get_join_spilling_threshold()? != 0 {
+            let probe_spill_state = if self.settings.get_join_spilling_threshold()? != 0 {
                 Some(Box::new(ProbeSpillState::create(
                     self.ctx.clone(),
                     probe_state.clone(),
@@ -1960,9 +2092,10 @@ impl PipelineBuilder {
                 probe_state.clone(),
                 probe_spill_state,
                 max_block_size,
-                func_ctx.clone(),
+                self.func_ctx.clone(),
                 &join.join_type,
                 !join.non_equi_conditions.is_empty(),
+                has_string_column,
             )?;
 
             if self.enable_profiling {
@@ -2016,8 +2149,13 @@ impl PipelineBuilder {
         union_plan: &UnionAll,
     ) -> Result<Receiver<DataBlock>> {
         let union_ctx = QueryContext::create_from(self.ctx.clone());
-        let mut pipeline_builder =
-            PipelineBuilder::create(union_ctx, self.enable_profiling, self.proc_profs.clone());
+        let mut pipeline_builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
+            union_ctx,
+            self.enable_profiling,
+            self.proc_profs.clone(),
+        );
         pipeline_builder.cte_state = self.cte_state.clone();
         let mut build_res = pipeline_builder.finalize(input)?;
 
@@ -2083,7 +2221,7 @@ impl PipelineBuilder {
 
         // should render result for select
         PipelineBuilder::render_result_set(
-            &self.ctx.get_function_context()?,
+            &self.func_ctx,
             insert_select.input.output_schema()?,
             &insert_select.select_column_bindings,
             &mut self.main_pipeline,
@@ -2091,7 +2229,6 @@ impl PipelineBuilder {
         )?;
 
         if insert_select.cast_needed {
-            let func_ctx = self.ctx.get_function_context()?;
             self.main_pipeline
                 .add_transform(|transform_input_port, transform_output_port| {
                     TransformCastSchema::try_create(
@@ -2099,7 +2236,7 @@ impl PipelineBuilder {
                         transform_output_port,
                         select_schema.clone(),
                         insert_schema.clone(),
-                        func_ctx.clone(),
+                        self.func_ctx.clone(),
                     )
                 })?;
         }
@@ -2223,6 +2360,8 @@ impl PipelineBuilder {
         let state = Arc::new(MaterializedCteState::new(self.ctx.clone()));
         self.cte_state.insert(cte_idx, state.clone());
         let mut left_side_builder = PipelineBuilder::create(
+            self.func_ctx.clone(),
+            self.settings.clone(),
             left_side_ctx,
             self.enable_profiling,
             self.proc_profs.clone(),
@@ -2232,7 +2371,7 @@ impl PipelineBuilder {
         assert!(left_side_pipeline.main_pipeline.is_pulling_pipeline()?);
 
         PipelineBuilder::render_result_set(
-            &self.ctx.get_function_context()?,
+            &self.func_ctx,
             left_side.output_schema()?,
             left_output_columns,
             &mut left_side_pipeline.main_pipeline,

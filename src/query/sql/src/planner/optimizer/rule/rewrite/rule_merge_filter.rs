@@ -79,10 +79,7 @@ impl Rule for RuleMergeFilter {
             .into_iter()
             .chain(down_filter.predicates.into_iter())
             .collect();
-        let merged = Filter {
-            predicates,
-            is_having: false,
-        };
+        let merged = Filter { predicates };
 
         let new_expr = SExpr::create_unary(
             Arc::new(merged.into()),

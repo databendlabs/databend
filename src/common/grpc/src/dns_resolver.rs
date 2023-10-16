@@ -168,17 +168,21 @@ impl ConnectionFactory {
     pub fn create_rpc_endpoint(
         addr: impl ToString,
         timeout: Option<Duration>,
-        rpc_client_config: Option<RpcClientTlsConfig>,
+        rpc_client_tls_config: Option<RpcClientTlsConfig>,
     ) -> std::result::Result<Endpoint, GrpcConnectionError> {
-        match format!("http://{}", addr.to_string()).parse::<Uri>() {
+        let u = if rpc_client_tls_config.is_some() {
+            format!("https://{}", addr.to_string())
+        } else {
+            format!("http://{}", addr.to_string())
+        };
+        match u.parse::<Uri>() {
             Err(error) => Err(GrpcConnectionError::InvalidUri {
                 uri: addr.to_string(),
                 source: AnyError::new(&error),
             }),
             Ok(uri) => {
                 let builder = Channel::builder(uri);
-
-                let mut endpoint = if let Some(conf) = rpc_client_config {
+                let mut endpoint = if let Some(conf) = rpc_client_tls_config {
                     info!("tls rpc enabled");
                     let client_tls_config = Self::client_tls_config(&conf).map_err(|e| {
                         GrpcConnectionError::TLSConfigError {

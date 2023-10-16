@@ -31,6 +31,7 @@ use common_expression::ColumnBuilder;
 use common_expression::ColumnVec;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
@@ -53,7 +54,7 @@ use log::info;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::FixedKeyHashJoinHashTable;
 use crate::pipelines::processors::transforms::hash_join::hash_join_state::HashJoinHashTable;
@@ -65,6 +66,7 @@ use crate::sessions::QueryContext;
 /// Define some shared states for all hash join build threads.
 pub struct HashJoinBuildState {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) func_ctx: FunctionContext,
     /// `hash_join_state` is shared by `HashJoinBuild` and `HashJoinProbe`
     pub(crate) hash_join_state: Arc<HashJoinState>,
     // When build side input data is coming, will put it into chunks.
@@ -100,8 +102,10 @@ pub struct HashJoinBuildState {
 }
 
 impl HashJoinBuildState {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<QueryContext>,
+        func_ctx: FunctionContext,
         build_keys: &[RemoteExpr],
         build_projections: &ColumnSet,
         hash_join_state: Arc<HashJoinState>,
@@ -115,8 +119,9 @@ impl HashJoinBuildState {
         let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(Self {
             ctx: ctx.clone(),
-            chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
+            func_ctx,
             hash_join_state,
+            chunk_size_limit: ctx.get_settings().get_max_block_size()? as usize * 16,
             barrier,
             restore_barrier,
             row_space_builders: Default::default(),
@@ -166,11 +171,10 @@ impl HashJoinBuildState {
             let mut validity = MutableBitmap::new();
             validity.extend_constant(data_block.num_rows(), true);
             let validity: Bitmap = validity.into();
-
             let nullable_columns = data_block
                 .columns()
                 .iter()
-                .map(|c| set_validity(c, validity.len(), &validity))
+                .map(|c| set_true_validity(c, validity.len(), &validity))
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
@@ -371,21 +375,11 @@ impl HashJoinBuildState {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let mut local_space: Vec<u8> = Vec::with_capacity($chunk.num_rows() * entry_size);
-                let local_space_ptr = local_space.as_mut_ptr();
+                let mut raw_entry_ptr = unsafe {
+                    std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(local_space.as_mut_ptr())
+                };
 
-                local_raw_entry_spaces.push(local_space);
-
-                let mut offset = 0;
-                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    // # Safety
-                    // offset + entry_size <= $chunk.num_rows() * entry_size.
-                    let raw_entry_ptr = unsafe {
-                        std::mem::transmute::<*mut u8, *mut RawEntry<$t>>(
-                            local_space_ptr.add(offset),
-                        )
-                    };
-                    offset += entry_size;
-
+                for (row_index, key) in build_keys_iter.enumerate() {
                     let row_ptr = RowPtr {
                         chunk_index: $chunk_index,
                         row_index: row_index as u32,
@@ -394,13 +388,16 @@ impl HashJoinBuildState {
                     // # Safety
                     // The memory address of `raw_entry_ptr` is valid.
                     unsafe {
-                        (*raw_entry_ptr).row_ptr = row_ptr;
-                        (*raw_entry_ptr).key = *key;
-                        (*raw_entry_ptr).next = 0;
+                        *raw_entry_ptr = RawEntry {
+                            row_ptr,
+                            key: *key,
+                            next: 0,
+                        }
                     }
-
                     $table.insert(*key, raw_entry_ptr);
+                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                 }
+                local_raw_entry_spaces.push(local_space);
             }};
         }
 
@@ -410,34 +407,20 @@ impl HashJoinBuildState {
                 let build_keys_iter = $method.build_keys_iter(&keys_state)?;
 
                 let space_size = match &keys_state {
-                    KeysState::Column(Column::String(col)) => col.offsets().last(),
+                    // safe to unwrap(): offset.len() >= 1.
+                    KeysState::Column(Column::String(col)) => col.offsets().last().unwrap(),
                     // The function `build_keys_state` of both HashMethodSerializer and HashMethodSingleString
                     // must return `KeysState::Column(Column::String)`.
                     _ => unreachable!(),
                 };
                 let mut entry_local_space: Vec<u8> =
                     Vec::with_capacity($chunk.num_rows() * entry_size);
-                // safe to unwrap(): offset.len() >= 1.
                 let mut string_local_space: Vec<u8> =
-                    Vec::with_capacity(*space_size.unwrap() as usize);
-                let entry_local_space_ptr = entry_local_space.as_mut_ptr();
-                let string_local_space_ptr = string_local_space.as_mut_ptr();
+                    Vec::with_capacity(*space_size as usize);
+                let mut raw_entry_ptr = unsafe { std::mem::transmute::<*mut u8, *mut StringRawEntry>(entry_local_space.as_mut_ptr()) };
+                let mut string_local_space_ptr = string_local_space.as_mut_ptr();
 
-                local_raw_entry_spaces.push(entry_local_space);
-                local_raw_entry_spaces.push(string_local_space);
-
-                let mut entry_offset = 0;
-                let mut string_offset = 0;
-                for (row_index, key) in build_keys_iter.enumerate().take($chunk.num_rows()) {
-                    // # Safety
-                    // entry_offset + entry_size <= $chunk.num_rows() * entry_size.
-                    let raw_entry_ptr = unsafe {
-                        std::mem::transmute::<*mut u8, *mut StringRawEntry>(
-                            entry_local_space_ptr.add(entry_offset),
-                        )
-                    };
-                    entry_offset += entry_size;
-
+                for (row_index, key) in build_keys_iter.enumerate() {
                     let row_ptr = RowPtr {
                         chunk_index: $chunk_index,
                         row_index: row_index as u32,
@@ -447,27 +430,28 @@ impl HashJoinBuildState {
                     // The memory address of `raw_entry_ptr` is valid.
                     // string_offset + key.len() <= space_size.
                     unsafe {
-                        let dst = string_local_space_ptr.add(string_offset);
                         (*raw_entry_ptr).row_ptr = row_ptr;
                         (*raw_entry_ptr).length = key.len() as u32;
                         (*raw_entry_ptr).next = 0;
-                        (*raw_entry_ptr).key = dst;
+                        (*raw_entry_ptr).key = string_local_space_ptr;
                         // The size of `early` is 4.
                         std::ptr::copy_nonoverlapping(
                             key.as_ptr(),
                             (*raw_entry_ptr).early.as_mut_ptr(),
                             std::cmp::min(STRING_EARLY_SIZE, key.len()),
                         );
-                        std::ptr::copy_nonoverlapping(key.as_ptr(), dst, key.len());
+                        std::ptr::copy_nonoverlapping(key.as_ptr(), string_local_space_ptr, key.len());
+                        string_local_space_ptr = string_local_space_ptr.add(key.len());
                     }
-                    string_offset += key.len();
 
                     $table.insert(key, raw_entry_ptr);
+                    raw_entry_ptr = unsafe { raw_entry_ptr.add(1) };
                 }
+                local_raw_entry_spaces.push(entry_local_space);
+                local_raw_entry_spaces.push(string_local_space);
             }};
         }
 
-        let func_ctx = self.ctx.get_function_context()?;
         let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
         let mut has_null = false;
         for chunk_index in task.0..task.1 {
@@ -479,7 +463,7 @@ impl HashJoinBuildState {
 
             let chunk = &mut chunks[chunk_index];
 
-            let evaluator = Evaluator::new(chunk, &func_ctx, &BUILTIN_FUNCTIONS);
+            let evaluator = Evaluator::new(chunk, &self.func_ctx, &BUILTIN_FUNCTIONS);
             let columns: Vec<(Column, DataType)> = self
                 .hash_join_state
                 .hash_join_desc

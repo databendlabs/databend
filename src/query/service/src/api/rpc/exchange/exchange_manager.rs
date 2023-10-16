@@ -807,6 +807,8 @@ impl FragmentCoordinator {
 
             let pipeline_ctx = QueryContext::create_from(ctx);
             let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx.get_function_context()?,
+                pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 enable_profiling,
                 SharedProcessorProfiles::default(),

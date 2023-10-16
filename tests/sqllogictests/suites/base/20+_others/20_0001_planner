@@ -30,6 +30,20 @@ select extract(day from to_date('2022-05-13'))
 ----
 13
 
+query I
+select date_part(day, to_date('2022-05-13'))
+----
+13
+
+query I
+select extract(week from to_timestamp('2016-01-02T23:39:20.123-07:00'))
+----
+53
+
+query I
+select date_part(week, to_timestamp('2016-01-02T23:39:20.123-07:00'))
+----
+53
 
 query T
 select date_trunc(month, to_date('2022-07-07'))
@@ -964,6 +978,11 @@ select number from temp
 statement ok
 drop view temp
 
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
 
 statement ok
 create table t1(a int, b int)

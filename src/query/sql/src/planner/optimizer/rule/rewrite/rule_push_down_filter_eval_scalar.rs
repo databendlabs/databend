@@ -14,13 +14,11 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::RuleID;
 use crate::optimizer::rule::TransformResult;
-use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
@@ -44,7 +42,7 @@ use crate::MetadataRef;
 pub struct RulePushDownFilterEvalScalar {
     id: RuleID,
     patterns: Vec<SExpr>,
-    metadata: MetadataRef,
+    _metadata: MetadataRef,
 }
 
 impl RulePushDownFilterEvalScalar {
@@ -78,7 +76,7 @@ impl RulePushDownFilterEvalScalar {
                     ))),
                 )),
             )],
-            metadata,
+            _metadata: metadata,
         }
     }
 
@@ -91,10 +89,7 @@ impl RulePushDownFilterEvalScalar {
                         return Ok(item.scalar.clone());
                     }
                 }
-                Err(ErrorCode::UnknownColumn(format!(
-                    "Cannot find column to replace `{}`(#{})",
-                    column.column.column_name, column.column.index
-                )))
+                Ok(predicate.clone())
             }
             ScalarExpr::WindowFunction(window) => {
                 let func = match &window.func {
@@ -253,61 +248,47 @@ impl Rule for RulePushDownFilterEvalScalar {
     }
 
     fn apply(&self, s_expr: &SExpr, state: &mut TransformResult) -> Result<()> {
-        let mut filter: Filter = s_expr.plan().clone().try_into()?;
-
-        let mut used_columns = ColumnSet::new();
-        for pred in filter.predicates.iter() {
-            used_columns = used_columns.union(&pred.used_columns()).cloned().collect();
-        }
-
-        let input = s_expr.child(0)?;
+        let filter: Filter = s_expr.plan().clone().try_into()?;
         let eval_scalar: EvalScalar = s_expr.child(0)?.plan().clone().try_into()?;
-
-        let rel_expr = RelExpr::with_s_expr(input);
-        let eval_scalar_child_prop = rel_expr.derive_relational_prop_child(0)?;
-
         let scalar_rel_expr = RelExpr::with_s_expr(s_expr);
         let eval_scalar_prop = scalar_rel_expr.derive_relational_prop_child(0)?;
 
-        let metadata = self.metadata.read();
-        let table_entries = metadata.tables();
-        let is_source_of_view = table_entries.iter().any(|t| t.is_source_of_view());
+        let mut remaining_predicates = vec![];
+        let mut pushed_down_predicates = vec![];
 
-        // Replacing `DerivedColumn` in `Filter` with the column expression defined in the view.
-        // This allows us to eliminate the `EvalScalar` and push the filter down to the `Scan`.
-        if (used_columns.is_subset(&eval_scalar_prop.output_columns)
-            && !used_columns.is_subset(&eval_scalar_child_prop.output_columns))
-            || is_source_of_view
-        {
-            let new_predicates = &filter
-                .predicates
-                .iter()
-                .map(|predicate| Self::replace_predicate(predicate, &eval_scalar.items))
-                .collect::<Result<Vec<ScalarExpr>>>()?;
-
-            filter.predicates = new_predicates.to_vec();
-
-            used_columns.clear();
-            for pred in filter.predicates.iter() {
-                used_columns = used_columns.union(&pred.used_columns()).cloned().collect();
+        for pred in filter.predicates.iter() {
+            if pred
+                .used_columns()
+                .is_subset(&eval_scalar_prop.output_columns)
+            {
+                // Replace `BoundColumnRef` with the column expression introduced in `EvalScalar`.
+                let rewritten_predicate = Self::replace_predicate(pred, &eval_scalar.items)?;
+                pushed_down_predicates.push(rewritten_predicate);
+            } else {
+                remaining_predicates.push(pred.clone());
             }
         }
 
-        // Check if `Filter` can be satisfied by children of `EvalScalar`
-        if used_columns.is_subset(&eval_scalar_child_prop.output_columns) {
-            // TODO(leiysky): partial push down conjunctions
-            // For example, `select a from (select a, a+1 as b from t) where a = 1 and b = 2`
-            // can be optimized as `select a from (select a, a+1 as b from t where a = 1) where b = 2`
-            let new_expr = SExpr::create_unary(
-                Arc::new(eval_scalar.into()),
-                Arc::new(SExpr::create_unary(
-                    Arc::new(filter.into()),
-                    Arc::new(input.child(0)?.clone()),
-                )),
-            );
-            state.add_result(new_expr);
+        let mut result = s_expr.child(0)?.child(0)?.clone();
+
+        if !pushed_down_predicates.is_empty() {
+            let pushed_down_filter = Filter {
+                predicates: pushed_down_predicates,
+            };
+            result = SExpr::create_unary(Arc::new(pushed_down_filter.into()), Arc::new(result));
         }
 
+        result = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(result));
+
+        if !remaining_predicates.is_empty() {
+            let remaining_filter = Filter {
+                predicates: remaining_predicates,
+            };
+            result = SExpr::create_unary(Arc::new(remaining_filter.into()), Arc::new(result));
+            result.set_applied_rule(&self.id);
+        }
+
+        state.add_result(result);
         Ok(())
     }
 
