@@ -95,7 +95,6 @@ impl<'a> FuseEncoding<'a> {
             )));
         }
         let column_id = field.column_id;
-        // let arrow_field = schema.to_arrow().fields[schema.index_of(&self.column).unwrap()];
         let arrow_field: Field = field.into();
         let mut pages_info = vec![];
         for chunk in snapshot.segments.chunks(chunk_size) {
