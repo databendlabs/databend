@@ -391,7 +391,7 @@ impl MetaConfig {
             } else {
                 None
             },
-            unhealth_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
+            unhealthy_endpoint_evict_time: Duration::from_secs(self.unhealth_endpoint_evict_time),
         }
     }
 }

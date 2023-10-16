@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
+use ethnum::AsI256;
 use itertools::Itertools;
 use num_traits::NumCast;
 use num_traits::ToPrimitive;
@@ -378,7 +379,34 @@ impl Decimal for i128 {
     }
 
     fn from_float(value: f64) -> Self {
-        value.to_i128().unwrap()
+        // still needs to be optimized.
+        // An implementation similar to float64_as_i256 obtained from the ethnum library
+        const M: u64 = (f64::MANTISSA_DIGITS - 1) as u64;
+        const MAN_MASK: u64 = !(!0 << M);
+        const MAN_ONE: u64 = 1 << M;
+        const EXP_MASK: u64 = !0 >> f64::MANTISSA_DIGITS;
+        const EXP_OFFSET: u64 = EXP_MASK / 2;
+        const ABS_MASK: u64 = !0 >> 1;
+        const SIG_MASK: u64 = !ABS_MASK;
+
+        let abs = f64::from_bits(value.to_bits() & ABS_MASK);
+        let sign = -(((value.to_bits() & SIG_MASK) >> (u64::BITS - 2)) as i128).wrapping_sub(1); // if self >= 0. { 1 } else { -1 }
+        if abs >= 1.0 {
+            let bits = abs.to_bits();
+            let exponent = ((bits >> M) & EXP_MASK) - EXP_OFFSET;
+            let mantissa = (bits & MAN_MASK) | MAN_ONE;
+            if exponent <= M {
+                (<i128 as From<u64>>::from(mantissa >> (M - exponent))) * sign
+            } else if exponent < 127 {
+                (<i128 as From<u64>>::from(mantissa) << (exponent - M)) * sign
+            } else if sign > 0 {
+                i128::MAX
+            } else {
+                i128::MIN
+            }
+        } else {
+            Self::zero()
+        }
     }
 
     fn from_u64(value: u64) -> Self {
@@ -523,7 +551,7 @@ impl Decimal for i256 {
     }
 
     fn from_float(value: f64) -> Self {
-        i256::from(value.to_i128().unwrap())
+        value.as_i256()
     }
 
     fn from_u64(value: u64) -> Self {
@@ -1008,7 +1036,6 @@ macro_rules! with_decimal_mapped_type {
         }
     }
 }
-
 // MAX decimal256 value of little-endian format for each precision.
 // Each element is the max value of signed 256-bit integer for the specified precision which
 // is encoded to the 32-byte width format of little-endian.
