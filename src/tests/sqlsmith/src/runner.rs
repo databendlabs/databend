@@ -74,16 +74,18 @@ pub struct Runner {
     count: usize,
     seed: Option<u64>,
     client: Client,
+    timeout: u64,
 }
 
 impl Runner {
-    pub fn new(dsn: String, count: usize, seed: Option<u64>) -> Self {
+    pub fn new(dsn: String, count: usize, seed: Option<u64>, timeout: u64) -> Self {
         let client = Client::new(dsn);
 
         Self {
             count,
             seed,
             client,
+            timeout,
         }
     }
 
@@ -139,15 +141,16 @@ impl Runner {
         let conn = self.client.get_conn().await.unwrap();
         let row_count = 10;
 
-        async fn check_timeout<F>(future: F, sql: String)
+        async fn check_timeout<F>(future: F, sql: String, sec: u64)
         where F: Future {
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(5), future).await {
+            if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
                 tracing::info!("sql: {}", sql);
                 let err = format!("sql timeout: {}", e);
                 tracing::error!(err);
             }
         }
-        for table in &tables {
+        let mut new_tables = tables.clone();
+        for (i, table) in tables.iter().enumerate() {
             let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
@@ -157,6 +160,7 @@ impl Runner {
             check_timeout(
                 async { check_res(conn.exec(&update_sql.clone()).await) },
                 update_sql.clone(),
+                self.timeout,
             )
             .await;
             let delete_stmt = generator.gen_delete(table);
@@ -164,7 +168,7 @@ impl Runner {
             tracing::info!("delete_sql: {}", delete_sql);
             check_res(conn.exec(&delete_sql).await);
             let alter_stmt_opt = generator.gen_alter(table, row_count);
-            if let Some((alter_stmt, insert_stmt_opt)) = alter_stmt_opt {
+            if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
                 let alter_sql = alter_stmt.to_string();
                 tracing::info!("alter_sql: {}", alter_sql);
                 if let Err(err) = conn.exec(&alter_sql).await {
@@ -176,8 +180,11 @@ impl Runner {
                     tracing::info!("after alter insert_sql: {}", insert_sql);
                     if let Err(err) = conn.exec(&insert_sql).await {
                         tracing::error!("after alter insert_sql err: {}", err);
+                        continue;
                     }
                 }
+                // save new table schema
+                new_tables[i] = new_table;
             }
         }
         fn check_res(res: databend_driver::Result<i64>) {
@@ -195,7 +202,7 @@ impl Runner {
                 tracing::error!(err);
             }
         }
-        generator.tables = tables;
+        generator.tables = new_tables;
 
         for _ in 0..self.count {
             let query = generator.gen_query();
@@ -228,6 +235,7 @@ impl Runner {
                     }
                 },
                 query_sql.clone(),
+                self.timeout,
             )
             .await;
             if try_reduce {
