@@ -269,6 +269,14 @@ impl Binder {
             }
         }
 
+        let target_name = if let Some(target_identify) = target_alias {
+            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
+                .name
+                .clone()
+        } else {
+            table_name.clone()
+        };
+
         // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
             matched_evaluators.push(
@@ -278,6 +286,7 @@ impl Binder {
                     &mut columns_set,
                     table_schema.clone(),
                     update_columns_star.clone(),
+                    target_name.as_ref(),
                 )
                 .await?,
             );
@@ -321,6 +330,7 @@ impl Binder {
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
         update_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
+        target_name: &str,
     ) -> Result<MatchedEvaluator> {
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
@@ -348,6 +358,17 @@ impl Binder {
                     let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
                     let col_name =
                         normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
+                    if let Some(tbl_identify) = &update_expr.table {
+                        let update_table_name =
+                            normalize_identifier(tbl_identify, &self.name_resolution_ctx).name;
+                        if &update_table_name != target_name {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Update Indentify's `{}` should be `{}`",
+                                update_table_name, target_name
+                            )));
+                        }
+                    }
+
                     let index = schema.index_of(&col_name)?;
 
                     if update_columns.contains_key(&index) {

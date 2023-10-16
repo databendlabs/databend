@@ -2629,12 +2629,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
-        |((catalog, table, name), _, expr)| MergeUpdateExpr {
-            catalog,
-            table,
-            name,
-            expr,
-        },
+        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
     )(i)
 }
