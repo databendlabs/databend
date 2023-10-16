@@ -155,12 +155,12 @@ pub struct ClientHandle {
 
 impl ClientHandle {
     /// Send a request to the internal worker task, which may be running in another runtime.
-    pub async fn request<Req, Resp, E>(&self, req: Req) -> Result<Resp, E>
+    pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
-        Req: RequestFor<Reply = Resp>,
+        Req: RequestFor,
         Req: Into<message::Request>,
-        Result<Resp, E>: TryFrom<message::Response>,
-        <Result<Resp, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
+        Result<Req::Reply, E>: TryFrom<message::Response>,
+        <Result<Req::Reply, E> as TryFrom<message::Response>>::Error: std::fmt::Display,
         E: From<MetaClientError> + Debug,
     {
         static META_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
@@ -212,9 +212,15 @@ impl ClientHandle {
             })?;
 
             grpc_metrics::incr_meta_grpc_client_request_inflight(-1);
-            let res: Result<Resp, E> = res
+            let res: Result<Req::Reply, E> = res
                 .try_into()
-                .map_err(|e| format!("expect: {}, got: {}", std::any::type_name::<Resp>(), e))
+                .map_err(|e| {
+                    format!(
+                        "expect: {}, got: {}",
+                        std::any::type_name::<Req::Reply>(),
+                        e
+                    )
+                })
                 .unwrap();
 
             res
