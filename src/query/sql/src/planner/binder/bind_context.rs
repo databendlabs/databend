@@ -212,11 +212,6 @@ impl BindContext {
         bind_context
     }
 
-    /// Generate a new BindContext and take current BindContext as its parent.
-    pub fn push(self) -> Self {
-        Self::with_parent(Box::new(self))
-    }
-
     /// Returns all column bindings in current scope.
     pub fn all_column_bindings(&self) -> &[ColumnBinding] {
         &self.columns
