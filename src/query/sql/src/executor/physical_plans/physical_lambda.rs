@@ -164,7 +164,7 @@ impl PhysicalPlanBuilder {
 
                     let expr = func
                         .lambda_expr
-                        .resolve_and_check(&lambda_schema)?
+                        .type_check(&lambda_schema)?
                         .project_column_ref(|index| {
                             lambda_schema.index_of(&index.to_string()).unwrap()
                         });

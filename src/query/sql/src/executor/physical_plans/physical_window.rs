@@ -215,10 +215,7 @@ impl PhysicalPlanBuilder {
                 _ => None,
             };
 
-            let mut common_ty = order_by
-                .resolve_and_check(&*input_schema)?
-                .data_type()
-                .clone();
+            let mut common_ty = order_by.type_check(&*input_schema)?.data_type().clone();
             for scalar in start.iter_mut().chain(end.iter_mut()) {
                 let ty = scalar.as_ref().infer_data_type();
                 common_ty = common_super_type(

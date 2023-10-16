@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -176,11 +175,6 @@ impl DataSchema {
             }
         }
         false
-    }
-
-    pub fn fields_map(&self) -> BTreeMap<FieldIndex, DataField> {
-        let x = self.fields().iter().cloned().enumerate();
-        x.collect::<BTreeMap<_, _>>()
     }
 
     /// Returns an immutable reference of a specific `Field` instance selected using an
@@ -552,11 +546,6 @@ impl TableSchema {
         self.fields[i].name = new_name.to_string();
     }
 
-    pub fn fields_map(&self) -> BTreeMap<FieldIndex, TableField> {
-        let x = self.fields().iter().cloned().enumerate();
-        x.collect::<BTreeMap<_, _>>()
-    }
-
     /// Returns an immutable reference of a specific `Field` instance selected using an
     /// offset within the internal `fields` vector.
     pub fn field(&self, i: FieldIndex) -> &TableField {
@@ -627,7 +616,7 @@ impl TableSchema {
         }
     }
 
-    /// project with inner columns by path.
+    /// Project with inner columns by path.
     pub fn inner_project(&self, path_indices: &BTreeMap<FieldIndex, Vec<FieldIndex>>) -> Self {
         let paths: Vec<Vec<usize>> = path_indices.values().cloned().collect();
         let schema_fields = self.fields();
@@ -1036,8 +1025,10 @@ impl TableField {
     // `leaf_column_ids` return only the child column id.
     // if field is Tuple(t1, t2), it will return a column id vector of 2 column id.
     pub fn leaf_column_ids(&self) -> Vec<ColumnId> {
-        let h: BTreeSet<u32> = BTreeSet::from_iter(self.column_ids().iter().cloned());
-        h.into_iter().sorted().collect()
+        let mut column_ids = self.column_ids();
+        column_ids.sort();
+        column_ids.dedup();
+        column_ids
     }
 
     // `column_ids` contains nest-type parent column id,

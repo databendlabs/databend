@@ -84,11 +84,11 @@ impl PhysicalPlanBuilder {
         {
             let left_expr = left
                 .1
-                .resolve_and_check(left_schema.as_ref())?
+                .type_check(left_schema.as_ref())?
                 .project_column_ref(|index| left_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right
                 .1
-                .resolve_and_check(right_schema.as_ref())?
+                .type_check(right_schema.as_ref())?
                 .project_column_ref(|index| right_schema.index_of(&index.to_string()).unwrap());
 
             let common_ty = common_super_type(left_expr.data_type().clone(), right_expr.data_type().clone(), &BUILTIN_FUNCTIONS.default_cast_rules)
