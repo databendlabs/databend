@@ -77,7 +77,7 @@ impl FuseTable {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
-        distributed_recieve: bool,
+        distributed_receive: bool,
     ) -> Result<PipeItem> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let aggregator = MatchedAggregator::create(
@@ -89,7 +89,7 @@ impl FuseTable {
             block_builder,
             io_request_semaphore,
             segment_locations,
-            distributed_recieve,
+            distributed_receive,
         )?;
         Ok(aggregator.into_pipe_item())
     }

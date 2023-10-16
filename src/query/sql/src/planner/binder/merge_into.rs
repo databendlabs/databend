@@ -363,7 +363,7 @@ impl Binder {
                             normalize_identifier(tbl_identify, &self.name_resolution_ctx).name;
                         if &update_table_name != target_name {
                             return Err(ErrorCode::BadArguments(format!(
-                                "Update Indentify's `{}` should be `{}`",
+                                "Update Identify's `{}` should be `{}`",
                                 update_table_name, target_name
                             )));
                         }

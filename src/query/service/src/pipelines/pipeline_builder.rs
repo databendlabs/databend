@@ -316,7 +316,7 @@ impl PipelineBuilder {
 
             segments,
         } = merge_into_row_id_apply;
-        // recieve rowids and MutationLogs
+        // receive rowids and MutationLogs
         self.build_pipeline(input)?;
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
         let tbl = self
@@ -709,7 +709,7 @@ impl PipelineBuilder {
                 false,
             )?);
         } else {
-            // distributed exectution
+            // distributed execution
             pipe_items.push(create_dummy_item())
         }
 

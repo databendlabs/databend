@@ -82,7 +82,7 @@ pub struct MatchedAggregator {
     block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
     aggregation_ctx: Arc<AggregationContext>,
     entries: Vec<MutationLogEntry>,
-    distributed_recieve: bool,
+    distributed_receive: bool,
 }
 
 impl MatchedAggregator {
@@ -96,7 +96,7 @@ impl MatchedAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
-        distributed_recieve: bool,
+        distributed_receive: bool,
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
@@ -127,7 +127,7 @@ impl MatchedAggregator {
             block_mutation_row_offset: HashMap::new(),
             segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
             entries: Vec::new(),
-            distributed_recieve,
+            distributed_receive,
         })
     }
 
@@ -136,7 +136,7 @@ impl MatchedAggregator {
         // we need to distinct MutationLogs and RowIds
         // this operation is lightweight.
         let logs = MutationLogs::try_from(data_block.clone());
-        if self.distributed_recieve && logs.is_ok() {
+        if self.distributed_receive && logs.is_ok() {
             self.entries.extend(logs.unwrap().entries);
             return Ok(());
         }
