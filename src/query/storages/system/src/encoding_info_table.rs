@@ -29,7 +29,7 @@ pub struct EncodingInfoTable {
 
 #[async_trait::async_trait]
 impl AsyncSystemTable for EncodingInfoTable {
-    const NAME: &'static str = "system.background_jobs";
+    const NAME: &'static str = "system.encoding_info";
 
     fn get_table_info(&self) -> &TableInfo {
         &self.table_info
