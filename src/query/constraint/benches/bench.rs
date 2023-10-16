@@ -25,7 +25,7 @@ use criterion::black_box;
 use criterion::Criterion;
 
 fn bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("bench_parser");
+    let mut group = c.benchmark_group("bench_solver");
     group.sample_size(10);
 
     group.bench_function("solve_variable_not_null", |b| {
