@@ -13,8 +13,11 @@ See also: [EXTRACT](extract.md)
 ## Syntax
 
 ```sql
-DATE_PART( YEAR | QUARTER | MONTH | WEEK | DAY | HOUR | MINUTE | SECOND, <date_or_time_expr> )
+DATE_PART( YEAR | QUARTER | MONTH | WEEK | DAY | HOUR | MINUTE | SECOND | DOW | DOY, <date_or_time_expr> )
 ```
+
+- DOW: Day of Week.
+- DOY: Day of Year.
 
 ## Return Type
 
@@ -27,13 +30,27 @@ SELECT NOW();
 
 now()                |
 ---------------------+
-2023-10-13 08:40:36.0|
+2023-10-16 02:09:28.0|
 
 SELECT DATE_PART(DAY, NOW());
 
 date_part(day, now())|
 ---------------------+
-                   13|
+                   16|
+
+-- October 16, 2023, is a Monday
+SELECT DATE_PART(DOW, NOW());
+
+date_part(dow, now())|
+---------------------+
+                    1|
+
+-- October 16, 2023, is the 289th day of the year
+SELECT DATE_PART(DOY, NOW());
+
+date_part(doy, now())|
+---------------------+
+                  289|
 
 SELECT DATE_PART(MONTH, TO_DATE('2022-05-13'));
 
