@@ -116,7 +116,7 @@ impl SharedStatus {
 
     #[inline(always)]
     pub fn get_flags(&self) -> usize {
-        self.data.load(Ordering::Relaxed) as usize & FLAGS_MASK
+        self.data.load(Ordering::SeqCst) as usize & FLAGS_MASK
     }
 }
 

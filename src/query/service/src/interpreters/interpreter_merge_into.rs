@@ -97,14 +97,6 @@ impl Interpreter for MergeIntoInterpreter {
             operation_name: "merge_into".to_owned(),
         };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
-
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
         } else {
@@ -117,6 +109,15 @@ impl Interpreter for MergeIntoInterpreter {
                 }
             });
         }
+
+        hook_compact(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            compact_target,
+            compact_hook_trace_ctx,
+        )
+        .await;
+
         Ok(build_res)
     }
 }

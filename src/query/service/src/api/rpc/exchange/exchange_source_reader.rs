@@ -13,18 +13,23 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::EventCause;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::TransformDummy;
+use log::info;
 
 use crate::api::rpc::exchange::metrics::metrics_inc_exchange_read_bytes;
 use crate::api::rpc::exchange::metrics::metrics_inc_exchange_read_count;
@@ -33,7 +38,7 @@ use crate::api::rpc::flight_client::FlightReceiver;
 use crate::api::DataPacket;
 
 pub struct ExchangeSourceReader {
-    finished: bool,
+    finished: AtomicBool,
     output: Arc<OutputPort>,
     output_data: Vec<DataPacket>,
     flight_receiver: FlightReceiver,
@@ -44,7 +49,7 @@ impl ExchangeSourceReader {
         ProcessorPtr::create(Box::new(ExchangeSourceReader {
             output,
             flight_receiver,
-            finished: false,
+            finished: AtomicBool::new(false),
             output_data: vec![],
         }))
     }
@@ -60,15 +65,14 @@ impl Processor for ExchangeSourceReader {
         self
     }
 
-    fn event(&mut self) -> common_exception::Result<Event> {
-        if self.finished {
+    fn event(&mut self) -> Result<Event> {
+        if self.finished.load(Ordering::SeqCst) {
             self.output.finish();
             return Ok(Event::Finished);
         }
 
         if self.output.is_finished() {
-            if !self.finished {
-                self.finished = true;
+            if !self.finished.swap(true, Ordering::SeqCst) {
                 self.flight_receiver.close();
             }
 
@@ -89,8 +93,21 @@ impl Processor for ExchangeSourceReader {
         Ok(Event::Async)
     }
 
+    fn un_reacted(&self, cause: EventCause, id: usize) -> Result<()> {
+        if let EventCause::Output(_) = cause {
+            if self.output.is_finished() {
+                info!("un_reacted output finished, id {}", id);
+                if !self.finished.swap(true, Ordering::SeqCst) {
+                    self.flight_receiver.close();
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     #[async_backtrace::framed]
-    async fn async_process(&mut self) -> common_exception::Result<()> {
+    async fn async_process(&mut self) -> Result<()> {
         if self.output_data.is_empty() {
             let mut bytes = 0;
             let mut dictionaries = Vec::new();
@@ -110,11 +127,10 @@ impl Processor for ExchangeSourceReader {
                 dictionaries.push(output_data);
             }
 
-            assert!(dictionaries.is_empty());
+            // assert!(dictionaries.is_empty());
         }
 
-        if !self.finished {
-            self.finished = true;
+        if !self.finished.swap(true, Ordering::SeqCst) {
             self.flight_receiver.close();
         }
 

@@ -108,7 +108,7 @@ pub struct QueryContext {
     query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
     // Used by synchronized generate aggregating indexes when new data written.
-    inserted_segment_locs: Arc<RwLock<Vec<Location>>>,
+    inserted_segment_locs: Arc<RwLock<HashSet<Location>>>,
 }
 
 impl QueryContext {
@@ -129,7 +129,7 @@ impl QueryContext {
             shared,
             query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
-            inserted_segment_locs: Arc::new(RwLock::new(Vec::new())),
+            inserted_segment_locs: Arc::new(RwLock::new(HashSet::new())),
         })
     }
 
@@ -761,12 +761,17 @@ impl TableContext for QueryContext {
 
     fn add_segment_location(&self, segment_loc: Location) -> Result<()> {
         let mut segment_locations = self.inserted_segment_locs.write();
-        segment_locations.push(segment_loc);
+        segment_locations.insert(segment_loc);
         Ok(())
     }
 
     fn get_segment_locations(&self) -> Result<Vec<Location>> {
-        Ok(self.inserted_segment_locs.read().to_vec())
+        Ok(self
+            .inserted_segment_locs
+            .read()
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>())
     }
 
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()> {

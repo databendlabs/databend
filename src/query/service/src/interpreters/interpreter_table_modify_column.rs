@@ -215,12 +215,6 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
         let catalog_info = catalog.info();
 
@@ -277,6 +271,12 @@ impl ModifyTableColumnInterpreter {
         if schema == new_schema {
             return Ok(PipelineBuildResult::create());
         }
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();

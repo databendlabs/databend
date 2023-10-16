@@ -18,8 +18,8 @@ crate-type = ["cdylib"]
 pyo3 = { version = "0.19.1", features = ["extension-module", "abi3", "abi3-py37"] }
 uuid = { version = "1.1.2" }
 # Workspace dependencies
-arrow = { version = "46.0.0", features = ["pyarrow"] }
-arrow-schema = "46.0.0"
+arrow = { workspace = true }
+arrow-schema = { workspace = true }
 
 common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
