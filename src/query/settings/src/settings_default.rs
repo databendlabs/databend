@@ -428,6 +428,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_distributed_recluster", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable distributed execution of table recluster.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

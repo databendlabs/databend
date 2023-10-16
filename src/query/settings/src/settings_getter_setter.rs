@@ -373,6 +373,10 @@ impl Settings {
         self.try_get_u64("recluster_block_size")
     }
 
+    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
+    }
+
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_refresh_aggregating_index_after_write")? != 0)
     }

@@ -97,10 +97,11 @@ impl FuseTable {
             return Ok(None);
         };
 
-        let mut nodes_num = 1;
+        let settings = ctx.get_settings();
+        let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() {
-            nodes_num = cluster.nodes.len();
+        if !cluster.is_empty() && settings.get_enable_distributed_recluster()?{
+            max_tasks = cluster.nodes.len();
         }
 
         let schema = self.schema();
@@ -123,13 +124,13 @@ impl FuseTable {
             threshold,
             block_thresholds,
             default_cluster_key_id,
-            nodes_num,
+            max_tasks,
         )?;
 
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads = settings.get_max_threads()? as usize;
         let limit = limit.unwrap_or(1000);
 
         'F: for chunk in segment_locations.chunks(limit) {
