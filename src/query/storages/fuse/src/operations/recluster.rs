@@ -100,7 +100,7 @@ impl FuseTable {
         let settings = ctx.get_settings();
         let mut max_tasks = 1;
         let cluster = ctx.get_cluster();
-        if !cluster.is_empty() && settings.get_enable_distributed_recluster()?{
+        if !cluster.is_empty() && settings.get_enable_distributed_recluster()? {
             max_tasks = cluster.nodes.len();
         }
 
