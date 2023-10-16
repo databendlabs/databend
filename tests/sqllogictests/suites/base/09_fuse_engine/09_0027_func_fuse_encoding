@@ -31,26 +31,24 @@ statement ok
 create table t2(c varchar) storage_format = 'native' compression = 'lz4';
 
 statement ok
-create table t3(c int) storage_format = 'native' compression = 'lz4';
+insert into t2 select 'a' as a from numbers(10) limit 10;
 
 statement ok
-insert into t3 select 1 from t limit 1024;
-
-statement ok
-insert into t3 select 2 from t limit 1024;
-
-statement ok
-insert into t2 select c from t3;
+insert into t2 select 'b' as a from numbers(10) limit 10;
 
 query III
 select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t2','c') group by level_one,level_two order by level_one;
 ----
-Dict Rle 1
-
-query III
-select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t3','c') group by level_one,level_two order by level_one;
-----
 OneValue NULL 2
 
 statement ok
-DROP DATABASE db_09_0008
+optimize table t2 compact;
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t2','c') group by level_one,level_two order by level_one;
+----
+Dict Rle 1 
+
+
+statement ok
+DROP DATABASE db_09_0027
