@@ -108,6 +108,7 @@ impl CopyIntoLocationInterpreter {
             },
             files_to_copy: None,
             is_select: false,
+            default_values: None,
         };
         let to_table = StageTable::try_create(stage_table_info)?;
         build_append2table_with_commit_pipeline(
