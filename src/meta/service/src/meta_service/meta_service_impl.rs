@@ -15,7 +15,6 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -24,16 +23,12 @@ use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_tracing::func_name;
 use minitrace::prelude::*;
-use tokio_stream::Stream;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
-
-pub type GrpcStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,

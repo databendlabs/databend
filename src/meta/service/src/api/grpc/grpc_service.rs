@@ -48,6 +48,7 @@ use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
+use tonic::codegen::BoxStream;
 use tonic::metadata::MetadataMap;
 use tonic::transport::NamedService;
 use tonic::Request;
@@ -55,7 +56,6 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::meta_service::meta_service_impl::GrpcStream;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -158,8 +158,7 @@ impl NamedService for MetaServiceImpl {
 
 #[async_trait::async_trait]
 impl MetaService for MetaServiceImpl {
-    // rpc handshake related type
-    type HandshakeStream = GrpcStream<HandshakeResponse>;
+    type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
     #[minitrace::trace]
