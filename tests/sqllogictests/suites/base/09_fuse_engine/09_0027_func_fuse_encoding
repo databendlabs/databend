@@ -1,0 +1,56 @@
+statement ok
+DROP DATABASE IF EXISTS db_09_0027
+
+statement ok
+CREATE DATABASE db_09_0027
+
+statement ok
+USE db_09_0027
+
+statement ok
+create table t(c int) storage_format = 'native' compression = 'lz4';
+
+statement ok
+insert into t select number from numbers(2048);
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t','c') group by level_one,level_two;
+----
+DeltaBitpack NULL 1
+
+statement ok
+insert into t select 1 from t limit 2048;
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t','c') group by level_one,level_two order by level_one;
+----
+DeltaBitpack NULL 1
+OneValue NULL 1
+
+statement ok
+create table t2(c varchar) storage_format = 'native' compression = 'lz4';
+
+statement ok
+create table t3(c int) storage_format = 'native' compression = 'lz4';
+
+statement ok
+insert into t3 select 1 from t limit 1024;
+
+statement ok
+insert into t3 select 2 from t limit 1024;
+
+statement ok
+insert into t2 select c from t3;
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t2','c') group by level_one,level_two order by level_one;
+----
+Dict Rle 1
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('db_09_0027','t3','c') group by level_one,level_two order by level_one;
+----
+OneValue NULL 2
+
+statement ok
+DROP DATABASE db_09_0008
