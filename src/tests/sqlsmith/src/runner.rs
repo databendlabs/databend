@@ -133,6 +133,31 @@ impl Runner {
         Ok(tables)
     }
 
+    async fn check_timeout<F>(future: F, sql: String, sec: u64)
+    where F: Future {
+        if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
+            tracing::info!("sql: {}", sql);
+            let err = format!("sql timeout: {}", e);
+            tracing::error!(err);
+        }
+    }
+
+    fn check_res(res: databend_driver::Result<i64>) {
+        if let Err(Error::Api(ClientError::InvalidResponse(err))) = res {
+            if err.code == 1005 || err.code == 1065 {
+                return;
+            }
+            if KNOWN_ERRORS
+                .iter()
+                .any(|known_err| err.message.starts_with(known_err))
+            {
+                return;
+            }
+            let err = format!("sql exec err: {}", err.message);
+            tracing::error!(err);
+        }
+    }
+
     pub async fn run(&self) {
         let mut rng = Self::generate_rng(self.seed);
         let mut generator = SqlGenerator::new(&mut rng);
@@ -141,32 +166,13 @@ impl Runner {
         let conn = self.client.get_conn().await.unwrap();
         let row_count = 10;
 
-        async fn check_timeout<F>(future: F, sql: String, sec: u64)
-        where F: Future {
-            if let Err(e) = tokio::time::timeout(Duration::from_secs(sec), future).await {
-                tracing::info!("sql: {}", sql);
-                let err = format!("sql timeout: {}", e);
-                tracing::error!(err);
-            }
-        }
         let mut new_tables = tables.clone();
         for (i, table) in tables.iter().enumerate() {
             let insert_stmt = generator.gen_insert(table, row_count);
             let insert_sql = insert_stmt.to_string();
             tracing::info!("insert_sql: {}", insert_sql);
             conn.exec(&insert_sql).await.unwrap();
-            let update_sql = generator.gen_update(table).to_string();
-            tracing::info!("update_sql: {}", update_sql);
-            check_timeout(
-                async { check_res(conn.exec(&update_sql.clone()).await) },
-                update_sql.clone(),
-                self.timeout,
-            )
-            .await;
-            let delete_stmt = generator.gen_delete(table);
-            let delete_sql = delete_stmt.to_string();
-            tracing::info!("delete_sql: {}", delete_sql);
-            check_res(conn.exec(&delete_sql).await);
+
             let alter_stmt_opt = generator.gen_alter(table, row_count);
             if let Some((alter_stmt, new_table, insert_stmt_opt)) = alter_stmt_opt {
                 let alter_sql = alter_stmt.to_string();
@@ -175,6 +181,8 @@ impl Runner {
                     tracing::error!("alter_sql err: {}", err);
                     continue;
                 }
+                // save new table schema
+                new_tables[i] = new_table;
                 if let Some(insert_stmt) = insert_stmt_opt {
                     let insert_sql = insert_stmt.to_string();
                     tracing::info!("after alter insert_sql: {}", insert_sql);
@@ -183,34 +191,57 @@ impl Runner {
                         continue;
                     }
                 }
-                // save new table schema
-                new_tables[i] = new_table;
-            }
-        }
-        fn check_res(res: databend_driver::Result<i64>) {
-            if let Err(Error::Api(ClientError::InvalidResponse(err))) = res {
-                if err.code == 1005 || err.code == 1065 {
-                    return;
-                }
-                if KNOWN_ERRORS
-                    .iter()
-                    .any(|known_err| err.message.starts_with(known_err))
-                {
-                    return;
-                }
-                let err = format!("sql exec err: {}", err.message);
-                tracing::error!(err);
             }
         }
         generator.tables = new_tables;
 
+        // generate update or delete
+        for _ in 0..4 {
+            if generator.flip_coin() {
+                let update_sql = generator.gen_update().to_string();
+                tracing::info!("update_sql: {}", update_sql);
+                Self::check_timeout(
+                    async { Self::check_res(conn.exec(&update_sql.clone()).await) },
+                    update_sql.clone(),
+                    self.timeout,
+                )
+                .await;
+            } else {
+                let delete_stmt = generator.gen_delete();
+                let delete_sql = delete_stmt.to_string();
+                tracing::info!("delete_sql: {}", delete_sql);
+                Self::check_timeout(
+                    async { Self::check_res(conn.exec(&delete_sql.clone()).await) },
+                    delete_sql.clone(),
+                    self.timeout,
+                )
+                .await;
+            }
+        }
+
+        // generate merge into
+        let enable_merge = "set enable_experimental_merge_into = 1".to_string();
+        conn.exec(&enable_merge).await.unwrap();
+        for _ in 0..20 {
+            let merge = generator.gen_merge();
+            let merge_sql = merge.to_string();
+            tracing::info!("merge_sql: {}", merge_sql);
+            Self::check_timeout(
+                async { Self::check_res(conn.exec(&merge_sql.clone()).await) },
+                merge_sql.clone(),
+                self.timeout,
+            )
+            .await;
+        }
+
+        // generate query
         for _ in 0..self.count {
             let query = generator.gen_query();
             let query_sql = query.to_string();
             let mut try_reduce = false;
             let mut err_code = 0;
             let mut err = String::new();
-            check_timeout(
+            Self::check_timeout(
                 async {
                     if let Err(e) = conn.exec(&query_sql).await {
                         if let Error::Api(ClientError::InvalidResponse(err)) = &e {

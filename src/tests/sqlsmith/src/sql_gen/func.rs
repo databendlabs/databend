@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::mem;
+
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Lambda;
@@ -32,6 +34,7 @@ use common_expression::types::ALL_FLOAT_TYPES;
 use common_expression::types::ALL_INTEGER_TYPES;
 use rand::Rng;
 
+use crate::sql_gen::Column;
 use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
@@ -669,6 +672,56 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 })
             },
         }
+    }
+
+    pub(crate) fn gen_lambda_func(&mut self, ty: &DataType) -> Expr {
+        // return value of lambda function must be an array type
+        if !matches!(ty, &DataType::Array(_)) {
+            return self.gen_simple_expr(ty);
+        }
+        let inner_ty = ty.as_array().unwrap();
+
+        let current_cte_tables = mem::take(&mut self.cte_tables);
+        let current_bound_tables = mem::take(&mut self.bound_tables);
+        let current_bound_columns = mem::take(&mut self.bound_columns);
+        let current_is_join = self.is_join;
+
+        self.cte_tables = vec![];
+        self.bound_tables = vec![];
+        self.bound_columns = vec![];
+        self.is_join = false;
+
+        let name = if inner_ty.remove_nullable() == DataType::Boolean {
+            "array_filter".to_string()
+        } else if self.rng.gen_bool(0.5) {
+            "array_transform".to_string()
+        } else {
+            "array_apply".to_string()
+        };
+
+        let args_type = vec![ty.clone()];
+        let lambda_name = format!("l{}", self.gen_random_name());
+        let lambda_column = Column {
+            table_name: "".to_string(),
+            name: lambda_name.clone(),
+            index: 0,
+            data_type: ty.clone(),
+        };
+        self.bound_columns.push(lambda_column);
+
+        let lambda_expr = self.gen_expr(inner_ty);
+
+        let lambda = Lambda {
+            params: vec![Identifier::from_name(lambda_name)],
+            expr: Box::new(lambda_expr),
+        };
+
+        self.cte_tables = current_cte_tables;
+        self.bound_tables = current_bound_tables;
+        self.bound_columns = current_bound_columns;
+        self.is_join = current_is_join;
+
+        self.gen_func(name, vec![], args_type, None, Some(lambda))
     }
 
     fn gen_func(
