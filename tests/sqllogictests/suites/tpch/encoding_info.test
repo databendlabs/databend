@@ -1,0 +1,244 @@
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_acctbal') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_address') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_custkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_mktsegment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_name') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_nationkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','customer','c_phone') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_commitdate') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_discount') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_extendedprice') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_linenumber') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_linestatus') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_orderkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_partkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_quantity') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_receiptdate') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_returnflag') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_shipdate') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_shipinstruct') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_shipmode') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_suppkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','lineitem','l_tax') group by level_one,level_two;
+----
+
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','nation','n_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','nation','n_name') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','nation','n_nationkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','nation','n_regionkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_clerk') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_custkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_orderdate') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_orderkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_orderpriority') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_orderstatus') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_shippriority') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','orders','o_totalprice') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_brand') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_container') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_mfgr') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_name') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_partkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_retailprice') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_size') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','part','p_type') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','partsupp','ps_availqty') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','partsupp','ps_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','partsupp','ps_partkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','partsupp','ps_suppkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','partsupp','ps_supplycost') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','region','r_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','region','r_name') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','region','r_regionkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_acctbal') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_address') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_comment') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_name') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_nationkey') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_phone') group by level_one,level_two;
+----
+
+query III
+select level_one,level_two,count(*) from fuse_encoding('tpch_sf100','supplier','s_suppkey') group by level_one,level_two;
+----
