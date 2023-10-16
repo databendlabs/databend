@@ -56,7 +56,6 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
 use common_meta_types::GrpcConfig;
-use common_meta_types::InvalidArgument;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::MetaHandshakeError;
@@ -877,29 +876,24 @@ impl MetaGrpcClient {
     }
 
     #[minitrace::trace]
-    pub(crate) async fn kv_api<T, R>(&self, v: T) -> Result<R, MetaError>
+    pub(crate) async fn kv_api<T>(&self, v: T) -> Result<T::Reply, MetaError>
     where
-        T: RequestFor<Reply = R>,
+        T: RequestFor,
         T: Into<MetaGrpcReq>,
-        R: DeserializeOwned,
+        T::Reply: DeserializeOwned,
     {
-        let read_req: MetaGrpcReq = v.into();
+        let grpc_req: MetaGrpcReq = v.into();
 
         debug!(
-            req = as_debug!(&read_req);
+            req = as_debug!(&grpc_req);
             "MetaGrpcClient::kv_api request"
         );
 
-        let req: Request<RaftRequest> = read_req.clone().try_into().map_err(|e| {
-            MetaNetworkError::InvalidArgument(InvalidArgument::new(e, "fail to encode request"))
-        })?;
+        let raft_req: RaftRequest = grpc_req
+            .to_raft_request()
+            .map_err(MetaNetworkError::InvalidArgument)?;
 
-        debug!(
-            req = as_debug!(&req);
-            "MetaGrpcClient::kv_api serialized request"
-        );
-
-        let req = common_tracing::inject_span_to_tonic_request(req);
+        let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req.clone()));
 
         let mut client = self
             .make_client()
@@ -925,13 +919,9 @@ impl MetaGrpcClient {
                         .make_client()
                         .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client-2"))
                         .await?;
-                    let req: Request<RaftRequest> = read_req.try_into().map_err(|e| {
-                        MetaNetworkError::InvalidArgument(InvalidArgument::new(
-                            e,
-                            "fail to encode request",
-                        ))
-                    })?;
-                    let req = common_tracing::inject_span_to_tonic_request(req);
+
+                    let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req));
+
                     Ok(client
                         .kv_api(req)
                         .timed_ge(threshold(), info_spent("client::kv_api-2"))
@@ -944,7 +934,7 @@ impl MetaGrpcClient {
         };
         let raft_reply = rpc_res?;
 
-        let resp: R = reply_to_api_result(raft_reply)?;
+        let resp: T::Reply = reply_to_api_result(raft_reply)?;
         Ok(resp)
     }
 
