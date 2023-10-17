@@ -178,9 +178,8 @@ impl PhysicalPlan {
             PhysicalPlan::MaterializedCte(plan) => plan.output_schema(),
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
-
+            PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
             PhysicalPlan::AsyncSourcer(_)
-            | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeIntoRowIdApply(_)

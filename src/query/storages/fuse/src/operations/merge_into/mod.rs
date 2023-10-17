@@ -19,3 +19,5 @@ pub use mutator::MatchedAggregator;
 pub use processors::MatchedSplitProcessor;
 pub use processors::MergeIntoNotMatchedProcessor;
 pub use processors::MergeIntoSplitProcessor;
+pub use processors::TransformDistributedMergeIntoBlockDeserialize;
+pub use processors::TransformDistributedMergeIntoBlockSerialize;

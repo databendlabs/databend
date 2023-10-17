@@ -46,6 +46,7 @@ pub struct MergeInto {
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     pub row_id_idx: usize,
     pub segments: Option<Vec<(usize, Location)>>,
+    pub output_schema: DataSchemaRef,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

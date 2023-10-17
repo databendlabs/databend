@@ -21,6 +21,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
@@ -340,6 +341,7 @@ impl MergeIntoInterpreter {
                 field_index_of_input_schema,
                 row_id_idx,
                 segments: Some(segments),
+                output_schema: DataSchemaRef::default(),
             }))
         } else {
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
@@ -351,6 +353,9 @@ impl MergeIntoInterpreter {
                 field_index_of_input_schema,
                 row_id_idx,
                 segments: None,
+                output_schema: DataSchemaRef::new(DataSchema::new(vec![
+                    join_output_schema.fields[row_id_idx].clone(),
+                ])),
             }));
             let exchange = exchange.unwrap();
             PhysicalPlan::MergeIntoRowIdApply(Box::new(MergeIntoRowIdApply {

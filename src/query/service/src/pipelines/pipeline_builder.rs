@@ -121,6 +121,8 @@ use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
+use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockDeserialize;
+use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockSerialize;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
@@ -318,7 +320,12 @@ impl PipelineBuilder {
         } = merge_into_row_id_apply;
         // receive rowids and MutationLogs
         self.build_pipeline(input)?;
-        let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
+        self.main_pipeline.try_resize(1)?;
+
+        self.main_pipeline
+            .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
+
+        let mut pipe_items = Vec::with_capacity(1);
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -351,7 +358,9 @@ impl PipelineBuilder {
             true,
         )?);
 
-        todo!()
+        self.main_pipeline
+            .add_pipe(Pipe::create(self.main_pipeline.output_len(), 1, pipe_items));
+        Ok(())
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
@@ -516,6 +525,7 @@ impl PipelineBuilder {
             field_index_of_input_schema,
             row_id_idx,
             segments,
+            ..
         } = merge_into;
 
         self.build_pipeline(input)?;
@@ -762,6 +772,12 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
+        // distributed execution
+        if !apply_row_id {
+            self.main_pipeline.try_resize(1)?;
+            self.main_pipeline
+                .add_pipe(TransformDistributedMergeIntoBlockSerialize::into_pipe())
+        }
         Ok(())
     }
 
