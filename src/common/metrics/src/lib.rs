@@ -14,7 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 
-pub mod counter;
+pub mod count;
 mod dump;
 pub mod histogram;
 pub mod registry;

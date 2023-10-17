@@ -106,8 +106,8 @@ mod tests {
     use std::sync::atomic::Ordering;
     use std::sync::Arc;
 
-    use crate::counter::Count;
-    use crate::counter::WithCount;
+    use crate::count::Count;
+    use crate::count::WithCount;
 
     struct Foo {}
     struct Counter {
