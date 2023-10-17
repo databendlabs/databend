@@ -20,7 +20,6 @@ use std::sync::MutexGuard;
 use lazy_static::lazy_static;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 use prometheus_client::encoding::EncodeLabelSet;
-use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::family::MetricConstructor;
 use prometheus_client::metrics::gauge::Gauge;
@@ -30,6 +29,7 @@ use prometheus_client::registry::Registry;
 
 use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
+use crate::resettable::Counter;
 
 lazy_static! {
     pub static ref REGISTRY: Mutex<WrappedRegistry> =
@@ -41,25 +41,23 @@ pub fn load_global_prometheus_registry() -> MutexGuard<'static, WrappedRegistry>
 }
 
 pub fn reset_global_prometheus_registry() {
-    // TODO(liyz): do nothing yet. This function would be trivial once prometheus_client
-    // supports iterating metrics. However it's not supported yet. I've raised an issue about
-    // this: https://github.com/prometheus/client_rust/issues/163 . If this feature request
-    // got denied, we can still wrap a customized Registry which record the metrics by itself.
+    let mut registry = load_global_prometheus_registry();
+    registry.reset();
 }
 
-trait ResetMetric {
+pub trait ResetMetric {
     fn reset_metric(&self);
 }
 
 impl ResetMetric for Counter {
     fn reset_metric(&self) {
-        // TODO: use i64 counter
+        self.reset()
     }
 }
 
 impl ResetMetric for Histogram {
     fn reset_metric(&self) {
-        // do nothing
+        // do nothing yet
     }
 }
 
@@ -67,25 +65,6 @@ impl ResetMetric for Gauge {
     fn reset_metric(&self) {
         let v = self.get();
         self.inc_by(-v);
-    }
-}
-
-#[derive(Default)]
-struct AtomicI64 {
-    inner: std::sync::atomic::AtomicI64,
-}
-
-impl prometheus_client::metrics::counter::Atomic<i64> for AtomicI64 {
-    fn inc(&self) -> i64 {
-        self.inner.fetch_add(1, Ordering::Relaxed)
-    }
-
-    fn inc_by(&self, v: i64) -> i64 {
-        self.inner.fetch_add(v, Ordering::Relaxed)
-    }
-
-    fn get(&self) -> i64 {
-        self.inner.load(Ordering::Relaxed)
     }
 }
 
@@ -97,8 +76,7 @@ impl<S: Clone + std::hash::Hash + Eq, M, C: MetricConstructor<M>> ResetMetric fo
 
 pub struct WrappedRegistry {
     inner: Registry,
-    prefix: String,
-    resetters: Vec<Box<dyn ResetMetric + Send + Sync>>,
+    resetters: Vec<Box<dyn ResetMetric + Send + Sync + 'static>>,
 }
 
 impl WrappedRegistry {
@@ -106,18 +84,19 @@ impl WrappedRegistry {
         let inner = Registry::with_prefix(prefix);
         Self {
             inner,
-            prefix: prefix.to_string(),
             resetters: vec![],
         }
     }
 
-    pub fn register(&mut self, name: &str, help: &str, metric: impl Metric + Clone) {
+    pub fn register(&mut self, name: &str, help: &str, metric: impl Metric + ResetMetric + Clone) {
+        self.resetters.push(Box::new(metric.clone()));
         self.inner.register(name, help, metric);
     }
 
     pub fn reset(&mut self) {
-        let mut inner = Registry::with_prefix(&self.prefix);
-        // TODO: loop the metrics and reset the values
+        for resetter in &self.resetters {
+            resetter.reset_metric();
+        }
     }
 
     pub fn inner_mut(&mut self) -> &mut Registry {

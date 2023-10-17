@@ -43,6 +43,11 @@ impl Counter {
     pub fn get(&self) -> u64 {
         self.value.load(Ordering::Relaxed)
     }
+
+    /// Reset the [`Counter`] to 0.
+    pub fn reset(&self) {
+        self.value.store(0, Ordering::Release)
+    }
 }
 
 impl TypedMetric for Counter {
