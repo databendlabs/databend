@@ -223,7 +223,7 @@ impl TransformHashJoinProbe {
         Ok(Event::NeedData)
     }
 
-    fn reset(&mut self) -> Result<()> {
+    async fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
         // self.probe_state.reset();
         if (self.join_probe_state.hash_join_state.need_outer_scan()
@@ -238,7 +238,7 @@ impl TransformHashJoinProbe {
         if self
             .join_probe_state
             .final_probe_workers
-            .load(Ordering::Relaxed)
+            .fetch_add(1, Ordering::Acquire)
             == 0
         {
             // Before probe processor into `WaitBuild` state, send `1` to channel
@@ -248,11 +248,9 @@ impl TransformHashJoinProbe {
                 .build_done_watcher
                 .send(1)
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-            self.join_probe_state
-                .final_probe_workers
-                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
         self.outer_scan_finished = false;
+        self.join_probe_state.restore_barrier.wait().await;
         Ok(())
     }
 }
@@ -516,7 +514,7 @@ impl Processor for TransformHashJoinProbe {
                     }
                 }
                 self.join_probe_state.restore_barrier.wait().await;
-                self.reset()?;
+                self.reset().await?;
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };
