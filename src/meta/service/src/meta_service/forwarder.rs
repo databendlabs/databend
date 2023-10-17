@@ -60,7 +60,7 @@ impl<'a> MetaForwarder<'a> {
 
         let endpoint = self
             .sto
-            .get_node_endpoint(&target)
+            .get_node_endpoint(target)
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
