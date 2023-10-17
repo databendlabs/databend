@@ -81,8 +81,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                     }
                     TableDataType::Timestamp => {
                         let multi = match max.checked_ilog10().unwrap_or_default() + 1 {
-                            10 => 1_000_000,
-                            13 => 1_000,
+                            0..=10 => 1_000_000,
+                            11..=13 => 1_000,
                             _ => 1,
                         };
                         (
@@ -104,8 +104,8 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
             Statistics::Int96(s) => {
                 let (max, min) = (s.max().to_i64(), s.min().to_i64());
                 let multi = match max.checked_ilog10().unwrap_or_default() + 1 {
-                    10 => 1_000_000,
-                    13 => 1_000,
+                    0..=10 => 1_000_000,
+                    11..=13 => 1_000,
                     _ => 1,
                 };
                 (
