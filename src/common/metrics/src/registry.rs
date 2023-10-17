@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::ops::Deref;
+use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
-use std::sync::atomic::Ordering;
 
 use lazy_static::lazy_static;
 use prometheus_client::encoding::text::encode as prometheus_encode;
@@ -72,7 +72,7 @@ impl ResetMetric for Gauge {
 
 #[derive(Default)]
 struct AtomicI64 {
-    inner: std::sync::atomic::AtomicI64
+    inner: std::sync::atomic::AtomicI64,
 }
 
 impl prometheus_client::metrics::counter::Atomic<i64> for AtomicI64 {

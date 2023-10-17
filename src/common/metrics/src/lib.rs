@@ -18,6 +18,7 @@ pub mod counter;
 mod dump;
 pub mod histogram;
 pub mod registry;
+pub mod resettable;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
