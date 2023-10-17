@@ -34,7 +34,7 @@ pub struct StringRawEntry {
 pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    pub(crate) hash_shift: usize,
+    pub(crate) hash_mask: u64,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
@@ -49,7 +49,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            hash_shift: (64 - capacity.trailing_zeros()) as usize,
+            hash_mask: capacity as u64 - 1,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -58,7 +58,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
     }
 
     pub fn insert(&mut self, key: &[u8], raw_entry_ptr: *mut StringRawEntry) {
-        let index = (key.fast_hash() >> self.hash_shift) as usize;
+        let index = (key.fast_hash() & self.hash_mask) as usize;
         // # Safety
         // `index` is less than the capacity of hash table.
         let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
@@ -89,7 +89,7 @@ where A: Allocator + Clone + 'static
     fn probe(&self, hashes: &mut [u64]) {
         hashes
             .iter_mut()
-            .for_each(|hash| *hash = self.pointers[(*hash >> self.hash_shift) as usize]);
+            .for_each(|hash| *hash = self.pointers[(*hash & self.hash_mask) as usize]);
     }
 
     fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {
