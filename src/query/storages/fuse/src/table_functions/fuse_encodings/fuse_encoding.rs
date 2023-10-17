@@ -152,6 +152,7 @@ impl<'a> FuseEncoding<'a> {
                     .exceptions
                     .as_ref()
                     .map(|e| encoding_to_string(&e.body)),
+                PageBody::Delta(delta) => Some(encoding_to_string(&delta.delta.body)),
                 _ => None,
             };
             if let Some(l2_encoding) = l2_encoding {
@@ -217,5 +218,6 @@ fn encoding_to_string(page_body: &PageBody) -> String {
         PageBody::Bitpack => "Bitpack".to_string(),
         PageBody::DeltaBitpack => "DeltaBitpack".to_string(),
         PageBody::Common(c) => format!("Common({:?})", c),
+        PageBody::Delta(_) => "Delta".to_string(),
     }
 }
