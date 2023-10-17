@@ -1874,7 +1874,9 @@ dependencies = [
 name = "common-constraint"
 version = "0.1.0"
 dependencies = [
+ "common-ast",
  "criterion",
+ "goldenfile",
  "z3",
 ]
 
@@ -2646,7 +2648,6 @@ dependencies = [
  "storages-common-table-meta",
  "time",
  "url",
- "z3",
 ]
 
 [[package]]
