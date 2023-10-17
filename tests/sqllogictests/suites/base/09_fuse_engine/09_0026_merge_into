@@ -40,13 +40,17 @@ select * from t2 order by a,b,c;
 2 b_7 c_7
 3 b_6 c_6
 
+## test source alias 
+statement error 1005
+merge into t1 using (select * from t2 ) on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
+
 # section I: basic test for match and unmatch
 
 statement error 1006
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c,t1.c = t2.c;
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -68,7 +72,7 @@ select * from t2 order by a,b,c;
 4 b_8 c_8
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -83,7 +87,7 @@ statement ok
 insert into t2 values(1,'b_9','c_9');
 
 statement error 4001
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -116,7 +120,7 @@ select * from t2 order by a,b,c;
 5 b_9 c_9
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then delete;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete;
 
 query ITT
 select * from t1 order by a,b,c;
@@ -135,10 +139,10 @@ select * from t1 order by a,b,c;
 3 b_2 c_2
 
 statement error 1065
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched and t1.b = 'b_1' then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched and t1.b = 'b_1' then delete when matched then update set t1.c = t2.c when not matched and t2.c = 'c_8' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -148,7 +152,7 @@ select * from t1 order by a,b,c;
 4 b_8 c_8
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then delete when not matched and t2.c = 'c_9' then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -157,7 +161,7 @@ select * from t1 order by a,b,c;
 5 b_9 c_9
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b) when not matched and t2.c = 'c_7' then insert (a,c) values(t2.a,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched and t2.c = 'c_8' then insert (a,b) values(t2.a,t2.b) when not matched and t2.c = 'c_7' then insert (a,c) values(t2.a,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -180,11 +184,11 @@ select * from t2 order by a,b,c;
 5 b_9 c_9
 
 statement error 4001
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a when matched and t2.c = 'c_9' then update set t1.b = 'b_11' when matched and t2.c = 'c_10' then delete;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched and t2.c = 'c_9' then update set t1.b = 'b_11' when matched and t2.c = 'c_10' then delete;
 
 ## idempotent delete test
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a when matched then delete;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when matched then delete;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -228,10 +232,10 @@ select * from t2 order by a,b,c;
 
 ## test insert columns mismatch
 statement error 1065
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a when not matched then insert values(t2.a,t2.c);
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a when not matched then insert values(t2.a,t2.c);
 
 statement ok
-merge into t1 using (select * from t2 as t2) on t1.a = t2.a  when matched then update *  when not matched then insert *;
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update *  when not matched then insert *;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -242,10 +246,10 @@ select * from t1 order by a,b,c;
 
 ## test multi same name for star
 statement error 1065
-merge into t1 using (select a,b,c,a from t2 as t2) on t1.a = t2.a  when matched then update *;
+merge into t1 using (select a,b,c,a from t2 ) as t2 on t1.a = t2.a  when matched then update *;
 
 statement error 1065
-merge into t1 using (select a,b,c,a,b from t2 as t2) on t1.a = t2.a  when not matched then insert *;
+merge into t1 using (select a,b,c,a,b from t2 ) as t2 on t1.a = t2.a  when not matched then insert *;
 
 ## stage file test
 statement ok
@@ -389,7 +393,7 @@ select * from t2 order by a,b,c;
 NULL b_3 c_3
 
 statement ok
-merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete when not matched then insert *;
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete when not matched then insert *;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -400,7 +404,7 @@ NULL b_1 c_1
 NULL b_3 c_3
 
 statement ok
-merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete;
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -429,7 +433,7 @@ statement ok
 insert into t2 values(1,'a1','b1');
 
 statement ok
-merge into t1 as t3 using (select * from t2 as t2) on t3.a = t2.a  when not matched  then insert (a,b,c) values(t2.a,t2.b,t2.c);
+merge into t1 as t3 using (select * from t2 ) as t2 on t3.a = t2.a  when not matched  then insert (a,b,c) values(t2.a,t2.b,t2.c);
 
 query TTT
 select * from t1 order by a,b,c;
@@ -449,7 +453,7 @@ statement ok
 INSERT INTO salaries VALUES(1, 50000.00),(2, 60000.00);
 
 statement ok
-MERGE INTO salaries USING (SELECT * FROM employees) ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
+MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
 
 query TTT
 select * from salaries order by employee_id;
@@ -473,7 +477,7 @@ statement ok
 insert into t2_source values(1),(2);
 
 statement ok
-merge into t1_target using (select * from t2_source) on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
+merge into t1_target using (select * from t2_source) as t2_source on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
 
 query T
 select * from t1_target order by a;
