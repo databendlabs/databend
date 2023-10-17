@@ -347,7 +347,7 @@ impl MergeIntoInterpreter {
         schema: DataSchemaRef,
     ) -> Result<RemoteExpr> {
         let scalar_expr = scalar_expr
-            .resolve_and_check(schema.as_ref())?
+            .type_check(schema.as_ref())?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
         let (filer, _) = ConstantFolder::fold(
             &scalar_expr,

@@ -113,7 +113,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::TypeCheck;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -1284,7 +1283,7 @@ impl<'a> TypeChecker<'a> {
             | WindowFrameBound::Preceding(Some(box expr)) => {
                 let box (expr, _) = self.resolve(expr).await?;
                 let (expr, _) =
-                    ConstantFolder::fold(&expr.type_check()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {

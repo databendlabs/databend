@@ -13,3 +13,4 @@ fuse_segment
 fuse_block
 fuse_column
 fuse_statistic
+fuse_encoding
