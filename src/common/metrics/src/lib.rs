@@ -18,7 +18,7 @@ pub mod count;
 mod dump;
 pub mod histogram;
 pub mod registry;
-pub mod resettable;
+pub mod counter;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
@@ -42,4 +42,4 @@ pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
 pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
-pub use resettable::Counter;
+pub use counter::Counter;

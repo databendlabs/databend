@@ -29,7 +29,7 @@ use prometheus_client::registry::Registry;
 
 use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
-use crate::resettable::Counter;
+use crate::counter::Counter;
 
 lazy_static! {
     pub static ref REGISTRY: Mutex<WrappedRegistry> =
