@@ -80,7 +80,7 @@ impl InspectParquetTable {
                 file_path
             )));
         }
-        let uri = file_path.strip_prefix('@').unwrap().to_string();
+        let uri = file_path;
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
