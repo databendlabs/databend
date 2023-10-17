@@ -74,6 +74,8 @@ impl<S: Clone + std::hash::Hash + Eq, M, C: MetricConstructor<M>> ResetMetric fo
     }
 }
 
+/// [`WrappedRegistry`] wraps [`Registry`] and provides an additional reset method, which is useful
+/// on `TRUNCATE system.metrics` on diagnosing customer issues.
 pub struct WrappedRegistry {
     inner: Registry,
     resetters: Vec<Box<dyn ResetMetric + Send + Sync + 'static>>,
