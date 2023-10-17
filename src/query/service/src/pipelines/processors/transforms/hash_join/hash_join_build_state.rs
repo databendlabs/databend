@@ -258,7 +258,7 @@ impl HashJoinBuildState {
                     .store(true, Ordering::Relaxed);
                 self.hash_join_state
                     .build_done_watcher
-                    .send(self.send_val.load(Ordering::Relaxed))
+                    .send(self.send_val.load(Ordering::Acquire))
                     .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
                 return Ok(());
             }
@@ -634,7 +634,7 @@ impl HashJoinBuildState {
             }
             self.hash_join_state
                 .build_done_watcher
-                .send(self.send_val.load(Ordering::Relaxed))
+                .send(self.send_val.load(Ordering::Acquire))
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
         }
         Ok(())
