@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
+use std::sync::atomic::Ordering;
 
 use lazy_static::lazy_static;
 use prometheus_client::encoding::text::encode as prometheus_encode;
 use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::family::MetricConstructor;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Metric;
@@ -29,10 +32,11 @@ use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
 
 lazy_static! {
-    pub static ref REGISTRY: Mutex<Registry> = Mutex::new(Registry::with_prefix("databend"));
+    pub static ref REGISTRY: Mutex<WrappedRegistry> =
+        Mutex::new(WrappedRegistry::with_prefix("databend"));
 }
 
-pub fn load_global_prometheus_registry() -> MutexGuard<'static, Registry> {
+pub fn load_global_prometheus_registry() -> MutexGuard<'static, WrappedRegistry> {
     REGISTRY.lock().unwrap()
 }
 
@@ -43,18 +47,92 @@ pub fn reset_global_prometheus_registry() {
     // got denied, we can still wrap a customized Registry which record the metrics by itself.
 }
 
+trait ResetMetric {
+    fn reset_metric(&self);
+}
+
+impl ResetMetric for Counter {
+    fn reset_metric(&self) {
+        // TODO: use i64 counter
+    }
+}
+
+impl ResetMetric for Histogram {
+    fn reset_metric(&self) {
+        // do nothing
+    }
+}
+
+impl ResetMetric for Gauge {
+    fn reset_metric(&self) {
+        let v = self.get();
+        self.inc_by(-v);
+    }
+}
+
+#[derive(Default)]
+struct AtomicI64 {
+    inner: std::sync::atomic::AtomicI64
+}
+
+impl prometheus_client::metrics::counter::Atomic<i64> for AtomicI64 {
+    fn inc(&self) -> i64 {
+        self.inner.fetch_add(1, Ordering::Relaxed)
+    }
+
+    fn inc_by(&self, v: i64) -> i64 {
+        self.inner.fetch_add(v, Ordering::Relaxed)
+    }
+
+    fn get(&self) -> i64 {
+        self.inner.load(Ordering::Relaxed)
+    }
+}
+
+impl<S: Clone + std::hash::Hash + Eq, M, C: MetricConstructor<M>> ResetMetric for Family<S, M, C> {
+    fn reset_metric(&self) {
+        self.clear();
+    }
+}
+
 pub struct WrappedRegistry {
     inner: Registry,
-    metrics: Vec<Box<dyn Metric>>,
+    prefix: String,
+    resetters: Vec<Box<dyn ResetMetric + Send + Sync>>,
 }
 
 impl WrappedRegistry {
+    pub fn with_prefix(prefix: &str) -> Self {
+        let inner = Registry::with_prefix(prefix);
+        Self {
+            inner,
+            prefix: prefix.to_string(),
+            resetters: vec![],
+        }
+    }
+
     pub fn register(&mut self, name: &str, help: &str, metric: impl Metric + Clone) {
-        self.metrics.push(Box::new(metric.clone()));
         self.inner.register(name, help, metric);
     }
 
+    pub fn reset(&mut self) {
+        let mut inner = Registry::with_prefix(&self.prefix);
+        // TODO: loop the metrics and reset the values
+    }
+
+    pub fn inner_mut(&mut self) -> &mut Registry {
+        &mut self.inner
+    }
+
     pub fn inner(&self) -> &Registry {
+        &self.inner
+    }
+}
+
+impl Deref for WrappedRegistry {
+    type Target = Registry;
+
+    fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
