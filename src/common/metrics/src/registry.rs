@@ -56,7 +56,7 @@ impl ResetMetric for Counter {
 
 impl ResetMetric for Histogram {
     fn reset_metric(&self) {
-        // do nothing yet
+        // TODO(liyz): do nothing on resetting a histogram yet, but we can add it whenever we need.
     }
 }
 
@@ -77,7 +77,7 @@ impl<S: Clone + std::hash::Hash + Eq, M, C: MetricConstructor<M>> ResetMetric fo
 /// on `TRUNCATE system.metrics` on diagnosing customer issues.
 pub struct WrappedRegistry {
     inner: Registry,
-    resetters: Vec<Box<dyn ResetMetric + Send + Sync + 'static>>,
+    resetters: Vec<Box<dyn ResetMetric + Send + Sync>>,
 }
 
 impl WrappedRegistry {
