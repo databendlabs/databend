@@ -378,6 +378,10 @@ impl NumberDataType {
         }
     }
 
+    pub const fn is_integer(&self) -> bool {
+        !self.is_float()
+    }
+
     pub const fn can_lossless_cast_to(self, dest: Self) -> bool {
         match (self.is_float(), dest.is_float()) {
             (true, true) => self.bit_width() <= dest.bit_width(),
@@ -457,6 +461,12 @@ impl NumberScalar {
             NumberScalar::NUM_TYPE(num) => *num > 0,
             NumberScalar::Float32(num) => num.is_positive(),
             NumberScalar::Float64(num) => num.is_positive(),
+        })
+    }
+
+    pub fn data_type(&self) -> NumberDataType {
+        crate::with_number_type!(|NUM_TYPE| match self {
+            NumberScalar::NUM_TYPE(_) => NumberDataType::NUM_TYPE,
         })
     }
 }

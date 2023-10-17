@@ -34,68 +34,64 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
         use crate::plans::JoinType;
 
         let mut join = join;
-        let mut filter: Filter = s_expr.plan().clone().try_into()?;
-        if let Some(mut constraint_set) =
-            crate::optimizer::ConstraintSet::new(&mut filter.predicates)
-        {
-            let join_expr = RelExpr::with_s_expr(s_expr.child(0)?);
-            let left_columns = join_expr
-                .derive_relational_prop_child(0)?
-                .output_columns
-                .clone();
-            let right_columns = join_expr
-                .derive_relational_prop_child(1)?
-                .output_columns
-                .clone();
+        let filter: Filter = s_expr.plan().clone().try_into()?;
+        let constraint_set = crate::optimizer::ConstraintSet::new(&filter.predicates);
 
-            let eliminate_left_null = left_columns
-                .iter()
-                .any(|col| constraint_set.is_null_reject(col));
-            let eliminate_right_null = right_columns
-                .iter()
-                .any(|col| constraint_set.is_null_reject(col));
+        let join_expr = RelExpr::with_s_expr(s_expr.child(0)?);
+        let left_columns = join_expr
+            .derive_relational_prop_child(0)?
+            .output_columns
+            .clone();
+        let right_columns = join_expr
+            .derive_relational_prop_child(1)?
+            .output_columns
+            .clone();
 
-            let new_join_type = match join.join_type {
-                JoinType::Left => {
-                    if eliminate_right_null {
-                        JoinType::Inner
-                    } else {
-                        JoinType::Left
-                    }
-                }
-                JoinType::Right => {
-                    if eliminate_left_null {
-                        JoinType::Inner
-                    } else {
-                        JoinType::Right
-                    }
-                }
-                JoinType::Full => {
-                    if eliminate_left_null && eliminate_right_null {
-                        JoinType::Inner
-                    } else if eliminate_left_null {
-                        JoinType::Left
-                    } else if eliminate_right_null {
-                        JoinType::Right
-                    } else {
-                        JoinType::Full
-                    }
-                }
-                _ => unreachable!(),
-            };
+        let eliminate_left_null = left_columns
+            .iter()
+            .any(|col| constraint_set.is_null_reject(col));
+        let eliminate_right_null = right_columns
+            .iter()
+            .any(|col| constraint_set.is_null_reject(col));
 
-            join.join_type = new_join_type;
-            Ok(SExpr::create_unary(
-                Arc::new(filter.into()),
-                Arc::new(SExpr::create_binary(
-                    Arc::new(join.into()),
-                    Arc::new(s_expr.child(0)?.child(0)?.clone()),
-                    Arc::new(s_expr.child(0)?.child(1)?.clone()),
-                )),
-            ))
-        } else {
-            Ok(s_expr.clone())
-        }
+        let new_join_type = match join.join_type {
+            JoinType::Left => {
+                if eliminate_right_null {
+                    JoinType::Inner
+                } else {
+                    JoinType::Left
+                }
+            }
+            JoinType::Right => {
+                if eliminate_left_null {
+                    JoinType::Inner
+                } else {
+                    JoinType::Right
+                }
+            }
+            JoinType::Full => {
+                if eliminate_left_null && eliminate_right_null {
+                    JoinType::Inner
+                } else if eliminate_left_null {
+                    JoinType::Left
+                } else if eliminate_right_null {
+                    JoinType::Right
+                } else {
+                    JoinType::Full
+                }
+            }
+            _ => unreachable!(),
+        };
+
+        join.join_type = new_join_type;
+        Ok(SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(SExpr::create_binary(
+                Arc::new(join.into()),
+                Arc::new(s_expr.child(0)?.child(0)?.clone()),
+                Arc::new(s_expr.child(0)?.child(1)?.clone()),
+            )),
+        ))
     }
 
     #[cfg(not(feature = "z3-prove"))]

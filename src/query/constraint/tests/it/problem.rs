@@ -12,159 +12,57 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_constraint::prelude::and_nullable_bool;
-use common_constraint::prelude::assert_int_is_not_null;
-use common_constraint::prelude::gt_int;
-use common_constraint::prelude::is_not_null_int;
-use common_constraint::prelude::is_true;
-use common_constraint::prelude::lt_int;
-use common_constraint::prelude::or_nullable_bool;
-use common_constraint::prelude::true_bool;
-use z3::ast::Int;
-use z3::Config;
-use z3::Context;
-use z3::SatResult;
-use z3::Solver;
+use common_constraint::mir::MirDataType;
+use common_constraint::problem::variable_must_not_null;
+
+use crate::parser::parse_mir_expr;
 
 #[test]
 fn test_assert_int_not_null() {
-    let ctx = Context::new(&Config::default());
-    let solver = Solver::new(&ctx);
+    let variables = &[("a".to_string(), MirDataType::Int)].into_iter().collect();
 
-    {
-        // a is not null -> a is not null
-        let proposition = is_not_null_int(&ctx, &Int::new_const(&ctx, "a"));
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-    }
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a is not null", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 or a < 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and a < 1", variables),
+        "a",
+    ));
 
-    {
-        // a > 0 -> a is not null
-        let proposition = is_true(
-            &ctx,
-            &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-    }
-
-    {
-        // a > 0 or true -> a is maybe not null
-        let proposition = is_true(
-            &ctx,
-            &or_nullable_bool(
-                &ctx,
-                &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                &true_bool(&ctx),
-            ),
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Unsat
-        );
-    }
-
-    {
-        // a > 0 or a < 0 -> a is not null
-        let proposition = is_true(
-            &ctx,
-            &or_nullable_bool(
-                &ctx,
-                &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                &lt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-            ),
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-    }
-
-    {
-        // a > 0 and a < 1 -> a is not null
-        let proposition = is_true(
-            &ctx,
-            &and_nullable_bool(
-                &ctx,
-                &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                &lt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-            ),
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-    }
+    assert!(!variable_must_not_null(
+        &parse_mir_expr("a > 0 or true", variables),
+        "a",
+    ));
+    assert!(!variable_must_not_null(
+        &parse_mir_expr("a is null", variables),
+        "a",
+    ));
 }
 
 #[test]
 fn test_assert_int_is_not_null_multiple_variable() {
-    let ctx = Context::new(&Config::default());
-    let solver = Solver::new(&ctx);
+    let variables = &[
+        ("a".to_string(), MirDataType::Int),
+        ("b".to_string(), MirDataType::Int),
+    ]
+    .into_iter()
+    .collect();
 
-    {
-        // a > 0 and b > 0 -> a is not null and b is not null
-        let proposition = is_true(
-            &ctx,
-            &and_nullable_bool(
-                &ctx,
-                &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                &gt_int(&ctx, &Int::new_const(&ctx, "b"), &Int::from_i64(&ctx, 0)),
-            ),
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a"), Int::new_const(&ctx, "b"),],
-                &Int::new_const(&ctx, "a"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-        assert_eq!(
-            assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a"), Int::new_const(&ctx, "b"),],
-                &Int::new_const(&ctx, "b"),
-                &proposition
-            ),
-            SatResult::Sat
-        );
-    }
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and b > 0", variables),
+        "a",
+    ));
+    assert!(variable_must_not_null(
+        &parse_mir_expr("a > 0 and b > 0", variables),
+        "b",
+    ));
 }
