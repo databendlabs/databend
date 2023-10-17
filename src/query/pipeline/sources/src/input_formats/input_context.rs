@@ -30,6 +30,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchema;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
 use common_formats::FileFormatOptionsExt;
@@ -114,7 +115,9 @@ pub struct InputContext {
     pub table_context: Arc<dyn TableContext>,
     pub plan: InputPlan,
     pub schema: TableSchemaRef,
+    pub default_values: Option<Vec<Scalar>>,
     pub source: InputSource,
+
     pub format: Arc<dyn InputFormat>,
     pub splits: Vec<Arc<SplitInfo>>,
 
@@ -132,6 +135,8 @@ pub struct InputContext {
     pub on_error_map: Option<Arc<DashMap<String, HashMap<u16, InputError>>>>,
     pub projection: Option<Vec<usize>>,
 }
+
+impl InputContext {}
 
 impl Debug for InputContext {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -172,6 +177,7 @@ impl InputContext {
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
         is_select: bool,
         projection: Option<Vec<usize>>,
+        default_values: Option<Vec<Scalar>>,
     ) -> Result<Self> {
         let mut file_format_options_ext =
             FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
@@ -201,6 +207,7 @@ impl InputContext {
             on_error_count: AtomicU64::new(0),
             on_error_map: Some(on_error_map),
             projection,
+            default_values,
         })
     }
 
@@ -257,6 +264,7 @@ impl InputContext {
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
             projection: None,
+            default_values: None,
         })
     }
 
@@ -299,6 +307,7 @@ impl InputContext {
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
             projection: None,
+            default_values: None,
         })
     }
 

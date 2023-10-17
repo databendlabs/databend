@@ -12,5 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use crate::declare::*;
-pub use crate::problem::*;
+mod fuse_encoding;
+mod fuse_encoding_table;
+
+pub use fuse_encoding::FuseEncoding;
+pub use fuse_encoding_table::FuseEncodingTable;

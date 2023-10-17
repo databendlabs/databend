@@ -1,5 +1,6 @@
 ---
 title: How to Write a Scalar Function
+sidebar_label: How to Write Scalar Function
 ---
 
 ## What's Scalar Function

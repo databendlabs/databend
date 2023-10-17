@@ -79,7 +79,17 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                     TableDataType::Number(NumberDataType::Int64) => {
                         (Scalar::from(max), Scalar::from(min))
                     }
-                    TableDataType::Timestamp => (Scalar::Timestamp(max), Scalar::Timestamp(min)),
+                    TableDataType::Timestamp => {
+                        let multi = match max.checked_ilog10().unwrap_or_default() + 1 {
+                            0..=10 => 1_000_000,
+                            11..=13 => 1_000,
+                            _ => 1,
+                        };
+                        (
+                            Scalar::Timestamp(max * multi),
+                            Scalar::Timestamp(min * multi),
+                        )
+                    }
                     TableDataType::Decimal(DecimalDataType::Decimal128(size)) => (
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(max), *size)),
                         Scalar::Decimal(DecimalScalar::Decimal128(i128::from(min), *size)),
@@ -91,10 +101,18 @@ pub fn convert_column_statistics(s: &Statistics, typ: &TableDataType) -> ColumnS
                     _ => (Scalar::Null, Scalar::Null),
                 }
             }
-            Statistics::Int96(s) => (
-                Scalar::Timestamp(s.max().to_i64()),
-                Scalar::Timestamp(s.min().to_i64()),
-            ),
+            Statistics::Int96(s) => {
+                let (max, min) = (s.max().to_i64(), s.min().to_i64());
+                let multi = match max.checked_ilog10().unwrap_or_default() + 1 {
+                    0..=10 => 1_000_000,
+                    11..=13 => 1_000,
+                    _ => 1,
+                };
+                (
+                    Scalar::Timestamp(max * multi),
+                    Scalar::Timestamp(min * multi),
+                )
+            }
             Statistics::Float(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::Double(s) => (Scalar::from(*s.max()), Scalar::from(*s.min())),
             Statistics::ByteArray(s) => (

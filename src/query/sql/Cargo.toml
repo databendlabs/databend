@@ -13,7 +13,7 @@ test = false
 [features]
 default = []
 storage-hdfs = ["common-config/storage-hdfs"]
-z3-prove = ["common-constraint", "z3"]
+z3-prove = ["common-constraint"]
 
 [dependencies] # In alphabetical order
 # Workspace dependencies
@@ -77,4 +77,3 @@ time = "0.3.14"
 
 indexmap = "2.0.0"
 url = { version = "2.3" }
-z3 = { version = "0.12.1", features = ["static-link-z3"], optional = true }

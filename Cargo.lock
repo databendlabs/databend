@@ -215,7 +215,7 @@ version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6686cd705badba064ec2322b9c3d72f5c70db8394e486bbb56e84fbdb3fa158c"
 dependencies = [
- "darling",
+ "darling 0.20.1",
  "proc-macro2",
  "quote",
  "serde_json",
@@ -1874,7 +1874,9 @@ dependencies = [
 name = "common-constraint"
 version = "0.1.0"
 dependencies = [
+ "common-ast",
  "criterion",
+ "goldenfile",
  "z3",
 ]
 
@@ -2406,7 +2408,7 @@ dependencies = [
  "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
- "procfs",
+ "procfs 0.15.1",
  "prometheus-client",
  "prometheus-parse",
  "serde",
@@ -2646,7 +2648,6 @@ dependencies = [
  "storages-common-table-meta",
  "time",
  "url",
- "z3",
 ]
 
 [[package]]
@@ -3559,12 +3560,36 @@ dependencies = [
 
 [[package]]
 name = "darling"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7b750cb3417fd1b327431a470f388520309479ab0bf5e323505daf0290cd3850"
+dependencies = [
+ "darling_core 0.14.4",
+ "darling_macro 0.14.4",
+]
+
+[[package]]
+name = "darling"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0558d22a7b463ed0241e993f76f09f30b126687447751a8638587b864e4b3944"
 dependencies = [
- "darling_core",
- "darling_macro",
+ "darling_core 0.20.1",
+ "darling_macro 0.20.1",
+]
+
+[[package]]
+name = "darling_core"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "109c1ca6e6b7f82cc233a97004ea8ed7ca123a9af07a8230878fcfda9b158bf0"
+dependencies = [
+ "fnv",
+ "ident_case",
+ "proc-macro2",
+ "quote",
+ "strsim",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -3583,11 +3608,22 @@ dependencies = [
 
 [[package]]
 name = "darling_macro"
+version = "0.14.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4aab4dbc9f7611d8b55048a3a16d2d010c2c8334e46304b40ac1cc14bf3b48e"
+dependencies = [
+ "darling_core 0.14.4",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "darling_macro"
 version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29a358ff9f12ec09c3e61fef9b5a9902623a695a46a917b07f269bff1445611a"
 dependencies = [
- "darling_core",
+ "darling_core 0.20.1",
  "quote",
  "syn 2.0.29",
 ]
@@ -4066,6 +4102,37 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.29",
+]
+
+[[package]]
+name = "derive_builder"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d67778784b508018359cbc8696edb3db78160bab2c2a28ba7f56ef6932997f8"
+dependencies = [
+ "derive_builder_macro",
+]
+
+[[package]]
+name = "derive_builder_core"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c11bdc11a0c47bc7d37d582b5285da6849c96681023680b906673c5707af7b0f"
+dependencies = [
+ "darling 0.14.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
+name = "derive_builder_macro"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebcda35c7a396850a55ffeac740804b40ffec779b98fffbb1738f4033f0ee79e"
+dependencies = [
+ "derive_builder_core",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -6821,7 +6888,7 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.10"
-source = "git+https://github.com/icelake-io/icelake?rev=9876ff1#9876ff1750e119e7c66913dadc8f1d22312749db"
+source = "git+https://github.com/icelake-io/icelake?rev=f06cdf3#f06cdf38996886fbf5267366f427f15442951090"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -6829,6 +6896,7 @@ dependencies = [
  "arrow-array",
  "arrow-buffer",
  "arrow-cast",
+ "arrow-ord",
  "arrow-row",
  "arrow-schema",
  "arrow-select",
@@ -6837,6 +6905,7 @@ dependencies = [
  "bytes",
  "chrono",
  "csv",
+ "derive_builder",
  "enum-display",
  "faster-hex",
  "futures",
@@ -7964,7 +8033,7 @@ version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "56b0d8a0db9bf6d2213e11f2c701cb91387b0614361625ab7b9743b41aa4938f"
 dependencies = [
- "darling",
+ "darling 0.20.1",
  "heck 0.4.1",
  "num-bigint",
  "proc-macro-crate 1.3.1",
@@ -8314,8 +8383,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.40.0"
-source = "git+https://github.com/apache/incubator-opendal?rev=d5990fe#d5990fe28a6023c9c26e1c306d933c778a0c9638"
+version = "0.41.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e31b48f0af6de5b3b344c1acc1e06c4581dca3e13cd5ba05269927fc2abf953a"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -8337,9 +8407,10 @@ dependencies = [
  "parking_lot 0.12.1",
  "percent-encoding",
  "pin-project",
+ "prometheus",
  "prometheus-client",
  "prost 0.11.9",
- "quick-xml 0.29.0",
+ "quick-xml 0.30.0",
  "redis",
  "reqsign",
  "reqwest",
@@ -9255,6 +9326,19 @@ dependencies = [
 
 [[package]]
 name = "procfs"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1de8dacb0873f77e6aefc6d71e044761fcc68060290f5b1089fcdf84626bb69"
+dependencies = [
+ "bitflags 1.3.2",
+ "byteorder",
+ "hex",
+ "lazy_static",
+ "rustix 0.36.9",
+]
+
+[[package]]
+name = "procfs"
 version = "0.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "943ca7f9f29bab5844ecd8fdb3992c5969b6622bb9609b9502fef9b4310e3f1f"
@@ -9276,6 +9360,23 @@ checksum = "1d67eb4220992a4a052a4bb03cf776e493ecb1a3a36bab551804153d63486af7"
 dependencies = [
  "bytesize",
  "human_format",
+]
+
+[[package]]
+name = "prometheus"
+version = "0.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "449811d15fbdf5ceb5c1144416066429cf82316e2ec8ce0c1f6f8a02e7bbcf8c"
+dependencies = [
+ "cfg-if",
+ "fnv",
+ "lazy_static",
+ "libc",
+ "memchr",
+ "parking_lot 0.12.1",
+ "procfs 0.14.2",
+ "protobuf",
+ "thiserror",
 ]
 
 [[package]]
@@ -9558,6 +9659,16 @@ name = "quick-xml"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "81b9228215d82c7b61490fec1de287136b5de6f5700f6e58ea9ad61a7964ca51"
+dependencies = [
+ "memchr",
+ "serde",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eff6510e86862b57b210fd8cbe8ed3f0d7d600b9c2863cd4549a2e033c66e956"
 dependencies = [
  "memchr",
  "serde",
@@ -10649,7 +10760,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edc7d5d3932fb12ce722ee5e64dd38c504efba37567f0c402f6ca728c3b8b070"
 dependencies = [
- "darling",
+ "darling 0.20.1",
  "proc-macro2",
  "quote",
  "syn 2.0.29",
@@ -11142,7 +11253,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.6"
-source = "git+https://github.com/sundy-li/strawboat?rev=25e5270#25e5270471d41ed92d38b0121a44667af53c27fd"
+source = "git+https://github.com/sundy-li/strawboat?rev=f3114b#f3114b28cf817f880221ae6c3100f87c83e850e5"
 dependencies = [
  "ahash 0.8.3",
  "arrow2",

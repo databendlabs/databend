@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use log::info;
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 /// Coordinate all hash join build processors to spill.
 /// It's shared by all hash join build processors.
@@ -41,7 +42,7 @@ pub struct BuildSpillCoordinator {
     /// Spill tasks, the size is the same as the total active processor count.
     pub(crate) spill_tasks: Mutex<VecDeque<Vec<(u8, DataBlock)>>>,
     /// When a build processor won't trigger spill, the field will plus one
-    pub(crate) non_spill_processors: AtomicUsize,
+    pub(crate) non_spill_processors: RwLock<usize>,
     /// If there is the last active processor, send true to watcher channel
     pub(crate) ready_spill_watcher: Sender<bool>,
     pub(crate) dummy_ready_spill_receiver: Receiver<bool>,
@@ -74,15 +75,18 @@ impl BuildSpillCoordinator {
                 .send(false)
                 .map_err(|_| ErrorCode::TokioError("ready_spill_watcher channel is closed"))?;
         }
-        let old_val = self.waiting_spill_count.fetch_add(1, Ordering::Relaxed);
+        let non_spill_processors = self.non_spill_processors.read();
+        let old_val = self.waiting_spill_count.fetch_add(1, Ordering::Release);
         let waiting_spill_count = old_val + 1;
-        let non_spill_processors = self.non_spill_processors.load(Ordering::Relaxed);
         info!(
             "waiting_spill_count: {:?}, non_spill_processors: {:?}, total_builder_count: {:?}",
-            waiting_spill_count, non_spill_processors, self.total_builder_count
+            waiting_spill_count, *non_spill_processors, self.total_builder_count
         );
 
-        if waiting_spill_count + non_spill_processors == self.total_builder_count {
+        if (waiting_spill_count + *non_spill_processors == self.total_builder_count)
+            && self.get_need_spill()
+        {
+            self.no_need_spill();
             // Reset waiting_spill_count
             self.waiting_spill_count.store(0, Ordering::Relaxed);
             // No need to wait spill, the processor is the last one
@@ -116,13 +120,6 @@ impl BuildSpillCoordinator {
 
     // Get active processor count
     pub fn active_processor_num(&self) -> usize {
-        self.total_builder_count - self.non_spill_processors.load(Ordering::Relaxed)
-    }
-
-    // Add one to `non_spill_processors`
-    // Return value after adding
-    pub fn increase_non_spill_processors(&self) -> usize {
-        let old = self.non_spill_processors.fetch_add(1, Ordering::Relaxed);
-        old + 1
+        self.total_builder_count - *self.non_spill_processors.read()
     }
 }

@@ -175,10 +175,10 @@ impl PhysicalPlanBuilder {
             .zip(join.right_conditions.iter())
         {
             let left_expr = left_condition
-                .resolve_and_check(probe_schema.as_ref())?
+                .type_check(probe_schema.as_ref())?
                 .project_column_ref(|index| probe_schema.index_of(&index.to_string()).unwrap());
             let right_expr = right_condition
-                .resolve_and_check(build_schema.as_ref())?
+                .type_check(build_schema.as_ref())?
                 .project_column_ref(|index| build_schema.index_of(&index.to_string()).unwrap());
             if join.join_type == JoinType::Inner {
                 if let (ScalarExpr::BoundColumnRef(left), ScalarExpr::BoundColumnRef(right)) =
@@ -370,7 +370,7 @@ impl PhysicalPlanBuilder {
                 .iter()
                 .map(|scalar| {
                     let expr = scalar
-                        .resolve_and_check(merged_schema.as_ref())?
+                        .type_check(merged_schema.as_ref())?
                         .project_column_ref(|index| {
                             merged_schema.index_of(&index.to_string()).unwrap()
                         });
