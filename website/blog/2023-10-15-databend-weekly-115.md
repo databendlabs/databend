@@ -44,9 +44,9 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
-## What's On In Databend
+## What's New
 
-Stay connected with the latest news about Databend.
+Stay informed about the latest features of Databend.
 
 ### AGGREGATING INDEX
 
