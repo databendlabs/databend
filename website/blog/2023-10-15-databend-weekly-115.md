@@ -62,7 +62,7 @@ CREATE AGGREGATING INDEX my_agg_index AS SELECT MIN(a), MAX(c) FROM agg;
 REFRESH AGGREGATING INDEX my_agg_index;
 ```
 
-The **AGGREGATING INDEX** requires upgrading to the Enterprise Edition. Please [contact the Databend team](https://www.databend.com/contact-us) for upgrade information.
+The **AGGREGATING INDEX** requires Databend Enterprise Edition. Please [contact the Databend team](https://www.databend.com/contact-us) for upgrade information.
 
 If you are interested in learning more, please check out the resources below:
 
@@ -74,7 +74,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Visualizing the MERGE INTO Pipeline
 
-Databend recently implemented support for the `MERGE INTO` statement to provide more comprehensive data maintenance capabilities. For those interested in how it works under the hood, check out the pipeline visualization of `MERGE INTO` below.
+Databend recently implemented the `MERGE INTO` statement to provide more comprehensive data management capabilities. For those interested in how it works under the hood, check out the pipeline visualization of `MERGE INTO` below.
 
 ```
                                                                                                                                                +-------------------+
@@ -128,10 +128,10 @@ If you are interested in learning more, please check out the resources below:
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Added support for automatic recluster and compaction in `MERGE INTO`.
-- SQLsmith now covers `DELETE`, `UPDATE`, `ALTER TABLE` and `CAST`.
-- Added semi-structured data processing functions like `json_each` and `json_array_elements`.
-- Added time and date functions like `to_week_of_year` and `date_part`. See [Docs | Date & Time Functions](https://databend.rs/doc/sql-functions/datetime-functions) for details.
+- MERGE INTO now supports for automatic recluster and compaction.
+- SQLsmith now covers `DELETE`, `UPDATE`, `ALTER TABLE`, and `CAST`.
+- Added semi-structured data processing functions `json_each` and `json_array_elements`.
+- Added time and date functions `to_week_of_year` and `date_part`. See [Docs | Date & Time Functions](https://databend.rs/doc/sql-functions/datetime-functions) for details.
 - Read [Sending IoT Stream Data to Databend with LF Edge eKuiper](https://databend.rs/blog/2023-10-09-databend-and-ekuiper) to learn how Databend integrates with eKuiper to meet growing IoT data analytics demands.
 
 ## What's Up Next
