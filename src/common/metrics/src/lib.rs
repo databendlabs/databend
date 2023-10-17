@@ -15,13 +15,14 @@
 #![allow(clippy::uninlined_format_args)]
 
 pub mod count;
+pub mod counter;
 mod dump;
 pub mod histogram;
 pub mod registry;
-pub mod counter;
 
 pub type VecLabels = Vec<(&'static str, String)>;
 
+pub use counter::Counter;
 pub use dump::dump_metric_samples;
 pub use dump::HistogramCount;
 pub use dump::MetricSample;
@@ -42,4 +43,3 @@ pub use registry::register_histogram_in_milliseconds;
 pub use registry::register_histogram_in_seconds;
 pub use registry::render_prometheus_metrics;
 pub use registry::reset_global_prometheus_registry;
-pub use counter::Counter;

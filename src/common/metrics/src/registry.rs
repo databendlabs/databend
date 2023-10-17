@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::ops::Deref;
-use std::sync::atomic::Ordering;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 
@@ -27,9 +26,9 @@ use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Metric;
 use prometheus_client::registry::Registry;
 
+use crate::counter::Counter;
 use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
-use crate::counter::Counter;
 
 lazy_static! {
     pub static ref REGISTRY: Mutex<WrappedRegistry> =

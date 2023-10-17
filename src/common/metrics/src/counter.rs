@@ -36,7 +36,7 @@ impl Counter {
 
     /// Increase the [`Counter`] by `v`, returning the previous value.
     pub fn inc_by(&self, v: u64) -> u64 {
-        self.value.fetch_add(1, Ordering::Relaxed)
+        self.value.fetch_add(v, Ordering::Relaxed)
     }
 
     /// Get the current value of the [`Counter`].
