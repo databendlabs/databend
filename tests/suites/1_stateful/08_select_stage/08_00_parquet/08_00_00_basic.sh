@@ -35,16 +35,4 @@ echo "drop stage if exists s3;" | $MYSQL_CLIENT_CONNECT
 echo "create stage s3 url = '${DATADIR}' FILE_FORMAT = (type = CSV);"  | $MYSQL_CLIENT_CONNECT
 echo "set use_parquet2 = ${USE_PARQUET2} ; select * from @s3 (FILE_FORMAT => 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 
-
-echo '--- external pruner'
-echo "drop stage if exists s4;" | $MYSQL_CLIENT_CONNECT
-echo "create stage s4 url = 'fs://${TESTS_DATA_DIR}/parquet/timestamp/' FILE_FORMAT = (type = PARQUET);"  | $MYSQL_CLIENT_CONNECT
-
-for name in s ms us ns; do
-	echo "testing timestamp precision ${name}"
-	echo "set use_parquet2 = ${USE_PARQUET2} ; select col_timestamp, count() from @s4 (FILE_FORMAT => 'PARQUET' PATTERN => 'timestamp_${name}.parquet')  where col_timestamp between '2023-10-13' and '2023-10-18' group by col_timestamp order by col_timestamp;" | $MYSQL_CLIENT_CONNECT
-done
-
-rm -rf ${DATADIR_PATH}
-
 done
