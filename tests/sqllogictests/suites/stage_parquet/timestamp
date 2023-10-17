@@ -1,0 +1,31 @@
+query TI
+select col_timestamp, count() from  @data/parquet/timestamp/timestamp_s.parquet where col_timestamp between '2023-10-13' and '2023-10-18' group by col_timestamp  order by col_timestamp
+----
+2023-10-13 10:00:00.000000	300
+2023-10-14 11:00:00.000000	300
+2023-10-15 12:00:00.000000	300
+2023-10-16 12:00:00.000000	300
+
+query TI
+select col_timestamp, count() from  @data/parquet/timestamp/timestamp_ms.parquet where col_timestamp between '2023-10-13' and '2023-10-18' group by col_timestamp order by col_timestamp
+----
+2023-10-13 10:00:00.000000	300
+2023-10-14 11:00:00.000000	300
+2023-10-15 12:00:00.000000	300
+2023-10-16 12:00:00.000000	300
+
+query TI
+select col_timestamp, count() from  @data/parquet/timestamp/timestamp_us.parquet where col_timestamp between '2023-10-13' and '2023-10-18' group by col_timestamp order by col_timestamp
+----
+2023-10-13 10:00:00.000000	300
+2023-10-14 11:00:00.000000	300
+2023-10-15 12:00:00.000000	300
+2023-10-16 12:00:00.000000	300
+
+query TI
+select col_timestamp, count() from  @data/parquet/timestamp/timestamp_ns.parquet where col_timestamp between '2023-10-13' and '2023-10-18' group by col_timestamp order by col_timestamp
+----
+2023-10-13 10:00:00.000000	300
+2023-10-14 11:00:00.000000	300
+2023-10-15 12:00:00.000000	300
+2023-10-16 12:00:00.000000	300
