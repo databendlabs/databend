@@ -74,6 +74,35 @@ impl<'a> Binder {
         bind_context: &mut BindContext,
         stmt: &CopyIntoTableStmt,
     ) -> Result<Plan> {
+        match &stmt.src {
+            CopyIntoTableSource::Location(location) => {
+                let plan = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .await?;
+                self.bind_copy_into_table_from_location(bind_context, plan)
+                    .await
+            }
+            CopyIntoTableSource::Query(query) => {
+                let mut max_column_position = MaxColumnPosition::new();
+                max_column_position.visit_query(query.as_ref());
+                self.metadata
+                    .write()
+                    .set_max_column_position(max_column_position.max_pos);
+                let (select_list, location, alias) = check_transform_query(query)?;
+                let plan = self
+                    .bind_copy_into_table_common(bind_context, stmt, location)
+                    .await?;
+                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
+                    .await
+            }
+        }
+    }
+    async fn bind_copy_into_table_common(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &CopyIntoTableStmt,
+        location: &FileLocation,
+    ) -> Result<CopyIntoTablePlan> {
         let (catalog_name, database_name, table_name) = self.normalize_object_identifier_triple(
             &stmt.dst.catalog,
             &stmt.dst.database,
@@ -86,119 +115,57 @@ impl<'a> Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
 
-        match &stmt.src {
-            CopyIntoTableSource::Location(location) => {
-                let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
-                self.apply_copy_into_table_options(stmt, &mut stage_info)
-                    .await?;
-                let files_info = StageFilesInfo {
-                    path,
-                    files: stmt.files.clone(),
-                    pattern: stmt.pattern.clone(),
-                };
-                let required_values_schema: DataSchemaRef = Arc::new(
-                    match &stmt.dst_columns {
-                        Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => self.schema_project(&table.schema(), &[])?,
-                    }
-                    .into(),
-                );
+        let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
+            .map_err(ErrorCode::SyntaxException)?;
 
-                let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
-                    .map_err(ErrorCode::SyntaxException)?;
-
-                let stage_schema = infer_table_schema(&required_values_schema)?;
-                let default_values = self
-                    .prepare_default_values(bind_context, &required_values_schema)
-                    .await?;
-
-                let plan = CopyIntoTablePlan {
-                    catalog_info,
-                    database_name,
-                    table_name,
-                    validation_mode,
-                    no_file_to_copy: false,
-                    from_attachment: false,
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: stage_schema,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
-                        default_values: Some(default_values),
-                    },
-                    values_consts: vec![],
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    write_mode: CopyIntoTableMode::Copy,
-                    query: None,
-
-                    enable_distributed: false,
-                };
-
-                self.bind_copy_into_table_from_location(bind_context, plan)
-                    .await
+        let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
+        self.apply_copy_into_table_options(stmt, &mut stage_info)
+            .await?;
+        let files_info = StageFilesInfo {
+            path,
+            files: stmt.files.clone(),
+            pattern: stmt.pattern.clone(),
+        };
+        let required_values_schema: DataSchemaRef = Arc::new(
+            match &stmt.dst_columns {
+                Some(cols) => self.schema_project(&table.schema(), cols)?,
+                None => self.schema_project(&table.schema(), &[])?,
             }
-            CopyIntoTableSource::Query(query) => {
-                let mut max_column_position = MaxColumnPosition::new();
-                max_column_position.visit_query(query.as_ref());
-                self.metadata
-                    .write()
-                    .set_max_column_position(max_column_position.max_pos);
+            .into(),
+        );
 
-                let (select_list, location, alias) = check_transform_query(query)?;
-                let (mut stage_info, path) = resolve_file_location(&self.ctx, location).await?;
-                self.apply_copy_into_table_options(stmt, &mut stage_info)
-                    .await?;
-                let files_info = StageFilesInfo {
-                    path,
-                    pattern: stmt.pattern.clone(),
-                    files: stmt.files.clone(),
-                };
+        let stage_schema = infer_table_schema(&required_values_schema)?;
+        let default_values = self
+            .prepare_default_values(bind_context, &required_values_schema)
+            .await?;
 
-                let required_values_schema: DataSchemaRef = Arc::new(
-                    match &stmt.dst_columns {
-                        Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
-                    }
-                    .into(),
-                );
-                let default_values = self
-                    .prepare_default_values(bind_context, &required_values_schema)
-                    .await?;
-                let plan = CopyIntoTablePlan {
-                    no_file_to_copy: false,
-                    catalog_info,
-                    database_name,
-                    table_name,
-                    from_attachment: false,
-                    required_source_schema: required_values_schema.clone(),
-                    required_values_schema: required_values_schema.clone(),
-                    values_consts: vec![],
-                    force: stmt.force,
-                    stage_table_info: StageTableInfo {
-                        schema: infer_table_schema(&required_values_schema)?,
-                        files_info,
-                        stage_info,
-                        files_to_copy: None,
-                        is_select: false,
-                        default_values: Some(default_values),
-                    },
-                    write_mode: CopyIntoTableMode::Copy,
-                    query: None,
-                    validation_mode: ValidationMode::None,
+        Ok(CopyIntoTablePlan {
+            catalog_info,
+            database_name,
+            table_name,
+            validation_mode,
+            no_file_to_copy: false,
+            from_attachment: false,
+            force: stmt.force,
+            stage_table_info: StageTableInfo {
+                schema: stage_schema,
+                files_info,
+                stage_info,
+                files_to_copy: None,
+                is_select: false,
+                default_values: Some(default_values),
+            },
+            values_consts: vec![],
+            required_source_schema: required_values_schema.clone(),
+            required_values_schema: required_values_schema.clone(),
+            write_mode: CopyIntoTableMode::Copy,
+            query: None,
 
-                    enable_distributed: false,
-                };
-                self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
-                    .await
-            }
-        }
+            enable_distributed: false,
+        })
     }
 
     /// Bind COPY INFO <table> FROM <stage_location>
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn bind_copy_into_table_from_location(
         &mut self,
@@ -271,6 +238,7 @@ impl<'a> Binder {
     }
 
     /// Bind COPY INFO <table> FROM <location>
+    /// called by bind_insert
     #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub(crate) async fn bind_copy_from_attachment(
@@ -333,7 +301,6 @@ impl<'a> Binder {
 
     /// Bind COPY INTO <table> FROM <query>
     #[async_backtrace::framed]
-    #[allow(clippy::too_many_arguments)]
     async fn bind_copy_from_query_into_table(
         &mut self,
         bind_context: &BindContext,
