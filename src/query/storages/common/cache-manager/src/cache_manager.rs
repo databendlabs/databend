@@ -75,8 +75,7 @@ impl CacheManager {
                             1,
                             std::thread::available_parallelism()
                                 .expect("Cannot get thread count")
-                                .get() as u32
-                                / 2,
+                                .get() as u32,
                         )
                     };
 
