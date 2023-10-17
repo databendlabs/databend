@@ -22,6 +22,7 @@ use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::Histogram;
+use prometheus_client::registry::Metric;
 use prometheus_client::registry::Registry;
 
 use crate::histogram::BUCKET_MILLISECONDS;
@@ -40,6 +41,22 @@ pub fn reset_global_prometheus_registry() {
     // supports iterating metrics. However it's not supported yet. I've raised an issue about
     // this: https://github.com/prometheus/client_rust/issues/163 . If this feature request
     // got denied, we can still wrap a customized Registry which record the metrics by itself.
+}
+
+pub struct WrappedRegistry {
+    inner: Registry,
+    metrics: Vec<Box<dyn Metric>>,
+}
+
+impl WrappedRegistry {
+    pub fn register(&mut self, name: &str, help: &str, metric: impl Metric + Clone) {
+        self.metrics.push(Box::new(metric.clone()));
+        self.inner.register(name, help, metric);
+    }
+
+    pub fn inner(&self) -> &Registry {
+        &self.inner
+    }
 }
 
 pub fn render_prometheus_metrics(registry: &Registry) -> String {
