@@ -370,12 +370,7 @@ impl Scalar {
                 let col = builder.build();
                 Scalar::Map(col)
             }
-            DataType::Bitmap => {
-                let mut bytes = vec![];
-                let rb = RoaringTreemap::new();
-                rb.serialize_into(&mut bytes).unwrap();
-                Scalar::Bitmap(bytes)
-            }
+            DataType::Bitmap => Scalar::Bitmap(vec![]),
             DataType::Tuple(tys) => Scalar::Tuple(tys.iter().map(Scalar::default_value).collect()),
             DataType::Variant => Scalar::Variant(vec![]),
 
@@ -1977,12 +1972,16 @@ impl ColumnBuilder {
             }
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => {
-                let rb =
-                    RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
-                let mut buf = vec![];
-                rb.serialize_into(&mut buf)
-                    .expect("failed to serialize bitmap");
-                ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
+                if b.is_empty() {
+                    ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n))
+                } else {
+                    let rb =
+                        RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
+                    let mut buf = vec![];
+                    rb.serialize_into(&mut buf)
+                        .expect("failed to serialize bitmap");
+                    ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
+                }
             }
             ScalarRef::Tuple(fields) => {
                 let fields_ty = match data_type {
