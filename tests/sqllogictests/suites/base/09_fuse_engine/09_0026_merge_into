@@ -393,7 +393,7 @@ select * from t2 order by a,b,c;
 NULL b_3 c_3
 
 statement ok
-merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete when not matched then insert *;
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete when not matched then insert *;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -404,7 +404,7 @@ NULL b_1 c_1
 NULL b_3 c_3
 
 statement ok
-merge into t1 using (select * from t2) on t1.a = t2.a when matched then delete;
+merge into t1 using (select * from t2) as t2 on t1.a = t2.a when matched then delete;
 
 query TTT
 select * from t1 order by a,b,c;
@@ -453,7 +453,7 @@ statement ok
 INSERT INTO salaries VALUES(1, 50000.00),(2, 60000.00);
 
 statement ok
-MERGE INTO salaries USING (SELECT * FROM employees) ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
+MERGE INTO salaries USING (SELECT * FROM employees) as employees ON salaries.employee_id = employees.employee_id WHEN MATCHED AND employees.department = 'HR' THEN UPDATE SET salaries.salary = salaries.salary + 1000.00 WHEN MATCHED THEN UPDATE SET salaries.salary = salaries.salary + 500.00 WHEN NOT MATCHED THEN INSERT (employee_id, salary) VALUES (employees.employee_id, 55000.00);
 
 query TTT
 select * from salaries order by employee_id;
@@ -477,7 +477,7 @@ statement ok
 insert into t2_source values(1),(2);
 
 statement ok
-merge into t1_target using (select * from t2_source) on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
+merge into t1_target using (select * from t2_source) as t2_source on t1_target.a = t2_source.a when matched then update * when not matched then insert *;
 
 query T
 select * from t1_target order by a;
