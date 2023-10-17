@@ -211,13 +211,13 @@ statement ok
 insert into t_source_merge values('a1','b1','c1'),('a2','b2','c2');
 
 statement error 1006
-merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c); 
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) as t2 on t1.a = t2.a when not matched then insert (a,b,c) values(t2.a,t2.b,t2.c); 
 
 statement error 1006
-merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a  when matched then update set t1.b = t2.b  when not matched then insert (a,c) values(t2.a,t2.c);
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) as t2 on t1.a = t2.a  when matched then update set t1.b = t2.b  when not matched then insert (a,c) values(t2.a,t2.c);
 
 statement ok
-merge into t_stored_merge as t1 using (select * from t_source_merge as t2) on t1.a = t2.a when not matched then insert (a,c) values(t2.a,t2.c);
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) as t2 on t1.a = t2.a when not matched then insert (a,c) values(t2.a,t2.c);
 
 query TTT
 select * from t_stored_merge order by a,b,c;
@@ -248,7 +248,7 @@ a1 b1 c1
 a2 b2 c2
 
 statement ok
-merge into t_stored_merge as t1 using (select * from t_source_merge as t2)  on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,c) values(t2.a,t2.c);
+merge into t_stored_merge as t1 using (select * from t_source_merge as t2) as t2  on t1.a = t2.a  when matched then update set t1.c = t2.c  when not matched then insert (a,c) values(t2.a,t2.c);
 
 query TTT
 select * from t_stored_merge order by a,b,c;
