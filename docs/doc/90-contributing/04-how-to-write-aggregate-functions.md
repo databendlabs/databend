@@ -1,5 +1,6 @@
 ---
 title: How to Write an Aggregate Function
+sidebar_label: How to Write Aggregate Function
 ---
 
 An aggregate function, or aggregation function, is a function that combines values from multiple rows to form a single summary value. Common aggregate functions include sum, count, avg, and others.
