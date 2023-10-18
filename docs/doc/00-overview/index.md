@@ -22,8 +22,6 @@ import TabItem from '@theme/TabItem';
 
 </TabItem>
 
-</TabItem>
-
 <TabItem value="Data Manipulation" label="Data Manipulation">
 
 - Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `REPLACE`, `COPY`, and `MERGE`.
