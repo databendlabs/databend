@@ -496,10 +496,10 @@ statement ok
 insert into cluster_source values(12,'b',1),(1,'a',2),(2,'b',3),(2,'a',4),(3,'a',3);
 
 ## test update indetify error
-statement error 1065
-merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update cluster_target.a = t2.a;
+statement error 1006
+merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update set cluster_target.a = t2.a;
 
-statement error 1065
+statement error 1006
 merge into cluster_target as t1 using (select * from cluster_source) as t2 on t1.a = t2.a when matched then update t2.a = t2.a;
 
 statement ok
