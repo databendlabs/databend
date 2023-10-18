@@ -335,15 +335,14 @@ impl<'a> AggregateRewriter<'a> {
                     index: column_ref.column.index,
                     scalar: arg.clone(),
                 });
-            } else
-            // check if the arg is in group items
-            // we can reuse the index
-            if let Some(item) = agg_info
+            } else if let Some(item) = agg_info
                 .group_items
                 .iter()
                 .chain(agg_info.aggregate_arguments.iter())
                 .find(|x| &x.scalar == arg)
             {
+                // check if the arg is in group items
+                // we can reuse the index
                 let column_binding = ColumnBindingBuilder::new(
                     name,
                     item.index,
