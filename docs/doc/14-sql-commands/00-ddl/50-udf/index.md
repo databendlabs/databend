@@ -3,15 +3,25 @@ title: User-Defined Function
 ---
 import IndexOverviewList from '@site/src/components/IndexOverviewList';
 
-## What are UDFs?
+User-Defined Functions (UDFs) enable you to define your custom operations to process data within Databend. User-Defined Functions are categorized into two types: [Lambda-Based UDFs](#lambda-based-udfs) and [Server-Based UDFs](#server-based-udfs). This page explains what they are, how to manage them, and provides two usage examples.
 
-User-Defined Functions (UDFs) enable you to define their own custom operations to process data within Databend. They are typically written using lambda expressions or implemented via a UDF server with programming languages such as Python and are executed as part of Databend's query processing pipeline. Advantages of using UDFs include:
+## Lambda-Based UDFs
 
-- Customized Data Transformations: UDFs empower you to perform data transformations that may not be achievable through built-in Databend functions alone. This customization is particularly valuable for handling unique data formats or business logic.
+Lambda-based UDFs are a type of user-defined function in Databend that are implemented using anonymous lambda expressions. These UDFs are simple, lightweight, and provide a quick way to define custom operations on data within Databend.
 
-- Performance Optimization: UDFs provide the flexibility to define and fine-tune your own custom functions, enabling you to optimize data processing to meet precise performance requirements. This means you can tailor the code for maximum efficiency, ensuring that your data processing tasks run as efficiently as possible.
+- Customized Data Transformations: Lambda-based UDFs empower you to perform data transformations that may not be achievable through built-in Databend functions alone. This customization is particularly valuable for handling unique data formats or implementing specific business logic.
 
-- Code Reusability: UDFs can be reused across multiple queries, saving time and effort in coding and maintaining data processing logic.
+- Code Reusability: Lambda-based UDFs can be easily reused across multiple queries, saving time and effort in coding and maintaining data processing logic.
+
+## Server-Based UDFs
+
+Server-based UDFs are a more advanced type of user-defined function in Databend. They involve the use of a UDF server implemented in programming languages such as Python to define custom operations on data.
+
+- Scalability: Server-based UDFs can handle complex and resource-intensive operations on data, making them suitable for more extensive and demanding processing tasks.
+
+- External Libraries: They can leverage external libraries and dependencies, allowing you to integrate additional functionality into your UDFs, making them more powerful and versatile.
+
+- Advanced Logic: Server-based UDFs are capable of implementing advanced and sophisticated logic, making them suitable for complex data processing scenarios.
 
 ## Managing UDFs
 

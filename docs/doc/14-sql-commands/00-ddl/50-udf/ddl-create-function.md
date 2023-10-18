@@ -7,7 +7,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced or updated: v1.2.116"/>
 
-Creates a user-defined function.
+Creates a user-defined function with a lambda expression or a UDF server.
 
 ## Syntax
 
@@ -115,7 +115,7 @@ def gcd(x: int, y: int) -> int:
 
 if __name__ == '__main__':
     # create a UDF server listening at '0.0.0.0:8815'
-    server = UdfServer("0.0.0.0:8815")
+    server = UDFServer("0.0.0.0:8815")
     # add defined functions
     server.add_function(gcd)
     # start the UDF server
