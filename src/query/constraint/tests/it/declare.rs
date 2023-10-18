@@ -12,8 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_constraint::prelude::*;
-use z3::ast::Int;
+use common_constraint::declare::*;
 use z3::Config;
 use z3::Context;
 use z3::SatResult;
@@ -22,82 +21,52 @@ use z3::Solver;
 #[test]
 fn test_bool_is_true() {
     // Test is_true function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
     // is_true(TRUE) => true
-    solver.assert(&is_true(&context, &true_bool(&context)));
+    solver.assert(&is_true(ctx, &true_bool(ctx)));
     // is_true(FALSE) => false
-    solver.assert(&is_true(&context, &false_bool(&context)).not());
+    solver.assert(&is_true(ctx, &false_bool(ctx)).not());
     // is_true(NULL) => false
-    solver.assert(&is_true(&context, &null_bool(&context)).not());
+    solver.assert(&is_true(ctx, &null_bool(ctx)).not());
     assert_eq!(solver.check(), SatResult::Sat);
 }
 
 #[test]
 fn test_bool_logical_and() {
     // Test logical AND function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // TRUE AND TRUE => TRUE
     solver.assert(&is_true(
-        &context,
-        &and_nullable_bool(&context, &true_bool(&context), &true_bool(&context)),
+        ctx,
+        &and_bool(ctx, &true_bool(ctx), &true_bool(ctx)),
     ));
     // TRUE AND FALSE => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &and_nullable_bool(&context, &true_bool(&context), &false_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &and_bool(ctx, &true_bool(ctx), &false_bool(ctx))).not());
     // FALSE AND TRUE => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &and_nullable_bool(&context, &false_bool(&context), &true_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &and_bool(ctx, &false_bool(ctx), &true_bool(ctx))).not());
     // TRUE AND NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &and_nullable_bool(&context, &true_bool(&context), &null_bool(&context)),
+        ctx,
+        &and_bool(ctx, &true_bool(ctx), &null_bool(ctx)),
     ));
     // NULL AND TRUE => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &and_nullable_bool(&context, &null_bool(&context), &true_bool(&context)),
+        ctx,
+        &and_bool(ctx, &null_bool(ctx), &true_bool(ctx)),
     ));
     // FALSE AND FALSE => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &and_nullable_bool(&context, &false_bool(&context), &false_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &and_bool(ctx, &false_bool(ctx), &false_bool(ctx))).not());
     // FALSE AND NULL => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &and_nullable_bool(&context, &false_bool(&context), &null_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &and_bool(ctx, &false_bool(ctx), &null_bool(ctx))).not());
     // NULL AND FALSE => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &and_nullable_bool(&context, &null_bool(&context), &false_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &and_bool(ctx, &null_bool(ctx), &false_bool(ctx))).not());
     // NULL AND NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &and_nullable_bool(&context, &null_bool(&context), &null_bool(&context)),
+        ctx,
+        &and_bool(ctx, &null_bool(ctx), &null_bool(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -106,56 +75,50 @@ fn test_bool_logical_and() {
 #[test]
 fn test_bool_logical_or() {
     // Test logical OR function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // TRUE OR TRUE => TRUE
     solver.assert(&is_true(
-        &context,
-        &or_nullable_bool(&context, &true_bool(&context), &true_bool(&context)),
+        ctx,
+        &or_bool(ctx, &true_bool(ctx), &true_bool(ctx)),
     ));
     // TRUE OR FALSE => TRUE
     solver.assert(&is_true(
-        &context,
-        &or_nullable_bool(&context, &true_bool(&context), &false_bool(&context)),
+        ctx,
+        &or_bool(ctx, &true_bool(ctx), &false_bool(ctx)),
     ));
     // FALSE OR TRUE => TRUE
     solver.assert(&is_true(
-        &context,
-        &or_nullable_bool(&context, &false_bool(&context), &true_bool(&context)),
+        ctx,
+        &or_bool(ctx, &false_bool(ctx), &true_bool(ctx)),
     ));
     // TRUE OR NULL => TRUE
     solver.assert(&is_true(
-        &context,
-        &or_nullable_bool(&context, &true_bool(&context), &null_bool(&context)),
+        ctx,
+        &or_bool(ctx, &true_bool(ctx), &null_bool(ctx)),
     ));
     // NULL OR TRUE => TRUE
     solver.assert(&is_true(
-        &context,
-        &or_nullable_bool(&context, &null_bool(&context), &true_bool(&context)),
+        ctx,
+        &or_bool(ctx, &null_bool(ctx), &true_bool(ctx)),
     ));
     // FALSE OR FALSE => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &or_nullable_bool(&context, &false_bool(&context), &false_bool(&context)),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &or_bool(ctx, &false_bool(ctx), &false_bool(ctx))).not());
     // FALSE OR NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &or_nullable_bool(&context, &false_bool(&context), &null_bool(&context)),
+        ctx,
+        &or_bool(ctx, &false_bool(ctx), &null_bool(ctx)),
     ));
     // NULL OR FALSE => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &or_nullable_bool(&context, &null_bool(&context), &false_bool(&context)),
+        ctx,
+        &or_bool(ctx, &null_bool(ctx), &false_bool(ctx)),
     ));
     // NULL OR NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &or_nullable_bool(&context, &null_bool(&context), &null_bool(&context)),
+        ctx,
+        &or_bool(ctx, &null_bool(ctx), &null_bool(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -164,21 +127,15 @@ fn test_bool_logical_or() {
 #[test]
 fn test_bool_logical_not() {
     // Test logical NOT function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // NOT TRUE => FALSE
-    solver.assert(&is_true(&context, &not_nullable_bool(&context, &true_bool(&context))).not());
+    solver.assert(&is_true(ctx, &not_bool(ctx, &true_bool(ctx))).not());
     // NOT FALSE => TRUE
-    solver.assert(&is_true(
-        &context,
-        &not_nullable_bool(&context, &false_bool(&context)),
-    ));
+    solver.assert(&is_true(ctx, &not_bool(ctx, &false_bool(ctx))));
     // NOT NULL => NULL
-    solver.assert(&is_null_bool(
-        &context,
-        &not_nullable_bool(&context, &null_bool(&context)),
-    ));
+    solver.assert(&is_null_bool(ctx, &not_bool(ctx, &null_bool(ctx))));
 
     assert_eq!(solver.check(), SatResult::Sat);
 }
@@ -186,44 +143,30 @@ fn test_bool_logical_not() {
 #[test]
 fn test_int_eq() {
     // Test int equality function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 1 == 1 => TRUE
     solver.assert(&is_true(
-        &context,
-        &eq_int(
-            &context,
-            &Int::from_i64(&context, 1),
-            &Int::from_i64(&context, 1),
-        ),
+        ctx,
+        &eq_int(ctx, &const_int(ctx, 1), &const_int(ctx, 1)),
     ));
     // 1 == 2 => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &eq_int(
-                &context,
-                &Int::from_i64(&context, 1),
-                &Int::from_i64(&context, 2),
-            ),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &eq_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2))).not());
     // 1 == NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &eq_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
+        ctx,
+        &eq_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
     ));
     // NULL == 1 => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &eq_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
+        ctx,
+        &eq_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
     ));
     // NULL == NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &eq_int(&context, &null_int(&context), &null_int(&context)),
+        ctx,
+        &eq_int(ctx, &null_int(ctx), &null_int(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -232,44 +175,30 @@ fn test_int_eq() {
 #[test]
 fn test_int_lt() {
     // Test int less than function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 1 < 2 => TRUE
     solver.assert(&is_true(
-        &context,
-        &lt_int(
-            &context,
-            &Int::from_i64(&context, 1),
-            &Int::from_i64(&context, 2),
-        ),
+        ctx,
+        &lt_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2)),
     ));
     // 2 < 1 => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &lt_int(
-                &context,
-                &Int::from_i64(&context, 2),
-                &Int::from_i64(&context, 1),
-            ),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &lt_int(ctx, &const_int(ctx, 2), &const_int(ctx, 1))).not());
     // 1 < NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &lt_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
+        ctx,
+        &lt_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
     ));
     // NULL < 1 => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &lt_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
+        ctx,
+        &lt_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
     ));
     // NULL < NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &lt_int(&context, &null_int(&context), &null_int(&context)),
+        ctx,
+        &lt_int(ctx, &null_int(ctx), &null_int(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -278,53 +207,35 @@ fn test_int_lt() {
 #[test]
 fn test_int_le() {
     // Test int less than or equal function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 1 <= 2 => TRUE
     solver.assert(&is_true(
-        &context,
-        &le_int(
-            &context,
-            &Int::from_i64(&context, 1),
-            &Int::from_i64(&context, 2),
-        ),
+        ctx,
+        &le_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2)),
     ));
     // 2 <= 1 => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &le_int(
-                &context,
-                &Int::from_i64(&context, 2),
-                &Int::from_i64(&context, 1),
-            ),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &le_int(ctx, &const_int(ctx, 2), &const_int(ctx, 1))).not());
     // 1 <= 1 => TRUE
     solver.assert(&is_true(
-        &context,
-        &le_int(
-            &context,
-            &Int::from_i64(&context, 1),
-            &Int::from_i64(&context, 1),
-        ),
+        ctx,
+        &le_int(ctx, &const_int(ctx, 1), &const_int(ctx, 1)),
     ));
     // 1 <= NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &le_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
+        ctx,
+        &le_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
     ));
     // NULL <= 1 => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &le_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
+        ctx,
+        &le_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
     ));
     // NULL <= NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &le_int(&context, &null_int(&context), &null_int(&context)),
+        ctx,
+        &le_int(ctx, &null_int(ctx), &null_int(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -333,44 +244,30 @@ fn test_int_le() {
 #[test]
 fn test_int_gt() {
     // Test int greater than function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 2 > 1 => TRUE
     solver.assert(&is_true(
-        &context,
-        &gt_int(
-            &context,
-            &Int::from_i64(&context, 2),
-            &Int::from_i64(&context, 1),
-        ),
+        ctx,
+        &gt_int(ctx, &const_int(ctx, 2), &const_int(ctx, 1)),
     ));
     // 1 > 2 => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &gt_int(
-                &context,
-                &Int::from_i64(&context, 1),
-                &Int::from_i64(&context, 2),
-            ),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &gt_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2))).not());
     // 1 > NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &gt_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
+        ctx,
+        &gt_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
     ));
     // NULL > 1 => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &gt_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
+        ctx,
+        &gt_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
     ));
     // NULL > NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &gt_int(&context, &null_int(&context), &null_int(&context)),
+        ctx,
+        &gt_int(ctx, &null_int(ctx), &null_int(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -379,53 +276,35 @@ fn test_int_gt() {
 #[test]
 fn test_int_ge() {
     // Test int greater than or equal function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 2 >= 1 => TRUE
     solver.assert(&is_true(
-        &context,
-        &ge_int(
-            &context,
-            &Int::from_i64(&context, 2),
-            &Int::from_i64(&context, 1),
-        ),
+        ctx,
+        &ge_int(ctx, &const_int(ctx, 2), &const_int(ctx, 1)),
     ));
     // 1 >= 2 => FALSE
-    solver.assert(
-        &is_true(
-            &context,
-            &ge_int(
-                &context,
-                &Int::from_i64(&context, 1),
-                &Int::from_i64(&context, 2),
-            ),
-        )
-        .not(),
-    );
+    solver.assert(&is_true(ctx, &ge_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2))).not());
     // 1 >= 1 => TRUE
     solver.assert(&is_true(
-        &context,
-        &ge_int(
-            &context,
-            &Int::from_i64(&context, 1),
-            &Int::from_i64(&context, 1),
-        ),
+        ctx,
+        &ge_int(ctx, &const_int(ctx, 1), &const_int(ctx, 1)),
     ));
     // 1 >= NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &ge_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
+        ctx,
+        &ge_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
     ));
     // NULL >= 1 => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &ge_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
+        ctx,
+        &ge_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
     ));
     // NULL >= NULL => NULL
     solver.assert(&is_null_bool(
-        &context,
-        &ge_int(&context, &null_int(&context), &null_int(&context)),
+        ctx,
+        &ge_int(ctx, &null_int(ctx), &null_int(ctx)),
     ));
 
     assert_eq!(solver.check(), SatResult::Sat);
@@ -434,47 +313,43 @@ fn test_int_ge() {
 #[test]
 fn test_int_plus() {
     // Test int plus function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 1 + 2 = 3 => TRUE
     solver.assert(&is_true(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &plus_int(
-                &context,
-                &Int::from_i64(&context, 1),
-                &Int::from_i64(&context, 2),
-            ),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &plus_int(ctx, &const_int(ctx, 1), &const_int(ctx, 2)),
+            &const_int(ctx, 3),
         ),
     ));
     // 1 + NULL = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &plus_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &plus_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
+            &const_int(ctx, 3),
         ),
     ));
     // NULL + 1 = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &plus_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &plus_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
+            &const_int(ctx, 3),
         ),
     ));
     // NULL + NULL = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &plus_int(&context, &null_int(&context), &null_int(&context)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &plus_int(ctx, &null_int(ctx), &null_int(ctx)),
+            &const_int(ctx, 3),
         ),
     ));
 
@@ -484,47 +359,43 @@ fn test_int_plus() {
 #[test]
 fn test_int_minus() {
     // Test int minus function
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
     // 3 - 2 = 1 => TRUE
     solver.assert(&is_true(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &minus_int(
-                &context,
-                &Int::from_i64(&context, 3),
-                &Int::from_i64(&context, 2),
-            ),
-            &Int::from_i64(&context, 1),
+            ctx,
+            &minus_int(ctx, &const_int(ctx, 3), &const_int(ctx, 2)),
+            &const_int(ctx, 1),
         ),
     ));
     // 1 - NULL = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &minus_int(&context, &Int::from_i64(&context, 1), &null_int(&context)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &minus_int(ctx, &const_int(ctx, 1), &null_int(ctx)),
+            &const_int(ctx, 3),
         ),
     ));
     // NULL - 1 = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &minus_int(&context, &null_int(&context), &Int::from_i64(&context, 1)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &minus_int(ctx, &null_int(ctx), &const_int(ctx, 1)),
+            &const_int(ctx, 3),
         ),
     ));
     // NULL - NULL = 3 => NULL
     solver.assert(&is_null_bool(
-        &context,
+        ctx,
         &eq_int(
-            &context,
-            &minus_int(&context, &null_int(&context), &null_int(&context)),
-            &Int::from_i64(&context, 3),
+            ctx,
+            &minus_int(ctx, &null_int(ctx), &null_int(ctx)),
+            &const_int(ctx, 3),
         ),
     ));
 
@@ -532,16 +403,44 @@ fn test_int_minus() {
 }
 
 #[test]
+fn test_int_unary_minus() {
+    // Test int minus function
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
+
+    // - 0 => 0
+    solver.assert(&is_true(
+        ctx,
+        &eq_int(
+            ctx,
+            &unary_minus_int(ctx, &const_int(ctx, 0)),
+            &const_int(ctx, 0),
+        ),
+    ));
+    // - 2 => -2
+    solver.assert(&is_true(
+        ctx,
+        &eq_int(
+            ctx,
+            &unary_minus_int(ctx, &const_int(ctx, 2)),
+            &const_int(ctx, -2),
+        ),
+    ));
+    // - NULL => NULL
+    solver.assert(&is_null_int(ctx, &unary_minus_int(ctx, &null_int(ctx))));
+
+    assert_eq!(solver.check(), SatResult::Sat);
+}
+
+#[test]
 fn test_int_nullability() {
     // Test int nullability
-    let context = Context::new(&Config::new());
-    let solver = Solver::new(&context);
+    let ctx = &Context::new(&Config::new());
+    let solver = Solver::new(ctx);
 
-    let int = Int::from_i64(&context, 1);
-    solver.assert(&is_null_int(&context, &int).not());
-    solver.assert(&is_not_null_int(&context, &int));
-    solver.assert(&is_null_int(&context, &null_int(&context)));
-    solver.assert(&is_not_null_int(&context, &null_int(&context)).not());
+    let int = const_int(ctx, 1);
+    solver.assert(&is_null_int(ctx, &int).not());
+    solver.assert(&is_null_int(ctx, &null_int(ctx)));
 
     assert_eq!(solver.check(), SatResult::Sat);
 }

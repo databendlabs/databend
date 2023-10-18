@@ -81,12 +81,11 @@ pub struct PushDownInfo {
     /// Assumption: expression's data type must be `DataType::Boolean`.
     pub filters: Option<Filters>,
     pub is_deterministic: bool,
-    /// Optional prewhere information
-    /// used for prewhere optimization
+    /// Optional prewhere information used for prewhere optimization.
     pub prewhere: Option<PrewhereInfo>,
-    /// Optional limit to skip read
+    /// Optional limit to skip read.
     pub limit: Option<usize>,
-    /// Optional order_by expression plan, asc, null_first
+    /// Optional order_by expression plan, asc, null_first.
     pub order_by: Vec<(RemoteExpr<String>, bool, bool)>,
     /// Optional virtual columns
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,

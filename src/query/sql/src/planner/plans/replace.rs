@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Expr;
 use common_expression::DataSchemaRef;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
@@ -30,6 +31,7 @@ pub struct Replace {
     pub on_conflict_fields: Vec<TableField>,
     pub schema: TableSchemaRef,
     pub source: InsertInputSource,
+    pub delete_when: Option<Expr>,
 }
 
 impl PartialEq for Replace {

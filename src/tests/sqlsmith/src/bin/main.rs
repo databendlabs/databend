@@ -39,8 +39,12 @@ pub struct Args {
     pass: String,
 
     /// The number of test cases to generate.
-    #[clap(long, default_value = "100")]
+    #[clap(long, default_value = "500")]
     count: usize,
+
+    /// The number of timeout seconds of one query.
+    #[clap(long, default_value = "5")]
+    timeout: u64,
 }
 
 #[tokio::main(flavor = "multi_thread", worker_threads = 5)]
@@ -53,6 +57,6 @@ async fn main() {
         "databend://{}:{}@{}:{}/{}?sslmode=disable",
         args.user, args.pass, args.host, args.port, args.db
     );
-    let runner = Runner::new(dsn, args.count, None);
+    let runner = Runner::new(dsn, args.count, None, args.timeout);
     runner.run().await;
 }

@@ -515,9 +515,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Null => DataType::Null,
             ScalarRef::EmptyArray => DataType::EmptyArray,
             ScalarRef::EmptyMap => DataType::EmptyMap,
-            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
-                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
-            }),
+            ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
                 DecimalScalar::DECIMAL_TYPE(_, size) =>
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),

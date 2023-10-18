@@ -15,24 +15,26 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
-use std::error::Error;
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_tracing::func_name;
 use minitrace::prelude::*;
-use tonic::codegen::futures_core::Stream;
+use tonic::codegen::BoxStream;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
 
+use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
-
-pub type GrpcStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
@@ -50,35 +52,6 @@ impl RaftServiceImpl {
             raft_metrics::network::incr_recv_bytes_from_peer(addr.to_string(), bytes);
         }
     }
-
-    /// Parse tonic::Request and decode it into required type.
-    fn parse_req<T>(request: tonic::Request<RaftRequest>) -> Result<T, tonic::Status>
-    where T: serde::de::DeserializeOwned {
-        let raft_req = request.into_inner();
-        let req: T = serde_json::from_str(&raft_req.data).map_err(Self::invalid_arg)?;
-        Ok(req)
-    }
-
-    /// Create an Ok response for raft API.
-    fn ok_response<D>(d: D) -> Result<tonic::Response<RaftReply>, tonic::Status>
-    where D: serde::Serialize {
-        let data = serde_json::to_string(&d).expect("fail to serialize resp");
-        let reply = RaftReply {
-            data,
-            error: "".to_string(),
-        };
-        Ok(tonic::Response::new(reply))
-    }
-
-    /// Create a tonic::Status with invalid argument error.
-    fn invalid_arg(e: impl Error) -> tonic::Status {
-        tonic::Status::invalid_argument(e.to_string())
-    }
-
-    /// Create a tonic::Status with internal error.
-    fn internal_err(e: impl Error) -> tonic::Status {
-        tonic::Status::internal(e.to_string())
-    }
 }
 
 #[async_trait::async_trait]
@@ -90,13 +63,36 @@ impl RaftService for RaftServiceImpl {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
 
         async {
-            let forward_req: ForwardRequest = Self::parse_req(request)?;
+            let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
 
             let res = self.meta_node.handle_forwardable_request(forward_req).await;
 
             let raft_reply: RaftReply = res.into();
 
             Ok(tonic::Response::new(raft_reply))
+        }
+        .in_span(root)
+        .await
+    }
+
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
+        async {
+            let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
+
+            let strm = self
+                .meta_node
+                .handle_forwardable_request(forward_req)
+                .await
+                .map_err(GrpcHelper::internal_err)?;
+
+            Ok(tonic::Response::new(strm))
         }
         .in_span(root)
         .await
@@ -111,15 +107,15 @@ impl RaftService for RaftServiceImpl {
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
 
-            let ae_req = Self::parse_req(request)?;
+            let ae_req = GrpcHelper::parse_req(request)?;
             let raft = &self.meta_node.raft;
 
             let resp = raft
                 .append_entries(ae_req)
                 .await
-                .map_err(Self::internal_err)?;
+                .map_err(GrpcHelper::internal_err)?;
 
-            Self::ok_response(resp)
+            GrpcHelper::ok_response(resp)
         }
         .in_span(root)
         .await
@@ -142,13 +138,13 @@ impl RaftService for RaftServiceImpl {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
             raft_metrics::network::incr_snapshot_recv_inflights_from_peer(addr.clone(), 1);
 
-            let is_req = Self::parse_req(request)?;
+            let is_req = GrpcHelper::parse_req(request)?;
             let raft = &self.meta_node.raft;
 
             let resp = raft
                 .install_snapshot(is_req)
                 .await
-                .map_err(Self::internal_err);
+                .map_err(GrpcHelper::internal_err);
 
             raft_metrics::network::sample_snapshot_recv(
                 addr.clone(),
@@ -158,7 +154,7 @@ impl RaftService for RaftServiceImpl {
             raft_metrics::network::incr_snapshot_recv_status_from_peer(addr.clone(), resp.is_ok());
 
             match resp {
-                Ok(resp) => Self::ok_response(resp),
+                Ok(resp) => GrpcHelper::ok_response(resp),
                 Err(e) => Err(e),
             }
         }
@@ -175,12 +171,12 @@ impl RaftService for RaftServiceImpl {
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
 
-            let v_req = Self::parse_req(request)?;
+            let v_req = GrpcHelper::parse_req(request)?;
             let raft = &self.meta_node.raft;
 
-            let resp = raft.vote(v_req).await.map_err(Self::internal_err)?;
+            let resp = raft.vote(v_req).await.map_err(GrpcHelper::internal_err)?;
 
-            Self::ok_response(resp)
+            GrpcHelper::ok_response(resp)
         }
         .in_span(root)
         .await

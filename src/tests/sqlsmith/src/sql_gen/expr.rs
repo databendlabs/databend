@@ -22,6 +22,7 @@ use common_ast::ast::Literal;
 use common_ast::ast::MapAccessor;
 use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
+use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
 use common_expression::types::DataType;
 use common_expression::types::DecimalDataType;
@@ -34,13 +35,13 @@ use crate::sql_gen::SqlGenerator;
 
 impl<'a, R: Rng> SqlGenerator<'a, R> {
     pub(crate) fn gen_expr(&mut self, ty: &DataType) -> Expr {
-        match self.rng.gen_range(0..=10) {
-            0..=3 => self.gen_column(ty),
-            4..=6 => self.gen_scalar_value(ty),
-            7 => self.gen_scalar_func(ty),
-            8 => self.gen_factory_scalar_func(ty),
-            9 => self.gen_window_func(ty),
-            10 => self.gen_other_expr(ty),
+        match self.rng.gen_range(0..=13) {
+            0..=8 => self.gen_simple_expr(ty),
+            9 => self.gen_scalar_func(ty),
+            10 => self.gen_factory_scalar_func(ty),
+            11 => self.gen_window_func(ty),
+            12 => self.gen_other_expr(ty),
+            13 => self.gen_cast_expr(ty),
             _ => unreachable!(),
         }
     }
@@ -482,7 +483,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         DataType::Timestamp
                     };
                     let expr = self.gen_expr(&expr_ty);
-                    let kind = match self.rng.gen_range(0..=6) {
+                    let kind = match self.rng.gen_range(0..=9) {
                         0 => IntervalKind::Year,
                         1 => IntervalKind::Quarter,
                         2 => IntervalKind::Month,
@@ -492,6 +493,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                         6 => IntervalKind::Second,
                         7 => IntervalKind::Doy,
                         8 => IntervalKind::Dow,
+                        9 => IntervalKind::Week,
                         _ => unreachable!(),
                     };
                     Expr::Extract {
@@ -635,5 +637,73 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
             }
         }
+    }
+
+    fn gen_cast_expr(&mut self, ty: &DataType) -> Expr {
+        // can't cast to nested types
+        if matches!(
+            ty.remove_nullable(),
+            DataType::Null
+                | DataType::EmptyArray
+                | DataType::EmptyMap
+                | DataType::Array(_)
+                | DataType::Map(_)
+                | DataType::Tuple(_)
+                | DataType::Generic(_)
+        ) {
+            return self.gen_other_expr(ty);
+        }
+
+        let source_type = self.gen_data_type();
+        let source_expr = self.gen_expr(&source_type);
+        let target_type = convert_to_type_name(ty);
+
+        if self.rng.gen_bool(0.5) {
+            Expr::Cast {
+                span: None,
+                expr: Box::new(source_expr),
+                target_type,
+                pg_style: self.rng.gen_bool(0.5),
+            }
+        } else {
+            Expr::TryCast {
+                span: None,
+                expr: Box::new(source_expr),
+                target_type,
+            }
+        }
+    }
+}
+
+fn convert_to_type_name(ty: &DataType) -> TypeName {
+    match ty {
+        DataType::Boolean => TypeName::Boolean,
+        DataType::Number(NumberDataType::UInt8) => TypeName::UInt8,
+        DataType::Number(NumberDataType::UInt16) => TypeName::UInt16,
+        DataType::Number(NumberDataType::UInt32) => TypeName::UInt32,
+        DataType::Number(NumberDataType::UInt64) => TypeName::UInt64,
+        DataType::Number(NumberDataType::Int8) => TypeName::Int8,
+        DataType::Number(NumberDataType::Int16) => TypeName::Int16,
+        DataType::Number(NumberDataType::Int32) => TypeName::Int32,
+        DataType::Number(NumberDataType::Int64) => TypeName::Int64,
+        DataType::Number(NumberDataType::Float32) => TypeName::Float32,
+        DataType::Number(NumberDataType::Float64) => TypeName::Float64,
+        DataType::Decimal(DecimalDataType::Decimal128(size)) => TypeName::Decimal {
+            precision: size.precision,
+            scale: size.scale,
+        },
+        DataType::Decimal(DecimalDataType::Decimal256(size)) => TypeName::Decimal {
+            precision: size.precision,
+            scale: size.scale,
+        },
+        DataType::Date => TypeName::Date,
+        DataType::Timestamp => TypeName::Timestamp,
+        DataType::String => TypeName::String,
+        DataType::Bitmap => TypeName::Bitmap,
+        DataType::Variant => TypeName::Variant,
+        DataType::Nullable(box inner_ty) => {
+            TypeName::Nullable(Box::new(convert_to_type_name(inner_ty)))
+        }
+        _ => unreachable!(),
     }
 }

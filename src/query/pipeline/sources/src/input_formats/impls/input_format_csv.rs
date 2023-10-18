@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderCSV;
@@ -59,10 +60,18 @@ impl InputFormatCSV {
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         let mut reader = Cursor::new(col_data);
         if reader.eof() {
-            builder.push_default();
+            match default_values {
+                None => {
+                    builder.push_default();
+                }
+                Some(values) => {
+                    builder.push(values[column_index].as_ref());
+                }
+            }
             return Ok(());
         }
         field_decoder
@@ -78,6 +87,7 @@ impl InputFormatCSV {
         schema: &TableSchemaRef,
         field_ends: &[usize],
         columns_to_read: &Option<Vec<usize>>,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         if let Some(columns_to_read) = columns_to_read {
             for c in columns_to_read {
@@ -87,7 +97,14 @@ impl InputFormatCSV {
                     let field_start = if *c == 0 { 0 } else { field_ends[c - 1] };
                     let field_end = field_ends[*c];
                     let col_data = &buf[field_start..field_end];
-                    Self::read_column(&mut columns[*c], field_decoder, col_data, *c, schema)?;
+                    Self::read_column(
+                        &mut columns[*c],
+                        field_decoder,
+                        col_data,
+                        *c,
+                        schema,
+                        default_values,
+                    )?;
                 }
             }
         } else {
@@ -95,7 +112,7 @@ impl InputFormatCSV {
             for (c, column) in columns.iter_mut().enumerate() {
                 let field_end = field_ends[c];
                 let col_data = &buf[field_start..field_end];
-                Self::read_column(column, field_decoder, col_data, c, schema)?;
+                Self::read_column(column, field_decoder, col_data, c, schema, default_values)?;
                 field_start = field_end;
             }
         }
@@ -176,6 +193,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 &builder.ctx.schema,
                 &batch.field_ends[field_end_idx..field_end_idx + num_fields],
                 &builder.projection,
+                &builder.ctx.default_values,
             ) {
                 builder.ctx.on_error(
                     e,

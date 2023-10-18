@@ -113,7 +113,6 @@ use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
 use crate::MetadataRef;
-use crate::TypeCheck;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -673,7 +672,7 @@ impl<'a> TypeChecker<'a> {
                 let func_name = normalize_identifier(name, self.name_resolution_ctx).to_string();
                 let func_name = func_name.as_str();
                 if !is_builtin_function(func_name)
-                    && !Self::all_rewritable_scalar_function().contains(&func_name)
+                    && !Self::all_sugar_functions().contains(&func_name)
                 {
                     if let Some(udf) = self.resolve_udf(*span, func_name, args).await? {
                         return Ok(udf);
@@ -686,7 +685,7 @@ impl<'a> TypeChecker<'a> {
                             .chain(GENERAL_WINDOW_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(GENERAL_LAMBDA_FUNCTIONS.iter().cloned().map(str::to_string))
                             .chain(
-                                Self::all_rewritable_scalar_function()
+                                Self::all_sugar_functions()
                                     .iter()
                                     .cloned()
                                     .map(str::to_string),
@@ -1042,6 +1041,10 @@ impl<'a> TypeChecker<'a> {
                 span, kind, expr, ..
             } => self.resolve_extract_expr(*span, kind, expr).await?,
 
+            Expr::DatePart {
+                span, kind, expr, ..
+            } => self.resolve_extract_expr(*span, kind, expr).await?,
+
             Expr::Interval { span, .. } => {
                 return Err(ErrorCode::SemanticError(
                     "Unsupported interval expression yet".to_string(),
@@ -1280,7 +1283,7 @@ impl<'a> TypeChecker<'a> {
             | WindowFrameBound::Preceding(Some(box expr)) => {
                 let box (expr, _) = self.resolve(expr).await?;
                 let (expr, _) =
-                    ConstantFolder::fold(&expr.type_check()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    ConstantFolder::fold(&expr.as_expr()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     Ok(Some(scalar))
                 } else {
@@ -1738,7 +1741,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Check if current function is a virtual function, e.g. `database`, `version`
         if let Some(rewritten_func_result) = self
-            .try_rewrite_scalar_function(span, func_name, arguments)
+            .try_rewrite_sugar_function(span, func_name, arguments)
             .await
         {
             return rewritten_func_result;
@@ -1962,6 +1965,10 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_function(span, "to_day_of_week", vec![], &[arg])
                     .await
             }
+            ASTIntervalKind::Week => {
+                self.resolve_function(span, "to_week_of_year", vec![], &[arg])
+                    .await
+            }
         }
     }
 
@@ -2125,7 +2132,7 @@ impl<'a> TypeChecker<'a> {
         Ok(Box::new((subquery_expr.into(), data_type)))
     }
 
-    pub fn all_rewritable_scalar_function() -> &'static [&'static str] {
+    pub fn all_sugar_functions() -> &'static [&'static str] {
         &[
             "database",
             "currentdatabase",
@@ -2147,12 +2154,14 @@ impl<'a> TypeChecker<'a> {
             "array_reduce",
             "to_variant",
             "try_to_variant",
+            "greatest",
+            "least",
         ]
     }
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
-    async fn try_rewrite_scalar_function(
+    async fn try_rewrite_sugar_function(
         &mut self,
         span: Span,
         func_name: &str,
@@ -2511,6 +2520,26 @@ impl<'a> TypeChecker<'a> {
                 let box (scalar, data_type) = self.resolve(args[0]).await.ok()?;
                 self.resolve_cast_to_variant(span, &data_type, &scalar, true)
                     .await
+            }
+            ("greatest", args) => {
+                let (array, _) = *self
+                    .resolve_function(span, "array", vec![], args)
+                    .await
+                    .ok()?;
+                Some(
+                    self.resolve_scalar_function_call(span, "array_max", vec![], vec![array])
+                        .await,
+                )
+            }
+            ("least", args) => {
+                let (array, _) = *self
+                    .resolve_function(span, "array", vec![], args)
+                    .await
+                    .ok()?;
+                Some(
+                    self.resolve_scalar_function_call(span, "array_min", vec![], vec![array])
+                        .await,
+                )
             }
             _ => None,
         }
@@ -3346,6 +3375,13 @@ impl<'a> TypeChecker<'a> {
                     target_type: target_type.clone(),
                 }),
                 Expr::Extract { span, kind, expr } => Ok(Expr::Extract {
+                    span: *span,
+                    kind: *kind,
+                    expr: Box::new(
+                        self.clone_expr_with_replacement(expr.as_ref(), replacement_fn)?,
+                    ),
+                }),
+                Expr::DatePart { span, kind, expr } => Ok(Expr::DatePart {
                     span: *span,
                     kind: *kind,
                     expr: Box::new(

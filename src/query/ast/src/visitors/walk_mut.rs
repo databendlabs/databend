@@ -68,6 +68,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             target_type,
         } => visitor.visit_try_cast(*span, expr, target_type),
         Expr::Extract { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
+        Expr::DatePart { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
         Expr::Position {
             span,
             substr_expr,

@@ -1,0 +1,25 @@
+# issue 13269
+
+statement ok
+DROP DATABASE IF EXISTS issue_13296
+
+statement ok
+CREATE DATABASE issue_13269
+
+statement ok
+USE issue_13269
+
+statement ok
+create table test(a int)
+
+statement ok
+insert into test select * from numbers(3)
+
+query F rowsort
+select coalesce((case when a = 0 then NULL else 6/a end) ,0,1) aaa from ( select 0 a union all select 3 a ) test
+----
+0.0
+2.0
+
+statement ok
+DROP DATABASE issue_13269

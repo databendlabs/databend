@@ -20,7 +20,7 @@ env:
 
 jobs:
   check:
-    runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -304,7 +304,7 @@ jobs:
         dirs:
           - "ydb"
           - "tpcds"
-          # - "tpch"
+          - "tpch"
           - "cluster"
     steps:
       - uses: actions/checkout@v4
@@ -312,7 +312,7 @@ jobs:
         timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
-          handlers: mysql,http,clickhouse
+          handlers: http
       - name: Upload failure
         if: failure()
         uses: ./.github/actions/artifact_failure

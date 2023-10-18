@@ -25,7 +25,7 @@ echo "update table column"
 echo "update t17_0003 set c=2 where c=1" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
-echo "drop table t17_0003" | $MYSQL_CLIENT_CONNECT
+echo "drop table t17_0003 all" | $MYSQL_CLIENT_CONNECT
 
 ## create two column table
 echo "create table t17_0003(a int not null, b int not null)" | $MYSQL_CLIENT_CONNECT
@@ -50,4 +50,4 @@ echo "update table column"
 echo "update t17_0003 set a=3 where a=1" | $MYSQL_CLIENT_CONNECT
 
 ## Drop table.
-echo "drop table t17_0003" | $MYSQL_CLIENT_CONNECT
+echo "drop table t17_0003 all" | $MYSQL_CLIENT_CONNECT

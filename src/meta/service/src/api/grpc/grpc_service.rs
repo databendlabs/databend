@@ -21,6 +21,7 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::time::Instant;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_client::MetaGrpcReq;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
@@ -33,6 +34,7 @@ use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
@@ -48,6 +50,7 @@ use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
 use tokio_stream::Stream;
+use tonic::codegen::BoxStream;
 use tonic::metadata::MetadataMap;
 use tonic::transport::NamedService;
 use tonic::Request;
@@ -55,7 +58,8 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
-use crate::meta_service::meta_service_impl::GrpcStream;
+use crate::grpc_helper::GrpcHelper;
+use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -126,6 +130,35 @@ impl MetaServiceImpl {
     }
 
     #[minitrace::trace]
+    async fn handle_kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+
+        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+
+        let req = ForwardRequest {
+            forward_to_leader: 1,
+            body: req,
+        };
+
+        let t0 = Instant::now();
+
+        let res = self
+            .meta_node
+            .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
+            .await
+            .map_err(GrpcHelper::internal_err);
+
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) ReadRequest: {:?}", elapsed, req);
+
+        network_metrics::incr_request_result(res.is_ok());
+        res
+    }
+
+    #[minitrace::trace]
     async fn handle_txn(&self, request: Request<TxnRequest>) -> Result<TxnReply, Status> {
         let request = request.into_inner();
 
@@ -158,8 +191,7 @@ impl NamedService for MetaServiceImpl {
 
 #[async_trait::async_trait]
 impl MetaService for MetaServiceImpl {
-    // rpc handshake related type
-    type HandshakeStream = GrpcStream<HandshakeResponse>;
+    type HandshakeStream = BoxStream<HandshakeResponse>;
 
     // rpc handshake first
     #[minitrace::trace]
@@ -231,6 +263,22 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
 
         Ok(Response::new(reply))
+    }
+
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        self.check_token(request.metadata())?;
+
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
+        let strm = self.handle_kv_read_v1(request).in_span(root).await?;
+
+        Ok(Response::new(strm))
     }
 
     async fn transaction(

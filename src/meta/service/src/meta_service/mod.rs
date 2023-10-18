@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub use forwarder::MetaForwarder;
 pub use meta_service_impl::RaftServiceImpl;
 pub use raftmeta::MetaNode;
 
@@ -21,6 +22,7 @@ pub use crate::message::JoinRequest;
 pub use crate::message::LeaveRequest;
 
 mod errors;
+mod forwarder;
 pub mod meta_leader;
 mod meta_node_kv_api_impl;
 pub mod meta_service_impl;

@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
+use std::u64::MAX;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
@@ -33,6 +34,7 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::UpdatePlan;
+use common_sql::IndexType;
 use common_sql::ScalarExpr;
 use common_sql::TypeCheck;
 use common_storages_factory::Table;
@@ -51,6 +53,8 @@ use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
 
+// predicate_index should not be conflict with update expr's column_binding's index.
+pub const PREDICATE_COLUMN_INDEX: IndexType = MAX as usize;
 const DUMMY_COL_INDEX: usize = 1;
 pub struct MergeIntoInterpreter {
     ctx: Arc<QueryContext>,
@@ -93,14 +97,6 @@ impl Interpreter for MergeIntoInterpreter {
             operation_name: "merge_into".to_owned(),
         };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
-
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
         } else {
@@ -113,6 +109,15 @@ impl Interpreter for MergeIntoInterpreter {
                 }
             });
         }
+
+        hook_compact(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            compact_target,
+            compact_hook_trace_ctx,
+        )
+        .await;
+
         Ok(build_res)
     }
 }
@@ -260,7 +265,7 @@ impl MergeIntoInterpreter {
                         self.ctx.clone(),
                         fuse_table.schema().into(),
                         col_indices,
-                        Some(join_output_schema.num_fields()),
+                        Some(PREDICATE_COLUMN_INDEX),
                         target_alias.is_some(),
                     )?;
                 let update_list = update_list
@@ -274,7 +279,7 @@ impl MergeIntoInterpreter {
                                     // there will add a predicate col when we process matched clauses.
                                     // so it's not in join_output_schema for now. But it's must be added
                                     // to the tail, so let do it like below.
-                                    if name == &join_output_schema.num_fields().to_string() {
+                                    if *name == PREDICATE_COLUMN_INDEX.to_string() {
                                         join_output_schema.num_fields()
                                     } else {
                                         join_output_schema.index_of(name).unwrap()
@@ -306,7 +311,7 @@ impl MergeIntoInterpreter {
 
         // recv datablocks from matched upstream and unmatched upstream
         // transform and append dat
-        let merge_into = PhysicalPlan::MergeInto(MergeInto {
+        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
             input: Box::new(merge_into_source),
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
@@ -320,10 +325,10 @@ impl MergeIntoInterpreter {
                 .into_iter()
                 .enumerate()
                 .collect(),
-        });
+        }));
 
         // build mutation_aggregate
-        let physical_plan = PhysicalPlan::CommitSink(CommitSink {
+        let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
             input: Box::new(merge_into),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
@@ -331,7 +336,7 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
             merge_meta: false,
-        });
+        }));
 
         Ok((physical_plan, table_info.clone()))
     }
@@ -342,7 +347,7 @@ impl MergeIntoInterpreter {
         schema: DataSchemaRef,
     ) -> Result<RemoteExpr> {
         let scalar_expr = scalar_expr
-            .resolve_and_check(schema.as_ref())?
+            .type_check(schema.as_ref())?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
         let (filer, _) = ConstantFolder::fold(
             &scalar_expr,
