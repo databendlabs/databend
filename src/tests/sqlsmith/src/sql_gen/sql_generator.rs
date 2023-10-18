@@ -45,6 +45,9 @@ pub(crate) struct SqlGenerator<'a, R: Rng> {
     pub(crate) bound_tables: Vec<Table>,
     pub(crate) bound_columns: Vec<Column>,
     pub(crate) is_join: bool,
+    // TODO: Generate expressions of the required type
+    pub(crate) only_scalar_expr: bool,
+    pub(crate) expr_depth: usize,
     pub(crate) scalar_func_sigs: Vec<FunctionSignature>,
     pub(crate) rng: &'a mut R,
     pub(crate) group_by: Option<GroupBy>,
@@ -80,6 +83,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             bound_tables: vec![],
             bound_columns: vec![],
             is_join: false,
+            only_scalar_expr: false,
+            expr_depth: 2,
             scalar_func_sigs,
             rng,
             group_by: None,
