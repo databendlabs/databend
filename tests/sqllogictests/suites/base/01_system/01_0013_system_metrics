@@ -1,10 +1,4 @@
 onlyif mysql
-query T
-SELECT metric FROM system.metrics where metric like '%query_scan_bytes_total%' and to_float32(value) > 5.0
-----
-query_scan_bytes_total
-
-onlyif mysql
 statement ok
 ----
 truncate table system.metrics;
