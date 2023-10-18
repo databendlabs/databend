@@ -552,6 +552,9 @@ impl<'a> Binder {
             Statement::ShowNetworkPolicies => {
                 self.bind_show_network_policies().await?
             }
+            Statement::CreateTask(stmt) => {
+                self.bind_create_task(stmt).await?
+            }
         };
         Ok(plan)
     }

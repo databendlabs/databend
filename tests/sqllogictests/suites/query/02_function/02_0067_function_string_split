@@ -6,22 +6,43 @@ select split('127.0.0.1', '.');
 query T
 select split('|', '|');
 ----
-['','']
+['']
+
+query T
+select split('', '|');
+----
+['']
 
 query T
 select split('ab', '');
 ----
-['','a','b','']
+['ab']
 
 query T
 select split_part('ab', '', 1);
 ----
-(empty)
+ab
+
+query T
+select split_part('ab', '', 0);
+----
+ab
+
+query T
+select split_part('ab', '', -1);
+----
+ab
 
 query T
 select split_part('ab', '', 2);
 ----
-a
+(empty)
+
+query T
+select split_part('ab', '', -2);
+----
+(empty)
+
 
 query T
 select split_part('|', '|', 1);

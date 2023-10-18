@@ -445,6 +445,8 @@ impl InterpreterFactory {
             Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
+
+            Plan::CreateTask(_) => todo!(),
         }
     }
 }

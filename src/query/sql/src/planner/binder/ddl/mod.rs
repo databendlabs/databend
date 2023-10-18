@@ -23,5 +23,6 @@ mod role;
 mod share;
 mod stage;
 mod table;
+mod task;
 mod view;
 mod virtual_column;

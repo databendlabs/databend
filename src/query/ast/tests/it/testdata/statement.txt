@@ -12777,6 +12777,80 @@ AlterNetworkPolicy(
 
 
 ---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 MINUTE SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: IntervalMinutes(
+            15,
+        ),
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        sql: "SELECT *\nFROM\n    MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 6 * * *",
+            Some(
+                "America/Los_Angeles",
+            ),
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "serverless + cron",
+        sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 12 * * *",
+            None,
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "",
+        sql: "VACUUM TABLE t ",
+    },
+)
+
+
+---------- Input ----------
 --各环节转各环节转各环节转各环节转各
   select 34343
 ---------- Output ---------
