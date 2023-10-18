@@ -157,10 +157,6 @@ where
         Self::default()
     }
 
-    fn mem_size() -> Option<usize> {
-        Some(std::mem::size_of::<T::Scalar>() + 1)
-    }
-
     fn add(&mut self, other: Option<T::ScalarRef<'_>>) {
         if let Some(other) = other {
             match &self.value {

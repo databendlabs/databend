@@ -40,9 +40,7 @@ use super::aggregate_scalar_state::ScalarStateFunc;
 use super::aggregate_scalar_state::TYPE_ANY;
 use super::aggregate_scalar_state::TYPE_MAX;
 use super::aggregate_scalar_state::TYPE_MIN;
-use super::deserialize_fixed_state;
 use super::deserialize_state;
-use super::serialize_fixed_state;
 use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::assert_unary_arguments;
@@ -76,10 +74,6 @@ where
 
     fn init_state(&self, place: StateAddr) {
         place.write(|| State::new());
-    }
-
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        State::mem_size()
     }
 
     fn state_layout(&self) -> Layout {
@@ -125,24 +119,14 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-
-        if self.serialize_size_per_row().is_some() {
-            serialize_fixed_state(writer, state)
-        } else {
-            serialize_state(writer, state)
-        }
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
 
-        if self.serialize_size_per_row().is_some() {
-            let rhs: State = deserialize_fixed_state(reader)?;
-            state.merge(&rhs)
-        } else {
-            let rhs: State = deserialize_state(reader)?;
-            state.merge(&rhs)
-        }
+        let rhs: State = deserialize_state(reader)?;
+        state.merge(&rhs)
     }
 
     fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {

@@ -34,8 +34,8 @@ use serde::Serialize;
 use super::aggregate_sum::DecimalSumState;
 use super::aggregate_sum::NumberSumState;
 use super::aggregate_sum::SumState;
-use super::deserialize_fixed_state;
-use super::serialize_fixed_state;
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
@@ -78,10 +78,6 @@ where T: SumState
         });
     }
 
-    fn serialize_size_per_row(&self) -> Option<usize> {
-        Some(std::mem::size_of::<T>() + 8)
-    }
-
     fn state_layout(&self) -> Layout {
         Layout::new::<AvgState<T>>()
     }
@@ -122,12 +118,12 @@ where T: SumState
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AvgState<T>>();
 
-        serialize_fixed_state(writer, state)
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AvgState<T>>();
-        let rhs: AvgState<T> = deserialize_fixed_state(reader)?;
+        let rhs: AvgState<T> = deserialize_state(reader)?;
 
         state.count += rhs.count;
         state.value.merge(&rhs.value)
