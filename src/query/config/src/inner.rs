@@ -597,7 +597,7 @@ impl Default for CacheConfig {
             table_bloom_index_filter_size: 2147483648,
             table_prune_partitions_count: 256,
             data_cache_storage: Default::default(),
-            table_data_cache_population_queue_size: 65536,
+            table_data_cache_population_queue_size: 0,
             disk_cache_config: Default::default(),
             table_data_deserialized_data_bytes: 0,
         }
