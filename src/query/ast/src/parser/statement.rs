@@ -155,8 +155,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
-            ~ #merge_source  ~ #table_alias? ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
+            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -166,7 +166,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             target_alias,
             _,
             source,
-            source_alias,
             _,
             join_expr,
             merge_options,
@@ -177,7 +176,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table_ident: table,
                 source,
-                source_alias,
                 target_alias,
                 join_expr,
                 merge_options,
@@ -1618,8 +1616,11 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         },
     );
 
-    let query = map(query, |query| MergeSource::Select {
-        query: Box::new(query),
+    let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
+        MergeSource::Select {
+            query: Box::new(query),
+            source_alias,
+        }
     });
 
     rule!(
