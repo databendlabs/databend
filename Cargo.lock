@@ -11180,6 +11180,7 @@ dependencies = [
  "common-catalog",
  "common-config",
  "common-exception",
+ "log",
  "storages-common-cache",
  "storages-common-index",
  "storages-common-table-meta",
