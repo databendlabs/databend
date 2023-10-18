@@ -187,7 +187,7 @@ impl PhysicalPlan {
             | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
-            | PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_) => Ok(DataSchemaRef::default()),
         }
