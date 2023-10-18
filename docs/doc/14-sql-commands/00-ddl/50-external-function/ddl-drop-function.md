@@ -5,7 +5,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced or updated: v1.2.116"/>
 
-Drops a user-defined function.
+Drops an external function.
 
 ## Syntax
 
