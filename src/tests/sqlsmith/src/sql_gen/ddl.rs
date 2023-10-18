@@ -139,7 +139,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub fn gen_data_type_name(
+    pub(crate) fn gen_data_type_name(
         &mut self,
         idx: Option<usize>,
     ) -> (TypeName, Option<NullableConstraint>) {
@@ -163,11 +163,16 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    pub fn gen_new_column(&mut self) -> ColumnDefinition {
-        let field_num: String = (0..5)
+    pub(crate) fn gen_random_name(&mut self) -> String {
+        let name: String = (0..5)
             .map(|_| self.rng.sample(Alphanumeric) as char)
             .collect();
-        let new_column_name = Identifier::from_name(format!("cc{:?}", field_num));
+        name
+    }
+
+    pub(crate) fn gen_new_column(&mut self) -> ColumnDefinition {
+        let name = self.gen_random_name();
+        let new_column_name = Identifier::from_name(format!("cc{}", name));
         let (data_type, nullable_constraint) = self.gen_data_type_name(None);
         ColumnDefinition {
             name: new_column_name,
