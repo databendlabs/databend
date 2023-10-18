@@ -22,6 +22,7 @@ use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::ArrayType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
@@ -757,6 +758,73 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "split",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
+                |str, sep, output, ctx| match String::from_utf8(str.to_vec()) {
+                    Ok(s) => match String::from_utf8(sep.to_vec()) {
+                        Ok(sep) => {
+                            let res: Vec<&str> = s.split(&sep).collect();
+                            let len = res.len();
+                            let mut builder = StringColumnBuilder::with_capacity(len, len);
+                            for i in res {
+                                builder.put_slice(i.as_bytes());
+                                builder.commit_row();
+                            }
+                            let column = builder.build();
+                            output.builder.append_column(&column);
+                            output.commit_row()
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.commit_row();
+                        }
+                    },
+                    Err(e) => {
+                        ctx.set_error(output.len(), e.to_string());
+                        output.commit_row();
+                    }
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<StringType, StringType, NumberType<i64>, StringType, _, _>(
+            "split_part",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, NumberType<i64>, StringType>(
+                |str, sep, part, output, ctx| match String::from_utf8(str.to_vec()) {
+                    Ok(s) => match String::from_utf8(sep.to_vec()) {
+                        Ok(sep) => {
+                            let split: Vec<&str> = s.split(&sep).collect();
+                            let len = split.len();
+                            if part <= len as i64 && part >= -(len as i64) {
+                                let idx = match part.cmp(&(0i64)) {
+                                    Ordering::Greater => (part-1) as usize,
+                                    Ordering::Less =>  (len as i64 + part) as usize,
+                                    Ordering::Equal => 0
+                                };
+                                let res = split[idx];
+                                output.put_slice(res.as_bytes());
+
+                            }
+                            output.commit_row();
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.commit_row();
+                        }
+                    },
+                    Err(e) => {
+                        ctx.set_error(output.len(), e.to_string());
+                        output.commit_row();
+                    }
+                },
+            ),
+        )
 }
 
 pub(crate) mod soundex {

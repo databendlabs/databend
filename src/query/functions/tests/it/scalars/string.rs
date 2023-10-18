@@ -61,6 +61,7 @@ fn test_string() {
     test_left(file);
     test_right(file);
     test_substr(file);
+    test_split(file)
 }
 
 fn test_upper(file: &mut impl Write) {
@@ -675,6 +676,27 @@ fn test_substr(file: &mut impl Write) {
             UInt8Type::from_data(vec![
                 0u8, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1,
                 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4, 0, 1, 2, 3, 4,
+            ]),
+        ),
+    ]);
+}
+
+fn test_split(file: &mut impl Write) {
+    run_ast(file, "split('Sakila', 'il')", &[]);
+    run_ast(file, "split('sakila', 'a')", &[]);
+    run_ast(file, "split('abc','b')", &[]);
+    run_ast(file, "split(str, sep)", &[
+        (
+            "str",
+            StringType::from_data_with_validity(
+                &["127.0.0.1", "aaa--bbb-BBB--ccc", "cc", "aeeceedeef"],
+                vec![false, true, true, true],
+            ),
+        ),
+        (
+            "sep",
+            StringType::from_data_with_validity(&[".", "--", "cc", "ee"], vec![
+                false, true, true, true,
             ]),
         ),
     ]);
