@@ -2068,7 +2068,6 @@ version = "0.1.0"
 dependencies = [
  "ahash 0.8.3",
  "bumpalo",
- "cfg-if",
  "common-base",
  "ethnum",
  "ordered-float 3.7.0",
