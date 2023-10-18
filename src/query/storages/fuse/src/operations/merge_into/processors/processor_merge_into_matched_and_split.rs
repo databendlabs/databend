@@ -49,9 +49,11 @@ enum MutationKind {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
-pub enum MixRowIdKindAndLog {
-    MutationLogs(MutationLogs),
-    RowIdKind(RowIdKind),
+pub struct MixRowIdKindAndLog {
+    pub log: Option<MutationLogs>,
+    // kind's range is [0,1,2], 0 stands for log
+    // 1 stands for row_id_update, 2 stands for row_id_delete,
+    pub kind: usize,
 }
 
 #[typetag::serde(name = "mix_row_id_kind_and_log")]

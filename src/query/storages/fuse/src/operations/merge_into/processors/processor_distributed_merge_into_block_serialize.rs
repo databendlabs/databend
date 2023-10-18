@@ -34,7 +34,7 @@ use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
 use super::RowIdKind;
 use crate::operations::common::MutationLogs;
 
-// It will recieve MutationLogs Or RowIds.
+// It will receive MutationLogs Or RowIds.
 // But for MutationLogs, it's a empty block
 // we will add a fake BlockEntry to make it consistent with
 // RowIds, because arrow-flight requires this.
@@ -79,15 +79,24 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 vec![entry],
                 1,
-                Some(Box::new(MixRowIdKindAndLog::MutationLogs(log))),
+                Some(Box::new(MixRowIdKindAndLog {
+                    log: Some(log),
+                    kind: 0,
+                })),
             ))
         } else {
             // RowIdKind
             let row_id_kind = RowIdKind::downcast_ref_from(data.get_meta().unwrap()).unwrap();
             Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
-                1,
-                Some(Box::new(MixRowIdKindAndLog::RowIdKind(row_id_kind.clone()))),
+                data.num_rows(),
+                Some(Box::new(MixRowIdKindAndLog {
+                    log: None,
+                    kind: match row_id_kind {
+                        RowIdKind::Update => 1,
+                        RowIdKind::Delete => 2,
+                    },
+                })),
             ))
         }
     }

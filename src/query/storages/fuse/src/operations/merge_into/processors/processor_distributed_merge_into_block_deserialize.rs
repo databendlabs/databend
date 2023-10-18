@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
@@ -26,8 +27,9 @@ use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
 use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
+use super::RowIdKind;
 
-// It will recieve MutationLogs Or RowIds.
+// It will receive MutationLogs Or RowIds.
 // But for MutationLogs, it's a empty block
 // we will add a fake BlockEntry to make it consistent with
 // RowIds, because arrow-flight requires this.
@@ -64,19 +66,25 @@ impl Transform for TransformDistributedMergeIntoBlockDeserialize {
     const NAME: &'static str = "TransformDistributedMergeIntoBlockDeserialize";
 
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
-        let kind = MixRowIdKindAndLog::downcast_ref_from(data.get_meta().unwrap()).unwrap();
-        let data_block = match kind {
-            MixRowIdKindAndLog::MutationLogs(logs) => DataBlock::new_with_meta(
+        let mix_kind = MixRowIdKindAndLog::downcast_ref_from(data.get_meta().unwrap()).unwrap();
+        match mix_kind.kind {
+            0 => Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
                 data.num_rows(),
-                Some(Box::new(logs.clone())),
-            ),
-            MixRowIdKindAndLog::RowIdKind(row_id_kind) => DataBlock::new_with_meta(
+                Some(Box::new(mix_kind.log.clone().unwrap())),
+            )),
+
+            1 => Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
                 data.num_rows(),
-                Some(Box::new(row_id_kind.clone())),
-            ),
-        };
-        Ok(data_block)
+                Some(Box::new(RowIdKind::Update)),
+            )),
+            2 => Ok(DataBlock::new_with_meta(
+                data.columns().to_vec(),
+                data.num_rows(),
+                Some(Box::new(RowIdKind::Delete)),
+            )),
+            _ => Err(ErrorCode::BadBytes("get error MixRowIdKindAndLog kind")),
+        }
     }
 }
