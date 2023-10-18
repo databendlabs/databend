@@ -96,19 +96,19 @@ fn col_encoding(data_type: &ArrowDataType) -> Encoding {
     match lt {
         DataType::Decimal(p, _) if *p <= 18 => Encoding::DeltaBinaryPacked,
         DataType::UInt8
-            | DataType::UInt16
-            | DataType::UInt32
-            | DataType::UInt64
-            | DataType::Int8
-            | DataType::Int16
-            | DataType::Int32
-            | DataType::Date32
-            | DataType::Time32(_)
-            | DataType::Int64
-            | DataType::Date64
-            | DataType::Time64(_)
-            | DataType::Timestamp(_, _)
-            | DataType::Duration(_) => Encoding::DeltaBinaryPacked,
+        | DataType::UInt16
+        | DataType::UInt32
+        | DataType::UInt64
+        | DataType::Int8
+        | DataType::Int16
+        | DataType::Int32
+        | DataType::Date32
+        | DataType::Time32(_)
+        | DataType::Int64
+        | DataType::Date64
+        | DataType::Time64(_)
+        | DataType::Timestamp(_, _)
+        | DataType::Duration(_) => Encoding::DeltaBinaryPacked,
 
         _ => Encoding::Plain,
     }
