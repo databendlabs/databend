@@ -3,6 +3,42 @@ select split('127.0.0.1', '.');
 ----
 ['127','0','0','1']
 
+query T
+select split('|', '|');
+----
+['','']
+
+query T
+select split('ab', '');
+----
+['','a','b','']
+
+query T
+select split_part('ab', '', 1);
+----
+(empty)
+
+query T
+select split_part('ab', '', 2);
+----
+a
+
+query T
+select split_part('|', '|', 1);
+----
+(empty)
+
+query T
+select split_part(null, null, 1);
+----
+NULL
+
+query T
+select split(null, null);
+----
+NULL
+
+
 query TT
 select * from
 (select  0, split_part('11.22.33', '.',  0) UNION
