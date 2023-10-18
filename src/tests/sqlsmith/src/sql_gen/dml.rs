@@ -20,11 +20,19 @@ use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::Identifier;
+use common_ast::ast::InsertOperation;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
+use common_ast::ast::MatchOperation;
+use common_ast::ast::MatchedClause;
+use common_ast::ast::MergeIntoStmt;
+use common_ast::ast::MergeOption;
+use common_ast::ast::MergeSource;
+use common_ast::ast::MergeUpdateExpr;
 use common_ast::ast::NullableConstraint;
 use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::ast::UnmatchedClause;
 use common_ast::ast::UpdateExpr;
 use common_ast::ast::UpdateStmt;
 use common_exception::Span;
@@ -81,22 +89,21 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_delete(&mut self, table: &Table) -> Statement {
+    pub(crate) fn gen_delete(&mut self) -> Statement {
+        let idx = self.rng.gen_range(0..self.tables.len());
+        let table = self.tables[idx].clone();
+
         let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
             database: None,
-            table: Identifier::from_name(table.name.clone()),
+            table: Identifier::from_name(table.name),
             alias: None,
             travel_point: None,
             pivot: None,
             unpivot: None,
         };
-        let selection = if self.rng.gen_bool(0.5) {
-            None
-        } else {
-            Some(self.gen_expr(&DataType::Boolean))
-        };
+        let selection = Some(self.gen_expr(&DataType::Boolean));
 
         Statement::Delete {
             hints: None,
@@ -105,14 +112,11 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_update(&mut self, table: &Table) -> UpdateStmt {
-        let data_types = table
-            .schema
-            .fields()
-            .iter()
-            .map(|f| (Identifier::from_name(&f.name), (&f.data_type).into()))
-            .collect::<Vec<(Identifier, DataType)>>();
-        let table = TableReference::Table {
+    pub(crate) fn gen_update(&mut self) -> UpdateStmt {
+        let idx = self.rng.gen_range(0..self.tables.len());
+        let table = self.tables[idx].clone();
+
+        let table_reference = TableReference::Table {
             span: Span::default(),
             catalog: None,
             database: None,
@@ -128,21 +132,154 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
             Some(self.gen_expr(&DataType::Boolean))
         };
 
-        let update_list = {
-            let mut res = vec![];
-            for (col_name, ty) in data_types.iter().take(self.rng.gen_range(1..=5)) {
-                res.push(UpdateExpr {
-                    name: col_name.clone(),
-                    expr: self.gen_scalar_value(ty),
-                });
-            }
-            res
-        };
+        let mut fields = table
+            .schema
+            .fields
+            .iter()
+            .filter(|_| self.rng.gen_bool(0.1))
+            .collect::<Vec<_>>();
+        if fields.is_empty() {
+            fields = vec![table.schema.field(0)];
+        }
+        let mut update_list = Vec::with_capacity(fields.len());
+        for field in fields {
+            update_list.push(UpdateExpr {
+                name: Identifier::from_name(field.name().clone()),
+                expr: self.gen_scalar_value(&DataType::from(field.data_type())),
+            });
+        }
         UpdateStmt {
             hints: None,
-            table,
+            table: table_reference,
             update_list,
             selection,
+        }
+    }
+
+    pub(crate) fn gen_merge(&mut self) -> MergeIntoStmt {
+        self.cte_tables.clear();
+        self.bound_tables.clear();
+        self.bound_columns.clear();
+        self.is_join = false;
+
+        let idx = self.rng.gen_range(0..self.tables.len());
+        let table = self.tables[idx].clone();
+        self.bound_table(table.clone());
+
+        let (query, schema) = self.gen_subquery(false);
+        let (source_table, source_alias) = self.gen_subquery_table(schema);
+        self.bound_table(source_table);
+        let source = MergeSource::Select {
+            query: Box::new(query),
+            source_alias,
+        };
+
+        self.only_scalar_expr = true;
+        let join_expr = self.gen_binary_expr();
+
+        let opt_num = self.rng.gen_range(1..=5);
+        let mut merge_options = Vec::with_capacity(opt_num);
+        for i in 0..opt_num {
+            let selection = if i < (opt_num - 1) || self.rng.gen_bool(0.5) {
+                self.only_scalar_expr = true;
+                Some(self.gen_expr(&DataType::Boolean))
+            } else {
+                None
+            };
+
+            let merge_opt = if self.rng.gen_bool(0.5) {
+                let operation = if self.rng.gen_bool(0.7) {
+                    let mut fields = table
+                        .schema
+                        .fields
+                        .iter()
+                        .filter(|_| self.rng.gen_bool(0.1))
+                        .collect::<Vec<_>>();
+                    if fields.is_empty() {
+                        fields = vec![table.schema.field(0)];
+                    }
+
+                    let mut update_list = Vec::with_capacity(fields.len());
+                    for field in fields {
+                        self.only_scalar_expr = true;
+                        let update_expr = MergeUpdateExpr {
+                            catalog: None,
+                            table: None,
+                            name: Identifier::from_name(field.name().clone()),
+                            expr: self.gen_expr(&DataType::from(field.data_type())),
+                        };
+                        update_list.push(update_expr);
+                    }
+                    // TODO: is_star true
+                    MatchOperation::Update {
+                        update_list,
+                        is_star: false,
+                    }
+                } else {
+                    MatchOperation::Delete
+                };
+
+                MergeOption::Match(MatchedClause {
+                    selection,
+                    operation,
+                })
+            } else {
+                let (columns, values) = if self.rng.gen_bool(0.5) {
+                    let fields = table
+                        .schema
+                        .fields
+                        .iter()
+                        .filter(|_| self.rng.gen_bool(0.2))
+                        .collect::<Vec<_>>();
+
+                    let columns = fields
+                        .iter()
+                        .map(|f| Identifier::from_name(f.name()))
+                        .collect::<Vec<_>>();
+                    let values = fields
+                        .iter()
+                        .map(|f| {
+                            let ty = DataType::from(f.data_type());
+                            self.gen_scalar_value(&ty)
+                        })
+                        .collect::<Vec<_>>();
+
+                    (Some(columns), values)
+                } else {
+                    let values = table
+                        .schema
+                        .fields
+                        .iter()
+                        .map(|f| {
+                            let ty = DataType::from(f.data_type());
+                            self.gen_scalar_value(&ty)
+                        })
+                        .collect::<Vec<_>>();
+                    (None, values)
+                };
+
+                let insert_operation = InsertOperation {
+                    columns,
+                    values,
+                    is_star: false,
+                };
+                MergeOption::Unmatch(UnmatchedClause {
+                    selection,
+                    insert_operation,
+                })
+            };
+            merge_options.push(merge_opt);
+        }
+
+        MergeIntoStmt {
+            hints: None,
+            catalog: None,
+            database: None,
+            table_ident: Identifier::from_name(table.name),
+            source,
+            target_alias: None,
+            join_expr,
+            merge_options,
         }
     }
 

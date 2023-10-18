@@ -986,3 +986,19 @@ select * from t
 
 statement ok
 drop table t
+
+
+statement error 1001
+select to_decimal(2,1)(10.1);
+
+statement error 1001
+select to_decimal(2,1)(10.11);
+
+statement ok
+create table if not exists test_decimal_insert(num DECIMAL(2,1));
+
+statement error 1001
+insert into test_decimal_insert values(10.9);
+
+statement ok
+drop table test_decimal_insert

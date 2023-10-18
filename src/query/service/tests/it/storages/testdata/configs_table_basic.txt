@@ -12,7 +12,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'cache'   | 'table_bloom_index_filter_count'           | '0'                                                            | ''       |
 | 'cache'   | 'table_bloom_index_filter_size'            | '2147483648'                                                   | ''       |
 | 'cache'   | 'table_bloom_index_meta_count'             | '3000'                                                         | ''       |
-| 'cache'   | 'table_data_cache_population_queue_size'   | '65536'                                                        | ''       |
+| 'cache'   | 'table_data_cache_population_queue_size'   | '0'                                                            | ''       |
 | 'cache'   | 'table_data_deserialized_data_bytes'       | '0'                                                            | ''       |
 | 'cache'   | 'table_meta_segment_bytes'                 | '1073741824'                                                   | ''       |
 | 'cache'   | 'table_meta_segment_count'                 | 'null'                                                         | ''       |
