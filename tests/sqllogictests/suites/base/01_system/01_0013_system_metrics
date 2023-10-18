@@ -1,0 +1,16 @@
+onlyif mysql
+query T
+SELECT metric FROM system.metrics where metric like '%mysql_interpreter_usedtime_ms_count%' and to_float32(value) > 5.0
+----
+mysql_interpreter_usedtime_ms_count
+
+onlyif mysql
+statement ok
+----
+truncate table system.metrics;
+
+onlyif mysql
+query TI
+SELECT metric, value FROM system.metrics where metric like '%mysql_interpreter_usedtime_ms_count%'
+----
+mysql_interpreter_usedtime_ms_count 2.0
