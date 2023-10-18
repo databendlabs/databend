@@ -133,7 +133,7 @@ pub fn optimize(
                 // left join and right join
                 // input is a Join_SExpr
                 let optimized_distributed_join_sexpr =
-                    optimize_distributed_query(ctx.clone(), &*plan.input)?;
+                    optimize_distributed_query(ctx.clone(), &plan.input)?;
                 Ok(Plan::MergeInto(Box::new(MergeInto {
                     input: Box::new(optimized_distributed_join_sexpr),
                     ..*plan

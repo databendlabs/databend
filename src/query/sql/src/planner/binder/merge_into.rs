@@ -360,7 +360,7 @@ impl Binder {
                     if let Some(tbl_identify) = &update_expr.table {
                         let update_table_name =
                             normalize_identifier(tbl_identify, &self.name_resolution_ctx).name;
-                        if &update_table_name != target_name {
+                        if update_table_name != target_name {
                             return Err(ErrorCode::BadArguments(format!(
                                 "Update Identify's `{}` should be `{}`",
                                 update_table_name, target_name
