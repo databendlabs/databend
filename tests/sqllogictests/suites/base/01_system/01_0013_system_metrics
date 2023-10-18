@@ -5,6 +5,6 @@ truncate table system.metrics;
 
 onlyif mysql
 query TI
-SELECT metric, value FROM system.metrics where metric like '%query_scan_bytes_total%'
+SELECT value FROM system.metrics where metric = 'session_connect_numbers_total'
 ----
-query_scan_bytes_total 0.0
+0.0
