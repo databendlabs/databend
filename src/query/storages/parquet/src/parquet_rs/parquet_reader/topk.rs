@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::plan::TopK;
 use common_exception::Result;
 use common_expression::Column;
@@ -63,8 +62,8 @@ impl ParquetTopK {
 
     pub fn evaluate_column(&self, column: &Column, sorter: &mut TopKSorter) -> Bitmap {
         let num_rows = column.len();
-        let mut bitmap = MutableBitmap::with_capacity(num_rows);
-        bitmap.extend_constant(num_rows, true);
+        let bitmap = Bitmap::new_constant(true, num_rows);
+        let mut bitmap = bitmap.make_mut();
         sorter.push_column(column, &mut bitmap);
         bitmap.into()
     }
