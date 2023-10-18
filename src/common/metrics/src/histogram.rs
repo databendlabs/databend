@@ -43,10 +43,8 @@ impl Clone for Histogram {
 
 #[derive(Debug)]
 pub(crate) struct Inner {
-    // TODO: Consider allowing integer observe values.
     sum: f64,
     count: u64,
-    // TODO: Consider being generic over the bucket length.
     buckets: Vec<(f64, u64)>,
 }
 
