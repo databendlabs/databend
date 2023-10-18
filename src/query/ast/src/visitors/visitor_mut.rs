@@ -601,6 +601,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_network_policies(&mut self) {}
 
+    fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
+
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter_mut() {
