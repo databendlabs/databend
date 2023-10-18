@@ -3080,6 +3080,10 @@ Functions overloads:
 1 soundex(String NULL) :: String NULL
 0 space(UInt64) :: String
 1 space(UInt64 NULL) :: String NULL
+0 split(String, String) :: Array(String)
+1 split(String NULL, String NULL) :: Array(String) NULL
+0 split_part(String, String, Int64) :: String
+1 split_part(String NULL, String NULL, Int64 NULL) :: String NULL
 0 sqrt(UInt8) :: Float64
 1 sqrt(UInt8 NULL) :: Float64 NULL
 2 sqrt(UInt16) :: Float64
