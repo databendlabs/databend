@@ -733,7 +733,9 @@ impl PipelineBuilder {
         );
         if !*need_insert {
             if segment_partition_num == 0 {
-                return Ok(());
+                return self
+                    .main_pipeline
+                    .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))));
             }
             let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
             self.main_pipeline
