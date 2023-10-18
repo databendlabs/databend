@@ -1078,6 +1078,7 @@ impl Column {
                     .unwrap(),
                 )
             }
+
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -2337,6 +2338,7 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];

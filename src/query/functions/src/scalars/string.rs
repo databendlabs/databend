@@ -38,7 +38,6 @@ use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
-
     registry.register_aliases("upper", &["ucase"]);
     registry.register_aliases("lower", &["lcase"]);
     registry.register_aliases("length", &["octet_length"]);
