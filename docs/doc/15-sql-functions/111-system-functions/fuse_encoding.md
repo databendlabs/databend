@@ -15,13 +15,13 @@ FUSE_ENCODING('<database_name>', '<table_name>', '<column_name>')
 
 The function returns a result set with the following columns:
 
-| Column            | Data Type        | Description                                                                                |
-|-------------------|------------------|--------------------------------------------------------------------------------------------|
-| VALIDITY_SIZE     | Nullable(UInt32) | The size of the column data after applying encoding.                                       |
-| COMPRESSED_SIZE   | UInt32           | The size of the column data after compression.                                             |
-| UNCOMPRESSED_SIZE | UInt32           | The size of the column data before applying encoding.                                      |
-| LEVEL_ONE         | String           | The primary or initial encoding applied to the column.                                     |
-| LEVEL_TWO         | Nullable(String) | A secondary or recursive encoding method applied to the column after the initial encoding. |
+| Column            | Data Type        | Description                                                                                                                                                                              |
+|-------------------|------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| VALIDITY_SIZE     | Nullable(UInt32) | The size of a bitmap value that indicates whether each row in the column has a non-null value. This bitmap is used to track the presence or absence of null values in the column's data. |
+| COMPRESSED_SIZE   | UInt32           | The size of the column data after compression.                                                                                                                                           |
+| UNCOMPRESSED_SIZE | UInt32           | The size of the column data before applying encoding.                                                                                                                                    |
+| LEVEL_ONE         | String           | The primary or initial encoding applied to the column.                                                                                                                                   |
+| LEVEL_TWO         | Nullable(String) | A secondary or recursive encoding method applied to the column after the initial encoding.                                                                                               |
 
 ## Examples
 
