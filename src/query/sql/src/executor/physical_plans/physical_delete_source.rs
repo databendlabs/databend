@@ -12,17 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
+use std::sync::Arc;
 
+use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
-use common_expression::ColumnId;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
+use storages_common_table_meta::meta::TableSnapshot;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CompactPartial {
+pub struct DeleteSource {
     pub parts: Partitions,
+    pub filters: Filters,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    pub column_ids: HashSet<ColumnId>,
+    pub col_indices: Vec<usize>,
+    pub query_row_id_col: bool,
+    pub snapshot: Arc<TableSnapshot>,
 }

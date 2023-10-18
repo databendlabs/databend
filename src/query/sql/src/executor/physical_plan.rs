@@ -22,12 +22,12 @@ use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
 use crate::executor::physical_plans::physical_async_source::AsyncSourcerPlan;
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
-use crate::executor::physical_plans::physical_compact_partial::CompactPartial;
+use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
 use crate::executor::physical_plans::physical_deduplicate::Deduplicate;
-use crate::executor::physical_plans::physical_delete_partial::DeletePartial;
+use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
 use crate::executor::physical_plans::physical_exchange::Exchange;
@@ -86,7 +86,7 @@ pub enum PhysicalPlan {
     ExchangeSink(ExchangeSink),
 
     /// Delete
-    DeletePartial(Box<DeletePartial>),
+    DeleteSource(Box<DeleteSource>),
 
     /// Copy into table
     CopyIntoTable(Box<CopyIntoTablePhysicalPlan>),
@@ -101,7 +101,7 @@ pub enum PhysicalPlan {
     MergeInto(Box<MergeInto>),
 
     /// Compact
-    CompactPartial(Box<CompactPartial>),
+    CompactSource(Box<CompactSource>),
     CommitSink(Box<CommitSink>),
 
     /// Recluster
@@ -137,7 +137,7 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(v) => v.plan_id,
             PhysicalPlan::MaterializedCte(v) => v.plan_id,
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
-            PhysicalPlan::DeletePartial(_)
+            PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::CommitSink(_)
@@ -145,7 +145,7 @@ impl PhysicalPlan {
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::CompactPartial(_)
+            | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::ReclusterSource(_)
             | PhysicalPlan::ReclusterSink(_) => {
                 unreachable!()
@@ -184,7 +184,7 @@ impl PhysicalPlan {
             | PhysicalPlan::MergeInto(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
-            | PhysicalPlan::CompactPartial(_)
+            | PhysicalPlan::CompactSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::DistributedInsertSelect(_)
             | PhysicalPlan::DeletePartial(_)
@@ -215,8 +215,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
-            PhysicalPlan::CompactPartial(_) => "CompactBlock".to_string(),
-            PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
+            PhysicalPlan::CompactSource(_) => "CompactBlock".to_string(),
+            PhysicalPlan::DeleteSource(_) => "DeleteSource".to_string(),
             PhysicalPlan::CommitSink(_) => "CommitSink".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
             PhysicalPlan::CopyIntoTable(_) => "CopyIntoTable".to_string(),
@@ -239,8 +239,8 @@ impl PhysicalPlan {
             | PhysicalPlan::CteScan(_)
             | PhysicalPlan::ConstantTableScan(_)
             | PhysicalPlan::ExchangeSource(_)
-            | PhysicalPlan::CompactPartial(_)
-            | PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::CompactSource(_)
+            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::ReclusterSource(_) => Box::new(std::iter::empty()),
@@ -311,8 +311,8 @@ impl PhysicalPlan {
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)
-            | PhysicalPlan::CompactPartial(_)
-            | PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::CompactSource(_)
+            | PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::CommitSink(_)
             | PhysicalPlan::CopyIntoTable(_)
             | PhysicalPlan::AsyncSourcer(_)

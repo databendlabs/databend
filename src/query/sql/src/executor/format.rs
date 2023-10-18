@@ -195,10 +195,10 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeletePartial(_) => Ok(FormatTreeNode::new("DeletePartial".to_string())),
+        PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
         PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
         PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
-        PhysicalPlan::CompactPartial(_) => Ok(FormatTreeNode::new("CompactPartial".to_string())),
+        PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),

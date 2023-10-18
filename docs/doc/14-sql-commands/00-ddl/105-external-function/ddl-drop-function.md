@@ -1,10 +1,11 @@
 ---
 title: DROP FUNCTION
-description:
-  Drop an existing user-defined function.
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Drops a user-defined function.
+<FunctionDescription description="Introduced or updated: v1.2.116"/>
+
+Drops an external function.
 
 ## Syntax
 
