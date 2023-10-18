@@ -1367,14 +1367,6 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    let ty_null_tag = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
-    let ty_null_val = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         alt((
             rule! {
@@ -1395,7 +1387,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ #ty_null_tag? : "type name"
+            ) ~ NOT? ~ NULL? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1403,10 +1395,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ #ty_null_val? : "type name" },
+            ) ~ NOT? ~ NULL? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() && opt_null.unwrap() {
+        |(ty, opt_not, opt_null)| {
+            if opt_not.is_none() && opt_null.is_some() {
                 ty.wrap_nullable()
             } else {
                 ty
