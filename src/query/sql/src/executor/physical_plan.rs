@@ -183,7 +183,6 @@ impl PhysicalPlan {
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeIntoRowIdApply(_)
-            | PhysicalPlan::CompactPartial(_)
             | PhysicalPlan::CompactSource(_) => Ok(DataSchemaRef::default()),
         }
     }
