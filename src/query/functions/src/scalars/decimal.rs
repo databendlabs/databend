@@ -709,7 +709,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 calc_domain: Box::new(move |ctx, d| {
                     convert_to_decimal_domain(ctx, d[0].clone(), decimal_type)
                         .map(|d| FunctionDomain::Domain(Domain::Decimal(d)))
-                        .unwrap_or(FunctionDomain::Full)
+                        .unwrap_or(FunctionDomain::MayThrow)
                 }),
                 eval: Box::new(move |args, ctx| {
                     convert_to_decimal(&args[0], ctx, &from_type, decimal_type)
@@ -994,6 +994,7 @@ fn convert_to_decimal_domain(
     };
     let dest_size = dest_type.size();
     let res = convert_to_decimal(&value.as_ref(), &mut ctx, &from_type, dest_type);
+
     if ctx.errors.is_some() {
         return None;
     }
@@ -1313,8 +1314,9 @@ fn decimal_256_to_128(
             .enumerate()
             .map(|(row, x)| {
                 let x = x * i128::one();
+
                 match x.checked_div(factor) {
-                    Some(x) if x <= max && x >= min => *x.low(),
+                    Some(y) if (y <= max && y >= min) && !(y == 0 && x > 0) => *y.low(),
                     _ => {
                         ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                         i128::one()
@@ -1344,7 +1346,28 @@ macro_rules! m_decimal_to_decimal {
         } else {
             let values: Vec<_> = if $from_size.scale > $dest_size.scale {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
-                $buffer.iter().map(|x| x / factor).collect()
+                let max = <$dest_type_name>::max_for_precision($dest_size.precision);
+                let min = <$dest_type_name>::min_for_precision($dest_size.precision);
+                $buffer
+                    .iter()
+                    .enumerate()
+                    .map(|(row, x)| {
+                        let x = x * <$dest_type_name>::one();
+
+                        match x.checked_div(factor) {
+                            Some(y) if y <= max && y >= min && !(y == 0 && x > 0) => {
+                                y as $dest_type_name
+                            }
+                            _ => {
+                                $ctx.set_error(
+                                    row,
+                                    concat!("Decimal overflow at line : ", line!()),
+                                );
+                                <$dest_type_name>::one()
+                            }
+                        }
+                    })
+                    .collect()
             } else {
                 let factor = <$dest_type_name>::e(($dest_size.scale - $from_size.scale) as u32);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);

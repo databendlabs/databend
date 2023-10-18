@@ -75,7 +75,7 @@ def gcd(x: int, y: int) -> int:
 
 if __name__ == '__main__':
     # create a UDF server listening at '0.0.0.0:8815'
-    server = UdfServer("0.0.0.0:8815")
+    server = UDFServer("0.0.0.0:8815")
     # add defined functions
     server.add_function(gcd)
     # start the UDF server

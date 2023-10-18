@@ -155,7 +155,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
+            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
             ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
