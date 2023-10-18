@@ -198,7 +198,7 @@ impl Session {
                     None => 0.0,
                     Some(ss) => ss.running_time_ms,
                 };
-                println!("{:.6}", server_time_ms / 1000.0);
+                println!("{:.3}", server_time_ms / 1000.0);
             }
         }
         Ok(())

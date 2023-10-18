@@ -36,9 +36,7 @@ impl TryFrom<&str> for StageLocation {
             .next()
             .ok_or_else(|| Error::Parsing(format!("Invalid stage location: {}", s)))?
             .trim_start_matches('@');
-        let path = parts
-            .next()
-            .ok_or_else(|| Error::Parsing(format!("Invalid stage location: {}", s)))?;
+        let path = parts.next().unwrap_or_default();
         Ok(Self {
             name: name.to_string(),
             path: path.to_string(),
@@ -66,6 +64,15 @@ mod test {
         let stage = StageLocation::try_from(location)?;
         assert_eq!(stage.name, "stage_name");
         assert_eq!(stage.path, "path/to/file");
+        Ok(())
+    }
+
+    #[test]
+    fn parse_stage_empty_path() -> Result<()> {
+        let location = "@stage_name";
+        let stage = StageLocation::try_from(location)?;
+        assert_eq!(stage.name, "stage_name");
+        assert_eq!(stage.path, "");
         Ok(())
     }
 
