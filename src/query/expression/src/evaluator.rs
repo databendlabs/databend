@@ -40,7 +40,6 @@ use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::NullableType;
 use crate::udf_client::UDFFlightClient;
-use crate::utils::arrow::constant_bitmap;
 use crate::utils::variant_transform::contains_variant;
 use crate::utils::variant_transform::transform_variant;
 use crate::values::Column;
@@ -420,7 +419,7 @@ impl<'a> Evaluator<'a> {
                         .into_column()
                         .unwrap();
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: constant_bitmap(true, column.len()).into(),
+                        validity: Bitmap::new_constant(true, column.len()),
                         column,
                     }))))
                 }
@@ -442,11 +441,8 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Array(inner_src_ty), DataType::Array(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Array(array)) => {
-                    let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(array.len());
-                        inner_validity.extend_constant(array.len(), validity.get_bit(0));
-                        inner_validity.into()
-                    });
+                    let validity = validity
+                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
 
                     let new_array = self
                         .run_cast(
@@ -505,11 +501,8 @@ impl<'a> Evaluator<'a> {
             },
             (DataType::Map(inner_src_ty), DataType::Map(inner_dest_ty)) => match value {
                 Value::Scalar(Scalar::Map(array)) => {
-                    let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(array.len());
-                        inner_validity.extend_constant(array.len(), validity.get_bit(0));
-                        inner_validity.into()
-                    });
+                    let validity = validity
+                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), array.len()));
 
                     let new_array = self
                         .run_cast(
@@ -524,11 +517,8 @@ impl<'a> Evaluator<'a> {
                     Ok(Value::Scalar(Scalar::Map(new_array)))
                 }
                 Value::Column(Column::Map(col)) => {
-                    let validity = validity.map(|validity| {
-                        let mut inner_validity = MutableBitmap::with_capacity(col.len());
-                        inner_validity.extend_constant(col.len(), validity.get_bit(0));
-                        inner_validity.into()
-                    });
+                    let validity = validity
+                        .map(|validity| Bitmap::new_constant(validity.get_bit(0), col.len()));
 
                     let new_col = self
                         .run_cast(
@@ -654,7 +644,7 @@ impl<'a> Evaluator<'a> {
                 Value::Scalar(_) => Ok(value),
                 Value::Column(column) => {
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: constant_bitmap(true, column.len()).into(),
+                        validity: Bitmap::new_constant(true, column.len()),
                         column,
                     }))))
                 }
@@ -692,7 +682,7 @@ impl<'a> Evaluator<'a> {
                         offsets: col.offsets,
                     }));
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: constant_bitmap(true, new_col.len()).into(),
+                        validity: Bitmap::new_constant(true, new_col.len()),
                         column: new_col,
                     }))))
                 }
@@ -730,7 +720,7 @@ impl<'a> Evaluator<'a> {
                         offsets: col.offsets,
                     }));
                     Ok(Value::Column(Column::Nullable(Box::new(NullableColumn {
-                        validity: constant_bitmap(true, new_col.len()).into(),
+                        validity: Bitmap::new_constant(true, new_col.len()),
                         column: new_col,
                     }))))
                 }
@@ -848,7 +838,7 @@ impl<'a> Evaluator<'a> {
             });
 
         // Evaluate the condition first and then partially evaluate the result branches.
-        let mut validity = validity.unwrap_or_else(|| constant_bitmap(true, num_rows).into());
+        let mut validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, num_rows));
         let mut conds = Vec::new();
         let mut flags = Vec::new();
         let mut results = Vec::new();
@@ -857,12 +847,12 @@ impl<'a> Evaluator<'a> {
             match cond.try_downcast::<NullableType<BooleanType>>().unwrap() {
                 Value::Scalar(None | Some(false)) => {
                     results.push(Value::Scalar(Scalar::default_value(&generics[0])));
-                    flags.push(constant_bitmap(false, len.unwrap_or(1)).into());
+                    flags.push(Bitmap::new_constant(false, len.unwrap_or(1)));
                 }
                 Value::Scalar(Some(true)) => {
                     results.push(self.partial_run(&args[cond_idx + 1], Some(validity.clone()))?);
-                    validity = constant_bitmap(false, num_rows).into();
-                    flags.push(constant_bitmap(true, len.unwrap_or(1)).into());
+                    validity = Bitmap::new_constant(false, num_rows);
+                    flags.push(Bitmap::new_constant(true, len.unwrap_or(1)));
                     break;
                 }
                 Value::Column(cond) => {

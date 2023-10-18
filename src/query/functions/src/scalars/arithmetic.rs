@@ -19,6 +19,7 @@ use std::ops::BitOr;
 use std::ops::BitXor;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::decimal::DecimalColumn;
 use common_expression::types::decimal::DecimalDomain;
@@ -44,7 +45,6 @@ use common_expression::types::ALL_NUMERICS_TYPES;
 use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::utils::arithmetics_type::ResultTypeOfBinary;
 use common_expression::utils::arithmetics_type::ResultTypeOfUnary;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::values::Value;
 use common_expression::values::ValueRef;
 use common_expression::vectorize_1_arg;
@@ -885,7 +885,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                             let result = builder.build();
                             Value::Column(NullableColumn {
                                 column: result,
-                                validity: constant_bitmap(true, from.len()).into(),
+                                validity: Bitmap::new_constant(true, from.len()),
                             })
                         }
                     },

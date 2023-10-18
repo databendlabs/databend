@@ -15,7 +15,6 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
-use common_expression::arrow::constant_bitmap;
 use common_expression::arrow::or_validities;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
@@ -132,7 +131,7 @@ impl HashJoinProbeState {
         match filter_vector {
             Column::Nullable(_) => Ok(filter_vector),
             other => Ok(Column::Nullable(Box::new(NullableColumn {
-                validity: constant_bitmap(true, other.len()).into(),
+                validity: Bitmap::new_constant(true, other.len()),
                 column: other,
             }))),
         }
@@ -156,9 +155,7 @@ impl HashJoinState {
                     Column::Nullable(c) => {
                         let bitmap = &c.validity;
                         if bitmap.unset_bits() == 0 {
-                            let mut m = MutableBitmap::with_capacity(num_rows);
-                            m.extend_constant(num_rows, true);
-                            valids = Some(m.into());
+                            valids = Some(Bitmap::new_constant(true, num_rows));
                             break;
                         } else {
                             valids = or_validities(valids, Some(bitmap.clone()));
@@ -166,9 +163,7 @@ impl HashJoinState {
                     }
                     Column::Null { .. } => {}
                     _c => {
-                        let mut m = MutableBitmap::with_capacity(num_rows);
-                        m.extend_constant(num_rows, true);
-                        valids = Some(m.into());
+                        valids = Some(Bitmap::new_constant(true, num_rows));
                         break;
                     }
                 }
