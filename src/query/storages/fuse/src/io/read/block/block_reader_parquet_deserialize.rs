@@ -176,7 +176,8 @@ impl BlockReader {
 
                         // TODO make compression configable
                         let schema = Schema::from(vec![field.clone()]);
-                        let options = write::WriteOptions { compression: None };
+                        let lz4 = common_arrow::arrow::io::ipc::write::Compression::LZ4;
+                        let options = write::WriteOptions { compression: Some(lz4)};
                         let mut writer = write::FileWriter::new(&mut file, schema, None, options);
                         writer.start()?;
                         let chunk = Chunk::try_new(vec![array.clone()])?;
@@ -352,18 +353,6 @@ impl BlockReader {
             } else {
                 // the array is deserialized from raw bytes, should be cached
                 let column_id = column.leaf_column_ids[0];
-
-                // create a batch
-                let schema = Schema::from(vec![column.field.clone()]);
-                let chunk = Chunk::try_new(vec![array.clone()])?;
-                let options = WriteOptions { compression: None };
-                let mut write_buffer = Vec::<u8>::new();
-                let mut writer = write::FileWriter::new(&mut write_buffer, schema, None, options);
-
-                writer.start()?;
-                writer.write(&chunk, None)?;
-                writer.finish()?;
-
                 Ok(Some(DeserializedArray::Deserialized((
                     column_id,
                     array,
