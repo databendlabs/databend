@@ -22,9 +22,9 @@ use common_ast::ast::Engine;
 use common_ast::ast::Identifier;
 use common_ast::ast::NullableConstraint;
 use common_ast::ast::TypeName;
+use rand::distributions::Alphanumeric;
 use rand::Rng;
 
-use super::Table;
 use crate::sql_gen::SqlGenerator;
 
 const BASE_TABLE_NAMES: [&str; 4] = ["t1", "t2", "t3", "t4"];
@@ -88,9 +88,15 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_nested_type(&mut self, depth: u8) -> TypeName {
-        let ty = if depth == 0 {
+        // TODO: generate nullable type for inner type
+        if depth == 0 {
             let i = self.rng.gen_range(0..=17);
-            SIMPLE_COLUMN_TYPES[i].clone()
+            // replace bitmap with string, as generated bitmap value can't display
+            if i == 16 {
+                TypeName::String
+            } else {
+                SIMPLE_COLUMN_TYPES[i].clone()
+            }
         } else {
             match self.rng.gen_range(0..=2) {
                 0 => {
@@ -98,19 +104,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     TypeName::Array(Box::new(inner_ty))
                 }
                 1 => {
-                    let key_type = match self.rng.gen_range(0..=6) {
-                        0 => TypeName::String,
-                        1 => TypeName::UInt64,
-                        2 => TypeName::Int64,
-                        3 => TypeName::Float64,
-                        4 => TypeName::Decimal {
-                            precision: 15,
-                            scale: 2,
-                        },
-                        5 => TypeName::Date,
-                        6 => TypeName::Timestamp,
-                        _ => unreachable!(),
-                    };
+                    let key_type = TypeName::String;
                     let val_type = self.gen_nested_type(depth - 1);
 
                     TypeName::Map {
@@ -142,16 +136,17 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 }
                 _ => unreachable!(),
             }
-        };
-        if self.rng.gen_bool(0.3) {
-            TypeName::Nullable(Box::new(ty))
-        } else {
-            ty
         }
     }
 
-    pub fn gen_data_type_name(&mut self) -> (TypeName, Option<NullableConstraint>) {
-        let i = self.rng.gen_range(0..=36);
+    pub(crate) fn gen_data_type_name(
+        &mut self,
+        idx: Option<usize>,
+    ) -> (TypeName, Option<NullableConstraint>) {
+        let i = match idx {
+            Some(i) => i,
+            None => self.rng.gen_range(0..38),
+        };
         if i <= 17 {
             (
                 SIMPLE_COLUMN_TYPES[i].clone(),
@@ -163,16 +158,22 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                 Some(NullableConstraint::Null),
             )
         } else {
-            // TODO: add nested data types
             let depth = self.rng.gen_range(1..=3);
             (self.gen_nested_type(depth), None)
         }
     }
 
-    pub fn gen_new_column(&mut self, table: &Table) -> ColumnDefinition {
-        let field_num = table.schema.num_fields();
-        let new_column_name = Identifier::from_name(format!("cc{:?}", field_num));
-        let (data_type, nullable_constraint) = self.gen_data_type_name();
+    pub(crate) fn gen_random_name(&mut self) -> String {
+        let name: String = (0..5)
+            .map(|_| self.rng.sample(Alphanumeric) as char)
+            .collect();
+        name
+    }
+
+    pub(crate) fn gen_new_column(&mut self) -> ColumnDefinition {
+        let name = self.gen_random_name();
+        let new_column_name = Identifier::from_name(format!("cc{}", name));
+        let (data_type, nullable_constraint) = self.gen_data_type_name(None);
         ColumnDefinition {
             name: new_column_name,
             data_type,
@@ -183,25 +184,11 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     fn gen_table_source(&mut self) -> CreateTableSource {
-        let mut column_defs = Vec::with_capacity(40);
+        let mut column_defs = Vec::with_capacity(38);
 
-        for i in 0..36 {
+        for i in 0..38 {
             let name = format!("c{}", i);
-            let (data_type, nullable_constraint) = if i <= 17 {
-                (
-                    SIMPLE_COLUMN_TYPES[i].clone(),
-                    Some(NullableConstraint::NotNull),
-                )
-            } else if i <= 35 {
-                (
-                    SIMPLE_COLUMN_TYPES[i - 18].clone(),
-                    Some(NullableConstraint::Null),
-                )
-            } else {
-                // TODO: add nested data types
-                let depth = self.rng.gen_range(1..=3);
-                (self.gen_nested_type(depth), None)
-            };
+            let (data_type, nullable_constraint) = self.gen_data_type_name(Some(i));
 
             let column_def = ColumnDefinition {
                 name: Identifier::from_name(name),

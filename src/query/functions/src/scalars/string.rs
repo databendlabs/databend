@@ -22,6 +22,7 @@ use common_expression::types::number::SimpleDomain;
 use common_expression::types::number::UInt64Type;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::ArrayType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::vectorize_with_builder_1_arg;
@@ -757,6 +758,85 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
         }),
     );
+
+    registry
+        .register_passthrough_nullable_2_arg::<StringType, StringType, ArrayType<StringType>, _, _>(
+            "split",
+            |_, _, _| FunctionDomain::Full,
+            vectorize_with_builder_2_arg::<StringType, StringType, ArrayType<StringType>>(
+                |str, sep, output, ctx| match std::str::from_utf8(str) {
+                    Ok(s) => match std::str::from_utf8(sep) {
+                        Ok(sep) => {
+                            if s == sep {
+                                output.builder.put_slice(&[]);
+                                output.builder.commit_row();
+                            } else if sep.is_empty() {
+                                output.builder.put_slice(str);
+                                output.builder.commit_row();
+                            } else {
+                                let split = s.split(&sep);
+                                for i in split {
+                                    output.builder.put_slice(i.as_bytes());
+                                    output.builder.commit_row();
+                                }
+                            }
+                            output.commit_row()
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.commit_row();
+                        }
+                    },
+                    Err(e) => {
+                        ctx.set_error(output.len(), e.to_string());
+                        output.commit_row();
+                    }
+                },
+            ),
+        );
+
+    registry
+        .register_passthrough_nullable_3_arg::<StringType, StringType, NumberType<i64>, StringType, _, _>(
+            "split_part",
+            |_, _, _, _| FunctionDomain::Full,
+            vectorize_with_builder_3_arg::<StringType, StringType, NumberType<i64>, StringType>(
+                |str, sep, part, output, ctx| match std::str::from_utf8(str) {
+                    Ok(s) => match std::str::from_utf8(sep) {
+                        Ok(sep) => {
+                            if s == sep {
+                                output.commit_row()
+                            } else if sep.is_empty() {
+                                if part == 0 || part == 1 || part == -1 {
+                                    output.put_slice(str);
+                                }
+                                output.commit_row()
+                            } else {
+                                let split: Vec<&str> = s.split(&sep).collect();
+                                let len = split.len();
+                                if part <= len as i64 && part >= -(len as i64) {
+                                    let idx = match part.cmp(&(0i64)) {
+                                        Ordering::Greater => (part-1) as usize,
+                                        Ordering::Less =>  (len as i64 + part) as usize,
+                                        Ordering::Equal => 0
+                                    };
+                                    let res = split[idx];
+                                    output.put_slice(res.as_bytes());
+                                }
+                                output.commit_row();
+                            }
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.commit_row();
+                        }
+                    },
+                    Err(e) => {
+                        ctx.set_error(output.len(), e.to_string());
+                        output.commit_row();
+                    }
+                },
+            ),
+        )
 }
 
 pub(crate) mod soundex {

@@ -97,14 +97,6 @@ impl Interpreter for MergeIntoInterpreter {
             operation_name: "merge_into".to_owned(),
         };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
-
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
         } else {
@@ -117,6 +109,15 @@ impl Interpreter for MergeIntoInterpreter {
                 }
             });
         }
+
+        hook_compact(
+            self.ctx.clone(),
+            &mut build_res.main_pipeline,
+            compact_target,
+            compact_hook_trace_ctx,
+        )
+        .await;
+
         Ok(build_res)
     }
 }
@@ -346,7 +347,7 @@ impl MergeIntoInterpreter {
         schema: DataSchemaRef,
     ) -> Result<RemoteExpr> {
         let scalar_expr = scalar_expr
-            .resolve_and_check(schema.as_ref())?
+            .type_check(schema.as_ref())?
             .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
         let (filer, _) = ConstantFolder::fold(
             &scalar_expr,

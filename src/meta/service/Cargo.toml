@@ -68,7 +68,7 @@ serde_json = { workspace = true }
 serfig = "0.1.0"
 tokio-stream = "0.1.10"
 tonic = { workspace = true }
-tonic-reflection = "0.9"
+tonic-reflection = { workspace = true }
 
 [dev-dependencies]
 env_logger = "0.10.0"

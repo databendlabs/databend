@@ -106,25 +106,17 @@ impl Interpreter for DeleteInterpreter {
 
         let is_distributed = !self.ctx.get_cluster().is_empty();
         let catalog_name = self.plan.catalog_name.as_str();
-        let db_name = self.plan.database_name.as_str();
-        let tbl_name = self.plan.table_name.as_str();
-
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
 
         let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
 
+        let db_name = self.plan.database_name.as_str();
+        let tbl_name = self.plan.table_name.as_str();
         // refresh table.
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
+        let table_info = tbl.get_table_info().clone();
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -200,6 +192,12 @@ impl Interpreter for DeleteInterpreter {
                     tbl.name(),
                     tbl.get_table_info().engine(),
                 )))?;
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();

@@ -73,6 +73,17 @@ pub fn parse_db_tb_ssid_args(
     }
 }
 
+pub fn parse_db_tb_col_args(
+    table_args: &TableArgs,
+    func_name: &str,
+) -> Result<(String, String, String)> {
+    let args = table_args.expect_all_positioned(func_name, Some(3))?;
+    let db = string_value(&args[0])?;
+    let tbl = string_value(&args[1])?;
+    let col = string_value(&args[2])?;
+    Ok((db, tbl, col))
+}
+
 pub fn unwrap_tuple(expr: &Expr) -> Option<Vec<Expr>> {
     match expr {
         Expr::FunctionCall { function, args, .. } if function.signature.name == "tuple" => {

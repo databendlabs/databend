@@ -1,213 +1,150 @@
 ---
-title: SQL IDENTIFIERS
+title: SQL Identifiers
 sidebar_label: SQL Identifiers
 ---
 
-SQL identifiers are names given to various database objects like tables, views, and databases. 
+SQL identifiers are names used for different elements within Databend, such as tables, views, and databases.
 
-The following are examples of SQL identifiers:
+## Unquoted & Double-quoted Identifiers
 
-## Requirement
+Unquoted identifiers begin with a letter (A-Z, a-z) or underscore (“_”) and may consist of letters, underscores, numbers (0-9), or dollar signs (“$”).
 
-Unquoted object identifiers:
+```text title='Examples:'
+mydatabend
+MyDatabend1
+My$databend
+_my_databend
+```
 
-* Begin with a Unicode letter (A-Z, a-z) or an underscore (_). Subsequent characters can only be letters, underscores, digits (0-9), or dollar signs ($).
+Double-quoted identifiers can include a wide range of characters, such as numbers (0-9), special characters (like period (.), single quote ('), exclamation mark (!), at symbol (@), number sign (#), dollar sign ($), percent sign (%), caret (^), and ampersand (&)), extended ASCII and non-ASCII characters, as well as blank spaces.
 
-* In default, Are stored and resolved as lowercase characters (e.g. ID is stored and resolved as id).
+```text title='Examples:'
+"MyDatabend"
+"my.databend"
+"my databend"
+"My 'Databend'"
+"1_databend"
+"$Databend"
+```
 
-Double-quoted object Identifiers:
+Note that using double backticks (``) or double quotes (") is equivalent:
 
-* The identifier can contain and can even start with any ASCII character from the blank character (32) to the tilde (126).
+```text title='Examples:'
+`MyDatabend`
+`my.databend`
+`my databend`
+`My 'Databend'`
+`1_databend`
+`$Databend`
+```
 
-* In default, The case of the identifier is preserved when storing and resolving the identifier (e.g. "Id" is stored and resolved as Id).
+## Identifier Casing Rules
 
-Examples:
+Databend stores unquoted identifiers by default in lowercase and double-quoted identifiers as they are entered. In other words, Databend handles object names, such as databases, tables, and columns, as case-insensitive. If you want Databend to handle them as case-sensitive, double-quote them.
+
+:::note
+Databend allows you to have control over the casing sensitivity of identifiers. Two key settings are available:
+
+- unquoted_ident_case_sensitive: When set to 1, this option preserves the case of characters for unquoted identifiers, ensuring they are case-sensitive. If left at the default value of 0, unquoted identifiers remain case-insensitive, converting to lowercase.
+
+- quoted_ident_case_sensitive: By setting this option to 0, you can indicate that double-quoted identifiers should not preserve the case of characters, making them case-insensitive.
+:::
+
+This example demonstrates how Databend treats the casing of identifiers when creating and listing databases:
 
 ```sql
-databend :) create table " with""TestQuote""" (id int);
+-- Create a database named "databend"
+CREATE DATABASE databend;
 
-databend :) desc ` with""TestQuote""`;
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
+-- Attempt to create a database named "Databend"
+CREATE DATABASE Databend;
 
+>> SQL Error [1105] [HY000]: DatabaseAlreadyExists. Code: 2301, Text = Database 'databend' already exists.
+
+-- Create a database named "Databend"
+CREATE DATABASE "Databend";
+
+-- List all databases
+SHOW DATABASES;
+
+databases_in_default|
+--------------------+
+Databend            |
+databend            |
+default             |
+information_schema  |
+system              |
 ```
 
-### Unquoted Identifiers
-
-If an identifier is not enclosed in double quotes, it must begin with a letter or underscore (_) and cannot contain extended characters or blank spaces.
-
-The following are all examples of valid identifiers; however, in default, the case of the characters in these identifiers would not be preserved:
-
-```
-myidentifier
-MyIdentifier1
-My$identifier
-_my_identifier
-```
-
-### Double-quoted Identifiers
-
-In default, Double-quoted identifiers are case-sensitive and can start with and contain any valid characters, including:
-
-* Numbers
-
-* Special characters (., ', !, @, #, $, %, ^, &, *, etc.)
-
-* Extended ASCII and non-ASCII characters
-
-* Blank spaces
-
-```
-"MyIdentifier"
-"my.identifier"
-"my identifier"
-"My 'Identifier'"
-"3rd_identifier"
-"$Identifier"
-"идентификатор"
-```
-
-Examples:
-```sql
-create table "BigTable" (a int);
-
-show tables;
-+--------------------+
-| tables_in_default  |
-+--------------------+
-| BigTable           |
-+--------------------+
-    
-desc "BigTable";
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| a     | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
-    
-desc BigTable;
-ERROR 1105 (HY000): Code: 1025, Text = Unknown table 'bigtable'.
-```
-
-## Identifier Resolution
-
-By default, Databend applies the following rules for storing identifiers (at creation/definition time) and resolving them (in queries and other SQL statements):
-
-* When an identifier is unquoted, it is stored and resolved in lowercase.
-
-* When an identifier is double-quoted, it is stored and resolved exactly as entered, including case.
-
-If you want to preserve the case of characters when use `unquoted identifier`, need to set [unquoted_ident_case_sensitive](20-system-tables/system-settings.md) = 1.
-
-Examples:
+This example demonstrates how Databend handles identifier casing for table and column names, highlighting its case-sensitivity by default and the use of double quotes to differentiate between identifiers with varying casing:
 
 ```sql
-set unquoted_ident_case_sensitive=1;
+-- Create a table named "databend"
+CREATE TABLE databend (a INT);
+DESC databend;
 
-create table Tt(id int);
+Field|Type|Null|Default|Extra|
+-----+----+----+-------+-----+
+a    |INT |YES |NULL   |     |
 
-desc Tt;
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
+-- Attempt to create a table named "Databend"
+CREATE TABLE Databend (a INT);
 
-create table tt(id1 int);
-Query OK, 0 rows affected (0.08 sec)
+>> SQL Error [1105] [HY000]: TableAlreadyExists. Code: 2302, Text = Table 'databend' already exists.
 
-desc tt;
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id1   | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
+-- Attempt to create a table with one column named "a" and the other one named "A"
+CREATE TABLE "Databend" (a INT, A INT);
 
+>> SQL Error [1105] [HY000]: BadArguments. Code: 1006, Text = Duplicated column name: a.
+
+-- Double quote the column names
+CREATE TABLE "Databend" ("a" INT, "A" INT);
+DESC "Databend";
+
+Field|Type|Null|Default|Extra|
+-----+----+----+-------+-----+
+a    |INT |YES |NULL   |     |
+A    |INT |YES |NULL   |     |
 ```
-
-If you do not want to preserve the case of characters when use `double identifier`, need a set [quoted_ident_case_sensitive](20-system-tables/system-settings.md) = 0.
-
-Examples:
-
-```sql
-set quoted_ident_case_sensitive=0;
-
-create table "Test"(id int);
-
-desc Test;
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
-
-desc test;
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
-    
-desc "Test";
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
-
-desc "test";
-+-------+------+------+---------+-------+
-| Field | Type | Null | Default | Extra |
-+-------+------+------+---------+-------+
-| id    | INT  | NO   | 0       |       |
-+-------+------+------+---------+-------+
-```
-
-## Identifiers Case-insensitive
-
-In Databend, SQL keywords and identifiers are not case-sensitive.
 
 ## String Identifiers
 
-In general, if an item is a string (e.g. text and dates) must be surrounded by single quotes (`'`):
+In Databend, when managing string items like text and dates, it is essential to enclose them within single quotes (') as a standard practice.
+
 ```sql
 INSERT INTO weather VALUES ('San Francisco', 46, 50, 0.25, '1994-11-27');
-```
 
-```sql
-select 'demo';
-+--------+
-| 'demo' |
-+--------+
-| demo   |
-+--------+
+SELECT 'Databend';
 
-select "demo";
-ERROR 1105 (HY000): Code: 1065, Text = error:
-  --> SQL:1:8
+'databend'|
+----------+
+Databend  |
+
+SELECT "Databend";
+
+>> SQL Error [1105] [HY000]: SemanticError. Code: 1065, Text = error: 
+  --> SQL:1:73
   |
-1 | select "demo"
-  |        ^^^^^^ column doesn't exist
+1 | /* ApplicationName=DBeaver 23.2.0 - SQLEditor <Script-12.sql> */ SELECT "Databend"
+  |                                                                         ^^^^^^^^^^ column Databend doesn't exist, do you mean 'Databend'?
 ```
 
 By default, Databend SQL dialect is `PostgreSQL`:
+
 ```sql
-show settings like '%sql_dialect%';
-+-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
-| name        | value      | default    | level   | description                                                                        | type   |
-+-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
-| sql_dialect | PostgreSQL | PostgreSQL | SESSION | SQL dialect, support "PostgreSQL" "MySQL" and "Hive", default value: "PostgreSQL". | String |
-+-------------+------------+------------+---------+------------------------------------------------------------------------------------+--------+
+SHOW SETTINGS LIKE '%sql_dialect%';
+
+name       |value     |default   |level  |description                                                                      |type  |
+-----------+----------+----------+-------+---------------------------------------------------------------------------------+------+
+sql_dialect|PostgreSQL|PostgreSQL|SESSION|Sets the SQL dialect. Available values include "PostgreSQL", "MySQL", and "Hive".|String|
 ```
 
 You can change it to `MySQL` to enable double quotes (`"`):
-```sql
-set sql_dialect='MySQL';
 
-select "demo";
+```sql
+SET sql_dialect='MySQL';
+
+SELECT "demo";
 +--------+
 | 'demo' |
 +--------+

@@ -15,24 +15,26 @@
 //! Meta service impl a grpc server that serves both raft protocol: append_entries, vote and install_snapshot.
 //! It also serves RPC for user-data access.
 
-use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_tracing::func_name;
 use minitrace::prelude::*;
-use tonic::codegen::futures_core::Stream;
+use tonic::codegen::BoxStream;
+use tonic::Request;
+use tonic::Response;
+use tonic::Status;
 
 use crate::grpc_helper::GrpcHelper;
 use crate::message::ForwardRequest;
+use crate::message::ForwardRequestBody;
 use crate::meta_service::MetaNode;
 use crate::metrics::raft_metrics;
-
-pub type GrpcStream<T> =
-    Pin<Box<dyn Stream<Item = Result<T, tonic::Status>> + Send + Sync + 'static>>;
 
 pub struct RaftServiceImpl {
     pub meta_node: Arc<MetaNode>,
@@ -61,13 +63,36 @@ impl RaftService for RaftServiceImpl {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
 
         async {
-            let forward_req: ForwardRequest = GrpcHelper::parse_req(request)?;
+            let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
 
             let res = self.meta_node.handle_forwardable_request(forward_req).await;
 
             let raft_reply: RaftReply = res.into();
 
             Ok(tonic::Response::new(raft_reply))
+        }
+        .in_span(root)
+        .await
+    }
+
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
+        async {
+            let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
+
+            let strm = self
+                .meta_node
+                .handle_forwardable_request(forward_req)
+                .await
+                .map_err(GrpcHelper::internal_err)?;
+
+            Ok(tonic::Response::new(strm))
         }
         .in_span(root)
         .await

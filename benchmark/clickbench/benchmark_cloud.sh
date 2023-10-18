@@ -85,7 +85,7 @@ function run_query() {
     local query=$3
 
     local q_time
-    q_time=$(echo "$query" | bendsql --time)
+    q_time=$(echo "$query" | bendsql --time=server)
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" -o json result.json

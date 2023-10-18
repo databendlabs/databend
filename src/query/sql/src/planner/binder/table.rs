@@ -640,6 +640,7 @@ impl Binder {
                     files_info,
                     files_to_copy: None,
                     is_select: true,
+                    default_values: None,
                 };
                 StageTable::try_create(info)?
             }
@@ -666,6 +667,7 @@ impl Binder {
                     files_info,
                     files_to_copy: None,
                     is_select: true,
+                    default_values: None,
                 };
                 StageTable::try_create(info)?
             }
