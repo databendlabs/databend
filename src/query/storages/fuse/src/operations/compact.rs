@@ -108,7 +108,7 @@ impl FuseTable {
         )))
     }
 
-    pub fn build_compact_partial(
+    pub fn build_compact_source(
         &self,
         ctx: Arc<dyn TableContext>,
         parts: Partitions,

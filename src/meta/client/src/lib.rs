@@ -70,7 +70,7 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// - 2023-10-11: since 1.2.153:
 ///   Meta service: add: pb::SeqV.meta field to support record expiration.
 ///
-/// - 2023-10-17: since TODO(fill in when merged):
+/// - 2023-10-17: since 1.2.163:
 ///   Meta service: add: stream api: kv_read_v1().
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,

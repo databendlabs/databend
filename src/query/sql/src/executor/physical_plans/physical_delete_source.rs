@@ -23,7 +23,7 @@ use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct DeletePartial {
+pub struct DeleteSource {
     pub parts: Partitions,
     pub filters: Filters,
     pub table_info: TableInfo,
@@ -33,7 +33,7 @@ pub struct DeletePartial {
     pub snapshot: Arc<TableSnapshot>,
 }
 
-impl DeletePartial {
+impl DeleteSource {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         Ok(DataSchemaRef::default())
     }
