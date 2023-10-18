@@ -18,6 +18,7 @@ use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Utc;
 use chrono_tz::Tz;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::error_to_null;
 use common_expression::types::date::check_date;
@@ -45,7 +46,6 @@ use common_expression::types::NullableType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::utils::date_helper::*;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_2_arg;
@@ -531,7 +531,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar as i64)),
             ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: constant_bitmap(true, col.len()).into(),
+                validity: Bitmap::new_constant(true, col.len()),
                 column: col.iter().map(|val| *val as i64).collect(),
             }),
         },
@@ -548,7 +548,7 @@ fn register_to_number(registry: &mut FunctionRegistry) {
         |val, _| match val {
             ValueRef::Scalar(scalar) => Value::Scalar(Some(scalar)),
             ValueRef::Column(col) => Value::Column(NullableColumn {
-                validity: constant_bitmap(true, col.len()).into(),
+                validity: Bitmap::new_constant(true, col.len()),
                 column: col,
             }),
         },
