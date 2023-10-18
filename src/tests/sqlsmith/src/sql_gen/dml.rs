@@ -203,7 +203,6 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                     for field in fields {
                         self.only_scalar_expr = true;
                         let update_expr = MergeUpdateExpr {
-                            catalog: None,
                             table: None,
                             name: Identifier::from_name(field.name().clone()),
                             expr: self.gen_expr(&DataType::from(field.data_type())),

@@ -272,7 +272,7 @@ impl MatchedAggregator {
                 ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
                     .add_message_back(e.to_string())
             })?;
-        let mut mutation_logs: Vec<MutationLogEntry> = self.entries.drain(..).into_iter().collect();
+        let mut mutation_logs: Vec<MutationLogEntry> = self.entries.drain(..).collect();
         for maybe_log_entry in log_entries {
             if let Some(segment_mutation_log) = maybe_log_entry? {
                 mutation_logs.push(segment_mutation_log);
