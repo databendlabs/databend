@@ -266,7 +266,7 @@ EvalScalar
 └── AggregateFinal
     ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#7)]
     ├── group by: []
-    ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0)]
+    ├── aggregate functions: [sum(sum_arg_0), count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
         ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#7)]
