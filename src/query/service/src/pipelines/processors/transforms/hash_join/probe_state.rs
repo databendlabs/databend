@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::FunctionContext;
 use common_hashtable::RowPtr;
 
@@ -52,9 +51,7 @@ impl ProbeState {
         has_string_column: bool,
         func_ctx: FunctionContext,
     ) -> Self {
-        let mut true_validity = MutableBitmap::new();
-        true_validity.extend_constant(max_block_size, true);
-        let true_validity: Bitmap = true_validity.into();
+        let true_validity = Bitmap::new_constant(true, max_block_size);
         let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunct {

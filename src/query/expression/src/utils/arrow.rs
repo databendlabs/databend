@@ -53,12 +53,6 @@ pub fn append_bitmap(bitmap: &mut MutableBitmap, other: &Bitmap) {
     bitmap.extend_from_bitmap(other)
 }
 
-pub fn constant_bitmap(value: bool, len: usize) -> MutableBitmap {
-    let mut builder = MutableBitmap::new();
-    builder.extend_constant(len, value);
-    builder
-}
-
 pub fn buffer_into_mut<T: Clone>(mut buffer: Buffer<T>) -> Vec<T> {
     unsafe {
         buffer
