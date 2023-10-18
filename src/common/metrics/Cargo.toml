@@ -24,6 +24,7 @@ metrics-exporter-prometheus = { version = "0.11.0", default-features = false }
 prometheus-client = { workspace = true }
 prometheus-parse = "0.2.3"
 serde = { workspace = true }
+parking_lot = "0.12.1"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 procfs = "0.15.1"
