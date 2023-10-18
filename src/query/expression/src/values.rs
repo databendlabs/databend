@@ -1973,7 +1973,10 @@ impl ColumnBuilder {
             ScalarRef::Map(col) => ColumnBuilder::Map(Box::new(ArrayColumnBuilder::repeat(col, n))),
             ScalarRef::Bitmap(b) => {
                 if b.is_empty() {
-                    ColumnBuilder::Bitmap(StringColumnBuilder::repeat(b, n))
+                    let rb = RoaringTreemap::new();
+                    let mut buf = vec![];
+                    rb.serialize_into(&mut buf).unwrap();
+                    ColumnBuilder::Bitmap(StringColumnBuilder::repeat(&buf, n))
                 } else {
                     let rb =
                         RoaringTreemap::deserialize_from(*b).expect("failed to deserialize bitmap");
