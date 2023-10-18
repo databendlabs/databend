@@ -20,7 +20,9 @@ import "request.proto";
 
 message Empty {}
 
-message RaftRequest { string data = 1; }
+message RaftRequest {
+  string data = 1;
+}
 
 message RaftReply {
   string data = 1;
@@ -148,10 +150,21 @@ message ClientInfo {
   string client_addr = 10;
 }
 
+// Item for a Streaming read reply, e.g., for `Mget` and `List`.
+message StreamItem {
+  string key = 1;
+  optional SeqV value = 2;
+}
+
+
 service RaftService {
 
-  /// Forward a request to other
-  rpc Forward(RaftRequest) returns (RaftReply) {}
+  // Forward a request to another node.
+  rpc Forward(RaftRequest) returns (RaftReply);
+
+  // Handling internally redirected KvReadV1 request.
+  // Without checking token.
+  rpc KvReadV1(RaftRequest) returns (stream StreamItem);
 
   // raft RPC
 
@@ -169,6 +182,15 @@ service MetaService {
   //
   // Since: 0.8.35; 2022-09-14
   rpc KvApi(RaftRequest) returns (RaftReply);
+
+  // Handle application read request.
+  //
+  // This API is not exposed to client directly, but is only used for internal request forwarding.
+  // The request will be forwarded to leader if current node is not leader.
+  // It returns a stream of `StreamItem`.
+  // - For single-reply request, the stream contains only one item, e.g. `Get`.
+  // - For multi-reply request, the stream contains multiple items, e.g. `MGet` and `List`.
+  rpc KvReadV1(RaftRequest) returns (stream StreamItem);
 
   // Export all meta data.
   //
