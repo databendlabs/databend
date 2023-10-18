@@ -19,6 +19,10 @@ use std::sync::atomic::Ordering;
 use common_base::mem_allocator::MmapAllocator;
 
 use super::traits::HashJoinHashtableLike;
+use crate::hashjoin_hashtable::combine_header;
+use crate::hashjoin_hashtable::early_filtering;
+use crate::hashjoin_hashtable::new_header;
+use crate::hashjoin_hashtable::remove_header_tag;
 use crate::traits::FastHash;
 use crate::RowPtr;
 
@@ -34,7 +38,7 @@ pub struct StringRawEntry {
 pub struct HashJoinStringHashTable<A: Allocator + Clone = MmapAllocator> {
     pub(crate) pointers: Box<[u64], A>,
     pub(crate) atomic_pointers: *mut AtomicU64,
-    pub(crate) hash_mask: u64,
+    pub(crate) hash_shift: usize,
 }
 
 unsafe impl<A: Allocator + Clone + Send> Send for HashJoinStringHashTable<A> {}
@@ -49,7 +53,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
                 Box::new_zeroed_slice_in(capacity, Default::default()).assume_init()
             },
             atomic_pointers: std::ptr::null_mut(),
-            hash_mask: capacity as u64 - 1,
+            hash_shift: (64 - capacity.trailing_zeros()) as usize,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())
@@ -57,26 +61,28 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
         hashtable
     }
 
-    pub fn insert(&mut self, key: &[u8], raw_entry_ptr: *mut StringRawEntry) {
-        let index = (key.fast_hash() & self.hash_mask) as usize;
+    pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
+        let hash = key.fast_hash();
+        let index = (key.fast_hash() >> self.hash_shift) as usize;
+        let new_header = new_header(entry_ptr as u64, hash);
         // # Safety
         // `index` is less than the capacity of hash table.
-        let mut head = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
+        let mut old_header = unsafe { (*self.atomic_pointers.add(index)).load(Ordering::Relaxed) };
         loop {
             let res = unsafe {
                 (*self.atomic_pointers.add(index)).compare_exchange_weak(
-                    head,
-                    raw_entry_ptr as u64,
+                    old_header,
+                    combine_header(new_header, old_header),
                     Ordering::SeqCst,
                     Ordering::SeqCst,
                 )
             };
             match res {
                 Ok(_) => break,
-                Err(x) => head = x,
+                Err(x) => old_header = x,
             };
         }
-        unsafe { (*raw_entry_ptr).next = head };
+        unsafe { (*entry_ptr).next = remove_header_tag(old_header) };
     }
 }
 
@@ -87,9 +93,14 @@ where A: Allocator + Clone + 'static
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
     fn probe(&self, hashes: &mut [u64]) {
-        hashes
-            .iter_mut()
-            .for_each(|hash| *hash = self.pointers[(*hash & self.hash_mask) as usize]);
+        hashes.iter_mut().for_each(|hash| {
+            let header = self.pointers[(*hash >> self.hash_shift) as usize];
+            *hash = if early_filtering(header, *hash) {
+                remove_header_tag(header)
+            } else {
+                0
+            };
+        });
     }
 
     fn next_contains(&self, key: &Self::Key, mut ptr: u64) -> bool {
