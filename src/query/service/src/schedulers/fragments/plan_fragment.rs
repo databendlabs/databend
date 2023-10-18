@@ -20,11 +20,11 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_settings::ReplaceIntoShuffleStrategy;
-use common_sql::executor::CompactPartial;
+use common_sql::executor::CompactSource;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
-use common_sql::executor::DeletePartial;
+use common_sql::executor::DeleteSource;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
@@ -55,7 +55,7 @@ pub enum FragmentType {
     /// a `TableScan` operator.
     Source,
     /// Leaf fragment of a delete plan, which contains
-    /// a `DeletePartial` operator.
+    /// a `DeleteSource` operator.
     DeleteLeaf,
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
@@ -199,7 +199,7 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
         let plan = match plan.input.as_ref() {
-            PhysicalPlan::DeletePartial(plan) => plan,
+            PhysicalPlan::DeleteSource(plan) => plan,
             _ => unreachable!("logic error"),
         };
 
@@ -212,8 +212,8 @@ impl PlanFragment {
         for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_delete_partial = ReplaceDeletePartial { partitions: parts };
-            plan = replace_delete_partial.replace(&plan)?;
+            let mut replace_delete_source = ReplaceDeleteSource { partitions: parts };
+            plan = replace_delete_source.replace(&plan)?;
 
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -281,7 +281,7 @@ impl PlanFragment {
             _ => unreachable!("logic error"),
         };
         let compact_block = match exchange_sink.input.as_ref() {
-            PhysicalPlan::CompactPartial(plan) => plan,
+            PhysicalPlan::CompactSource(plan) => plan,
             _ => unreachable!("logic error"),
         };
 
@@ -294,8 +294,8 @@ impl PlanFragment {
         for (executor, parts) in partition_reshuffle.into_iter() {
             let mut plan = self.plan.clone();
 
-            let mut replace_compact_partial = ReplaceCompactBlock { partitions: parts };
-            plan = replace_compact_partial.replace(&plan)?;
+            let mut replace_compact_source = ReplaceCompactBlock { partitions: parts };
+            plan = replace_compact_source.replace(&plan)?;
 
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
@@ -427,21 +427,21 @@ struct ReplaceCompactBlock {
 }
 
 impl PhysicalPlanReplacer for ReplaceCompactBlock {
-    fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactPartial(Box::new(CompactPartial {
+    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts: self.partitions.clone(),
             ..plan.clone()
         })))
     }
 }
 
-struct ReplaceDeletePartial {
+struct ReplaceDeleteSource {
     pub partitions: Partitions,
 }
 
-impl PhysicalPlanReplacer for ReplaceDeletePartial {
-    fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DeletePartial(Box::new(DeletePartial {
+impl PhysicalPlanReplacer for ReplaceDeleteSource {
+    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: self.partitions.clone(),
             ..plan.clone()
         })))

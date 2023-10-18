@@ -31,7 +31,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_sql::binder::ColumnBindingBuilder;
-use common_sql::executor::DeletePartial;
+use common_sql::executor::DeleteSource;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
@@ -291,7 +291,7 @@ impl DeleteInterpreter {
         query_row_id_col: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = partitions.is_lazy;
-        let mut root = PhysicalPlan::DeletePartial(Box::new(DeletePartial {
+        let mut root = PhysicalPlan::DeleteSource(Box::new(DeleteSource {
             parts: partitions,
             filters,
             table_info: table_info.clone(),

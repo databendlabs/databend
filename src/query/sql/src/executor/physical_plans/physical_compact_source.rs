@@ -20,7 +20,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CompactPartial {
+pub struct CompactSource {
     pub parts: Partitions,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
