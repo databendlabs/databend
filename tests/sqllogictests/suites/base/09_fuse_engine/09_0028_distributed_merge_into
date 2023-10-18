@@ -1,0 +1,67 @@
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+set enable_distributed_merge_into = 1;
+
+## distributed test
+statement ok
+drop table if exists distributed_target_test;
+
+statement ok
+drop table if exists distributed_source_test;
+
+statement ok
+create table distributed_target_test(a int,b string);
+
+statement ok
+insert into distributed_target_test values(1,'a'),(2,'b'),(3,'c');
+
+statement ok
+insert into distributed_target_test values(6,'z'),(7,'y'),(8,'x');
+
+query TT
+select * from distributed_target_test order by a;
+----
+1 a
+2 b
+3 c
+6 z
+7 y
+8 x
+
+statement ok
+create table distributed_source_test(a int,b string,is_databend_deleted bool);
+
+statement ok
+insert into distributed_source_test values(1,'d',true),(2,'e',true),(3,'f',false),(4,'e',true),(5,'f',false);
+
+statement ok
+insert into distributed_source_test values(6,'h',true),(7,'i',true),(8,'j',false),(9,'k',true),(10,'l',false);
+
+statement ok
+create stage source_parquet file_format = (type = parquet);
+
+statement ok
+remove @source_parquet;
+
+statement ok
+copy into @source_parquet from (select * from distributed_source_test);
+
+statement ok
+merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
+when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
+
+query TT
+select * from distributed_target_test order by a;
+----
+3 f
+5 f
+8 j
+10 l
+
+statement ok
+set enable_experimental_merge_into = 0;
+
+statement ok
+set enable_distributed_merge_into = 0;
