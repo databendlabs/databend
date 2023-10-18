@@ -15,11 +15,13 @@ FUSE_ENCODING('<database_name>', '<table_name>', '<column_name>')
 
 The function returns a result set with the following columns:
 
-| Column    | Description                                                                                   |
-|-----------|-----------------------------------------------------------------------------------------------|
-| LEVEL_ONE | The primary or initial encoding applied to the column.                                        |
-| LEVEL_TWO | A secondary or recursive encoding method applied to the column after the initial encoding.    |
-| COUNT(*)  | The count of occurrences of each unique combination of LEVEL_ONE and LEVEL_TWO in the result. |
+| Column            | Data Type        | Description                                                                                |
+|-------------------|------------------|--------------------------------------------------------------------------------------------|
+| VALIDITY_SIZE     | Nullable(UInt32) | The size of the column data after applying encoding.                                       |
+| COMPRESSED_SIZE   | UInt32           | The size of the column data after compression.                                             |
+| UNCOMPRESSED_SIZE | UInt32           | The size of the column data before applying encoding.                                      |
+| LEVEL_ONE         | String           | The primary or initial encoding applied to the column.                                     |
+| LEVEL_TWO         | Nullable(String) | A secondary or recursive encoding method applied to the column after the initial encoding. |
 
 ## Examples
 
