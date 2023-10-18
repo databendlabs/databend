@@ -104,7 +104,7 @@ impl Histogram {
         (sum, count, buckets)
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub(crate) fn reset(&self) {
         let mut inner = self.inner.write();
         inner.sum = 0.0;
         inner.count = 0;

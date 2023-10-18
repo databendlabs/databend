@@ -22,11 +22,11 @@ use prometheus_client::encoding::EncodeLabelSet;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::metrics::family::MetricConstructor;
 use prometheus_client::metrics::gauge::Gauge;
-use prometheus_client::metrics::histogram::Histogram;
 use prometheus_client::registry::Metric;
 use prometheus_client::registry::Registry;
 
 use crate::counter::Counter;
+use crate::histogram::Histogram;
 use crate::histogram::BUCKET_MILLISECONDS;
 use crate::histogram::BUCKET_SECONDS;
 
@@ -56,7 +56,7 @@ impl ResetMetric for Counter {
 
 impl ResetMetric for Histogram {
     fn reset_metric(&self) {
-        // TODO(liyz): do nothing on resetting a histogram yet, but we can add it whenever we need.
+        self.reset()
     }
 }
 

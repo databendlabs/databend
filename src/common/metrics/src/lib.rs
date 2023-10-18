@@ -31,7 +31,7 @@ pub use dump::SummaryCount;
 pub use metrics_exporter_prometheus::PrometheusHandle;
 pub use prometheus_client::metrics::family::Family;
 pub use prometheus_client::metrics::gauge::Gauge;
-pub use prometheus_client::metrics::histogram::Histogram;
+pub use histogram::Histogram;
 pub use registry::load_global_prometheus_registry;
 pub use registry::register_counter;
 pub use registry::register_counter_family;
