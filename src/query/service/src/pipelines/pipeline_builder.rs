@@ -343,7 +343,7 @@ impl PipelineBuilder {
             InputPort::create(),
             OutputPort::create(),
             table,
-            cluster_stats_gen.clone(),
+            cluster_stats_gen,
         )?
         .get_block_builder();
 
