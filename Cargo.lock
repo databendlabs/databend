@@ -11253,7 +11253,7 @@ checksum = "9091b6114800a5f2141aee1d1b9d6ca3592ac062dc5decb3764ec5895a47b4eb"
 [[package]]
 name = "strawboat"
 version = "0.2.6"
-source = "git+https://github.com/SkyFan2002/strawboat?branch=bp#5b81fac6cbe3a79c10d3f2e5bd0241b4f4fe3606"
+source = "git+https://github.com/SkyFan2002/strawboat?rev=78748e#78748e9a43f2ac5833811a52805d5ffde29eb836"
 dependencies = [
  "ahash 0.8.3",
  "arrow2",
