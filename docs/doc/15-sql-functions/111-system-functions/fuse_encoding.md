@@ -31,7 +31,9 @@ CREATE TABLE t(c INT) STORAGE_FORMAT = 'native' COMPRESSION = 'lz4';
 INSERT INTO t SELECT number FROM numbers(2048);
 
 -- Analyze the encoding for column 'c' in table 't'
-SELECT LEVEL_ONE, LEVEL_TWO, COUNT(*) FROM FUSE_ENCODING('default', 't', 'c') GROUP BY LEVEL_ONE, LEVEL_TWO;
+SELECT LEVEL_ONE, LEVEL_TWO, COUNT(*) 
+FROM FUSE_ENCODING('default', 't', 'c') 
+GROUP BY LEVEL_ONE, LEVEL_TWO;
 
 level_one   |level_two|count(*)|
 ------------+---------+--------+
@@ -42,7 +44,9 @@ INSERT INTO t (c)
 SELECT 1
 FROM numbers(2048);
 
-SELECT LEVEL_ONE, LEVEL_TWO, COUNT(*) FROM FUSE_ENCODING('default', 't', 'c') GROUP BY LEVEL_ONE, LEVEL_TWO;
+SELECT LEVEL_ONE, LEVEL_TWO, COUNT(*) 
+FROM FUSE_ENCODING('default', 't', 'c') 
+GROUP BY LEVEL_ONE, LEVEL_TWO;
 
 level_one   |level_two|count(*)|
 ------------+---------+--------+
