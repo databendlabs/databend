@@ -4382,7 +4382,6 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
- "common-settings",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -4396,6 +4395,7 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
@@ -11126,6 +11126,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "storage-encryption"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+]
 
 [[package]]
 name = "storages-common-blocks"

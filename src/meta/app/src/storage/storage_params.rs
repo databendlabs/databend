@@ -104,6 +104,11 @@ impl StorageParams {
         matches!(self, StorageParams::Fs(_))
     }
 
+    /// Whether this storage params need encryption feature to start.
+    pub fn need_encryption_feature(&self) -> bool {
+        todo!("implement me")
+    }
+
     /// auto_detect is used to do auto detect for some storage params under async context.
     ///
     /// - This action should be taken before storage params been passed out.

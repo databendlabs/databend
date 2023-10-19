@@ -41,6 +41,7 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 virtual-column = { path = "../ee-features/virtual-column" }
+storage-encryption = { path = "../ee-features/storage-encryption" }
 
 arrow-array = { workspace = true }
 async-trait = "0.1.57"

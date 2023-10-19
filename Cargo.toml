@@ -74,6 +74,7 @@ members = [
     "src/query/ee-features/aggregating-index",
     "src/query/ee-features/data-mask",
     "src/query/ee-features/table-lock",
+    "src/query/ee-features/storage-encryption",
     # databend-query
     "src/query/service",
     # enterprise
