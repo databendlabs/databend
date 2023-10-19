@@ -13,10 +13,11 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::GetKVReq;
-use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::ListKVReq;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
@@ -26,11 +27,15 @@ use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
 use common_meta_types::MetaAPIError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
+use futures::StreamExt;
+use futures::TryStreamExt;
 use log::info;
 
+use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 
 /// Impl kvapi::KVApi for MetaNode.
@@ -82,14 +87,21 @@ impl kvapi::KVApi for MetaNode {
     }
 
     #[minitrace::trace]
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
-        let res = self
-            .consistent_read(ListKVReq {
-                prefix: prefix.to_string(),
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        let req = ListKVReq {
+            prefix: prefix.to_string(),
+        };
+
+        let strm = self
+            .handle_forwardable_request(ForwardRequest {
+                forward_to_leader: 1,
+                body: MetaGrpcReadReq::ListKV(req),
             })
             .await?;
 
-        Ok(res)
+        let strm =
+            strm.map_err(|status| MetaAPIError::NetworkError(MetaNetworkError::from(status)));
+        Ok(strm.boxed())
     }
 
     #[minitrace::trace]
