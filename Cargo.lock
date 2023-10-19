@@ -2118,7 +2118,6 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
- "common-settings",
  "jwt-simple",
  "serde",
 ]

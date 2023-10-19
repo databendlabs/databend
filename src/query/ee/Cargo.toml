@@ -29,7 +29,6 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-settings = { path = "../../query/settings" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }

@@ -157,11 +157,9 @@ impl Interpreter for UpdateInterpreter {
 
         if !computed_list.is_empty() {
             let license_manager = get_license_manager();
-            license_manager.manager.check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                ComputedColumn,
-            )?;
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
         // Add table lock heartbeat.
