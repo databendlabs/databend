@@ -80,7 +80,7 @@ impl InspectParquetTable {
                 file_path
             )));
         }
-        let uri = file_path;
+        
         let table_info = TableInfo {
             ident: TableIdent::new(table_id, 0),
             desc: format!("'{}'.'{}'", database_name, table_func_name),
@@ -93,7 +93,7 @@ impl InspectParquetTable {
             ..Default::default()
         };
 
-        Ok(Arc::new(Self { uri, table_info }))
+        Ok(Arc::new(Self { file_path, table_info }))
     }
 
     pub fn schema() -> Arc<TableSchema> {
@@ -203,8 +203,8 @@ impl AsyncSource for InspectParquetSource {
             return Ok(None);
         }
         self.is_finished = true;
-
-        let (stage_info, path) = resolve_stage_location(&self.ctx, &self.uri).await?;
+        let uri = self.uri.strip_prefix('@').unwrap().to_string();
+        let (stage_info, path) = resolve_stage_location(&self.ctx, &uri).await?;
 
         let operator = init_stage_operator(&stage_info)?;
 
