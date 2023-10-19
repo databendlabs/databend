@@ -16,7 +16,7 @@ use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Endpoint;
 use common_meta_types::GrpcConfig;
 use common_meta_types::NodeId;
-use common_metrics::counter;
+use common_metrics::count;
 use log::debug;
 use tonic::transport::channel::Channel;
 
@@ -30,14 +30,14 @@ pub struct PeerCounter {
     endpoint_str: String,
 }
 
-impl counter::Count for PeerCounter {
+impl count::Count for PeerCounter {
     fn incr_count(&mut self, n: i64) {
         raft_metrics::network::incr_active_peers(&self.target, &self.endpoint_str, n)
     }
 }
 
 /// RaftClient is a grpc client bound with a metrics reporter..
-pub type RaftClient = counter::WithCount<PeerCounter, RaftServiceClient<Channel>>;
+pub type RaftClient = count::WithCount<PeerCounter, RaftServiceClient<Channel>>;
 
 /// Defines the API of the client to a raft node.
 pub trait RaftClientApi {
@@ -57,7 +57,7 @@ impl RaftClientApi for RaftClient {
         let cli = RaftServiceClient::new(channel)
             .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
             .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
-        counter::WithCount::new(cli, PeerCounter {
+        count::WithCount::new(cli, PeerCounter {
             target,
             endpoint,
             endpoint_str,
