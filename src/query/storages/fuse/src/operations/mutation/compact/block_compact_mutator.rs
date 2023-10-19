@@ -408,9 +408,11 @@ impl CompactTaskBuilder {
 
     fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
         if let Some(default_cluster_key) = self.cluster_key_id {
-            if block.cluster_stats.as_ref().map_or(false, |v| {
-                v.level != 0 && v.cluster_key_id == default_cluster_key
-            }) {
+            if block
+                .cluster_stats
+                .as_ref()
+                .is_some_and(|v| v.level != 0 && v.cluster_key_id == default_cluster_key)
+            {
                 return (true, !self.blocks.is_empty());
             }
         }
@@ -454,7 +456,7 @@ impl CompactTaskBuilder {
         let column_ids: HashSet<ColumnId> = block.col_metas.keys().cloned().collect();
         if self.column_ids == column_ids {
             // Check if the block needs to be resort.
-            self.cluster_key_id.map_or(false, |key| {
+            self.cluster_key_id.is_some_and(|key| {
                 block
                     .cluster_stats
                     .as_ref()

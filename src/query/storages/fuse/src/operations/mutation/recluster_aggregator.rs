@@ -176,13 +176,23 @@ impl ReclusterAggregator {
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
             tasks.push(async move {
-                let new_summary =
+                let location = location_gen.gen_segment_info_location();
+                let mut new_summary =
                     reduce_block_metas(&new_blocks, block_thresholds, default_cluster_key);
+                if new_summary.block_count > 1 {
+                    // To fix issue #13217.
+                    if new_summary.block_count > new_summary.perfect_block_count {
+                        log::warn!(
+                            "compact: generate new segment: {}, perfect_block_count: {}, block_count: {}",
+                            location, new_summary.perfect_block_count, new_summary.block_count,
+                        );
+                        new_summary.perfect_block_count = new_summary.block_count;
+                    }
+                }
                 // create new segment info
                 let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                 // write the segment info.
-                let location = location_gen.gen_segment_info_location();
                 let serialized_segment = SerializedSegment {
                     path: location.clone(),
                     segment: Arc::new(new_segment),
