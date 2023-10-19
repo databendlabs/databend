@@ -238,7 +238,7 @@ impl FuseTable {
 
         // merge sort
         let block_num = std::cmp::max(
-            mutator.total_bytes / block_thresholds.max_bytes_per_block,
+            mutator.total_bytes * 80 / (block_thresholds.max_bytes_per_block * 100),
             1,
         );
         let final_block_size = std::cmp::min(
@@ -254,6 +254,14 @@ impl FuseTable {
         } else {
             final_block_size
         };
+        eprintln!(
+            "block_count: {}, total_rows: {}, total_bytes: {}",
+            block_count, mutator.total_rows, mutator.total_bytes
+        );
+        eprintln!(
+            "block_num: {}, final_block_size: {}, partial_block_size: {}",
+            block_num, final_block_size, partial_block_size
+        );
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);
