@@ -254,14 +254,6 @@ impl FuseTable {
         } else {
             final_block_size
         };
-        eprintln!(
-            "block_count: {}, total_rows: {}, total_bytes: {}",
-            block_count, mutator.total_rows, mutator.total_bytes
-        );
-        eprintln!(
-            "block_num: {}, final_block_size: {}, partial_block_size: {}",
-            block_num, final_block_size, partial_block_size
-        );
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);
