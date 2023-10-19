@@ -241,20 +241,20 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
     )?;
 
     let res = client.get_cluster_status().await?;
-    println!("Binary Version: {}", res.binary_version);
-    println!("Data Version: {}", res.data_version);
-    println!("Node: [{}] {}", res.id, res.endpoint);
-    println!("DB Size: {}", res.db_size);
+    println!("BinaryVersion: {}", res.binary_version);
+    println!("DataVersion: {}", res.data_version);
+    println!("DBSize: {}", res.db_size);
+    println!("Node: id={} raft={}", res.id, res.endpoint);
     println!("State: {}", res.state);
     if let Some(leader) = res.leader {
         println!("Leader: {}", leader);
     }
-    println!("Current Term: {}", res.current_term);
-    println!("Last Seq: {:?}", res.last_seq);
-    println!("Last Log Index: {}", res.last_log_index);
-    println!("Last Applied: {}", res.last_applied);
+    println!("CurrentTerm: {}", res.current_term);
+    println!("LastSeq: {:?}", res.last_seq);
+    println!("LastLogIndex: {}", res.last_log_index);
+    println!("LastApplied: {}", res.last_applied);
     if let Some(last_log_id) = res.snapshot_last_log_id {
-        println!("Snapshot Last Log ID: {}", last_log_id);
+        println!("SnapshotLastLogID: {}", last_log_id);
     }
     if let Some(purged) = res.purged {
         println!("Purged: {}", purged);
@@ -262,19 +262,19 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
     if !res.replication.is_empty() {
         println!("Replication:");
         for (k, v) in res.replication {
-            println!("  [{}] {}", k, v);
+            println!("  - [{}] {}", k, v);
         }
     }
     if !res.voters.is_empty() {
         println!("Voters:");
         for v in res.voters {
-            println!("  {}", v);
+            println!("  - {}", v);
         }
     }
     if !res.non_voters.is_empty() {
-        println!("Non Voters:");
+        println!("NonVoters:");
         for v in res.non_voters {
-            println!("  {}", v);
+            println!("  - {}", v);
         }
     }
     Ok(())
