@@ -51,7 +51,7 @@ async fn test_impl(scenario: Scenario, predicate: &str, expected_rgs: Vec<usize>
         Arc::new(schema),
         leaf_fields,
         &plan.push_downs,
-        ParquetReadOptions::new()
+        ParquetReadOptions::default()
             .with_prune_row_groups(prune)
             .with_prune_pages(false),
     )

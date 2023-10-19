@@ -38,7 +38,6 @@ use itertools::izip;
 
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("to_string", &["to_varchar", "to_text"]);
-
     registry.register_aliases("upper", &["ucase"]);
     registry.register_aliases("lower", &["lcase"]);
     registry.register_aliases("length", &["octet_length"]);
@@ -811,16 +810,28 @@ pub fn register(registry: &mut FunctionRegistry) {
                                 }
                                 output.commit_row()
                             } else {
-                                let split: Vec<&str> = s.split(&sep).collect();
-                                let len = split.len();
-                                if part <= len as i64 && part >= -(len as i64) {
-                                    let idx = match part.cmp(&(0i64)) {
-                                        Ordering::Greater => (part-1) as usize,
-                                        Ordering::Less =>  (len as i64 + part) as usize,
-                                        Ordering::Equal => 0
+                                if part < 0 {
+                                    let split = s.rsplit(&sep);
+                                    let idx = (-part-1) as usize;
+                                    for (count, i) in split.enumerate() {
+                                        if idx == count {
+                                            output.put_slice(i.as_bytes());
+                                            break
+                                        }
+                                    }
+                                } else {
+                                    let split = s.split(&sep);
+                                    let idx = if part == 0 {
+                                        0usize
+                                    } else {
+                                        (part - 1) as usize
                                     };
-                                    let res = split[idx];
-                                    output.put_slice(res.as_bytes());
+                                    for (count, i) in split.enumerate() {
+                                        if idx == count {
+                                            output.put_slice(i.as_bytes());
+                                            break
+                                        }
+                                    }
                                 }
                                 output.commit_row();
                             }

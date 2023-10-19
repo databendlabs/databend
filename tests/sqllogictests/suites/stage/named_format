@@ -1,0 +1,30 @@
+statement ok
+drop table if exists table_csv;
+
+statement ok
+create table table_csv (a int, b string, c int);
+
+statement ok
+drop file format if exists my_csv
+
+statement ok
+create file format my_csv type = CSV field_delimiter = '|'
+
+statement ok
+drop stage if exists stage$named_format;
+
+statement ok
+create stage stage$named_format FILE_FORMAT = (FORMAT_NAME = 'my_csv');
+
+statement ok
+remove @stage$named_format;
+
+statement ok
+copy into @stage$named_format from (select number, number + 1 from numbers(3)) FILE_FORMAT = (type = csv field_delimiter='|');
+
+query TT
+select $1, $2 from @stage$named_format order by $1;
+----
+0 1
+1 2
+2 3

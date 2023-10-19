@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -69,9 +70,44 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
     fn accumulate_row(&self, _place: StateAddr, _columns: &[Column], _row: usize) -> Result<()>;
 
     // serialize  the state into binary array
+    fn batch_serialize(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        builder: &mut StringColumnBuilder,
+    ) -> Result<()> {
+        for place in places {
+            self.serialize(place.next(offset), &mut builder.data)?;
+            builder.commit_row();
+        }
+        Ok(())
+    }
+
     fn serialize(&self, _place: StateAddr, _writer: &mut Vec<u8>) -> Result<()>;
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        None
+    }
+
     fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
+
+    fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
+        let c = column.as_string().unwrap();
+        for (place, mut data) in places.iter().zip(c.iter()) {
+            self.merge(place.next(offset), &mut data)?;
+        }
+
+        Ok(())
+    }
+
+    fn batch_merge_single(&self, place: StateAddr, column: &Column) -> Result<()> {
+        let c = column.as_string().unwrap();
+
+        for mut data in c.iter() {
+            self.merge(place, &mut data)?;
+        }
+        Ok(())
+    }
 
     fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 

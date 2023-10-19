@@ -319,9 +319,9 @@ impl ClusterDiscovery {
                     let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                     let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                     warn!(
-                        "Used loopback or unspecified address as cluster flight address. \
-                        we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
-                        If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
+                        "Detected loopback or unspecified address as cluster flight endpoint. \
+                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                        If there are proxies between nodes, you can specify endpoint with --flight-api-address.",
                         address, new_addr
                     );
 

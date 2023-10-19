@@ -22,6 +22,7 @@ use common_meta_client::MIN_METASRV_SEMVER;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeResponse;
@@ -111,6 +112,13 @@ impl MetaService for GrpcServiceForTestImpl {
         &self,
         _request: Request<MemberListRequest>,
     ) -> Result<Response<MemberListReply>, Status> {
+        todo!()
+    }
+
+    async fn get_cluster_status(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClusterStatus>, Status> {
         todo!()
     }
 
