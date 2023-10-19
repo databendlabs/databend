@@ -568,7 +568,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
         ),
     );
-    
+
     registry.register_combine_nullable_2_arg::<StringType, StringType, StringType, _, _>(
         "json_extract_path_text",
         |_, _, _| FunctionDomain::MayThrow,
