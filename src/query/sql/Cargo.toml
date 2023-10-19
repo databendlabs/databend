@@ -55,6 +55,7 @@ async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
 cidr = { version = "0.2.2" }
+cron = "0.12.0"
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"

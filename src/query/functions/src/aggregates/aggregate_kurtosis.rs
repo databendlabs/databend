@@ -27,12 +27,12 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_unary_arguments;
 use crate::aggregates::AggregateFunction;
@@ -195,12 +195,12 @@ where T: Number + AsPrimitive<f64>
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<KurtosisState>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<KurtosisState>();
-        let rhs: KurtosisState = deserialize_from_slice(reader)?;
+        let rhs: KurtosisState = deserialize_state(reader)?;
         state.merge(&rhs);
         Ok(())
     }

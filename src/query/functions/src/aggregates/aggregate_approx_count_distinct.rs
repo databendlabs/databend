@@ -32,11 +32,12 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use streaming_algorithms::HyperLogLog;
 
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::deserialize_state;
+use super::serialize_state;
 use super::AggregateFunctionRef;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
@@ -123,12 +124,12 @@ where for<'a> T::ScalarRef<'a>: Hash
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        serialize_into_buf(writer, &state.hll)
+        serialize_state(writer, &state.hll)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateApproxCountDistinctState<T::ScalarRef<'_>>>();
-        let hll: HyperLogLog<T::ScalarRef<'_>> = deserialize_from_slice(reader)?;
+        let hll: HyperLogLog<T::ScalarRef<'_>> = deserialize_state(reader)?;
         state.hll.union(&hll);
 
         Ok(())

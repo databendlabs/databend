@@ -33,6 +33,7 @@ use common_pipeline_core::processors::Processor;
 
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::AggregateMeta;
 use crate::pipelines::processors::transforms::aggregator::aggregate_meta::HashTablePayload;
+use crate::pipelines::processors::transforms::aggregator::create_state_serializer;
 use crate::pipelines::processors::transforms::aggregator::estimated_key_size;
 use crate::pipelines::processors::transforms::aggregator::serde::serde_meta::AggregateSerdeMeta;
 use crate::pipelines::processors::transforms::group_by::HashMethodBounds;
@@ -164,30 +165,31 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
     let offsets_aggregate_states = &params.offsets_aggregate_states;
 
     // Builders.
-    let mut state_builders = (0..funcs.len())
-        .map(|_| StringColumnBuilder::with_capacity(keys_len, keys_len * 4))
-        .collect::<Vec<_>>();
+    let mut state_builders: Vec<StringColumnBuilder> = funcs
+        .iter()
+        .map(|func| create_state_serializer(func, keys_len))
+        .collect();
 
     let mut group_key_builder = method.keys_column_builder(keys_len, value_size);
 
+    let mut places = Vec::with_capacity(keys_len);
     for group_entity in hashtable.iter() {
-        let place = Into::<StateAddr>::into(*group_entity.get());
-
-        for (idx, func) in funcs.iter().enumerate() {
-            let arg_place = place.next(offsets_aggregate_states[idx]);
-            func.serialize(arg_place, &mut state_builders[idx].data)?;
-            state_builders[idx].commit_row();
-        }
-
+        places.push(Into::<StateAddr>::into(*group_entity.get()));
         group_key_builder.append_value(group_entity.key());
     }
 
     let mut columns = Vec::with_capacity(state_builders.len() + 1);
+    for (idx, func) in funcs.iter().enumerate() {
+        func.batch_serialize(
+            &places,
+            offsets_aggregate_states[idx],
+            &mut state_builders[idx],
+        )?;
+    }
 
     for builder in state_builders.into_iter() {
         columns.push(Column::String(builder.build()));
     }
-
     columns.push(group_key_builder.finish());
     Ok(DataBlock::new_from_columns(columns))
 }
@@ -212,6 +214,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
     ) -> Self {
         unsafe {
             let payload = Box::pin(payload);
+
             let point = NonNull::from(&payload.cell.hashtable);
             let iter = point.as_ref().iter();
 
@@ -253,10 +256,10 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
         let funcs = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
-        // Builders.
-        let mut state_builders = (0..funcs.len())
-            .map(|_| StringColumnBuilder::with_capacity(max_block_rows, max_block_rows * 4))
-            .collect::<Vec<_>>();
+        let mut state_builders: Vec<StringColumnBuilder> = funcs
+            .iter()
+            .map(|func| create_state_serializer(func, max_block_rows))
+            .collect();
 
         let mut group_key_builder = self
             .method
@@ -271,7 +274,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
                 func.serialize(arg_place, &mut state_builders[idx].data)?;
                 state_builders[idx].commit_row();
-                bytes += state_builders[idx].data.len();
+                bytes += state_builders[idx].memory_size();
             }
 
             group_key_builder.append_value(group_entity.key());

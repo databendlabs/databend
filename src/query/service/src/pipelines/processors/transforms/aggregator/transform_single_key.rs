@@ -21,10 +21,10 @@ use bumpalo::Bump;
 use common_catalog::plan::AggIndexMeta;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
+use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::Scalar;
@@ -115,16 +115,9 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
             if is_agg_index_block {
                 // Aggregation states are in the back of the block.
                 let agg_index = block.num_columns() - self.funcs.len() + idx;
-                let agg_state = block
-                    .get_by_offset(agg_index)
-                    .value
-                    .as_column()
-                    .unwrap()
-                    .as_string()
-                    .unwrap();
-                for (_, mut raw_state) in agg_state.iter().enumerate() {
-                    func.merge(place, &mut raw_state)?;
-                }
+                let agg_state = block.get_by_offset(agg_index).value.as_column().unwrap();
+
+                func.batch_merge_single(place, agg_state)?;
             } else {
                 func.accumulate(place, &arg_columns, None, block.num_rows())?;
             }
@@ -168,7 +161,7 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 pub struct FinalSingleStateAggregator {
     arena: Bump,
     layout: Layout,
-    to_merge_data: Vec<Vec<StringColumn>>,
+    to_merge_data: Vec<Vec<Column>>,
     funcs: Vec<AggregateFunctionRef>,
     offsets_aggregate_states: Vec<usize>,
 }
@@ -222,10 +215,6 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
 
             for (index, _) in self.funcs.iter().enumerate() {
                 let binary_array = block.get_by_offset(index).value.as_column().unwrap();
-                let binary_array = binary_array.as_string().ok_or_else(|| {
-                    ErrorCode::IllegalDataType("binary array should be string type")
-                })?;
-
                 self.to_merge_data[index].push(binary_array.clone());
             }
         }
@@ -249,12 +238,9 @@ impl AccumulatingTransform for FinalSingleStateAggregator {
             let main_places = self.new_places();
             for (index, func) in self.funcs.iter().enumerate() {
                 let main_place = main_places[index];
-
                 for col in self.to_merge_data[index].iter() {
-                    let mut data = unsafe { col.index_unchecked(0) };
-                    func.merge(main_place, &mut data)?;
+                    func.batch_merge_single(main_place, col)?;
                 }
-
                 let array = aggr_values[index].borrow_mut();
                 func.merge_result(main_place, array)?;
             }

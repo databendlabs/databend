@@ -3,15 +3,11 @@ title: Welcome
 slug: /
 ---
 
-Welcome to the Databend documentation! Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
-
-<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/Ysp0do8Ci-8" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
+Welcome to the Databend documentation! Databend is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. **Crafted with Rust, it's your most efficient [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059)**.
 
 This welcome page guides you through the features, architecture, and other important details about Databend.
 
 ## Why Databend?
-
-Databend is always searching for and incorporating the most advanced and innovative technologies to provide you with an exceptional user experience.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
@@ -26,17 +22,9 @@ import TabItem from '@theme/TabItem';
 
 </TabItem>
 
-<TabItem value="Compatibility" label="Compatibility">
-
-- Compatible with MySQL / ClickHouse.
-- ANSI SQL compliant.
-- Easy connection with existing tools such as [MySQL Client](https://databend.rs/doc/integrations/api/mysql-handler), [ClickHouse HTTP Handler](https://databend.rs/doc/integrations/api/clickhouse-handler), [Vector](https://vector.dev/), [DBeaver](https://dbeaver.com/), [Jupyter](https://databend.rs/doc/integrations/gui-tool/jupyter), [JDBC](https://databend.rs/doc/develop), and more.
-
-</TabItem>
-
 <TabItem value="Data Manipulation" label="Data Manipulation">
 
-- Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `COPY`, and `ALTER`.
+- Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `REPLACE`, `COPY`, and `MERGE`.
 - Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
 - Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data/load) in various formats like CSV, JSON, and Parquet.
 - Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/).

@@ -640,7 +640,8 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::AlterNetworkPolicy(_)
             | Plan::DropNetworkPolicy(_)
             | Plan::DescNetworkPolicy(_)
-            | Plan::ShowNetworkPolicies(_) => {
+            | Plan::ShowNetworkPolicies(_)
+            | Plan::CreateTask(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
                     .await?;
