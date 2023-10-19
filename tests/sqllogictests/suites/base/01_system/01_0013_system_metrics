@@ -39,8 +39,8 @@ statement ok
 SELECT 1;
 
 onlyif mysql
-query TTT
-SELECT min(value > 5) FROM system.metrics where metric = 'query_success_total'
+query I
+SELECT min(to_float32(value) > 5) FROM system.metrics where metric = 'query_success_total'
 ----
 1
 
@@ -51,7 +51,7 @@ truncate table system.metrics;
 
 
 onlyif mysql
-query TTT
-SELECT min(value > 5) FROM system.metrics where metric = 'query_success_total'
+query I
+SELECT min(to_float32(value) > 5) FROM system.metrics where metric = 'query_success_total'
 ----
 0
