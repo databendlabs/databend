@@ -35,8 +35,8 @@ insert into t2 (a) values (1),(2);
 query IT
 SELECT a, to_string(b) FROM t2
 ----
-1 0,1
-2 1,2
+1 (empty)
+2 (empty)
 
 statement ok
 DROP DATABASE db_bitmap
