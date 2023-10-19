@@ -306,7 +306,7 @@ bucket = "databend"
 # GCS also supports changing the endpoint URL
 # but the endpoint should be compatible with GCS's JSON API
 # default:
-# endpoint_url = "https://storage.googleapis.com/"
+# endpoint_url = "https://storage.googleapis.com"
 
 # working directory of GCS
 # default:

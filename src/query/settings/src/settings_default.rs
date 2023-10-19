@@ -428,6 +428,24 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_parquet_page_index", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet page index",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_rowgroup_pruning", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet rowgroup pruning",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_prewhere", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet prewhere",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
