@@ -143,11 +143,18 @@ impl Drop for LimitMemGuard {
 pub struct OutOfLimit<V = i64> {
     pub value: V,
     pub limit: V,
+    pub max_allocate: V,
+    pub memory_usage: V,
 }
 
 impl<V> OutOfLimit<V> {
-    pub const fn new(value: V, limit: V) -> Self {
-        Self { value, limit }
+    pub const fn new(value: V, limit: V, memory_usage: V, max_allocate: V) -> Self {
+        Self {
+            value,
+            limit,
+            memory_usage,
+            max_allocate,
+        }
     }
 }
 
@@ -155,11 +162,15 @@ impl Debug for OutOfLimit<i64> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "memory usage {}({}) exceeds limit {}({})",
+            "memory usage {}({}) exceeds limit {}({}), memory_usage {}({}), max_allocate {}({})",
             ByteSize::b(self.value as u64),
             self.value,
             ByteSize::b(self.limit as u64),
             self.limit,
+            ByteSize::b(self.memory_usage as u64),
+            self.memory_usage,
+            ByteSize::b(self.max_allocate as u64),
+            self.max_allocate,
         )
     }
 }
@@ -336,6 +347,8 @@ pub struct MemStat {
 
     peak_used: AtomicI64,
 
+    max_allocate: AtomicI64,
+
     /// The limit of max used memory for this tracker.
     ///
     /// Set to 0 to disable the limit.
@@ -404,6 +417,9 @@ impl MemStat {
 
         used += memory_usage;
         mem_stat.peak_used.fetch_max(used, Ordering::Relaxed);
+        mem_stat
+            .max_allocate
+            .fetch_max(memory_usage, Ordering::Relaxed);
 
         if !is_root {
             if let Err(cause) =
@@ -420,7 +436,7 @@ impl MemStat {
             }
         }
 
-        if let Err(cause) = mem_stat.check_limit(used) {
+        if let Err(cause) = mem_stat.check_limit(used, memory_usage) {
             if NEED_ROLLBACK {
                 let used = mem_stat.used.fetch_sub(memory_usage, Ordering::Relaxed);
                 mem_stat
@@ -436,7 +452,7 @@ impl MemStat {
 
     /// Check if used memory is out of the limit.
     #[inline]
-    fn check_limit(&self, used: i64) -> Result<(), OutOfLimit> {
+    fn check_limit(&self, used: i64, memory_usage: i64) -> Result<(), OutOfLimit> {
         let limit = self.limit.load(Ordering::Relaxed);
 
         // No limit
@@ -448,7 +464,8 @@ impl MemStat {
             return Ok(());
         }
 
-        Err(OutOfLimit::new(used, limit))
+        let max_allocate = self.max_allocate.load(Ordering::Relaxed);
+        Err(OutOfLimit::new(used, limit, memory_usage))
     }
 
     #[inline]
