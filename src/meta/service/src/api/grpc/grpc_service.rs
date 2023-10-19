@@ -373,9 +373,11 @@ impl MetaService for MetaServiceImpl {
         _request: Request<Empty>,
     ) -> Result<Response<ClusterStatus>, Status> {
         let _guard = RequestInFlight::guard();
-        let status = self.meta_node.get_status().await.map_err(|e| {
-            Status::internal(format!("get meta node status failed: {}", e.to_string()))
-        })?;
+        let status = self
+            .meta_node
+            .get_status()
+            .await
+            .map_err(|e| Status::internal(format!("get meta node status failed: {}", e)))?;
 
         let resp = ClusterStatus {
             id: status.id,
@@ -395,10 +397,7 @@ impl MetaService for MetaServiceImpl {
                 .replication
                 .unwrap_or_default()
                 .into_iter()
-                .filter_map(|(k, v)| match v {
-                    Some(v) => Some((k, v.to_string())),
-                    None => None,
-                })
+                .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
                 .collect(),
             voters: status.voters.iter().map(|n| n.to_string()).collect(),
             non_voters: status.non_voters.iter().map(|n| n.to_string()).collect(),
