@@ -21,38 +21,38 @@ use common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::AggregateExpand;
-use crate::executor::AggregateFinal;
-use crate::executor::AggregateFunctionDesc;
-use crate::executor::AggregatePartial;
-use crate::executor::CommitSink;
-use crate::executor::ConstantTableScan;
-use crate::executor::CopyIntoTable;
-use crate::executor::CteScan;
-use crate::executor::DeletePartial;
-use crate::executor::DistributedInsertSelect;
-use crate::executor::EvalScalar;
-use crate::executor::Exchange;
-use crate::executor::ExchangeSink;
-use crate::executor::ExchangeSource;
-use crate::executor::Filter;
-use crate::executor::FragmentKind;
-use crate::executor::HashJoin;
-use crate::executor::Lambda;
-use crate::executor::Limit;
-use crate::executor::MaterializedCte;
+use crate::executor::physical_plans::common::AggregateFunctionDesc;
+use crate::executor::physical_plans::common::FragmentKind;
+use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
+use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
+use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
+use crate::executor::physical_plans::physical_commit_sink::CommitSink;
+use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
+use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
+use crate::executor::physical_plans::physical_cte_scan::CteScan;
+use crate::executor::physical_plans::physical_delete_source::DeleteSource;
+use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
+use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
+use crate::executor::physical_plans::physical_exchange::Exchange;
+use crate::executor::physical_plans::physical_exchange_sink::ExchangeSink;
+use crate::executor::physical_plans::physical_exchange_source::ExchangeSource;
+use crate::executor::physical_plans::physical_filter::Filter;
+use crate::executor::physical_plans::physical_hash_join::HashJoin;
+use crate::executor::physical_plans::physical_lambda::Lambda;
+use crate::executor::physical_plans::physical_limit::Limit;
+use crate::executor::physical_plans::physical_materialized_cte::MaterializedCte;
+use crate::executor::physical_plans::physical_project::Project;
+use crate::executor::physical_plans::physical_project_set::ProjectSet;
+use crate::executor::physical_plans::physical_range_join::RangeJoin;
+use crate::executor::physical_plans::physical_range_join::RangeJoinType;
+use crate::executor::physical_plans::physical_row_fetch::RowFetch;
+use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
+use crate::executor::physical_plans::physical_sort::Sort;
+use crate::executor::physical_plans::physical_table_scan::TableScan;
+use crate::executor::physical_plans::physical_union_all::UnionAll;
+use crate::executor::physical_plans::physical_window::Window;
+use crate::executor::physical_plans::physical_window::WindowFunction;
 use crate::executor::PhysicalPlan;
-use crate::executor::Project;
-use crate::executor::ProjectSet;
-use crate::executor::RangeJoin;
-use crate::executor::RangeJoinType;
-use crate::executor::RowFetch;
-use crate::executor::RuntimeFilterSource;
-use crate::executor::Sort;
-use crate::executor::TableScan;
-use crate::executor::UnionAll;
-use crate::executor::Window;
-use crate::executor::WindowFunction;
 use crate::planner::Metadata;
 use crate::planner::MetadataRef;
 use crate::planner::DUMMY_TABLE_INDEX;
@@ -97,14 +97,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Probe".to_string(), vec![probe_child]),
                 ];
 
-                let estimated_rows = if let Some(info) = &plan.stat_info {
+                let _estimated_rows = if let Some(info) = &plan.stat_info {
                     format!("{0:.2}", info.estimated_rows)
                 } else {
                     String::from("None")
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("HashJoin: {} (rows: {})", plan.join_type, estimated_rows),
+                    format!("HashJoin: {}", plan.join_type),
                     children,
                 ))
             }
@@ -117,14 +117,14 @@ impl PhysicalPlan {
                     FormatTreeNode::with_children("Right".to_string(), vec![right_child]),
                 ];
 
-                let estimated_rows = if let Some(info) = &plan.stat_info {
+                let _estimated_rows = if let Some(info) = &plan.stat_info {
                     format!("{0:.2}", info.estimated_rows)
                 } else {
                     String::from("none")
                 };
 
                 Ok(FormatTreeNode::with_children(
-                    format!("RangeJoin: {} (rows: {})", plan.join_type, estimated_rows),
+                    format!("RangeJoin: {}", plan.join_type,),
                     children,
                 ))
             }
@@ -195,10 +195,10 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeletePartial(plan) => {
-            delete_partial_to_format_tree(plan.as_ref(), metadata, profs)
+        PhysicalPlan::DeleteSource(plan) => {
+            delete_source_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::CompactPartial(_) => Ok(FormatTreeNode::new("CompactPartial".to_string())),
+        PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
         PhysicalPlan::Lambda(plan) => lambda_to_format_tree(plan, metadata, profs),
@@ -246,7 +246,7 @@ fn append_profile_info(
     }
 }
 
-fn copy_into_table(plan: &CopyIntoTable) -> Result<FormatTreeNode<String>> {
+fn copy_into_table(plan: &CopyIntoTablePhysicalPlan) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new(format!(
         "CopyIntoTable: {}",
         plan.table_info
@@ -1057,12 +1057,12 @@ fn distributed_insert_to_format_tree(
     ))
 }
 
-fn delete_partial_to_format_tree(
-    _plan: &DeletePartial,
+fn delete_source_to_format_tree(
+    _plan: &DeleteSource,
     _metadata: &Metadata,
     _prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new("DeletePartial".to_string()))
+    Ok(FormatTreeNode::new("DeleteSource".to_string()))
 }
 
 fn commit_sink_to_format_tree(

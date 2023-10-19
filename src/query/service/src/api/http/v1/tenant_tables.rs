@@ -40,6 +40,9 @@ pub struct TenantTableInfo {
     pub data_bytes: u64,
     pub compressed_data_bytes: u64,
     pub index_bytes: u64,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
+    pub table_id: u64,
 }
 
 async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
@@ -62,6 +65,7 @@ async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
             }
         };
         for table in tables {
+            let table_id = table.get_table_info().ident.table_id;
             let stats = &table.get_table_info().meta.statistics;
             table_infos.push(TenantTableInfo {
                 table: table.name().to_string(),
@@ -73,6 +77,9 @@ async fn load_tenant_tables(tenant: &str) -> Result<TenantTablesResponse> {
                 data_bytes: stats.data_bytes,
                 compressed_data_bytes: stats.compressed_data_bytes,
                 index_bytes: stats.index_data_bytes,
+                number_of_blocks: stats.number_of_blocks,
+                number_of_segments: stats.number_of_segments,
+                table_id,
             });
         }
     }

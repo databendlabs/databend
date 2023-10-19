@@ -14,7 +14,6 @@
 
 use std::fmt::Display;
 use std::fmt::Formatter;
-use std::ops::Deref;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
@@ -26,6 +25,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
 use crate::optimizer::SExpr;
+use crate::plans::copy_into_location::CopyIntoLocationPlan;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
@@ -36,7 +36,7 @@ use crate::plans::AlterViewPlan;
 use crate::plans::AlterVirtualColumnPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CopyIntoTableMode;
-use crate::plans::CopyPlan;
+use crate::plans::CopyIntoTablePlan;
 use crate::plans::CreateCatalogPlan;
 use crate::plans::CreateDatabasePlan;
 use crate::plans::CreateDatamaskPolicyPlan;
@@ -48,6 +48,7 @@ use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
@@ -148,8 +149,8 @@ pub enum Plan {
         plan: Box<Plan>,
     },
 
-    // Copy
-    Copy(Box<CopyPlan>),
+    CopyIntoTable(Box<CopyIntoTablePlan>),
+    CopyIntoLocation(CopyIntoLocationPlan),
 
     // Call is rewrite into Query
     // Call(Box<CallPlan>),
@@ -276,6 +277,9 @@ pub enum Plan {
     DropNetworkPolicy(Box<DropNetworkPolicyPlan>),
     DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
     ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
+
+    // Task
+    CreateTask(Box<CreateTaskPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -308,12 +312,9 @@ impl Plan {
     pub fn kind(&self) -> QueryKind {
         match self {
             Plan::Query { .. } => QueryKind::Query,
-            Plan::Copy(plan) => match plan.deref() {
-                CopyPlan::IntoTable(copy_plan) => match copy_plan.write_mode {
-                    CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
-                    _ => QueryKind::Copy,
-                },
-                _ => QueryKind::Copy,
+            Plan::CopyIntoTable(copy_plan) => match copy_plan.write_mode {
+                CopyIntoTableMode::Insert { .. } => QueryKind::Insert,
+                _ => QueryKind::CopyIntoTable,
             },
             Plan::Explain { .. }
             | Plan::ExplainAnalyze { .. }
@@ -378,7 +379,9 @@ impl Plan {
             Plan::DropNetworkPolicy(plan) => plan.schema(),
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
-            Plan::Copy(plan) => plan.schema(),
+            Plan::CopyIntoTable(plan) => plan.schema(),
+
+            Plan::CreateTask(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -412,7 +415,7 @@ impl Plan {
                 | Plan::DescDatamaskPolicy(_)
                 | Plan::DescNetworkPolicy(_)
                 | Plan::ShowNetworkPolicies(_)
-                | Plan::Copy(_)
+                | Plan::CopyIntoTable(_)
         )
     }
 }

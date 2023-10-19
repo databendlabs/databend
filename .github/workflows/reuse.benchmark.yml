@@ -39,9 +39,9 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
+    if: inputs.source == 'release'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
     strategy:
       matrix:
         dataset:
@@ -94,7 +94,7 @@ jobs:
           source_id: ${{ inputs.source_id }}
 
   cloud:
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
@@ -132,13 +132,13 @@ jobs:
   comment:
     needs: cloud
     if: inputs.source == 'pr'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          sudo apt update -y
-          sudo apt install -y python3-jinja2
+          sudo apt-get update -yq
+          sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
           name: benchmark-hits
@@ -183,7 +183,7 @@ jobs:
   archive:
     needs: cloud
     if: inputs.source == 'release'
-    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         dataset:
@@ -193,8 +193,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install Dependencies
         run: |
-          sudo apt update -y
-          sudo apt install -y python3-jinja2
+          sudo apt-get update -yq
+          sudo apt-get install -yq python3-jinja2
       - uses: actions/download-artifact@v3
         with:
           name: benchmark-${{ matrix.dataset }}

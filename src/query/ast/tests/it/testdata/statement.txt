@@ -1462,7 +1462,6 @@ TruncateTable(
                 15..16,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1493,7 +1492,6 @@ TruncateTable(
                 19..20,
             ),
         },
-        purge: false,
     },
 )
 
@@ -1573,7 +1571,7 @@ UseDatabase {
 ---------- Input ----------
 create catalog ctl type=hive connection=(url='<hive-meta-store>' thrift_protocol='binary');
 ---------- Output ---------
-CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol='binary' url='<hive-meta-store>' )
+CREATE CATALOG ctl TYPE='HIVE' CONNECTION = ( thrift_protocol='binary', url='<hive-meta-store>' )
 ---------- AST ------------
 CreateCatalog(
     CreateCatalogStmt {
@@ -2359,7 +2357,6 @@ TruncateTable(
                 15..19,
             ),
         },
-        purge: false,
     },
 )
 
@@ -2388,7 +2385,6 @@ TruncateTable(
                 23..27,
             ),
         },
-        purge: false,
     },
 )
 
@@ -6515,7 +6511,7 @@ Query(
 ---------- Input ----------
 select * from @foo (pattern=>'[.]*parquet' file_format=>'tsv');
 ---------- Output ---------
-SELECT * FROM @foo (FILE_FORMAT => 'tsv',PATTERN => '[.]*parquet')
+SELECT * FROM @foo ( FILE_FORMAT => 'tsv', PATTERN => '[.]*parquet', )
 ---------- AST ------------
 Query(
     Query {
@@ -7020,9 +7016,9 @@ CreateStage(
 
 
 ---------- Input ----------
-CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
+CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c' aws_secret_key='4x5y6z' ) FILE_FORMAT = ( compression = 'GZIP' record_delimiter = ',' type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 's3://load/files/' CONNECTION = ( aws_key_id='1a2b3c', aws_secret_key='4x5y6z' ) FILE_FORMAT = (compression='GZIP', record_delimiter=',', type='CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7059,7 +7055,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key='4x5y6z' account_name='1a2b3c' ) FILE_FORMAT = ( compression = 'GZIP' record_delimiter = ',' type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage URL = 'azblob://load/files/' CONNECTION = ( account_key='4x5y6z', account_name='1a2b3c' ) FILE_FORMAT = (compression='GZIP', record_delimiter=',', type='CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -8106,7 +8102,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
 ---------- Output ---------
-ALTER TABLE t SET OPTIONS: block_per_segment='500' snapshot_location='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk'
+ALTER TABLE t SET OPTIONS (block_per_segment='500', snapshot_location='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk')
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -9187,17 +9183,16 @@ COPY INTO mytable
                 FROM '@~/mybucket/my data.csv'
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @~/mybucket/my data.csv SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "~/mybucket/my data.csv",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9207,20 +9202,20 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
+        dst_columns: None,
+        hints: None,
+        file_format: {},
         files: None,
         pattern: None,
-        file_format: {},
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9234,21 +9229,20 @@ COPY INTO mytable
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;
+                )
+                size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "~/mybucket/data.csv",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9258,25 +9252,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9291,15 +9285,14 @@ COPY INTO mytable
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10,
+                size_limit=10
                 max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9314,7 +9307,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9324,25 +9317,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 10,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9360,12 +9353,11 @@ COPY INTO mytable
                 size_limit=10
                 max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 2000 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9380,7 +9372,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9390,25 +9382,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 2000,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9428,12 +9420,11 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9450,7 +9441,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9460,25 +9451,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9498,12 +9489,11 @@ COPY INTO mytable
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9520,7 +9510,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9530,25 +9520,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9558,11 +9548,10 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9577,7 +9566,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9587,20 +9576,20 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
+        dst_columns: None,
+        hints: None,
+        file_format: {},
         files: None,
         pattern: None,
-        file_format: {},
+        force: false,
         validation_mode: "",
         size_limit: 0,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9610,11 +9599,10 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9629,7 +9617,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9639,20 +9627,20 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
+        dst_columns: None,
+        hints: None,
+        file_format: {},
         files: None,
         pattern: None,
-        file_format: {},
+        force: false,
         validation_mode: "",
         size_limit: 0,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9670,18 +9658,17 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @my_stage FILE_FORMAT = ( error_on_column_count_mismatch = 'false' field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @my_stage FILE_FORMAT = (error_on_column_count_mismatch='false', field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "my_stage",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9691,10 +9678,9 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "error_on_column_count_mismatch": "false",
             "field_delimiter": ",",
@@ -9702,15 +9688,16 @@ Copy(
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9725,102 +9712,78 @@ COPY INTO 's3://mybucket/data.csv'
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;
 ---------- Output ---------
-COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
-Copy(
-    CopyStmt {
+CopyIntoLocation(
+    CopyIntoLocationStmt {
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                name: "mytable",
-                quote: None,
-                span: Some(
-                    56..63,
-                ),
-            },
-            columns: None,
-        },
-        dst: Location(
-            Uri(
-                UriLocation {
-                    protocol: "s3",
-                    name: "mybucket",
-                    path: "/data.csv",
-                    part_prefix: "",
-                    connection: Connection {
-                        visited_keys: {},
-                        conns: {},
-                    },
+        src: Table(
+            TableIdentifier {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "mytable",
+                    quote: None,
+                    span: Some(
+                        56..63,
+                    ),
                 },
-            ),
+            },
         ),
-        files: None,
-        pattern: None,
+        dst: Uri(
+            UriLocation {
+                protocol: "s3",
+                name: "mybucket",
+                path: "/data.csv",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {},
+                },
+            },
+        ),
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        max_file_size: 0,
-        split_size: 0,
         single: false,
-        purge: false,
-        force: false,
-        disable_variant_check: false,
-        on_error: "abort",
+        max_file_size: 0,
     },
 )
 
 
 ---------- Input ----------
 COPY INTO '@my_stage/my data'
-                FROM mytable
-                size_limit=10;
+                FROM mytable;
 ---------- Output ---------
-COPY INTO @my_stage/my data FROM mytable SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO @my_stage/my data FROM mytable SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
-Copy(
-    CopyStmt {
+CopyIntoLocation(
+    CopyIntoLocationStmt {
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                name: "mytable",
-                quote: None,
-                span: Some(
-                    51..58,
-                ),
+        src: Table(
+            TableIdentifier {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "mytable",
+                    quote: None,
+                    span: Some(
+                        51..58,
+                    ),
+                },
             },
-            columns: None,
-        },
-        dst: Location(
-            Stage(
-                "my_stage/my data",
-            ),
         ),
-        files: None,
-        pattern: None,
+        dst: Stage(
+            "my_stage/my data",
+        ),
         file_format: {},
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        max_file_size: 0,
-        split_size: 0,
         single: false,
-        purge: false,
-        force: false,
-        disable_variant_check: false,
-        on_error: "abort",
+        max_file_size: 0,
     },
 )
 
@@ -9833,50 +9796,38 @@ COPY INTO @my_stage
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10;
+                );
 ---------- Output ---------
-COPY INTO @my_stage FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO @my_stage FROM mytable FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
-Copy(
-    CopyStmt {
+CopyIntoLocation(
+    CopyIntoLocationStmt {
         hints: None,
-        src: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                name: "mytable",
-                quote: None,
-                span: Some(
-                    41..48,
-                ),
+        src: Table(
+            TableIdentifier {
+                catalog: None,
+                database: None,
+                table: Identifier {
+                    name: "mytable",
+                    quote: None,
+                    span: Some(
+                        41..48,
+                    ),
+                },
             },
-            columns: None,
-        },
-        dst: Location(
-            Stage(
-                "my_stage",
-            ),
         ),
-        files: None,
-        pattern: None,
+        dst: Stage(
+            "my_stage",
+        ),
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
-        validation_mode: "",
-        size_limit: 10,
-        max_files: 0,
-        max_file_size: 0,
-        split_size: 0,
         single: false,
-        purge: false,
-        force: false,
-        disable_variant_check: false,
-        on_error: "abort",
+        max_file_size: 0,
     },
 )
 
@@ -9887,21 +9838,20 @@ COPY INTO mytable
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                ),
+                )
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;
+                )
+                size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key', aws_secret_key='secret_key' ) FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -9919,7 +9869,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9929,25 +9879,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -9964,18 +9914,17 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -9985,25 +9934,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10020,18 +9969,17 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "external_stage/path/to/dir/",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10041,25 +9989,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10076,18 +10024,17 @@ COPY INTO mytable
                 )
                 force=true;
 ---------- Output ---------
-COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Stage(
                 "external_stage/path/to/file.csv",
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10097,25 +10044,25 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: true,
         validation_mode: "",
         size_limit: 0,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: true,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -10133,12 +10080,11 @@ COPY INTO mytable
                 size_limit=10
                 disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter=',', record_delimiter='
+', skip_header='1', type='CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
+CopyIntoTable(
+    CopyIntoTableStmt {
         src: Location(
             Uri(
                 UriLocation {
@@ -10153,7 +10099,7 @@ Copy(
                 },
             ),
         ),
-        dst: Table {
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
@@ -10163,79 +10109,89 @@ Copy(
                     10..17,
                 ),
             },
-            columns: None,
         },
-        files: None,
-        pattern: None,
+        dst_columns: None,
+        hints: None,
         file_format: {
             "field_delimiter": ",",
             "record_delimiter": "\n",
             "skip_header": "1",
             "type": "CSV",
         },
+        files: None,
+        pattern: None,
+        force: false,
         validation_mode: "",
         size_limit: 10,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: true,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
 
 
 ---------- Input ----------
-copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)
+COPY INTO books FROM 's3://databend/books.csv'
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://localhost:9000/',
+                    ACCESS_KEY_ID = 'ROOTUSER',
+                    SECRET_ACCESS_KEY = 'CHANGEME123',
+                    region = 'us-west-2'
+                )
+                FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO t1 FROM "" FILE_FORMAT = ( compression = 'GZIP' type = 'TSV' ) SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id='ROOTUSER', endpoint_url='http://localhost:9000/', region='us-west-2', secret_access_key='CHANGEME123' ) FILE_FORMAT = (type='CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
-Copy(
-    CopyStmt {
-        hints: None,
-        src: Table {
+CopyIntoTable(
+    CopyIntoTableStmt {
+        src: Location(
+            Uri(
+                UriLocation {
+                    protocol: "s3",
+                    name: "databend",
+                    path: "/books.csv",
+                    part_prefix: "",
+                    connection: Connection {
+                        visited_keys: {},
+                        conns: {
+                            "access_key_id": "ROOTUSER",
+                            "endpoint_url": "http://localhost:9000/",
+                            "region": "us-west-2",
+                            "secret_access_key": "CHANGEME123",
+                        },
+                    },
+                },
+            ),
+        ),
+        dst: TableIdentifier {
             catalog: None,
             database: None,
             table: Identifier {
-                name: "",
-                quote: Some(
-                    '"',
-                ),
-                span: Some(
-                    18..20,
-                ),
-            },
-            columns: None,
-        },
-        dst: Table {
-            catalog: None,
-            database: None,
-            table: Identifier {
-                name: "t1",
+                name: "books",
                 quote: None,
                 span: Some(
-                    10..12,
+                    10..15,
                 ),
             },
-            columns: None,
+        },
+        dst_columns: None,
+        hints: None,
+        file_format: {
+            "type": "CSV",
         },
         files: None,
         pattern: None,
-        file_format: {
-            "compression": "GZIP",
-            "type": "TSV",
-        },
+        force: false,
         validation_mode: "",
         size_limit: 0,
         max_files: 0,
-        max_file_size: 0,
         split_size: 0,
-        single: false,
         purge: false,
-        force: false,
         disable_variant_check: false,
+        return_failed_only: false,
         on_error: "abort",
     },
 )
@@ -11197,7 +11153,7 @@ Query(
 SELECT t.c1 FROM @stage1/dir/file
         ( file_format => 'PARQUET', FILES => ('file1', 'file2')) t;
 ---------- Output ---------
-SELECT t.c1 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'PARQUET') AS t
+SELECT t.c1 FROM @stage1/dir/file ( FILES => ('file1', 'file2'), FILE_FORMAT => 'PARQUET', ) AS t
 ---------- AST ------------
 Query(
     Query {
@@ -11295,7 +11251,7 @@ select table0.c1, table1.c2 from
             @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
             left join table1;
 ---------- Output ---------
-SELECT table0.c1, table1.c2 FROM @stage1/dir/file (FILES => ('file1','file2'),FILE_FORMAT => 'parquet') AS table0 LEFT OUTER JOIN table1
+SELECT table0.c1, table1.c2 FROM @stage1/dir/file ( FILES => ('file1', 'file2'), FILE_FORMAT => 'parquet', ) AS table0 LEFT OUTER JOIN table1
 ---------- AST ------------
 Query(
     Query {
@@ -11445,7 +11401,7 @@ Query(
 ---------- Input ----------
 SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;
 ---------- Output ---------
-SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', endpoint_url => 'xxx') AS t
+SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet',endpoint_url=>'xxx' ) AS t
 ---------- AST ------------
 Query(
     Query {
@@ -12816,6 +12772,80 @@ AlterNetworkPolicy(
         comment: Some(
             "test",
         ),
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = MyWarehouse SCHEDULE 15 MINUTE SUSPEND TASK AFTER 3 FAILURES COMMENTS = 'This is test task 1'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: Some(
+                "MyWarehouse",
+            ),
+        },
+        schedule_opts: IntervalMinutes(
+            15,
+        ),
+        suspend_task_after_num_failures: Some(
+            3,
+        ),
+        comments: "This is test task 1",
+        sql: "SELECT *\nFROM\n    MyTable1",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 6 * * *' TIMEZONE 'America/Los_Angeles' COMMENTS = 'serverless + cron'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 6 * * *",
+            Some(
+                "America/Los_Angeles",
+            ),
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "serverless + cron",
+        sql: "INSERT INTO\n    t (c1, c2)\nVALUES\n    (1, 2), (3, 4)",
+    },
+)
+
+
+---------- Input ----------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t
+---------- Output ---------
+CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE CRON '0 12 * * *'
+---------- AST ------------
+CreateTask(
+    CreateTaskStmt {
+        if_not_exists: true,
+        name: "MyTask1",
+        warehouse_opts: WarehouseOptions {
+            warehouse: None,
+        },
+        schedule_opts: CronExpression(
+            "0 12 * * *",
+            None,
+        ),
+        suspend_task_after_num_failures: None,
+        comments: "",
+        sql: "VACUUM TABLE t ",
     },
 )
 

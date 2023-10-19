@@ -15,9 +15,6 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
@@ -28,7 +25,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_validity;
+use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -38,6 +35,7 @@ impl HashJoinProbeState {
         hash_table: &H,
         probe_state: &mut ProbeState,
         keys_iter: IT,
+        pointers: &[u64],
         input: &DataBlock,
         is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
@@ -46,13 +44,14 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         let max_block_size = probe_state.max_block_size;
-        let valids = &probe_state.valids;
+        let valids = probe_state.valids.as_ref();
         // The inner join will return multiple data blocks of similar size.
         let mut matched_num = 0;
         let mut result_blocks = vec![];
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let string_items_buf = &mut probe_state.string_items_buf;
 
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
@@ -63,22 +62,17 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, key) in keys_iter.enumerate() {
+        for (i, (key, ptr)) in keys_iter.zip(pointers.iter()).enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery {
-                    hash_table.probe_hash_table(key, build_indexes_ptr, matched_num, max_block_size)
+                if self.hash_join_state.hash_join_desc.from_correlated_subquery
+                    || valids.map_or(true, |v| v.get_bit(i))
+                {
+                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
                 } else {
-                    self.probe_key(
-                        hash_table,
-                        key,
-                        valids,
-                        i,
-                        build_indexes_ptr,
-                        matched_num,
-                        max_block_size,
-                    )
+                    continue;
                 };
+
             if match_count == 0 {
                 continue;
             }
@@ -96,7 +90,7 @@ impl HashJoinProbeState {
                     }
 
                     let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes)?)
+                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
                     } else {
                         None
                     };
@@ -106,6 +100,7 @@ impl HashJoinProbeState {
                             build_columns,
                             build_columns_data_type,
                             build_num_rows,
+                            string_items_buf,
                         )?)
                     } else {
                         None
@@ -123,16 +118,11 @@ impl HashJoinProbeState {
                                 (true, false) => {
                                     result_block.get_by_offset(*index).clone().remove_nullable()
                                 }
-                                (false, true) => {
-                                    let mut validity = MutableBitmap::new();
-                                    validity.extend_constant(result_block.num_rows(), true);
-                                    let validity: Bitmap = validity.into();
-                                    set_validity(
-                                        result_block.get_by_offset(*index),
-                                        validity.len(),
-                                        &validity,
-                                    )
-                                }
+                                (false, true) => set_true_validity(
+                                    result_block.get_by_offset(*index),
+                                    result_block.num_rows(),
+                                    &probe_state.true_validity,
+                                ),
                             };
                             result_block.add_column(entry);
                         }
@@ -144,7 +134,7 @@ impl HashJoinProbeState {
                     if incomplete_ptr == 0 {
                         break;
                     }
-                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
@@ -169,7 +159,11 @@ impl HashJoinProbeState {
 
         if matched_num > 0 {
             let probe_block = if is_probe_projected {
-                Some(DataBlock::take(input, &probe_indexes[0..matched_num])?)
+                Some(DataBlock::take(
+                    input,
+                    &probe_indexes[0..matched_num],
+                    string_items_buf,
+                )?)
             } else {
                 None
             };
@@ -179,6 +173,7 @@ impl HashJoinProbeState {
                     build_columns,
                     build_columns_data_type,
                     build_num_rows,
+                    string_items_buf,
                 )?)
             } else {
                 None
@@ -193,16 +188,11 @@ impl HashJoinProbeState {
                         (true, false) => {
                             result_block.get_by_offset(*index).clone().remove_nullable()
                         }
-                        (false, true) => {
-                            let mut validity = MutableBitmap::new();
-                            validity.extend_constant(result_block.num_rows(), true);
-                            let validity: Bitmap = validity.into();
-                            set_validity(
-                                result_block.get_by_offset(*index),
-                                validity.len(),
-                                &validity,
-                            )
-                        }
+                        (false, true) => set_true_validity(
+                            result_block.get_by_offset(*index),
+                            result_block.num_rows(),
+                            &probe_state.true_validity,
+                        ),
                     };
                     result_block.add_column(entry);
                 }
@@ -218,9 +208,7 @@ impl HashJoinProbeState {
                 let other_predicate = cast_expr_to_non_null_boolean(other_predicate.clone())?;
                 assert_eq!(other_predicate.data_type(), &DataType::Boolean);
 
-                let func_ctx = self.ctx.get_function_context()?;
                 let mut filtered_blocks = Vec::with_capacity(result_blocks.len());
-
                 for result_block in result_blocks {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -228,7 +216,8 @@ impl HashJoinProbeState {
                         ));
                     }
 
-                    let evaluator = Evaluator::new(&result_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                    let evaluator =
+                        Evaluator::new(&result_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
                     let predicate = evaluator
                         .run(&other_predicate)?
                         .try_downcast::<BooleanType>()

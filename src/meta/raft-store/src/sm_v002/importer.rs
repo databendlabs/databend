@@ -20,7 +20,7 @@ use common_meta_types::LogId;
 use common_meta_types::StoredMembership;
 
 use crate::key_spaces::RaftStoreEntry;
-use crate::sm_v002::leveled_store::level_data::LevelData;
+use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::state_machine::ExpireKey;
@@ -29,7 +29,7 @@ use crate::state_machine::StateMachineMetaKey;
 /// A container of temp data that are imported to a LevelData.
 #[derive(Debug, Default)]
 pub struct Importer {
-    level_data: LevelData,
+    level_data: Level,
 
     kv: BTreeMap<String, Marked>,
     expire: BTreeMap<ExpireKey, Marked<String>>,
@@ -109,7 +109,7 @@ impl Importer {
         Ok(())
     }
 
-    pub fn commit(mut self) -> LevelData {
+    pub fn commit(mut self) -> Level {
         let d = &mut self.level_data;
 
         d.replace_kv(self.kv);

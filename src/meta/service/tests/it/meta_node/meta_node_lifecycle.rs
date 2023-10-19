@@ -692,7 +692,7 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
             .await?;
         log_index += 1;
 
-        want_hs = leader.sto.raft_state.read_vote()?;
+        want_hs = leader.sto.raft_state.read().await.read_vote()?;
 
         leader.stop().await?;
     }
@@ -724,13 +724,13 @@ async fn test_meta_node_restart_single_node() -> anyhow::Result<()> {
 
     info!("--- check hard state");
     {
-        let hs = leader.sto.raft_state.read_vote()?;
+        let hs = leader.sto.raft_state.read().await.read_vote()?;
         assert_eq!(want_hs, hs);
     }
 
     info!("--- check logs");
     {
-        let logs = leader.sto.log.range_values(..)?;
+        let logs = leader.sto.log.read().await.range_values(..)?;
         info!("logs: {:?}", logs);
         assert_eq!(log_index as usize + 1, logs.len());
     }
@@ -752,7 +752,7 @@ fn join_req(
     endpoint: Endpoint,
     grpc_api_advertise_address: Option<String>,
     forward: u64,
-) -> ForwardRequest {
+) -> ForwardRequest<ForwardRequestBody> {
     ForwardRequest {
         forward_to_leader: forward,
         body: ForwardRequestBody::Join(JoinRequest::new(

@@ -553,7 +553,8 @@ impl Table for FuseTable {
 
     #[minitrace::trace(name = "fuse_table_truncate")]
     #[async_backtrace::framed]
-    async fn truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
+    async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        let purge = false;
         self.do_truncate(ctx, purge).await
     }
 

@@ -220,7 +220,7 @@ impl FuseTable {
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds)?;
+            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds, None)?;
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();

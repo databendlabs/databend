@@ -81,6 +81,8 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+
+    // Used internally for generic types
     Generic(usize),
 }
 
@@ -156,10 +158,7 @@ impl DataType {
     }
 
     pub fn is_numeric(&self) -> bool {
-        match self {
-            DataType::Number(ty) => ALL_NUMERICS_TYPES.contains(ty),
-            _ => false,
-        }
+        matches!(self, DataType::Number(_))
     }
 
     #[inline]
@@ -186,6 +185,15 @@ impl DataType {
     #[inline]
     pub fn is_date_or_date_time(&self) -> bool {
         matches!(self, DataType::Timestamp | DataType::Date)
+    }
+
+    #[inline]
+    pub fn is_string_column(&self) -> bool {
+        match self {
+            DataType::String | DataType::Bitmap | DataType::Variant => true,
+            DataType::Nullable(ty) => ty.is_string_column(),
+            _ => false,
+        }
     }
 
     pub fn numeric_byte_size(&self) -> Result<usize, String> {

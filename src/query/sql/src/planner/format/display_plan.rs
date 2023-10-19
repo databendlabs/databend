@@ -46,7 +46,8 @@ impl Plan {
             Plan::ExplainSyntax { .. } => Ok("ExplainSyntax".to_string()),
             Plan::ExplainAnalyze { .. } => Ok("ExplainAnalyze".to_string()),
 
-            Plan::Copy(plan) => Ok(format!("{:?}", plan)),
+            Plan::CopyIntoTable(plan) => Ok(format!("{:?}", plan)),
+            Plan::CopyIntoLocation(plan) => Ok(format!("{:?}", plan)),
 
             // catalog
             Plan::ShowCreateCatalog(show_create_catalog) => {
@@ -183,6 +184,9 @@ impl Plan {
             Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
+
+            // task
+            Plan::CreateTask(p) => Ok(format!("{:?}", p)),
         }
     }
 }
@@ -235,10 +239,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
         if let Some(selection) = &delete.selection {
             predicates.push(selection.clone());
         }
-        let filter = RelOperator::Filter(Filter {
-            predicates,
-            is_having: false,
-        });
+        let filter = RelOperator::Filter(Filter { predicates });
         SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
     };
     let res = s_expr.to_format_tree(&delete.metadata).format_pretty()?;

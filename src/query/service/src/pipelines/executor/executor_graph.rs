@@ -242,6 +242,8 @@ impl ExecutingGraph {
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
+                } else {
+                    node.processor.un_reacted(event_cause.clone())?;
                 }
             }
 

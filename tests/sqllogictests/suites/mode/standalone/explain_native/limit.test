@@ -97,54 +97,50 @@ Limit
             ├── estimated rows: 0.20
             └── Filter
                 ├── output columns: [t.number (#0)]
-                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
+                ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), scalar_subquery_4 (#4), 0))]
                 ├── estimated rows: 0.20
                 └── HashJoin
-                    ├── output columns: [t.number (#0), count(*) (#5)]
+                    ├── output columns: [t.number (#0), COUNT(*) (#4)]
                     ├── join type: LEFT SINGLE
                     ├── build keys: [number (#2)]
                     ├── probe keys: [CAST(number (#0) AS UInt64 NULL)]
                     ├── filters: []
                     ├── estimated rows: 1.00
-                    ├── EvalScalar(Build)
-                    │   ├── output columns: [t2.number (#2), count(*) (#5)]
-                    │   ├── expressions: [COUNT(*) (#4)]
+                    ├── AggregateFinal(Build)
+                    │   ├── output columns: [COUNT(*) (#4), t2.number (#2)]
+                    │   ├── group by: [number]
+                    │   ├── aggregate functions: [count()]
                     │   ├── estimated rows: 1.00
-                    │   └── AggregateFinal
-                    │       ├── output columns: [COUNT(*) (#4), t2.number (#2)]
+                    │   └── AggregatePartial
+                    │       ├── output columns: [COUNT(*) (#4), #_group_by_key]
                     │       ├── group by: [number]
                     │       ├── aggregate functions: [count()]
                     │       ├── estimated rows: 1.00
-                    │       └── AggregatePartial
-                    │           ├── output columns: [COUNT(*) (#4), #_group_by_key]
-                    │           ├── group by: [number]
-                    │           ├── aggregate functions: [count()]
+                    │       └── HashJoin
+                    │           ├── output columns: [t2.number (#2)]
+                    │           ├── join type: CROSS
+                    │           ├── build keys: []
+                    │           ├── probe keys: []
+                    │           ├── filters: []
                     │           ├── estimated rows: 1.00
-                    │           └── HashJoin
-                    │               ├── output columns: [t2.number (#2)]
-                    │               ├── join type: CROSS
-                    │               ├── build keys: []
-                    │               ├── probe keys: []
-                    │               ├── filters: []
-                    │               ├── estimated rows: 1.00
-                    │               ├── TableScan(Build)
-                    │               │   ├── table: default.system.numbers
-                    │               │   ├── output columns: []
-                    │               │   ├── read rows: 1
-                    │               │   ├── read bytes: 8
-                    │               │   ├── partitions total: 1
-                    │               │   ├── partitions scanned: 1
-                    │               │   ├── push downs: [filters: [], limit: NONE]
-                    │               │   └── estimated rows: 1.00
-                    │               └── TableScan(Probe)
-                    │                   ├── table: default.system.numbers
-                    │                   ├── output columns: [number (#2)]
-                    │                   ├── read rows: 1
-                    │                   ├── read bytes: 8
-                    │                   ├── partitions total: 1
-                    │                   ├── partitions scanned: 1
-                    │                   ├── push downs: [filters: [], limit: NONE]
-                    │                   └── estimated rows: 1.00
+                    │           ├── TableScan(Build)
+                    │           │   ├── table: default.system.numbers
+                    │           │   ├── output columns: []
+                    │           │   ├── read rows: 1
+                    │           │   ├── read bytes: 8
+                    │           │   ├── partitions total: 1
+                    │           │   ├── partitions scanned: 1
+                    │           │   ├── push downs: [filters: [], limit: NONE]
+                    │           │   └── estimated rows: 1.00
+                    │           └── TableScan(Probe)
+                    │               ├── table: default.system.numbers
+                    │               ├── output columns: [number (#2)]
+                    │               ├── read rows: 1
+                    │               ├── read bytes: 8
+                    │               ├── partitions total: 1
+                    │               ├── partitions scanned: 1
+                    │               ├── push downs: [filters: [], limit: NONE]
+                    │               └── estimated rows: 1.00
                     └── HashJoin(Probe)
                         ├── output columns: [t.number (#0)]
                         ├── join type: CROSS
@@ -175,64 +171,56 @@ query T
 explain select * from (select count(t1.number) as c1 from numbers(1) as t1 group by number) as t3 left join (select count(t.number) as c from numbers(2) as t group by number) as t4 on t3.c1=t4.c order by t3.c1 limit 1
 ----
 Limit
-├── output columns: [c (#7), c1 (#3)]
+├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
 ├── limit: 1
 ├── offset: 0
 ├── estimated rows: 1.00
 └── Sort
-    ├── output columns: [c (#7), c1 (#3)]
-    ├── sort keys: [c1 ASC NULLS LAST]
+    ├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
+    ├── sort keys: [count(t1.number) ASC NULLS LAST]
     ├── estimated rows: 2.00
     └── HashJoin
-        ├── output columns: [c (#7), c1 (#3)]
+        ├── output columns: [count(t.number) (#5), count(t1.number) (#2)]
         ├── join type: RIGHT OUTER
-        ├── build keys: [CAST(t3.c1 (#3) AS UInt64 NULL)]
-        ├── probe keys: [t4.c (#7)]
+        ├── build keys: [CAST(t3.c1 (#2) AS UInt64 NULL)]
+        ├── probe keys: [t4.c (#5)]
         ├── filters: []
         ├── estimated rows: 2.00
-        ├── EvalScalar(Build)
-        │   ├── output columns: [c1 (#3)]
-        │   ├── expressions: [count(t1.number) (#2)]
+        ├── AggregateFinal(Build)
+        │   ├── output columns: [count(t1.number) (#2), t1.number (#0)]
+        │   ├── group by: [number]
+        │   ├── aggregate functions: [count()]
         │   ├── estimated rows: 1.00
-        │   └── AggregateFinal
-        │       ├── output columns: [count(t1.number) (#2), t1.number (#0)]
+        │   └── AggregatePartial
+        │       ├── output columns: [count(t1.number) (#2), #_group_by_key]
         │       ├── group by: [number]
-        │       ├── aggregate functions: [count(number)]
+        │       ├── aggregate functions: [count()]
         │       ├── estimated rows: 1.00
-        │       └── AggregatePartial
-        │           ├── output columns: [count(t1.number) (#2), #_group_by_key]
-        │           ├── group by: [number]
-        │           ├── aggregate functions: [count(number)]
-        │           ├── estimated rows: 1.00
-        │           └── TableScan
-        │               ├── table: default.system.numbers
-        │               ├── output columns: [number (#0)]
-        │               ├── read rows: 1
-        │               ├── read bytes: 8
-        │               ├── partitions total: 1
-        │               ├── partitions scanned: 1
-        │               ├── push downs: [filters: [], limit: NONE]
-        │               └── estimated rows: 1.00
-        └── EvalScalar(Probe)
-            ├── output columns: [c (#7)]
-            ├── expressions: [count(t.number) (#6)]
+        │       └── TableScan
+        │           ├── table: default.system.numbers
+        │           ├── output columns: [number (#0)]
+        │           ├── read rows: 1
+        │           ├── read bytes: 8
+        │           ├── partitions total: 1
+        │           ├── partitions scanned: 1
+        │           ├── push downs: [filters: [], limit: NONE]
+        │           └── estimated rows: 1.00
+        └── AggregateFinal(Probe)
+            ├── output columns: [count(t.number) (#5), t.number (#3)]
+            ├── group by: [number]
+            ├── aggregate functions: [count()]
             ├── estimated rows: 2.00
-            └── AggregateFinal
-                ├── output columns: [count(t.number) (#6), t.number (#4)]
+            └── AggregatePartial
+                ├── output columns: [count(t.number) (#5), #_group_by_key]
                 ├── group by: [number]
-                ├── aggregate functions: [count(number)]
+                ├── aggregate functions: [count()]
                 ├── estimated rows: 2.00
-                └── AggregatePartial
-                    ├── output columns: [count(t.number) (#6), #_group_by_key]
-                    ├── group by: [number]
-                    ├── aggregate functions: [count(number)]
-                    ├── estimated rows: 2.00
-                    └── TableScan
-                        ├── table: default.system.numbers
-                        ├── output columns: [number (#4)]
-                        ├── read rows: 2
-                        ├── read bytes: 16
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── push downs: [filters: [], limit: NONE]
-                        └── estimated rows: 2.00
+                └── TableScan
+                    ├── table: default.system.numbers
+                    ├── output columns: [number (#3)]
+                    ├── read rows: 2
+                    ├── read bytes: 16
+                    ├── partitions total: 1
+                    ├── partitions scanned: 1
+                    ├── push downs: [filters: [], limit: NONE]
+                    └── estimated rows: 2.00

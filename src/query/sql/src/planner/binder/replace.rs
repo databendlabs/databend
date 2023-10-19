@@ -46,7 +46,8 @@ impl Binder {
             on_conflict_columns,
             columns,
             source,
-            ..
+            delete_when,
+            hints: _,
         } = stmt;
 
         let (catalog_name, database_name, table_name) =
@@ -152,6 +153,7 @@ impl Binder {
             on_conflict_fields,
             schema,
             source: input_source?,
+            delete_when: delete_when.clone(),
         };
 
         Ok(Plan::Replace(Box::new(plan)))

@@ -20,8 +20,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::ValueType;
 use common_expression::ColumnBuilder;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
@@ -111,14 +109,17 @@ impl<T: ValueType> ChangeIf<T> for CmpAny {
     }
 }
 
-pub trait ScalarStateFunc<T: ValueType>: Send + Sync + 'static {
+pub trait ScalarStateFunc<T: ValueType>:
+    Serialize + DeserializeOwned + Send + Sync + 'static
+{
     fn new() -> Self;
+    fn mem_size() -> Option<usize> {
+        None
+    }
     fn add(&mut self, other: Option<T::ScalarRef<'_>>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;
     fn merge_result(&mut self, builder: &mut ColumnBuilder) -> Result<()>;
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
 }
 
 #[derive(Serialize, Deserialize)]
@@ -235,15 +236,6 @@ where
         } else {
             builder.push_default();
         }
-        Ok(())
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = deserialize_from_slice(reader)?;
         Ok(())
     }
 }

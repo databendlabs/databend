@@ -4,13 +4,9 @@ on:
   pull_request:
     branches:
       - main
-    paths-ignore:
-      - "docs/**"
-      - "website/**"
-      - "**.md"
-      - "docker/**"
-      - "scripts/setup/**"
-      - ".devcontainer/**"
+    paths:
+      - "src/**"
+      - ".github/workflows/bindings.python.yml"
   workflow_call:
     inputs:
       tag:
@@ -22,18 +18,14 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
-env:
-  RUNNER_PROVIDER: github
-
 jobs:
-  build_linux:
-    name: build-${{ matrix.target }}
-    runs-on: ubuntu-latest
+  linux:
+    name: ${{ matrix.target }}
+    runs-on: [self-hosted, X64, Linux, 8c16g, gcp]
     strategy:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,11 +34,18 @@ jobs:
         with:
           target: ${{ matrix.target }}
           version: ${{ inputs.tag }}
+      - name: Publish to PyPI
+        if: inputs.tag
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+          password: ${{ secrets.PYPI_PASSWORD }}
+          packages-dir: src/bendpy/dist
 
-  build_macos:
-    name: build-${{ matrix.target }}
-    if: github.event_name != 'pull_request'
-    runs-on: macos-11
+  macos:
+    if: inputs.tag
+    name: ${{ matrix.target }}
+    runs-on: macos-latest
     strategy:
       matrix:
         target:
@@ -60,18 +59,12 @@ jobs:
         with:
           target: ${{ matrix.target }}
           version: ${{ inputs.tag }}
-
-  release:
-    # publish release only the version endsWith 0
-    # if: endsWith(inputs.tag, '0')
-    if: inputs.tag
-    name: Publish to PyPI
-    needs: [build_linux, build_macos]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v3
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        if: inputs.tag
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_PASSWORD }}
+        uses: PyO3/maturin-action@v1
         with:
-          password: ${{ secrets.pypi_password }}
-          skip-existing: true
+          command: upload
+          args: --skip-existing *
+          working-directory: src/bendpy/dist

@@ -53,6 +53,14 @@ pub struct KVMeta {
     pub expire_at: Option<u64>,
 }
 
+impl KVMeta {
+    pub fn new_expire(expire_at: u64) -> Self {
+        Self {
+            expire_at: Some(expire_at),
+        }
+    }
+}
+
 /// Some value bound with a seq number
 #[derive(Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 pub struct SeqV<T = Vec<u8>> {
@@ -136,6 +144,14 @@ impl<T> SeqV<T> {
             meta: None,
             data,
         }
+    }
+
+    /// Create a timestamp in second for expiration control used in SeqV
+    pub fn now_sec() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
     }
 
     /// Create a timestamp in millisecond for expiration control used in SeqV

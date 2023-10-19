@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::FunctionContext;
 use common_hashtable::RowPtr;
 
@@ -37,6 +36,7 @@ pub struct ProbeState {
     pub(crate) row_state_indexes: Option<Vec<usize>>,
     pub(crate) probe_unmatched_indexes: Option<Vec<u32>>,
     pub(crate) markers: Option<Vec<u8>>,
+    pub(crate) string_items_buf: Option<Vec<(u64, usize)>>,
 }
 
 impl ProbeState {
@@ -48,11 +48,10 @@ impl ProbeState {
         max_block_size: usize,
         join_type: &JoinType,
         with_conjunct: bool,
+        has_string_column: bool,
         func_ctx: FunctionContext,
     ) -> Self {
-        let mut true_validity = MutableBitmap::new();
-        true_validity.extend_constant(max_block_size, true);
-        let true_validity: Bitmap = true_validity.into();
+        let true_validity = Bitmap::new_constant(true, max_block_size);
         let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
             JoinType::Left | JoinType::LeftSingle | JoinType::Full => {
                 if with_conjunct {
@@ -76,6 +75,11 @@ impl ProbeState {
         } else {
             None
         };
+        let string_items_buf = if has_string_column {
+            Some(vec![(0, 0); max_block_size])
+        } else {
+            None
+        };
         ProbeState {
             max_block_size,
             probe_indexes: vec![0; max_block_size],
@@ -91,8 +95,9 @@ impl ProbeState {
             func_ctx,
             row_state,
             row_state_indexes,
-            markers,
             probe_unmatched_indexes,
+            markers,
+            string_items_buf,
         }
     }
 

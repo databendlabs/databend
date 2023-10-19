@@ -40,6 +40,7 @@ pub enum IntervalKind {
     Minute,
     Second,
     Doy,
+    Week,
     Dow,
 }
 
@@ -139,6 +140,12 @@ pub enum Expr {
     },
     /// EXTRACT(IntervalKind FROM <expr>)
     Extract {
+        span: Span,
+        kind: IntervalKind,
+        expr: Box<Expr>,
+    },
+    /// DATE_PART(IntervalKind, <expr>)
+    DatePart {
         span: Span,
         kind: IntervalKind,
         expr: Box<Expr>,
@@ -503,6 +510,7 @@ impl Expr {
             | Expr::Cast { span, .. }
             | Expr::TryCast { span, .. }
             | Expr::Extract { span, .. }
+            | Expr::DatePart { span, .. }
             | Expr::Position { span, .. }
             | Expr::Substring { span, .. }
             | Expr::Trim { span, .. }
@@ -522,6 +530,21 @@ impl Expr {
             | Expr::DateTrunc { span, .. } => *span,
         }
     }
+
+    pub fn all_function_like_syntaxes() -> &'static [&'static str] {
+        &[
+            "CAST",
+            "TRY_CAST",
+            "EXTRACT",
+            "DATE_PART",
+            "POSITION",
+            "SUBSTRING",
+            "TRIM",
+            "DATE_ADD",
+            "DATE_SUB",
+            "DATE_TRUNC",
+        ]
+    }
 }
 
 impl Display for IntervalKind {
@@ -536,6 +559,7 @@ impl Display for IntervalKind {
             IntervalKind::Second => "SECOND",
             IntervalKind::Doy => "DOY",
             IntervalKind::Dow => "DOW",
+            IntervalKind::Week => "WEEK",
         })
     }
 }
@@ -1026,6 +1050,11 @@ impl Display for Expr {
                 kind: field, expr, ..
             } => {
                 write!(f, "EXTRACT({field} FROM {expr})")?;
+            }
+            Expr::DatePart {
+                kind: field, expr, ..
+            } => {
+                write!(f, "DATE_PART({field}, {expr})")?;
             }
             Expr::Position {
                 substr_expr,

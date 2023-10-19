@@ -276,7 +276,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("spilling_memory_ratio", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(100),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Sets the maximum memory ratio in bytes that an aggregator can use before spilling data to storage during query execution.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -351,7 +351,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("enable_distributed_compact", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enable distributed execution of table compaction.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -427,6 +427,24 @@ impl DefaultSettings {
                     desc: "Sets the maximum byte size of blocks for recluster",
                     possible_values: None,
                     display_in_show_settings: true,
+                }),
+                ("enable_parquet_page_index", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet page index",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_rowgroup_pruning", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet rowgroup pruning",
+                        possible_values: None,
+                        display_in_show_settings: true,
+                }),
+                ("enable_parquet_prewhere", DefaultSettingValue {
+                        value: UserSettingValue::UInt64(1),
+                        desc: "Enables parquet prewhere",
+                        possible_values: None,
+                        display_in_show_settings: true,
                 }),
             ]);
 

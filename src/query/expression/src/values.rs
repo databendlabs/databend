@@ -75,7 +75,6 @@ use crate::types::*;
 use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::utils::FromData;
@@ -515,9 +514,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Null => DataType::Null,
             ScalarRef::EmptyArray => DataType::EmptyArray,
             ScalarRef::EmptyMap => DataType::EmptyMap,
-            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
-                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
-            }),
+            ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
                 DecimalScalar::DECIMAL_TYPE(_, size) =>
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
@@ -1081,6 +1078,7 @@ impl Column {
                     .unwrap(),
                 )
             }
+
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -1628,11 +1626,10 @@ impl Column {
         };
 
         if is_nullable {
-            let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
-                let mut validity = MutableBitmap::with_capacity(arrow_col.len());
-                validity.extend_constant(arrow_col.len(), true);
-                validity.into()
-            });
+            let validity = arrow_col
+                .validity()
+                .cloned()
+                .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
             Column::Nullable(Box::new(NullableColumn { column, validity }))
         } else {
             column
@@ -1776,11 +1773,7 @@ impl Column {
                 }))
             }
             _ => {
-                let validity = validity.unwrap_or_else(|| {
-                    let mut validity = MutableBitmap::with_capacity(self.len());
-                    validity.extend_constant(self.len(), true);
-                    validity.into()
-                });
+                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
                 Column::Nullable(Box::new(NullableColumn {
                     column: self.clone(),
                     validity,
@@ -1816,6 +1809,29 @@ impl Column {
             Column::Nullable(c) => c.column.memory_size() + c.validity.as_slice().0.len(),
             Column::Tuple(fields) => fields.iter().map(|f| f.memory_size()).sum(),
             Column::Variant(col) => col.memory_size(),
+        }
+    }
+
+    pub fn serialize_size(&self) -> usize {
+        match self {
+            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => 0,
+            Column::Number(NumberColumn::UInt8(col)) => col.len(),
+            Column::Number(NumberColumn::UInt16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::UInt32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::UInt64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Float32(col)) => col.len() * 4,
+            Column::Number(NumberColumn::Float64(col)) => col.len() * 8,
+            Column::Number(NumberColumn::Int8(col)) => col.len(),
+            Column::Number(NumberColumn::Int16(col)) => col.len() * 2,
+            Column::Number(NumberColumn::Int32(col)) | Column::Date(col) => col.len() * 4,
+            Column::Number(NumberColumn::Int64(col)) | Column::Timestamp(col) => col.len() * 8,
+            Column::Decimal(DecimalColumn::Decimal128(col, _)) => col.len() * 16,
+            Column::Decimal(DecimalColumn::Decimal256(col, _)) => col.len() * 32,
+            Column::Boolean(c) => c.len(),
+            Column::String(col) | Column::Bitmap(col) | Column::Variant(col) => col.memory_size(),
+            Column::Array(col) | Column::Map(col) => col.values.serialize_size() + col.len() * 8,
+            Column::Nullable(c) => c.column.serialize_size() + c.len(),
+            Column::Tuple(fields) => fields.iter().map(|f| f.serialize_size()).sum(),
         }
     }
 
@@ -1914,7 +1930,7 @@ impl ColumnBuilder {
                 }
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
-                    validity: constant_bitmap(true, n),
+                    validity: Bitmap::new_constant(true, n).make_mut(),
                 }));
             }
         }
@@ -1929,7 +1945,7 @@ impl ColumnBuilder {
                     }
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                         builder,
-                        validity: constant_bitmap(false, n),
+                        validity: Bitmap::new_constant(false, n).make_mut(),
                     }))
                 }
                 _ => unreachable!(),
@@ -1940,7 +1956,7 @@ impl ColumnBuilder {
             ScalarRef::Decimal(dec) => {
                 ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
             }
-            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
+            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
@@ -2230,10 +2246,10 @@ impl ColumnBuilder {
             ColumnBuilder::String(builder)
             | ColumnBuilder::Variant(builder)
             | ColumnBuilder::Bitmap(builder) => {
-                let offset: u64 = reader.read_uvarint()?;
-                builder.data.resize(offset as usize + builder.data.len(), 0);
+                let offset = reader.read_scalar::<u64>()? as usize;
+                builder.data.resize(offset + builder.data.len(), 0);
                 let last = *builder.offsets.last().unwrap() as usize;
-                reader.read_exact(&mut builder.data[last..last + offset as usize])?;
+                reader.read_exact(&mut builder.data[last..last + offset])?;
                 builder.commit_row();
             }
             ColumnBuilder::Timestamp(builder) => {
@@ -2246,7 +2262,7 @@ impl ColumnBuilder {
                 builder.push(value);
             }
             ColumnBuilder::Array(builder) => {
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 for _ in 0..len {
                     builder.builder.push_binary(reader)?;
                 }
@@ -2255,7 +2271,7 @@ impl ColumnBuilder {
             ColumnBuilder::Map(builder) => {
                 const KEY: usize = 0;
                 const VALUE: usize = 1;
-                let len = reader.read_uvarint()?;
+                let len = reader.read_scalar::<u64>()?;
                 let map_builder = builder.builder.as_tuple_mut().unwrap();
                 for _ in 0..len {
                     map_builder[KEY].push_binary(reader)?;
@@ -2322,6 +2338,7 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];

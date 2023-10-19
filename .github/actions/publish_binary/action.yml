@@ -8,7 +8,7 @@ inputs:
     description: "Release target"
     required: true
   category:
-    description: "Release default / hdfs"
+    description: "Release default/hdfs/testsuite"
     required: false
     default: default
 
@@ -25,6 +25,9 @@ runs:
             ;;
           hdfs)
             publish_name="databend-hdfs-${{ inputs.version }}-${{ inputs.target }}"
+            ;;
+          testsuite)
+            publish_name="databend-testsuite-${{ inputs.version }}-${{ inputs.target }}"
             ;;
           *)
             echo "Unknown release category {{ inputs.category }}"

@@ -208,6 +208,7 @@ impl StringColumn {
     /// # Safety
     ///
     /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    #[inline]
     pub unsafe fn index_unchecked(&self, index: usize) -> &[u8] {
         &self.data[(self.offsets[index] as usize)..(self.offsets[index + 1] as usize)]
     }
@@ -306,6 +307,10 @@ impl StringColumnBuilder {
 
     pub fn len(&self) -> usize {
         self.offsets.len() - 1
+    }
+
+    pub fn memory_size(&self) -> usize {
+        self.offsets.len() * 8 + self.data.len()
     }
 
     pub fn put_u8(&mut self, item: u8) {

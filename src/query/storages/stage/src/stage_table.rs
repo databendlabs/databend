@@ -31,6 +31,7 @@ use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -214,6 +215,7 @@ impl Table for StageTable {
             on_error_map,
             self.table_info.is_select,
             projection,
+            self.table_info.default_values.clone(),
         )?);
         debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
@@ -274,7 +276,7 @@ impl Table for StageTable {
 
     // Truncate the stage file.
     #[async_backtrace::framed]
-    async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
+    async fn truncate(&self, _ctx: Arc<dyn TableContext>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "S3 external table truncate() unimplemented yet!",
         ))
@@ -296,6 +298,7 @@ pub fn unload_path(
     uuid: &str,
     group_id: usize,
     batch_id: usize,
+    compression: Option<CompressAlgorithm>,
 ) -> String {
     let format_name = format!(
         "{:?}",
@@ -303,17 +306,21 @@ pub fn unload_path(
     )
     .to_ascii_lowercase();
 
+    let suffix: &str = &compression
+        .map(|c| format!(".{}", c.extension()))
+        .unwrap_or_default();
+
     let path = &stage_table_info.files_info.path;
 
     if path.ends_with("data_") {
         format!(
-            "{}{}_{:0>4}_{:0>8}.{}",
-            path, uuid, group_id, batch_id, format_name
+            "{}{}_{:0>4}_{:0>8}.{}{}",
+            path, uuid, group_id, batch_id, format_name, suffix
         )
     } else {
         format!(
-            "{}/data_{}_{:0>4}_{:0>8}.{}",
-            path, uuid, group_id, batch_id, format_name
+            "{}/data_{}_{:0>4}_{:0>8}.{}{}",
+            path, uuid, group_id, batch_id, format_name, suffix
         )
     }
 }

@@ -39,12 +39,13 @@ use common_expression::ColumnBuilder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use super::AggregateFunctionRef;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
@@ -146,16 +147,6 @@ where T: Ord
         if !self.sorted {
             self.events_list.sort_by(cmp);
         }
-    }
-
-    fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, self)
-    }
-
-    fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        *self = deserialize_from_slice(reader)?;
-
-        Ok(())
     }
 }
 
@@ -287,19 +278,20 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        AggregateWindowFunnelState::<T::Scalar>::serialize(state, writer)
+        serialize_state(writer, state)
     }
 
-    fn deserialize(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
+    fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        state.deserialize(reader)
+        let mut rhs: AggregateWindowFunnelState<T::Scalar> = deserialize_state(reader)?;
+        state.merge(&mut rhs);
+        Ok(())
     }
 
-    fn merge(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
-        let rhs = rhs.get::<AggregateWindowFunnelState<T::Scalar>>();
+    fn merge_states(&self, place: StateAddr, rhs: StateAddr) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-
-        state.merge(rhs);
+        let other = rhs.get::<AggregateWindowFunnelState<T::Scalar>>();
+        state.merge(other);
         Ok(())
     }
 

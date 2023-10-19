@@ -971,7 +971,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge,
         } = stmt;
 
         let (catalog, database, table) =
@@ -981,7 +980,6 @@ impl Binder {
             catalog,
             database,
             table,
-            purge: *purge,
         })))
     }
 
@@ -1397,7 +1395,7 @@ impl Binder {
             )
             .build();
 
-            bind_context.columns.push(column);
+            bind_context.add_column_binding(column);
         }
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,

@@ -955,3 +955,50 @@ select to_uint64(b), b::uint64, b  from t;
 
 statement ok
 drop table t
+
+# decimal 128
+statement ok
+CREATE TABLE t (c1 TUPLE(ARRAY(ARRAY(DECIMAL(20, 10)) NULL)))
+
+statement ok
+insert into t values (([NULL,NULL])), (([[1, 3]]))
+
+query T
+select * from t
+----
+([NULL,NULL])
+([[1.0000000000,3.0000000000]])
+
+statement ok
+drop table t
+
+# decimal 258
+statement ok
+CREATE TABLE t (c1 TUPLE(ARRAY(ARRAY(DECIMAL(40, 10)) NULL)))
+
+statement ok
+insert into t values (([NULL,NULL]))
+
+query T
+select * from t
+----
+([NULL,NULL])
+
+statement ok
+drop table t
+
+
+statement error 1001
+select to_decimal(2,1)(10.1);
+
+statement error 1001
+select to_decimal(2,1)(10.11);
+
+statement ok
+create table if not exists test_decimal_insert(num DECIMAL(2,1));
+
+statement error 1001
+insert into test_decimal_insert values(10.9);
+
+statement ok
+drop table test_decimal_insert

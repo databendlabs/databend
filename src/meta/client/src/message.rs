@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use common_base::base::tokio::sync::oneshot::Sender;
 use common_meta_kvapi::kvapi::GetKVReply;
 use common_meta_kvapi::kvapi::GetKVReq;
@@ -24,6 +26,7 @@ use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::ExportedChunk;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::MetaClientError;
@@ -32,17 +35,38 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
+use tonic::Streaming;
 
 use crate::grpc_client::AuthInterceptor;
 
 /// A request that is sent by a meta-client handle to its worker.
-#[derive(Debug)]
 pub struct ClientWorkerRequest {
+    pub(crate) request_id: u64,
+
     /// For sending back the response to the handle.
     pub(crate) resp_tx: Sender<Response>,
 
     /// Request body
     pub(crate) req: Request,
+}
+
+impl fmt::Debug for ClientWorkerRequest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ClientWorkerRequest")
+            .field("request_id", &self.request_id)
+            .field("req", &self.req)
+            .finish()
+    }
+}
+
+/// Mark an RPC to return a stream.
+#[derive(Debug, Clone)]
+pub struct Streamed<T>(pub T);
+
+impl<T> Streamed<T> {
+    pub fn into_inner(self) -> T {
+        self.0
+    }
 }
 
 /// Meta-client handle-to-worker request body
@@ -55,7 +79,16 @@ pub enum Request {
     MGet(MGetKVReq),
 
     /// List KVs by key prefix
-    PrefixList(ListKVReq),
+    List(ListKVReq),
+
+    /// Get KV, returning a stream
+    StreamGet(Streamed<GetKVReq>),
+
+    /// Get multiple KV, returning a stream.
+    StreamMGet(Streamed<MGetKVReq>),
+
+    /// List KVs by key prefix, returning a stream.
+    StreamList(Streamed<ListKVReq>),
 
     /// Update or insert KV
     Upsert(UpsertKVReq),
@@ -84,7 +117,10 @@ impl Request {
         match self {
             Request::Get(_) => "Get",
             Request::MGet(_) => "MGet",
-            Request::PrefixList(_) => "PrefixList",
+            Request::List(_) => "PrefixList",
+            Request::StreamGet(_) => "StreamGet",
+            Request::StreamMGet(_) => "StreamMGet",
+            Request::StreamList(_) => "StreamPrefixList",
             Request::Upsert(_) => "Upsert",
             Request::Txn(_) => "Txn",
             Request::Watch(_) => "Watch",
@@ -101,7 +137,10 @@ impl Request {
 pub enum Response {
     Get(Result<GetKVReply, MetaError>),
     MGet(Result<MGetKVReply, MetaError>),
-    PrefixList(Result<ListKVReply, MetaError>),
+    List(Result<ListKVReply, MetaError>),
+    StreamGet(Result<Streaming<StreamItem>, MetaError>),
+    StreamMGet(Result<Streaming<StreamItem>, MetaError>),
+    StreamList(Result<Streaming<StreamItem>, MetaError>),
     Upsert(Result<UpsertKVReply, MetaError>),
     Txn(Result<TxnReply, MetaError>),
     Watch(Result<tonic::codec::Streaming<WatchResponse>, MetaError>),
@@ -114,21 +153,6 @@ pub enum Response {
 }
 
 impl Response {
-    pub fn is_err(&self) -> bool {
-        match self {
-            Response::Get(res) => res.is_err(),
-            Response::MGet(res) => res.is_err(),
-            Response::PrefixList(res) => res.is_err(),
-            Response::Upsert(res) => res.is_err(),
-            Response::Txn(res) => res.is_err(),
-            Response::Watch(res) => res.is_err(),
-            Response::Export(res) => res.is_err(),
-            Response::MakeClient(res) => res.is_err(),
-            Response::GetEndpoints(res) => res.is_err(),
-            Response::GetClientInfo(res) => res.is_err(),
-        }
-    }
-
     pub fn err(&self) -> Option<&(dyn std::error::Error + 'static)> {
         let e = match self {
             Response::Get(res) => res
@@ -139,7 +163,19 @@ impl Response {
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
-            Response::PrefixList(res) => res
+            Response::List(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::StreamGet(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::StreamMGet(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::StreamList(res) => res
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),

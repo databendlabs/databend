@@ -68,6 +68,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             target_type,
         } => visitor.visit_try_cast(*span, expr, target_type),
         Expr::Extract { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
+        Expr::DatePart { span, kind, expr } => visitor.visit_extract(*span, kind, expr),
         Expr::Position {
             span,
             substr_expr,
@@ -343,7 +344,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
             ..
         } => visitor.visit_delete(table_reference, selection),
         Statement::Update(update) => visitor.visit_update(update),
-        Statement::Copy(stmt) => visitor.visit_copy(stmt),
+        Statement::CopyIntoTable(stmt) => visitor.visit_copy_into_table(stmt),
+        Statement::CopyIntoLocation(stmt) => visitor.visit_copy_into_location(stmt),
         Statement::ShowSettings { like } => visitor.visit_show_settings(like),
         Statement::ShowProcessList => visitor.visit_show_process_list(),
         Statement::ShowMetrics => visitor.visit_show_metrics(),
@@ -470,5 +472,6 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::DropNetworkPolicy(stmt) => visitor.visit_drop_network_policy(stmt),
         Statement::DescNetworkPolicy(stmt) => visitor.visit_desc_network_policy(stmt),
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
+        Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
     }
 }

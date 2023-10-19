@@ -64,3 +64,4 @@ mod v056_least_visible_time;
 mod v057_hdfs_storage;
 mod v058_udf;
 mod v059_csv_format_params;
+mod v060_copy_options;

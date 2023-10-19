@@ -57,6 +57,18 @@ impl MetaNetworkError {
             Self::InvalidReply(e) => e.add_context(context).into(),
         }
     }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            MetaNetworkError::ConnectionError(_) => "ConnectionError",
+            MetaNetworkError::GetNodeAddrError(_) => "GetNodeAddrError",
+            MetaNetworkError::DnsParseError(_) => "DnsParseError",
+            MetaNetworkError::TLSConfigError(_) => "TLSConfigError",
+            MetaNetworkError::BadAddressFormat(_) => "BadAddressFormat",
+            MetaNetworkError::InvalidArgument(_) => "InvalidArgument",
+            MetaNetworkError::InvalidReply(_) => "InvalidReply",
+        }
+    }
 }
 
 pub type MetaNetworkResult<T> = std::result::Result<T, MetaNetworkError>;

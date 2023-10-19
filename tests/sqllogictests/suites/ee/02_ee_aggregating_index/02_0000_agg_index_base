@@ -290,6 +290,9 @@ statement ok
 CREATE AGGREGATING INDEX testi AS select abs(b) as bs, sum(a) from t where c > 1 group by bs
 
 statement ok
+UPDATE t SET c = 3 where b = -1
+
+statement ok
 REFRESH AGGREGATING INDEX testi
 
 query TI rowsort

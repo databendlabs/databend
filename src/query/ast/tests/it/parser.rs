@@ -169,7 +169,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
-        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
         r#"DROP STAGE ~"#,
@@ -256,8 +256,8 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;"#,
+                )
+                size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 FILE_FORMAT = (
@@ -266,7 +266,7 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10,
+                size_limit=10
                 max_files=10;"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
@@ -323,11 +323,9 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                )
-                size_limit=10;"#,
+                )"#,
         r#"COPY INTO '@my_stage/my data'
-                FROM mytable
-                size_limit=10;"#,
+                FROM mytable;"#,
         r#"COPY INTO @my_stage
                 FROM mytable
                 FILE_FORMAT = (
@@ -335,21 +333,20 @@ fn test_statement() {
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10;"#,
+                );"#,
         r#"COPY INTO mytable
                 FROM 's3://mybucket/data.csv'
                 CREDENTIALS = (
                     AWS_KEY_ID = 'access_key'
                     AWS_SECRET_KEY = 'secret_key'
-                ),
+                )
                 FILE_FORMAT = (
                     type = CSV
                     field_delimiter = ','
                     record_delimiter = '\n'
                     skip_header = 1
-                ),
-                size_limit=10,;"#,
+                )
+                size_limit=10;"#,
         r#"COPY INTO mytable
                 FROM @external_stage/path/to/file.csv
                 FILE_FORMAT = (
@@ -387,7 +384,14 @@ fn test_statement() {
                 )
                 size_limit=10
                 disable_variant_check=true;"#,
-        r#"copy into t1 from "" FILE_FORMAT = (TYPE = TSV, COMPRESSION = GZIP)"#,
+        r#"COPY INTO books FROM 's3://databend/books.csv'
+                CONNECTION = (
+                    ENDPOINT_URL = 'http://localhost:9000/',
+                    ACCESS_KEY_ID = 'ROOTUSER',
+                    SECRET_ACCESS_KEY = 'CHANGEME123',
+                    region = 'us-west-2'
+                )
+                FILE_FORMAT = (type = CSV);"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
@@ -461,6 +465,9 @@ fn test_statement() {
         r#"REFRESH VIRTUAL COLUMN FOR t"#,
         r#"CREATE NETWORK POLICY mypolicy ALLOWED_IP_LIST=('192.168.10.0/24') BLOCKED_IP_LIST=('192.168.10.99') COMMENT='test'"#,
         r#"ALTER NETWORK POLICY mypolicy SET ALLOWED_IP_LIST=('192.168.10.0/24','192.168.255.1') BLOCKED_IP_LIST=('192.168.1.99') COMMENT='test'"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 WAREHOUSE = 'MyWarehouse' SCHEDULE = 15 MINUTE SUSPEND_TASK_AFTER_NUM_FAILURES = 3 COMMENT = 'This is test task 1' AS SELECT * FROM MyTable1"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 6 * * *' 'America/Los_Angeles' COMMENT = 'serverless + cron' AS insert into t (c1, c2) values (1, 2), (3, 4)"#,
+        r#"CREATE TASK IF NOT EXISTS MyTask1 SCHEDULE = USING CRON '0 12 * * *' AS VACUUM TABLE t"#,
         "--各环节转各环节转各环节转各环节转各\n  select 34343",
         "-- 96477300355	31379974136	3.074486292973661\nselect 34343",
         "-- xxxxx\n  select 34343;",
@@ -683,6 +690,7 @@ fn test_expr() {
         r#"TRY_CAST(col1 AS TUPLE(BIGINT UNSIGNED NULL, BOOLEAN))"#,
         r#"trim(leading 'abc' from 'def')"#,
         r#"extract(year from d)"#,
+        r#"date_part(year, d)"#,
         r#"position('a' in str)"#,
         r#"substring(a from b for c)"#,
         r#"substring(a, b, c)"#,
