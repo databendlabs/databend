@@ -603,6 +603,16 @@ pub trait VisitorMut: Sized {
 
     fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
 
+    fn visit_drop_task(&mut self, _stmt: &mut DropTaskStmt) {}
+
+    fn visit_show_tasks(&mut self, _stmt: &mut ShowTasksStmt) {}
+
+    fn visit_execute_task(&mut self, _stmt: &mut ExecuteTaskStmt) {}
+
+    fn visit_describe_task(&mut self, _stmt: &mut DescribeTaskStmt) {}
+
+    fn visit_alter_task(&mut self, _stmt: &mut AlterTaskStmt) {}
+
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter_mut() {
