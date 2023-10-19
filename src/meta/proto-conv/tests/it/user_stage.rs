@@ -482,11 +482,9 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
                 presign_endpoint_url: "".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
-
-                server_side_encryption: "".to_string(),
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
-                server_side_encryption_key_id: "".to_string(),
+                ..Default::default()
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(
