@@ -43,6 +43,7 @@
 //! and will be restored when `poll()` returns.
 
 use std::alloc::AllocError;
+use std::backtrace::Backtrace;
 use std::cell::RefCell;
 use std::fmt::Debug;
 use std::fmt::Formatter;
@@ -145,15 +146,23 @@ pub struct OutOfLimit<V = i64> {
     pub limit: V,
     pub max_allocate: V,
     pub memory_usage: V,
+    pub backtrace: Backtrace,
 }
 
 impl<V> OutOfLimit<V> {
-    pub const fn new(value: V, limit: V, memory_usage: V, max_allocate: V) -> Self {
+    pub const fn new(
+        value: V,
+        limit: V,
+        memory_usage: V,
+        max_allocate: V,
+        backtrace: Backtrace,
+    ) -> Self {
         Self {
             value,
             limit,
             memory_usage,
             max_allocate,
+            backtrace,
         }
     }
 }
@@ -162,7 +171,7 @@ impl Debug for OutOfLimit<i64> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "memory usage {}({}) exceeds limit {}({}), memory_usage {}({}), max_allocate {}({})",
+            "memory usage {}({}) exceeds limit {}({}), memory_usage {}({}), max_allocate {}({}), backtrace {:?}",
             ByteSize::b(self.value as u64),
             self.value,
             ByteSize::b(self.limit as u64),
@@ -171,6 +180,7 @@ impl Debug for OutOfLimit<i64> {
             self.memory_usage,
             ByteSize::b(self.max_allocate as u64),
             self.max_allocate,
+            self.backtrace
         )
     }
 }
@@ -466,8 +476,15 @@ impl MemStat {
             return Ok(());
         }
 
+        let backtrace = Backtrace::force_capture();
         let max_allocate = self.max_allocate.load(Ordering::Relaxed);
-        Err(OutOfLimit::new(used, limit, memory_usage, max_allocate))
+        Err(OutOfLimit::new(
+            used,
+            limit,
+            memory_usage,
+            max_allocate,
+            backtrace,
+        ))
     }
 
     #[inline]
