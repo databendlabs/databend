@@ -1387,7 +1387,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ (NOT|NULL)? : "type name"
+            ) : "type name"
             },
             rule! {
             ( #ty_date
@@ -1395,15 +1395,9 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~(NOT|NULL)? : "type name" },
+            ) : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
-            }
-        },
+        |ty| ty,
     )(i)
 }
 
