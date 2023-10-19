@@ -16,7 +16,7 @@ insert into "E" values (1, 'one')
 statement ok
 insert into "E" values (2, 'two')
 
-statement error 1001
+statement error 1006
 insert into "E" values (null, null)
 
 statement ok
@@ -28,7 +28,7 @@ insert into "I" values (2, 'due')
 statement ok
 insert into "I" values (4, 'quattro')
 
-statement error 1001
+statement error 1006
 insert into "I" values (null, 'this is not null')
 
 query ITTT
