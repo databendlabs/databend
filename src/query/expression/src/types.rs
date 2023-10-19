@@ -81,6 +81,8 @@ pub enum DataType {
     Bitmap,
     Tuple(Vec<DataType>),
     Variant,
+
+    // Used internally for generic types
     Generic(usize),
 }
 

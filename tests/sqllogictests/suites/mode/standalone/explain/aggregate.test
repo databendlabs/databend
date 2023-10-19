@@ -219,12 +219,12 @@ EvalScalar
     └── AggregateFinal
         ├── output columns: [sum(b) (#2), count(b) (#3), max(b) (#5), explain_agg_t1.a (#0)]
         ├── group by: [a]
-        ├── aggregate functions: [sum(b), count(b), max(b)]
+        ├── aggregate functions: [sum(b), count(), max(b)]
         ├── estimated rows: 0.00
         └── AggregatePartial
             ├── output columns: [sum(b) (#2), count(b) (#3), max(b) (#5), #_group_by_key]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b), max(b)]
+            ├── aggregate functions: [sum(b), count(), max(b)]
             ├── estimated rows: 0.00
             └── Filter
                 ├── output columns: [explain_agg_t1.a (#0), explain_agg_t1.b (#1)]
@@ -258,12 +258,12 @@ EvalScalar
         └── AggregateFinal
             ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b)]
+            ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
                 ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
-                ├── aggregate functions: [sum(b), count(b)]
+                ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
@@ -294,12 +294,12 @@ EvalScalar
         └── AggregateFinal
             ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b)]
+            ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
                 ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
-                ├── aggregate functions: [sum(b), count(b)]
+                ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
@@ -329,12 +329,12 @@ EvalScalar
         └── AggregateFinal
             ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b)]
+            ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
                 ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
-                ├── aggregate functions: [sum(b), count(b)]
+                ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
@@ -364,12 +364,12 @@ EvalScalar
         └── AggregateFinal
             ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b)]
+            ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
                 ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
-                ├── aggregate functions: [sum(b), count(b)]
+                ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1
@@ -399,12 +399,12 @@ EvalScalar
         └── AggregateFinal
             ├── output columns: [sum(b) (#2), count(b) (#3), explain_agg_t1.a (#0)]
             ├── group by: [a]
-            ├── aggregate functions: [sum(b), count(b)]
+            ├── aggregate functions: [sum(b), count()]
             ├── estimated rows: 0.00
             └── AggregatePartial
                 ├── output columns: [sum(b) (#2), count(b) (#3), #_group_by_key]
                 ├── group by: [a]
-                ├── aggregate functions: [sum(b), count(b)]
+                ├── aggregate functions: [sum(b), count()]
                 ├── estimated rows: 0.00
                 └── TableScan
                     ├── table: default.default.explain_agg_t1

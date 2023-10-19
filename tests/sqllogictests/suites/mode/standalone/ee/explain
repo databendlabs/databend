@@ -260,22 +260,22 @@ query T
 EXPLAIN SELECT avg(a + 1) from t1
 ----
 EvalScalar
-├── output columns: [(sum((a + 1)) / if((count((a + 1)) = 0), 1, count((a + 1)))) (#9)]
-├── expressions: [sum((a + 1)) (#6) / CAST(if(CAST(count((a + 1)) (#8) = 0 AS Boolean NULL), 1, count((a + 1)) (#8)) AS UInt64 NULL)]
+├── output columns: [(sum((a + 1)) / if((count((a + 1)) = 0), 1, count((a + 1)))) (#8)]
+├── expressions: [sum((a + 1)) (#6) / CAST(if(CAST(count((a + 1)) (#7) = 0 AS Boolean NULL), 1, count((a + 1)) (#7)) AS UInt64 NULL)]
 ├── estimated rows: 1.00
 └── AggregateFinal
-    ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#8)]
+    ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#7)]
     ├── group by: []
-    ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0)]
+    ├── aggregate functions: [sum(sum_arg_0), count()]
     ├── estimated rows: 1.00
     └── AggregatePartial
-        ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#8)]
+        ├── output columns: [sum((a + 1)) (#6), count((a + 1)) (#7)]
         ├── group by: []
-        ├── aggregate functions: [sum(sum_arg_0), count(count_arg_0)]
+        ├── aggregate functions: [sum(sum_arg_0), count()]
         ├── estimated rows: 1.00
         └── EvalScalar
-            ├── output columns: [sum_arg_0 (#5), count_arg_0 (#7)]
-            ├── expressions: [t1.a (#3) + 1, t1.a (#3) + 1]
+            ├── output columns: [sum_arg_0 (#5)]
+            ├── expressions: [t1.a (#3) + 1]
             ├── estimated rows: 0.00
             └── TableScan
                 ├── table: default.test_index_db.t1
@@ -286,7 +286,7 @@ EvalScalar
                 ├── partitions scanned: 0
                 ├── push downs: [filters: [], limit: NONE]
                 ├── aggregating index: [SELECT (a + 1) FROM test_index_db.t1]
-                ├── rewritten query: [selection: [index_col_0 (#0), index_col_0 (#0)]]
+                ├── rewritten query: [selection: [index_col_0 (#0)]]
                 └── estimated rows: 0.00
 
 # Should not be rewritten

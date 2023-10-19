@@ -133,13 +133,13 @@ HashJoin
 │       └── AggregateFinal
 │           ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
 │           ├── group by: []
-│           ├── aggregate functions: [count(COUNT(*)), any(COUNT(*))]
+│           ├── aggregate functions: [count(), any(COUNT(*))]
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── output columns: [_count_scalar_subquery (#13), _any_scalar_subquery (#14)]
 │               ├── group by: []
-│               ├── aggregate functions: [count(COUNT(*)), any(COUNT(*))]
+│               ├── aggregate functions: [count(), any(COUNT(*))]
 │               ├── estimated rows: 1.00
 │               └── AggregateFinal
 │                   ├── output columns: [COUNT(*) (#12)]
