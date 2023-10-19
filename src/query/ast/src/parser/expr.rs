@@ -1324,7 +1324,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        rule! { ARRAY ~ "(" ~ #type_name ~ NOT? ")" },
         |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
     );
     let ty_map = map(
@@ -1387,7 +1387,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) : "type name"
+            ) ~ NULL? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1395,9 +1395,15 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) : "type name" },
+            ) ~ NULL? : "type name" },
         )),
-        |ty| ty,
+        |(ty, opt_null)| {
+            if opt_null.is_some() {
+                ty.wrap_nullable()
+            } else {
+                ty
+            }
+        },
     )(i)
 }
 
