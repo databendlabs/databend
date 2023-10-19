@@ -38,6 +38,8 @@ Below is a list of available environment variables, each correspondingly mapped 
 
 ## Query Environment Variables
 
-The parameters under the [query] and [storage] sections in the configuration file [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml) can be configured using environment variables. 
+The parameters under the [query] and [storage] sections in the configuration file [databend-query.toml](https://github.com/datafuselabs/databend/blob/main/scripts/distribution/configs/databend-query.toml) can be configured using environment variables. The names of the environment variables are formed by combining the word QUERY or STORAGE with the corresponding parameter names using underscores. 
 
-The names of the environment variables are formed by combining the word QUERY or STORAGE with the corresponding parameter names using underscores. For example, the environment variable for the parameter **admin_api_address** under the [query] section is QUERY_ADMIN_API_ADDRESS, and the environment variable for the parameter **bucket** under the [storage.s3] section is STORAGE_S3_BUCKET.
+Databend also accepts environment variables from storage services when they match Databend's environment variables. This allows you to work with the environment variable naming conventions you are most familiar with, eliminating the need to remember additional variable names and simplifying your configuration process.
+
+To illustrate with an example, if you want to set the access key ID for S3 using an environment variable, you have the flexibility to use either STORAGE_S3_ACCESS_KEY_ID provided by Databend or the well-known AWS_ACCESS_KEY_ID typically associated with AWS S3.
