@@ -365,6 +365,7 @@ impl MemStat {
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             parent_memory_stat: None,
+            max_allocate: AtomicI64::new(0),
         }
     }
 
@@ -380,6 +381,7 @@ impl MemStat {
             limit: AtomicI64::new(0),
             peak_used: AtomicI64::new(0),
             parent_memory_stat,
+            max_allocate: AtomicI64::new(0),
         })
     }
 
@@ -465,7 +467,7 @@ impl MemStat {
         }
 
         let max_allocate = self.max_allocate.load(Ordering::Relaxed);
-        Err(OutOfLimit::new(used, limit, memory_usage))
+        Err(OutOfLimit::new(used, limit, memory_usage, max_allocate))
     }
 
     #[inline]
