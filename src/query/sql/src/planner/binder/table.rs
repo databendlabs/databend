@@ -551,7 +551,23 @@ impl Binder {
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
                 let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
-                let read_options = ParquetReadOptions::default();
+                let mut read_options = ParquetReadOptions::default();
+
+                if !table_ctx.get_settings().get_enable_parquet_page_index()? {
+                    read_options = read_options.with_prune_pages(false);
+                }
+
+                if !table_ctx
+                    .get_settings()
+                    .get_enable_parquet_rowgroup_pruning()?
+                {
+                    read_options = read_options.with_prune_row_groups(false);
+                }
+
+                if !table_ctx.get_settings().get_enable_parquet_prewhere()? {
+                    read_options = read_options.with_do_prewhere(false);
+                }
+
                 if use_parquet2 {
                     Parquet2Table::create(
                         table_ctx.clone(),

@@ -387,4 +387,16 @@ impl Settings {
     pub fn get_enable_query_profiling(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_query_profiling")? != 0)
     }
+
+    pub fn get_enable_parquet_page_index(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_page_index")? != 0)
+    }
+
+    pub fn get_enable_parquet_rowgroup_pruning(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_rowgroup_pruning")? != 0)
+    }
+
+    pub fn get_enable_parquet_prewhere(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_parquet_prewhere")? != 0)
+    }
 }
