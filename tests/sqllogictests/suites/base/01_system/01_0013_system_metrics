@@ -1,10 +1,57 @@
 onlyif mysql
 statement ok
 ----
-truncate table system.metrics;
+SELECT 1;
 
 onlyif mysql
-query TI
-SELECT value FROM system.metrics where metric = 'session_connect_numbers_total'
+statement ok
 ----
-0.0
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+statement ok
+----
+SELECT 1;
+
+onlyif mysql
+query TTT
+SELECT min(value > 5) FROM system.metrics where metric = 'query_success_total'
+----
+1
+
+onlyif mysql
+statement ok
+----
+truncate table system.metrics;
+
+
+onlyif mysql
+query TTT
+SELECT min(value > 5) FROM system.metrics where metric = 'query_success_total'
+----
+0
