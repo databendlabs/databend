@@ -39,9 +39,9 @@ env:
 
 jobs:
   local:
-    if: inputs.runner_provider == 'aws' && inputs.source == 'release'
+    if: inputs.source == 'release'
     timeout-minutes: 60
-    runs-on: [self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}"]
+    runs-on: [self-hosted, X64, Linux, 16c32g, aws]
     strategy:
       matrix:
         dataset:
