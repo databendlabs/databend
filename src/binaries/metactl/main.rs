@@ -262,7 +262,11 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
     if !res.replication.is_empty() {
         println!("Replication:");
         for (k, v) in res.replication {
-            println!("  - [{}] {}", k, v);
+            if v != res.last_applied {
+                println!("  - [{}] {} *", k, v);
+            } else {
+                println!("  - [{}] {}", k, v);
+            }
         }
     }
     if !res.voters.is_empty() {
