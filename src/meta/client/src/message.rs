@@ -25,6 +25,7 @@ use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
@@ -108,6 +109,9 @@ pub enum Request {
     /// Get endpoints, for test
     GetEndpoints(GetEndpoints),
 
+    /// Get cluster status, for metactl
+    GetClusterStatus(GetClusterStatus),
+
     /// Get info about the client
     GetClientInfo(GetClientInfo),
 }
@@ -127,6 +131,7 @@ impl Request {
             Request::Export(_) => "Export",
             Request::MakeClient(_) => "MakeClient",
             Request::GetEndpoints(_) => "GetEndpoints",
+            Request::GetClusterStatus(_) => "GetClusterStatus",
             Request::GetClientInfo(_) => "GetClientInfo",
         }
     }
@@ -149,6 +154,7 @@ pub enum Response {
         Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>,
     ),
     GetEndpoints(Result<Vec<String>, MetaError>),
+    GetClusterStatus(Result<ClusterStatus, MetaError>),
     GetClientInfo(Result<ClientInfo, MetaError>),
 }
 
@@ -203,6 +209,10 @@ impl Response {
                 .as_ref()
                 .err()
                 .map(|x| x as &(dyn std::error::Error + 'static)),
+            Response::GetClusterStatus(res) => res
+                .as_ref()
+                .err()
+                .map(|x| x as &(dyn std::error::Error + 'static)),
             Response::GetClientInfo(res) => res
                 .as_ref()
                 .err()
@@ -225,6 +235,10 @@ pub struct MakeClient {}
 /// Get all meta server endpoints
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct GetEndpoints {}
+
+/// Get cluster status
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct GetClusterStatus {}
 
 /// Get info about client
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
