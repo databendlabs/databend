@@ -26,6 +26,7 @@ use common_meta_client::MetaGrpcReq;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -364,6 +365,45 @@ impl MetaService for MetaServiceImpl {
         let resp = MemberListReply { data: members };
         network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
 
+        Ok(Response::new(resp))
+    }
+
+    async fn get_cluster_status(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClusterStatus>, Status> {
+        let _guard = RequestInFlight::guard();
+        let status = self.meta_node.get_status().await.map_err(|e| {
+            Status::internal(format!("get meta node status failed: {}", e.to_string()))
+        })?;
+
+        let resp = ClusterStatus {
+            id: status.id,
+            binary_version: status.binary_version,
+            data_version: status.data_version.to_string(),
+            endpoint: status.endpoint,
+            db_size: status.db_size,
+            state: status.state,
+            is_leader: status.is_leader,
+            current_term: status.current_term,
+            last_log_index: status.last_log_index,
+            last_applied: status.last_applied.to_string(),
+            snapshot_last_log_id: status.snapshot_last_log_id.map(|id| id.to_string()),
+            purged: status.purged.map(|id| id.to_string()),
+            leader: status.leader.map(|node| node.to_string()),
+            replication: status
+                .replication
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(k, v)| match v {
+                    Some(v) => Some((k, v.to_string())),
+                    None => None,
+                })
+                .collect(),
+            voters: status.voters.iter().map(|n| n.to_string()).collect(),
+            non_voters: status.non_voters.iter().map(|n| n.to_string()).collect(),
+            last_seq: status.last_seq,
+        };
         Ok(Response::new(resp))
     }
 

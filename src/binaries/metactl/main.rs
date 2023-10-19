@@ -65,6 +65,11 @@ pub struct Config {
     )]
     pub grpc_api_address: String,
 
+    /// The dir to store persisted meta state, including raft logs, state machine etc.
+    #[clap(long)]
+    #[serde(alias = "kvsrv_raft_dir")]
+    pub raft_dir: Option<String>,
+
     /// When export raft data, this is the name of the save db file.
     /// If `db` is empty, output the exported data as json to stdout instead.
     /// When import raft data, this is the name of the restored db file.
@@ -76,20 +81,6 @@ pub struct Config {
     #[clap(long)]
     pub initial_cluster: Vec<String>,
 
-    #[clap(flatten)]
-    pub raft_config: MetaCtlRaftConfig,
-}
-
-/// TODO: This is a temp copy of RaftConfig, we will migrate them in the future.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version, author)]
-#[serde(default)]
-pub struct MetaCtlRaftConfig {
-    /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long)]
-    #[serde(alias = "kvsrv_raft_dir")]
-    pub raft_dir: String,
-
     /// The node id. Used in these cases:
     /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
     /// 2. --initial_cluster with new cluster node id.
@@ -99,23 +90,14 @@ pub struct MetaCtlRaftConfig {
     pub id: u64,
 }
 
-impl From<MetaCtlRaftConfig> for RaftConfig {
+impl From<Config> for RaftConfig {
     #[allow(clippy::field_reassign_with_default)]
-    fn from(value: MetaCtlRaftConfig) -> Self {
+    fn from(value: Config) -> Self {
         let mut c = Self::default();
 
-        c.raft_dir = value.raft_dir;
+        c.raft_dir = value.raft_dir.unwrap_or_default();
         c.id = value.id;
         c
-    }
-}
-
-impl Default for MetaCtlRaftConfig {
-    fn default() -> Self {
-        Self {
-            raft_dir: "".to_string(),
-            id: 0,
-        }
     }
 }
 
@@ -145,6 +127,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let _guards = init_logging("metactl", &log_config);
+
+    if config.status {
+        return show_status(&config).await;
+    }
 
     eprintln!();
     eprintln!("╔╦╗╔═╗╔╦╗╔═╗   ╔═╗╔╦╗╦  ");
@@ -239,4 +225,23 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
         clients.push(client);
     }
+}
+
+async fn show_status(conf: &Config) -> anyhow::Result<()> {
+    let addr = &conf.grpc_api_address;
+
+    let client = MetaGrpcClient::try_create(
+        vec![addr.to_string()],
+        "root",
+        "xxx",
+        None,
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
+
+    let res = client.get_cluster_status().await?;
+    println!("status: {:?}", res);
+
+    Ok(())
 }

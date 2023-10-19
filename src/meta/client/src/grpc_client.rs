@@ -46,6 +46,7 @@ use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf as pb;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -231,6 +232,10 @@ impl ClientHandle {
         };
 
         UnlimitedFuture::create(request_future).await
+    }
+
+    pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+        self.request(message::GetClusterStatus {}).await
     }
 
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -477,6 +482,10 @@ impl MetaGrpcClient {
                 message::Request::GetEndpoints(_) => {
                     let resp = self.get_cached_endpoints();
                     message::Response::GetEndpoints(Ok(resp))
+                }
+                message::Request::GetClusterStatus(_) => {
+                    let resp = self.get_cluster_status().await;
+                    message::Response::GetClusterStatus(resp)
                 }
                 message::Request::GetClientInfo(_) => {
                     let resp = self.get_client_info().await;
@@ -898,6 +907,16 @@ impl MetaGrpcClient {
 
         let mut client = self.make_client().await?;
         let res = client.export(Empty {}).await?;
+        Ok(res.into_inner())
+    }
+
+    /// Get cluster status
+    #[minitrace::trace]
+    pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+        debug!("MetaGrpcClient::get_cluster_status");
+
+        let mut client = self.make_client().await?;
+        let res = client.get_cluster_status(Empty {}).await?;
         Ok(res.into_inner())
     }
 
