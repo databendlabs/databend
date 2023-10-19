@@ -65,6 +65,7 @@ impl AggIndexReader {
             agg.projection.clone(),
             ctx.clone(),
             false,
+            true,
         )?;
 
         let func_ctx = ctx.get_function_context()?;

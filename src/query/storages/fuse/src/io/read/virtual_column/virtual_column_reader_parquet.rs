@@ -142,7 +142,7 @@ impl VirtualColumnReader {
             );
 
             let merge_io_result =
-                BlockReader::merge_io_read(read_settings, self.dal.clone(), loc, ranges)
+                BlockReader::merge_io_read(read_settings, self.dal.clone(), loc, ranges, true)
                     .await
                     .ok()?;
 

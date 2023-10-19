@@ -106,6 +106,7 @@ impl MatchedAggregator {
                 projection,
                 ctx.clone(),
                 false,
+                true,
             )
         }?;
 

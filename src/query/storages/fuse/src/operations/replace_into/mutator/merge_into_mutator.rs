@@ -157,6 +157,7 @@ impl MergeIntoOperationAggregator {
                 projection,
                 ctx.clone(),
                 false,
+                true,
             )
         }?;
 
@@ -171,6 +172,7 @@ impl MergeIntoOperationAggregator {
                     projection,
                     ctx.clone(),
                     false,
+                    true,
                 )?;
                 Some(reader)
             }
