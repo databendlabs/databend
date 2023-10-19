@@ -146,23 +146,17 @@ pub struct OutOfLimit<V = i64> {
     pub limit: V,
     pub max_allocate: V,
     pub memory_usage: V,
-    pub backtrace: Backtrace,
+    pub backtrace: Arc<Backtrace>,
 }
 
 impl<V> OutOfLimit<V> {
-    pub const fn new(
-        value: V,
-        limit: V,
-        memory_usage: V,
-        max_allocate: V,
-        backtrace: Backtrace,
-    ) -> Self {
+    pub fn new(value: V, limit: V, memory_usage: V, max_allocate: V, backtrace: Backtrace) -> Self {
         Self {
             value,
             limit,
             memory_usage,
             max_allocate,
-            backtrace,
+            backtrace: Arc::new(backtrace),
         }
     }
 }
