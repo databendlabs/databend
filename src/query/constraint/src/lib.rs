@@ -12,9 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate core;
-
-mod declare;
-mod problem;
-
-pub mod prelude;
+pub mod declare;
+pub mod mir;
+pub mod problem;
+pub mod simplify;

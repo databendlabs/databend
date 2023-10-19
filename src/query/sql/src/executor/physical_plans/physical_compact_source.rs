@@ -12,5 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub use crate::declare::*;
-pub use crate::problem::*;
+use std::collections::HashSet;
+
+use common_catalog::plan::Partitions;
+use common_expression::ColumnId;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::TableInfo;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct CompactSource {
+    pub parts: Partitions,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+    pub column_ids: HashSet<ColumnId>,
+}

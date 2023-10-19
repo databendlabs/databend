@@ -97,6 +97,44 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_task = map(
+        rule! {
+            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ #task_warehouse_option
+            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ AS ~ #statement
+        },
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            task,
+            warehouse_opts,
+            _,
+            _,
+            schedule_opts,
+            suspend_opt,
+            comment_opt,
+            _,
+            sql,
+        )| {
+            let sql = pretty_statement(sql.stmt, 10)
+                .map_err(|_| ErrorKind::Other("invalid statement"))
+                .unwrap();
+            Statement::CreateTask(CreateTaskStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: task.to_string(),
+                warehouse_opts,
+                schedule_opts,
+                suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                sql,
+            })
+        },
+    );
+
     let insert = map(
         rule! {
             INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
@@ -155,8 +193,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
-            ~ #merge_source  ~ #table_alias? ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
+            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -166,7 +204,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             target_alias,
             _,
             source,
-            source_alias,
             _,
             join_expr,
             merge_options,
@@ -177,7 +214,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table_ident: table,
                 source,
-                source_alias,
                 target_alias,
                 join_expr,
                 merge_options,
@@ -1550,6 +1586,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
         | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
         ),
+        rule!(
+            #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
+  [ { WAREHOUSE = <string> }
+  [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <sql>`"
+        ),
     ));
 
     map(
@@ -1618,8 +1663,11 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         },
     );
 
-    let query = map(query, |query| MergeSource::Select {
-        query: Box::new(query),
+    let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
+        MergeSource::Select {
+            query: Box::new(query),
+            source_alias,
+        }
     });
 
     rule!(
@@ -2343,6 +2391,41 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
             }
         },
     ),))(i)
+}
+
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+    alt((map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~  #literal_string)?
+        },
+        |warehouse_opt| {
+            let warehouse = match warehouse_opt {
+                Some(warehouse) => Some(warehouse.2),
+                None => None,
+            };
+            WarehouseOptions { warehouse }
+        },
+    ),))(i)
+}
+
+pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
+    let interval = map(
+        rule! {
+             #literal_u64 ~ MINUTE
+        },
+        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+    );
+    let cron_expr = map(
+        rule! {
+            USING ~ CRON ~ #literal_string ~ #literal_string?
+        },
+        |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
+    );
+
+    rule!(
+        #interval
+        | #cron_expr
+    )(i)
 }
 
 pub fn kill_target(i: Input) -> IResult<KillTarget> {

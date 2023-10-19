@@ -184,6 +184,9 @@ impl Plan {
             Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
+
+            // task
+            Plan::CreateTask(p) => Ok(format!("{:?}", p)),
         }
     }
 }

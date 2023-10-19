@@ -75,7 +75,6 @@ use crate::types::*;
 use crate::utils::arrow::append_bitmap;
 use crate::utils::arrow::bitmap_into_mut;
 use crate::utils::arrow::buffer_into_mut;
-use crate::utils::arrow::constant_bitmap;
 use crate::utils::arrow::deserialize_column;
 use crate::utils::arrow::serialize_column;
 use crate::utils::FromData;
@@ -520,9 +519,7 @@ impl<'a> ScalarRef<'a> {
             ScalarRef::Null => DataType::Null,
             ScalarRef::EmptyArray => DataType::EmptyArray,
             ScalarRef::EmptyMap => DataType::EmptyMap,
-            ScalarRef::Number(s) => with_number_type!(|NUM_TYPE| match s {
-                NumberScalar::NUM_TYPE(_) => DataType::Number(NumberDataType::NUM_TYPE),
-            }),
+            ScalarRef::Number(s) => DataType::Number(s.data_type()),
             ScalarRef::Decimal(s) => with_decimal_type!(|DECIMAL_TYPE| match s {
                 DecimalScalar::DECIMAL_TYPE(_, size) =>
                     DataType::Decimal(DecimalDataType::DECIMAL_TYPE(*size)),
@@ -1086,6 +1083,7 @@ impl Column {
                     .unwrap(),
                 )
             }
+
             Column::Timestamp(col) => Box::new(
                 common_arrow::arrow::array::PrimitiveArray::<i64>::try_new(
                     arrow_type,
@@ -1633,11 +1631,10 @@ impl Column {
         };
 
         if is_nullable {
-            let validity = arrow_col.validity().cloned().unwrap_or_else(|| {
-                let mut validity = MutableBitmap::with_capacity(arrow_col.len());
-                validity.extend_constant(arrow_col.len(), true);
-                validity.into()
-            });
+            let validity = arrow_col
+                .validity()
+                .cloned()
+                .unwrap_or_else(|| Bitmap::new_constant(true, arrow_col.len()));
             Column::Nullable(Box::new(NullableColumn { column, validity }))
         } else {
             column
@@ -1781,11 +1778,7 @@ impl Column {
                 }))
             }
             _ => {
-                let validity = validity.unwrap_or_else(|| {
-                    let mut validity = MutableBitmap::with_capacity(self.len());
-                    validity.extend_constant(self.len(), true);
-                    validity.into()
-                });
+                let validity = validity.unwrap_or_else(|| Bitmap::new_constant(true, self.len()));
                 Column::Nullable(Box::new(NullableColumn {
                     column: self.clone(),
                     validity,
@@ -1942,7 +1935,7 @@ impl ColumnBuilder {
                 }
                 return ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                     builder,
-                    validity: constant_bitmap(true, n),
+                    validity: Bitmap::new_constant(true, n).make_mut(),
                 }));
             }
         }
@@ -1957,7 +1950,7 @@ impl ColumnBuilder {
                     }
                     ColumnBuilder::Nullable(Box::new(NullableColumnBuilder {
                         builder,
-                        validity: constant_bitmap(false, n),
+                        validity: Bitmap::new_constant(false, n).make_mut(),
                     }))
                 }
                 _ => unreachable!(),
@@ -1966,7 +1959,10 @@ impl ColumnBuilder {
             ScalarRef::EmptyMap => ColumnBuilder::EmptyMap { len: n },
             ScalarRef::Number(num) => ColumnBuilder::Number(NumberColumnBuilder::repeat(*num, n)),
             ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(*b, n)),
-            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
+            ScalarRef::Decimal(dec) => {
+                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
+            }
+            ScalarRef::Boolean(b) => ColumnBuilder::Boolean(Bitmap::new_constant(*b, n).make_mut()),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
             ScalarRef::Date(d) => ColumnBuilder::Date(vec![*d; n]),
@@ -2343,6 +2339,7 @@ impl ColumnBuilder {
                     builder.commit_row();
                 }
             }
+
             ColumnBuilder::Timestamp(builder) => {
                 for row in 0..rows {
                     let mut reader = &reader[step * row..];

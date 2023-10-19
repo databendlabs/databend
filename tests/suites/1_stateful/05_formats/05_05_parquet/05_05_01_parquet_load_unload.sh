@@ -9,13 +9,17 @@ echo "CREATE TABLE test_load_unload
 (
     a VARCHAR NULL,
     b float,
+    c array(string),
+    d Variant,
     e timestamp,
-    f variant
+    f decimal(4, 2),
+    h tuple(string,int)
 );" | $MYSQL_CLIENT_CONNECT
 
 insert_data() {
 	echo "insert into test_load_unload values
-	('a\"b', 1, '2044-05-06T03:25:02.868894-07:00', '{\"k1\":\"v\",\"k2\":[1,2]}')
+	('a\"b', 1, ['a\"b'], parse_json('{\"k\":\"v\"}'), '2044-05-06T03:25:02.868894-07:00', 010.011, ('a', 5)),
+	(null, 2, ['a\'b'], parse_json('[1]'), '2044-05-06T03:25:02.868894-07:00', -010.011, ('b',10))
 	" | $MYSQL_CLIENT_CONNECT
 }
 
@@ -60,8 +64,6 @@ test_format() {
 	diff /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
 	diff /tmp/test_load_unload3.parquet /tmp/test_load_unload.parquet
 	diff /tmp/test_load_unload4.parquet /tmp/test_load_unload.parquet
-	rm /tmp/test_load_unload2.parquet /tmp/test_load_unload.parquet
-	rm /tmp/test_load_unload4.parquet /tmp/test_load_unload3.parquet
 	echo "truncate table test_load_unload" | $MYSQL_CLIENT_CONNECT
 }
 

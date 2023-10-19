@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 use chrono::Datelike;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::types::date::string_to_date;
 use common_expression::types::nullable::NullableColumn;
@@ -38,7 +39,6 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::VariantType;
 use common_expression::types::ALL_NUMERICS_TYPES;
-use common_expression::utils::arrow::constant_bitmap;
 use common_expression::vectorize_1_arg;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
@@ -649,7 +649,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             ValueRef::Column(col) => {
                 let new_col = cast_scalars_to_variants(col.iter(), ctx.func_ctx.tz);
                 Value::Column(NullableColumn {
-                    validity: constant_bitmap(true, new_col.len()).into(),
+                    validity: Bitmap::new_constant(true, new_col.len()),
                     column: new_col,
                 })
             }

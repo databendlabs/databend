@@ -45,6 +45,9 @@ use serde::Serialize;
 use siphasher::sip128::Hasher128;
 use siphasher::sip128::SipHasher24;
 
+use super::deserialize_state;
+use super::serialize_state;
+
 pub trait DistinctStateFunc: Sized + Send + Sync {
     fn new() -> Self;
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
@@ -83,11 +86,11 @@ impl DistinctStateFunc for AggregateDistinctState {
     }
 
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.set)
+        serialize_state(writer, &self.set)
     }
 
     fn deserialize(reader: &mut &[u8]) -> Result<Self> {
-        let set = deserialize_from_slice(reader)?;
+        let set = deserialize_state(reader)?;
         Ok(Self { set })
     }
 
@@ -105,7 +108,7 @@ impl DistinctStateFunc for AggregateDistinctState {
             .map(|col| unsafe { AnyType::index_column_unchecked(col, row).to_owned() })
             .collect::<Vec<_>>();
         let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-        serialize_into_buf(&mut buffer, &values)?;
+        serialize_state(&mut buffer, &values)?;
         self.set.insert(buffer);
         Ok(())
     }
@@ -124,7 +127,7 @@ impl DistinctStateFunc for AggregateDistinctState {
                     .collect::<Vec<_>>();
 
                 let mut buffer = Vec::with_capacity(values.len() * std::mem::size_of::<Scalar>());
-                serialize_into_buf(&mut buffer, &values)?;
+                serialize_state(&mut buffer, &values)?;
                 self.set.insert(buffer);
             }
         }
@@ -143,7 +146,7 @@ impl DistinctStateFunc for AggregateDistinctState {
 
         for data in self.set.iter() {
             let mut slice = data.as_slice();
-            let scalars: Vec<Scalar> = deserialize_from_slice(&mut slice)?;
+            let scalars: Vec<Scalar> = deserialize_state(&mut slice)?;
             scalars.iter().enumerate().for_each(|(idx, group_value)| {
                 builders[idx].push(group_value.as_ref());
             });
@@ -249,7 +252,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for e in self.set.iter() {
-            serialize_into_buf(writer, e.key())?
+            serialize_state(writer, e.key())?
         }
         Ok(())
     }
@@ -258,7 +261,7 @@ where T: Number + Serialize + DeserializeOwned + HashtableKeyable
         let size = reader.read_uvarint()?;
         let mut set = CommonHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let t: T = deserialize_from_slice(reader)?;
+            let t: T = deserialize_state(reader)?;
             let _ = set.set_insert(t).is_ok();
         }
         Ok(Self { set })
@@ -330,7 +333,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
         writer.write_uvarint(self.set.len() as u64)?;
         for value in self.set.iter() {
-            serialize_into_buf(writer, value.key())?
+            serialize_state(writer, value.key())?
         }
         Ok(())
     }
@@ -339,7 +342,7 @@ impl DistinctStateFunc for AggregateUniqStringState {
         let size = reader.read_uvarint()?;
         let mut set = StackHashSet::with_capacity(size as usize);
         for _ in 0..size {
-            let e = deserialize_from_slice(reader)?;
+            let e = deserialize_state(reader)?;
             let _ = set.set_insert(e).is_ok();
         }
         Ok(Self { set })

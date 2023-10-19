@@ -95,6 +95,10 @@ impl<const NULLABLE_RESULT: bool> AggregateFunction
         self.nested.init_state(place);
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        self.nested.serialize_size_per_row().map(|row| row + 1)
+    }
+
     #[inline]
     fn state_layout(&self) -> Layout {
         let layout = self.nested.state_layout();

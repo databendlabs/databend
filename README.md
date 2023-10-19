@@ -21,7 +21,7 @@
 
 <br>
 
-<a href="https://github.com/datafuselabs/databend/actions">
+<a href="https://github.com/datafuselabs/databend/actions/workflows/release.yml">
 <img src="https://img.shields.io/github/actions/workflow/status/datafuselabs/databend/release.yml?branch=main" alt="CI Status" />
 </a>
 

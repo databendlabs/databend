@@ -309,6 +309,10 @@ impl StringColumnBuilder {
         self.offsets.len() - 1
     }
 
+    pub fn memory_size(&self) -> usize {
+        self.offsets.len() * 8 + self.data.len()
+    }
+
     pub fn put_u8(&mut self, item: u8) {
         self.data.push(item);
     }

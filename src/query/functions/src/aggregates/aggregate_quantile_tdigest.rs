@@ -32,13 +32,13 @@ use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
-use common_io::prelude::deserialize_from_slice;
-use common_io::prelude::serialize_into_buf;
 use itertools::Itertools;
 use num_traits::AsPrimitive;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionDescription;
 use crate::aggregates::assert_params;
 use crate::aggregates::assert_unary_arguments;
@@ -357,12 +357,12 @@ where T: Number + AsPrimitive<f64>
     }
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<QuantileTDigestState>();
-        let mut rhs: QuantileTDigestState = deserialize_from_slice(reader)?;
+        let mut rhs: QuantileTDigestState = deserialize_state(reader)?;
         state.merge(&mut rhs)
     }
 

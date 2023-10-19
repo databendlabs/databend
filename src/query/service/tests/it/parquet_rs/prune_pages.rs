@@ -52,7 +52,7 @@ async fn test(scenario: Scenario, predicate: &str, expected_selection: RowSelect
         Arc::new(schema),
         leaf_fields,
         &plan.push_downs,
-        ParquetReadOptions::new()
+        ParquetReadOptions::default()
             .with_prune_row_groups(false)
             .with_prune_pages(true),
     )

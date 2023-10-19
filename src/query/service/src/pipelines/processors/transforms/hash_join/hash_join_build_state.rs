@@ -20,7 +20,6 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -168,9 +167,7 @@ impl HashJoinBuildState {
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::Left | JoinType::LeftSingle | JoinType::Full
         ) {
-            let mut validity = MutableBitmap::new();
-            validity.extend_constant(data_block.num_rows(), true);
-            let validity: Bitmap = validity.into();
+            let validity = Bitmap::new_constant(true, data_block.num_rows());
             let nullable_columns = data_block
                 .columns()
                 .iter()
@@ -258,7 +255,7 @@ impl HashJoinBuildState {
                     .store(true, Ordering::Relaxed);
                 self.hash_join_state
                     .build_done_watcher
-                    .send(self.send_val.load(Ordering::Relaxed))
+                    .send(self.send_val.load(Ordering::Acquire))
                     .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
                 return Ok(());
             }
@@ -615,7 +612,7 @@ impl HashJoinBuildState {
             }
             self.hash_join_state
                 .build_done_watcher
-                .send(self.send_val.load(Ordering::Relaxed))
+                .send(self.send_val.load(Ordering::Acquire))
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
         }
         Ok(())
