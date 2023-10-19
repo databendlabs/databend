@@ -213,6 +213,7 @@ impl FuseTable {
                         self.operator.clone(),
                         agg,
                         self.table_compression,
+                        put_cache,
                     )
                 })
                 .transpose()?,
@@ -229,6 +230,7 @@ impl FuseTable {
                         plan,
                         virtual_columns.clone(),
                         self.table_compression,
+                        put_cache,
                     )
                 })
                 .transpose()?,

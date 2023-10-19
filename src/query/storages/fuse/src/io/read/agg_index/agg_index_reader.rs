@@ -58,6 +58,7 @@ impl AggIndexReader {
         dal: Operator,
         agg: &AggIndexInfo,
         compression: TableCompression,
+        put_cache: bool,
     ) -> Result<Self> {
         let reader = BlockReader::create(
             dal,
@@ -65,7 +66,7 @@ impl AggIndexReader {
             agg.projection.clone(),
             ctx.clone(),
             false,
-            true,
+            put_cache,
         )?;
 
         let func_ctx = ctx.get_function_context()?;

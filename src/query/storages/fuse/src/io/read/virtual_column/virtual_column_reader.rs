@@ -85,6 +85,7 @@ impl VirtualColumnReader {
         plan: &DataSourcePlan,
         virtual_column_infos: Vec<VirtualColumnInfo>,
         compression: TableCompression,
+        put_cache: bool,
     ) -> Result<Self> {
         let prewhere_schema =
             if let Some(v) = PushDownInfo::prewhere_of_push_downs(plan.push_downs.as_ref()) {
@@ -114,7 +115,7 @@ impl VirtualColumnReader {
             Projection::Columns(vec![]),
             ctx.clone(),
             false,
-            true,
+            put_cache,
         )?;
 
         Ok(Self {
