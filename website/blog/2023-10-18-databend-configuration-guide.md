@@ -220,6 +220,92 @@ Therefore, `metasrv_log_dir` corresponds to the environment variable
 `METASRV_LOG_DIR`, and ultimately maps to the `log_dir` option in `Config`, thus
 associating it with the configuration file and command line option `--log-dir`.
 
+## Implicit Environment Variables
+
+While some environment variables is not a formal option listed in the
+configuration options, it can still be used as an environment variable for
+configuration purposes.
+
+This is mainly due to the absence of setting corresponding configuration
+options, which triggers the rollback mechanism of
+[reqsign](https://crates.io/crates/reqsign). It reads some commonly used
+environment variables of the corresponding service to ensure its proper
+operation as much as possible.
+
+The mapping and usage of these environment variables can be understood by
+examining the relevant code sections.
+
+### Example: `AWS_ACCESS_KEY_ID` Environment Variable
+
+In the implementation, there is a check for the `STORAGE_S3_ACCESS_KEY_ID`
+configuration option, which aligns with the configuration and environment
+variable mapping.
+
+However, if the corresponding configuration is not provided, a fallback
+mechanism is triggered. `reqsign` will check `AWS_S3_ACCESS_KEY_ID` to obtain
+possible value.
+
+This is also the reason why commands like the one below can work correctly.
+
+```bash
+docker run \
+    -p 8000:8000 \
+    -p 3307:3307 \
+    -v meta_storage_dir:/var/lib/databend/meta \
+    -v query_storage_dir:/var/lib/databend/query \
+    -v log_dir:/var/log/databend \
+    -e QUERY_DEFAULT_USER=databend \
+    -e QUERY_DEFAULT_PASSWORD=databend \
+    -e QUERY_STORAGE_TYPE=s3 \
+    -e AWS_S3_ENDPOINT=http://172.17.0.2:9000 \
+    -e AWS_S3_BUCKET=databend \
+    -e AWS_ACCESS_KEY_ID=ROOTUSER \
+    -e AWS_SECRET_ACCESS_KEY=CHANGEME123 \
+    datafuselabs/databend
+```
+
+### Mapping Implicit Environment Variables to Code
+
+Let's examine the relevant code snippet in `src/common/storage/src/operator.rs`
+(line 244):
+
+```rust
+builder.access_key_id(&cfg.access_key_id);
+```
+
+The `access_key_id()` function in the default behavior of the opendal library
+handles the configuration:
+
+```rust
+/// Set access_key_id of this backend.
+///
+/// - If access_key_id is set, we will take user's input first.
+/// - If not, we will try to load it from environment.
+pub fn access_key_id(&mut self, v: &str) -> &mut Self {...}
+```
+
+Since `disable_config_load` is not explicitly set, the S3 accessor will attempt
+to load the configuration from the environment variables while building. The
+code snippet responsible for this behavior is found in `AwsConfig` in the
+`reqsign` library:
+
+```rust
+pub struct AwsConfig {
+    /// `access_key_id` will be loaded from:
+    /// - this field if it's `is_some`
+    /// - env value: `AWS_ACCESS_KEY_ID`
+    /// - profile config: `aws_access_key_id`
+    pub access_key_id: Option<String>,
+    ...
+}
+```
+
+So if `access_key_id` is not provided, the library will attempt to load it from
+the `AWS_ACCESS_KEY_ID` environment variable.
+
+This also allows you to choose familiar AWS or other service examples' default
+environment variables when using Databend in practice.
+
 ## Conclusion
 
 Understanding configuration management in Databend is crucial for developers and
