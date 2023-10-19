@@ -43,3 +43,5 @@ Boolean
 ["UInt64","String"]
 ["0","0"]
 ["1","1"]
+----JSON
+{"meta":[{"name":"number","type":"UInt64"},{"name":"number::string","type":"String"}],"data":[{"number":0,"number::string":"0"},{"number":1,"number::string":"1"}],"rows":2}
