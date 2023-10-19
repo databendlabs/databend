@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -265,8 +266,7 @@ impl RangeJoinState {
             }
         }
         // Initialize bit_array
-        let mut bit_array = MutableBitmap::with_capacity(p_array.len());
-        bit_array.extend_constant(p_array.len(), false);
+        let bit_array = Bitmap::new_constant(false, p_array.len()).make_mut();
 
         let l2 = &merged_blocks.columns()[1].value.convert_to_full_column(
             self.conditions[0]

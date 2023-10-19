@@ -1,0 +1,15 @@
+statement ok
+drop table if exists it
+
+statement ok
+create table it(c1 int default 1, c2 int, c3 int null, c4 int not null, c5 int not null default 5)
+
+query TIITI
+copy into it from @data/csv/empty.csv file_format = (type = TSV, field_delimiter=',')
+----
+csv/empty.csv 1 0 NULL NULL
+
+query 
+select * from it;
+----
+1 2 NULL 0 5

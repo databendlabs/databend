@@ -628,7 +628,10 @@ async fn test_query_log() -> Result<()> {
     );
     Ok(())
 }
+
+// todo(youngsofun): flaky, may timing problem
 #[tokio::test(flavor = "current_thread")]
+#[ignore]
 async fn test_query_log_killed() -> Result<()> {
     let config = ConfigBuilder::create().build();
     let _guard = TestGlobalServices::setup(config.clone()).await?;

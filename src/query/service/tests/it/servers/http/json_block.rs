@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::number::Float64Type;
@@ -69,12 +69,9 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
         columns = columns
             .iter()
             .map(|c| {
-                let mut validity = MutableBitmap::new();
-                validity.extend_constant(c.len(), true);
-
                 Column::Nullable(Box::new(NullableColumn {
                     column: c.clone(),
-                    validity: validity.into(),
+                    validity: Bitmap::new_constant(true, c.len()),
                 }))
             })
             .collect();
