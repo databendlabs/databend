@@ -56,7 +56,6 @@ pub use applied_state::AppliedState;
 pub use change::Change;
 pub use cluster::Node;
 pub use cluster::NodeInfo;
-pub use cluster::NodeStatus;
 pub use cmd::Cmd;
 pub use cmd::UpsertKV;
 pub use endpoint::Endpoint;
