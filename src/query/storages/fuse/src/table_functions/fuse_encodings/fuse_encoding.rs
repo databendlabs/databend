@@ -113,6 +113,7 @@ impl<'a> FuseEncoding<'a> {
                         self.table.operator.clone(),
                         &block.location.0,
                         ranges,
+                        true,
                     )
                     .await?;
                     let column_chunks = merge_io_read_res.columns_chunks()?;

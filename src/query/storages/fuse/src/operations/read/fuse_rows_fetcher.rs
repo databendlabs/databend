@@ -54,7 +54,8 @@ pub fn build_row_fetcher_pipeline(
         .ok_or_else(|| ErrorCode::Internal("Row fetcher is only supported by Fuse engine"))?
         .to_owned();
     let fuse_table = Arc::new(fuse_table);
-    let block_reader = fuse_table.create_block_reader(projection.clone(), false, ctx.clone())?;
+    let block_reader =
+        fuse_table.create_block_reader(projection.clone(), false, ctx.clone(), true)?;
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match &fuse_table.storage_format {

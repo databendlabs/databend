@@ -46,6 +46,7 @@ impl FuseTable {
         projection: Projection,
         query_internal_columns: bool,
         ctx: Arc<dyn TableContext>,
+        put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
         BlockReader::create(
@@ -54,6 +55,7 @@ impl FuseTable {
             projection,
             ctx,
             query_internal_columns,
+            put_cache,
         )
     }
 
@@ -62,6 +64,7 @@ impl FuseTable {
         &self,
         plan: &DataSourcePlan,
         ctx: Arc<dyn TableContext>,
+        put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
             PushDownInfo::projection_of_push_downs(
@@ -70,6 +73,7 @@ impl FuseTable {
             ),
             plan.query_internal_columns,
             ctx,
+            put_cache,
         )
     }
 
@@ -139,6 +143,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        put_cache: bool,
     ) -> Result<()> {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
@@ -189,7 +194,7 @@ impl FuseTable {
             });
         }
 
-        let block_reader = self.build_block_reader(plan, ctx.clone())?;
+        let block_reader = self.build_block_reader(plan, ctx.clone(), put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan

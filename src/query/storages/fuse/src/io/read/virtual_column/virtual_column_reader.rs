@@ -114,6 +114,7 @@ impl VirtualColumnReader {
             Projection::Columns(vec![]),
             ctx.clone(),
             false,
+            true,
         )?;
 
         Ok(Self {

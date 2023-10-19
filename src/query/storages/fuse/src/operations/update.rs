@@ -177,6 +177,7 @@ impl FuseTable {
                     Projection::Columns(remain_col_indices),
                     false,
                     ctx.clone(),
+                    true,
                 )?;
                 fields.extend_from_slice(reader.schema().fields());
                 remain_reader = Some((*reader).clone());
@@ -235,7 +236,8 @@ impl FuseTable {
             projection: offset_map.values().cloned().collect(),
         });
 
-        let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
+        let block_reader =
+            self.create_block_reader(projection.clone(), false, ctx.clone(), true)?;
         let mut schema = block_reader.schema().as_ref().clone();
         if query_row_id_col {
             schema.add_internal_field(

@@ -528,7 +528,7 @@ impl Table for FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline)
+        self.do_read_data(ctx, plan, pipeline, true)
     }
 
     fn append_data(
