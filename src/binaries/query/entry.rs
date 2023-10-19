@@ -82,9 +82,9 @@ pub async fn init_services(conf: &InnerConfig) -> Result<()> {
 
 async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     if conf.query.max_memory_limit_enabled {
-        let size = conf.query.max_server_memory_usage as i64;
-        info!("Set memory limit: {}", size);
-        GLOBAL_MEM_STAT.set_limit(size);
+        // let size = conf.query.max_server_memory_usage as i64;
+        // info!("Set memory limit: {}", size);
+        // GLOBAL_MEM_STAT.set_limit(size);
     }
 
     let tenant = conf.query.tenant_id.clone();
