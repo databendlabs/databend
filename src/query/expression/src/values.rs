@@ -1965,9 +1965,7 @@ impl ColumnBuilder {
             ScalarRef::EmptyArray => ColumnBuilder::EmptyArray { len: n },
             ScalarRef::EmptyMap => ColumnBuilder::EmptyMap { len: n },
             ScalarRef::Number(num) => ColumnBuilder::Number(NumberColumnBuilder::repeat(*num, n)),
-            ScalarRef::Decimal(dec) => {
-                ColumnBuilder::Decimal(DecimalColumnBuilder::repeat(*dec, n))
-            }
+            ScalarRef::Bitmap(b) => ColumnBuilder::Bitmap(StringColumnBuilder::repeat(*b, n)),
             ScalarRef::Boolean(b) => ColumnBuilder::Boolean(constant_bitmap(*b, n)),
             ScalarRef::String(s) => ColumnBuilder::String(StringColumnBuilder::repeat(s, n)),
             ScalarRef::Timestamp(d) => ColumnBuilder::Timestamp(vec![*d; n]),
