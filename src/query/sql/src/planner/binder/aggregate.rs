@@ -456,6 +456,7 @@ impl<'a> AggregateRewriter<'a> {
         Ok(replaced_func.into())
     }
 }
+
 impl Binder {
     /// Analyze aggregates in select clause, this will rewrite aggregate functions.
     /// See [`AggregateRewriter`] for more details.
@@ -921,7 +922,7 @@ impl Binder {
             let (column_binding, scalar) = available_aliases[result[0]].clone();
             // We will add the alias to BindContext, so we can reference it
             // in `HAVING` and `ORDER BY` clause.
-            bind_context.columns.push(column_binding.clone());
+            bind_context.add_column_binding(column_binding.clone());
 
             let index = column_binding.index;
             bind_context.aggregate_info.group_items.push(ScalarItem {

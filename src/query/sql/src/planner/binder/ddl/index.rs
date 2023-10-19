@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
+use common_ast::ast::ExplainKind;
 use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::RefreshIndexStmt;
@@ -29,6 +30,8 @@ use common_ast::Dialect;
 use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature::AggregateIndex;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
@@ -45,9 +48,104 @@ use crate::plans::RefreshIndexPlan;
 use crate::AggregatingIndexChecker;
 use crate::AggregatingIndexRewriter;
 use crate::BindContext;
+use crate::MetadataRef;
 use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 impl Binder {
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_query_index(
+        &mut self,
+        bind_context: &mut BindContext,
+        plan: &Plan,
+    ) -> Result<()> {
+        match plan {
+            Plan::Query { metadata, .. } => {
+                self.do_bind_query_index(bind_context, metadata).await?;
+            }
+            Plan::Explain { kind, plan }
+                if matches!(kind, ExplainKind::Plan) && matches!(**plan, Plan::Query { .. }) =>
+            {
+                match **plan {
+                    Plan::Query { ref metadata, .. } => {
+                        self.do_bind_query_index(bind_context, metadata).await?;
+                    }
+                    _ => unreachable!(),
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn do_bind_query_index(
+        &mut self,
+        bind_context: &mut BindContext,
+        metadata: &MetadataRef,
+    ) -> Result<()> {
+        let catalog = self.ctx.get_current_catalog();
+        let database = self.ctx.get_current_database();
+        let tables = metadata.read().tables().to_vec();
+
+        for table_entry in tables {
+            let table = table_entry.table();
+            // Avoid death loop
+            let mut agg_indexes = vec![];
+            if self.ctx.get_can_scan_from_agg_index()
+                && self
+                    .ctx
+                    .get_settings()
+                    .get_enable_aggregating_index_scan()?
+                && !bind_context.planning_agg_index
+                && table.support_index()
+                && table.engine() != "VIEW"
+            {
+                let license_manager = get_license_manager();
+                if license_manager
+                    .manager
+                    .check_enterprise_enabled(
+                        &self.ctx.get_settings(),
+                        self.ctx.get_tenant(),
+                        AggregateIndex,
+                    )
+                    .is_ok()
+                {
+                    let indexes = self
+                        .resolve_table_indexes(
+                            self.ctx.get_tenant().as_str(),
+                            catalog.as_str(),
+                            table.get_id(),
+                        )
+                        .await?;
+
+                    let mut s_exprs = Vec::with_capacity(indexes.len());
+                    for (index_id, _, index_meta) in indexes {
+                        let tokens = tokenize_sql(&index_meta.query)?;
+                        let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                        let mut new_bind_context =
+                            BindContext::with_parent(Box::new(bind_context.clone()));
+                        new_bind_context.planning_agg_index = true;
+                        if let Statement::Query(query) = &stmt {
+                            let (s_expr, _) = self.bind_query(&mut new_bind_context, query).await?;
+                            s_exprs.push((index_id, index_meta.query.clone(), s_expr));
+                        }
+                    }
+                    agg_indexes.extend(s_exprs);
+                }
+            }
+
+            if !agg_indexes.is_empty() {
+                // Should use bound table id.
+                let table_name = table.name();
+                let full_table_name = format!("{catalog}.{database}.{table_name}");
+                metadata
+                    .write()
+                    .add_agg_indexes(full_table_name, agg_indexes);
+            }
+        }
+
+        Ok(())
+    }
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_index(
         &mut self,
