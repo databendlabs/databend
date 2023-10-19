@@ -241,7 +241,39 @@ async fn show_status(conf: &Config) -> anyhow::Result<()> {
     )?;
 
     let res = client.get_cluster_status().await?;
-    println!("status: {:?}", res);
-
+    println!("Binary Version: {}", res.binary_version);
+    println!("Data Version: {}", res.data_version);
+    println!("Node: {}: {}", res.id, res.endpoint);
+    println!("DB Size: {}", res.db_size);
+    println!("State: {}", res.state);
+    if let Some(leader) = res.leader {
+        println!("Leader: {}", leader);
+    }
+    println!("Current Term: {}", res.current_term);
+    println!("Last Log Index: {}", res.last_log_index);
+    println!("Last Seq: {:?}", res.last_seq);
+    println!("Last Applied: {}", res.last_applied);
+    println!("Snapshot Last Log ID: {:?}", res.snapshot_last_log_id);
+    if let Some(purged) = res.purged {
+        println!("Purged: {}", purged);
+    }
+    if !res.replication.is_empty() {
+        println!("Replication:");
+        for (k, v) in res.replication {
+            println!("  {}: {}", k, v);
+        }
+    }
+    if !res.voters.is_empty() {
+        println!("Voters:");
+        for v in res.voters {
+            println!("  {}", v);
+        }
+    }
+    if !res.non_voters.is_empty() {
+        println!("Non Voters:");
+        for v in res.non_voters {
+            println!("  {}", v);
+        }
+    }
     Ok(())
 }
