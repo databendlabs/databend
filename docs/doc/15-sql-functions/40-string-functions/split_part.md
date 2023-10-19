@@ -23,7 +23,7 @@ The *position* argument specifies which part to return. It uses a 1-based index 
 
 ## Return Type
 
-String. SPLIT_PART returns NULL when either the input string, the delimiter, or the position is NULL, or when the specified part doesn't exist in the input string.
+String. SPLIT_PART returns NULL when either the input string, the delimiter, or the position is NULL.
 
 ## Examples
 
@@ -58,7 +58,7 @@ split_part('2023-10-19 15:30:45   info   log message goes here', '   ', 3)|
 --------------------------------------------------------------------------+
 Log message goes here                                                     |
 
--- SPLIT_PART returns NULL as the specified part does not exist at all.
+-- SPLIT_PART returns an empty string as the specified part does not exist at all.
 SELECT SPLIT_PART('2023-10-19 15:30:45   INFO   Log message goes here', '   ', 4);
 
 split_part('2023-10-19 15:30:45   info   log message goes here', '   ', 4)|
