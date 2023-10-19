@@ -50,13 +50,25 @@ pub struct Config {
     pub log_level: String,
 
     #[clap(long)]
+    pub status: bool,
+
+    #[clap(long)]
     pub import: bool,
 
     #[clap(long)]
     pub export: bool,
 
-    #[clap(long, env = "METASRV_GRPC_API_ADDRESS", default_value = "")]
+    #[clap(
+        long,
+        env = "METASRV_GRPC_API_ADDRESS",
+        default_value = "127.0.0.1:9191"
+    )]
     pub grpc_api_address: String,
+
+    /// The dir to store persisted meta state, including raft logs, state machine etc.
+    #[clap(long)]
+    #[serde(alias = "kvsrv_raft_dir")]
+    pub raft_dir: Option<String>,
 
     /// When export raft data, this is the name of the save db file.
     /// If `db` is empty, output the exported data as json to stdout instead.
@@ -69,20 +81,6 @@ pub struct Config {
     #[clap(long)]
     pub initial_cluster: Vec<String>,
 
-    #[clap(flatten)]
-    pub raft_config: MetaCtlRaftConfig,
-}
-
-/// TODO: This is a temp copy of RaftConfig, we will migrate them in the future.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Parser)]
-#[clap(about, version, author)]
-#[serde(default)]
-pub struct MetaCtlRaftConfig {
-    /// The dir to store persisted meta state, including raft logs, state machine etc.
-    #[clap(long, default_value = "./_meta")]
-    #[serde(alias = "kvsrv_raft_dir")]
-    pub raft_dir: String,
-
     /// The node id. Used in these cases:
     /// 1. when this server is not initialized, e.g. --boot or --single for the first time.
     /// 2. --initial_cluster with new cluster node id.
@@ -92,23 +90,14 @@ pub struct MetaCtlRaftConfig {
     pub id: u64,
 }
 
-impl From<MetaCtlRaftConfig> for RaftConfig {
+impl From<Config> for RaftConfig {
     #[allow(clippy::field_reassign_with_default)]
-    fn from(value: MetaCtlRaftConfig) -> Self {
+    fn from(value: Config) -> Self {
         let mut c = Self::default();
 
-        c.raft_dir = value.raft_dir;
+        c.raft_dir = value.raft_dir.unwrap_or_default();
         c.id = value.id;
         c
-    }
-}
-
-impl Default for MetaCtlRaftConfig {
-    fn default() -> Self {
-        Self {
-            raft_dir: "./_meta".to_string(),
-            id: 0,
-        }
     }
 }
 
@@ -138,6 +127,10 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let _guards = init_logging("metactl", &log_config);
+
+    if config.status {
+        return show_status(&config).await;
+    }
 
     eprintln!();
     eprintln!("╔╦╗╔═╗╔╦╗╔═╗   ╔═╗╔╦╗╦  ");
@@ -232,4 +225,61 @@ async fn bench_client_num_conn(conf: &Config) -> anyhow::Result<()> {
 
         clients.push(client);
     }
+}
+
+async fn show_status(conf: &Config) -> anyhow::Result<()> {
+    let addr = &conf.grpc_api_address;
+
+    let client = MetaGrpcClient::try_create(
+        vec![addr.to_string()],
+        "root",
+        "xxx",
+        None,
+        None,
+        Duration::from_secs(10),
+        None,
+    )?;
+
+    let res = client.get_cluster_status().await?;
+    println!("BinaryVersion: {}", res.binary_version);
+    println!("DataVersion: {}", res.data_version);
+    println!("DBSize: {}", res.db_size);
+    println!("Node: id={} raft={}", res.id, res.endpoint);
+    println!("State: {}", res.state);
+    if let Some(leader) = res.leader {
+        println!("Leader: {}", leader);
+    }
+    println!("CurrentTerm: {}", res.current_term);
+    println!("LastSeq: {:?}", res.last_seq);
+    println!("LastLogIndex: {}", res.last_log_index);
+    println!("LastApplied: {}", res.last_applied);
+    if let Some(last_log_id) = res.snapshot_last_log_id {
+        println!("SnapshotLastLogID: {}", last_log_id);
+    }
+    if let Some(purged) = res.purged {
+        println!("Purged: {}", purged);
+    }
+    if !res.replication.is_empty() {
+        println!("Replication:");
+        for (k, v) in res.replication {
+            if v != res.last_applied {
+                println!("  - [{}] {} *", k, v);
+            } else {
+                println!("  - [{}] {}", k, v);
+            }
+        }
+    }
+    if !res.voters.is_empty() {
+        println!("Voters:");
+        for v in res.voters {
+            println!("  - {}", v);
+        }
+    }
+    if !res.non_voters.is_empty() {
+        println!("NonVoters:");
+        for v in res.non_voters {
+            println!("  - {}", v);
+        }
+    }
+    Ok(())
 }
