@@ -17,6 +17,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 use common_exception::Result;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
@@ -44,6 +45,7 @@ impl InputFormatNDJson {
         buf: &[u8],
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         let mut json: serde_json::Value =
             serde_json::from_reader(buf).map_err(|e| FileParseError::InvalidNDJsonRow {
@@ -68,20 +70,32 @@ impl InputFormatNDJson {
             for ((column_index, field), column) in
                 schema.fields().iter().enumerate().zip(columns.iter_mut())
             {
-                let value = if field_decoder.ident_case_sensitive {
-                    &json[field.name().to_owned()]
+                let field_name = if field_decoder.ident_case_sensitive {
+                    field.name().to_owned()
                 } else {
-                    &json[field.name().to_lowercase()]
+                    field.name().to_lowercase()
                 };
-                field_decoder.read_field(column, value).map_err(|e| {
-                    FileParseError::ColumnDecodeError {
-                        column_index,
-                        column_name: field.name().to_owned(),
-                        column_type: field.data_type.to_string(),
-                        decode_error: e.to_string(),
-                        column_data: truncate_column_data(value.to_string()),
+                let value = &json[field_name];
+                if value == &serde_json::Value::Null {
+                    match default_values {
+                        None => {
+                            column.push_default();
+                        }
+                        Some(values) => {
+                            column.push(values[column_index].as_ref());
+                        }
                     }
-                })?;
+                } else {
+                    field_decoder.read_field(column, value).map_err(|e| {
+                        FileParseError::ColumnDecodeError {
+                            column_index,
+                            column_name: field.name().to_owned(),
+                            column_type: field.data_type.to_string(),
+                            decode_error: e.to_string(),
+                            column_data: truncate_column_data(value.to_string()),
+                        }
+                    })?;
+                }
             }
         }
         Ok(())
@@ -126,7 +140,13 @@ impl InputFormatTextBase for InputFormatNDJson {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
-                if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
+                if let Err(e) = Self::read_row(
+                    field_decoder,
+                    buf,
+                    columns,
+                    &builder.ctx.schema,
+                    &builder.ctx.default_values,
+                ) {
                     builder.ctx.on_error(
                         e,
                         Some((columns, builder.num_rows)),

@@ -30,12 +30,13 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
     }
 
     pub(crate) fn gen_all_number_data_type(&mut self) -> DataType {
-        match self.rng.gen_range(0..=22) {
-            0..=20 => self.gen_number_data_type(),
-            21..=22 => self.gen_decimal_data_type(),
-            _ => unreachable!(),
+        if self.rng.gen_bool(0.8) {
+            self.gen_number_data_type()
+        } else {
+            self.gen_decimal_data_type()
         }
     }
+
     pub(crate) fn gen_number_data_type(&mut self) -> DataType {
         match self.rng.gen_range(0..=20) {
             0 => DataType::Number(NumberDataType::UInt8),
@@ -91,7 +92,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             1 => DataType::EmptyMap,
             2..=3 => DataType::Array(Box::new(self.gen_data_type())),
             4..=5 => {
-                let key_ty = match self.rng.gen_range(0..=3) {
+                let key_ty = DataType::String;
+                let val_ty = match self.rng.gen_range(0..=3) {
                     0 => DataType::String,
                     1 => DataType::Number(NumberDataType::UInt64),
                     2 => DataType::Number(NumberDataType::Int64),
@@ -99,7 +101,6 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
                     // TODO: boolean, date, timestamp
                     _ => unreachable!(),
                 };
-                let val_ty = key_ty.clone();
                 let inner_ty = DataType::Tuple(vec![key_ty, val_ty]);
                 DataType::Map(Box::new(inner_ty))
             }

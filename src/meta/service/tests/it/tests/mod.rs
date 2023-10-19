@@ -19,4 +19,5 @@ pub mod service;
 pub mod tls_constants;
 
 pub use service::start_metasrv;
+pub use service::start_metasrv_cluster;
 pub use service::start_metasrv_with_context;

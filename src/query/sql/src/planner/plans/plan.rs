@@ -48,6 +48,7 @@ use crate::plans::CreateShareEndpointPlan;
 use crate::plans::CreateSharePlan;
 use crate::plans::CreateStagePlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateTaskPlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
@@ -276,6 +277,9 @@ pub enum Plan {
     DropNetworkPolicy(Box<DropNetworkPolicyPlan>),
     DescNetworkPolicy(Box<DescNetworkPolicyPlan>),
     ShowNetworkPolicies(Box<ShowNetworkPoliciesPlan>),
+
+    // Task
+    CreateTask(Box<CreateTaskPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -376,6 +380,8 @@ impl Plan {
             Plan::DescNetworkPolicy(plan) => plan.schema(),
             Plan::ShowNetworkPolicies(plan) => plan.schema(),
             Plan::CopyIntoTable(plan) => plan.schema(),
+
+            Plan::CreateTask(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())

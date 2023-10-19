@@ -20,7 +20,9 @@ import "request.proto";
 
 message Empty {}
 
-message RaftRequest { string data = 1; }
+message RaftRequest {
+  string data = 1;
+}
 
 message RaftReply {
   string data = 1;
@@ -143,15 +145,46 @@ message TxnReply {
   string error = 3;
 }
 
+message ClusterStatus {
+  uint64 id = 1;
+  string binary_version = 2;
+  string data_version = 3;
+  string endpoint = 4;
+  uint64 db_size = 5;
+  string state = 6;
+  bool is_leader = 7;
+  uint64 current_term = 8;
+  uint64 last_log_index = 9;
+  string last_applied = 10;
+  optional string snapshot_last_log_id = 11;
+  optional string purged = 12;
+  optional string leader = 13;
+  map<uint64, string> replication = 14;
+  repeated string voters = 15;
+  repeated string non_voters = 16;
+  uint64 last_seq = 17;
+}
+
 message ClientInfo {
   // The address of the connected in form of "<ip>:<port>"
   string client_addr = 10;
 }
 
+// Item for a Streaming read reply, e.g., for `Mget` and `List`.
+message StreamItem {
+  string key = 1;
+  optional SeqV value = 2;
+}
+
+
 service RaftService {
 
-  /// Forward a request to other
-  rpc Forward(RaftRequest) returns (RaftReply) {}
+  // Forward a request to another node.
+  rpc Forward(RaftRequest) returns (RaftReply);
+
+  // Handling internally redirected KvReadV1 request.
+  // Without checking token.
+  rpc KvReadV1(RaftRequest) returns (stream StreamItem);
 
   // raft RPC
 
@@ -170,6 +203,15 @@ service MetaService {
   // Since: 0.8.35; 2022-09-14
   rpc KvApi(RaftRequest) returns (RaftReply);
 
+  // Handle application read request.
+  //
+  // This API is not exposed to client directly, but is only used for internal request forwarding.
+  // The request will be forwarded to leader if current node is not leader.
+  // It returns a stream of `StreamItem`.
+  // - For single-reply request, the stream contains only one item, e.g. `Get`.
+  // - For multi-reply request, the stream contains multiple items, e.g. `MGet` and `List`.
+  rpc KvReadV1(RaftRequest) returns (stream StreamItem);
+
   // Export all meta data.
   //
   // Including raft hard state, logs and state machine.
@@ -186,6 +228,10 @@ service MetaService {
 
   // Get MetaSrv member list endpoints
   rpc MemberList(MemberListRequest) returns (MemberListReply);
+
+  // Get cluster status
+  // Since: 2023-10-19
+  rpc GetClusterStatus(Empty) returns (ClusterStatus);
 
   // Respond with the information about the client.
   // Since: 2022-09-09 0.8.30

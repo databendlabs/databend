@@ -87,6 +87,10 @@ impl AggregateFunction for AggregateFunctionOrNullAdaptor {
         self.inner.init_state(place)
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        self.inner.serialize_size_per_row().map(|row| row + 1)
+    }
+
     #[inline]
     fn state_layout(&self) -> std::alloc::Layout {
         let layout = self.inner.state_layout();

@@ -35,7 +35,6 @@ use common_expression::with_number_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use ethnum::i256;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
@@ -45,11 +44,16 @@ use serde::Serialize;
 use super::aggregate_function::AggregateFunction;
 use super::aggregate_function::AggregateFunctionRef;
 use super::aggregate_function_factory::AggregateFunctionDescription;
+use super::deserialize_state;
+use super::serialize_state;
 use super::StateAddr;
 use crate::aggregates::aggregator_common::assert_unary_arguments;
 
 pub trait SumState: Serialize + DeserializeOwned + Send + Sync + Default + 'static {
     fn merge(&mut self, other: &Self) -> Result<()>;
+    fn mem_size() -> Option<usize> {
+        None
+    }
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()>;
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()>;
     fn accumulate(&mut self, column: &Column, validity: Option<&Bitmap>) -> Result<()>;
@@ -85,11 +89,11 @@ where
     TSum: Number + AsPrimitive<f64> + Serialize + DeserializeOwned + std::ops::AddAssign,
 {
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.value)
+        serialize_state(writer, &self.value)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = deserialize_from_slice(reader)?;
+        self.value = deserialize_state(reader)?;
         Ok(())
     }
 
@@ -186,12 +190,16 @@ where T: Decimal
         + std::fmt::Debug
         + std::cmp::PartialOrd
 {
+    fn mem_size() -> Option<usize> {
+        Some(std::mem::size_of::<T>())
+    }
+
     fn serialize(&self, writer: &mut Vec<u8>) -> Result<()> {
-        serialize_into_buf(writer, &self.value)
+        serialize_state(writer, &self.value)
     }
 
     fn deserialize(&mut self, reader: &mut &[u8]) -> Result<()> {
-        self.value = deserialize_from_slice(reader)?;
+        self.value = deserialize_state(reader)?;
         Ok(())
     }
 
@@ -297,6 +305,10 @@ where State: SumState
         Layout::new::<State>()
     }
 
+    fn serialize_size_per_row(&self) -> Option<usize> {
+        State::mem_size()
+    }
+
     fn accumulate(
         &self,
         place: StateAddr,
@@ -326,12 +338,12 @@ where State: SumState
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<State>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<State>();
-        let rhs: State = deserialize_from_slice(reader)?;
+        let rhs: State = deserialize_state(reader)?;
         state.merge(&rhs)
     }
 

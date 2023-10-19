@@ -14,9 +14,12 @@
 
 use std::fmt;
 
+use common_meta_client::MetaGrpcReadReq;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::ForwardRPCError;
 use common_meta_types::MetaOperationError;
 use common_meta_types::NodeId;
+use tonic::codegen::BoxStream;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
@@ -45,4 +48,8 @@ pub trait Forwarder<Req: MetaRequest> {
 
 impl MetaRequest for ForwardRequestBody {
     type Resp = ForwardResponse;
+}
+
+impl MetaRequest for MetaGrpcReadReq {
+    type Resp = BoxStream<StreamItem>;
 }

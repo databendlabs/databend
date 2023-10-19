@@ -116,7 +116,7 @@ opendal = { version = "0.41", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "b29f2ea" }
+jsonb = { version = "0.3.0" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -248,7 +248,7 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "dd80c89" }
+arrow2 = { git = "https://github.com/jorgecarleitao/arrow2", rev = "3c61372" }
 arrow-format = { git = "https://github.com/everpcpc/arrow-format", rev = "588d371" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "b0e6545" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=dd80c89#dd80c891850213104c8c0d11b76b56401cb1ce52"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=3c61372#3c61372d7ac76bba149316b1fbad6e981752e502"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -1262,9 +1262,9 @@ dependencies = [
 
 [[package]]
 name = "byteorder"
-version = "1.4.3"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
 
 [[package]]
 name = "bytes"
@@ -1942,7 +1942,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "lexical-core",
  "log",
  "match-template",
@@ -1976,7 +1976,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -1996,6 +1996,7 @@ name = "common-functions"
 version = "0.1.0"
 dependencies = [
  "base64 0.21.0",
+ "bincode 2.0.0-rc.2",
  "blake3",
  "bstr 1.6.2",
  "bumpalo",
@@ -2022,7 +2023,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "lexical-core",
  "libm",
  "match-template",
@@ -2502,7 +2503,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "match-template",
 ]
 
@@ -2625,6 +2626,7 @@ dependencies = [
  "common-storages-stage",
  "common-storages-view",
  "common-users",
+ "cron",
  "ctor",
  "dashmap",
  "data-mask-feature",
@@ -2732,7 +2734,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "lazy_static",
  "log",
  "metrics",
@@ -3027,7 +3029,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "log",
  "once_cell",
  "opendal",
@@ -3894,7 +3896,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -3966,7 +3968,7 @@ dependencies = [
  "databend-client",
  "glob",
  "itertools 0.11.0",
- "jsonb 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "jsonb 0.2.3",
  "roaring",
  "serde",
  "serde_json",
@@ -4013,7 +4015,7 @@ dependencies = [
  "databend-driver",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "rand 0.8.5",
  "roaring",
  "tokio",
@@ -4391,7 +4393,7 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.2.3 (git+https://github.com/datafuselabs/jsonb?rev=b29f2ea)",
+ "jsonb 0.3.0",
  "jwt-simple",
  "log",
  "opendal",
@@ -4508,17 +4510,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f2b0c2380453a92ea8b6c8e5f64ecaafccddde8ceab55ff7a8ac1029f894569"
 dependencies = [
  "serde",
-]
-
-[[package]]
-name = "errno"
-version = "0.2.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f639046355ee4f37944e44f60642c6f3a7efa3cf6b78c78a0d989a8ce6c396a1"
-dependencies = [
- "errno-dragonfly",
- "libc",
- "winapi",
 ]
 
 [[package]]
@@ -6575,7 +6566,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd139e8f6c58950322dc73060b8c23b80be07d235dd2eaf5c7c821c1d91eb469"
 dependencies = [
  "blocking",
- "errno 0.3.1",
+ "errno",
  "futures",
  "hdfs-sys",
  "libc",
@@ -7116,7 +7107,7 @@ checksum = "21b6b32576413a8e69b90e952e4a026476040d81017b80445deda5f2d3921857"
 dependencies = [
  "hermit-abi 0.3.1",
  "io-lifetimes",
- "rustix 0.36.9",
+ "rustix 0.36.16",
  "windows-sys 0.45.0",
 ]
 
@@ -7188,13 +7179,14 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.2.3"
-source = "git+https://github.com/datafuselabs/jsonb?rev=b29f2ea#b29f2eab3e052d50a3a6ebfaa95299413e039ea7"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67ecc0ffa63ae2ba534a38128fdd9e1e86bf08515769c6252d2a2c1da66d1773"
 dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 3.7.0",
+ "ordered-float 4.1.1",
  "rand 0.8.5",
  "serde_json",
 ]
@@ -8601,6 +8593,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ordered-float"
+version = "4.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "536900a8093134cf9ccf00a27deb3532421099e958d9dd431135d0c7543ca1e8"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "ordered-multimap"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9334,7 +9335,7 @@ dependencies = [
  "byteorder",
  "hex",
  "lazy_static",
- "rustix 0.36.9",
+ "rustix 0.36.16",
 ]
 
 [[package]]
@@ -9349,7 +9350,7 @@ dependencies = [
  "flate2",
  "hex",
  "lazy_static",
- "rustix 0.36.9",
+ "rustix 0.36.16",
 ]
 
 [[package]]
@@ -10273,12 +10274,12 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.36.9"
+version = "0.36.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd5c6ff11fecd55b40746d1995a02f2eb375bf8c00d192d521ee09f42bef37bc"
+checksum = "6da3636faa25820d8648e0e31c5d519bbb01f72fdf57131f0f5f7da5fed36eab"
 dependencies = [
  "bitflags 1.3.2",
- "errno 0.2.8",
+ "errno",
  "io-lifetimes",
  "libc",
  "linux-raw-sys 0.1.4",
@@ -10292,7 +10293,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2aae838e49b3d63e9274e1c01833cc8139d3fec468c3b84688c628f44b1ae11d"
 dependencies = [
  "bitflags 1.3.2",
- "errno 0.3.1",
+ "errno",
  "io-lifetimes",
  "libc",
  "linux-raw-sys 0.3.8",
@@ -10306,7 +10307,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0c3dde1fc030af041adc40e79c0e7fbcf431dd24870053d187d7c66e4b87453"
 dependencies = [
  "bitflags 2.4.0",
- "errno 0.3.1",
+ "errno",
  "libc",
  "linux-raw-sys 0.4.5",
  "windows-sys 0.48.0",
@@ -10685,9 +10686,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.103"
+version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d03b412469450d4404fe8499a268edd7f8b79fecb074b0d812ad64ca21f4031b"
+checksum = "6b420ce6e3d8bd882e9b243c6eed35dbc9a6110c9769e74b584e0d68d1f20c65"
 dependencies = [
  "indexmap 2.0.0",
  "itoa",
@@ -11170,6 +11171,7 @@ dependencies = [
  "common-catalog",
  "common-config",
  "common-exception",
+ "log",
  "storages-common-cache",
  "storages-common-index",
  "storages-common-table-meta",
@@ -11594,7 +11596,7 @@ dependencies = [
  "cfg-if",
  "fastrand 1.9.0",
  "redox_syscall 0.2.16",
- "rustix 0.36.9",
+ "rustix 0.36.16",
  "windows-sys 0.42.0",
 ]
 

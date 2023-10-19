@@ -185,22 +185,22 @@ impl PhysicalPlanReplacer for Fragmenter {
         }
     }
 
-    fn replace_compact_partial(
+    fn replace_compact_source(
         &mut self,
-        plan: &common_sql::executor::CompactPartial,
+        plan: &common_sql::executor::CompactSource,
     ) -> Result<PhysicalPlan> {
         self.state = State::Compact;
 
-        Ok(PhysicalPlan::CompactPartial(Box::new(plan.clone())))
+        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
-    fn replace_delete_partial(
+    fn replace_delete_source(
         &mut self,
-        plan: &common_sql::executor::DeletePartial,
+        plan: &common_sql::executor::DeleteSource,
     ) -> Result<PhysicalPlan> {
         self.state = State::DeleteLeaf;
 
-        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
+        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
     fn replace_hash_join(&mut self, plan: &HashJoin) -> Result<PhysicalPlan> {

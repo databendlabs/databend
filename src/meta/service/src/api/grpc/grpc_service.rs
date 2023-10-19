@@ -21,10 +21,12 @@ use common_base::base::tokio::sync::mpsc;
 use common_base::base::tokio::time::Instant;
 use common_grpc::GrpcClaim;
 use common_grpc::GrpcToken;
+use common_meta_client::MetaGrpcReadReq;
 use common_meta_client::MetaGrpcReq;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_types::protobuf::meta_service_server::MetaService;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -33,6 +35,7 @@ use common_meta_types::protobuf::MemberListReply;
 use common_meta_types::protobuf::MemberListRequest;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
@@ -56,6 +59,8 @@ use tonic::Response;
 use tonic::Status;
 use tonic::Streaming;
 
+use crate::grpc_helper::GrpcHelper;
+use crate::message::ForwardRequest;
 use crate::meta_service::MetaNode;
 use crate::metrics::network_metrics;
 use crate::metrics::RequestInFlight;
@@ -123,6 +128,35 @@ impl MetaServiceImpl {
         network_metrics::incr_request_result(reply.error.is_empty());
 
         Ok(reply)
+    }
+
+    #[minitrace::trace]
+    async fn handle_kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<BoxStream<StreamItem>, Status> {
+        let req: MetaGrpcReadReq = GrpcHelper::parse_req(request)?;
+
+        info!("{}: Received ReadRequest: {:?}", func_name!(), req);
+
+        let req = ForwardRequest {
+            forward_to_leader: 1,
+            body: req,
+        };
+
+        let t0 = Instant::now();
+
+        let res = self
+            .meta_node
+            .handle_forwardable_request::<MetaGrpcReadReq>(req.clone())
+            .await
+            .map_err(GrpcHelper::internal_err);
+
+        let elapsed = t0.elapsed();
+        info!("Handled(elapsed: {:?}) ReadRequest: {:?}", elapsed, req);
+
+        network_metrics::incr_request_result(res.is_ok());
+        res
     }
 
     #[minitrace::trace]
@@ -232,6 +266,22 @@ impl MetaService for MetaServiceImpl {
         Ok(Response::new(reply))
     }
 
+    type KvReadV1Stream = BoxStream<StreamItem>;
+
+    async fn kv_read_v1(
+        &self,
+        request: Request<RaftRequest>,
+    ) -> Result<Response<Self::KvReadV1Stream>, Status> {
+        self.check_token(request.metadata())?;
+
+        network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
+        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
+        let strm = self.handle_kv_read_v1(request).in_span(root).await?;
+
+        Ok(Response::new(strm))
+    }
+
     async fn transaction(
         &self,
         request: Request<TxnRequest>,
@@ -315,6 +365,44 @@ impl MetaService for MetaServiceImpl {
         let resp = MemberListReply { data: members };
         network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
 
+        Ok(Response::new(resp))
+    }
+
+    async fn get_cluster_status(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<ClusterStatus>, Status> {
+        let _guard = RequestInFlight::guard();
+        let status = self
+            .meta_node
+            .get_status()
+            .await
+            .map_err(|e| Status::internal(format!("get meta node status failed: {}", e)))?;
+
+        let resp = ClusterStatus {
+            id: status.id,
+            binary_version: status.binary_version,
+            data_version: status.data_version.to_string(),
+            endpoint: status.endpoint,
+            db_size: status.db_size,
+            state: status.state,
+            is_leader: status.is_leader,
+            current_term: status.current_term,
+            last_log_index: status.last_log_index,
+            last_applied: status.last_applied.to_string(),
+            snapshot_last_log_id: status.snapshot_last_log_id.map(|id| id.to_string()),
+            purged: status.purged.map(|id| id.to_string()),
+            leader: status.leader.map(|node| node.to_string()),
+            replication: status
+                .replication
+                .unwrap_or_default()
+                .into_iter()
+                .filter_map(|(k, v)| v.map(|v| (k, v.to_string())))
+                .collect(),
+            voters: status.voters.iter().map(|n| n.to_string()).collect(),
+            non_voters: status.non_voters.iter().map(|n| n.to_string()).collect(),
+            last_seq: status.last_seq,
+        };
         Ok(Response::new(resp))
     }
 

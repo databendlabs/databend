@@ -25,7 +25,7 @@ use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::CommitSink;
-use common_sql::executor::CompactPartial;
+use common_sql::executor::CompactSource;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::MutationKind;
@@ -90,7 +90,7 @@ impl OptimizeTableInterpreter {
         is_distributed: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.is_lazy;
-        let mut root = PhysicalPlan::CompactPartial(Box::new(CompactPartial {
+        let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
             parts,
             table_info: table_info.clone(),
             catalog_info: catalog_info.clone(),

@@ -15,3 +15,62 @@ select * from i order by a
 2
 3
 4
+
+statement ok
+drop table if exists ii
+
+statement ok
+CREATE TABLE ii (id INT, age INT)
+
+statement ok
+insert into ii (id, age) values(1,3), (4, 6)
+
+statement ok
+drop stage if exists parquet_transform
+
+# make sure the name is uniq in the test suit
+statement ok
+create stage parquet_transform FILE_FORMAT = (type = TSV)
+
+statement ok
+remove @parquet_transform
+
+statement ok
+copy into @parquet_transform from ii FILE_FORMAT = (type = PARQUET)
+
+statement ok
+truncate table ii
+
+query 
+copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet) PATTERN='.*parquet' RETURN_FAILED_ONLY=TRUE
+----
+
+query 
+select * from ii order by id
+----
+2 3
+5 6
+
+# copy same file again, should skip it
+query 
+copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet)
+----
+
+query 
+select * from ii order by id
+----
+2 3
+5 6
+
+# copy same file again with force, should load it
+query 
+copy into ii from (select (t.id+1), age from @parquet_transform t)  FILE_FORMAT = (type = parquet) FORCE=TRUE RETURN_FAILED_ONLY=TRUE
+----
+
+query 
+select * from ii order by id
+----
+2 3
+2 3
+5 6
+5 6

@@ -1517,7 +1517,6 @@ impl From<&DataType> for ArrowDataType {
                 Box::new(ArrowDataType::LargeBinary),
                 None,
             ),
-
             _ => unreachable!(),
         }
     }

@@ -42,18 +42,16 @@ impl ReadPolicyBuilder for NoPretchPolicyBuilder {
     async fn build(
         &self,
         mut row_group: InMemoryRowGroup<'_>,
-        row_selection: Option<RowSelection>,
+        _row_selection: Option<RowSelection>,
         _sorter: &mut Option<TopKSorter>,
         batch_size: usize,
     ) -> Result<Option<ReadPolicyImpl>> {
-        row_group
-            .fetch(&self.projection, row_selection.as_ref())
-            .await?;
+        row_group.fetch(&self.projection, None).await?;
         let reader = ParquetRecordBatchReader::try_new_with_row_groups(
             &self.field_levels,
             &row_group,
             batch_size,
-            row_selection,
+            None,
         )?;
         Ok(Some(Box::new(NoPrefetchPolicy {
             field_paths: self.field_paths.clone(),

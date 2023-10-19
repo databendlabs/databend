@@ -43,8 +43,10 @@ use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_api::reply::reply_to_api_result;
 use common_meta_types::anyerror::AnyError;
+use common_meta_types::protobuf as pb;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::Empty;
 use common_meta_types::protobuf::ExportedChunk;
 use common_meta_types::protobuf::HandshakeRequest;
@@ -81,16 +83,19 @@ use tonic::transport::Channel;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
+use tonic::Streaming;
 
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
 use crate::grpc_metrics;
 use crate::message;
 use crate::to_digit_ver;
+use crate::MetaGrpcReadReq;
 use crate::MetaGrpcReq;
 use crate::METACLI_COMMIT_SEMVER;
 use crate::MIN_METASRV_SEMVER;
 
+const RPC_RETRIES: usize = 2;
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
 
 #[derive(Debug)]
@@ -227,6 +232,10 @@ impl ClientHandle {
         };
 
         UnlimitedFuture::create(request_future).await
+    }
+
+    pub async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+        self.request(message::GetClusterStatus {}).await
     }
 
     pub async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -403,6 +412,13 @@ impl MetaGrpcClient {
                         .await;
                     message::Response::Get(resp)
                 }
+                message::Request::StreamGet(r) => {
+                    let strm = self
+                        .kv_read_v1(MetaGrpcReadReq::GetKV(r.into_inner()))
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_read_v1(GetKV)"))
+                        .await;
+                    message::Response::StreamGet(strm)
+                }
                 message::Request::MGet(r) => {
                     let resp = self
                         .kv_api(r)
@@ -410,12 +426,32 @@ impl MetaGrpcClient {
                         .await;
                     message::Response::MGet(resp)
                 }
-                message::Request::PrefixList(r) => {
+                message::Request::StreamMGet(r) => {
+                    let strm = self
+                        .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
+                        .timed_ge(
+                            threshold(),
+                            info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
+                        )
+                        .await;
+                    message::Response::StreamMGet(strm)
+                }
+                message::Request::List(r) => {
                     let resp = self
                         .kv_api(r)
                         .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
                         .await;
-                    message::Response::PrefixList(resp)
+                    message::Response::List(resp)
+                }
+                message::Request::StreamList(r) => {
+                    let strm = self
+                        .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
+                        .timed_ge(
+                            threshold(),
+                            info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
+                        )
+                        .await;
+                    message::Response::StreamMGet(strm)
                 }
                 message::Request::Upsert(r) => {
                     let resp = self
@@ -446,6 +482,10 @@ impl MetaGrpcClient {
                 message::Request::GetEndpoints(_) => {
                     let resp = self.get_cached_endpoints();
                     message::Response::GetEndpoints(Ok(resp))
+                }
+                message::Request::GetClusterStatus(_) => {
+                    let resp = self.get_cluster_status().await;
+                    message::Response::GetClusterStatus(resp)
                 }
                 message::Request::GetClientInfo(_) => {
                     let resp = self.get_client_info().await;
@@ -870,6 +910,16 @@ impl MetaGrpcClient {
         Ok(res.into_inner())
     }
 
+    /// Get cluster status
+    #[minitrace::trace]
+    pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
+        debug!("MetaGrpcClient::get_cluster_status");
+
+        let mut client = self.make_client().await?;
+        let res = client.get_cluster_status(Empty {}).await?;
+        Ok(res.into_inner())
+    }
+
     /// Export all data in json from metasrv.
     #[minitrace::trace]
     pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
@@ -898,7 +948,7 @@ impl MetaGrpcClient {
             .to_raft_request()
             .map_err(MetaNetworkError::InvalidArgument)?;
 
-        for i in 0..2 {
+        for i in 0..RPC_RETRIES {
             let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req.clone()));
 
             let mut client = self
@@ -929,7 +979,54 @@ impl MetaGrpcClient {
             return Ok(resp);
         }
 
-        unreachable!("impossible to reach here");
+        unreachable!("impossible to quit loop without error or success");
+    }
+
+    #[minitrace::trace]
+    pub(crate) async fn kv_read_v1(
+        &self,
+        grpc_req: MetaGrpcReadReq,
+    ) -> Result<Streaming<pb::StreamItem>, MetaError> {
+        debug!(
+            req = as_debug!(&grpc_req);
+            "MetaGrpcClient::kv_api request"
+        );
+
+        let raft_req: RaftRequest = grpc_req
+            .to_raft_request()
+            .map_err(MetaNetworkError::InvalidArgument)?;
+
+        for i in 0..RPC_RETRIES {
+            let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req.clone()));
+
+            let mut client = self
+                .make_client()
+                .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
+                .await?;
+
+            let result = client
+                .kv_read_v1(req)
+                .timed_ge(threshold(), info_spent("client::kv_read_v1"))
+                .await;
+
+            debug!(
+                result = as_debug!(&result);
+                "MetaGrpcClient::kv_read_v1 result, {}-th try", i
+            );
+
+            if let Err(ref e) = result {
+                if status_is_retryable(e) {
+                    self.mark_as_unhealthy();
+                    continue;
+                }
+            }
+
+            let strm = result?.into_inner();
+
+            return Ok(strm);
+        }
+
+        unreachable!("impossible to quit loop without error or success");
     }
 
     #[minitrace::trace]

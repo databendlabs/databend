@@ -60,6 +60,7 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::EmptySource;
 use common_pipeline_sources::OneBlockSource;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
@@ -77,13 +78,13 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
-use common_sql::executor::CompactPartial;
+use common_sql::executor::CompactSource;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
-use common_sql::executor::DeletePartial;
+use common_sql::executor::DeleteSource;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -272,10 +273,8 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::CompactPartial(compact_partial) => {
-                self.build_compact_partial(compact_partial)
-            }
+            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
+            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
             PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -902,14 +901,19 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+    fn build_compact_source(&mut self, compact_block: &CompactSource) -> Result<()> {
         let table = self.ctx.build_table_by_table_info(
             &compact_block.catalog_info,
             &compact_block.table_info,
             None,
         )?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        table.build_compact_partial(
+
+        if compact_block.parts.is_empty() {
+            return self.main_pipeline.add_source(EmptySource::create, 1);
+        }
+
+        table.build_compact_source(
             self.ctx.clone(),
             compact_block.parts.clone(),
             compact_block.column_ids.clone(),
@@ -926,11 +930,16 @@ impl PipelineBuilder {
     /// +---------------+      +-----------------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
-    fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
+    fn build_delete_source(&mut self, delete: &DeleteSource) -> Result<()> {
         let table =
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+
+        if delete.parts.is_empty() {
+            return self.main_pipeline.add_source(EmptySource::create, 1);
+        }
+
         if delete.parts.is_lazy {
             let ctx = self.ctx.clone();
             let projection = Projection::Columns(delete.col_indices.clone());

@@ -122,7 +122,9 @@ impl<'a> Binder {
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();
-        self.bind_statement(&mut init_bind_context, stmt).await
+        let plan = self.bind_statement(&mut init_bind_context, stmt).await?;
+        self.bind_query_index(&mut init_bind_context, &plan).await?;
+        Ok(plan)
     }
 
     pub(crate) async fn opt_hints_set_var(
@@ -181,13 +183,13 @@ impl<'a> Binder {
                 let (mut s_expr, bind_context) = self.bind_query(bind_context, query).await?;
                 // Wrap `LogicalMaterializedCte` to `s_expr`
                 for (_, cte_info) in self.ctes_map.iter().rev() {
-                    if !cte_info.materialized || cte_info.used_count == 0{
+                    if !cte_info.materialized || cte_info.used_count == 0 {
                         continue;
                     }
                     let cte_s_expr = self.m_cte_bound_s_expr.get(&cte_info.cte_idx).unwrap();
                     let left_output_columns = cte_info.columns.clone();
                     s_expr = SExpr::create_binary(
-                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx})),
+                        Arc::new(RelOperator::MaterializedCte(MaterializedCte { left_output_columns, cte_idx: cte_info.cte_idx })),
                         Arc::new(cte_s_expr.clone()),
                         Arc::new(s_expr),
                     );
@@ -362,7 +364,7 @@ impl<'a> Binder {
                     "".to_string()
                 };
                 self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM LIST_STAGE(location => '@{location}'{pattern})").as_str(), RewriteKind::ListStage).await?
-            },
+            }
             Statement::DescribeStage { stage_name } => self.bind_rewrite_to_query(bind_context, format!("SELECT * FROM system.stages WHERE name = '{stage_name}'").as_str(), RewriteKind::DescribeStage).await?,
             Statement::CreateStage(stmt) => self.bind_create_stage(stmt).await?,
             Statement::DropStage {
@@ -398,7 +400,7 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_merge_into(bind_context, stmt).await?
-            },
+            }
             Statement::Delete {
                 hints,
                 table_reference,
@@ -551,6 +553,9 @@ impl<'a> Binder {
             }
             Statement::ShowNetworkPolicies => {
                 self.bind_show_network_policies().await?
+            }
+            Statement::CreateTask(stmt) => {
+                self.bind_create_task(stmt).await?
             }
         };
         Ok(plan)

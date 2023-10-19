@@ -95,15 +95,33 @@ select * from clustering_information('db_09_0016','t3')
 ----
 (b) 2 2 0 1.0 2.0 {"00002":2}
 
+# Fix pr#13332
 statement ok
-DROP Table t1
+create table t4(a int, b string) cluster by(a)
 
 statement ok
-DROP Table t2
+set max_block_size = 5
 
 statement ok
-DROP Table t3
+insert into t4 select number % 2, to_string(number) from numbers(500)
+
+statement ok
+alter table t4 recluster final
+
+statement ok
+DROP Table t1 all
+
+statement ok
+DROP Table t2 all
+
+statement ok
+DROP Table t3 all
+
+statement ok
+DROP Table t4 all
 
 statement ok
 DROP DATABASE db_09_0016
 
+statement ok
+set max_block_size = 65536

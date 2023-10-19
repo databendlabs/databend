@@ -39,12 +39,13 @@ use common_expression::ColumnBuilder;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_io::prelude::*;
 use num_traits::AsPrimitive;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::deserialize_state;
+use super::serialize_state;
 use super::AggregateFunctionRef;
 use super::AggregateNullVariadicAdaptor;
 use super::StateAddr;
@@ -277,12 +278,12 @@ where
 
     fn serialize(&self, place: StateAddr, writer: &mut Vec<u8>) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        serialize_into_buf(writer, state)
+        serialize_state(writer, state)
     }
 
     fn merge(&self, place: StateAddr, reader: &mut &[u8]) -> Result<()> {
         let state = place.get::<AggregateWindowFunnelState<T::Scalar>>();
-        let mut rhs: AggregateWindowFunnelState<T::Scalar> = deserialize_from_slice(reader)?;
+        let mut rhs: AggregateWindowFunnelState<T::Scalar> = deserialize_state(reader)?;
         state.merge(&mut rhs);
         Ok(())
     }

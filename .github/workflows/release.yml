@@ -541,7 +541,7 @@ jobs:
           gh release upload ${version} sha256sums.txt --clobber
 
   benchmark:
-    needs: [create_release, linux]
+    needs: [create_release, docker_separate]
     uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
