@@ -21,7 +21,9 @@ use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_license::license_manager::LicenseManager;
 use enterprise_query::enterprise_services::EnterpriseServices;
+use enterprise_query::license::RealLicenseManager;
 
 use crate::entry::init_services;
 use crate::entry::run_cmd;
@@ -50,6 +52,8 @@ pub async fn main_entrypoint() -> Result<()> {
     if run_cmd(&conf).await? {
         return Ok(());
     }
+
+    RealLicenseManager::init(conf.query.tenant_id.clone())?;
     init_services(&conf).await?;
     EnterpriseServices::init(conf.clone()).await?;
     start_services(&conf).await

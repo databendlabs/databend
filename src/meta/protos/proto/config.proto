@@ -74,6 +74,8 @@ message OssStorageConfig {
   string root = 3;
   string access_key_id = 4;
   string access_key_secret = 5;
+  string server_side_encryption = 6;
+  string server_side_encryption_key_id = 7;
 }
 
 message WebhdfsStorageConfig {

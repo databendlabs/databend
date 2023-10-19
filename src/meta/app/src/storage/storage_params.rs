@@ -106,7 +106,12 @@ impl StorageParams {
 
     /// Whether this storage params need encryption feature to start.
     pub fn need_encryption_feature(&self) -> bool {
-        todo!("implement me")
+        match &self {
+            StorageParams::Oss(v) => {
+                !v.server_side_encryption.is_empty() || !v.server_side_encryption_key_id.is_empty()
+            }
+            _ => false,
+        }
     }
 
     /// auto_detect is used to do auto detect for some storage params under async context.
@@ -435,6 +440,14 @@ pub struct StorageOssConfig {
     pub access_key_id: String,
     pub access_key_secret: String,
     pub root: String,
+    /// Server-side encryption for OSS
+    ///
+    /// Available values: "AES256", "KMS"
+    pub server_side_encryption: String,
+    /// Server-side encryption key id for OSS
+    ///
+    /// Only effective when `server_side_encryption` is "KMS"
+    pub server_side_encryption_key_id: String,
 }
 
 impl Debug for StorageOssConfig {
@@ -449,7 +462,7 @@ impl Debug for StorageOssConfig {
                 "access_key_secret",
                 &mask_string(&self.access_key_secret, 3),
             )
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 

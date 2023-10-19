@@ -2680,6 +2680,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "storage-encryption",
  "thiserror",
 ]
 

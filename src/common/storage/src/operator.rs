@@ -50,6 +50,7 @@ use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
+use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -318,7 +319,9 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
-        .root(&cfg.root);
+        .root(&cfg.root)
+        .server_side_encryption(&cfg.server_side_encryption)
+        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
 
     Ok(builder)
 }
@@ -402,6 +405,10 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
+        if conf.params.need_encryption_feature() {
+            get_storage_encryption_handler().check_license().await?;
+        }
+
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
