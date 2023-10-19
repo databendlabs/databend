@@ -180,13 +180,26 @@ impl IcebergTable {
         let arrow_schema = arrow_schema::Schema::new(arrow_fields);
         let leaf_fields = Arc::new(table_schema.leaf_fields());
 
-        let options = ParquetReadOptions::default();
+        let mut read_options = ParquetReadOptions::default();
+
+        if !ctx.get_settings().get_enable_parquet_page_index()? {
+            read_options = read_options.with_prune_pages(false);
+        }
+
+        if !ctx.get_settings().get_enable_parquet_rowgroup_pruning()? {
+            read_options = read_options.with_prune_row_groups(false);
+        }
+
+        if !ctx.get_settings().get_enable_parquet_prewhere()? {
+            read_options = read_options.with_do_prewhere(false);
+        }
+
         let pruner = ParquetRSPruner::try_create(
             ctx.get_function_context()?,
             table_schema.clone(),
             leaf_fields,
             &plan.push_downs,
-            options,
+            read_options,
         )?;
 
         let mut builder = ParquetRSReaderBuilder::create(
@@ -195,6 +208,7 @@ impl IcebergTable {
             table_schema,
             &arrow_schema,
         )?
+        .with_options(read_options)
         .with_push_downs(plan.push_downs.as_ref())
         .with_pruner(Some(pruner));
 
