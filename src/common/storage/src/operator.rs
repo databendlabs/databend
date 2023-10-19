@@ -405,10 +405,6 @@ impl DataOperator {
 
     #[async_backtrace::framed]
     pub async fn init(conf: &StorageConfig) -> common_exception::Result<()> {
-        if conf.params.need_encryption_feature() {
-            get_storage_encryption_handler().check_license().await?;
-        }
-
         GlobalInstance::set(Self::try_create(&conf.params).await?);
 
         Ok(())
@@ -451,6 +447,14 @@ impl DataOperator {
             operator,
             params: sp.clone(),
         })
+    }
+
+    /// Check license must be run after license manager setup.
+    pub async fn check_license(&self) -> common_exception::Result<()> {
+        if self.params.need_encryption_feature() {
+            get_storage_encryption_handler().check_license().await?;
+        }
+        Ok(())
     }
 
     pub fn instance() -> DataOperator {
