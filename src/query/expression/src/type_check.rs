@@ -298,7 +298,7 @@ pub fn check_function<Index: ColumnIndex>(
     }
 
     // to_string('a')
-    if name.starts_with("to_") && args.len() == 1 {
+    if params.is_empty() && name.starts_with("to_") && args.len() == 1 {
         let type_name = args[0].data_type().remove_nullable();
         match get_simple_cast_function(false, &type_name) {
             Some(n) if name.eq_ignore_ascii_case(&n) => return Ok(args[0].clone()),
