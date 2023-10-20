@@ -84,11 +84,9 @@ impl Interpreter for AddTableColumnInterpreter {
             let field = self.plan.field.clone();
             if field.computed_expr().is_some() {
                 let license_manager = get_license_manager();
-                license_manager.manager.check_enterprise_enabled(
-                    &self.ctx.get_settings(),
-                    self.plan.tenant.clone(),
-                    ComputedColumn,
-                )?;
+                license_manager
+                    .manager
+                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
 
             if field.default_expr().is_some() {

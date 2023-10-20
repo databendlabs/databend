@@ -267,8 +267,7 @@ impl RealBackgroundService {
             .get_settings();
         // check for valid license
         get_license_manager().manager.check_enterprise_enabled(
-            &settings,
-            self.conf.query.tenant_id.clone(),
+            settings.get_enterprise_license().unwrap_or_default(),
             Feature::BackgroundService,
         )
     }

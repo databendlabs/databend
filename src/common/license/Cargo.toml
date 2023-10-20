@@ -14,6 +14,5 @@ test = false
 # Workspace dependencies
 common-base = { path = "../base" }
 common-exception = { path = "../exception" }
-common-settings = { path = "../../query/settings" }
 jwt-simple = "0.11.0"
 serde = { workspace = true }

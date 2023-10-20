@@ -784,6 +784,12 @@ impl TableContext for QueryContext {
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         self.shared.copy_status.clone()
     }
+
+    fn get_license_key(&self) -> String {
+        self.get_settings()
+            .get_enterprise_license()
+            .unwrap_or_default()
+    }
 }
 
 impl TrySpawn for QueryContext {

@@ -27,13 +27,13 @@ use crate::virtual_column::RealVirtualColumnHandler;
 pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig) -> Result<()> {
-        RealLicenseManager::init()?;
+    pub async fn init(cfg: InnerConfig) -> Result<()> {
+        RealLicenseManager::init(cfg.query.tenant_id.clone())?;
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealTableLockHandler::init()?;
         RealDatamaskHandler::init()?;
-        RealBackgroundService::init(&_config).await?;
+        RealBackgroundService::init(&cfg).await?;
         RealVirtualColumnHandler::init()?;
         Ok(())
     }
