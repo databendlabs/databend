@@ -462,7 +462,15 @@ impl Debug for StorageOssConfig {
                 "access_key_secret",
                 &mask_string(&self.access_key_secret, 3),
             )
-            .finish_non_exhaustive()
+            .field(
+                "server_side_encryption",
+                &mask_string(&self.server_side_encryption, 3),
+            )
+            .field(
+                "server_side_encryption_key_id",
+                &mask_string(&self.server_side_encryption_key_id, 3),
+            )
+            .finish()
     }
 }
 
