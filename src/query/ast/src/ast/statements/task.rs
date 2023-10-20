@@ -15,6 +15,8 @@
 use std::fmt::Display;
 use std::fmt::Formatter;
 
+use crate::ast::ShowLimit;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateTaskStmt {
     pub if_not_exists: bool,
@@ -46,6 +48,7 @@ impl Display for CreateTaskStmt {
             write!(f, " COMMENTS = '{}'", self.comments)?;
         }
 
+        write!(f, " AS {}", self.sql)?;
         Ok(())
     }
 }
@@ -84,5 +87,131 @@ impl Display for ScheduleOptions {
                 Ok(())
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlterTaskStmt {
+    pub if_exists: bool,
+    pub name: String,
+    pub options: AlterTaskOptions,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AlterTaskOptions {
+    Resume,
+    Suspend,
+    Set {
+        warehouse: Option<String>,
+        schedule: Option<ScheduleOptions>,
+        suspend_task_after_num_failures: Option<u64>,
+        comments: Option<String>,
+    },
+    Unset {
+        warehouse: bool,
+    },
+    // Change SQL
+    ModifyAs(String),
+}
+
+impl Display for AlterTaskOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AlterTaskOptions::Resume => write!(f, " RESUME"),
+            AlterTaskOptions::Suspend => write!(f, " SUSPEND"),
+            AlterTaskOptions::Set {
+                warehouse,
+                schedule,
+                suspend_task_after_num_failures,
+                comments,
+            } => {
+                if let Some(wh) = warehouse {
+                    write!(f, " SET WAREHOUSE = {}", wh)?;
+                }
+                if let Some(schedule) = schedule {
+                    write!(f, " SET {}", schedule)?;
+                }
+                if let Some(num) = suspend_task_after_num_failures {
+                    write!(f, " SUSPEND TASK AFTER {} FAILURES", num)?;
+                }
+                if let Some(comments) = comments {
+                    write!(f, " COMMENTS = '{}'", comments)?;
+                }
+                Ok(())
+            }
+            AlterTaskOptions::Unset { warehouse } => {
+                if *warehouse {
+                    write!(f, " UNSET WAREHOUSE")?;
+                }
+                Ok(())
+            }
+            AlterTaskOptions::ModifyAs(sql) => write!(f, " AS {}", sql),
+        }
+    }
+}
+
+impl Display for AlterTaskStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ALTER TASK")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", self.name)?;
+        write!(f, "{}", self.options)?;
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DropTaskStmt {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+impl Display for DropTaskStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP TASK")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+        write!(f, " {}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowTasksStmt {
+    pub limit: Option<ShowLimit>,
+}
+
+impl Display for ShowTasksStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "SHOW ")?;
+        write!(f, "TASKS")?;
+        if let Some(limit) = &self.limit {
+            write!(f, " {limit}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExecuteTaskStmt {
+    pub name: String,
+}
+
+impl Display for ExecuteTaskStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "EXECUTE TASK {}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DescribeTaskStmt {
+    pub name: String,
+}
+
+impl Display for DescribeTaskStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DESCRIBE TASK {}", self.name)
     }
 }

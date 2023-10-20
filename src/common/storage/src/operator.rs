@@ -114,7 +114,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
         .layer(PrometheusClientLayer::new(
-            &mut load_global_prometheus_registry(),
+            load_global_prometheus_registry().inner_mut(),
         ))
         .finish();
 

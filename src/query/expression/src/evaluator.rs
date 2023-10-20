@@ -369,7 +369,7 @@ impl<'a> Evaluator<'a> {
                         .map(|validity| validity.unset_bits() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
-                        Err(ErrorCode::Internal(format!(
+                        Err(ErrorCode::BadArguments(format!(
                             "unable to cast type `NULL` to type `{dest_type}`"
                         ))
                         .set_span(span))
@@ -581,7 +581,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
 
-            _ => Err(ErrorCode::Internal(format!(
+            _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),
@@ -763,7 +763,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
 
-            _ => Err(ErrorCode::Internal(format!(
+            _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),

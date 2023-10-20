@@ -40,7 +40,7 @@ use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_metrics::counter::Count;
+use common_metrics::count::Count;
 use common_tracing::func_name;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
