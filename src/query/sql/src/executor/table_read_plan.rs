@@ -170,11 +170,9 @@ impl ToReadDataSourcePlan for dyn Table {
 
             if let Some(column_mask_policy) = &table_meta.column_mask_policy {
                 let license_manager = get_license_manager();
-                let ret = license_manager.manager.check_enterprise_enabled(
-                    &ctx.get_settings(),
-                    tenant.clone(),
-                    DataMask,
-                );
+                let ret = license_manager
+                    .manager
+                    .check_enterprise_enabled(ctx.get_license_key(), DataMask);
                 if ret.is_err() {
                     None
                 } else {

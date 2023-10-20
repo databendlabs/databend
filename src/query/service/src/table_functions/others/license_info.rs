@@ -234,11 +234,9 @@ impl AsyncSource for LicenseInfoSource {
                 format!("failed to get license for {}", self.ctx.get_tenant())
             })?;
 
-        get_license_manager().manager.check_enterprise_enabled(
-            &settings,
-            self.ctx.get_tenant(),
-            Feature::LicenseInfo,
-        )?;
+        get_license_manager()
+            .manager
+            .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
         let info = get_license_manager()
             .manager

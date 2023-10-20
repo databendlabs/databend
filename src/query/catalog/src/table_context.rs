@@ -214,4 +214,7 @@ pub trait TableContext: Send + Sync {
     fn add_file_status(&self, file_path: &str, file_status: FileStatus) -> Result<()>;
 
     fn get_copy_status(&self) -> Arc<CopyStatus>;
+
+    /// Get license key from context, return empty if license is not found or error happened.
+    fn get_license_key(&self) -> String;
 }
