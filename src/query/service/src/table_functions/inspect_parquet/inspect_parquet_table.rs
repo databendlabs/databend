@@ -25,6 +25,7 @@ use common_catalog::table_args::TableArgs;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::types::Int64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
@@ -114,11 +115,11 @@ impl InspectParquetTable {
             ),
             TableField::new(
                 "max_row_groups_size_compressed",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::Int64),
             ),
             TableField::new(
                 "max_row_groups_size_uncompressed",
-                TableDataType::Number(NumberDataType::UInt64),
+                TableDataType::Number(NumberDataType::Int64),
             ),
         ])
     }
@@ -221,8 +222,8 @@ impl AsyncSource for InspectParquetSource {
 
         let parquet_schema =
             read_metadata_async(&first_file.path, &operator, Some(first_file.size)).await?;
-        let created = match first_file.creator {
-            Some(user) => user.username,
+        let created = match parquet_schema.file_metadata().created_by() {
+            Some(user) => user.to_owned(),
             None => String::from("NULL"),
         };
         let serialized_size: u64 = first_file.size;
@@ -231,11 +232,13 @@ impl AsyncSource for InspectParquetSource {
         } else {
             0
         };
-        let mut max_compressed: u64 = 0;
-        let mut max_uncompressed: u64 = 0;
+        let mut max_compressed: i64 = 0;
+        let mut max_uncompressed: i64 = 0;
         for grp in parquet_schema.row_groups().iter() {
-            max_compressed = max(max_compressed, grp.compressed_size() as u64);
-            max_uncompressed = max(max_uncompressed, grp.total_byte_size() as u64);
+            for col in grp.columns().iter() {
+                max_compressed = max(max_compressed, col.compressed_size());
+                max_uncompressed = max(max_uncompressed, col.uncompressed_size());
+            }
         }
         let block = DataBlock::new(
             vec![
@@ -264,12 +267,12 @@ impl AsyncSource for InspectParquetSource {
                     Value::Scalar(UInt64Type::upcast_scalar(serialized_size)),
                 ),
                 BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(max_compressed)),
+                    DataType::Number(NumberDataType::Int64),
+                    Value::Scalar(Int64Type::upcast_scalar(max_compressed)),
                 ),
                 BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(UInt64Type::upcast_scalar(max_uncompressed)),
+                    DataType::Number(NumberDataType::Int64),
+                    Value::Scalar(Int64Type::upcast_scalar(max_uncompressed)),
                 ),
             ],
             1,
