@@ -134,6 +134,7 @@ impl Table for LicenseInfoTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(|output| LicenseInfoSource::create(ctx.clone(), output), 1)?;
         Ok(())

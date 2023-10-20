@@ -132,6 +132,7 @@ impl<TTable: 'static + SyncSystemTable> Table for SyncOneBlockSystemTable<TTable
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         // avoid duplicate read in cluster mode.
         if plan.parts.partitions.is_empty() {
@@ -271,6 +272,7 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let inner_table = self.inner_table.clone();
         let push_downs = plan.push_downs.clone();

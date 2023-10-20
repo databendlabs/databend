@@ -217,7 +217,7 @@ impl FuseTable {
         ctx.set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline, false)?;
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds, None)?;
