@@ -270,7 +270,7 @@ where
         Ok(runtime) => runtime
             .spawn_blocking(f)
             .await
-            .map_err(|err| ErrorCode::from_std_error(err))?,
+            .map_err(ErrorCode::from_std_error)?,
         Err(_) => f(),
     }
 }
