@@ -45,7 +45,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
     ) -> Result<SendableDataBlockStream> {
         let mut pipeline = Pipeline::create();
         ctx.set_partitions(plan.parts.clone())?;
-        self.read_data(ctx.clone(), plan, &mut pipeline)?;
+        self.read_data(ctx.clone(), plan, &mut pipeline, true)?;
 
         let settings = ctx.get_settings();
         pipeline.set_max_threads(settings.get_max_threads()? as usize);
