@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=3c61372#3c61372d7ac76bba149316b1fbad6e981752e502"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=9a26422#9a26422d00b83c65245f75e02eb436dedd91b5b8"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
