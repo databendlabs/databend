@@ -78,6 +78,7 @@ message OssStorageConfig {
   //  We used to have role_arn (6) and oidc_token (7) but removed later, keep those index reserved.
   //  string role_arn = 6;
   //  string oidc_token = 7;
+  reserved 6, 7;
 
   string server_side_encryption = 8;
   string server_side_encryption_key_id = 9;
