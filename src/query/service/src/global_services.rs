@@ -64,16 +64,6 @@ impl GlobalServices {
         // Cluster discovery.
         ClusterDiscovery::init(config.clone()).await?;
 
-        DataOperator::init(&config.storage).await?;
-
-        ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.clone(),
-        )?;
-
-        CacheManager::init(&config.cache, &config.query.tenant_id)?;
-
         // TODO(xuanwo):
         //
         // This part is a bit complex because catalog are used widely in different
@@ -107,6 +97,14 @@ impl GlobalServices {
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
         QueryProfileManager::init();
+
+        DataOperator::init(&config.storage).await?;
+        ShareTableConfig::init(
+            &config.query.share_endpoint_address,
+            &config.query.share_endpoint_auth_token_file,
+            config.query.tenant_id.clone(),
+        )?;
+        CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         Ok(())
     }

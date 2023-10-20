@@ -256,6 +256,9 @@ fn parse_oss_params(l: &mut UriLocation, root: String) -> Result<StorageParams> 
             .cloned()
             .unwrap_or_default(),
         root,
+        // TODO(xuanwo): Support SSE in stage later.
+        server_side_encryption: "".to_string(),
+        server_side_encryption_key_id: "".to_string(),
     });
 
     l.connection.check()?;

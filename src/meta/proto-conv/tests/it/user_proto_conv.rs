@@ -261,9 +261,11 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
                 endpoint_url: "https://oss-cn-litang.example.com".to_string(),
                 bucket: "my_bucket".to_string(),
                 root: "/data/files".to_string(),
+                server_side_encryption: "".to_string(),
                 access_key_id: "access_key_id".to_string(),
                 access_key_secret: "access_key_secret".to_string(),
                 presign_endpoint_url: "".to_string(),
+                server_side_encryption_key_id: "".to_string(),
             }),
         },
         file_format_params: mt::principal::FileFormatParams::Json(

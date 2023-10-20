@@ -13,7 +13,7 @@ const ASKBEND_URL = 'https://ask.databend.rs';
 const config = {
     title: 'Databend',
     staticDirectories: ['static', '../docs/public'],
-    tagline: 'Databend is a modern cloud data warehouse that empowers your object storage for real-time analytics.',
+    tagline: 'Databend - Your best alternative to Snowflake. Cost-effective and simple for massive-scale insights.',
     url: 'https://databend.rs',
     baseUrl: '/',
     onBrokenLinks: 'throw',

@@ -103,11 +103,7 @@ impl Binder {
                 let license_manager = get_license_manager();
                 if license_manager
                     .manager
-                    .check_enterprise_enabled(
-                        &self.ctx.get_settings(),
-                        self.ctx.get_tenant(),
-                        AggregateIndex,
-                    )
+                    .check_enterprise_enabled(self.ctx.get_license_key(), AggregateIndex)
                     .is_ok()
                 {
                     let indexes = self

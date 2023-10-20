@@ -134,6 +134,7 @@ impl Table for LicenseInfoTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(|output| LicenseInfoSource::create(ctx.clone(), output), 1)?;
         Ok(())
@@ -234,11 +235,9 @@ impl AsyncSource for LicenseInfoSource {
                 format!("failed to get license for {}", self.ctx.get_tenant())
             })?;
 
-        get_license_manager().manager.check_enterprise_enabled(
-            &settings,
-            self.ctx.get_tenant(),
-            Feature::LicenseInfo,
-        )?;
+        get_license_manager()
+            .manager
+            .check_enterprise_enabled(license.clone(), Feature::LicenseInfo)?;
 
         let info = get_license_manager()
             .manager
