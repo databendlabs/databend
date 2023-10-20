@@ -22,7 +22,6 @@ use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::LicenseManagerWrapper;
-use common_settings::Settings;
 use dashmap::DashMap;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
@@ -35,14 +34,17 @@ pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
 -----END PUBLIC KEY-----"#;
 
 pub struct RealLicenseManager {
+    tenant: String,
+    public_key: String,
+
     // cache available settings to get avoid of unneeded license parsing time.
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
-    public_key: String,
 }
 
 impl LicenseManager for RealLicenseManager {
-    fn init() -> Result<()> {
+    fn init(tenant: String) -> Result<()> {
         let rm = RealLicenseManager {
+            tenant,
             cache: DashMap::new(),
             public_key: LICENSE_PUBLIC_KEY.to_string(),
         };
@@ -57,30 +59,21 @@ impl LicenseManager for RealLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(
-        &self,
-        settings: &Arc<Settings>,
-        tenant: String,
-        feature: Feature,
-    ) -> Result<()> {
-        let license_key = settings.get_enterprise_license().map_err_to_code(
-            ErrorCode::LicenseKeyInvalid,
-            || format!("use of {feature} requires an enterprise license. failed to load license key for {tenant}"),
-        )?;
-
+    fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()> {
         if license_key.is_empty() {
             return Err(ErrorCode::LicenseKeyInvalid(format!(
-                "use of {feature} requires an enterprise license. license key is empty for {tenant}"
+                "use of {feature} requires an enterprise license. license key is not found for {}",
+                self.tenant
             )));
         }
 
-        if let Some(v) = self.cache.get(license_key.as_str()) {
+        if let Some(v) = self.cache.get(&license_key) {
             return Self::verify_license(v.value(), feature);
         }
 
-        let license = self.parse_license(license_key.as_str()).map_err_to_code(
+        let license = self.parse_license(&license_key).map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
-            || format!("use of {feature} requires an enterprise license. current license is invalid for {tenant}"),
+            || format!("use of {feature} requires an enterprise license. current license is invalid for {}", self.tenant),
         )?;
         Self::verify_feature(&license, feature)?;
         self.cache.insert(license_key, license);
@@ -101,10 +94,12 @@ impl LicenseManager for RealLicenseManager {
 
 impl RealLicenseManager {
     // this method mainly used for unit tests
-    pub fn new(public_key: String) -> Self {
+    pub fn new(tenant: String, public_key: String) -> Self {
         RealLicenseManager {
-            cache: DashMap::new(),
+            tenant,
             public_key,
+
+            cache: DashMap::new(),
         }
     }
 

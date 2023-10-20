@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
@@ -19,6 +20,8 @@ use common_arrow::arrow::io::parquet::read as pread;
 use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::ParquetReadOptions;
+use common_catalog::query_kind::QueryKind;
+use common_catalog::table::Parquet2TableColumnStatisticsProvider;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -53,23 +56,26 @@ impl Parquet2Table {
         let (arrow_schema, schema_descr, compression_ratio) =
             Self::prepare_metas(&first_file, operator.clone()).await?;
 
-        // TODO(Dousir9): collect more information for read partitions.
-        let file_metas = get_parquet2_file_meta(
-            ctx,
-            &files_to_read,
-            &files_info,
-            &operator,
-            &schema_descr,
-            &first_file,
-        )
-        .await?;
-
-        let num_rows = file_metas.iter().map(|m| m.num_rows as u64).sum();
-        let column_statistics_provider =
-            create_parquet2_statistics_provider(file_metas, &arrow_schema)?;
-
+        // If the query is `COPY`, we don't need to collect column statistics.
+        // It's because the only transform could be contained in `COPY` command is projection.
+        let need_stats_provider = !matches!(ctx.get_query_kind(), QueryKind::CopyIntoTable);
         let mut table_info = create_parquet_table_info(arrow_schema.clone(), &stage_info);
-        table_info.meta.statistics.number_of_rows = num_rows;
+        let column_statistics_provider = if need_stats_provider {
+            let file_metas = get_parquet2_file_meta(
+                ctx,
+                &files_to_read,
+                &files_info,
+                &operator,
+                &schema_descr,
+                &first_file,
+            )
+            .await?;
+            let num_rows = file_metas.iter().map(|m| m.num_rows as u64).sum();
+            table_info.meta.statistics.number_of_rows = num_rows;
+            create_parquet2_statistics_provider(file_metas, &arrow_schema)?
+        } else {
+            Parquet2TableColumnStatisticsProvider::new(HashMap::new(), 0)
+        };
 
         Ok(Arc::new(Parquet2Table {
             table_info,
