@@ -208,7 +208,7 @@ impl CopyIntoTableInterpreter {
         };
 
         stage_table.set_block_thresholds(block_thresholds);
-        stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
+        stage_table.read_data(table_ctx, &read_source_plan, pipeline, false)?;
 
         Ok(())
     }

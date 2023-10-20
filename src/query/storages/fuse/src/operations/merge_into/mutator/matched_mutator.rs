@@ -101,12 +101,12 @@ impl MatchedAggregator {
             let projection =
                 Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 target_table_schema,
                 projection,
-                ctx.clone(),
                 false,
-                true,
+                false,
             )
         }?;
 

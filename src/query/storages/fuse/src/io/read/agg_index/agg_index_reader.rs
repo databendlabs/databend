@@ -61,10 +61,10 @@ impl AggIndexReader {
         put_cache: bool,
     ) -> Result<Self> {
         let reader = BlockReader::create(
+            ctx.clone(),
             dal,
             agg.schema.clone(),
             agg.projection.clone(),
-            ctx.clone(),
             false,
             put_cache,
         )?;

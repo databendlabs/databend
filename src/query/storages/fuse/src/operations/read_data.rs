@@ -43,17 +43,17 @@ use crate::FuseTable;
 impl FuseTable {
     pub fn create_block_reader(
         &self,
+        ctx: Arc<dyn TableContext>,
         projection: Projection,
         query_internal_columns: bool,
-        ctx: Arc<dyn TableContext>,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         let table_schema = self.table_info.schema();
         BlockReader::create(
+            ctx,
             self.operator.clone(),
             table_schema,
             projection,
-            ctx,
             query_internal_columns,
             put_cache,
         )
@@ -62,17 +62,17 @@ impl FuseTable {
     // Build the block reader.
     pub fn build_block_reader(
         &self,
-        plan: &DataSourcePlan,
         ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
         self.create_block_reader(
+            ctx,
             PushDownInfo::projection_of_push_downs(
                 &self.table_info.schema(),
                 plan.push_downs.as_ref(),
             ),
             plan.query_internal_columns,
-            ctx,
             put_cache,
         )
     }
@@ -194,7 +194,7 @@ impl FuseTable {
             });
         }
 
-        let block_reader = self.build_block_reader(plan, ctx.clone(), put_cache)?;
+        let block_reader = self.build_block_reader(ctx.clone(), plan, put_cache)?;
         let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan

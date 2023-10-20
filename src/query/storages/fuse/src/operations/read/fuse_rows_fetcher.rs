@@ -55,7 +55,7 @@ pub fn build_row_fetcher_pipeline(
         .to_owned();
     let fuse_table = Arc::new(fuse_table);
     let block_reader =
-        fuse_table.create_block_reader(projection.clone(), false, ctx.clone(), true)?;
+        fuse_table.create_block_reader(ctx.clone(), projection.clone(), false, true)?;
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
     match &fuse_table.storage_format {
