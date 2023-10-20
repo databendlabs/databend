@@ -183,6 +183,7 @@ impl Table for NumbersTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         if plan.parts.partitions.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;

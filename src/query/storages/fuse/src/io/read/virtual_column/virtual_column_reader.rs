@@ -110,10 +110,10 @@ impl VirtualColumnReader {
         // Each virtual columns source may have different schemas,
         // read the real schema from the file's meta
         let reader = BlockReader::create(
+            ctx.clone(),
             dal.clone(),
             TableSchemaRefExt::create(vec![]),
             Projection::Columns(vec![]),
-            ctx.clone(),
             false,
             put_cache,
         )?;

@@ -527,8 +527,9 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        put_cache: bool,
     ) -> Result<()> {
-        self.do_read_data(ctx, plan, pipeline, true)
+        self.do_read_data(ctx, plan, pipeline, put_cache)
     }
 
     fn append_data(

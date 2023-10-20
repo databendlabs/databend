@@ -76,10 +76,10 @@ fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) 
 
 impl BlockReader {
     pub fn create(
+        ctx: Arc<dyn TableContext>,
         operator: Operator,
         schema: TableSchemaRef,
         projection: Projection,
-        ctx: Arc<dyn TableContext>,
         query_internal_columns: bool,
         put_cache: bool,
     ) -> Result<Arc<BlockReader>> {
