@@ -1324,7 +1324,141 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ (NOT ~ ^NULL)? ")" },
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+    );
+    let ty_map = map(
+        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
+        |(_, _, key_type, _, val_type, _)| TypeName::Map {
+            key_type: Box::new(key_type),
+            val_type: Box::new(val_type),
+        },
+    );
+    let ty_bitmap = value(TypeName::Bitmap, rule! { BITMAP });
+    let ty_nullable = map(
+        rule! { NULLABLE ~ ( "(" ~ #type_name ~ ")" ) },
+        |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
+    );
+    let ty_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
+        |(_, _, fields_type, _)| TypeName::Tuple {
+            fields_name: None,
+            fields_type,
+        },
+    );
+    let ty_named_tuple = map(
+        rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
+        |(_, _, fields, _)| {
+            let (fields_name, fields_type) =
+                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
+            TypeName::Tuple {
+                fields_name: Some(fields_name),
+                fields_type,
+            }
+        },
+    );
+    let ty_date = value(TypeName::Date, rule! { DATE });
+    let ty_datetime = map(
+        rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+        |(_, _)| TypeName::Timestamp,
+    );
+    let ty_string = value(
+        TypeName::String,
+        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
+    map(
+        alt((
+            rule! {
+            ( #ty_boolean
+            | #ty_uint8
+            | #ty_uint16
+            | #ty_uint32
+            | #ty_uint64
+            | #ty_int8
+            | #ty_int16
+            | #ty_int32
+            | #ty_int64
+            | #ty_float32
+            | #ty_float64
+            | #ty_decimal
+            | #ty_array
+            | #ty_map
+            | #ty_bitmap
+            | #ty_tuple : "TUPLE(<type>, ...)"
+            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
+            ) : "type name"
+            },
+            rule! {
+            ( #ty_date
+            | #ty_datetime
+            | #ty_string
+            | #ty_variant
+            | #ty_nullable
+            ) : "type name" },
+        )),
+        |ty| ty,
+    )(i)
+}
+
+pub fn basic_type_name(i: Input) -> IResult<TypeName> {
+    let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
+    let ty_uint8 = value(
+        TypeName::UInt8,
+        rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )?  },
+    );
+    let ty_uint16 = value(
+        TypeName::UInt16,
+        rule! { ( UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_uint32 = value(
+        TypeName::UInt32,
+        rule! { ( UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_uint64 = value(
+        TypeName::UInt64,
+        rule! { ( UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_int8 = value(
+        TypeName::Int8,
+        rule! { ( INT8 | TINYINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_int16 = value(
+        TypeName::Int16,
+        rule! { ( INT16 | SMALLINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_int32 = value(
+        TypeName::Int32,
+        rule! { ( INT32 | INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_int64 = value(
+        TypeName::Int64,
+        rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
+    );
+    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
+    let ty_float64 = value(
+        TypeName::Float64,
+        rule! { (FLOAT64 | DOUBLE)  ~ PRECISION? },
+    );
+    let ty_decimal = map_res(
+        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" },
+        |(_, _, precision, opt_scale, _)| {
+            Ok(TypeName::Decimal {
+                precision: precision
+                    .try_into()
+                    .map_err(|_| ErrorKind::Other("precision is too large"))?,
+                scale: if let Some((_, scale)) = opt_scale {
+                    scale
+                        .try_into()
+                        .map_err(|_| ErrorKind::Other("scale is too large"))?
+                } else {
+                    0
+                },
+            })
+        },
+    );
+    let ty_array = map(
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
         |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
     );
     let ty_map = map(
