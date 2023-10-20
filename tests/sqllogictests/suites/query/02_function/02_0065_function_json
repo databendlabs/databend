@@ -73,7 +73,7 @@ SELECT json_object('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'}, 'k5', nul
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"}}
 
-statement error 1001
+statement error 1006
 SELECT json_object('k1', 1, 'k2', 'str', 'k3')
 
 query T
@@ -96,7 +96,7 @@ SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3', [1,2], 'k4', {'k':'v'},
 ----
 {"k1":1,"k2":"str","k3":[1,2],"k4":{"k":"v"},"k5":null}
 
-statement error 1001
+statement error 1006
 SELECT json_object_keep_null('k1', 1, 'k2', 'str', 'k3')
 
 query T

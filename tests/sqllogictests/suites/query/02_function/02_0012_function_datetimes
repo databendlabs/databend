@@ -68,7 +68,7 @@ select to_date('9999-12-31')
 9999-12-31
 
 
-statement error 1001
+statement error 1006
 select to_date('10000-12-31')
 
 query T
@@ -127,19 +127,19 @@ select to_unix_timestamp('2022-12-31T23:59:59-08:00')
 1672559999
 
 
-statement error 1001
+statement error 1006
 select to_datetime('9999-01-01 00x')
 
-statement error 1001
+statement error 1006
 select to_datetime('9999-01-01 001')
 
-statement error 1001
+statement error 1006
 select to_datetime('9999-01-01 01:123')
 
-statement error 1001
+statement error 1006
 select to_datetime('9999-01-01 01:12.123+02:00')
 
-statement error 1001
+statement error 1006
 select to_datetime('10000-01-01 00:00:00')
 
 query T
@@ -222,10 +222,10 @@ select to_date('2023-01-01') - 100 = to_date('2022-09-23')
 ----
 1
 
-statement error 1001
+statement error 1006
 select to_date('2023-01-01') + 100000000
 
-statement error 1001
+statement error 1006
 select to_date('2023-01-01') - 100000000
 
 
@@ -578,10 +578,10 @@ select add_years(to_datetime(1582970400000000), cast(-50, INT8))
 1970-02-28 10:00:00.000000
 
 
-statement error 1001
+statement error 1006
 select add_years(to_date('9999-12-31'), 1)
 
-statement error 1001
+statement error 1006
 select add_years(to_datetime('9999-12-31 23:59:59'), 1)
 
 # 2020-2-29 - 13 months
@@ -597,10 +597,10 @@ select subtract_months(to_datetime(1582970400000000), cast(122, INT16))
 2009-12-29 10:00:00.000000
 
 
-statement error 1001
+statement error 1006
 select subtract_months(to_date('1000-01-01'), 1)
 
-statement error 1001
+statement error 1006
 select subtract_months(to_datetime('1000-01-01 00:00:00'), 1)
 
 # 2020-2-29 + 1 day
@@ -615,10 +615,10 @@ select add_days(to_datetime(1582970400000000), cast(-1, INT16))
 ----
 2020-02-28 10:00:00.000000
 
-statement error 1001
+statement error 1006
 select add_days(to_date('9999-12-31'), 1)
 
-statement error 1001
+statement error 1006
 select add_days(to_datetime('9999-12-31 23:59:59'), 1)
 
 # 2020-2-29T10:00:00 + 25 hours
@@ -634,10 +634,10 @@ select add_hours(to_date(18321), 1)
 2020-02-29 01:00:00.000000
 
 
-statement error 1001
+statement error 1006
 select add_hours(to_date('9999-12-31'), 24)
 
-statement error 1001
+statement error 1006
 select add_hours(to_datetime('9999-12-31 23:59:59'), 1)
 
 # 2020-2-29T10:00:00 - 1 minutes
@@ -646,10 +646,10 @@ select subtract_minutes(to_datetime(1582970400000000), cast(1, INT32))
 ----
 2020-02-29 09:59:00.000000
 
-statement error 1001
+statement error 1006
 select subtract_minutes(to_date('1000-01-01'), 1)
 
-statement error 1001
+statement error 1006
 select subtract_minutes(to_datetime('1000-01-01 00:00:00'), 1)
 
 # 2020-2-29T10:00:00 + 61 seconds
@@ -668,10 +668,10 @@ select to_datetime('2023-01-01 00:00:00') - 10000000000
 ----
 2022-12-31 21:13:20.000000
 
-statement error 1001
+statement error 1006
 select to_datetime('2023-01-01 00:00:00') + 1000000000000000000
 
-statement error 1001
+statement error 1006
 select to_datetime('2023-01-01 00:00:00') - 1000000000000000000
 
 query I
@@ -924,7 +924,7 @@ insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '9999
 statement ok
 insert into t values('0999-04-02 15:10:28.221', '2022-04-02 15:10:28.222', '2020-10-10')
 
-statement error 1001
+statement error 1006
 insert into t values('10000-01-01 00:00:00', '2022-04-02 15:10:28.221', '2020-10-10')
 
 statement ok
@@ -937,7 +937,7 @@ statement ok
 insert into t values('2022-04-02T15:10:28-08:13', '2022-04-02T15:10:28.223+08:00', '2022-04-02')
 
 skipif clickhouse
-statement error 1001
+statement error 1006
 insert into t values('2022-04-02 15:10:28.221', '2022-04-02 15:10:28.221', '10000-10-10')
 
 query TTT
@@ -968,10 +968,10 @@ select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y�
 ----
 2022-02-02
 
-statement error 1001
+statement error 1006
 select date_format('', '');
 
-statement error 1001
+statement error 1006
 select date_format('2022-2-04T03:58:59', '%Y年%m月%d日，%H时%M分%S秒');
 
 query T

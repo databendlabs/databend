@@ -2408,6 +2408,7 @@ dependencies = [
  "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
+ "parking_lot 0.12.1",
  "procfs 0.15.1",
  "prometheus-client",
  "prometheus-parse",
