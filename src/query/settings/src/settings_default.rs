@@ -441,7 +441,7 @@ impl DefaultSettings {
                         display_in_show_settings: true,
                 }),
                 ("enable_parquet_prewhere", DefaultSettingValue {
-                        value: UserSettingValue::UInt64(1),
+                        value: UserSettingValue::UInt64(0),
                         desc: "Enables parquet prewhere",
                         possible_values: None,
                         display_in_show_settings: true,
