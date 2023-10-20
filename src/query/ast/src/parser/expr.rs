@@ -1324,7 +1324,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ (NOT ~ NULL)? ")" },
+        rule! { ARRAY ~ "(" ~ #type_name ~ (NOT ~ ^NULL)? ")" },
         |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
     );
     let ty_map = map(
