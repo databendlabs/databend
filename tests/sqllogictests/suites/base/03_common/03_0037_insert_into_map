@@ -32,7 +32,7 @@ select * from t1 where m[300] = '123'
 ----
 2 {300:'123'}
 
-statement error 1001
+statement error 1006
 INSERT INTO t1 (id, m) VALUES(1, {100:'k1',100:'k2'})
 
 statement ok
@@ -79,7 +79,7 @@ select {'id':number} from numbers(5)
 {'id':3}
 {'id':4}
 
-statement error 1001
+statement error 1006
 CREATE TABLE IF NOT EXISTS t3(id Int, m Map(Array(Date), String)) Engine = Fuse
 
 statement ok
