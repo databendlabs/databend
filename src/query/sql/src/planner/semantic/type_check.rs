@@ -3200,11 +3200,7 @@ impl<'a> TypeChecker<'a> {
         let license_manager = get_license_manager();
         if license_manager
             .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                VirtualColumn,
-            )
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
             .is_err()
         {
             return None;
@@ -3659,7 +3655,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                     TableDataType::Map(Box::new(inner_type))
                 }
                 _ => {
-                    return Err(ErrorCode::Internal(format!(
+                    return Err(ErrorCode::BadArguments(format!(
                         "Invalid Map key type \'{:?}\'",
                         key_type
                     )));

@@ -50,6 +50,7 @@ use opendal::raw::HttpClient;
 use opendal::services;
 use opendal::Builder;
 use opendal::Operator;
+use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
@@ -113,7 +114,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
         .layer(PrometheusClientLayer::new(
-            &mut load_global_prometheus_registry(),
+            load_global_prometheus_registry().inner_mut(),
         ))
         .finish();
 
@@ -318,7 +319,9 @@ fn init_oss_operator(cfg: &StorageOssConfig) -> Result<impl Builder> {
         .access_key_id(&cfg.access_key_id)
         .access_key_secret(&cfg.access_key_secret)
         .bucket(&cfg.bucket)
-        .root(&cfg.root);
+        .root(&cfg.root)
+        .server_side_encryption(&cfg.server_side_encryption)
+        .server_side_encryption_key_id(&cfg.server_side_encryption_key_id);
 
     Ok(builder)
 }
@@ -444,6 +447,14 @@ impl DataOperator {
             operator,
             params: sp.clone(),
         })
+    }
+
+    /// Check license must be run after license manager setup.
+    pub async fn check_license(&self) -> common_exception::Result<()> {
+        if self.params.need_encryption_feature() {
+            get_storage_encryption_handler().check_license().await?;
+        }
+        Ok(())
     }
 
     pub fn instance() -> DataOperator {

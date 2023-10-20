@@ -179,6 +179,7 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let schema = Event::schema();
         let mut mutable_columns: Vec<ColumnBuilder> = Vec::with_capacity(schema.num_fields());

@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_ast::ast::AlterTaskOptions;
 use common_ast::ast::ScheduleOptions;
+use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
@@ -30,6 +32,69 @@ pub struct CreateTaskPlan {
 }
 
 impl CreateTaskPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AlterTaskPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub task_name: String,
+    pub alter_options: AlterTaskOptions,
+}
+
+impl AlterTaskPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropTaskPlan {
+    pub if_exists: bool,
+    pub tenant: String,
+    pub task_name: String,
+}
+
+impl DropTaskPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DescribeTaskPlan {
+    pub tenant: String,
+    pub task_name: String,
+}
+
+impl DescribeTaskPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ExecuteTaskPlan {
+    pub tenant: String,
+    pub task_name: String,
+}
+
+impl ExecuteTaskPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ShowTasksPlan {
+    pub tenant: String,
+    pub limit: Option<ShowLimit>,
+}
+
+impl ShowTasksPlan {
     pub fn schema(&self) -> DataSchemaRef {
         DataSchemaRefExt::create(vec![])
     }

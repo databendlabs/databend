@@ -12,128 +12,68 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This mod provides mechanism to track the count of active instances of some type `T`.
-//! The count is maintained by a `Count` implementation and will be increased or decreased when a wrapper of `T` `WithCounter` is created or dropped.
-//!
-//! Example:
-//!
-//! ```ignore
-//! struct Connection{}
-//! impl Connection {
-//!     fn ping() {}
-//! }
-//!
-//! struct MyCounter{ identifier: String, }
-//! impl Count for MyCounter {/*...*/}
-//!
-//! {
-//!     let conn = WithCounter::new(Connection{}, MyCounter{}); // increase count with `MyCounter`
-//!     conn.ping();
-//! } // decrease count with `MyCounter`
-//! ```
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::sync::Arc;
 
-use std::ops::Deref;
-use std::ops::DerefMut;
+use prometheus_client::encoding::EncodeMetric;
+use prometheus_client::encoding::MetricEncoder;
+use prometheus_client::metrics::MetricType;
+use prometheus_client::metrics::TypedMetric;
 
-/// Defines how to report counter metrics.
-pub trait Count {
-    fn incr_count(&mut self, n: i64);
-
-    /// Create a guard instance that increases the counter when created, and decreases the counter when dropped.
-    fn guard() -> WithCount<Self, ()>
-    where Self: Default + Sized {
-        WithCount::new((), Self::default())
-    }
-}
-
-/// Binds a counter to a `T`.
-///
-/// It counts the number of instances of `T` with the provided counter `Count`.
 #[derive(Debug)]
-pub struct WithCount<C, T>
-where C: Count
-{
-    counter: C,
-    inner: T,
+pub struct Counter {
+    value: Arc<AtomicU64>,
 }
 
-impl<C, T> WithCount<C, T>
-where C: Count
-{
-    pub fn new(t: T, counter: C) -> Self {
-        let mut s = Self { counter, inner: t };
-        s.counter.incr_count(1);
-        s
-    }
-
-    pub fn counter(&self) -> &C {
-        &self.counter
-    }
-}
-
-/// When being dropped, decreases the count.
-impl<C, T> Drop for WithCount<C, T>
-where C: Count
-{
-    fn drop(&mut self) {
-        self.counter.incr_count(-1);
-    }
-}
-
-/// Let an app use `WithCount` the same as using `T`.
-impl<C, T> Deref for WithCount<C, T>
-where C: Count
-{
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-/// Let an app use `WithCount` the same as using `T`.
-impl<C, T> DerefMut for WithCount<C, T>
-where C: Count
-{
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::atomic::AtomicI64;
-    use std::sync::atomic::Ordering;
-    use std::sync::Arc;
-
-    use crate::counter::Count;
-    use crate::counter::WithCount;
-
-    struct Foo {}
-    struct Counter {
-        n: Arc<AtomicI64>,
-    }
-    impl Count for Counter {
-        fn incr_count(&mut self, n: i64) {
-            self.n.fetch_add(n, Ordering::Relaxed);
+impl Clone for Counter {
+    fn clone(&self) -> Self {
+        Self {
+            value: self.value.clone(),
         }
     }
+}
 
-    #[test]
-    fn test_with_count() -> anyhow::Result<()> {
-        let count = Arc::new(AtomicI64::new(0));
-        assert_eq!(0, count.load(Ordering::Relaxed));
-
-        {
-            let _a = WithCount::new(Foo {}, Counter { n: count.clone() });
-            assert_eq!(1, count.load(Ordering::Relaxed));
-            {
-                let _b = WithCount::new(Foo {}, Counter { n: count.clone() });
-                assert_eq!(2, count.load(Ordering::Relaxed));
-            }
-            assert_eq!(1, count.load(Ordering::Relaxed));
+impl Default for Counter {
+    fn default() -> Self {
+        Counter {
+            value: Arc::new(AtomicU64::new(0)),
         }
-        assert_eq!(0, count.load(Ordering::Relaxed));
-        Ok(())
+    }
+}
+
+impl Counter {
+    /// Increase the [`Counter`] by 1, returning the previous value.
+    pub fn inc(&self) -> u64 {
+        self.value.fetch_add(1, Ordering::Relaxed)
+    }
+
+    /// Increase the [`Counter`] by `v`, returning the previous value.
+    pub fn inc_by(&self, v: u64) -> u64 {
+        self.value.fetch_add(v, Ordering::Relaxed)
+    }
+
+    /// Get the current value of the [`Counter`].
+    pub fn get(&self) -> u64 {
+        self.value.load(Ordering::Relaxed)
+    }
+
+    /// Reset the [`Counter`] to 0.
+    pub fn reset(&self) {
+        self.value.store(0, Ordering::Release)
+    }
+}
+
+impl TypedMetric for Counter {
+    const TYPE: MetricType = MetricType::Counter;
+}
+
+impl EncodeMetric for Counter {
+    fn encode(&self, mut encoder: MetricEncoder) -> Result<(), std::fmt::Error> {
+        encoder.encode_counter::<(), _, u64>(&self.get(), None)
+    }
+
+    fn metric_type(&self) -> MetricType {
+        Self::TYPE
     }
 }

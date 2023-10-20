@@ -50,6 +50,7 @@ pub async fn main_entrypoint() -> Result<()> {
     if run_cmd(&conf).await? {
         return Ok(());
     }
+
     init_services(&conf).await?;
     EnterpriseServices::init(conf.clone()).await?;
     start_services(&conf).await

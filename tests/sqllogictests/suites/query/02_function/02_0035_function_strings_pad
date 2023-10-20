@@ -36,13 +36,13 @@ NULL
 statement ok
 SELECT LPAD('', 0, '')
 
-statement error 1001
+statement error 1006
 SELECT LPAD('', 10, '')
 
-statement error 1001
+statement error 1006
 SELECT LPAD('123', 10, '')
 
-statement error 1001
+statement error 1006
 SELECT LPAD('123', 2000000, '')
 
 query T
@@ -177,13 +177,13 @@ NULL
 statement ok
 SELECT RPAD('', 0, '')
 
-statement error 1001
+statement error 1006
 SELECT RPAD('', 10, '')
 
-statement error 1001
+statement error 1006
 SELECT RPAD('123', 10, '')
 
-statement error 1001
+statement error 1006
 SELECT RPAD('123', 2000000, '')
 
 query T

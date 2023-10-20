@@ -125,6 +125,7 @@ impl Table for ResultScan {
         _ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         if self.block_raw_data.is_empty() {
             pipeline.add_source(EmptySource::create, 1)?;

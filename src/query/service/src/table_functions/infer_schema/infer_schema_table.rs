@@ -126,6 +126,7 @@ impl Table for InferSchemaTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| InferSchemaSource::create(ctx.clone(), output, self.args_parsed.clone()),
