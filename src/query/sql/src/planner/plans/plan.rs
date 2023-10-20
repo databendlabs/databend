@@ -30,6 +30,7 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterNetworkPolicyPlan;
 use crate::plans::AlterShareTenantsPlan;
 use crate::plans::AlterTableClusterKeyPlan;
+use crate::plans::AlterTaskPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
@@ -58,6 +59,7 @@ use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DescNetworkPolicyPlan;
 use crate::plans::DescSharePlan;
 use crate::plans::DescribeTablePlan;
+use crate::plans::DescribeTaskPlan;
 use crate::plans::DropCatalogPlan;
 use crate::plans::DropDatabasePlan;
 use crate::plans::DropDatamaskPolicyPlan;
@@ -71,10 +73,12 @@ use crate::plans::DropStagePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropTaskPlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
 use crate::plans::DropVirtualColumnPlan;
+use crate::plans::ExecuteTaskPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
@@ -111,6 +115,7 @@ use crate::plans::ShowObjectGrantPrivilegesPlan;
 use crate::plans::ShowRolesPlan;
 use crate::plans::ShowShareEndpointPlan;
 use crate::plans::ShowSharesPlan;
+use crate::plans::ShowTasksPlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UnSettingPlan;
 use crate::plans::UndropDatabasePlan;
@@ -280,6 +285,11 @@ pub enum Plan {
 
     // Task
     CreateTask(Box<CreateTaskPlan>),
+    AlterTask(Box<AlterTaskPlan>),
+    DropTask(Box<DropTaskPlan>),
+    DescribeTask(Box<DescribeTaskPlan>),
+    ShowTasks(Box<ShowTasksPlan>),
+    ExecuteTask(Box<ExecuteTaskPlan>),
 }
 
 #[derive(Clone, Debug)]
