@@ -1062,15 +1062,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_delete(
-        &mut self,
-        table_reference: &'ast TableReference,
-        selection: &'ast Option<Expr>,
-    ) {
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
         let mut children = Vec::new();
-        self.visit_table_reference(table_reference);
+        self.visit_table_reference(&delete.table);
         children.push(self.children.pop().unwrap());
-        if let Some(selection) = selection {
+        if let Some(selection) = &delete.selection {
             self.visit_expr(selection);
             children.push(self.children.pop().unwrap());
         }
