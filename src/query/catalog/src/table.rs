@@ -175,8 +175,9 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        put_cache: bool,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, plan, pipeline);
+        let (_, _, _, _) = (ctx, plan, pipeline, put_cache);
 
         Err(ErrorCode::Unimplemented(format!(
             "read_data operation for table {} is not implemented. table engine : {}",
