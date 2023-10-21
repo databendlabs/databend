@@ -75,6 +75,7 @@ use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
+use log::info;
 use parking_lot::RwLock;
 
 use crate::binder::copy_into_table::resolve_file_location;
@@ -548,6 +549,8 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
+        let start = std::time::Instant::now();
+
         let table = match stage_info.file_format_params {
             FileFormatParams::Parquet(..) => {
                 let use_parquet2 = table_ctx.get_settings().get_use_parquet2()?;
@@ -658,6 +661,8 @@ impl Binder {
         if let Some(alias) = alias {
             bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
+
+        info!("bind_stage_table cost: {:?}", start.elapsed());
         Ok((s_expr, bind_context))
     }
 
