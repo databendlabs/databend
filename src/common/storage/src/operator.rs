@@ -42,7 +42,6 @@ use common_metrics::load_global_prometheus_registry;
 use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
-use opendal::layers::MinitraceLayer;
 use opendal::layers::PrometheusClientLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
@@ -111,7 +110,7 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add logging
         .layer(LoggingLayer::default())
         // Add tracing
-        .layer(MinitraceLayer)
+        //.layer(MinitraceLayer)
         // Add PrometheusClientLayer
         .layer(PrometheusClientLayer::new(
             load_global_prometheus_registry().inner_mut(),
