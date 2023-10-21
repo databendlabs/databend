@@ -2694,9 +2694,9 @@ CreateTable(
 
 ---------- Input ----------
 CREATE TABLE t_nest_type(a int, b array(int not null));
- ---------- Output ---------
+---------- Output ---------
 CREATE TABLE t_nest_type (a Int32, b ARRAY(Int32))
- ---------- AST ------------
+---------- AST ------------
 CreateTable(
     CreateTableStmt {
         if_not_exists: false,
@@ -2749,7 +2749,8 @@ CreateTable(
         table_options: {},
         as_query: None,
         transient: false,
-   },
+    },
+)
 
 
 ---------- Input ----------
