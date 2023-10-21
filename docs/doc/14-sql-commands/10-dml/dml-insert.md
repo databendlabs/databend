@@ -113,7 +113,12 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES (v1|DEFAULT, v2|DEFAULT, v3|DEFAULT
 ```sql
 CREATE TABLE t_insert_default(a int null, b int default 2, c float, d varchar default 'd');
 
-INSERT INTO t_insert_default VALUES (default, default, default, default), (1, default, 1.0, default), (3, 3, 3.0, default), (4, 4, 4.0, 'a');
+INSERT INTO t_insert_default
+VALUES
+    (default, default, default, default),
+    (1, default, 1.0, default),
+    (3, 3, 3.0, default),
+    (4, 4, 4.0, 'a');
 
 SELECT * FROM t_insert_default;
 +------+------+------+------+
