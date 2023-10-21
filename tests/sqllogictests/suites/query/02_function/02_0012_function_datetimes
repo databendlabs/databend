@@ -1008,3 +1008,16 @@ query I
 SELECT to_week_of_year('2016-01-02T23:39:20.123-07:00');
 ----
 53
+
+statement ok
+create table tc(a int, b Date)
+
+statement ok
+insert into tc values(1, '2022-02-03'),(2,'2022-02-04'),(3,'2022-02-05');
+
+query T
+SELECT DATE_ADD(MINUTE, COUNT(*), b)
+----
+53
+52
+52
