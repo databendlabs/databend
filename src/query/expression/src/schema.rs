@@ -205,6 +205,7 @@ impl DataSchema {
         }
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name().clone()).collect();
 
+        assert_eq!(1,2);
         Err(ErrorCode::BadArguments(format!(
             "Unable to get field named \"{}\". Valid fields: {:?}",
             name, valid_fields
@@ -572,6 +573,7 @@ impl TableSchema {
         }
         let valid_fields: Vec<String> = self.fields.iter().map(|f| f.name.clone()).collect();
 
+        assert_eq!(1,2);
         Err(ErrorCode::BadArguments(format!(
             "Unable to get field named \"{}\". Valid fields: {:?}",
             name, valid_fields
