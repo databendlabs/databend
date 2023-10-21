@@ -208,7 +208,7 @@ impl CopyIntoTableInterpreter {
         };
 
         stage_table.set_block_thresholds(block_thresholds);
-        stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
+        stage_table.read_data(table_ctx, &read_source_plan, pipeline, false)?;
 
         Ok(())
     }
@@ -286,24 +286,27 @@ impl Interpreter for CopyIntoTableInterpreter {
         build_commit_data_pipeline(&self.ctx, &mut build_res.main_pipeline, &self.plan, &files)
             .await?;
 
-        let compact_target = CompactTargetTableDescription {
-            catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
-            database: self.plan.database_name.clone(),
-            table: self.plan.table_name.clone(),
-        };
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog_info.name_ident.catalog_name.clone(),
+                database: self.plan.database_name.clone(),
+                table: self.plan.table_name.clone(),
+            };
 
-        let trace_ctx = CompactHookTraceCtx {
-            start,
-            operation_name: "copy_into_table".to_owned(),
-        };
+            let trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "copy_into_table".to_owned(),
+            };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            compact_target,
-            trace_ctx,
-        )
-        .await;
+            hook_compact(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                compact_target,
+                trace_ctx,
+            )
+            .await;
+        }
 
         // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
         {

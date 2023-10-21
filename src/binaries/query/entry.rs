@@ -25,6 +25,7 @@ use common_config::QUERY_SEMVER;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_client::MIN_METASRV_SEMVER;
+use common_storage::DataOperator;
 use common_tracing::set_panic_hook;
 use databend_query::api::HttpService;
 use databend_query::api::RpcService;
@@ -112,6 +113,9 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
+
+    // Check storage enterprise features.
+    DataOperator::instance().check_license().await?;
     Ok(())
 }
 

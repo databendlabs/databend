@@ -582,6 +582,7 @@ impl Table for HiveTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         self.do_read2(ctx, plan, pipeline)
     }

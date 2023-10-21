@@ -32,6 +32,7 @@ jobs:
             docs/**
             website/**
             **.md
+            benchmark/**
             docker/**
             scripts/setup/**
             .devcontainer/**

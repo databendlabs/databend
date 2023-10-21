@@ -449,5 +449,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
 
         Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
+        Statement::ExecuteTask(stmt) => visitor.visit_execute_task(stmt),
+        Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),
+        Statement::AlterTask(stmt) => visitor.visit_alter_task(stmt),
+        Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
+        Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
     }
 }

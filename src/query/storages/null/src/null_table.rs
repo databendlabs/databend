@@ -77,6 +77,7 @@ impl Table for NullTable {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let schema: DataSchemaRef = Arc::new(self.table_info.schema().into());
         pipeline.add_source(

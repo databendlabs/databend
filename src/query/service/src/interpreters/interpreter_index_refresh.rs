@@ -218,11 +218,9 @@ impl Interpreter for RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Feature::AggregateIndex,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,

@@ -264,7 +264,7 @@ SELECT cbrt(-64)
 ----
 -4.0
 
-statement error 1001
+statement error 1006
 SELECT sqrt('a')
 
 query F
@@ -314,23 +314,23 @@ SELECT factorial(5)
 ----
 120
 
-statement error 1001
+statement error 1006
 SELECT factorial(30)
 
 
-statement error 1001
+statement error 1006
 SELECT pow('a', 2)
 
 
-statement error 1001
+statement error 1006
 SELECT pow(2, 'a')
 
 
-statement error 1001
+statement error 1006
 SELECT abs('-233.0')
 
 
-statement error 1001
+statement error 1006
 SELECT abs('blah')
 
 

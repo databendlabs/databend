@@ -211,7 +211,9 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         uncompressed_byte_size += b.block_size;
         compressed_byte_size += b.file_size;
         index_size += b.bloom_filter_index_size;
-        if thresholds.check_large_enough(b.row_count as usize, b.block_size as usize) {
+        if thresholds.check_large_enough(b.row_count as usize, b.block_size as usize)
+            || b.cluster_stats.as_ref().is_some_and(|v| v.level != 0)
+        {
             perfect_block_count += 1;
         }
         col_stats.push(&b.col_stats);

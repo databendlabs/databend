@@ -33,7 +33,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::RaftError;
 use common_meta_types::SeqV;
-use common_metrics::counter::Count;
+use common_metrics::count::Count;
 use futures::StreamExt;
 use log::as_debug;
 use log::debug;
