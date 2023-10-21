@@ -6,7 +6,7 @@ Attempts to forcibly terminate the currently running queries.
 
 ## Syntax
 
-```
+```sql
 KILL QUERY|CONNECTION <session_id>
 ```
 
