@@ -40,6 +40,7 @@ use common_meta_app::storage::StorageS3Config;
 use common_meta_app::storage::StorageWebhdfsConfig;
 use common_metrics::load_global_prometheus_registry;
 use log::warn;
+use once_cell::sync::OnceCell;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MinitraceLayer;
@@ -54,6 +55,8 @@ use storage_encryption::get_storage_encryption_handler;
 
 use crate::runtime_layer::RuntimeLayer;
 use crate::StorageConfig;
+
+static PROMETHEUS_CLIENT_LAYER_INSTANCE: OnceCell<PrometheusClientLayer> = OnceCell::new();
 
 /// init_operator will init an opendal operator based on storage config.
 pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
@@ -113,12 +116,15 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // Add tracing
         .layer(MinitraceLayer)
         // Add PrometheusClientLayer
-        .layer(PrometheusClientLayer::new(
-            load_global_prometheus_registry().inner_mut(),
-        ))
+        .layer(load_prometheus_client_layer())
         .finish();
 
     Ok(op)
+}
+
+fn load_prometheus_client_layer() -> &PrometheusClientLayer {
+    PROMETHEUS_CLIENT_LAYER_INSTANCE
+        .get_or_init(|| PrometheusClientLayer::new(load_global_prometheus_registry().inner_mut()))
 }
 
 /// init_azblob_operator will init an opendal azblob operator.

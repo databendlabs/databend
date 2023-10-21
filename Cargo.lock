@@ -2675,6 +2675,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
+ "once_cell",
  "opendal",
  "ordered-float 3.7.0",
  "parquet",
