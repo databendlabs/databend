@@ -1267,7 +1267,7 @@ pub fn at_string(i: Input) -> IResult<String> {
     })(i)
 }
 
-pub fn type_name(i: Input) -> IResult<TypeName> {
+pub fn basic_type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
         TypeName::UInt8,
@@ -1401,7 +1401,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
     )(i)
 }
 
-pub fn basic_type_name(i: Input) -> IResult<TypeName> {
+pub fn type_name(i: Input) -> IResult<TypeName> {
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
         TypeName::UInt8,
@@ -1458,8 +1458,14 @@ pub fn basic_type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
-        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ")" },
+        |(_, _, item_type, not_opt, null_opt)| {
+            if not_opt.is_none() && null_opt.is_some() {
+                TypeName::Array(Box::new(item_type.wrap_nullable()))
+            } else {
+                TypeName::Array(Box::new(item_type))
+            }
+        },
     );
     let ty_map = map(
         rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
