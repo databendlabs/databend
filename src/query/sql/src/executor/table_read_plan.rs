@@ -110,10 +110,10 @@ impl ToReadDataSourcePlan for dyn Table {
                 .await
         }?;
 
-        ctx.set_status_info(
+        ctx.set_status_info(&format!(
             "build physical plan - got data source partitions, time used {:?}",
-            start.elapsed(),
-        );
+            start.elapsed()
+        ));
 
         ctx.incr_total_scan_value(ProgressValues {
             rows: statistics.read_rows,
@@ -189,9 +189,9 @@ impl ToReadDataSourcePlan for dyn Table {
                     let column_not_null = !ctx.get_settings().get_ddl_column_type_nullable()?;
                     for (i, field) in output_schema.fields().iter().enumerate() {
                         if let Some(mask_policy) = column_mask_policy.get(field.name()) {
-                            ctx.set_status_info(
+                            ctx.set_status_info(&format!(
                                 "build physical plan - checking data mask policies - getting data masks, time used {:?}",
-                                start.elapsed(),
+                                start.elapsed())
                             );
                             if let Ok(policy) = handler
                                 .get_data_mask(
@@ -242,8 +242,8 @@ impl ToReadDataSourcePlan for dyn Table {
                                 );
 
                                 ctx.set_status_info(
-                                    "build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
-                                    start.elapsed(),
+                                    &format!("build physical plan - checking data mask policies - resolving mask expression, time used {:?}",
+                                    start.elapsed())
                                 );
                                 let scalar = type_checker.resolve(&ast_expr).await?;
                                 let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
@@ -262,7 +262,10 @@ impl ToReadDataSourcePlan for dyn Table {
             None
         };
 
-        ctx.set_status_info("build physical plan - built data source plan");
+        ctx.set_status_info(&format!(
+            "build physical plan - built data source plan, time used {:?}",
+            start.elapsed()
+        ));
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
