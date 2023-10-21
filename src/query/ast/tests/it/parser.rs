@@ -124,6 +124,7 @@ fn test_statement() {
         r#"CREATE TABLE t(c1 int not null, c2 bigint not null, c3 varchar not null);"#,
         r#"CREATE TABLE t(c1 varbinary);"#,
         r#"CREATE TABLE t(c1 int default 1);"#,
+        r#"CREATE TABLE t_nest_type(a int, b array(int not null));"#,
         r#"create table abc as (select * from xyz limit 10)"#,
         r#"ALTER USER u1 IDENTIFIED BY '123456';"#,
         r#"ALTER USER u1 WITH DEFAULT_ROLE = role1;"#,

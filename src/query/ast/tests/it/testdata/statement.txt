@@ -2693,6 +2693,13 @@ CreateTable(
 
 
 ---------- Input ----------
+CREATE TABLE t_nest_type(a int, b array(int not null))
+---------- Output ---------
+CREATE TABLE t_nest_type(a int, b array(int not null))
+---------- AST ------------
+
+
+---------- Input ----------
 create table abc as (select * from xyz limit 10)
 ---------- Output ---------
 CREATE TABLE abc AS SELECT * FROM xyz LIMIT 10
