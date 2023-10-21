@@ -1458,8 +1458,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ")" },
-        |(_, _, item_type, not_opt, null_opt)| {
+        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ~ ")" },
+        |(_, _, item_type, not_opt, null_opt, _)| {
             if not_opt.is_none() && null_opt.is_some() {
                 TypeName::Array(Box::new(item_type.wrap_nullable()))
             } else {
