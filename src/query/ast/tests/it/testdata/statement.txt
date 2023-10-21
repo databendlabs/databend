@@ -2693,10 +2693,63 @@ CreateTable(
 
 
 ---------- Input ----------
-CREATE TABLE t_nest_type(a int, b array(int not null))
----------- Output ---------
-CREATE TABLE t_nest_type(a int, b array(int not null))
----------- AST ------------
+CREATE TABLE t_nest_type(a int, b array(int not null));
+ ---------- Output ---------
+CREATE TABLE t_nest_type (a Int32, b ARRAY(Int32))
+ ---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: false,
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t_nest_type",
+            quote: None,
+            span: Some(
+                13..24,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                25..26,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                        nullable_constraint: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: Array(
+                            Int32,
+                        ),
+                        expr: None,
+                        comment: None,
+                        nullable_constraint: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+   },
 
 
 ---------- Input ----------
