@@ -1019,7 +1019,7 @@ statement ok
 insert into tc values(1, '2022-02-03'),(2,'2022-02-04'),(3,'2022-02-05');
 
 query T
-SELECT DATE_ADD(MINUTE, COUNT(*), b) FROM tc group by b;
+select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc group by b;
 ----
 53
 52
