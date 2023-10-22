@@ -6,7 +6,7 @@ This section provides reference information for the string-related functions in 
 
 ## String Manipulation:
 - [CONCAT](concat.md)
-- [CONCAT_WS](concat_ws.md)
+- [CONCAT_WS](concat-ws.md)
 - [INSERT](insert.md)
 - [LEFT](left.md)
 - [LPAD](lpad.md)
@@ -16,20 +16,20 @@ This section provides reference information for the string-related functions in 
 - [RIGHT](right.md)
 - [RPAD](rpad.md)
 - [SPLIT](split.md)
-- [SPLIT_PART](split_part.md)
+- [SPLIT_PART](split-part.md)
 - [SUBSTR](substr.md)
 - [SUBSTRING](substring.md)
 - [TRIM](trim.md)
 
 ## String Information:
 - [ASCII](ascii.md)
-- [BIT_LENGTH](bit_length.md)
-- [CHAR_LENGTH](char_length.md)
-- [CHARACTER_LENGTH](character_length.md)
+- [BIT_LENGTH](bit-length.md)
+- [CHAR_LENGTH](char-length.md)
+- [CHARACTER_LENGTH](character-length)
 - [INSTR](instr.md)
 - [LENGTH](length.md)
 - [LOCATE](locate.md)
-- [OCTET_LENGTH](octet_length.md)
+- [OCTET_LENGTH](octet-length.md)
 - [ORD](ord.md)
 - [POSITION](position.md)
 - [STRCMP](strcmp.md)
@@ -42,22 +42,22 @@ This section provides reference information for the string-related functions in 
 
 ## Regular Expressions:
 - [LIKE](like.md)
-- [NOT_LIKE](not_like.md)
-- [NOT_REGEXP](not_regexp.md)
-- [NOT_RLIKE](not_rlike.md)
+- [NOT_LIKE](not-like.md)
+- [NOT_REGEXP](not-regexp.md)
+- [NOT_RLIKE](not-rlike.md)
 - [REGEXP](regexp.md)
-- [REGEXP_INSTR](regexp_instr.md)
-- [REGEXP_LIKE](regexp_like.md)
-- [REGEXP_REPLACE](regexp_replace.md)
-- [REGEXP_SUBSTR](regexp_substr.md)
+- [REGEXP_INSTR](regexp-instr.md)
+- [REGEXP_LIKE](regexp-like.md)
+- [REGEXP_REPLACE](regexp-replace.md)
+- [REGEXP_SUBSTR](regexp-substr.md)
 - [RLIKE](rlike.md)
 
 ## Encoding and Decoding:
 - [BIN](bin.md)
-- [FROM_BASE64](from_base64.md)
+- [FROM_BASE64](from-base64.md)
 - [HEX](hex.md)
 - [OCT](oct.md)
-- [TO_BASE64](to_base64.md)
+- [TO_BASE64](to-base64.md)
 - [UNHEX](unhex.md)
 
 ## Miscellaneous:
