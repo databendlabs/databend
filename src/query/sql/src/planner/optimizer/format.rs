@@ -62,7 +62,7 @@ fn group_to_format_tree(
 ) -> FormatTreeNode<String> {
     FormatTreeNode::with_children(
         format!("Group #{}", group.group_index),
-        vec![
+        [
             if let Some(cost_context) = cost_context {
                 vec![FormatTreeNode::new(format!(
                     "best cost: [#{}] {}",

@@ -104,7 +104,7 @@ impl VisitorMut for AggregatingIndexRewriter {
         }
 
         let table = {
-            let table_ref = from.get(0).unwrap();
+            let table_ref = from.first().unwrap();
             match table_ref {
                 TableReference::Table { table, .. } => table.clone(),
                 _ => unreachable!(),
