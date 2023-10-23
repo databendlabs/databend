@@ -312,11 +312,29 @@ impl FuseTable {
             }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
-                Ok(options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    // for backward compatibility, we check the legacy table option
-                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                    .cloned())
+
+                if options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some() {
+                    // if table is read-only attached, parse snapshot location from hint
+                    // TODO report error
+                    let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
+                    // TODO duplicated code
+                    let reader = MetaReaders::table_snapshot_reader(self.operator.clone());
+                    let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                    let snapshot_loc = self.operator.read(&hint).await?;
+                    let snapshot_loc = String::from_utf8(snapshot_loc)?;
+                    let info = operator.info();
+                    let root = info.root();
+                    let snapshot_loc = snapshot_loc[root.len()..].to_string();
+                    Ok(Some(snapshot_loc))
+
+                } else {
+                    Ok(options
+                        .get(OPT_KEY_SNAPSHOT_LOCATION)
+                        // for backward compatibility, we check the legacy table option
+                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                        .cloned())
+                }
+
             }
         }
     }

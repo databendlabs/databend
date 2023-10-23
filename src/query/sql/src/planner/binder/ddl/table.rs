@@ -645,14 +645,15 @@ impl Binder {
             catalog,
             database,
             table,
-            options,
+            schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            storage_params: Some(sp),
+            read_only_attach: stmt.read_only,
+            part_prefix,
+            options,
+            field_comments: vec![],
             cluster_key: None,
             as_select: None,
-            schema: Arc::new(TableSchema::default()),
-            field_comments: vec![],
-            storage_params: Some(sp),
-            part_prefix,
         })))
     }
 

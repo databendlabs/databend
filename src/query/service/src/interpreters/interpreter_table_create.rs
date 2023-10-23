@@ -152,6 +152,10 @@ impl Interpreter for CreateTableInterpreter {
 impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
+        if self.plan.read_only_attach {
+            return Err(ErrorCode::InvalidArgument("READ_ ONLY attached table does not support create-as-select"));
+        }
+
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
@@ -311,6 +315,11 @@ impl CreateTableInterpreter {
         let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = self.plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+
+        if self.plan.read_only_attach {
+            // mark table as read_only attached
+            options.insert(OPT_KEY_READ_ONLY_ATTACHED, "T".to_string());
+        }
 
         let params = LoadParams {
             location: snapshot_loc.clone(),
