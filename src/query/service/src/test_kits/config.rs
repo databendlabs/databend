@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 
+use common_base::base::GlobalUniqName;
 use common_config::InnerConfig;
 use common_meta_app::principal::AuthInfo;
 use common_users::idm_config::IDMConfig;
@@ -31,6 +32,9 @@ impl ConfigBuilder {
         let mut users = HashMap::new();
         users.insert("root".to_string(), AuthInfo::None);
         conf.query.idm = IDMConfig { users };
+
+        // set node_id to a unique value
+        conf.query.node_id = GlobalUniqName::unique();
 
         ConfigBuilder { conf }
     }

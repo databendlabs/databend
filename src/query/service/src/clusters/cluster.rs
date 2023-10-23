@@ -29,7 +29,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep as tokio_async_sleep;
 use common_base::base::DummySignalStream;
 use common_base::base::GlobalInstance;
-use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
 pub use common_catalog::cluster_info::Cluster;
@@ -165,7 +164,7 @@ impl ClusterDiscovery {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_id: GlobalUniqName::unique(),
+            local_id: cfg.query.node_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
