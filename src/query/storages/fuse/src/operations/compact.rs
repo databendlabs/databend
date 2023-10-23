@@ -160,7 +160,7 @@ impl FuseTable {
 
         let all_column_indices = self.all_column_indices();
         let projection = Projection::Columns(all_column_indices);
-        let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
+        let block_reader = self.create_block_reader(ctx.clone(), projection, false, false)?;
         // Add source pipe.
         pipeline.add_source(
             |output| {

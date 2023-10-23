@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=3c61372#3c61372d7ac76bba149316b1fbad6e981752e502"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=9a26422#9a26422d00b83c65245f75e02eb436dedd91b5b8"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -2118,7 +2118,6 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
- "common-settings",
  "jwt-simple",
  "serde",
 ]
@@ -2409,6 +2408,7 @@ dependencies = [
  "lazy_static",
  "metrics",
  "metrics-exporter-prometheus",
+ "parking_lot 0.12.1",
  "procfs 0.15.1",
  "prometheus-client",
  "prometheus-parse",
@@ -2681,6 +2681,7 @@ dependencies = [
  "regex",
  "reqwest",
  "serde",
+ "storage-encryption",
  "thiserror",
 ]
 
@@ -4383,7 +4384,6 @@ dependencies = [
  "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
- "common-settings",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -4397,6 +4397,7 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
@@ -11127,6 +11128,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "storage-encryption"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+]
 
 [[package]]
 name = "storages-common-blocks"

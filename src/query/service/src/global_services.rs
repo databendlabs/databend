@@ -52,27 +52,24 @@ impl GlobalServices {
 
     #[async_backtrace::framed]
     pub async fn init_with(config: InnerConfig) -> Result<()> {
+        let app_name_shuffle = format!(
+            "databend-query@{}-{}",
+            config.query.node_id, config.query.cluster_id
+        );
+
         // The order of initialization is very important
+        // 1. global config init.
         GlobalConfig::init(config.clone())?;
 
-        let app_name_shuffle = format!("{}-{}", config.query.tenant_id, config.query.cluster_id);
-
+        // 2. log init.
         GlobalLogger::init(&app_name_shuffle, &config.log);
+
+        // 3. runtime init.
         GlobalIORuntime::init(config.storage.num_cpus as usize)?;
         GlobalQueryRuntime::init(config.storage.num_cpus as usize)?;
 
-        // Cluster discovery.
+        // 4. cluster discovery init.
         ClusterDiscovery::init(config.clone()).await?;
-
-        DataOperator::init(&config.storage).await?;
-
-        ShareTableConfig::init(
-            &config.query.share_endpoint_address,
-            &config.query.share_endpoint_auth_token_file,
-            config.query.tenant_id.clone(),
-        )?;
-
-        CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         // TODO(xuanwo):
         //
@@ -107,6 +104,14 @@ impl GlobalServices {
         RoleCacheManager::init()?;
         ShareEndpointManager::init()?;
         QueryProfileManager::init();
+
+        DataOperator::init(&config.storage).await?;
+        ShareTableConfig::init(
+            &config.query.share_endpoint_address,
+            &config.query.share_endpoint_auth_token_file,
+            config.query.tenant_id.clone(),
+        )?;
+        CacheManager::init(&config.cache, &config.query.tenant_id)?;
 
         Ok(())
     }

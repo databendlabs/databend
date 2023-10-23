@@ -334,6 +334,7 @@ impl Table for IcebergTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }

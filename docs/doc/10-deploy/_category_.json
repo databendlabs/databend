@@ -1,7 +1,3 @@
 {
-  "label": "Deploy & Manage",
-  "link": {
-    "type": "generated-index",
-    "slug": "/deploy"
-  }
+  "label": "Deploy & Manage"
 }

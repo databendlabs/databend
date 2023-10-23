@@ -112,6 +112,7 @@ impl Table for ClusteringInformationTable {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| {

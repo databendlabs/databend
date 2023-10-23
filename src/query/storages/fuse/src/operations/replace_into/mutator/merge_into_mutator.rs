@@ -152,10 +152,11 @@ impl MergeIntoOperationAggregator {
         let key_column_reader = {
             let projection = Projection::Columns(key_column_field_indexes);
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 table_schema.clone(),
                 projection,
-                ctx.clone(),
+                false,
                 false,
             )
         }?;
@@ -166,10 +167,11 @@ impl MergeIntoOperationAggregator {
             } else {
                 let projection = Projection::Columns(remain_column_field_ids.clone());
                 let reader = BlockReader::create(
+                    ctx.clone(),
                     data_accessor.clone(),
                     table_schema,
                     projection,
-                    ctx.clone(),
+                    false,
                     false,
                 )?;
                 Some(reader)

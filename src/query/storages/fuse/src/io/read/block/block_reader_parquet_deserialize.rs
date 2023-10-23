@@ -160,14 +160,16 @@ impl BlockReader {
         };
 
         // populate cache if necessary
-        if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
-            // populate array cache items
-            for item in deserialized_column_arrays.into_iter() {
-                if let DeserializedArray::Deserialized((column_id, array, size)) = item {
-                    let meta = column_metas.get(&column_id).unwrap();
-                    let (offset, len) = meta.offset_length();
-                    let key = TableDataCacheKey::new(block_path, column_id, offset, len);
-                    cache.put(key.into(), Arc::new((array, size)))
+        if self.put_cache {
+            if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {
+                // populate array cache items
+                for item in deserialized_column_arrays.into_iter() {
+                    if let DeserializedArray::Deserialized((column_id, array, size)) = item {
+                        let meta = column_metas.get(&column_id).unwrap();
+                        let (offset, len) = meta.offset_length();
+                        let key = TableDataCacheKey::new(block_path, column_id, offset, len);
+                        cache.put(key.into(), Arc::new((array, size)))
+                    }
                 }
             }
         }

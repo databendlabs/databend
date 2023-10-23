@@ -1,7 +1,3 @@
 {
-  "label": "Upgrading Databend",
-  "link": {
-    "type": "generated-index",
-    "slug": "/deploy/upgrade"
-  }
+  "label": "Upgrading Databend"
 }

@@ -17,26 +17,21 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_settings::Settings;
 use jwt_simple::claims::JWTClaims;
 
 use crate::license::Feature;
 use crate::license::LicenseInfo;
 
 pub trait LicenseManager: Sync + Send {
-    fn init() -> Result<()>
+    fn init(tenant: String) -> Result<()>
     where Self: Sized;
+
     fn instance() -> Arc<Box<dyn LicenseManager>>
     where Self: Sized;
 
     /// Check whether enterprise feature is available given context
     /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
-    fn check_enterprise_enabled(
-        &self,
-        settings: &Arc<Settings>,
-        tenant: String,
-        feature: Feature,
-    ) -> Result<()>;
+    fn check_enterprise_enabled(&self, license_key: String, feature: Feature) -> Result<()>;
 
     /// Encodes a raw license string as a JWT using the constant public key.
     ///
@@ -68,7 +63,7 @@ unsafe impl Sync for LicenseManagerWrapper {}
 pub struct OssLicenseManager {}
 
 impl LicenseManager for OssLicenseManager {
-    fn init() -> Result<()> {
+    fn init(_tenant: String) -> Result<()> {
         let rm = OssLicenseManager {};
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
@@ -81,12 +76,7 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn check_enterprise_enabled(
-        &self,
-        _settings: &Arc<Settings>,
-        _tenant: String,
-        _feature: Feature,
-    ) -> Result<()> {
+    fn check_enterprise_enabled(&self, _license_key: String, _feature: Feature) -> Result<()> {
         Err(ErrorCode::LicenseKeyInvalid(
             "Need Commercial License".to_string(),
         ))

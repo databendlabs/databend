@@ -590,7 +590,7 @@ impl<'a> EvalContext<'a> {
                     )
                 };
 
-                Err(ErrorCode::Internal(err_msg).set_span(span))
+                Err(ErrorCode::BadArguments(err_msg).set_span(span))
             }
             None => Ok(()),
         }

@@ -174,14 +174,14 @@ select '4294967295'::BIGINT::UINT32
 # ----
 # 4294967295
 
-statement error 1001
+statement error 1006
 select '18446744073709551615'::BIGINT::UINT64
 
 # TODO https://github.com/datafuselabs/databend/issues/7347
 # statement error XXX
 # select '-1'::BIGINT::UINT64
 
-statement error 1001
+statement error 1006
 select '18446744073709551616'::BIGINT::UINT64
 
 query I
