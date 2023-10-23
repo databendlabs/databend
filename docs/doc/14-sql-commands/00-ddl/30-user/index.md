@@ -2,7 +2,7 @@
 title: User
 ---
 
-This page provides reference information for the user-related commands in Databend.
+This page provides reference information for the user and role related commands in Databend.
 
 ## User and Role Management:
 
