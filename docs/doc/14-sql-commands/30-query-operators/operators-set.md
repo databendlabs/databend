@@ -6,9 +6,9 @@ description:
 
 Set operators combine the results of two queries into a single result. Databend supports the following set operators:
 
-* INTERSECT
-* EXCEPT
-* UNION [ALL]
+- [INTERSECT](#intersect)
+- [EXCEPT](#except)
+- [UNION [ALL]](#union-all)
 
 ## INTERSECT
 
