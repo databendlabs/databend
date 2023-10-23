@@ -154,6 +154,7 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
                 }
                 Scalar::Boolean(value) => MirConstant::Bool(*value),
                 Scalar::Null => MirConstant::Null,
+                Scalar::Timestamp(value) => MirConstant::Int(*value),
                 _ => return None,
             };
             Some(MirExpr::Constant(value))
@@ -163,6 +164,7 @@ pub fn as_mir(scalar: &ScalarExpr) -> Option<MirExpr> {
             let data_type = match column_ref.column.data_type.remove_nullable() {
                 DataType::Boolean => MirDataType::Bool,
                 DataType::Number(num_ty) if num_ty.is_integer() => MirDataType::Int,
+                DataType::Timestamp => MirDataType::Int,
                 _ => return None,
             };
             Some(MirExpr::Variable { name, data_type })
