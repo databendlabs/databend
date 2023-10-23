@@ -150,7 +150,7 @@ pub struct QueryConfig {
     /// ID for construct the cluster.
     pub cluster_id: String,
     // ID for the query node.
-    // This only initialized when InnerConfig.load().
+    // This only initialized when InnerConfig::load().
     pub node_id: String,
     pub num_cpus: u64,
     pub mysql_handler_host: String,

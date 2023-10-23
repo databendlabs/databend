@@ -1817,6 +1817,30 @@ impl<'a> TypeChecker<'a> {
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
+        // Run constant folding for arguments of the scalar function.
+        // This will be helpful to simplify some constant expressions, especially
+        // the implicitly casted literal values, e.g. `timestamp > '2001-01-01'`
+        // will be folded from `timestamp > to_timestamp('2001-01-01')` to `timestamp > 978307200000000`
+        let folded_args = match &expr {
+            common_expression::Expr::FunctionCall {
+                args: checked_args, ..
+            } => {
+                let mut folded_args = Vec::with_capacity(args.len());
+                for (checked_arg, arg) in checked_args.iter().zip(args.iter()) {
+                    match self.try_fold_constant(checked_arg) {
+                        Some(constant) if arg.evaluable() => {
+                            folded_args.push(constant.0);
+                        }
+                        _ => {
+                            folded_args.push(arg.clone());
+                        }
+                    }
+                }
+                folded_args
+            }
+            _ => args,
+        };
+
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
         }
@@ -1829,7 +1853,7 @@ impl<'a> TypeChecker<'a> {
             FunctionCall {
                 span,
                 params,
-                arguments: args,
+                arguments: folded_args,
                 func_name: func_name.to_string(),
             }
             .into(),
