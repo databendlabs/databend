@@ -28,11 +28,14 @@ CONNECTION = (
     AWS_KEY_ID = 'minioadmin'
     AWS_SECRET_KEY = 'minioadmin'
     ENDPOINT_URL = 'http://127.0.0.1:9000'
+    REGION = 'us-east-2'
 );
 
 SHOW CREATE CATALOG iceberg_ctl;
 
-| Catalog     | Type    | Option                                                                            |
-|-------------|---------|-----------------------------------------------------------------------------------|
-| iceberg_ctl | iceberg | STORAGE PARAMS s3 | bucket=databend,root=/iceberg/,endpoint=http://127.0.0.1:9000 |
+┌─────────────┬─────────┬────────────────────────────────────────────────────────────────────────────────────────┐
+│  Catalog    │  Type   │  Option                                                                                │
+├─────────────┼─────────┼────────────────────────────────────────────────────────────────────────────────────────┤
+│ iceberg_ctl │ iceberg │ STORAGE PARAMS s3 | bucket=databend, root=/iceberg/, endpoint=http://127.0.0.1:9000    │
+└─────────────┴─────────┴────────────────────────────────────────────────────────────────────────────────────────┘
 ```
