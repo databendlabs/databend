@@ -512,16 +512,7 @@ This example loads data from a CSV file "data.csv" with the following content:
 
 Each line contains three columns of data, with the third column being a string containing JSON data. To load CSV data correctly with JSON fields, we need to set the correct escape character. This example uses the backslash \ as the escape character, as the JSON data contains double quotes ".
 
-#### Step 1: Create custom file format.
-
-```sql
--- Define a custom CSV file format with the escape character set to backslash \
-CREATE FILE FORMAT my_csv_format
-    TYPE = CSV
-    ESCAPE = '\\';
-```
-
-#### Step 2: Create target table.
+#### Step 1: Create target table.
 
 ```sql
 CREATE TABLE t
@@ -532,9 +523,8 @@ CREATE TABLE t
   ); 
 ```
 
-#### Step 3: Load with custom file format.
+#### Step 2: Load data with custom escape format.
 
 ```sql
-COPY INTO t FROM @t_stage files=('data.csv') 
-FILE_FORMAT=(NAME='my_csv_format');
+COPY INTO t FROM @t_stage files=('data.csv') FILE_FORMAT=(type='my_csv_format', escape='\\');
 ```
