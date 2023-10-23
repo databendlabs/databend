@@ -53,7 +53,7 @@ fn test_decode_v5_share_meta() -> anyhow::Result<()> {
             now,
         );
         let mut entries = BTreeMap::new();
-        for entry in vec![share::ShareGrantEntry::new(
+        for entry in [share::ShareGrantEntry::new(
             share::ShareGrantObject::Table(19),
             share::ShareGrantObjectPrivilege::Select,
             now,
@@ -64,8 +64,8 @@ fn test_decode_v5_share_meta() -> anyhow::Result<()> {
         share::ShareMeta {
             database: Some(db_entry),
             entries,
-            accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
-            share_from_db_ids: BTreeSet::from_iter(vec![1, 2].into_iter()),
+            accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+            share_from_db_ids: BTreeSet::from_iter(vec![1, 2]),
             comment: Some(s("comment")),
             share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
             update_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap()),

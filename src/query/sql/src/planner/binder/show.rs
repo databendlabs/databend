@@ -85,7 +85,7 @@ impl Binder {
         let sub_query = like
             .clone()
             .map(|s| format!("WHERE name LIKE '{s}'"))
-            .unwrap_or_else(|| "".to_string());
+            .unwrap_or_default();
         let query = format!(
             "SELECT name, value, default, level, description, type FROM system.settings {} ORDER BY name",
             sub_query
