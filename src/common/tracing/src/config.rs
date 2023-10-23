@@ -161,7 +161,7 @@ impl Display for TracingConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), jaeger_endpoint={}",
+            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), otlp_endpoint={}",
             self.on,
             if !self.on {
                 "(To enable: DATABEND_OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317)"

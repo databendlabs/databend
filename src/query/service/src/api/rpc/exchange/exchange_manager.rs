@@ -97,6 +97,7 @@ impl DataExchangeManager {
 
     // Create connections for cluster all nodes. We will push data through this connection.
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn init_nodes_channel(&self, packet: &InitNodesChannelPacket) -> Result<()> {
         let mut request_exchanges = HashMap::new();
         let mut targets_exchanges = HashMap::new();
@@ -172,6 +173,7 @@ impl DataExchangeManager {
     }
 
     // Execute query in background
+    #[minitrace::trace]
     pub fn execute_partial_query(&self, query_id: &str) -> Result<()> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -186,6 +188,7 @@ impl DataExchangeManager {
     }
 
     // Create a pipeline based on query plan
+    #[minitrace::trace]
     pub fn init_query_fragments_plan(
         &self,
         ctx: &Arc<QueryContext>,
@@ -206,6 +209,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_statistics_exchange(
         &self,
         id: String,
@@ -222,6 +226,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn handle_exchange_fragment(
         &self,
         query: String,
@@ -248,6 +253,7 @@ impl DataExchangeManager {
         }
     }
 
+    #[minitrace::trace]
     pub fn on_finished_query(&self, query_id: &str) {
         let queries_coordinator_guard = self.queries_coordinator.lock();
         let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
@@ -262,6 +268,7 @@ impl DataExchangeManager {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,

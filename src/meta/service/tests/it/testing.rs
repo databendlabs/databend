@@ -42,7 +42,8 @@ where
 
 pub fn meta_service_test_harness_sync<F>(test: F)
 where F: FnOnce() -> anyhow::Result<()> + 'static {
-    setup_test();
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.block_on(async { setup_test() });
 
     let root = Span::root(closure_name::<F>(), SpanContext::random());
     let _guard = root.set_local_parent();
