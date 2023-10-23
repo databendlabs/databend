@@ -14,8 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
+use common_tracing::func_name;
 use log::error;
 use log::info;
+use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
 use poem::get;
@@ -271,19 +273,24 @@ async fn query_page_handler(
     _ctx: &HttpQueryContext,
     Path((query_id, page_no)): Path<(String, usize)>,
 ) -> PoemResult<impl IntoResponse> {
-    let http_query_manager = HttpQueryManager::instance();
-    match http_query_manager.get_query(&query_id).await {
-        Some(query) => {
-            query.update_expire_time(true).await;
-            let resp = query
-                .get_response_page(page_no)
-                .await
-                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query_id, resp, false))
+    let root = Span::root(func_name!(), SpanContext::random());
+
+    async {
+        let http_query_manager = HttpQueryManager::instance();
+        match http_query_manager.get_query(&query_id).await {
+            Some(query) => {
+                query.update_expire_time(true).await;
+                let resp = query.get_response_page(page_no).await.map_err(|err| {
+                    poem::Error::from_string(err.message(), StatusCode::NOT_FOUND)
+                })?;
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query_id, resp, false))
+            }
+            None => Err(query_id_not_found(query_id)),
         }
-        None => Err(query_id_not_found(query_id)),
     }
+    .in_span(root)
+    .await
 }
 
 #[poem::handler]
@@ -292,38 +299,44 @@ pub(crate) async fn query_handler(
     ctx: &HttpQueryContext,
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
-    info!("new http query request: {:?}", req);
-    let http_query_manager = HttpQueryManager::instance();
-    let sql = req.sql.clone();
+    let root = Span::root(func_name!(), SpanContext::random());
 
-    let query = http_query_manager
-        .try_create_query(ctx, req)
-        .await
-        .map_err(|err| err.display_with_sql(&sql));
-    match query {
-        Ok(query) => {
-            query.update_expire_time(true).await;
-            let resp = query
-                .get_response_page(0)
-                .await
-                .map_err(|err| err.display_with_sql(&sql))
-                .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
-            let (rows, next_page) = match &resp.data {
-                None => (0, None),
-                Some(p) => (p.page.data.num_rows(), p.next_page_no),
-            };
-            info!(
-                "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
-                &query.id, &resp.state, rows, next_page, sql
-            );
-            query.update_expire_time(false).await;
-            Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
-        }
-        Err(e) => {
-            error!("Fail to start sql, Error: {:?}", e);
-            Ok(QueryResponse::fail_to_start_sql(&e).into_response())
+    async {
+        info!("new http query request: {:?}", req);
+        let http_query_manager = HttpQueryManager::instance();
+        let sql = req.sql.clone();
+
+        let query = http_query_manager
+            .try_create_query(ctx, req)
+            .await
+            .map_err(|err| err.display_with_sql(&sql));
+        match query {
+            Ok(query) => {
+                query.update_expire_time(true).await;
+                let resp = query
+                    .get_response_page(0)
+                    .await
+                    .map_err(|err| err.display_with_sql(&sql))
+                    .map_err(|err| poem::Error::from_string(err.message(), StatusCode::NOT_FOUND))?;
+                let (rows, next_page) = match &resp.data {
+                    None => (0, None),
+                    Some(p) => (p.page.data.num_rows(), p.next_page_no),
+                };
+                info!(
+                    "initial response to http query_id={}, state={:?}, rows={}, next_page={:?}, sql='{}'",
+                    &query.id, &resp.state, rows, next_page, sql
+                );
+                query.update_expire_time(false).await;
+                Ok(QueryResponse::from_internal(query.id.to_string(), resp, false).into_response())
+            }
+            Err(e) => {
+                error!("Fail to start sql, Error: {:?}", e);
+                Ok(QueryResponse::fail_to_start_sql(&e).into_response())
+            }
         }
     }
+    .in_span(root)
+    .await
 }
 
 pub fn query_route() -> Route {

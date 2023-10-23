@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(provide_any)]
-
 pub mod meta_bytes_error;
 mod meta_storage_errors;
 

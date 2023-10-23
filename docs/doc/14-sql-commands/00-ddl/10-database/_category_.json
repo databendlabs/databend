@@ -1,7 +1,3 @@
 {
-  "label": "Database",
-  "link": {
-    "type": "generated-index",
-    "slug": "/sql-commands/ddl/database"
-  }
+  "label": "Database"
 }

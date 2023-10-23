@@ -96,7 +96,7 @@ impl OpenAI {
         } else {
             let message = resp
                 .choices
-                .get(0)
+                .first()
                 .and_then(|choice| choice.message.as_ref());
 
             match message {

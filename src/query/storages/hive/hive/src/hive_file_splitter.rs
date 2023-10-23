@@ -31,7 +31,6 @@ impl HiveFileSplitter {
     }
 
     pub fn split_length(&self, length: u64) -> Vec<Range<u64>> {
-        let length = length;
         let mut num = length / self.min_split_size;
         let left = length % self.min_split_size;
         if num == 0 || left > self.min_split_size / 3 {

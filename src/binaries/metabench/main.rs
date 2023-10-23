@@ -103,7 +103,7 @@ async fn main() {
         tracing: TracingConfig {
             on: false,
             capture_log_level: "TRACE".to_string(),
-            jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
+            otlp_endpoint: "http://127.0.0.1:4317".to_string(),
         },
     };
 
