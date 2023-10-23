@@ -230,6 +230,10 @@ impl StringColumn {
             offsets: self.offsets.windows(2),
         }
     }
+
+    pub fn into_buffer(self) -> (Buffer<u8>, Buffer<u64>) {
+        (self.data, self.offsets)
+    }
 }
 
 pub struct StringIterator<'a> {

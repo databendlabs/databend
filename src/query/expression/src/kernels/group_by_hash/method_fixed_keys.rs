@@ -43,7 +43,9 @@ use crate::with_number_mapped_type;
 use crate::Column;
 use crate::ColumnBuilder;
 use crate::HashMethod;
+use crate::KeyAccessor;
 use crate::KeysState;
+use crate::PrimitiveKeyAccessor;
 
 pub type HashMethodKeysU8 = HashMethodFixedKeys<u8>;
 pub type HashMethodKeysU16 = HashMethodFixedKeys<u16>;
@@ -268,16 +270,16 @@ macro_rules! impl_hash_method_fixed_keys {
                 }
             }
 
-            fn build_keys_iter_and_hashes<'a>(
+            fn build_keys_accessor_and_hashes(
                 &self,
-                keys_state: &'a KeysState,
-            ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+                keys_state: KeysState,
+                hashes: &mut Vec<u64>,
+            ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
                 use crate::types::ArgType;
                 match keys_state {
                     KeysState::Column(Column::Number(NumberColumn::$dt(col))) => {
-                        let mut hashes = Vec::with_capacity(col.len());
                         hashes.extend(col.iter().map(|key| key.fast_hash()));
-                        Ok((col.iter(), hashes))
+                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(col)))
                     }
                     other => unreachable!("{:?} -> {}", other, NumberType::<$ty>::data_type()),
                 }
@@ -338,15 +340,15 @@ macro_rules! impl_hash_method_fixed_large_keys {
                 }
             }
 
-            fn build_keys_iter_and_hashes<'a>(
+            fn build_keys_accessor_and_hashes(
                 &self,
-                keys_state: &'a KeysState,
-            ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+                keys_state: KeysState,
+                hashes: &mut Vec<u64>,
+            ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
                 match keys_state {
                     KeysState::$name(v) => {
-                        let mut hashes = Vec::with_capacity(v.len());
                         hashes.extend(v.iter().map(|key| key.fast_hash()));
-                        Ok((v.iter(), hashes))
+                        Ok(Box::new(PrimitiveKeyAccessor::<$ty>::new(v)))
                     }
                     _ => unreachable!(),
                 }

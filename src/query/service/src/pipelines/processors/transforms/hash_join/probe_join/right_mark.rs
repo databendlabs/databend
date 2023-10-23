@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_exception::ErrorCode;
@@ -21,6 +20,7 @@ use common_expression::types::BooleanType;
 use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::DataBlock;
+use common_expression::KeyAccessor;
 use common_hashtable::HashJoinHashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
@@ -30,20 +30,17 @@ use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn probe_right_mark_join<'a, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn probe_right_mark_join<'a, H: HashJoinHashtableLike>(
         &self,
+        input: &DataBlock,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
         probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
-        input: &DataBlock,
-        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let valids = probe_state.valids.as_ref();
+        // Probe states.
         let has_null = *self
             .hash_join_state
             .hash_join_desc
@@ -51,16 +48,15 @@ impl HashJoinProbeState {
             .has_null
             .read();
         let markers = probe_state.markers.as_mut().unwrap();
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
-            let contains = match self.hash_join_state.hash_join_desc.from_correlated_subquery
-                || valids.map_or(true, |v| v.get_bit(i))
-            {
-                true => hash_table.next_contains(key, *ptr),
-                false => false,
-            };
+        let pointers = probe_state.hashes.as_slice();
+        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+        let is_probe_projected = probe_state.is_probe_projected;
 
-            if contains {
-                markers[i] = MARKER_KIND_TRUE;
+        for idx in selection.iter() {
+            let key = unsafe { keys.key_unchecked(*idx as usize) };
+            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            if hash_table.next_contains(key, ptr) {
+                markers[*idx as usize] = MARKER_KIND_TRUE;
             }
         }
 
@@ -78,27 +74,38 @@ impl HashJoinProbeState {
         )])
     }
 
-    pub(crate) fn probe_right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn probe_right_mark_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
+        input: &DataBlock,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
         probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
-        input: &DataBlock,
-        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
-        let max_block_size = probe_state.max_block_size;
-        let valids = probe_state.valids.as_ref();
         let has_null = *self
             .hash_join_state
             .hash_join_desc
             .marker_join_desc
             .has_null
             .read();
+        let other_predicate = self
+            .hash_join_state
+            .hash_join_desc
+            .other_predicate
+            .as_ref()
+            .unwrap();
+
+        // Probe states.
+        let max_block_size = probe_state.max_block_size;
+        let probe_indexes = &mut probe_state.probe_indexes;
+        let build_indexes = &mut probe_state.build_indexes;
+        let build_indexes_ptr = build_indexes.as_mut_ptr();
+        let pointers = probe_state.hashes.as_slice();
+        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+        let is_probe_projected = probe_state.is_probe_projected;
+        let string_items_buf = &mut probe_state.string_items_buf;
         let cols = input
             .columns()
             .iter()
@@ -108,19 +115,7 @@ impl HashJoinProbeState {
         self.hash_join_state
             .init_markers(&cols, input.num_rows(), markers);
 
-        let other_predicate = self
-            .hash_join_state
-            .hash_join_desc
-            .other_predicate
-            .as_ref()
-            .unwrap();
-
-        let mut matched_num = 0;
-        let probe_indexes = &mut probe_state.probe_indexes;
-        let build_indexes = &mut probe_state.build_indexes;
-        let build_indexes_ptr = build_indexes.as_mut_ptr();
-        let string_items_buf = &mut probe_state.string_items_buf;
-
+        // Build states.
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
             unsafe { &*self.hash_join_state.build_columns_data_type.get() };
@@ -130,22 +125,20 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
+        let mut matched_num = 0;
+
+        for idx in selection.iter() {
+            let key = unsafe { keys.key_unchecked(*idx as usize) };
+            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
             let (mut match_count, mut incomplete_ptr) =
-                if self.hash_join_state.hash_join_desc.from_correlated_subquery
-                    || valids.map_or(true, |v| v.get_bit(i))
-                {
-                    hash_table.next_probe(key, *ptr, build_indexes_ptr, matched_num, max_block_size)
-                } else {
-                    continue;
-                };
+                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_num, max_block_size);
 
             if match_count == 0 {
                 continue;
             }
 
             for _ in 0..match_count {
-                probe_indexes[matched_num] = i as u32;
+                probe_indexes[matched_num] = *idx;
                 matched_num += 1;
             }
             if matched_num >= max_block_size {
@@ -211,7 +204,7 @@ impl HashJoinProbeState {
                     }
 
                     for _ in 0..match_count {
-                        probe_indexes[matched_num] = i as u32;
+                        probe_indexes[matched_num] = *idx;
                         matched_num += 1;
                     }
 

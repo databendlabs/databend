@@ -157,6 +157,35 @@ impl HashJoinProbeState {
         }
     }
 
+    /// Checks if a join type can use selection.
+    pub fn check_for_eliminate_valids(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Full
+                | JoinType::Left
+                | JoinType::LeftSingle
+                | JoinType::LeftAnti
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+                | JoinType::RightMark
+        )
+    }
+
+    /// Checks if a join type can eliminate valids.
+    pub fn check_for_selection(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::RightMark
+                | JoinType::LeftMark
+        )
+    }
+
     pub fn probe_join(
         &self,
         mut input: DataBlock,
@@ -209,11 +238,11 @@ impl HashJoinProbeState {
             }
         }
 
+        let mut valids = None;
         if probe_keys
             .iter()
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
-            let mut valids = None;
             for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
@@ -223,11 +252,15 @@ impl HashJoinProbeState {
                     valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
-            probe_state.valids = valids;
+        }
+        if self.hash_join_state.hash_join_desc.from_correlated_subquery
+            && Self::check_for_eliminate_valids(&self.hash_join_state.hash_join_desc.join_type)
+        {
+            valids = None;
         }
 
         let input = input.project(&self.probe_projections);
-        let is_probe_projected = input.num_columns() > 0;
+        probe_state.is_probe_projected = input.num_columns() > 0;
 
         if self.hash_join_state.fast_return.load(Ordering::Relaxed)
             && matches!(
@@ -235,7 +268,7 @@ impl HashJoinProbeState {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, is_probe_projected);
+            return self.left_fast_return(input, probe_state.is_probe_projected);
         }
 
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
@@ -244,18 +277,21 @@ impl HashJoinProbeState {
                 let keys_state = table
                     .hash_method
                     .build_keys_state(&probe_keys, input.num_rows())?;
-                let (keys_iter, mut hashes) =
-                    table.hash_method.build_keys_iter_and_hashes(&keys_state)?;
+                let keys = table
+                    .hash_method
+                    .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
                 // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-                table.hash_table.probe(&mut hashes);
-                self.result_blocks(
-                    &table.hash_table,
-                    probe_state,
-                    keys_iter,
-                    &hashes,
-                    &input,
-                    is_probe_projected,
-                )
+                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
+                    probe_state.selection_count = table.hash_table.probe_with_selection(
+                        &mut probe_state.hashes,
+                        valids,
+                        &mut probe_state.selection,
+                    );
+                } else {
+                    // For these join types, we don't use selection: full, left, left single, left anti, left semi.
+                    table.hash_table.probe(&mut probe_state.hashes, valids);
+                }
+                self.result_blocks(&input, keys, &table.hash_table, probe_state)
             }
             HashJoinHashTable::Null => Err(ErrorCode::AbortedQuery(
                 "Aborted query, because the hash table is uninitialized.",

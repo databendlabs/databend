@@ -19,7 +19,9 @@ use crate::types::string::StringIterator;
 use crate::types::DataType;
 use crate::Column;
 use crate::HashMethod;
+use crate::KeyAccessor;
 use crate::KeysState;
+use crate::StringKeyAccessor;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleString {}
@@ -50,17 +52,18 @@ impl HashMethod for HashMethodSingleString {
         }
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::String(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
-                let mut hashes = Vec::with_capacity(col.len());
                 hashes.extend(col.iter().map(|key| key.fast_hash()));
-                Ok((col.iter(), hashes))
+                let (data, offsets) = col.into_buffer();
+                Ok(Box::new(StringKeyAccessor::new(data, offsets)))
             }
             _ => unreachable!(),
         }

@@ -25,9 +25,12 @@ pub struct ProbeState {
     pub(crate) max_block_size: usize,
     pub(crate) probe_indexes: Vec<u32>,
     pub(crate) build_indexes: Vec<RowPtr>,
-    pub(crate) valids: Option<Bitmap>,
+    pub(crate) selection: Vec<u32>,
+    pub(crate) hashes: Vec<u64>,
     pub(crate) true_validity: Bitmap,
     pub(crate) func_ctx: FunctionContext,
+    pub(crate) selection_count: usize,
+    pub(crate) is_probe_projected: bool,
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
     // probe_indexes: the result index to the probe block row -> [0, 1, 2, 2, 3]
@@ -41,7 +44,8 @@ pub struct ProbeState {
 
 impl ProbeState {
     pub fn clear(&mut self) {
-        self.valids = None;
+        // Reuse hashes vec.
+        unsafe { self.hashes.set_len(0) };
     }
 
     pub fn create(
@@ -90,7 +94,10 @@ impl ProbeState {
                 };
                 max_block_size
             ],
-            valids: None,
+            selection: vec![0; max_block_size],
+            hashes: vec![0; max_block_size],
+            selection_count: 0,
+            is_probe_projected: false,
             true_validity,
             func_ctx,
             row_state,
@@ -112,7 +119,6 @@ impl ProbeState {
             };
             self.max_block_size
         ];
-        self.valids = None;
         self.row_state = None;
         self.row_state_indexes = None;
         self.probe_unmatched_indexes = None;

@@ -20,6 +20,7 @@ use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::num::NonZeroU64;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
@@ -437,7 +438,15 @@ pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe(&self, hashes: &mut [u64]);
+    fn probe(&self, hashes: &mut [u64], valids: Option<Bitmap>);
+
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn probe_with_selection(
+        &self,
+        hashes: &mut [u64],
+        valids: Option<Bitmap>,
+        selection: &mut [u32],
+    ) -> usize;
 
     fn next_contains(&self, key: &Self::Key, ptr: u64) -> bool;
 

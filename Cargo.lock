@@ -2070,6 +2070,7 @@ dependencies = [
  "ahash 0.8.3",
  "bumpalo",
  "cfg-if",
+ "common-arrow",
  "common-base",
  "ethnum",
  "ordered-float 3.7.0",

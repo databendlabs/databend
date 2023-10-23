@@ -30,6 +30,7 @@ use common_expression::HashMethodKeysU128;
 use common_expression::HashMethodKeysU256;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
+use common_expression::KeyAccessor;
 use common_expression::KeysState;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
@@ -618,11 +619,13 @@ impl<Method: HashMethodBounds> HashMethod for PartitionedHashMethod<Method> {
         self.method.build_keys_iter(keys_state)
     }
 
-    fn build_keys_iter_and_hashes<'a>(
+    fn build_keys_accessor_and_hashes(
         &self,
-        keys_state: &'a KeysState,
-    ) -> Result<(Self::HashKeyIter<'a>, Vec<u64>)> {
-        self.method.build_keys_iter_and_hashes(keys_state)
+        keys_state: KeysState,
+        hashes: &mut Vec<u64>,
+    ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
+        self.method
+            .build_keys_accessor_and_hashes(keys_state, hashes)
     }
 }
 

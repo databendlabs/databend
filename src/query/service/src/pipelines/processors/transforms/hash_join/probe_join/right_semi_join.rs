@@ -12,49 +12,48 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::KeyAccessor;
 use common_hashtable::HashJoinHashtableLike;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn probe_right_semi_join<'a, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn probe_right_semi_join<'a, H: HashJoinHashtableLike>(
         &self,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
         probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        // Probe states.
         let max_block_size = probe_state.max_block_size;
-        let valids = probe_state.valids.as_ref();
-        // The right join will return multiple data blocks of similar size.
-        let mut matched_num = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let pointers = probe_state.hashes.as_slice();
+        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+
+        // Build states.
         let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
 
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
-            let (mut match_count, mut incomplete_ptr) = if valids.map_or(true, |v| v.get_bit(i)) {
-                hash_table.next_probe(
-                    key,
-                    *ptr,
-                    local_build_indexes_ptr,
-                    matched_num,
-                    max_block_size,
-                )
-            } else {
-                continue;
-            };
+        let mut matched_num = 0;
+        for idx in selection.iter() {
+            let key = unsafe { keys.key_unchecked(*idx as usize) };
+            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            let (mut match_count, mut incomplete_ptr) = hash_table.next_probe(
+                key,
+                ptr,
+                local_build_indexes_ptr,
+                matched_num,
+                max_block_size,
+            );
 
             if match_count == 0 {
                 continue;
@@ -106,28 +105,27 @@ impl HashJoinProbeState {
         Ok(vec![])
     }
 
-    pub(crate) fn probe_right_semi_join_with_conjunct<'a, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn probe_right_semi_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
+        input: &DataBlock,
+        keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
         hash_table: &H,
         probe_state: &mut ProbeState,
-        keys_iter: IT,
-        pointers: &[u64],
-        input: &DataBlock,
-        is_probe_projected: bool,
     ) -> Result<Vec<DataBlock>>
     where
-        IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        // Probe states.
         let max_block_size = probe_state.max_block_size;
-        let valids = probe_state.valids.as_ref();
-        // The right join will return multiple data blocks of similar size.
-        let mut matched_num = 0;
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
-        let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+        let pointers = probe_state.hashes.as_slice();
+        let is_probe_projected = probe_state.is_probe_projected;
         let string_items_buf = &mut probe_state.string_items_buf;
+        let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
+        // Build states.
         let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
         let build_columns_data_type =
             unsafe { &*self.hash_join_state.build_columns_data_type.get() };
@@ -138,25 +136,24 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
 
-        for (i, (key, ptr)) in keys_iter.zip(pointers).enumerate() {
-            let (mut match_count, mut incomplete_ptr) = if valids.map_or(true, |v| v.get_bit(i)) {
-                hash_table.next_probe(
-                    key,
-                    *ptr,
-                    local_build_indexes_ptr,
-                    matched_num,
-                    max_block_size,
-                )
-            } else {
-                continue;
-            };
+        let mut matched_num = 0;
+        for idx in selection.iter() {
+            let key = unsafe { keys.key_unchecked(*idx as usize) };
+            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+            let (mut match_count, mut incomplete_ptr) = hash_table.next_probe(
+                key,
+                ptr,
+                local_build_indexes_ptr,
+                matched_num,
+                max_block_size,
+            );
 
             if match_count == 0 {
                 continue;
             }
 
             for _ in 0..match_count {
-                local_probe_indexes[matched_num] = i as u32;
+                local_probe_indexes[matched_num] = *idx;
                 matched_num += 1;
             }
             if matched_num >= max_block_size {
@@ -236,7 +233,7 @@ impl HashJoinProbeState {
                     }
 
                     for _ in 0..match_count {
-                        local_probe_indexes[matched_num] = i as u32;
+                        local_probe_indexes[matched_num] = *idx;
                         matched_num += 1;
                     }
 

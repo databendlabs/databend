@@ -44,6 +44,7 @@ use crate::IndexType;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
+    Cross,
     Inner,
     Left,
     Right,
@@ -52,7 +53,6 @@ pub enum JoinType {
     RightSemi,
     LeftAnti,
     RightAnti,
-    Cross,
     /// Mark Join is a special case of join that is used to process Any subquery and correlated Exists subquery.
     /// Left Mark Join use subquery as probe side, it's blocked at `mark_join_blocks`
     LeftMark,
