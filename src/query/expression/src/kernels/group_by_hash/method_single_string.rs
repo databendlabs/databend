@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 use common_hashtable::FastHash;
 
@@ -21,7 +22,6 @@ use crate::Column;
 use crate::HashMethod;
 use crate::KeyAccessor;
 use crate::KeysState;
-use crate::StringKeyAccessor;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HashMethodSingleString {}
@@ -67,5 +67,27 @@ impl HashMethod for HashMethodSingleString {
             }
             _ => unreachable!(),
         }
+    }
+}
+
+pub struct StringKeyAccessor {
+    data: Buffer<u8>,
+    offsets: Buffer<u64>,
+}
+
+impl StringKeyAccessor {
+    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
+        Self { data, offsets }
+    }
+}
+
+impl KeyAccessor for StringKeyAccessor {
+    type Key = [u8];
+
+    /// # Safety
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
+    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
+        &self.data[*self.offsets.get_unchecked(index) as usize
+            ..*self.offsets.get_unchecked(index + 1) as usize]
     }
 }

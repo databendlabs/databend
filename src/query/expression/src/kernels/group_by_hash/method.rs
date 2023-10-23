@@ -63,68 +63,6 @@ pub trait KeyAccessor {
     unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key;
 }
 
-pub struct PrimitiveKeyAccessor<T> {
-    data: Buffer<T>,
-}
-
-impl<T> PrimitiveKeyAccessor<T> {
-    pub fn new(data: Buffer<T>) -> Self {
-        Self { data }
-    }
-}
-
-impl<T> KeyAccessor for PrimitiveKeyAccessor<T> {
-    type Key = T;
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
-        self.data.get_unchecked(index)
-    }
-}
-
-pub struct StringKeyAccessor {
-    data: Buffer<u8>,
-    offsets: Buffer<u64>,
-}
-
-impl StringKeyAccessor {
-    pub fn new(data: Buffer<u8>, offsets: Buffer<u64>) -> Self {
-        Self { data, offsets }
-    }
-}
-
-impl KeyAccessor for StringKeyAccessor {
-    type Key = [u8];
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
-        &self.data[*self.offsets.get_unchecked(index) as usize
-            ..*self.offsets.get_unchecked(index + 1) as usize]
-    }
-}
-
-pub struct DicKeyAccessor {
-    data: Vec<DictionaryKeys>,
-}
-
-impl DicKeyAccessor {
-    pub fn new(data: Vec<DictionaryKeys>) -> Self {
-        Self { data }
-    }
-}
-
-impl KeyAccessor for DicKeyAccessor {
-    type Key = DictionaryKeys;
-
-    /// # Safety
-    /// Calling this method with an out-of-bounds index is *[undefined behavior]*.
-    unsafe fn key_unchecked<'a>(&'a self, index: usize) -> &'a Self::Key {
-        self.data.get_unchecked(index)
-    }
-}
-
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
 

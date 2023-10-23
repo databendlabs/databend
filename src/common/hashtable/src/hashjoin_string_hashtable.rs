@@ -65,7 +65,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
 
     pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
         let hash = key.fast_hash();
-        let index = (key.fast_hash() >> self.hash_shift) as usize;
+        let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
         // # Safety
         // `index` is less than the capacity of hash table.
