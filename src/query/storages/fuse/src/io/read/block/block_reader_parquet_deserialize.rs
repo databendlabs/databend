@@ -19,7 +19,9 @@ use std::time::Instant;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
+use common_arrow::arrow::io::parquet::read::InitNested;
 use common_arrow::parquet::compression::Compression as ParquetCompression;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::metadata::SchemaDescriptor;
@@ -176,12 +178,14 @@ impl BlockReader {
         Ok(data_block)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn chunks_to_parquet_array_iter<'a>(
         metas: Vec<&ColumnMeta>,
         chunks: Vec<&'a [u8]>,
         rows: usize,
         column_descriptors: Vec<&ColumnDescriptor>,
         field: Field,
+        init: Vec<InitNested>,
         compression: &Compression,
         uncompressed_buffer: Arc<UncompressedBuffer>,
     ) -> Result<ArrayIter<'a>> {
@@ -217,13 +221,12 @@ impl BlockReader {
             .map(|column_descriptor| &column_descriptor.descriptor.primitive_type)
             .collect::<Vec<_>>();
 
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
+        let array_iter = if init.is_empty() {
+            column_iter_to_arrays(columns, types, field, Some(rows), rows)?
+        } else {
+            nested_column_iter_to_arrays(columns, types, field, init, Some(rows), rows)?
+        };
+        Ok(array_iter)
     }
 
     pub fn deserialize_field<'a>(
@@ -294,6 +297,7 @@ impl BlockReader {
                 num_rows,
                 field_column_descriptors,
                 column.field.clone(),
+                column.init.clone(),
                 compression,
                 uncompressed_buffer
                     .clone()

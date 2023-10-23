@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=9a26422#9a26422d00b83c65245f75e02eb436dedd91b5b8"
+source = "git+https://github.com/b41sh/arrow2?rev=32a3104#32a3104627827cd578c0417c63c45f9bad2c04a8"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -554,6 +554,7 @@ dependencies = [
  "json-deserializer",
  "lexical-core",
  "lz4",
+ "memchr",
  "multiversion",
  "num-traits",
  "parquet2",
