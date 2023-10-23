@@ -2375,6 +2375,7 @@ pub struct DiskCacheConfig {
 }
 
 mod cache_config_converters {
+    use common_base::base::GlobalUniqName;
     use log::warn;
 
     use super::*;
@@ -2430,6 +2431,7 @@ mod cache_config_converters {
                 catalogs,
                 cache: self.cache.try_into()?,
                 background: self.background.try_into()?,
+                node_id: GlobalUniqName::unique(),
             })
         }
     }

@@ -21,6 +21,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use common_base::base::mask_string;
+use common_base::base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
@@ -63,6 +64,9 @@ pub struct InnerConfig {
 
     // Background Config
     pub background: InnerBackgroundConfig,
+
+    // UUID node id, this is not configurable.
+    pub node_id: String,
 }
 
 impl InnerConfig {
@@ -79,6 +83,9 @@ impl InnerConfig {
         if cfg.subcommand.is_none() {
             cfg.meta.check_valid()?;
         }
+
+        // UUID.
+        cfg.node_id = GlobalUniqName::unique();
         Ok(cfg)
     }
 
