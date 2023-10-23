@@ -1,4 +1,4 @@
 query 
 select * from inspect_parquet('@data/parquet/tuple.parquet')
 ----
-NULL 3 3 1 431 109 105
+Arrow2 - Native Rust implementation of Arrow 3 3 1 431 109 105
