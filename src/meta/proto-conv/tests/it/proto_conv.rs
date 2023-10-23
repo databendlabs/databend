@@ -85,13 +85,13 @@ fn new_share_meta_share_from_db_ids() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in [share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),
@@ -113,13 +113,13 @@ fn new_share_meta() -> share::ShareMeta {
         now,
     );
     let mut entries = BTreeMap::new();
-    for entry in [share::ShareGrantEntry::new(
+
+    let entry = share::ShareGrantEntry::new(
         share::ShareGrantObject::Table(19),
         share::ShareGrantObjectPrivilege::Select,
         now,
-    )] {
-        entries.insert(entry.to_string().clone(), entry);
-    }
+    );
+    entries.insert(entry.to_string().clone(), entry);
 
     share::ShareMeta {
         database: Some(db_entry),

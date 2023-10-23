@@ -52,13 +52,12 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
             now,
         );
         let mut entries = BTreeMap::new();
-        for entry in [share::ShareGrantEntry::new(
+        let entry = share::ShareGrantEntry::new(
             share::ShareGrantObject::Table(19),
             share::ShareGrantObjectPrivilege::Select,
             now,
-        )] {
-            entries.insert(entry.to_string().clone(), entry);
-        }
+        );
+        entries.insert(entry.to_string().clone(), entry);
 
         share::ShareMeta {
             database: Some(db_entry),

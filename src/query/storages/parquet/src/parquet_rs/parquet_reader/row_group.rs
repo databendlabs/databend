@@ -144,7 +144,7 @@ impl<'a> InMemoryRowGroup<'a> {
                 .zip(self.metadata.columns())
                 .enumerate()
                 .filter(|&(idx, (chunk, _chunk_meta))| {
-                    (chunk.is_none() && projection.leaf_included(idx))
+                    chunk.is_none() && projection.leaf_included(idx)
                 })
                 .flat_map(|(idx, (_chunk, chunk_meta))| {
                     // If the first page does not start at the beginning of the column,
