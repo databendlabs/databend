@@ -1457,8 +1457,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             })
         },
     );
-    let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+    let _ty_array = map(
+        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ~ ")" },
         |(_, _, item_type, not_opt, null_opt, _)| {
             if not_opt.is_none() && null_opt.is_some() {
                 TypeName::Array(Box::new(item_type.wrap_nullable()))
@@ -1466,6 +1466,10 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
                 TypeName::Array(Box::new(item_type))
             }
         },
+    );
+    let ty_array = map(
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
     );
     let ty_map = map(
         rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
@@ -1537,13 +1541,11 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_nullable
             ) ~ NOT? ~ NULL? : "type name" },
         )),
-        |(ty, opt_not, opt_null)| {
-            match (opt_not, opt_null) {
-                (None, Some(_)) => Ok(ty.wrap_nullable()),
-                (Some(_), Some(_)) => Ok(ty),
-                (None, None) => Ok(ty),
-                (Some(_), None) => Err(ErrorKind::Other("invalid type name")),
-            }
+        |(ty, opt_not, opt_null)| match (opt_not, opt_null) {
+            (None, Some(_)) => Ok(ty.wrap_nullable()),
+            (Some(_), Some(_)) => Ok(ty),
+            (None, None) => Ok(ty),
+            (Some(_), None) => Err(ErrorKind::Other("invalid type name")),
         },
     )(i)
 }
