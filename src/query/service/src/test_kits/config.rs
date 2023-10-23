@@ -121,6 +121,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn disable_trace(mut self) -> ConfigBuilder {
+        self.conf.log.tracing.on = false;
+        self
+    }
+
     pub fn build(self) -> InnerConfig {
         self.conf
     }
