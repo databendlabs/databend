@@ -1835,12 +1835,7 @@ impl<'a> TypeChecker<'a> {
                 }
                 folded_args
             }
-            _ => {
-                return Err(ErrorCode::SemanticError(format!(
-                    "Function {} is not a scalar function",
-                    func_name
-                )));
-            }
+            _ => args,
         };
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
