@@ -22,6 +22,7 @@ use common_exception::Result;
 use log::info;
 
 use super::cost::CostContext;
+use super::distributed::MergeSourceOptimizer;
 use super::format::display_memo;
 use super::Memo;
 use crate::optimizer::cascades::CascadesOptimizer;
@@ -130,12 +131,14 @@ pub fn optimize(
                 && ctx.get_settings().get_enable_distributed_merge_into()?
             {
                 // Todo(JackTan25): We should use optimizer to make a decision to use
-                // left join and right join
+                // left join and right join.
                 // input is a Join_SExpr
-                let optimized_distributed_join_sexpr =
-                    optimize_distributed_query(ctx.clone(), &plan.input)?;
+                let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &plan.input)?;
+                let merge_source_optimizer = MergeSourceOptimizer::create();
+                let optimized_distributed_merge_into_join_sexpr =
+                    merge_source_optimizer.optimize(&merge_into_join_sexpr)?;
                 Ok(Plan::MergeInto(Box::new(MergeInto {
-                    input: Box::new(optimized_distributed_join_sexpr),
+                    input: Box::new(optimized_distributed_merge_into_join_sexpr),
                     ..*plan
                 })))
             } else {
