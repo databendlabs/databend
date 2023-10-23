@@ -81,7 +81,11 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
 
         let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
-            let rt = tokio::runtime::Runtime::new().unwrap();
+            // Init runtime with 2 threads.
+            let rt = tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .build()
+                .unwrap();
             let reporter = rt.block_on(async {
                 minitrace_opentelemetry::OpenTelemetryReporter::new(
                     opentelemetry_otlp::SpanExporter::new_tonic(
