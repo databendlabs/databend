@@ -39,7 +39,7 @@ use crate::tests::tls_constants::*;
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {
     // Setup
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().disable_trace().build()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -57,7 +57,7 @@ async fn test_generic_code_with_on_query() -> Result<()> {
 #[tokio::test(flavor = "current_thread")]
 async fn test_connect_with_tls() -> Result<()> {
     // Setup
-    let _guard = TestGlobalServices::setup(ConfigBuilder::create().build()).await?;
+    let _guard = TestGlobalServices::setup(ConfigBuilder::create().disable_trace().build()).await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let tls_config = MySQLTlsConfig::new(TEST_SERVER_CERT.to_string(), TEST_SERVER_KEY.to_string());
@@ -76,8 +76,13 @@ async fn test_connect_with_tls() -> Result<()> {
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_rejected_session_with_sequence() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    let _guard = TestGlobalServices::setup(
+        ConfigBuilder::create()
+            .disable_trace()
+            .max_active_sessions(1)
+            .build(),
+    )
+    .await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
@@ -143,8 +148,13 @@ async fn test_rejected_session_with_parallel() -> Result<()> {
     }
 
     // Setup
-    let _guard =
-        TestGlobalServices::setup(ConfigBuilder::create().max_active_sessions(1).build()).await?;
+    let _guard = TestGlobalServices::setup(
+        ConfigBuilder::create()
+            .disable_trace()
+            .max_active_sessions(1)
+            .build(),
+    )
+    .await?;
 
     let tcp_keepalive_timeout_secs = 120;
     let mut handler = MySQLHandler::create(tcp_keepalive_timeout_secs, MySQLTlsConfig::default())?;
