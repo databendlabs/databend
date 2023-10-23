@@ -21,6 +21,7 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use common_base::base::mask_string;
+use common_base::base::GlobalUniqName;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::RpcClientConf;
@@ -71,6 +72,9 @@ impl InnerConfig {
     /// In the future, we could have `ConfigV1` and `ConfigV2`.
     pub async fn load() -> Result<Self> {
         let mut cfg: Self = Config::load(true)?.try_into()?;
+
+        // Handle the node_id for query node.
+        cfg.query.node_id = GlobalUniqName::unique();
 
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await;
@@ -145,6 +149,9 @@ pub struct QueryConfig {
     pub tenant_id: String,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    // ID for the query node.
+    // This only initialized when InnerConfig.load().
+    pub node_id: String,
     pub num_cpus: u64,
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
@@ -221,6 +228,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: "admin".to_string(),
             cluster_id: "".to_string(),
+            node_id: "".to_string(),
             num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,
