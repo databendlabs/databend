@@ -155,12 +155,6 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("inlist_to_subquery", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Converts IN list to subquery.",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
                 ("disable_join_reorder", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Disable join reorder optimization.",
