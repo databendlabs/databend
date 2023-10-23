@@ -196,8 +196,11 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        // TODO
-        write!(f, " FROM {0}", self.uri_location)?;
+        write!(f, " FROM {}", self.uri_location)?;
+
+        if self.read_only {
+            write!(f, " READ_ONLY")?;
+        }
 
         Ok(())
     }

@@ -65,6 +65,7 @@ use storages_common_table_meta::table::TableCompression;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -318,15 +319,14 @@ impl FuseTable {
                     // TODO report error
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
                     // TODO duplicated code
-                    let reader = MetaReaders::table_snapshot_reader(self.operator.clone());
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
-                    let snapshot_loc = self.operator.read(&hint).await?;
-                    let snapshot_loc = String::from_utf8(snapshot_loc)?;
-                    let info = operator.info();
-                    let root = info.root();
-                    let snapshot_loc = snapshot_loc[root.len()..].to_string();
+                    let snapshot_loc = {
+                        let hint_content = self.operator.read(&hint).await?;
+                        let snapshot_full_path = String::from_utf8(hint_content)?;
+                        let operator_info = self.operator.info();
+                        snapshot_full_path[operator_info.root().len()..].to_string()
+                    };
                     Ok(Some(snapshot_loc))
-
                 } else {
                     Ok(options
                         .get(OPT_KEY_SNAPSHOT_LOCATION)
@@ -334,7 +334,6 @@ impl FuseTable {
                         .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
                         .cloned())
                 }
-
             }
         }
     }

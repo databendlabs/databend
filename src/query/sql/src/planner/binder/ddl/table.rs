@@ -576,6 +576,7 @@ impl Binder {
             schema: schema.clone(),
             engine,
             storage_params,
+            read_only_attach: false,
             part_prefix,
             options,
             field_comments,

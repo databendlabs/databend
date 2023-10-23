@@ -57,6 +57,7 @@ use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -153,7 +154,9 @@ impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
         if self.plan.read_only_attach {
-            return Err(ErrorCode::InvalidArgument("READ_ ONLY attached table does not support create-as-select"));
+            return Err(ErrorCode::InvalidArgument(
+                "READ_ ONLY attached table does not support create-as-select",
+            ));
         }
 
         let tenant = self.ctx.get_tenant();
@@ -318,7 +321,7 @@ impl CreateTableInterpreter {
 
         if self.plan.read_only_attach {
             // mark table as read_only attached
-            options.insert(OPT_KEY_READ_ONLY_ATTACHED, "T".to_string());
+            options.insert(OPT_KEY_READ_ONLY_ATTACHED.to_string(), "T".to_string());
         }
 
         let params = LoadParams {
