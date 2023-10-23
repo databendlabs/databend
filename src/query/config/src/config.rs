@@ -994,6 +994,14 @@ pub struct OssStorageConfig {
     #[clap(long = "storage-oss-root", default_value_t)]
     #[serde(rename = "root")]
     pub oss_root: String,
+
+    #[clap(long = "storage-oss-server-side-encryption", default_value_t)]
+    #[serde(rename = "server_side_encryption")]
+    pub oss_server_side_encryption: String,
+
+    #[clap(long = "storage-oss-server-side-encryption-key-id", default_value_t)]
+    #[serde(rename = "server_side_encryption_key_id")]
+    pub oss_server_side_encryption_key_id: String,
 }
 
 impl Default for OssStorageConfig {
@@ -1026,6 +1034,8 @@ impl From<InnerStorageOssConfig> for OssStorageConfig {
             oss_endpoint_url: inner.endpoint_url,
             oss_presign_endpoint_url: inner.presign_endpoint_url,
             oss_root: inner.root,
+            oss_server_side_encryption: inner.server_side_encryption,
+            oss_server_side_encryption_key_id: inner.server_side_encryption_key_id,
         }
     }
 }
@@ -1041,6 +1051,8 @@ impl TryInto<InnerStorageOssConfig> for OssStorageConfig {
             access_key_id: self.oss_access_key_id,
             access_key_secret: self.oss_access_key_secret,
             root: self.oss_root,
+            server_side_encryption: self.oss_server_side_encryption,
+            server_side_encryption_key_id: self.oss_server_side_encryption_key_id,
         })
     }
 }
@@ -1551,6 +1563,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
         Ok(InnerQueryConfig {
             tenant_id: self.tenant_id,
             cluster_id: self.cluster_id,
+            node_id: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,

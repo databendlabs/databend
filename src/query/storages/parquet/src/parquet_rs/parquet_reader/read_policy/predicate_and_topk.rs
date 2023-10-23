@@ -93,8 +93,8 @@ impl PredicateAndTopkPolicyBuilder {
             remain_schema
                 .fields()
                 .iter()
+                .filter(|&f| f.name() != topk.field.name())
                 .cloned()
-                .filter(|f| f.name() != topk.field.name())
                 .collect::<Vec<_>>()
         } else {
             remain_schema.fields().clone()

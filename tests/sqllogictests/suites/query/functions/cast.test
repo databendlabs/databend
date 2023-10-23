@@ -23,6 +23,11 @@ select try_cast(int_not_nullable as int) from cast_test
 ----
 1
 
+query T
+select to_string('a')
+----
+a
+
 query I
 select try_cast(3 as int);
 ----

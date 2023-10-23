@@ -13,18 +13,31 @@ Databend has the ability to export tracing data to Jaeger by integrating with th
 This tutorial uses the All In One image to deploy Jaeger in Docker. If you already have a running Jaeger instance, you can skip this step.
 
 ```bash
-docker run -d -p6831:6831/udp -p14268:14268 -p16686:16686 --name jaeger jaegertracing/all-in-one:latest
+docker run --rm -d --name jaeger \
+  -e COLLECTOR_ZIPKIN_HOST_PORT=:9411 \
+  -p 6831:6831/udp \
+  -p 6832:6832/udp \
+  -p 5778:5778 \
+  -p 16686:16686 \
+  -p 4317:4317 \
+  -p 4318:4318 \
+  -p 14250:14250 \
+  -p 14268:14268 \
+  -p 14269:14269 \
+  -p 9411:9411 \
+  jaegertracing/all-in-one:latest
 ```
 
 ### Step 2. Set Environment Variables
 
 Set the following environment variables according to your actual tracing level requirements and Jaeger endpoint.
-    - `DATABEND_TRACING_CAPTURE_LOG_LEVEL`: Sets the log level that will attach to spans.
-    - `DATABEND_JAEGER_ENDPOINT`: Sets the endpoint the Jaeger agent is listening on.
+
+- `DATABEND_TRACING_CAPTURE_LOG_LEVEL`: Sets the log level that will attach to spans.  
+- `DATABEND_OTEL_EXPORTER_OTLP_ENDPOINT`: Sets the endpoint the OpenTelemetry Collector is listening on.
 
 ```bash
 export DATABEND_TRACING_CAPTURE_LOG_LEVEL=DEBUG
-export DATABEND_JAEGER_ENDPOINT=http://localhost:14268/api/traces
+export DATABEND_OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317
 ```
 
 ### Step 3. Deploy Databend

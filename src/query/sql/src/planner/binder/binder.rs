@@ -401,17 +401,13 @@ impl<'a> Binder {
                 }
                 self.bind_merge_into(bind_context, stmt).await?
             }
-            Statement::Delete {
-                hints,
-                table_reference,
-                selection,
-            } => {
-                if let Some(hints) = hints {
+            Statement::Delete(stmt) => {
+                if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                         warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_delete(bind_context, table_reference, selection)
+                self.bind_delete(bind_context, stmt)
                     .await?
             }
             Statement::Update(stmt) => {
@@ -556,6 +552,21 @@ impl<'a> Binder {
             }
             Statement::CreateTask(stmt) => {
                 self.bind_create_task(stmt).await?
+            }
+            Statement::AlterTask(stmt) => {
+                self.bind_alter_task(stmt).await?
+            }
+            Statement::DropTask(stmt) => {
+                self.bind_drop_task(stmt).await?
+            }
+            Statement::DescribeTask(stmt) => {
+                self.bind_describe_task(stmt).await?
+            }
+            Statement::ExecuteTask(stmt) => {
+                self.bind_execute_task(stmt).await?
+            }
+            Statement::ShowTasks(stmt) => {
+                self.bind_show_tasks(stmt).await?
             }
         };
         Ok(plan)

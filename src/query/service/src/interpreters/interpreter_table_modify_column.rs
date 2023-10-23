@@ -76,11 +76,9 @@ impl ModifyTableColumnInterpreter {
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
@@ -145,11 +143,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
@@ -372,11 +368,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            ComputedColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
         let table_info = table.get_table_info();
         let schema = table.schema();

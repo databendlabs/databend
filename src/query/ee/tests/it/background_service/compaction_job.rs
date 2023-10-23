@@ -74,7 +74,7 @@ async fn test_parse_target_tables() -> Result<()> {
     ]));
     assert_eq!(tables.len(), 1);
     assert_eq!(tables.get("db1").unwrap().len(), 2);
-    assert_eq!(tables.get("db1").unwrap().get(0).unwrap(), "table1");
+    assert_eq!(tables.get("db1").unwrap().first().unwrap(), "table1");
     assert_eq!(tables.get("db1").unwrap().get(1).unwrap(), "table2");
     let tables = CompactionJob::parse_all_target_tables(Some(&vec![
         "db1.table1".to_string(),
@@ -82,15 +82,15 @@ async fn test_parse_target_tables() -> Result<()> {
     ]));
     assert_eq!(tables.len(), 2);
     assert_eq!(tables.get("db1").unwrap().len(), 1);
-    assert_eq!(tables.get("db1").unwrap().get(0).unwrap(), "table1");
-    assert_eq!(tables.get("default").unwrap().get(0).unwrap(), "tb2");
+    assert_eq!(tables.get("db1").unwrap().first().unwrap(), "table1");
+    assert_eq!(tables.get("default").unwrap().first().unwrap(), "tb2");
     let tables = CompactionJob::parse_all_target_tables(Some(&vec![
         "iceberg.db1.table1".to_string(),
         "tb2".to_string(),
     ]));
     assert_eq!(tables.len(), 1);
 
-    assert_eq!(tables.get("default").unwrap().get(0).unwrap(), "tb2");
+    assert_eq!(tables.get("default").unwrap().first().unwrap(), "tb2");
     Ok(())
 }
 

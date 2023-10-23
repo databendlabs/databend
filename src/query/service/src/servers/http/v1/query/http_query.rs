@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
 use log::warn;
+use minitrace::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -210,6 +211,7 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -329,9 +331,8 @@ impl HttpQuery {
         let schema = plan.schema();
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
-        http_query_runtime_instance
-            .runtime()
-            .try_spawn(async move {
+        http_query_runtime_instance.runtime().try_spawn(
+            async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
@@ -358,7 +359,11 @@ impl HttpQuery {
                         .await;
                     block_sender_closer.close();
                 }
-            })?;
+            }
+            .in_span(Span::enter_with_local_parent(
+                "ExecuteState::try_start_query",
+            )),
+        )?;
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -382,6 +387,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;

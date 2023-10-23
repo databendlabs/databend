@@ -110,6 +110,14 @@ impl SyncSystemTable for ConfigsTable {
         let mut storage_config = config.storage;
         storage_config.s3.access_key_id = mask_string(&storage_config.s3.access_key_id, 3);
         storage_config.s3.secret_access_key = mask_string(&storage_config.s3.secret_access_key, 3);
+        storage_config.oss.oss_access_key_id =
+            mask_string(&storage_config.oss.oss_access_key_id, 3);
+        storage_config.oss.oss_access_key_secret =
+            mask_string(&storage_config.oss.oss_access_key_secret, 3);
+        storage_config.oss.oss_server_side_encryption =
+            mask_string(&storage_config.oss.oss_server_side_encryption, 3);
+        storage_config.oss.oss_server_side_encryption_key_id =
+            mask_string(&storage_config.oss.oss_server_side_encryption_key_id, 3);
         storage_config.gcs.credential = mask_string(&storage_config.gcs.credential, 3);
         storage_config.azblob.account_name = mask_string(&storage_config.azblob.account_name, 3);
         storage_config.azblob.account_key = mask_string(&storage_config.azblob.account_key, 3);

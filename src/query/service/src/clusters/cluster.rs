@@ -29,7 +29,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep as tokio_async_sleep;
 use common_base::base::DummySignalStream;
 use common_base::base::GlobalInstance;
-use common_base::base::GlobalUniqName;
 use common_base::base::SignalStream;
 use common_base::base::SignalType;
 pub use common_catalog::cluster_info::Cluster;
@@ -165,7 +164,7 @@ impl ClusterDiscovery {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_id: GlobalUniqName::unique(),
+            local_id: cfg.query.node_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,
@@ -319,9 +318,9 @@ impl ClusterDiscovery {
                     let local_socket_addr = SocketAddr::from_str(&local_addr)?;
                     let new_addr = format!("{}:{}", local_socket_addr.ip(), socket_addr.port());
                     warn!(
-                        "Used loopback or unspecified address as cluster flight address. \
-                        we rewrite it(\"{}\" -> \"{}\") for other nodes can connect it.\
-                        If your has proxy between nodes, you can specify the node's IP address in the configuration file.",
+                        "Detected loopback or unspecified address as cluster flight endpoint. \
+                        We rewrite it(\"{}\" -> \"{}\") for advertising to other nodes. \
+                        If there are proxies between nodes, you can specify endpoint with --flight-api-address.",
                         address, new_addr
                     );
 

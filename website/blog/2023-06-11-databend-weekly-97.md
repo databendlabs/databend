@@ -124,7 +124,7 @@ We have also made these improvements to Databend that we hope you will find help
 - The lazy_topn_threshold setting is now active by default, with a default value of 1,000.
 - For enhanced security measures, the ability to change the password has been added to the root user.
 - Read *[Blog | Databend X Tableau](https://databend.rs/blog/2023-06-01-tableau)* to learn how to connect Databend for BI data analysis in Tableau.
-- Read *[Docs | Integrating Databend as a Sink for Vector](https://databend.rs/doc/integrations/data-tool/vector)* and *[Docs | Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector)* to understand how to integrate Vector with Databend.
+- Read *[Docs | Integrating Databend as a Sink for Vector](https://databend.rs/doc/load-data/load-db/vector)* to understand how to integrate Vector with Databend.
 
 ## What's Up Next
 

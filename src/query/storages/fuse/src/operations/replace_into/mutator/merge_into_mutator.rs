@@ -152,10 +152,11 @@ impl MergeIntoOperationAggregator {
         let key_column_reader = {
             let projection = Projection::Columns(key_column_field_indexes);
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 table_schema.clone(),
                 projection,
-                ctx.clone(),
+                false,
                 false,
             )
         }?;
@@ -166,10 +167,11 @@ impl MergeIntoOperationAggregator {
             } else {
                 let projection = Projection::Columns(remain_column_field_ids.clone());
                 let reader = BlockReader::create(
+                    ctx.clone(),
                     data_accessor.clone(),
                     table_schema,
                     projection,
-                    ctx.clone(),
+                    false,
                     false,
                 )?;
                 Some(reader)
@@ -179,7 +181,7 @@ impl MergeIntoOperationAggregator {
         Ok(Self {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+                segment_locations: AHashMap::from_iter(segment_locations),
                 block_slots_in_charge: block_slots,
                 on_conflict_fields,
                 bloom_filter_column_indexes,

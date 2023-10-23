@@ -25,6 +25,7 @@ use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
@@ -42,6 +43,7 @@ use tonic::Streaming;
 use crate::grpc_client::AuthInterceptor;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
+use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
 use crate::message::MakeClient;
 use crate::message::Streamed;
@@ -167,6 +169,10 @@ impl RequestFor for GetEndpoints {
 
 impl RequestFor for TxnRequest {
     type Reply = TxnReply;
+}
+
+impl RequestFor for GetClusterStatus {
+    type Reply = ClusterStatus;
 }
 
 impl RequestFor for GetClientInfo {

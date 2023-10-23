@@ -145,6 +145,26 @@ message TxnReply {
   string error = 3;
 }
 
+message ClusterStatus {
+  uint64 id = 1;
+  string binary_version = 2;
+  string data_version = 3;
+  string endpoint = 4;
+  uint64 db_size = 5;
+  string state = 6;
+  bool is_leader = 7;
+  uint64 current_term = 8;
+  uint64 last_log_index = 9;
+  string last_applied = 10;
+  optional string snapshot_last_log_id = 11;
+  optional string purged = 12;
+  optional string leader = 13;
+  map<uint64, string> replication = 14;
+  repeated string voters = 15;
+  repeated string non_voters = 16;
+  uint64 last_seq = 17;
+}
+
 message ClientInfo {
   // The address of the connected in form of "<ip>:<port>"
   string client_addr = 10;
@@ -208,6 +228,10 @@ service MetaService {
 
   // Get MetaSrv member list endpoints
   rpc MemberList(MemberListRequest) returns (MemberListReply);
+
+  // Get cluster status
+  // Since: 2023-10-19
+  rpc GetClusterStatus(Empty) returns (ClusterStatus);
 
   // Respond with the information about the client.
   // Since: 2022-09-09 0.8.30

@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use bytes::Buf;
 use bytes::Bytes;
+use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;
@@ -141,45 +143,36 @@ impl<'a> InMemoryRowGroup<'a> {
                 .iter()
                 .zip(self.metadata.columns())
                 .enumerate()
-                .filter_map(|(idx, (chunk, chunk_meta))| {
-                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
-                        // If the first page does not start at the beginning of the column,
-                        // then we need to also fetch a dictionary page.
-                        let mut ranges = vec![];
-                        let (start, _len) = chunk_meta.byte_range();
-                        match page_locations[idx].first() {
-                            Some(first) if first.offset as u64 != start => {
-                                ranges.push(start..first.offset as u64);
-                            }
-                            _ => (),
-                        }
-
-                        ranges.extend(
-                            selection
-                                .scan_ranges(&page_locations[idx])
-                                .iter()
-                                .map(|r| r.start as u64..r.end as u64),
-                        );
-                        page_start_offsets
-                            .push(ranges.iter().map(|range| range.start as usize).collect());
-
-                        ranges
-                    })
+                .filter(|&(idx, (chunk, _chunk_meta))| {
+                    chunk.is_none() && projection.leaf_included(idx)
                 })
-                .flatten()
+                .flat_map(|(idx, (_chunk, chunk_meta))| {
+                    // If the first page does not start at the beginning of the column,
+                    // then we need to also fetch a dictionary page.
+                    let mut ranges = vec![];
+                    let (start, _len) = chunk_meta.byte_range();
+                    match page_locations[idx].first() {
+                        Some(first) if first.offset as u64 != start => {
+                            ranges.push(start..first.offset as u64);
+                        }
+                        _ => (),
+                    }
+
+                    ranges.extend(
+                        selection
+                            .scan_ranges(&page_locations[idx])
+                            .iter()
+                            .map(|r| r.start as u64..r.end as u64),
+                    );
+                    page_start_offsets
+                        .push(ranges.iter().map(|range| range.start as usize).collect());
+
+                    ranges
+                })
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let mut handles = Vec::with_capacity(fetch_ranges.len());
-            for range in fetch_ranges {
-                let fut_read = self.op.read_with(self.location);
-                handles.push(async move {
-                    let data = fut_read.range(range).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
-            }
-
-            let chunk_data = futures::future::try_join_all(handles).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?;
             let mut chunk_iter = chunk_data.into_iter();
             let mut page_start_offsets = page_start_offsets.into_iter();
 
@@ -205,25 +198,16 @@ impl<'a> InMemoryRowGroup<'a> {
                 .column_chunks
                 .iter()
                 .enumerate()
-                .filter_map(|(idx, chunk)| {
-                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
-                        let column = self.metadata.column(idx);
-                        let (start, length) = column.byte_range();
-                        start..(start + length)
-                    })
+                .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
+                .map(|(idx, _chunk)| {
+                    let column = self.metadata.column(idx);
+                    let (start, length) = column.byte_range();
+                    start..(start + length)
                 })
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
-            let mut handles = Vec::with_capacity(fetch_ranges.len());
-            for range in fetch_ranges {
-                let fut_read = self.op.read_with(self.location);
-                handles.push(async move {
-                    let data = fut_read.range(range).await?;
-                    Ok::<_, ErrorCode>(Bytes::from(data))
-                });
-            }
-            let chunk_data = futures::future::try_join_all(handles).await?;
+            let chunk_data = self.get_ranges(&fetch_ranges).await?;
             let mut chunk_iter = chunk_data.into_iter();
 
             for (idx, chunk) in self.column_chunks.iter_mut().enumerate() {
@@ -241,6 +225,52 @@ impl<'a> InMemoryRowGroup<'a> {
         }
 
         Ok(())
+    }
+
+    async fn get_ranges(&self, ranges: &[Range<u64>]) -> Result<Vec<Bytes>> {
+        if self.op.info().full_capability().blocking {
+            let blocking_op = self.op.blocking();
+            let ranges = ranges.to_vec();
+            let location = self.location.to_owned();
+
+            let f = move || -> Result<Vec<Bytes>> {
+                ranges
+                    .into_iter()
+                    .map(|range| {
+                        let data = blocking_op.read_with(&location).range(range).call()?;
+                        Ok::<_, ErrorCode>(Bytes::from(data))
+                    })
+                    .collect::<Result<Vec<_>>>()
+            };
+
+            maybe_spawn_blocking(f).await
+        } else {
+            let mut handles = Vec::with_capacity(ranges.len());
+            for range in ranges {
+                let fut_read = self.op.read_with(self.location);
+                handles.push(async move {
+                    let data = fut_read.range(range.start..range.end).await?;
+                    Ok::<_, ErrorCode>(Bytes::from(data))
+                });
+            }
+            let chunk_data = futures::future::try_join_all(handles).await?;
+            Ok(chunk_data)
+        }
+    }
+}
+
+/// Takes a function and spawns it to a tokio blocking pool if available
+pub async fn maybe_spawn_blocking<F, T>(f: F) -> Result<T>
+where
+    F: FnOnce() -> Result<T> + Send + 'static,
+    T: Send + 'static,
+{
+    match tokio::runtime::Handle::try_current() {
+        Ok(runtime) => runtime
+            .spawn_blocking(f)
+            .await
+            .map_err(ErrorCode::from_std_error)?,
+        Err(_) => f(),
     }
 }
 

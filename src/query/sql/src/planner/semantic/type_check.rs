@@ -2199,7 +2199,7 @@ impl<'a> TypeChecker<'a> {
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
-                            .unwrap_or_else(|| "".to_string()),
+                            .unwrap_or_default(),
                     ),
                 })
                 .await,
@@ -3200,11 +3200,7 @@ impl<'a> TypeChecker<'a> {
         let license_manager = get_license_manager();
         if license_manager
             .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                VirtualColumn,
-            )
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)
             .is_err()
         {
             return None;
@@ -3552,7 +3548,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = vec!["substr", "substring", "length"];
+        let names = ["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"
@@ -3659,7 +3655,7 @@ pub fn resolve_type_name_inner(type_name: &TypeName) -> Result<TableDataType> {
                     TableDataType::Map(Box::new(inner_type))
                 }
                 _ => {
-                    return Err(ErrorCode::Internal(format!(
+                    return Err(ErrorCode::BadArguments(format!(
                         "Invalid Map key type \'{:?}\'",
                         key_type
                     )));

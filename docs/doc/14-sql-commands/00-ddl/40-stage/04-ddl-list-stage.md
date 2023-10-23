@@ -7,8 +7,8 @@ Lists files in a stage.
 
 See also:
 
-- [LIST_STAGE](../../../15-sql-functions/112-table-functions/list_stage.md): This function lists files in a stage and allows you to filter files in a stage based on their extensions and obtain comprehensive details about each file.
-- [PRESIGN](../80-presign/presign.md): Databend recommends using the Presigned URL method to upload files to the stage.
+- [LIST_STAGE](../../../15-sql-functions/112-table-functions/list-stage.md): This function lists files in a stage and allows you to filter files in a stage based on their extensions and obtain comprehensive details about each file.
+- [PRESIGN](../80-presign.md): Databend recommends using the Presigned URL method to upload files to the stage.
 - [REMOVE STAGE FILES](05-ddl-remove-stage.md): Removes files from a stage.
 
 ## Syntax
