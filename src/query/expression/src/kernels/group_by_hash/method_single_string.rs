@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::hash_join_fast_string_hash;
 
 use crate::types::string::StringIterator;
 use crate::types::DataType;
@@ -61,7 +61,7 @@ impl HashMethod for HashMethodSingleString {
             KeysState::Column(Column::String(col))
             | KeysState::Column(Column::Variant(col))
             | KeysState::Column(Column::Bitmap(col)) => {
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
+                hashes.extend(col.iter().map(hash_join_fast_string_hash));
                 let (data, offsets) = col.into_buffer();
                 Ok(Box::new(StringKeyAccessor::new(data, offsets)))
             }

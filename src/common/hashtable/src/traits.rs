@@ -345,6 +345,42 @@ impl<const N: usize> FastHash for ([u64; N], NonZeroU64) {
     }
 }
 
+// For hash join string hash table.
+#[inline(always)]
+pub fn hash_join_fast_string_hash(key: &[u8]) -> u64 {
+    cfg_if::cfg_if! {
+        if #[cfg(target_feature = "sse4.2")] {
+            use crate::utils::read_le;
+            use std::arch::x86_64::_mm_crc32_u64;
+            if std::intrinsics::unlikely(key.is_empty()) {
+                u32::MAX as u64
+            } else {
+                let mut value = u64::MAX;
+                for i in (0..key.len()).step_by(8) {
+                    if i + 8 < key.len() {
+                        unsafe {
+                            let x = (&key[i] as *const u8 as *const u64).read_unaligned();
+                            value = _mm_crc32_u64(value, x);
+                        }
+                    } else {
+                        unsafe {
+                            let x = read_le(&key[i] as *const u8, key.len() - i);
+                            value = _mm_crc32_u64(value, x);
+                        }
+                    }
+                }
+                value
+            }
+        } else {
+            use std::hash::Hasher;
+            let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
+            let mut hasher = state.build_hasher();
+            hasher.write(key);
+            hasher.finish()
+        }
+    }
+}
+
 pub trait EntryRefLike: Copy {
     type KeyRef;
     type ValueRef;

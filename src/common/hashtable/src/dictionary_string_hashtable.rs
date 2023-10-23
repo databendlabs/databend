@@ -46,20 +46,41 @@ impl PartialEq for DictionaryKeys {
 }
 
 impl FastHash for DictionaryKeys {
+    #[inline(always)]
     fn fast_hash(&self) -> u64 {
-        unsafe {
-            self.keys
-                .as_ref()
-                .iter()
-                .map(|x| x.as_ref().fast_hash())
-                .reduce(|left, right| {
-                    let mut a = (left ^ right).wrapping_mul(0x9ddfea08eb382d69_u64);
-                    a ^= a >> 47;
-                    let mut b = (right ^ a).wrapping_mul(0x9ddfea08eb382d69_u64);
-                    b ^= b >> 47;
-                    b.wrapping_mul(0x9ddfea08eb382d69_u64)
-                })
-                .unwrap_or_default()
+        cfg_if::cfg_if! {
+            if #[cfg(target_feature = "sse4.2")] {
+                unsafe {
+                    let hash = self.keys
+                        .as_ref()
+                        .iter()
+                        .map(|x| x.as_ref().fast_hash())
+                        .reduce(|left, right| {
+                            let mut a = (left ^ right).wrapping_mul(0x9ddfea08eb382d69_u64);
+                            a ^= a >> 47;
+                            let mut b = (right ^ a).wrapping_mul(0x9ddfea08eb382d69_u64);
+                            b ^= b >> 47;
+                            b.wrapping_mul(0x9ddfea08eb382d69_u64)
+                        })
+                        .unwrap_or_default()
+                    hash >> 32
+                }
+            } else {
+                unsafe {
+                    self.keys
+                        .as_ref()
+                        .iter()
+                        .map(|x| x.as_ref().fast_hash())
+                        .reduce(|left, right| {
+                            let mut a = (left ^ right).wrapping_mul(0x9ddfea08eb382d69_u64);
+                            a ^= a >> 47;
+                            let mut b = (right ^ a).wrapping_mul(0x9ddfea08eb382d69_u64);
+                            b ^= b >> 47;
+                            b.wrapping_mul(0x9ddfea08eb382d69_u64)
+                        })
+                        .unwrap_or_default()
+                }
+            }
         }
     }
 }

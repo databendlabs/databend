@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_hashtable::FastHash;
+use common_hashtable::hash_join_fast_string_hash;
 
 use super::utils::serialize_column;
 use crate::types::string::StringIterator;
@@ -69,7 +69,7 @@ impl HashMethod for HashMethodSerializer {
     ) -> Result<Box<dyn KeyAccessor<Key = Self::HashKey>>> {
         match keys_state {
             KeysState::Column(Column::String(col)) => {
-                hashes.extend(col.iter().map(|key| key.fast_hash()));
+                hashes.extend(col.iter().map(hash_join_fast_string_hash));
                 let (data, offsets) = col.into_buffer();
                 Ok(Box::new(StringKeyAccessor::new(data, offsets)))
             }

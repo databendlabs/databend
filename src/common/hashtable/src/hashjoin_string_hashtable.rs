@@ -25,6 +25,7 @@ use crate::hashjoin_hashtable::early_filtering;
 use crate::hashjoin_hashtable::hash_bits;
 use crate::hashjoin_hashtable::new_header;
 use crate::hashjoin_hashtable::remove_header_tag;
+use crate::traits::hash_join_fast_string_hash;
 use crate::traits::FastHash;
 use crate::RowPtr;
 
@@ -64,7 +65,7 @@ impl<A: Allocator + Clone + Default> HashJoinStringHashTable<A> {
     }
 
     pub fn insert(&mut self, key: &[u8], entry_ptr: *mut StringRawEntry) {
-        let hash = key.fast_hash();
+        let hash = hash_join_fast_string_hash(key);
         let index = (hash >> self.hash_shift) as usize;
         let new_header = new_header(entry_ptr as u64, hash);
         // # Safety
