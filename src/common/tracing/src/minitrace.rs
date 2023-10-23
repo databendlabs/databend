@@ -20,6 +20,7 @@ use std::io::Write;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_base::base::tokio;
 use common_base::base::GlobalInstance;
 use fern::FormatCallback;
 use log::LevelFilter;
@@ -79,26 +80,41 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         let name = name.to_string();
         let otlp_endpoint = cfg.tracing.otlp_endpoint.clone();
 
-        let otlp_reporter = minitrace_opentelemetry::OpenTelemetryReporter::new(
-            opentelemetry_otlp::SpanExporter::new_tonic(
-                opentelemetry_otlp::ExportConfig {
-                    endpoint: otlp_endpoint,
-                    protocol: opentelemetry_otlp::Protocol::Grpc,
-                    timeout: Duration::from_secs(
-                        opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
-                    ),
-                },
-                opentelemetry_otlp::TonicConfig::default(),
-            )
-            .expect("initialize otlp exporter"),
-            opentelemetry::trace::SpanKind::Server,
-            Cow::Owned(opentelemetry::sdk::Resource::new([
-                opentelemetry::KeyValue::new("service.name", name.clone()),
-            ])),
-            opentelemetry::InstrumentationLibrary::new(name, None, None),
-        );
+        let (reporter_rt, otlp_reporter) = std::thread::spawn(|| {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            let reporter = rt.block_on(async {
+                minitrace_opentelemetry::OpenTelemetryReporter::new(
+                    opentelemetry_otlp::SpanExporter::new_tonic(
+                        opentelemetry_otlp::ExportConfig {
+                            endpoint: otlp_endpoint,
+                            protocol: opentelemetry_otlp::Protocol::Grpc,
+                            timeout: Duration::from_secs(
+                                opentelemetry_otlp::OTEL_EXPORTER_OTLP_TIMEOUT_DEFAULT,
+                            ),
+                        },
+                        opentelemetry_otlp::TonicConfig::default(),
+                    )
+                    .expect("initialize otlp exporter"),
+                    opentelemetry::trace::SpanKind::Server,
+                    Cow::Owned(opentelemetry::sdk::Resource::new([
+                        opentelemetry::KeyValue::new("service.name", name.clone()),
+                    ])),
+                    opentelemetry::InstrumentationLibrary::new(name, None, None),
+                )
+            });
+            (rt, reporter)
+        })
+        .join()
+        .unwrap();
+
         minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
+
         guards.push(Box::new(defer::defer(minitrace::flush)));
+        guards.push(Box::new(defer::defer(|| {
+            std::thread::spawn(move || std::mem::drop(reporter_rt))
+                .join()
+                .unwrap()
+        })));
     }
 
     // Initialize logging

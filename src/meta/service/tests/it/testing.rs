@@ -25,25 +25,23 @@ where
     F: FnOnce() -> Fut + 'static,
     Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
 {
+    setup_test();
+
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(3)
         .enable_all()
         .build()
         .unwrap();
     let root = Span::root(closure_name::<F>(), SpanContext::random());
-    let test = async {
-        setup_test();
-        test().await.unwrap();
-        shutdown_test();
-    }
-    .in_span(root);
-    rt.block_on(test);
+    let test = test().in_span(root);
+    rt.block_on(test).unwrap();
+
+    shutdown_test();
 }
 
 pub fn meta_service_test_harness_sync<F>(test: F)
 where F: FnOnce() -> anyhow::Result<()> + 'static {
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.block_on(async { setup_test() });
+    setup_test();
 
     let root = Span::root(closure_name::<F>(), SpanContext::random());
     let _guard = root.set_local_parent();
