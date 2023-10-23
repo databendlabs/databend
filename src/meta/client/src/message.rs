@@ -34,6 +34,7 @@ use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use minitrace::Span;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use tonic::Streaming;
@@ -49,6 +50,9 @@ pub struct ClientWorkerRequest {
 
     /// Request body
     pub(crate) req: Request,
+
+    /// Tracing span for this request
+    pub(crate) span: Span,
 }
 
 impl fmt::Debug for ClientWorkerRequest {

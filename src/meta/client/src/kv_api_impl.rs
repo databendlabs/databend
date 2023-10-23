@@ -31,11 +31,13 @@ use crate::ClientHandle;
 impl kvapi::KVApi for ClientHandle {
     type Error = MetaError;
 
+    #[minitrace::trace]
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let reply = self.request(act).await?;
         Ok(reply)
     }
 
+    #[minitrace::trace]
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let reply = self
             .request(GetKVReq {
@@ -45,12 +47,14 @@ impl kvapi::KVApi for ClientHandle {
         Ok(reply)
     }
 
+    #[minitrace::trace]
     async fn mget_kv(&self, keys: &[String]) -> Result<MGetKVReply, Self::Error> {
         let keys = keys.to_vec();
         let reply = self.request(MGetKVReq { keys }).await?;
         Ok(reply)
     }
 
+    #[minitrace::trace]
     async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
         let reply = self
             .request(ListKVReq {
@@ -60,6 +64,7 @@ impl kvapi::KVApi for ClientHandle {
         Ok(reply)
     }
 
+    #[minitrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let reply = self.request(txn).await?;
         Ok(reply)
