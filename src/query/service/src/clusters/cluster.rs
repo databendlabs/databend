@@ -164,7 +164,7 @@ impl ClusterDiscovery {
         let (lift_time, provider) = Self::create_provider(cfg, metastore)?;
 
         Ok(Arc::new(ClusterDiscovery {
-            local_id: cfg.node_id.clone(),
+            local_id: cfg.query.node_id.clone(),
             api_provider: provider.clone(),
             heartbeat: Mutex::new(ClusterHeartbeat::create(
                 lift_time,

@@ -64,9 +64,6 @@ pub struct InnerConfig {
 
     // Background Config
     pub background: InnerBackgroundConfig,
-
-    // UUID node id, this is not configurable.
-    pub node_id: String,
 }
 
 impl InnerConfig {
@@ -76,6 +73,9 @@ impl InnerConfig {
     pub async fn load() -> Result<Self> {
         let mut cfg: Self = Config::load(true)?.try_into()?;
 
+        // Handle the node_id for query node.
+        cfg.query.node_id = GlobalUniqName::unique();
+
         // Handle auto detect for storage params.
         cfg.storage.params = cfg.storage.params.auto_detect().await;
 
@@ -83,9 +83,6 @@ impl InnerConfig {
         if cfg.subcommand.is_none() {
             cfg.meta.check_valid()?;
         }
-
-        // UUID.
-        cfg.node_id = GlobalUniqName::unique();
         Ok(cfg)
     }
 
@@ -152,6 +149,9 @@ pub struct QueryConfig {
     pub tenant_id: String,
     /// ID for construct the cluster.
     pub cluster_id: String,
+    // ID for the query node.
+    // This only initialized when InnerConfig.load().
+    pub node_id: String,
     pub num_cpus: u64,
     pub mysql_handler_host: String,
     pub mysql_handler_port: u16,
@@ -228,6 +228,7 @@ impl Default for QueryConfig {
         Self {
             tenant_id: "admin".to_string(),
             cluster_id: "".to_string(),
+            node_id: "".to_string(),
             num_cpus: 0,
             mysql_handler_host: "127.0.0.1".to_string(),
             mysql_handler_port: 3307,

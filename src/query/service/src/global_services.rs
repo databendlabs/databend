@@ -54,7 +54,7 @@ impl GlobalServices {
     pub async fn init_with(config: InnerConfig) -> Result<()> {
         let app_name_shuffle = format!(
             "databend-query@{}-{}",
-            config.node_id, config.query.cluster_id
+            config.query.node_id, config.query.cluster_id
         );
 
         // The order of initialization is very important

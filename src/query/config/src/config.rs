@@ -1563,6 +1563,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
         Ok(InnerQueryConfig {
             tenant_id: self.tenant_id,
             cluster_id: self.cluster_id,
+            node_id: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,
@@ -2375,7 +2376,6 @@ pub struct DiskCacheConfig {
 }
 
 mod cache_config_converters {
-    use common_base::base::GlobalUniqName;
     use log::warn;
 
     use super::*;
@@ -2431,7 +2431,6 @@ mod cache_config_converters {
                 catalogs,
                 cache: self.cache.try_into()?,
                 background: self.background.try_into()?,
-                node_id: GlobalUniqName::unique(),
             })
         }
     }
