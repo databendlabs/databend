@@ -1458,7 +1458,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         },
     );
     let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ~ ")" },
+        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
         |(_, _, item_type, not_opt, null_opt, _)| {
             if not_opt.is_none() && null_opt.is_some() {
                 TypeName::Array(Box::new(item_type.wrap_nullable()))
@@ -1507,7 +1507,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
+    map_res(
         alt((
             rule! {
             ( #ty_boolean
@@ -1527,7 +1527,7 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_bitmap
             | #ty_tuple : "TUPLE(<type>, ...)"
             | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NULL? : "type name"
+            ) ~ NOT? ~ NULL? : "type name"
             },
             rule! {
             ( #ty_date
@@ -1535,13 +1535,14 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_string
             | #ty_variant
             | #ty_nullable
-            ) ~ NULL? : "type name" },
+            ) ~ NOT? ~ NULL? : "type name" },
         )),
-        |(ty, opt_null)| {
-            if opt_null.is_some() {
-                ty.wrap_nullable()
-            } else {
-                ty
+        |(ty, opt_not, opt_null)| {
+            match (opt_not, opt_null) {
+                (None, Some(_)) => Ok(ty.wrap_nullable()),
+                (Some(_), Some(_)) => Ok(ty),
+                (None, None) => Ok(ty),
+                (Some(_), None) => Err(ErrorKind::Other("invalid type name")),
             }
         },
     )(i)
