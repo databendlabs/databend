@@ -173,7 +173,7 @@ impl HashJoinProbeState {
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
-        
+
         let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
         let probe_keys = self
             .hash_join_state
@@ -210,7 +210,10 @@ impl HashJoinProbeState {
         }
 
         let mut valids = None;
-        if probe_keys
+        if !Self::check_for_eliminate_valids(
+            self.hash_join_state.hash_join_desc.from_correlated_subquery,
+            &self.hash_join_state.hash_join_desc.join_type,
+        ) && probe_keys
             .iter()
             .any(|(_, ty)| ty.is_nullable() || ty.is_null())
         {
@@ -223,11 +226,6 @@ impl HashJoinProbeState {
                     valids = and_validities(valids, tmp_valids.cloned());
                 }
             }
-        }
-        if self.hash_join_state.hash_join_desc.from_correlated_subquery
-            && Self::check_for_eliminate_valids(&self.hash_join_state.hash_join_desc.join_type)
-        {
-            valids = None;
         }
 
         let input = input.project(&self.probe_projections);
@@ -673,7 +671,13 @@ impl HashJoinProbeState {
     }
 
     /// Checks if a join type can use selection.
-    pub fn check_for_eliminate_valids(join_type: &JoinType) -> bool {
+    pub fn check_for_eliminate_valids(
+        from_correlated_subquery: bool,
+        join_type: &JoinType,
+    ) -> bool {
+        if !from_correlated_subquery {
+            return false;
+        }
         matches!(
             join_type,
             JoinType::Inner
