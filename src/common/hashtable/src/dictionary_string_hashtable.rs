@@ -62,7 +62,7 @@ impl FastHash for DictionaryKeys {
                             b ^= b >> 47;
                             b.wrapping_mul(0x9ddfea08eb382d69_u64)
                         })
-                        .unwrap_or_default()
+                        .unwrap_or_default();
                     hash >> 32
                 }
             } else {
