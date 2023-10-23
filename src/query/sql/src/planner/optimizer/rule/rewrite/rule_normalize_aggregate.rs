@@ -71,6 +71,9 @@ impl Rule for RuleNormalizeAggregate {
         let mut work_expr = None;
         let mut alias_functions_index = vec![];
         let mut new_aggregate_functions = Vec::with_capacity(aggregate.aggregate_functions.len());
+
+        let mut rewritten = false;
+
         for aggregate_function in &aggregate.aggregate_functions {
             if let ScalarExpr::AggregateFunction(function) = &aggregate_function.scalar {
                 if !function.distinct
@@ -78,6 +81,7 @@ impl Rule for RuleNormalizeAggregate {
                     && (function.args.is_empty()
                         || !function.args[0].data_type()?.is_nullable_or_null())
                 {
+                    rewritten = true;
                     if work_expr.is_none() {
                         let mut new_function = function.clone();
                         new_function.args = vec![];
@@ -92,31 +96,63 @@ impl Rule for RuleNormalizeAggregate {
                     alias_functions_index.push((aggregate_function.index, function.clone()));
                     continue;
                 }
+
+                // rewrite count(distinct items) to count() if items in group by
+                let distinct_eliminated = ((function.distinct && function.func_name == "count")
+                    || function.func_name == "uniq"
+                    || function.func_name == "count_distinct")
+                    && function.args.iter().all(|expr| {
+                        if let ScalarExpr::BoundColumnRef(r) = expr {
+                            aggregate
+                                .group_items
+                                .iter()
+                                .any(|item| item.index == r.column.index)
+                        } else {
+                            false
+                        }
+                    });
+
+                if distinct_eliminated {
+                    rewritten = true;
+                    let mut new_function = function.clone();
+                    new_function.args = vec![];
+                    new_function.func_name = "count".to_string();
+
+                    new_aggregate_functions.push(ScalarItem {
+                        index: aggregate_function.index,
+                        scalar: ScalarExpr::AggregateFunction(new_function),
+                    });
+                    continue;
+                }
             }
 
             new_aggregate_functions.push(aggregate_function.clone());
         }
 
+        if !rewritten {
+            return Ok(());
+        }
+
+        let new_aggregate = Aggregate {
+            mode: aggregate.mode,
+            group_items: aggregate.group_items,
+            aggregate_functions: new_aggregate_functions,
+            from_distinct: aggregate.from_distinct,
+            limit: aggregate.limit,
+            grouping_sets: aggregate.grouping_sets,
+        };
+
+        let mut new_aggregate = SExpr::create_unary(
+            Arc::new(new_aggregate.into()),
+            Arc::new(s_expr.child(0)?.clone()),
+        );
+        new_aggregate.set_applied_rule(&self.id);
+
         if let Some((work_index, work_c)) = work_expr {
-            // no count aggregate function need to fold
             if alias_functions_index.len() < 2 {
+                state.add_result(new_aggregate);
                 return Ok(());
             }
-
-            let new_aggregate = Aggregate {
-                mode: aggregate.mode,
-                group_items: aggregate.group_items,
-                aggregate_functions: new_aggregate_functions,
-                from_distinct: aggregate.from_distinct,
-                limit: aggregate.limit,
-                grouping_sets: aggregate.grouping_sets,
-            };
-
-            let mut new_aggregate = SExpr::create_unary(
-                Arc::new(new_aggregate.into()),
-                Arc::new(s_expr.child(0)?.clone()),
-            );
-
             if !alias_functions_index.is_empty() {
                 let mut scalar_items = Vec::with_capacity(alias_functions_index.len());
                 for (alias_function_index, _alias_function) in alias_functions_index {
@@ -150,10 +186,13 @@ impl Rule for RuleNormalizeAggregate {
                 );
             }
 
+            new_aggregate.set_applied_rule(&self.id);
             state.add_result(new_aggregate);
+            Ok(())
+        } else {
+            state.add_result(new_aggregate);
+            Ok(())
         }
-
-        Ok(())
     }
 
     fn patterns(&self) -> &Vec<SExpr> {

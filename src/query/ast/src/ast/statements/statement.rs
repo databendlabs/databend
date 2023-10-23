@@ -21,6 +21,7 @@ use common_meta_app::principal::UserIdentity;
 
 use super::merge_into::MergeIntoStmt;
 use super::*;
+use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
@@ -229,6 +230,14 @@ pub enum Statement {
     DropNetworkPolicy(DropNetworkPolicyStmt),
     DescNetworkPolicy(DescNetworkPolicyStmt),
     ShowNetworkPolicies,
+
+    // tasks
+    CreateTask(CreateTaskStmt),
+    AlterTask(AlterTaskStmt),
+    ExecuteTask(ExecuteTaskStmt),
+    DescribeTask(DescribeTaskStmt),
+    DropTask(DropTaskStmt),
+    ShowTasks(ShowTasksStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -526,6 +535,12 @@ impl Display for Statement {
             Statement::DropNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescNetworkPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::ShowNetworkPolicies => write!(f, "SHOW NETWORK POLICIES")?,
+            Statement::CreateTask(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterTask(stmt) => write!(f, "{stmt}")?,
+            Statement::ExecuteTask(stmt) => write!(f, "{stmt}")?,
+            Statement::DropTask(stmt) => write!(f, "{stmt}")?,
+            Statement::ShowTasks(stmt) => write!(f, "{stmt}")?,
+            Statement::DescribeTask(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -586,6 +586,18 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_network_policies(&mut self) {}
 
+    fn visit_create_task(&mut self, _stmt: &'ast CreateTaskStmt) {}
+
+    fn visit_drop_task(&mut self, _stmt: &'ast DropTaskStmt) {}
+
+    fn visit_show_tasks(&mut self, _stmt: &'ast ShowTasksStmt) {}
+
+    fn visit_execute_task(&mut self, _stmt: &'ast ExecuteTaskStmt) {}
+
+    fn visit_describe_task(&mut self, _stmt: &'ast DescribeTaskStmt) {}
+
+    fn visit_alter_task(&mut self, _stmt: &'ast AlterTaskStmt) {}
+
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

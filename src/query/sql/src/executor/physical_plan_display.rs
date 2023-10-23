@@ -23,12 +23,12 @@ use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
 use crate::executor::physical_plans::physical_async_source::AsyncSourcerPlan;
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
-use crate::executor::physical_plans::physical_compact_partial::CompactPartial;
+use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
 use crate::executor::physical_plans::physical_deduplicate::Deduplicate;
-use crate::executor::physical_plans::physical_delete_partial::DeletePartial;
+use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
 use crate::executor::physical_plans::physical_exchange::Exchange;
@@ -87,8 +87,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ExchangeSink(sink) => write!(f, "{}", sink)?,
             PhysicalPlan::UnionAll(union_all) => write!(f, "{}", union_all)?,
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
-            PhysicalPlan::CompactPartial(compact_partial) => write!(f, "{}", compact_partial)?,
-            PhysicalPlan::DeletePartial(delete) => write!(f, "{}", delete)?,
+            PhysicalPlan::CompactSource(compact) => write!(f, "{}", compact)?,
+            PhysicalPlan::DeleteSource(delete) => write!(f, "{}", delete)?,
             PhysicalPlan::CommitSink(commit) => write!(f, "{}", commit)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::Lambda(lambda) => write!(f, "{}", lambda)?,
@@ -401,15 +401,15 @@ impl Display for DistributedInsertSelect {
     }
 }
 
-impl Display for CompactPartial {
+impl Display for CompactSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CompactPartial")
+        write!(f, "CompactSource")
     }
 }
 
-impl Display for DeletePartial {
+impl Display for DeleteSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DeletePartial")
+        write!(f, "DeleteSource")
     }
 }
 

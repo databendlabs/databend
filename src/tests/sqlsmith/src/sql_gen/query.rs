@@ -38,7 +38,6 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
-use rand::distributions::Alphanumeric;
 use rand::Rng;
 
 use crate::sql_gen::Column;
@@ -77,6 +76,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         let current_bound_columns = mem::take(&mut self.bound_columns);
         let current_is_join = self.is_join;
 
+        self.cte_tables = vec![];
         self.bound_tables = vec![];
         self.bound_columns = vec![];
         self.is_join = false;
@@ -91,9 +91,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
             self.rng.gen_range(1..=5)
         };
 
-        let name: String = (0..3)
-            .map(|_| self.rng.sample(Alphanumeric) as char)
-            .collect();
+        let name = self.gen_random_name();
         let mut fields = Vec::with_capacity(len);
         let mut select_list = Vec::with_capacity(len);
         for i in 0..len {
@@ -189,7 +187,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    fn flip_coin(&mut self) -> bool {
+    pub(crate) fn flip_coin(&mut self) -> bool {
         self.rng.gen_bool(0.5)
     }
 
@@ -320,9 +318,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         if self.rng.gen_bool(0.1) {
             let mut res = vec![];
             for _ in 0..self.rng.gen_range(1..3) {
-                let name: String = (0..4)
-                    .map(|_| self.rng.sample(Alphanumeric) as char)
-                    .collect();
+                let name = self.gen_random_name();
                 let window_name = format!("w_{}", name);
                 let spec = self.gen_window_spec();
                 let window_def = WindowDefinition {
@@ -694,10 +690,8 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         }
     }
 
-    fn gen_subquery_table(&mut self, schema: TableSchemaRef) -> (Table, TableAlias) {
-        let name: String = (0..4)
-            .map(|_| self.rng.sample(Alphanumeric) as char)
-            .collect();
+    pub(crate) fn gen_subquery_table(&mut self, schema: TableSchemaRef) -> (Table, TableAlias) {
+        let name = self.gen_random_name();
         let table_name = format!("t{}", name);
         let mut columns = Vec::with_capacity(schema.num_fields());
         for field in schema.fields() {
@@ -713,7 +707,7 @@ impl<'a, R: Rng> SqlGenerator<'a, R> {
         (table, alias)
     }
 
-    fn bound_table(&mut self, table: Table) {
+    pub(crate) fn bound_table(&mut self, table: Table) {
         for (i, field) in table.schema.fields().iter().enumerate() {
             let column = Column {
                 table_name: table.name.clone(),

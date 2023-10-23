@@ -18,6 +18,7 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::Barrier;
 use common_catalog::table_context::TableContext;
@@ -216,9 +217,7 @@ impl HashJoinProbeState {
             for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
-                    let mut m = MutableBitmap::with_capacity(input.num_rows());
-                    m.extend_constant(input.num_rows(), false);
-                    valids = Some(m.into());
+                    valids = Some(Bitmap::new_constant(false, input.num_rows()));
                     break;
                 } else {
                     valids = and_validities(valids, tmp_valids.cloned());

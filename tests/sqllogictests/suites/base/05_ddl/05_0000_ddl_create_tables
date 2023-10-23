@@ -192,7 +192,7 @@ bool BOOLEAN NO false (empty)
 arr ARRAY(INT32) NO [] (empty)
 tup TUPLE(1 INT32, 2 BOOLEAN) NO (0, false) (empty)
 map MAP(INT32, STRING) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+variant VARIANT NO null (empty)
 
 statement ok
 create transient table db2.test8(tiny TINYINT not null, tiny_unsigned TINYINT UNSIGNED not null, smallint SMALLINT not null, smallint_unsigned SMALLINT UNSIGNED not null, int INT not null, int_unsigned INT UNSIGNED not null, bigint BIGINT not null, bigint_unsigned BIGINT UNSIGNED not null,float FLOAT not null, double DOUBLE not null, date DATE not null, datetime DATETIME not null, ts TIMESTAMP not null, str VARCHAR not null default '3', bool BOOLEAN not null, arr ARRAY(VARCHAR) not null, tup TUPLE(DOUBLE, INT) not null, map MAP(STRING, Date) not null, variant VARIANT not null)
@@ -218,7 +218,7 @@ bool BOOLEAN NO false (empty)
 arr ARRAY(STRING) NO [] (empty)
 tup TUPLE(1 FLOAT64, 2 INT32) NO (0, 0) (empty)
 map MAP(STRING, DATE) NO {} (empty)
-variant VARIANT NO (empty) (empty)
+variant VARIANT NO null (empty)
 
 
 statement ok

@@ -70,19 +70,21 @@ impl TableLockHandlerWrapper {
 
         info!("Table lock enabled : [{}]", enabled_table_lock);
 
+        let dummy = Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
+
         if !enabled_table_lock {
             // dummy lock does nothing
-            return Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
+            return dummy;
         }
 
         let enterprise_enabled = get_license_manager()
             .manager
-            .check_enterprise_enabled(&ctx.get_settings(), ctx.get_tenant(), Feature::TableLock)
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::TableLock)
             .is_ok();
         if enterprise_enabled {
             GlobalInstance::get()
         } else {
-            Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})))
+            dummy
         }
     }
 }

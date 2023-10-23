@@ -151,6 +151,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),

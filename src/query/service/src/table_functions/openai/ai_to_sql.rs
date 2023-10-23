@@ -139,6 +139,7 @@ impl Table for GPT2SQLTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| GPT2SQLSource::create(ctx.clone(), output, self.prompt.clone()),

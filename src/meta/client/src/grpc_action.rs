@@ -25,7 +25,9 @@ use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::InvalidArgument;
@@ -36,12 +38,15 @@ use log::debug;
 use tonic::codegen::InterceptedService;
 use tonic::transport::Channel;
 use tonic::Request;
+use tonic::Streaming;
 
 use crate::grpc_client::AuthInterceptor;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
+use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
 use crate::message::MakeClient;
+use crate::message::Streamed;
 
 /// Bind a request type to its corresponding response type.
 pub trait RequestFor {
@@ -86,16 +91,60 @@ impl MetaGrpcReq {
     }
 }
 
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    derive_more::From,
+    derive_more::TryInto,
+)]
+pub enum MetaGrpcReadReq {
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    ListKV(ListKVReq),
+}
+
+impl MetaGrpcReadReq {
+    pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
+        let raft_request = RaftRequest {
+            data: serde_json::to_string(self)
+                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        Ok(raft_request)
+    }
+}
+
 impl RequestFor for GetKVReq {
     type Reply = GetKVReply;
+}
+
+impl RequestFor for Streamed<GetKVReq> {
+    type Reply = Streaming<StreamItem>;
 }
 
 impl RequestFor for MGetKVReq {
     type Reply = MGetKVReply;
 }
 
+impl RequestFor for Streamed<MGetKVReq> {
+    type Reply = Streaming<StreamItem>;
+}
+
 impl RequestFor for ListKVReq {
     type Reply = ListKVReply;
+}
+
+impl RequestFor for Streamed<ListKVReq> {
+    type Reply = Streaming<StreamItem>;
 }
 
 impl RequestFor for UpsertKVReq {
@@ -120,6 +169,10 @@ impl RequestFor for GetEndpoints {
 
 impl RequestFor for TxnRequest {
     type Reply = TxnReply;
+}
+
+impl RequestFor for GetClusterStatus {
+    type Reply = ClusterStatus;
 }
 
 impl RequestFor for GetClientInfo {

@@ -48,11 +48,9 @@ impl Interpreter for CreateVirtualColumnInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            tenant.clone(),
-            VirtualColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), VirtualColumn)?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();

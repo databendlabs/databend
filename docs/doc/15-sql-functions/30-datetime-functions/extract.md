@@ -8,7 +8,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Retrieves the designated portion of a date, time, or timestamp.
 
-See also: [DATE_PART](date_part.md)
+See also: [DATE_PART](date-part.md)
 
 ## Syntax
 
@@ -16,7 +16,7 @@ See also: [DATE_PART](date_part.md)
 EXTRACT( YEAR | QUARTER | MONTH | WEEK | DAY | HOUR | MINUTE | SECOND | DOW | DOY FROM <date_or_time_expr> )
 ```
 
-- DOW: Day of Week.
+- DOW: Day of the Week.
 - DOY: Day of Year.
 
 ## Return Type

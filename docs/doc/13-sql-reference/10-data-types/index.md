@@ -54,7 +54,7 @@ Some basic rules about "Coercion" aka (Auto casting)
 1. All integer datatypes can be implicitly casted into  `BIGINT` aka (`INT64`) datatype.
 
 e.g.
-```
+```sql
 Int --> bigint
 UInt8 --> bigint
 Int32 --> bigint
@@ -64,7 +64,7 @@ Int32 --> bigint
 2. All numeric datatypes can be implicitly cast into  `Double` aka (`Float64`) datatype.
 
 e.g.
-```
+```sql
 Int --> Double
 Float --> Double
 Int32 --> Double
@@ -73,7 +73,7 @@ Int32 --> Double
 3. ALL non-nullable datatypes `T` can be implicitly casted into `Nullable(T)` datatype.
 
 e.g.
-```
+```sql
 Int --> Nullable<Int>
 String -->  Nullable<String>
 ```
@@ -82,7 +82,7 @@ String -->  Nullable<String>
 
 e.g.
 
-```
+```sql
 Int --> Variant
 ```
 
@@ -100,7 +100,7 @@ It's trivial and even works in other popular databases. But it'll introduce ambi
 
 e.g.
 
-```
+```sql
 select 39 > '301';
 select 39 = '  39  ';
 ```
@@ -117,7 +117,7 @@ To make the syntax more precise and less ambiguous, we throw the error to user a
 This will also bring ambiguity.
 e.g.
 
-```
+```sql
 select true > 0.5;
 ```
 

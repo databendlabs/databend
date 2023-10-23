@@ -1,1 +1,1 @@
-drop table hits all;
+drop table if exists hits;

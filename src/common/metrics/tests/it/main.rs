@@ -31,7 +31,7 @@ async fn test_dump_metric_samples() -> common_exception::Result<()> {
     histogram1.observe(2.0);
 
     let registry = load_global_prometheus_registry();
-    let samples = dump_metric_samples(&registry)
+    let samples = dump_metric_samples(registry.inner())
         .unwrap()
         .into_iter()
         .map(|s| (s.name.clone(), s))

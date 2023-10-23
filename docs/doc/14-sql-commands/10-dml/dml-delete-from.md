@@ -89,35 +89,58 @@ The examples in this section are based on the following two tables:
 #### Deleting with subquery using IN / NOT IN clause
 
 ```sql
-DELETE FROM employees WHERE department IN (SELECT department FROM departments);
+DELETE FROM EMPLOYEES
+WHERE DEPARTMENT IN (
+    SELECT DEPARTMENT
+    FROM DEPARTMENTS
+);
 ```
 This deletes employees whose department matches any department in the departments table. It would delete employees with IDs 2 and 3.
 
 #### Deleting with subquery using EXISTS / NOT EXISTS clause
 
 ```sql
-DELETE FROM employees WHERE EXISTS (SELECT * FROM departments WHERE employees.department = departments.department);
+DELETE FROM EMPLOYEES
+WHERE EXISTS (
+    SELECT *
+    FROM DEPARTMENTS
+    WHERE EMPLOYEES.DEPARTMENT = DEPARTMENTS.DEPARTMENT
+);
 ```
 This deletes employees who belong to a department that exists in the departments table. In this case, it would delete employees with IDs 2 and 3.
 
 #### Deleting with subquery using ALL clause
 
 ```sql
-DELETE FROM employees WHERE department = ALL (SELECT department FROM departments);
+DELETE FROM EMPLOYEES
+WHERE DEPARTMENT = ALL (
+    SELECT DEPARTMENT
+    FROM DEPARTMENTS
+);
 ```
-This deletes employees whose department matches all departments in the departments table. In this case, no employees would be deleted.
+This deletes employees whose department matches all departments in the department table. In this case, no employees would be deleted.
 
 #### Deleting with subquery using ANY clause
 
 ```sql
-DELETE FROM employees WHERE department = ANY (SELECT department FROM departments);
+DELETE FROM EMPLOYEES
+WHERE DEPARTMENT = ANY (
+    SELECT DEPARTMENT
+    FROM DEPARTMENTS
+);
 ```
 This deletes employees whose department matches any department in the departments table. In this case, it would delete employees with IDs 2 and 3.
 
 #### Deleting with subquery combining multiple conditions
 
 ```sql
-DELETE FROM employees WHERE department = ANY (SELECT department FROM departments WHERE employees.department = departments.department) OR id > 2;
+DELETE FROM EMPLOYEES
+WHERE DEPARTMENT = ANY (
+    SELECT DEPARTMENT
+    FROM DEPARTMENTS
+    WHERE EMPLOYEES.DEPARTMENT = DEPARTMENTS.DEPARTMENT
+)
+   OR ID > 2;
 ```
 
 This deletes employees from the employees table if the value of the department column matches any value in the department column of the departments table or if the value of the id column is greater than 2. In this case, it would delete the rows with id 2, 3, and 4 since Mary's department is "Sales," which exists in the departments table, and the IDs 3 and 4 are greater than 2.

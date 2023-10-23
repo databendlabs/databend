@@ -217,7 +217,7 @@ impl FuseTable {
         ctx.set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline, false)?;
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds, None)?;
@@ -237,9 +237,10 @@ impl FuseTable {
         }
 
         // merge sort
-        let block_num = mutator
-            .total_bytes
-            .div_ceil(block_thresholds.max_bytes_per_block);
+        let block_num = std::cmp::max(
+            mutator.total_bytes * 80 / (block_thresholds.max_bytes_per_block * 100),
+            1,
+        );
         let final_block_size = std::cmp::min(
             // estimate block_size based on max_bytes_per_block.
             mutator.total_rows / block_num,

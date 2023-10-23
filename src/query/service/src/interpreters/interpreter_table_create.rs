@@ -100,11 +100,9 @@ impl Interpreter for CreateTableInterpreter {
             .any(|f| f.computed_expr().is_some());
         if has_computed_column {
             let license_manager = get_license_manager();
-            license_manager.manager.check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                tenant.clone(),
-                ComputedColumn,
-            )?;
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
 
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;

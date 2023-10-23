@@ -22,11 +22,13 @@ mod message;
 
 pub use common_meta_api::reply::reply_to_api_result;
 pub use common_meta_api::reply::reply_to_meta_result;
+pub use grpc_action::MetaGrpcReadReq;
 pub use grpc_action::MetaGrpcReq;
 pub use grpc_action::RequestFor;
 pub use grpc_client::ClientHandle;
 pub use grpc_client::MetaGrpcClient;
 pub use message::ClientWorkerRequest;
+pub use message::Streamed;
 use once_cell::sync::Lazy;
 use semver::BuildMetadata;
 use semver::Prerelease;
@@ -67,6 +69,9 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///
 /// - 2023-10-11: since 1.2.153:
 ///   Meta service: add: pb::SeqV.meta field to support record expiration.
+///
+/// - 2023-10-17: since 1.2.163:
+///   Meta service: add: stream api: kv_read_v1().
 pub static MIN_METASRV_SEMVER: Version = Version {
     major: 1,
     minor: 1,
