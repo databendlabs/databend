@@ -236,10 +236,14 @@ impl AsyncSource for InspectParquetSource {
         let mut max_compressed: i64 = 0;
         let mut max_uncompressed: i64 = 0;
         for grp in parquet_schema.row_groups().iter() {
+            let mut grp_compressed_size: i64 = 0;
+            let mut grp_uncompressed_size: i64 = 0;
             for col in grp.columns().iter() {
-                max_compressed = max(max_compressed, col.compressed_size());
-                max_uncompressed = max(max_uncompressed, col.uncompressed_size());
+                grp_compressed_size += col.compressed_size();
+                grp_uncompressed_size += col.uncompressed_size();
             }
+            max_compressed = max(max_compressed, grp_compressed_size);
+            max_uncompressed = max(max_uncompressed, grp_uncompressed_size);
         }
         let block = DataBlock::new(
             vec![
