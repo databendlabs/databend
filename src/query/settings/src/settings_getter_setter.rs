@@ -188,10 +188,6 @@ impl Settings {
         Ok(self.try_get_u64("enable_cbo")? != 0)
     }
 
-    pub fn get_inlist_to_subquery(&self) -> Result<bool> {
-        Ok(self.try_get_u64("inlist_to_subquery")? != 0)
-    }
-
     pub fn get_disable_join_reorder(&self) -> Result<bool> {
         Ok(self.try_get_u64("disable_join_reorder")? != 0)
     }
