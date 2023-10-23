@@ -233,7 +233,17 @@ SELECT number%2 as c1, number%3 as c2, MAX(number) FROM numbers(10000) GROUP BY 
 ## HAVING Clause
 
 ```sql
-SELECT number%2 as c1, number%3 as c2, MAX(number) as max FROM numbers(10000) GROUP BY c1, c2 HAVING max>9996;
+SELECT
+    number % 2 as c1, 
+    number % 3 as c2, 
+    MAX(number) as max
+FROM
+    numbers(10000)
+GROUP BY
+    c1, c2
+HAVING
+    max > 9996;
+
 +------+------+------+
 | c1   | c2   | max  |
 +------+------+------+
@@ -379,13 +389,13 @@ For optimizing query performance with large result sets, Databend has enabled th
 </details>
 
 ```sql
-MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
+SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
 Empty set (0.300 sec)
 
-MySQL [(none)]> set lazy_read_threshold=0;
+set lazy_read_threshold=0;
 Query OK, 0 rows affected (0.004 sec)
 
-MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
+SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
 Empty set (0.897 sec)
 ```
 
@@ -415,7 +425,7 @@ SELECT number FROM numbers(2);
 |      1 |
 +--------+
 
-mysql> SELECT number FROM numbers(2) IGNORE_RESULT;
+SELECT number FROM numbers(2) IGNORE_RESULT;
 -- Empty set
 ```
 

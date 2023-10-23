@@ -1,7 +1,5 @@
 ---
-title: PRESIGN
-description:
-  Generates the pre-signed URL for a staged file.
+title: Presign
 ---
 
 Generates the pre-signed URL for a staged file by the stage name and file path you provide. The pre-signed URL enables you to access the file through a web browser or an API request.
@@ -19,8 +17,8 @@ curl -X PUT -T books.csv -H "<header-generated-by-presign>" <presigned-url>
 See also: 
 
 - [Presign RFC](https://databend.rs/doc/contributing/rfcs/presign)
-- [LIST STAGE FILES](../40-stage/04-ddl-list-stage.md): Lists files in a stage.
-- [REMOVE STAGE FILES](../40-stage/05-ddl-remove-stage.md): Removes files from a stage.
+- [LIST STAGE FILES](40-stage/04-ddl-list-stage.md): Lists files in a stage.
+- [REMOVE STAGE FILES](40-stage/05-ddl-remove-stage.md): Removes files from a stage.
 
 ## Syntax
 

@@ -31,6 +31,8 @@ use log::debug;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_refresh_agg_index;
+use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
@@ -179,6 +181,22 @@ impl Interpreter for UpdateInterpreter {
             &mut build_res.main_pipeline,
         )
         .await?;
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        {
+            let refresh_agg_index_desc = RefreshAggIndexDesc {
+                catalog: catalog_name.to_string(),
+                database: db_name.to_string(),
+                table: tbl_name.to_string(),
+            };
+
+            hook_refresh_agg_index(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                refresh_agg_index_desc,
+            )
+            .await?;
+        }
 
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;

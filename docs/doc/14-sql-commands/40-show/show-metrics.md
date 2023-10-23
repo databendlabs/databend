@@ -6,7 +6,7 @@ Shows the list of [system metrics](../../13-sql-reference/20-system-tables/syste
 
 ## Syntax
 
-```
+```sql
 SHOW METRICS
 ```
 

@@ -278,13 +278,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_only
+            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, _, table_reference, opt_selection)| Statement::Delete {
-            hints: opt_hints,
-            table_reference,
-            selection: opt_selection.map(|(_, selection)| selection),
+        |(_, hints, _, table, opt_selection)| {
+            Statement::Delete(DeleteStmt {
+                hints,
+                table,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
         },
     );
 
@@ -294,9 +296,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, table, _, update_list, opt_selection)| {
+        |(_, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
-                hints: opt_hints,
+                hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -2745,6 +2747,27 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))(i)
+}
+
+pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_1_to_3 ~ #alias_name?
+        }),
+        |(span, ((catalog, database, table), alias))| TableReference::Table {
+            span: transform_span(span.0),
+            catalog,
+            database,
+            table,
+            alias: alias.map(|v| TableAlias {
+                name: v,
+                columns: vec![],
+            }),
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+    )(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {

@@ -1105,8 +1105,7 @@ impl PipelineBuilder {
             }
         })?;
         self.pipelines.push(right_res.main_pipeline);
-        self.pipelines
-            .extend(right_res.sources_pipelines.into_iter());
+        self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }
 
@@ -1190,8 +1189,7 @@ impl PipelineBuilder {
         }
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines
-            .extend(build_res.sources_pipelines.into_iter());
+        self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
 
@@ -2192,8 +2190,7 @@ impl PipelineBuilder {
         })?;
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines
-            .extend(build_res.sources_pipelines.into_iter());
+        self.pipelines.extend(build_res.sources_pipelines);
         Ok(rx)
     }
 
@@ -2400,8 +2397,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
         self.pipelines.push(left_side_pipeline.main_pipeline);
-        self.pipelines
-            .extend(left_side_pipeline.sources_pipelines.into_iter());
+        self.pipelines.extend(left_side_pipeline.sources_pipelines);
         Ok(())
     }
 }

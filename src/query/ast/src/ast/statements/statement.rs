@@ -25,7 +25,6 @@ use crate::ast::statements::task::CreateTaskStmt;
 use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
-use crate::ast::TableReference;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -80,11 +79,7 @@ pub enum Statement {
     Insert(InsertStmt),
     Replace(ReplaceStmt),
     MergeInto(MergeIntoStmt),
-    Delete {
-        hints: Option<Hint>,
-        table_reference: TableReference,
-        selection: Option<Expr>,
-    },
+    Delete(DeleteStmt),
 
     Update(UpdateStmt),
 
@@ -305,19 +300,7 @@ impl Display for Statement {
             Statement::Insert(insert) => write!(f, "{insert}")?,
             Statement::Replace(replace) => write!(f, "{replace}")?,
             Statement::MergeInto(merge_into) => write!(f, "{merge_into}")?,
-            Statement::Delete {
-                table_reference,
-                selection,
-                hints,
-            } => {
-                write!(f, "DELETE FROM {table_reference} ")?;
-                if let Some(hints) = hints {
-                    write!(f, "{} ", hints)?;
-                }
-                if let Some(conditions) = selection {
-                    write!(f, "WHERE {conditions} ")?;
-                }
-            }
+            Statement::Delete(delete) => write!(f, "{delete}")?,
             Statement::Update(update) => write!(f, "{update}")?,
             Statement::CopyIntoTable(stmt) => write!(f, "{stmt}")?,
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,

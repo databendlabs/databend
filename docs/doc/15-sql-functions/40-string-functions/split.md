@@ -7,7 +7,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Splits a string using a specified delimiter and returns the resulting parts as an array.
 
-See also: [SPLIT_PART](split_part.md)
+See also: [SPLIT_PART](split-part)
 
 ## Syntax
 

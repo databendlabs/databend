@@ -22,7 +22,6 @@
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
 #![feature(alloc_error_hook)]
-#![feature(return_position_impl_trait_in_trait)]
 #![feature(slice_swap_unchecked)]
 
 pub mod base;

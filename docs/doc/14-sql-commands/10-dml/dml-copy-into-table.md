@@ -247,19 +247,28 @@ These examples showcase data loading into Databend from various types of stages:
   <TabItem value="user" label="User Stage" default>
 
 ```sql
-COPY INTO mytable FROM @~ PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @~
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
   <TabItem value="internal" label="Internal Stage">
 
 ```sql
-COPY INTO mytable FROM @my_internal_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @my_internal_stage
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
   <TabItem value="external" label="External Stage">
 
 ```sql
-COPY INTO mytable FROM @my_external_stage PATTERN = '.*[.]parquet' FILE_FORMAT = (TYPE = PARQUET);
+COPY INTO mytable
+    FROM @my_external_stage
+    PATTERN = '.*[.]parquet'
+    FILE_FORMAT = (TYPE = PARQUET);
 ```
   </TabItem>
 </Tabs>
@@ -276,13 +285,18 @@ This example establishes a connection to Amazon S3 using AWS access keys and sec
 ```sql
 -- Authenticated by AWS access keys and secrets.
 COPY INTO mytable
-FROM 's3://mybucket/data.csv'
-CONNECTION = (
-    ACCESS_KEY_ID = '<your-access-key-ID>',
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-)
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
-SIZE_LIMIT = 10;
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    )
+    SIZE_LIMIT = 10;
 ```
 
 This example connects to Amazon S3 using AWS IAM role authentication with an external ID and loads CSV files matching the specified pattern from 'mybucket':
@@ -290,14 +304,19 @@ This example connects to Amazon S3 using AWS IAM role authentication with an ext
 ```sql
 -- Authenticated by AWS IAM role and external ID.
 COPY INTO mytable
-FROM 's3://mybucket/'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
-    EXTERNAL_ID = '123456'
-)
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>',
+        ROLE_ARN = 'arn:aws:iam::123456789012:role/my_iam_role',
+        EXTERNAL_ID = '123456'
+    )
+    PATTERN = '.*[.]csv'
+        FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 
 </TabItem>
@@ -308,13 +327,13 @@ This example connects to Azure Blob Storage and loads data from 'data.csv' into 
 
 ```sql
 COPY INTO mytable
-FROM 'azblob://mybucket/data.csv'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
-    ACCOUNT_NAME = '<account_name>',
-    ACCOUNT_KEY = '<account_key>'
-)
-FILE_FORMAT = (type = CSV);
+    FROM 'azblob://mybucket/data.csv'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<account_name>.blob.core.windows.net',
+        ACCOUNT_NAME = '<account_name>',
+        ACCOUNT_KEY = '<account_key>'
+    )
+    FILE_FORMAT = (type = CSV);
 ```
 </TabItem>
 
@@ -324,9 +343,9 @@ This example loads data from three remote CSV files and skips a file in case of 
 
 ```sql
 COPY INTO mytable
-FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
-FILE_FORMAT = (type = CSV)
-ON_ERROR = continue;
+    FROM 'https://ci.databend.org/dataset/stateful/ontime_200{6,7,8}_200.csv'
+    FILE_FORMAT = (type = CSV)
+    ON_ERROR = continue;
 ```
 </TabItem>
 
@@ -336,9 +355,16 @@ This example loads data from a CSV file on IPFS:
 
 ```sql
 COPY INTO mytable
-FROM 'ipfs://<your-ipfs-hash>'
-CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 'ipfs://<your-ipfs-hash>'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<your-ipfs-gateway>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 </TabItem>
 </Tabs>
@@ -349,13 +375,19 @@ This example loads a GZIP-compressed CSV file on Amazon S3 into Databend:
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/data.csv.gz'
-CONNECTION = (
-    ENDPOINT_URL = 'https://<endpoint-URL>',
-    ACCESS_KEY_ID = '<your-access-key-ID>',
-    SECRET_ACCESS_KEY = '<your-secret-access-key>'
-)
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO);
+    FROM 's3://mybucket/data.csv.gz'
+    CONNECTION = (
+        ENDPOINT_URL = 'https://<endpoint-URL>',
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1,
+        COMPRESSION = AUTO
+    );
 ```
 
 ### Example 4: Filtering Files with Pattern
@@ -364,9 +396,14 @@ This example demonstrates how to load CSV files from Amazon S3 using pattern mat
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*sales.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    PATTERN = '.*sales.*[.]csv'
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
 ```
 Where `.*` is interpreted as zero or more occurrences of any character. The square brackets escape the period character `.` that precedes a file extension.
 
@@ -374,9 +411,15 @@ To load from all the CSV files:
 
 ```sql
 COPY INTO mytable
-FROM 's3://mybucket/'
-PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
+    FROM 's3://mybucket/'
+    PATTERN = '.*[.]csv'
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    );
+
 ```
 
 When specifying the pattern for a file path including multiple folders, consider your matching criteria:
@@ -416,7 +459,9 @@ CREATE TABLE books
     date VARCHAR
 );
 
-COPY INTO books FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+COPY INTO books
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV);
 ```
 
 If your table has more columns than the file, you can specify the columns into which you want to load data. For example,
@@ -430,7 +475,9 @@ CREATE TABLE books_with_language
     date VARCHAR
 );
 
-COPY INTO books_with_language (title, author, date) FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV);
+COPY INTO books_with_language (title, author, date)
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV);
 ```
 
 If your table has more columns than the file, and the additional columns are at the end of the table, you can load data using the [FILE_FORMAT](#file_format) option `ERROR_ON_COLUMN_COUNT_MISMATCH`. This allows you to load data without specifying each column individually. Please note that ERROR_ON_COLUMN_COUNT_MISMATCH currently works for the CSV file format.
@@ -445,9 +492,49 @@ CREATE TABLE books_with_extra_columns
     region VARCHAR
 );
 
-COPY INTO books_with_extra_columns FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv' FILE_FORMAT = (TYPE = CSV ERROR_ON_COLUMN_COUNT_MISMATCH = false);
+COPY INTO books_with_extra_columns
+    FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv'
+    FILE_FORMAT = (TYPE = CSV, ERROR_ON_COLUMN_COUNT_MISMATCH = false);
 ```
 
 :::note
 Extra columns in a table can have default values specified by [CREATE TABLE](../00-ddl/20-table/10-ddl-create-table.md) or [ALTER TABLE COLUMN](../00-ddl/20-table/90-alter-table-column.md). If a default value is not explicitly set for an extra column, the default value associated with its data type will be applied. For instance, an integer-type column will default to 0 if no other value is specified. 
 :::
+
+### Example 6: Loading JSON with Custom Format
+
+This example loads data from a CSV file "data.csv" with the following content:
+
+```json
+1,"U00010","{\"carPriceList\":[{\"carTypeId":10,\"distance":5860},{\"carTypeId":11,\"distance\":5861}]}"
+2,"U00011","{\"carPriceList\":[{\"carTypeId":12,\"distance":5862},{\"carTypeId":13,\"distance\":5863}]}"
+```
+
+Each line contains three columns of data, with the third column being a string containing JSON data. To load CSV data correctly with JSON fields, we need to set the correct escape character. This example uses the backslash \ as the escape character, as the JSON data contains double quotes ".
+
+#### Step 1: Create custom file format.
+
+```sql
+-- Define a custom CSV file format with the escape character set to backslash \
+CREATE FILE FORMAT my_csv_format
+    TYPE = CSV
+    ESCAPE = '\\';
+```
+
+#### Step 2: Create target table.
+
+```sql
+CREATE TABLE t
+  (
+     id       INT,
+     seq      VARCHAR,
+     p_detail VARCHAR
+  ); 
+```
+
+#### Step 3: Load with custom file format.
+
+```sql
+COPY INTO t FROM @t_stage files=('data.csv') 
+FILE_FORMAT=(NAME='my_csv_format');
+```
