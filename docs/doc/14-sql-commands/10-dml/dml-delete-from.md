@@ -15,7 +15,7 @@ Databend ensures data integrity with atomic operations. Inserts, updates, replac
 ## Syntax
 
 ```sql
-DELETE FROM <table_name>
+DELETE FROM <table_name> [[AS] alias]
 [WHERE <condition>]
 ```
 

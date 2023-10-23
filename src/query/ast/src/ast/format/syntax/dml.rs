@@ -27,10 +27,9 @@ use crate::ast::CopyIntoLocationSource;
 use crate::ast::CopyIntoLocationStmt;
 use crate::ast::CopyIntoTableSource;
 use crate::ast::CopyIntoTableStmt;
-use crate::ast::Expr;
+use crate::ast::DeleteStmt;
 use crate::ast::InsertSource;
 use crate::ast::InsertStmt;
-use crate::ast::TableReference;
 use crate::ast::UpdateExpr;
 use crate::ast::UpdateStmt;
 
@@ -125,10 +124,14 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
     })
 }
 
-pub(crate) fn pretty_delete(table: TableReference, selection: Option<Expr>) -> RcDoc<'static> {
+pub(crate) fn pretty_delete(delete_stmt: DeleteStmt) -> RcDoc<'static> {
     RcDoc::text("DELETE FROM")
-        .append(RcDoc::line().nest(NEST_FACTOR).append(pretty_table(table)))
-        .append(if let Some(selection) = selection {
+        .append(
+            RcDoc::line()
+                .nest(NEST_FACTOR)
+                .append(pretty_table(delete_stmt.table)),
+        )
+        .append(if let Some(selection) = delete_stmt.selection {
             RcDoc::line().append(RcDoc::text("WHERE")).append(
                 RcDoc::line()
                     .nest(NEST_FACTOR)
