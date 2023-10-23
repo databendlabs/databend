@@ -84,13 +84,10 @@ pub struct DictionaryEntry<V> {
 
 impl<V> DictionaryEntry<V> {
     pub fn is_zero(&self) -> bool {
-        // FIXME:
-        //
-        // returned pointer of `as_ptr` call is never null, so checking it for null
-        // will always return false
-        //
-        // unsafe { self.key.assume_init_ref().as_ptr().is_null() }
-        false
+        #[allow(useless_ptr_null_checks)]
+        unsafe {
+            self.key.assume_init_ref().as_ptr().is_null()
+        }
     }
 }
 
