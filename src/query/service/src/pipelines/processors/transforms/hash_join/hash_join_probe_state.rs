@@ -157,35 +157,6 @@ impl HashJoinProbeState {
         }
     }
 
-    /// Checks if a join type can use selection.
-    pub fn check_for_eliminate_valids(join_type: &JoinType) -> bool {
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::Full
-                | JoinType::Left
-                | JoinType::LeftSingle
-                | JoinType::LeftAnti
-                | JoinType::LeftSemi
-                | JoinType::LeftMark
-                | JoinType::RightMark
-        )
-    }
-
-    /// Checks if a join type can eliminate valids.
-    pub fn check_for_selection(join_type: &JoinType) -> bool {
-        matches!(
-            join_type,
-            JoinType::Inner
-                | JoinType::Right
-                | JoinType::RightSingle
-                | JoinType::RightSemi
-                | JoinType::RightAnti
-                | JoinType::RightMark
-                | JoinType::LeftMark
-        )
-    }
-
     pub fn probe_join(
         &self,
         mut input: DataBlock,
@@ -202,8 +173,8 @@ impl HashJoinProbeState {
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
+        
         let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
-
         let probe_keys = self
             .hash_join_state
             .hash_join_desc
@@ -699,5 +670,34 @@ impl HashJoinProbeState {
             build_indexes_occupied = 0;
         }
         Ok(result_blocks)
+    }
+
+    /// Checks if a join type can use selection.
+    pub fn check_for_eliminate_valids(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Full
+                | JoinType::Left
+                | JoinType::LeftSingle
+                | JoinType::LeftAnti
+                | JoinType::LeftSemi
+                | JoinType::LeftMark
+                | JoinType::RightMark
+        )
+    }
+
+    /// Checks if a join type can eliminate valids.
+    pub fn check_for_selection(join_type: &JoinType) -> bool {
+        matches!(
+            join_type,
+            JoinType::Inner
+                | JoinType::Right
+                | JoinType::RightSingle
+                | JoinType::RightSemi
+                | JoinType::RightAnti
+                | JoinType::RightMark
+                | JoinType::LeftMark
+        )
     }
 }
