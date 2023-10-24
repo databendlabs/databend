@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
 
 mod block_meta;
 mod internal_column_pruner;

@@ -16,6 +16,7 @@ use common_meta_app as mt;
 use common_meta_app::principal::CsvFileFormatParams;
 use common_meta_app::principal::StageFileCompression;
 use common_meta_app::principal::TsvFileFormatParams;
+use common_tracing::func_name;
 
 use crate::common;
 use crate::v032_file_format_params::mt::principal::JsonFileFormatParams;

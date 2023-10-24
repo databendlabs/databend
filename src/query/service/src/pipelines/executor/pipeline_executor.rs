@@ -237,6 +237,11 @@ impl PipelineExecutor {
             }
         }
 
+        if let Err(error) = self.graph.assert_finished_graph() {
+            self.on_finished(&Some(error.clone()))?;
+            return Err(error);
+        }
+
         self.on_finished(&None)?;
         Ok(())
     }
