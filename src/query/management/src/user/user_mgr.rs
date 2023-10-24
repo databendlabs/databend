@@ -80,6 +80,7 @@ impl UserMgr {
 #[async_trait::async_trait]
 impl UserApi for UserMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_user(&self, user_info: UserInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let user_key = format_user_key(&user_info.name, &user_info.hostname);
@@ -102,6 +103,7 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_user(&self, user: UserIdentity, seq: MatchSeq) -> Result<SeqV<UserInfo>> {
         let user_key = format_user_key(&user.username, &user.hostname);
         let key = format!("{}/{}", self.user_prefix, escape_for_key(&user_key)?);
@@ -119,6 +121,7 @@ impl UserApi for UserMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_users(&self) -> Result<Vec<SeqV<UserInfo>>> {
         let user_prefix = self.user_prefix.clone();
         let values = self.kv_api.prefix_list_kv(user_prefix.as_str()).await?;
