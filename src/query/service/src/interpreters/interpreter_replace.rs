@@ -162,6 +162,9 @@ impl ReplaceInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
+        fuse_table.check_mutable()?;
+
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))

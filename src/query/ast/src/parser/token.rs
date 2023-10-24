@@ -735,9 +735,9 @@ pub enum TokenKind {
     #[token("RANGE", ignore(ascii_case))]
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
-    READONLY,
-    #[token("READ_ONLY", ignore(ascii_case))]
     RAWDEFLATE,
+    #[token("READ_ONLY", ignore(ascii_case))]
+    READ_ONLY,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]

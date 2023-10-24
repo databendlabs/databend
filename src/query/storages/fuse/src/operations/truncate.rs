@@ -31,6 +31,7 @@ impl FuseTable {
     #[inline]
     #[async_backtrace::framed]
     pub async fn do_truncate(&self, ctx: Arc<dyn TableContext>, purge: bool) -> Result<()> {
+        self.check_mutable()?;
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             // 1. prepare new snapshot
             let prev_id = prev_snapshot.snapshot_id;

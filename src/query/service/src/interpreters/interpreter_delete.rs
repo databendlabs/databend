@@ -193,6 +193,8 @@ impl Interpreter for DeleteInterpreter {
                     tbl.get_table_info().engine(),
                 )))?;
 
+        fuse_table.check_mutable()?;
+
         // Add table lock heartbeat.
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler

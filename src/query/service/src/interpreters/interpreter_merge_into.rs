@@ -188,6 +188,8 @@ impl MergeIntoInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
+        fuse_table.check_mutable()?;
         let table_info = fuse_table.get_table_info();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 

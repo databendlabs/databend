@@ -101,6 +101,8 @@ pub struct FuseTable {
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
+
+    read_only: bool,
 }
 
 impl FuseTable {
@@ -112,15 +114,22 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
+        let read_only;
         let mut operator = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => create_share_table_operator(
-                ShareTableConfig::share_endpoint_address(),
-                ShareTableConfig::share_endpoint_token(),
-                &share_ident.tenant,
-                &share_ident.share_name,
-                &table_info.name,
-            ),
+            DatabaseType::ShareDB(share_ident) => {
+                // ShareDB is immutable
+                read_only = true;
+                create_share_table_operator(
+                    ShareTableConfig::share_endpoint_address(),
+                    ShareTableConfig::share_endpoint_token(),
+                    &share_ident.tenant,
+                    &share_ident.share_name,
+                    &table_info.name,
+                )
+            }
             DatabaseType::NormalDB => {
+                // check if table is read-only attached
+                read_only = Self::is_read_only_attach(&table_info.meta.options);
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => Ok(init_operator(&sp)?),
@@ -164,6 +173,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
+            read_only,
         }))
     }
 
@@ -316,9 +326,7 @@ impl FuseTable {
 
                 if options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some() {
                     // if table is read-only attached, parse snapshot location from hint
-                    // TODO report error
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
-                    // TODO duplicated code
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
                     let snapshot_loc = {
                         let hint_content = self.operator.read(&hint).await?;
@@ -369,6 +377,24 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    fn is_read_only_attach(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some()
+    }
+
+    pub fn check_mutable(&self) -> Result<()> {
+        if self.read_only {
+            let mut err_code = ErrorCode::InvalidOperation(format!(
+                "Mutation not allowed, table {} is read-only, type {}.",
+                self.table_info.name, self.table_info.db_type
+            ));
+            if Self::is_read_only_attach(&self.table_info.meta.options) {
+                err_code = err_code.add_message("(read-only attached)");
+            }
+            return Err(err_code);
+        }
+        Ok(())
     }
 }
 
@@ -427,7 +453,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
-        // if new cluter_key_str is the same with old one,
+        self.check_mutable()?;
+        // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
             return Ok(())
@@ -478,6 +505,8 @@ impl Table for FuseTable {
 
     #[async_backtrace::framed]
     async fn drop_table_cluster_keys(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.check_mutable()?;
+
         if self.cluster_key_meta.is_none() {
             return Ok(());
         }
@@ -555,6 +584,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_append_data(ctx, pipeline, append_mode)
     }
 
@@ -566,12 +596,14 @@ impl Table for FuseTable {
         overwrite: bool,
         prev_snapshot_id: Option<SnapshotId>,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
     }
 
     #[minitrace::trace(name = "fuse_table_truncate")]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.check_mutable()?;
         let purge = false;
         self.do_truncate(ctx, purge).await
     }
@@ -586,6 +618,7 @@ impl Table for FuseTable {
         keep_last_snapshot: bool,
         dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
+        self.check_mutable()?;
         match self.navigate_for_purge(&ctx, instant).await {
             Ok((table, files)) => {
                 table
@@ -603,6 +636,7 @@ impl Table for FuseTable {
     #[minitrace::trace(name = "analyze")]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
+        self.check_mutable()?;
         self.do_analyze(&ctx).await
     }
 
@@ -675,6 +709,7 @@ impl Table for FuseTable {
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_update(
             ctx,
             filter,
@@ -704,6 +739,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: Option<usize>,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_compact_segments(ctx, limit).await
     }
 
@@ -713,6 +749,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: Option<usize>,
     ) -> Result<Option<(Partitions, Arc<TableSnapshot>)>> {
+        self.check_mutable()?;
         self.do_compact_blocks(ctx, limit).await
     }
 
@@ -724,6 +761,7 @@ impl Table for FuseTable {
         limit: Option<usize>,
         pipeline: &mut Pipeline,
     ) -> Result<u64> {
+        self.check_mutable()?;
         self.do_recluster(ctx, push_downs, limit, pipeline).await
     }
 
@@ -733,6 +771,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         point: NavigationDescriptor,
     ) -> Result<()> {
+        self.check_mutable()?;
         self.do_revert_to(ctx.as_ref(), point).await
     }
 

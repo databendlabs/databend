@@ -89,6 +89,7 @@ impl Interpreter for DropTableInterpreter {
                 // otherwise, plain truncate
                 if let Ok(fuse_table) = maybe_fuse_table {
                     let purge = true;
+                    // TODO abstraction leak?
                     fuse_table.do_truncate(self.ctx.clone(), purge).await?
                 } else {
                     latest.truncate(self.ctx.clone()).await?

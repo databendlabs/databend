@@ -325,6 +325,7 @@ build_exceptions! {
     StorageUnsupported(3902),
     StorageInsecure(3903),
     DeprecatedIndexFormat(3904),
+    InvalidOperation(3905),
     StorageOther(4000),
     UnresolvableConflict(4001),
 }
