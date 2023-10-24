@@ -257,7 +257,7 @@ impl HashJoinProbeState {
                         &mut probe_state.selection,
                     );
                 } else {
-                    // For these join types, we don't use selection: full, left, left single, left anti, left semi.
+                    // For these join types, we don't use selection: full, left, left single, left anti.
                     table.hash_table.probe(&mut probe_state.hashes, valids);
                 }
                 self.result_blocks(&input, keys, &table.hash_table, probe_state)
@@ -701,6 +701,7 @@ impl HashJoinProbeState {
                 | JoinType::RightSemi
                 | JoinType::RightAnti
                 | JoinType::RightMark
+                | JoinType::LeftSemi
                 | JoinType::LeftMark
         )
     }

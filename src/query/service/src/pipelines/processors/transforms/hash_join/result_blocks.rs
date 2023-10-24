@@ -47,14 +47,9 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.left_semi_anti_join::<true, _>(input, keys, hash_table, probe_state)
+                    self.left_semi_join::<_>(input, keys, hash_table, probe_state)
                 } else {
-                    self.left_semi_anti_join_with_conjunct::<true, _>(
-                        input,
-                        keys,
-                        hash_table,
-                        probe_state,
-                    )
+                    self.left_semi_join_with_conjunct::<_>(input, keys, hash_table, probe_state)
                 }
             }
             JoinType::LeftAnti => {
@@ -64,43 +59,21 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.left_semi_anti_join::<false, _>(input, keys, hash_table, probe_state)
+                    self.left_anti_join::<_>(input, keys, hash_table, probe_state)
                 } else {
-                    self.left_semi_anti_join_with_conjunct::<false, _>(
-                        input,
-                        keys,
-                        hash_table,
-                        probe_state,
-                    )
+                    self.left_anti_join_with_conjunct::<_>(input, keys, hash_table, probe_state)
                 }
             }
-            JoinType::RightSemi => {
+            JoinType::RightSemi | JoinType::RightAnti => {
                 if self
                     .hash_join_state
                     .hash_join_desc
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_semi_join::<_>(keys, hash_table, probe_state)
+                    self.probe_right_semi_anti_join::<_>(keys, hash_table, probe_state)
                 } else {
-                    self.probe_right_semi_join_with_conjunct::<_>(
-                        input,
-                        keys,
-                        hash_table,
-                        probe_state,
-                    )
-                }
-            }
-            JoinType::RightAnti => {
-                if self
-                    .hash_join_state
-                    .hash_join_desc
-                    .other_predicate
-                    .is_none()
-                {
-                    self.probe_right_anti_join::<_>(keys, hash_table, probe_state)
-                } else {
-                    self.probe_right_anti_join_with_conjunct::<_>(
+                    self.probe_right_semi_anti_join_with_conjunct::<_>(
                         input,
                         keys,
                         hash_table,

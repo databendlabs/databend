@@ -20,12 +20,13 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::KeyAccessor;
 use common_hashtable::HashJoinHashtableLike;
+use common_hashtable::RowPtr;
 
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
 impl HashJoinProbeState {
-    pub(crate) fn left_semi_join<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_anti_join<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -38,21 +39,21 @@ impl HashJoinProbeState {
         // If there is no build key, the result is input
         // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
         // Probe states.
+        let input_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
         let probe_indexes = &mut probe_state.probe_indexes;
         let pointers = probe_state.hashes.as_slice();
-        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
         let string_items_buf = &mut probe_state.string_items_buf;
 
         // Results.
         let mut matched_num = 0;
         let mut result_blocks = vec![];
 
-        for idx in selection.iter() {
-            let key = unsafe { keys.key_unchecked(*idx as usize) };
-            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
-            if hash_table.next_contains(key, ptr) {
-                probe_indexes[matched_num] = *idx;
+        for idx in 0..input_rows {
+            let key = unsafe { keys.key_unchecked(idx) };
+            let ptr = unsafe { *pointers.get_unchecked(idx) };
+            if !hash_table.next_contains(key, ptr) {
+                probe_indexes[matched_num] = idx as u32;
                 matched_num += 1;
                 if matched_num >= max_block_size {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -62,6 +63,7 @@ impl HashJoinProbeState {
                     }
                     let probe_block = DataBlock::take(input, probe_indexes, string_items_buf)?;
                     result_blocks.push(probe_block);
+
                     matched_num = 0;
                 }
             }
@@ -74,7 +76,7 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    pub(crate) fn left_semi_join_with_conjunct<'a, H: HashJoinHashtableLike>(
+    pub(crate) fn left_anti_join_with_conjunct<'a, H: HashJoinHashtableLike>(
         &self,
         input: &DataBlock,
         keys: Box<(dyn KeyAccessor<Key = H::Key>)>,
@@ -85,12 +87,13 @@ impl HashJoinProbeState {
         H::Key: 'a,
     {
         // Probe states.
+        let input_rows = input.num_rows();
         let max_block_size = probe_state.max_block_size;
         let probe_indexes = &mut probe_state.probe_indexes;
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
+
         let pointers = probe_state.hashes.as_slice();
-        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
         let is_probe_projected = probe_state.is_probe_projected;
         let string_items_buf = &mut probe_state.string_items_buf;
 
@@ -106,6 +109,10 @@ impl HashJoinProbeState {
 
         // For semi join, it defaults to all.
         let mut row_state = vec![0_u32; input.num_rows()];
+        let dummy_probed_row = RowPtr {
+            chunk_index: 0,
+            row_index: 0,
+        };
         let other_predicate = self
             .hash_join_state
             .hash_join_desc
@@ -117,18 +124,25 @@ impl HashJoinProbeState {
         let mut matched_num = 0;
         let mut result_blocks = vec![];
 
-        for idx in selection.iter() {
-            let key = unsafe { keys.key_unchecked(*idx as usize) };
-            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+        for idx in 0..input_rows {
+            let key = unsafe { keys.key_unchecked(idx) };
+            let ptr = unsafe { *pointers.get_unchecked(idx) };
             let (mut match_count, mut incomplete_ptr) =
                 hash_table.next_probe(key, ptr, build_indexes_ptr, matched_num, max_block_size);
 
+            let true_match_count = match_count;
             if match_count == 0 {
-                continue;
+                // dummy_probed_row
+                unsafe { std::ptr::write(build_indexes_ptr.add(matched_num), dummy_probed_row) };
+                match_count = 1;
+            }
+
+            if true_match_count > 0 {
+                row_state[idx] += true_match_count as u32;
             }
 
             for _ in 0..match_count {
-                probe_indexes[matched_num] = *idx;
+                probe_indexes[matched_num] = idx as u32;
                 matched_num += 1;
             }
             if matched_num >= max_block_size {
@@ -169,7 +183,7 @@ impl HashJoinProbeState {
                         _ => unreachable!(),
                     };
 
-                    self.fill_null_for_semi_join(&mut bm, probe_indexes, &mut row_state);
+                    self.fill_null_for_anti_join(&mut bm, probe_indexes, &mut row_state);
 
                     if let Some(probe_block) = probe_block {
                         let result_block = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
@@ -193,8 +207,10 @@ impl HashJoinProbeState {
                         break;
                     }
 
+                    row_state[idx] += match_count as u32;
+
                     for _ in 0..match_count {
-                        probe_indexes[matched_num] = *idx;
+                        probe_indexes[matched_num] = idx as u32;
                         matched_num += 1;
                     }
 
@@ -244,7 +260,7 @@ impl HashJoinProbeState {
             _ => unreachable!(),
         };
 
-        self.fill_null_for_semi_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
+        self.fill_null_for_anti_join(&mut bm, &probe_indexes[0..matched_num], &mut row_state);
 
         if let Some(probe_block) = probe_block {
             let result_block = DataBlock::filter_with_bitmap(probe_block, &bm.into())?;
@@ -256,24 +272,28 @@ impl HashJoinProbeState {
         Ok(result_blocks)
     }
 
-    // modify the bm by the value row_state
-    // keep the index of the first positive state
-    // bitmap: [1, 1, 1] with row_state [0, 0], probe_index: [(0, 3)] => [0, 0, 0] (repeat the first element 3 times)
-    // bitmap will be [1, 1, 1] -> [1, 1, 1] -> [1, 0, 1] -> [1, 0, 0]
-    // row_state will be [0, 0] -> [1, 0] -> [1,0] -> [1, 0]
-    pub(crate) fn fill_null_for_semi_join(
+    // keep the index of the negative state
+    // bitmap: [1, 1, 1] with row_state [3, 0], probe_index: [(0, 3)] => [0, 0, 0] (repeat the first element 3 times)
+    // bitmap will be [1, 1, 1] -> [0, 1, 1] -> [0, 0, 1] -> [0, 0, 0]
+    // row_state will be [3, 0] -> [3, 0] -> [3, 0] -> [3, 0]
+    pub(crate) fn fill_null_for_anti_join(
         &self,
         bm: &mut MutableBitmap,
         probe_indexes: &[u32],
         row_state: &mut [u32],
     ) {
         for (index, row) in probe_indexes.iter().enumerate() {
-            if bm.get(index) {
-                if row_state[*row as usize] == 0 {
-                    row_state[*row as usize] = 1;
-                } else {
-                    bm.set(index, false);
-                }
+            if row_state[*row as usize] == 0 {
+                // if state is not matched, anti result will take one
+                bm.set(index, true);
+            } else if row_state[*row as usize] == 1 {
+                // if state has just one, anti reverse the result
+                row_state[*row as usize] -= 1;
+                bm.set(index, !bm.get(index))
+            } else if !bm.get(index) {
+                row_state[*row as usize] -= 1;
+            } else {
+                bm.set(index, false);
             }
         }
     }
