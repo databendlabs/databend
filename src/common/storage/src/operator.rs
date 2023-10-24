@@ -233,9 +233,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         // Try to load region from env if not set.
         builder.region(&region);
     } else {
+        // FIXME: we should return error here but keep those logic for compatibility.
         warn!(
             "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
-        )
+        );
+        builder.region("us-east-1");
     }
 
     // Credential.
