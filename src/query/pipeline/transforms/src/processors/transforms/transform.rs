@@ -100,7 +100,7 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
         }
     }
 
-    #[minitrace::trace(name = "transformer.process", span)]
+    #[minitrace::trace(name = "Transformer::process")]
     fn process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;
