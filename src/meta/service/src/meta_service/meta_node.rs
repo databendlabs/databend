@@ -31,6 +31,7 @@ use common_base::base::tokio::time::Instant;
 use common_grpc::ConnectionFactory;
 use common_grpc::DNSResolver;
 use common_meta_client::reply_to_api_result;
+use common_meta_client::RequestFor;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::DATA_VERSION;
@@ -92,7 +93,6 @@ use crate::metrics::server_metrics;
 use crate::network::Network;
 use crate::request_handling::Forwarder;
 use crate::request_handling::Handler;
-use crate::request_handling::MetaRequest;
 use crate::store::RaftStore;
 use crate::version::METASRV_COMMIT_VERSION;
 use crate::watcher::DispatcherSender;
@@ -1000,9 +1000,9 @@ impl MetaNode {
     pub async fn handle_forwardable_request<Req>(
         &self,
         req: ForwardRequest<Req>,
-    ) -> Result<Req::Resp, MetaAPIError>
+    ) -> Result<Req::Reply, MetaAPIError>
     where
-        Req: MetaRequest,
+        Req: RequestFor,
         for<'a> MetaLeader<'a>: Handler<Req>,
         for<'a> MetaForwarder<'a>: Forwarder<Req>,
     {
