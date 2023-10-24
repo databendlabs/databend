@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_config::GlobalConfig;
 use common_exception::Result;
 use common_sql::plans::TruncateTablePlan;
@@ -68,6 +69,9 @@ impl Interpreter for TruncateTableInterpreter {
             .ctx
             .get_table(&self.catalog_name, &self.database_name, &self.table_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         if self.proxy_to_cluster && table.broadcast_truncate_to_cluster() {
             let settings = self.ctx.get_settings();

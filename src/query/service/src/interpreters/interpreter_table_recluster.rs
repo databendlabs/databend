@@ -18,6 +18,7 @@ use std::time::SystemTime;
 
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check::check_function;
@@ -114,6 +115,9 @@ impl Interpreter for ReclusterTableInterpreter {
                 .await?
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
+
+            // check mutability
+            table.check_mutable()?;
 
             // check if the table is locked.
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;

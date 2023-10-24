@@ -127,6 +127,9 @@ impl OptimizeTableInterpreter {
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
 
+        // check mutability
+        table.check_mutable()?;
+
         let table_info = table.get_table_info().clone();
         // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
