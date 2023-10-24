@@ -273,7 +273,7 @@ impl ExecutingGraph {
                 let processor_state = match event {
                     Event::Finished => {
                         if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
-                            locker.finished_nodes.fetch_add(1, Ordering::Acquire);
+                            locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
                         }
 
                         State::Finished
