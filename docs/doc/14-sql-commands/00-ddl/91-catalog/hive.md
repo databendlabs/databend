@@ -7,6 +7,27 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Databend supports the integration of an [Apache Hive](https://hive.apache.org/) catalog, enhancing its compatibility and versatility for data management and analytics. This extends Databend's capabilities by seamlessly incorporating the powerful metadata and storage management capabilities of Apache Hive into the platform.
 
+## Datatype Mapping to Databend
+
+This table maps data types between Apache Hive and Databend. Please note that Databend does not currently support Hive data types that are not listed in the table.
+
+| Apache Hive         | Databend             |
+| ------------------- | -------------------- |
+| boolean             | boolean              |
+| tinyint             | tinyint (int8)       |
+| smallint            | smallint (int16)     |
+| int                 | int (int32)          |
+| bigint              | bigint (int64)       |
+| date                | date                 |
+| timestamp           | timestamp            |
+| float               | float (float32)      |
+| double              | double (float64)     |
+| varchar             | varchar (string)     |
+| decimal             | decimal              |
+| array&lt;type&gt;         | array, supports nesting |
+| map&lt;KeyType, ValueType&gt; | map             |
+
+
 ## Managing Apache Hive Catalogs
 
 Databend provides you the following commands to manage Apache Hive catalogs:
