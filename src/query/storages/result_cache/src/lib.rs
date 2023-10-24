@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #![feature(type_alias_impl_trait)]
-#![deny(unused_crate_dependencies)]
 #![feature(impl_trait_in_assoc_type)]
 
 mod common;

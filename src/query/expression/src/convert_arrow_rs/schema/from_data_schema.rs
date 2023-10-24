@@ -19,7 +19,6 @@ use arrow_schema::Field as ArrowField;
 use arrow_schema::Fields;
 use arrow_schema::Schema as ArrowSchema;
 
-use super::set_nullable;
 use crate::infer_schema_type;
 use crate::types::DataType;
 use crate::DataField;
@@ -56,13 +55,7 @@ impl From<&DataField> for ArrowField {
             metadata.insert(EXTENSION_KEY.to_string(), extend_type);
             ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
         } else {
-            match ty {
-                ArrowDataType::Struct(_) if f.is_nullable() => {
-                    let ty = set_nullable(&ty);
-                    ArrowField::new(f.name(), ty, f.is_nullable())
-                }
-                _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
-            }
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null())
         }
     }
 }
@@ -70,21 +63,5 @@ impl From<&DataField> for ArrowField {
 impl From<&DataType> for ArrowDataType {
     fn from(ty: &DataType) -> Self {
         (&infer_schema_type(ty).expect("Generic type can not convert to arrow")).into()
-    }
-}
-
-/// This function is similar to the above, but does not change the nullability of any type.
-pub fn data_schema_to_arrow_schema(data_schema: &DataSchema) -> ArrowSchema {
-    let fields = data_schema
-        .fields
-        .iter()
-        .map(|f| {
-            let ty = f.data_type().into();
-            ArrowField::new(f.name(), ty, f.is_nullable_or_null())
-        })
-        .collect::<Vec<_>>();
-    ArrowSchema {
-        fields: Fields::from(fields),
-        metadata: Default::default(),
     }
 }

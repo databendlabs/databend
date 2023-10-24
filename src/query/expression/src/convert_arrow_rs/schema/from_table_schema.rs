@@ -48,13 +48,7 @@ impl From<&TableField> for ArrowField {
             metadata.insert(EXTENSION_KEY.to_string(), extend_type);
             ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
         } else {
-            match ty {
-                ArrowDataType::Struct(_) if f.is_nullable() => {
-                    let ty = set_nullable(&ty);
-                    ArrowField::new(f.name(), ty, f.is_nullable())
-                }
-                _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()),
-            }
+            ArrowField::new(f.name(), ty, f.is_nullable_or_null())
         }
     }
 }
@@ -123,22 +117,5 @@ impl From<&TableDataType> for ArrowDataType {
             TableDataType::Bitmap => ArrowDataType::LargeBinary,
             TableDataType::Variant => ArrowDataType::LargeBinary,
         }
-    }
-}
-
-pub(super) fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
-    // if the struct type is nullable, need to set inner fields as nullable
-    match ty {
-        ArrowDataType::Struct(fields) => {
-            let fields = fields
-                .iter()
-                .map(|f| {
-                    let data_type = set_nullable(f.data_type());
-                    ArrowField::new(f.name().clone(), data_type, true)
-                })
-                .collect();
-            ArrowDataType::Struct(fields)
-        }
-        _ => ty.clone(),
     }
 }
