@@ -18,6 +18,7 @@ common-tracing = { path = "../../common/tracing" }
 
 anyhow = { workspace = true }
 async-trait = "0.1.57"
+futures-util = { workspace = true }
 log = { workspace = true }
 minitrace = { workspace = true }
 serde = { workspace = true }
