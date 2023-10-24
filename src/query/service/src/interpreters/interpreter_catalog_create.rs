@@ -18,6 +18,10 @@ use common_catalog::catalog::CatalogManager;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::CatalogMeta;
+use common_meta_app::schema::CatalogNameIdent;
 use common_meta_app::schema::CatalogOption;
 use common_sql::plans::CreateCatalogPlan;
 use common_storages_fuse::TableContext;
@@ -59,6 +63,25 @@ impl Interpreter for CreateCatalogInterpreter {
         }
 
         let catalog_manager = CatalogManager::instance();
+
+        // Build and check if catalog is valid.
+        let ctl = catalog_manager
+            .build_catalog(&CatalogInfo {
+                id: CatalogId::default(),
+                name_ident: CatalogNameIdent {
+                    tenant: self.plan.tenant.clone(),
+                    catalog_name: self.plan.catalog.clone(),
+                },
+                meta: CatalogMeta {
+                    catalog_option: self.plan.meta.catalog_option.clone(),
+                    created_on: chrono::Utc::now(),
+                },
+            })
+            .map_err(|err| err.add_message("The catalog you're trying to create is invalid."))?;
+
+        // list databases to check if the catalog is valid.
+        let _ = ctl.list_databases(&self.plan.tenant).await.map_err(|err| err.add_message("The catalog creation failed the validation check. Please verify if its configuration is valid."))?;
+
         catalog_manager
             .create_catalog(self.plan.clone().into())
             .await?;
