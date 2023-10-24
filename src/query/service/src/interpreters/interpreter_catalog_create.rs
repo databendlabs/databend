@@ -77,10 +77,12 @@ impl Interpreter for CreateCatalogInterpreter {
                     created_on: chrono::Utc::now(),
                 },
             })
-            .map_err(|err| err.add_message("The catalog you're trying to create is invalid."))?;
+            .map_err(|err| err.add_message("Error creating catalog."))?;
 
         // list databases to check if the catalog is valid.
-        let _ = ctl.list_databases(&self.plan.tenant).await.map_err(|err| err.add_message("The catalog creation failed the validation check. Please verify if its configuration is valid."))?;
+        let _ = ctl.list_databases(&self.plan.tenant).await.map_err(|err| {
+            err.add_message("Catalog creation failed. Check your parameter values.")
+        })?;
 
         catalog_manager
             .create_catalog(self.plan.clone().into())
