@@ -29,7 +29,6 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-settings = { path = "../../query/settings" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
@@ -37,6 +36,7 @@ data-mask-feature = { path = "../ee-features/data-mask" }
 databend-query = { path = "../service" }
 jsonb = { workspace = true }
 opendal = { workspace = true }
+storage-encryption = { path = "../ee-features/storage-encryption" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }

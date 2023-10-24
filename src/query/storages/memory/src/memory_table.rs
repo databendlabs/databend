@@ -214,6 +214,7 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let numbers = ctx.get_settings().get_max_threads()? as usize;
         let read_data_blocks = self.get_read_data_blocks();

@@ -313,11 +313,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
         Statement::MergeInto(merge_into) => visitor.visit_merge_into(merge_into),
-        Statement::Delete {
-            table_reference,
-            selection,
-            ..
-        } => visitor.visit_delete(table_reference, selection),
+        Statement::Delete(delete) => visitor.visit_delete(delete),
         Statement::Update(update) => visitor.visit_update(update),
         Statement::CopyIntoLocation(stmt) => visitor.visit_copy_into_location(stmt),
         Statement::CopyIntoTable(stmt) => visitor.visit_copy_into_table(stmt),
@@ -449,5 +445,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowNetworkPolicies => visitor.visit_show_network_policies(),
 
         Statement::CreateTask(stmt) => visitor.visit_create_task(stmt),
+        Statement::ExecuteTask(stmt) => visitor.visit_execute_task(stmt),
+        Statement::DropTask(stmt) => visitor.visit_drop_task(stmt),
+        Statement::AlterTask(stmt) => visitor.visit_alter_task(stmt),
+        Statement::ShowTasks(stmt) => visitor.visit_show_tasks(stmt),
+        Statement::DescribeTask(stmt) => visitor.visit_describe_task(stmt),
     }
 }

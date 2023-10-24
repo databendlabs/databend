@@ -85,18 +85,6 @@ impl Interpreter for MergeIntoInterpreter {
         let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
 
-        // hook compact
-        let compact_target = CompactTargetTableDescription {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-        };
-
-        let compact_hook_trace_ctx = CompactHookTraceCtx {
-            start,
-            operation_name: "merge_into".to_owned(),
-        };
-
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;
         } else {
@@ -110,13 +98,27 @@ impl Interpreter for MergeIntoInterpreter {
             });
         }
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut build_res.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
+
+            let compact_hook_trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "merge_into".to_owned(),
+            };
+
+            hook_compact(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                compact_target,
+                compact_hook_trace_ctx,
+            )
+            .await;
+        }
 
         Ok(build_res)
     }

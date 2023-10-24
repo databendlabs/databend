@@ -447,6 +447,11 @@ impl InterpreterFactory {
             }
 
             Plan::CreateTask(_) => todo!(),
+            Plan::AlterTask(_) => todo!(),
+            Plan::DropTask(_) => todo!(),
+            Plan::DescribeTask(_) => todo!(),
+            Plan::ExecuteTask(_) => todo!(),
+            Plan::ShowTasks(_) => todo!(),
         }
     }
 }

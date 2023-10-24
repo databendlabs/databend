@@ -29,8 +29,8 @@ use crate::virtual_column::RealVirtualColumnHandler;
 pub struct MockServices;
 impl MockServices {
     #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig, public_key: String) -> Result<()> {
-        let rm = RealLicenseManager::new(public_key);
+    pub async fn init(cfg: InnerConfig, public_key: String) -> Result<()> {
+        let rm = RealLicenseManager::new(cfg.query.tenant_id.clone(), public_key);
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
         };

@@ -50,7 +50,7 @@ impl Parquet2Reader {
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let pages = PageReader::new_with_page_meta(
                     std::io::Cursor::new(chunk),
@@ -90,7 +90,7 @@ impl Parquet2Reader {
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let filter_state = Arc::new(Mutex::new(FilterState::new(filter.clone())));
                 let iter_filter_state = filter_state.clone();

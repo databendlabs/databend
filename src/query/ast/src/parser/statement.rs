@@ -135,6 +135,61 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let alter_task = map(
+        rule! {
+            ALTER ~ TASK ~ ( IF ~ ^EXISTS )?
+            ~ #ident ~ #alter_task_option
+        },
+        |(_, _, opt_if_exists, task, options)| {
+            Statement::AlterTask(AlterTaskStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+                options,
+            })
+        },
+    );
+
+    let drop_task = map(
+        rule! {
+            DROP ~ TASK ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, opt_if_exists, task)| {
+            Statement::DropTask(DropTaskStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+            })
+        },
+    );
+    let show_tasks = map(
+        rule! {
+            SHOW ~ TASKS ~ #show_limit?
+        },
+        |(_, _, limit)| Statement::ShowTasks(ShowTasksStmt { limit }),
+    );
+
+    let execute_task = map(
+        rule! {
+            EXECUTE ~ TASK ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::ExecuteTask(ExecuteTaskStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
+    let desc_task = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ TASK ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::DescribeTask(DescribeTaskStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
     let insert = map(
         rule! {
             INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
@@ -223,13 +278,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_only
+            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, _, table_reference, opt_selection)| Statement::Delete {
-            hints: opt_hints,
-            table_reference,
-            selection: opt_selection.map(|(_, selection)| selection),
+        |(_, hints, _, table, opt_selection)| {
+            Statement::Delete(DeleteStmt {
+                hints,
+                table,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
         },
     );
 
@@ -239,9 +296,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, table, _, update_list, opt_selection)| {
+        |(_, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
-                hints: opt_hints,
+                hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -1594,6 +1651,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
   [ COMMENT = '<string_literal>' ]
 AS
   <sql>`"
+         | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #show_tasks : "`SHOW TASKS [<show_limit>]`"
+         | #desc_task : "`DESC | DESCRIBE TASK <name>`"
+         | #execute_task: "`EXECUTE TASK <name>`"
         ),
     ));
 
@@ -2393,6 +2455,60 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     ),))(i)
 }
 
+pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
+    let suspend = map(
+        rule! {
+             SUSPEND
+        },
+        |_| AlterTaskOptions::Suspend,
+    );
+    let resume = map(
+        rule! {
+             RESUME
+        },
+        |_| AlterTaskOptions::Resume,
+    );
+    let modify_as = map(
+        rule! {
+             MODIFY ~ AS ~ #statement
+        },
+        |(_, _, sql)| {
+            let sql = pretty_statement(sql.stmt, 10)
+                .map_err(|_| ErrorKind::Other("invalid statement"))
+                .expect("failed to alter task");
+            AlterTaskOptions::ModifyAs(sql)
+        },
+    );
+    let set = map(
+        rule! {
+             SET
+             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
+             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
+             ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(_, warehouse_opts, schedule_opts, suspend_opts, comment)| AlterTaskOptions::Set {
+            warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
+            schedule: schedule_opts.map(|(_, _, schedule)| schedule),
+            suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
+            comments: comment.map(|(_, _, comment)| comment),
+        },
+    );
+    let unset = map(
+        rule! {
+             UNSET ~ WAREHOUSE
+        },
+        |_| AlterTaskOptions::Unset { warehouse: true },
+    );
+    rule!(
+        #suspend
+        | #resume
+        | #modify_as
+        | #set
+        | #unset
+    )(i)
+}
+
 pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
     alt((map(
         rule! {
@@ -2631,6 +2747,27 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))(i)
+}
+
+pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_1_to_3 ~ #alias_name?
+        }),
+        |(span, ((catalog, database, table), alias))| TableReference::Table {
+            span: transform_span(span.0),
+            catalog,
+            database,
+            table,
+            alias: alias.map(|v| TableAlias {
+                name: v,
+                columns: vec![],
+            }),
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+    )(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {

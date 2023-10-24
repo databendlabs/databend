@@ -210,7 +210,7 @@ impl FuseTable {
         ctx.set_partitions(plan.parts.clone())?;
 
         // ReadDataKind to avoid OOM.
-        self.do_read_data(ctx.clone(), &plan, pipeline)?;
+        self.do_read_data(ctx.clone(), &plan, pipeline, false)?;
 
         {
             metrics_inc_recluster_block_nums_to_read(recluster_block_nums as u64);

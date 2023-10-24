@@ -4,7 +4,7 @@ title: Staging Files
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Databend recommends two file upload methods for stages: [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) and PUT/GET commands. These methods enable direct data transfer between the client and your storage, eliminating intermediaries and resulting in cost savings by reducing traffic between Databend and your storage.
+Databend recommends two file upload methods for stages: [PRESIGN](../../14-sql-commands/00-ddl/80-presign.md) and PUT/GET commands. These methods enable direct data transfer between the client and your storage, eliminating intermediaries and resulting in cost savings by reducing traffic between Databend and your storage.
 
 ![Alt text](../../../public/img/load/staging-file.png)
 

@@ -100,25 +100,27 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // hook compact
-        let compact_target = CompactTargetTableDescription {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-        };
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
 
-        let compact_hook_trace_ctx = CompactHookTraceCtx {
-            start,
-            operation_name: "replace_into".to_owned(),
-        };
+            let compact_hook_trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "replace_into".to_owned(),
+            };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut pipeline.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
+            hook_compact(
+                self.ctx.clone(),
+                &mut pipeline.main_pipeline,
+                compact_target,
+                compact_hook_trace_ctx,
+            )
+            .await;
+        }
 
         Ok(pipeline)
     }

@@ -101,10 +101,11 @@ impl MatchedAggregator {
             let projection =
                 Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
             BlockReader::create(
+                ctx.clone(),
                 data_accessor.clone(),
                 target_table_schema,
                 projection,
-                ctx.clone(),
+                false,
                 false,
             )
         }?;
@@ -121,7 +122,7 @@ impl MatchedAggregator {
             io_request_semaphore,
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
-            segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+            segment_locations: AHashMap::from_iter(segment_locations),
         })
     }
 

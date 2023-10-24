@@ -1,12 +1,12 @@
 ---
-title: KILL QUERY
+title: Kill
 ---
 
-Attempts to forcibly terminate the currently running queries.
+Forcibly terminates the currently running queries.
 
 ## Syntax
 
-```
+```sql
 KILL QUERY|CONNECTION <session_id>
 ```
 

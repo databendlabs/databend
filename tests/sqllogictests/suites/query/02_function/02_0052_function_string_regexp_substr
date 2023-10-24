@@ -90,7 +90,7 @@ CREATE TABLE tt2(b int not null) Engine = Fuse
 statement ok
 INSERT INTO tt2 VALUES (-1448403955),(1978682043),(775979323),(-2057711809),(183393966),(618200641)
 
-statement error 1001
+statement error 1006
 SELECT string_agg(regexp_substr(tt1.d, '-', tt1.c)), tt1.a FROM tt1 FULL OUTER JOIN tt2 USING(b) GROUP BY ROLLUP (tt1.a)
 
 

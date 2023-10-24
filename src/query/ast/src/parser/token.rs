@@ -72,7 +72,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(kind) if kind == TokenKind::Error => Some(Err(ErrorCode::SyntaxException(
+            Some(TokenKind::Error) => Some(Err(ErrorCode::SyntaxException(
                 "unable to recognize the rest tokens".to_string(),
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
@@ -1018,6 +1018,8 @@ pub enum TokenKind {
     LANGUAGE,
     #[token("TASK", ignore(ascii_case))]
     TASK,
+    #[token("TASKS", ignore(ascii_case))]
+    TASKS,
     #[token("WAREHOUSE", ignore(ascii_case))]
     WAREHOUSE,
     #[token("SCHEDULE", ignore(ascii_case))]
@@ -1026,6 +1028,12 @@ pub enum TokenKind {
     SUSPEND_TASK_AFTER_NUM_FAILURES,
     #[token("CRON", ignore(ascii_case))]
     CRON,
+    #[token("EXECUTE", ignore(ascii_case))]
+    EXECUTE,
+    #[token("SUSPEND", ignore(ascii_case))]
+    SUSPEND,
+    #[token("RESUME", ignore(ascii_case))]
+    RESUME,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1367,6 +1375,7 @@ impl TokenKind {
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
             | TokenKind::POLICY
+            | TokenKind::TASK
             if !after_as => true,
             _ => false
         }
