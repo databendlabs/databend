@@ -90,7 +90,7 @@ jobs:
         with:
           sha: ${{ github.sha }}
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          artifacts: all
+          artifacts: query
 
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
