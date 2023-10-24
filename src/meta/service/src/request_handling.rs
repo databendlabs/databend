@@ -12,44 +12,31 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt;
-
-use common_meta_client::MetaGrpcReadReq;
-use common_meta_types::protobuf::StreamItem;
+use common_meta_client::RequestFor;
 use common_meta_types::ForwardRPCError;
 use common_meta_types::MetaOperationError;
 use common_meta_types::NodeId;
-use tonic::codegen::BoxStream;
 
 use crate::message::ForwardRequest;
 use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 
-/// A request that can be handled by meta node
-pub trait MetaRequest: Clone + fmt::Debug {
-    type Resp;
-}
-
 /// A handler that handles meta node request locally
 #[async_trait::async_trait]
-pub trait Handler<Req: MetaRequest> {
-    async fn handle(&self, req: ForwardRequest<Req>) -> Result<Req::Resp, MetaOperationError>;
+pub trait Handler<Req: RequestFor> {
+    async fn handle(&self, req: ForwardRequest<Req>) -> Result<Req::Reply, MetaOperationError>;
 }
 
 /// A handler that forward meta node request locally
 #[async_trait::async_trait]
-pub trait Forwarder<Req: MetaRequest> {
+pub trait Forwarder<Req: RequestFor> {
     async fn forward(
         &self,
         target: NodeId,
         req: ForwardRequest<Req>,
-    ) -> Result<Req::Resp, ForwardRPCError>;
+    ) -> Result<Req::Reply, ForwardRPCError>;
 }
 
-impl MetaRequest for ForwardRequestBody {
-    type Resp = ForwardResponse;
-}
-
-impl MetaRequest for MetaGrpcReadReq {
-    type Resp = BoxStream<StreamItem>;
+impl RequestFor for ForwardRequestBody {
+    type Reply = ForwardResponse;
 }
