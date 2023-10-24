@@ -13,20 +13,19 @@ This table maps data types between Apache Hive and Databend. Please note that Da
 
 | Apache Hive         | Databend             |
 | ------------------- | -------------------- |
-| boolean             | boolean              |
-| tinyint             | tinyint (int8)       |
-| smallint            | smallint (int16)     |
-| int                 | int (int32)          |
-| bigint              | bigint (int64)       |
-| date                | date                 |
-| timestamp           | timestamp            |
-| float               | float (float32)      |
-| double              | double (float64)     |
-| varchar             | varchar (string)     |
-| decimal             | decimal              |
-| array&lt;type&gt;         | array, supports nesting |
-| map&lt;KeyType, ValueType&gt; | map             |
-
+| BOOLEAN             | [BOOLEAN](../../../13-sql-reference/10-data-types/00-data-type-logical-types.md)              |
+| TINYINT             | [TINYINT (INT8)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)       |
+| SMALLINT            | [SMALLINT (INT16)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)     |
+| INT                 | [INT (INT32)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)          |
+| BIGINT              | [BIGINT (INT64)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)       |
+| DATE                | [DATE](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)                 |
+| TIMESTAMP           | [TIMESTAMP](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)            |
+| FLOAT               | [FLOAT (FLOAT32)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#floating-point-data-types)      |
+| DOUBLE              | [DOUBLE (FLOAT64)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#floating-point-data-types)     |
+| VARCHAR             | [VARCHAR (STRING)](../../../13-sql-reference/10-data-types/30-data-type-string-types.md)     |
+| DECIMAL             | [DECIMAL](../../../13-sql-reference/10-data-types/11-data-type-decimal-types.md)              |
+| ARRAY&lt;TYPE&gt;    | [ARRAY](../../../13-sql-reference/10-data-types/40-data-type-array-types.md), supports nesting |
+| MAP&lt;KEYTYPE, VALUETYPE&gt; | [MAP](../../../13-sql-reference/10-data-types/42-data-type-map.md)             |
 
 ## Managing Apache Hive Catalogs
 
