@@ -163,8 +163,8 @@ fn test_schema_from_simple_type() -> Result<()> {
     assert_eq!(schema.next_column_id(), 3);
 
     let leaf_fields = schema.leaf_fields();
-    let leaf_field_names = vec!["a", "b", "c"];
-    let leaf_column_ids = vec![0, 1, 2];
+    let leaf_field_names = ["a", "b", "c"];
+    let leaf_column_ids = [0, 1, 2];
     for (i, field) in leaf_fields.iter().enumerate() {
         assert_eq!(field.name(), leaf_field_names[i]);
         assert_eq!(field.column_id(), leaf_column_ids[i]);
@@ -204,7 +204,7 @@ fn test_field_leaf_default_values() -> Result<()> {
         Scalar::Tuple(vec![
             Scalar::Tuple(vec![
                 Scalar::Boolean(true),
-                Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+                Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
             ]),
             Scalar::Number(common_expression::types::number::NumberScalar::Int64(2)),
         ]),
@@ -220,7 +220,7 @@ fn test_field_leaf_default_values() -> Result<()> {
         (1, Scalar::Boolean(true)),
         (
             2,
-            Scalar::String(vec!['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
+            Scalar::String(['a', 'b'].iter().map(|c| *c as u8).collect::<Vec<_>>()),
         ),
         (
             3,
@@ -480,7 +480,7 @@ fn test_schema_modify_field() -> Result<()> {
 
     // check leaf fields
     {
-        let expected_column_id_field = vec![
+        let expected_column_id_field = [
             (0, "a"),
             (2, "c"),
             (3, "s:0:0"),

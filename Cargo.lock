@@ -405,7 +405,7 @@ dependencies = [
  "paste",
  "prost 0.12.1",
  "tokio",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -417,7 +417,7 @@ dependencies = [
  "prost 0.12.1",
  "prost-derive 0.12.1",
  "serde",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -1911,7 +1911,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -1958,7 +1958,7 @@ dependencies = [
  "serde",
  "serde_json",
  "terminal_size",
- "tonic",
+ "tonic 0.10.2",
  "typetag",
  "unicode-segmentation",
 ]
@@ -2060,7 +2060,7 @@ dependencies = [
  "once_cell",
  "serde",
  "thiserror",
- "tonic",
+ "tonic 0.10.2",
  "trust-dns-resolver",
 ]
 
@@ -2171,7 +2171,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -2232,7 +2232,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -2260,6 +2260,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "futures-util",
  "log",
  "minitrace",
  "serde",
@@ -2396,7 +2397,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
- "tonic",
+ "tonic 0.10.2",
  "tonic-build",
 ]
 
@@ -2544,7 +2545,7 @@ dependencies = [
  "prost 0.12.1",
  "prost-build",
  "semver",
- "tonic",
+ "tonic 0.10.2",
  "tonic-build",
 ]
 
@@ -3070,10 +3071,10 @@ dependencies = [
  "minitrace",
  "minitrace-opentelemetry",
  "opentelemetry",
- "opentelemetry-jaeger",
+ "opentelemetry-otlp",
  "serde",
  "serde_json",
- "tonic",
+ "tonic 0.10.2",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -3154,7 +3155,7 @@ dependencies = [
  "futures-core",
  "prost 0.12.1",
  "prost-types",
- "tonic",
+ "tonic 0.10.2",
  "tracing-core",
 ]
 
@@ -3176,7 +3177,7 @@ dependencies = [
  "thread_local",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.10.2",
  "tracing",
  "tracing-core",
  "tracing-subscriber",
@@ -3705,7 +3706,7 @@ dependencies = [
  "storages-common-table-meta",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.10.2",
  "url",
 ]
 
@@ -3809,7 +3810,7 @@ dependencies = [
  "tempfile",
  "test-harness",
  "tokio-stream",
- "tonic",
+ "tonic 0.10.2",
  "tonic-reflection",
 ]
 
@@ -3947,7 +3948,7 @@ dependencies = [
  "time",
  "tokio-stream",
  "toml 0.7.6",
- "tonic",
+ "tonic 0.10.2",
  "tower",
  "typetag",
  "unicode-segmentation",
@@ -4860,9 +4861,9 @@ dependencies = [
 
 [[package]]
 name = "futures-async-stream"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f529ccdeacfa2446a9577041686cf1abb839b1b3e15fee4c1b1232ab3b7d799f"
+checksum = "379790776b0d953337df4ab7ecc51936c66ea112484cad7912907b1d34253ebf"
 dependencies = [
  "futures-async-stream-macro",
  "futures-core",
@@ -4871,13 +4872,13 @@ dependencies = [
 
 [[package]]
 name = "futures-async-stream-macro"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca2b48ee06dc8d2808ba5ebad075d06c3406085bb19deaac33be64c39113bf80"
+checksum = "5df2c13d48c8cb8a3ec093ede6f0f4482f327d7bb781120c5fb483ef0f17e758"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.29",
 ]
 
 [[package]]
@@ -7148,9 +7149,9 @@ dependencies = [
 
 [[package]]
 name = "js-sys"
-version = "0.3.61"
+version = "0.3.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "445dde2150c55e483f3d8416706b97ec8e8237c307e5b7b4b8dd15e6af2a0730"
+checksum = "c5f195fe497f702db0f318b07fdd68edb16955aed830df8363d837542f8f935a"
 dependencies = [
  "wasm-bindgen",
 ]
@@ -8497,46 +8498,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "opentelemetry-http"
-version = "0.8.0"
+name = "opentelemetry-otlp"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a819b71d6530c4297b49b3cae2939ab3a8cc1b9f382826a1bc29dd0ca3864906"
-dependencies = [
- "async-trait",
- "bytes",
- "http",
- "opentelemetry_api",
- "reqwest",
-]
-
-[[package]]
-name = "opentelemetry-jaeger"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08e028dc9f4f304e9320ce38c80e7cf74067415b1ad5a8750a38bae54a4d450d"
+checksum = "8af72d59a4484654ea8eb183fea5ae4eb6a41d7ac3e3bae5f4d2a282a3a7d3ca"
 dependencies = [
  "async-trait",
  "futures",
- "futures-executor",
- "headers",
+ "futures-util",
  "http",
- "once_cell",
  "opentelemetry",
- "opentelemetry-http",
- "opentelemetry-semantic-conventions",
- "reqwest",
+ "opentelemetry-proto",
+ "prost 0.11.9",
  "thiserror",
- "thrift",
  "tokio",
+ "tonic 0.8.3",
 ]
 
 [[package]]
-name = "opentelemetry-semantic-conventions"
-version = "0.11.0"
+name = "opentelemetry-proto"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24e33428e6bf08c6f7fcea4ddb8e358fab0fe48ab877a87c70c6ebe20f673ce5"
+checksum = "045f8eea8c0fa19f7d48e7bc3128a39c2e5c533d5c61298c548dfefc1064474c"
 dependencies = [
+ "futures",
+ "futures-util",
  "opentelemetry",
+ "prost 0.11.9",
+ "tonic 0.8.3",
 ]
 
 [[package]]
@@ -8545,6 +8534,7 @@ version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed41783a5bf567688eb38372f2b7a8530f5a607a4b49d38dd7573236c23ca7e2"
 dependencies = [
+ "fnv",
  "futures-channel",
  "futures-util",
  "indexmap 1.9.2",
@@ -8562,6 +8552,8 @@ checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
+ "dashmap",
+ "fnv",
  "futures-channel",
  "futures-executor",
  "futures-util",
@@ -8570,8 +8562,6 @@ dependencies = [
  "percent-encoding",
  "rand 0.8.5",
  "thiserror",
- "tokio",
- "tokio-stream",
 ]
 
 [[package]]
@@ -11935,6 +11925,38 @@ dependencies = [
 
 [[package]]
 name = "tonic"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f219fad3b929bef19b1f86fbc0358d35daed8f2cac972037ac0dc10bbb8d5fb"
+dependencies = [
+ "async-stream",
+ "async-trait",
+ "axum",
+ "base64 0.13.1",
+ "bytes",
+ "futures-core",
+ "futures-util",
+ "h2",
+ "http",
+ "http-body",
+ "hyper",
+ "hyper-timeout",
+ "percent-encoding",
+ "pin-project",
+ "prost 0.11.9",
+ "prost-derive 0.11.9",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+ "tracing-futures",
+]
+
+[[package]]
+name = "tonic"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d560933a0de61cf715926b9cac824d4c883c2c43142f787595e48280c40a1d0e"
@@ -11987,7 +12009,7 @@ dependencies = [
  "prost-types",
  "tokio",
  "tokio-stream",
- "tonic",
+ "tonic 0.10.2",
 ]
 
 [[package]]
@@ -12557,9 +12579,9 @@ checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
 name = "wasm-bindgen"
-version = "0.2.84"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "31f8dcbc21f30d9b8f2ea926ecb58f6b91192c17e9d33594b3df58b2007ca53b"
+checksum = "7706a72ab36d8cb1f80ffbf0e071533974a60d0a308d01a5d0375bf60499a342"
 dependencies = [
  "cfg-if",
  "wasm-bindgen-macro",
@@ -12567,16 +12589,16 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-backend"
-version = "0.2.84"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "95ce90fd5bcc06af55a641a86428ee4229e44e07033963a2290a8e241607ccb9"
+checksum = "5ef2b6d3c510e9625e5fe6f509ab07d66a760f0885d858736483c32ed7809abd"
 dependencies = [
  "bumpalo",
  "log",
  "once_cell",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.29",
  "wasm-bindgen-shared",
 ]
 
@@ -12594,9 +12616,9 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro"
-version = "0.2.84"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c21f77c0bedc37fd5dc21f897894a5ca01e7bb159884559461862ae90c0b4c5"
+checksum = "dee495e55982a3bd48105a7b947fd2a9b4a8ae3010041b9e0faab3f9cd028f1d"
 dependencies = [
  "quote",
  "wasm-bindgen-macro-support",
@@ -12604,22 +12626,22 @@ dependencies = [
 
 [[package]]
 name = "wasm-bindgen-macro-support"
-version = "0.2.84"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2aff81306fcac3c7515ad4e177f521b5c9a15f2b08f4e32d823066102f35a5f6"
+checksum = "54681b18a46765f095758388f2d0cf16eb8d4169b639ab575a8f5693af210c7b"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.29",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
 
 [[package]]
 name = "wasm-bindgen-shared"
-version = "0.2.84"
+version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0046fef7e28c3804e5e38bfa31ea2a0f73905319b677e57ebe37e49358989b5d"
+checksum = "ca6ad05a4870b2bf5fe995117d3728437bd27d7cd5f06f13c17443ef369775a1"
 
 [[package]]
 name = "wasm-streams"

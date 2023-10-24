@@ -47,7 +47,7 @@ use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
-use crate::meta_service::raftmeta::MetaRaft;
+use crate::meta_service::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;

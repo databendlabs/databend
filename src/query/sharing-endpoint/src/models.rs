@@ -160,7 +160,7 @@ impl TableMetaLambdaInput {
             authorization,
             share_name,
             tenant_id,
-            request_tables: HashSet::from_iter(request_tables.into_iter()),
+            request_tables: HashSet::from_iter(request_tables),
             request_id,
         }
     }

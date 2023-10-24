@@ -535,6 +535,6 @@ CREATE TABLE t
 #### Step 3: Load with custom file format.
 
 ```sql
-COPY INTO t FROM @t_stage files=('data.csv') 
-FILE_FORMAT=(NAME='my_csv_format');
+COPY INTO t FROM @t_stage FILES=('data.csv') 
+FILE_FORMAT=(FORMAT_NAME='my_csv_format');
 ```

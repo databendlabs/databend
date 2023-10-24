@@ -23,6 +23,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
+use tonic::transport::server::TcpIncoming;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
@@ -78,13 +79,15 @@ impl RpcService {
             builder
         };
 
+        let incoming = TcpIncoming::new(addr, true, None)
+            .map_err(|e| ErrorCode::CannotListenerPort(format!("{e}")))?;
         let server = builder
             .add_service(
                 FlightServiceServer::new(flight_api_service)
                     .max_encoding_message_size(usize::MAX)
                     .max_decoding_message_size(usize::MAX),
             )
-            .serve_with_shutdown(addr, self.shutdown_notify());
+            .serve_with_incoming_shutdown(incoming, self.shutdown_notify());
 
         tokio::spawn(async_backtrace::location!().frame(server));
         Ok(())

@@ -77,7 +77,7 @@ impl Rule for RuleMergeFilter {
         let predicates = up_filter
             .predicates
             .into_iter()
-            .chain(down_filter.predicates.into_iter())
+            .chain(down_filter.predicates)
             .collect();
         let merged = Filter { predicates };
 

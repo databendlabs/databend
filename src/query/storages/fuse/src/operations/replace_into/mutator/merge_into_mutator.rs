@@ -181,7 +181,7 @@ impl MergeIntoOperationAggregator {
         Ok(Self {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
+                segment_locations: AHashMap::from_iter(segment_locations),
                 block_slots_in_charge: block_slots,
                 on_conflict_fields,
                 bloom_filter_column_indexes,

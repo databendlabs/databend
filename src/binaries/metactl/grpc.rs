@@ -31,7 +31,7 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
         None,
     )?;
 
-    let mut grpc_client = client.make_client().await?;
+    let (mut grpc_client, _server_version) = client.make_client().await?;
 
     let exported = grpc_client.export(tonic::Request::new(Empty {})).await?;
 

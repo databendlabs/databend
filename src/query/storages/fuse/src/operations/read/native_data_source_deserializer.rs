@@ -302,7 +302,7 @@ impl NativeDeserializeDataTransform {
                     // If the source column is the default value, num_rows may be zero
                     if block.num_columns() > 0 && block.num_rows() == 0 {
                         let num_rows = array.len();
-                        let mut columns = block.columns().clone().to_vec();
+                        let mut columns = block.columns().to_vec();
                         columns.push(column);
                         *block = DataBlock::new(columns, num_rows);
                     } else {

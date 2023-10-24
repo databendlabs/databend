@@ -144,7 +144,7 @@ impl PatternExtractor {
             let child_group = memo.group(*child)?;
             let child_m_expr = child_group
                 .m_exprs
-                .get(0)
+                .first()
                 .ok_or_else(|| ErrorCode::Internal(format!("No MExpr in group {child}")))?;
             children.push(Arc::new(Self::expand_pattern(memo, child_m_expr)?));
         }
