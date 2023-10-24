@@ -14,6 +14,7 @@ test = true
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../app" }
 common-protos = { path = "../protos" }
+common-tracing = { path = "../../common/tracing" }
 
 chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }

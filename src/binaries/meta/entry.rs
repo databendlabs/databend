@@ -71,7 +71,12 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
 
     set_panic_hook();
 
-    let _guards = init_logging("databend-meta", &conf.log);
+    // app name format: node_id@cluster_id
+    let app_name_shuffle = format!(
+        "databend-meta-{}@{}",
+        conf.raft_config.id, conf.raft_config.cluster_name
+    );
+    let _guards = init_logging(&app_name_shuffle, &conf.log);
 
     info!("Databend Meta version: {}", METASRV_COMMIT_VERSION.as_str());
     info!(
