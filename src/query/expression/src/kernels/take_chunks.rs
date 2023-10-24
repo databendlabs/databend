@@ -639,7 +639,7 @@ impl Column {
                 Self::take_block_vec_value_types::<ArrayType<AnyType>>(columns, builder, indices)
             }
             ColumnVec::Map(columns) => {
-                let data_type = data_type.as_array().unwrap();
+                let data_type = data_type.as_map().unwrap();
                 let mut offsets = Vec::with_capacity(result_size + 1);
                 offsets.push(0);
                 let builder = ColumnBuilder::from_column(
@@ -702,7 +702,7 @@ impl Column {
 
                 Column::Tuple(fields)
             }
-            ColumnVec::Variant(columns) => StringType::upcast_column(
+            ColumnVec::Variant(columns) => VariantType::upcast_column(
                 Self::take_block_vec_string_types(columns, indices, string_items_buf.as_mut()),
             ),
         }
