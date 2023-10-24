@@ -15,6 +15,7 @@
 use std::ops::Not;
 
 use common_exception::Result;
+use common_expression::eval_function;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
@@ -60,11 +61,18 @@ impl DeleteByExprMutator {
                 .map_err(|e| e.add_message("eval filter failed:"))?
                 .try_downcast::<BooleanType>()
                 .unwrap();
-            let filter = predicates.into_column().unwrap();
-            let filtered_block = data_block.clone().filter_with_bitmap(&filter)?;
+            let (predicates_not, _) = eval_function(
+                None,
+                "not",
+                [(predicates.clone().upcast(), DataType::Boolean)],
+                &self.func_ctx,
+                data_block.num_rows(),
+                &BUILTIN_FUNCTIONS,
+            )?;
+            let filtered_block = data_block.clone().filter_boolean_value(&predicates)?;
 
             Ok((
-                data_block.filter_with_bitmap(&filter.not())?,
+                data_block.filter_boolean_value(&predicates_not.try_downcast().unwrap())?,
                 DataBlock::new(
                     vec![filtered_block.get_by_offset(self.row_id_idx).clone()],
                     filtered_block.num_rows(),
