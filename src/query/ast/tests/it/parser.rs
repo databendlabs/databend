@@ -550,6 +550,7 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
         r#"copy into t1 from "" FILE"#,
+        r#"select $1 from @data/csv/books.csv (file_format => 'mycsv_sp_h1')"#,
         r#"copy into t1 from "" FILE_FORMAT"#,
         r#"copy into t1 from "" FILE_FORMAT = "#,
         r#"copy into t1 from "" FILE_FORMAT = ("#,

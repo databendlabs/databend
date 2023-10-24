@@ -516,6 +516,18 @@ error:
 
 
 ---------- Input ----------
+select $1 from @data/csv/books.csv (file_format => 'mycsv_sp_h1')
+---------- Output ---------
+error: 
+  --> SQL:1:65
+  |
+1 | select $1 from @data/csv/books.csv (file_format => 'mycsv_sp_h1')
+  | ------                                                          ^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, <Ident>, <QuotedString>, `ENABLE_VIRTUAL_HOST_STYLE`, or `,`
+  | |                                                                
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
 copy into t1 from "" FILE_FORMAT
 ---------- Output ---------
 error: 
