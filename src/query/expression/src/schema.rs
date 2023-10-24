@@ -736,7 +736,7 @@ impl TableSchema {
         if let TableDataType::Tuple {
             fields_name,
             fields_type,
-        } = &field.data_type
+        } = &field.data_type.remove_nullable()
         {
             let field_name = field.name();
             let mut next_column_id = column_ids[1 + index];

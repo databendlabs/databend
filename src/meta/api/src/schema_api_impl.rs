@@ -1279,6 +1279,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
     // virtual column
 
+    #[minitrace::trace]
     async fn create_virtual_column(
         &self,
         req: CreateVirtualColumnReq,
@@ -1343,6 +1344,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(CreateVirtualColumnReply {})
     }
 
+    #[minitrace::trace]
     async fn update_virtual_column(
         &self,
         req: UpdateVirtualColumnReq,
@@ -1396,6 +1398,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(UpdateVirtualColumnReply {})
     }
 
+    #[minitrace::trace]
     async fn drop_virtual_column(
         &self,
         req: DropVirtualColumnReq,
@@ -1436,6 +1439,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(DropVirtualColumnReply {})
     }
 
+    #[minitrace::trace]
     async fn list_virtual_columns(
         &self,
         req: ListVirtualColumnsReq,
@@ -1643,7 +1647,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!("SchemaApi: {}", func_name!());
 
         let reply = self
-            .prefix_list_kv(&vec![TableId::PREFIX, ""].join("/"))
+            .prefix_list_kv(&[TableId::PREFIX, ""].join("/"))
             .await?;
 
         let mut res = vec![];
@@ -2466,6 +2470,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         )))
     }
 
+    #[minitrace::trace]
     async fn get_table_copied_file_info(
         &self,
         req: GetTableCopiedFileReq,
@@ -2794,7 +2799,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 });
             } else {
                 let resp = responses
-                    .get(0)
+                    .first()
                     // fail fast if response is None (which should not happen)
                     .expect("internal error: expect one response if update_table_meta txn failed.");
 
@@ -3066,6 +3071,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         })
     }
 
+    #[minitrace::trace]
     async fn gc_drop_tables(
         &self,
         req: GcDroppedTableReq,
@@ -3143,6 +3149,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(CountTablesReply { count })
     }
 
+    #[minitrace::trace]
     async fn list_table_lock_revs(&self, req: ListTableLockRevReq) -> Result<Vec<u64>, KVAppError> {
         let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
         let reply = self.prefix_list_kv(&prefix).await?;
@@ -3160,6 +3167,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(revisions)
     }
 
+    #[minitrace::trace]
     async fn create_table_lock_rev(
         &self,
         req: CreateTableLockRevReq,
@@ -3216,6 +3224,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(CreateTableLockRevReply { revision })
     }
 
+    #[minitrace::trace]
     async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
@@ -3269,6 +3278,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(())
     }
 
+    #[minitrace::trace]
     async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
@@ -3551,6 +3561,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         Ok(catalog_infos)
     }
 
+    #[minitrace::trace]
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 

@@ -37,6 +37,7 @@ use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
+use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;
@@ -197,7 +198,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let query_id = req
             .headers()
             .get(QUERY_ID)
-            .map(|id| id.to_str().unwrap().to_string());
+            .map(|id| id.to_str().unwrap().to_string())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         Ok(HttpQueryContext::new(
             session,
@@ -265,7 +267,7 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
 }
 
 pub fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
-    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    let sensitive_headers = ["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
         .map(|(k, v)| {

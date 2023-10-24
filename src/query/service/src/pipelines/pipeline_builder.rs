@@ -887,7 +887,7 @@ impl PipelineBuilder {
             CopyIntoTableSource::Stage(source) => {
                 let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
                 stage_table.set_block_thresholds(to_table.get_block_thresholds());
-                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline)?;
+                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline, false)?;
                 copy.required_source_schema.clone()
             }
         };
@@ -1105,8 +1105,7 @@ impl PipelineBuilder {
             }
         })?;
         self.pipelines.push(right_res.main_pipeline);
-        self.pipelines
-            .extend(right_res.sources_pipelines.into_iter());
+        self.pipelines.extend(right_res.sources_pipelines);
         Ok(())
     }
 
@@ -1190,8 +1189,7 @@ impl PipelineBuilder {
         }
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines
-            .extend(build_res.sources_pipelines.into_iter());
+        self.pipelines.extend(build_res.sources_pipelines);
         Ok(())
     }
 
@@ -1231,7 +1229,12 @@ impl PipelineBuilder {
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
-        table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+        table.read_data(
+            self.ctx.clone(),
+            &scan.source,
+            &mut self.main_pipeline,
+            true,
+        )?;
 
         if self.enable_profiling {
             self.main_pipeline.add_transform(|input, output| {
@@ -2187,8 +2190,7 @@ impl PipelineBuilder {
         })?;
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines
-            .extend(build_res.sources_pipelines.into_iter());
+        self.pipelines.extend(build_res.sources_pipelines);
         Ok(rx)
     }
 
@@ -2395,8 +2397,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
         self.pipelines.push(left_side_pipeline.main_pipeline);
-        self.pipelines
-            .extend(left_side_pipeline.sources_pipelines.into_iter());
+        self.pipelines.extend(left_side_pipeline.sources_pipelines);
         Ok(())
     }
 }

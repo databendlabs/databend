@@ -155,6 +155,7 @@ impl Table for RandomTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let mut output_schema = self.table_info.schema();
         let push_downs = plan.push_downs.clone();

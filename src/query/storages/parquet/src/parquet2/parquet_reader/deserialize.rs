@@ -20,7 +20,9 @@ use std::sync::Mutex;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::read::column_iter_to_arrays;
+use common_arrow::arrow::io::parquet::read::nested_column_iter_to_arrays;
 use common_arrow::arrow::io::parquet::read::ArrayIter;
+use common_arrow::arrow::io::parquet::read::InitNested;
 use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_arrow::parquet::page::CompressedPage;
@@ -47,10 +49,11 @@ impl Parquet2Reader {
         chunks: Vec<Vec<u8>>,
         rows: usize,
         field: Field,
+        init: Vec<InitNested>,
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let pages = PageReader::new_with_page_meta(
                     std::io::Cursor::new(chunk),
@@ -71,13 +74,12 @@ impl Parquet2Reader {
             })
             .unzip();
 
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows),
-            rows,
-        )?)
+        let array_iter = if init.is_empty() {
+            column_iter_to_arrays(columns, types, field, Some(rows), rows)?
+        } else {
+            nested_column_iter_to_arrays(columns, types, field, init, Some(rows), rows)?
+        };
+        Ok(array_iter)
     }
 
     /// Almost the same as `to_array_iter`, but with a filter.
@@ -86,11 +88,12 @@ impl Parquet2Reader {
         chunks: Vec<Vec<u8>>,
         rows: usize,
         field: Field,
+        init: Vec<InitNested>,
         filter: Bitmap,
     ) -> Result<ArrayIter<'static>> {
         let (columns, types) = metas
             .iter()
-            .zip(chunks.into_iter())
+            .zip(chunks)
             .map(|(&(meta, descriptor), chunk)| {
                 let filter_state = Arc::new(Mutex::new(FilterState::new(filter.clone())));
                 let iter_filter_state = filter_state.clone();
@@ -140,13 +143,25 @@ impl Parquet2Reader {
             })
             .unzip();
 
-        Ok(column_iter_to_arrays(
-            columns,
-            types,
-            field,
-            Some(rows - filter.unset_bits()),
-            rows,
-        )?)
+        let array_iter = if init.is_empty() {
+            column_iter_to_arrays(
+                columns,
+                types,
+                field,
+                Some(rows - filter.unset_bits()),
+                rows,
+            )?
+        } else {
+            nested_column_iter_to_arrays(
+                columns,
+                types,
+                field,
+                init,
+                Some(rows - filter.unset_bits()),
+                rows,
+            )?
+        };
+        Ok(array_iter)
     }
 
     pub(crate) fn full_deserialize(

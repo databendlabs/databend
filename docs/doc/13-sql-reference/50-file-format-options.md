@@ -2,21 +2,27 @@
 title: Input & Output File Formats
 ---
 
-Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or the Streaming Load API. You can also unload data from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md) command. To do so, you need to tell Databend what the file looks like using the following syntax:
+Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. This page explains the supported file formats and their available options.
+
+## Syntax
+
+To specify a file format in a statement, use the following syntax:
 
 ```sql
-FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
+-- Specify a standard file format
+... FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
+
+-- Specify a custom file format
+... FILE_FORMAT = ( FORMAT_NAME = '<your-custom-format>' )
 ```
 
-`Type`: Specifies the file format. Must be one of the ones listed above that Databend supports.
+- Databend currently supports XML as a source ONLY. Unloading data into an XML file is not supported yet.
+- If you don't specify the FILE_FORMAT when performing a COPY INTO or SELECT operation from a stage, Databend will use the file format that you initially defined for the stage when you created it. In cases where you didn't explicitly specify a file format during the stage creation, Databend defaults to using the PARQUET format. If you specify a different FILE_FORMAT from the one you defined when creating the stage, Databend will prioritize the FILE_FORMAT specified during the operation.
+- For managing custom file formats in Databend, see [File Format](../14-sql-commands/00-ddl/100-file-format/index.md).
 
-:::note
-Databend currently supports XML as a source ONLY. Unloading data into an XML file is not supported yet.
-:::
+### formatTypeOptions
 
-If `FILE_FORMAT` is not specified, use `FILE_FORMAT = (TYPE = PARQUET)` by default.
-
-`formatTypeOptions`: Includes one or more options to describe other format details about the file. The options vary depending on the file format. See the sections below to find out the available options for each supported file format.
+`formatTypeOptions` includes one or more options to describe other format details about the file. The options vary depending on the file format. See the sections below to find out the available options for each supported file format.
 
 ```sql
 formatTypeOptions ::=

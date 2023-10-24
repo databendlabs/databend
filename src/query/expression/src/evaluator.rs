@@ -252,7 +252,7 @@ impl<'a> Evaluator<'a> {
             .collect::<Result<Vec<_>>>()?;
 
         let input_batch = DataBlock::new(block_entries, num_rows)
-            .to_record_batch_keep_schema(&data_schema)
+            .to_record_batch(&data_schema)
             .map_err(|err| ErrorCode::from_string(format!("{err}")))?;
 
         let func_name = func_name.to_string();
@@ -369,7 +369,7 @@ impl<'a> Evaluator<'a> {
                         .map(|validity| validity.unset_bits() < validity.len())
                         .unwrap_or(true);
                     if has_valid {
-                        Err(ErrorCode::Internal(format!(
+                        Err(ErrorCode::BadArguments(format!(
                             "unable to cast type `NULL` to type `{dest_type}`"
                         ))
                         .set_span(span))
@@ -581,7 +581,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
 
-            _ => Err(ErrorCode::Internal(format!(
+            _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),
@@ -763,7 +763,7 @@ impl<'a> Evaluator<'a> {
                 }
             }
 
-            _ => Err(ErrorCode::Internal(format!(
+            _ => Err(ErrorCode::BadArguments(format!(
                 "unable to cast type `{src_type}` to type `{dest_type}`"
             ))
             .set_span(span)),

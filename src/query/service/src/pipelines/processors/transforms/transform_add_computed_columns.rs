@@ -50,11 +50,9 @@ where Self: Transform
         output_schema: DataSchemaRef,
     ) -> Result<ProcessorPtr> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &ctx.get_settings(),
-            ctx.get_tenant(),
-            ComputedColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), ComputedColumn)?;
 
         let mut exprs = Vec::with_capacity(output_schema.fields().len());
         for f in output_schema.fields().iter() {

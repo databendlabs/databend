@@ -506,7 +506,7 @@ select id, get(arr, 5) from t4
 2 NULL
 
 
-statement error 1001
+statement error 1006
 select id, get(arr, 'a') from t4
 
 query ITS
@@ -551,7 +551,7 @@ query IT
 select id, json_path_query(obj, '$.b?(@.c > 2)') from t2
 ----
 
-statement error 1001
+statement error 1006
 select id, json_path_query(obj, '--') from t2
 
 query IT
@@ -589,7 +589,7 @@ select id, json_path_query_array(obj, '$.b?(@.c > 2)') from t2
 ----
 1 []
 
-statement error 1001
+statement error 1006
 select id, json_path_query_array(obj, '--') from t2
 
 query IT
@@ -627,7 +627,7 @@ select id, json_path_query_first(obj, '$.b?(@.c > 2)') from t2
 ----
 1 NULL
 
-statement error 1001
+statement error 1006
 select id, json_path_query_first(obj, '--') from t2
 
 query T

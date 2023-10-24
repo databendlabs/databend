@@ -6,7 +6,7 @@ Shows the CREATE TABLE statement that creates the named table.
 
 ## Syntax
 
-```
+```sql
 SHOW CREATE TABLE [database.]table_name
 ```
 

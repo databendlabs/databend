@@ -136,6 +136,7 @@ impl Table for SuggestedBackgroundTasksTable {
         ctx: Arc<dyn TableContext>,
         _plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         pipeline.add_source(
             |output| SuggestedBackgroundTasksSource::create(ctx.clone(), output),
@@ -254,11 +255,9 @@ impl AsyncSource for SuggestedBackgroundTasksSource {
 
         let ctx = self.ctx.as_any().downcast_ref::<QueryContext>().unwrap();
         let license_mgr = get_license_manager();
-        license_mgr.manager.check_enterprise_enabled(
-            &ctx.get_settings(),
-            ctx.get_tenant(),
-            Feature::BackgroundService,
-        )?;
+        license_mgr
+            .manager
+            .check_enterprise_enabled(ctx.get_license_key(), Feature::BackgroundService)?;
 
         let suggestions = Self::all_suggestions(Arc::new(ctx.clone())).await?;
         Ok(Some(self.to_block(suggestions)?))

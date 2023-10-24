@@ -1,0 +1,73 @@
+name: "Build Linux with AddressSanitizer"
+description: "Build with AddressSanitizer"
+inputs:
+  sha:
+    description: "Git commit sha"
+    required: true
+  target:
+    description: ""
+    required: true
+  upload:
+    description: "Upload artifact"
+    required: false
+    default: "false"
+  artifacts:
+    description: "Artifacts to build"
+    required: false
+    default: "meta,query"
+  features:
+    description: "Features to build"
+    required: false
+    default: "default"
+  category:
+    description: "Category to upload"
+    required: false
+    default: "false"
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Build Tool
+      uses: ./.github/actions/setup_build_tool
+      with:
+        target: ${{ inputs.target }}
+        bypass_env_vars: RUSTFLAGS,RUST_LOG
+
+    - name: Cross setup
+      if: startsWith(inputs.target, 'aarch64-')
+      shell: bash
+      run: |
+        echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
+
+    - name: Set Build Flags
+      shell: bash
+      run: |
+        case ${{ inputs.target }} in
+          x86_64-unknown-linux-gnu)
+            flags="-Z sanitizer=address"
+            ;;
+          aarch64-unknown-linux-gnu)
+            flags="-Z sanitizer=address"
+            ;;
+          *)
+            flags=""
+            ;;
+        esac
+        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
+        target=${{ inputs.target }}
+        echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
+
+    # build all binaries for debug
+    - name: Build Debug
+      if: env.BUILD_PROFILE == 'debug' && endsWith(inputs.target, '-gnu')
+      shell: bash
+      run: |
+        artifacts="meta,metactl,query"
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact with sanitizer ..."
+          cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+        done
+        cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
+
+    - shell: bash
+      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
