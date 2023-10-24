@@ -343,7 +343,7 @@ pub(crate) async fn query_handler(
         let sql = req.sql.clone();
 
         let query = http_query_manager
-            .try_create_query(&ctx, req)
+            .try_create_query(ctx, req)
             .await
             .map_err(|err| err.display_with_sql(&sql));
         match query {
@@ -407,5 +407,5 @@ fn query_id_not_found(query_id: String) -> PoemError {
 
 fn query_id_to_trace_id(query_id: &str) -> TraceId {
     let [hash_high, hash_low] = highway::PortableHash::default().hash128(query_id.as_bytes());
-    TraceId((hash_high as u128) << 64 + hash_low as u128)
+    TraceId(((hash_high as u128) << 64) + (hash_low as u128))
 }
