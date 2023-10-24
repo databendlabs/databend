@@ -42,6 +42,7 @@ use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientConf;
 use common_grpc::RpcClientTlsConfig;
 use common_meta_api::reply::reply_to_api_result;
+use common_meta_kvapi::kvapi::ListKVReply;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::protobuf as pb;
 use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
@@ -76,6 +77,7 @@ use semver::Version;
 use serde::de::DeserializeOwned;
 use tonic::async_trait;
 use tonic::client::GrpcService;
+use tonic::codegen::BoxStream;
 use tonic::codegen::InterceptedService;
 use tonic::metadata::MetadataValue;
 use tonic::service::Interceptor;
@@ -83,7 +85,6 @@ use tonic::transport::Channel;
 use tonic::Code;
 use tonic::Request;
 use tonic::Status;
-use tonic::Streaming;
 
 use crate::from_digit_ver;
 use crate::grpc_action::RequestFor;
@@ -97,6 +98,8 @@ use crate::MIN_METASRV_SEMVER;
 
 const RPC_RETRIES: usize = 2;
 const AUTH_TOKEN_KEY: &str = "auth-token-bin";
+
+pub(crate) type RealClient = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
 
 #[derive(Debug)]
 struct MetaChannelManager {
@@ -242,10 +245,7 @@ impl ClientHandle {
         self.request(message::GetClientInfo {}).await
     }
 
-    pub async fn make_client(
-        &self,
-    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
-    {
+    pub async fn make_client(&self) -> Result<(RealClient, u64), MetaClientError> {
         self.request(message::MakeClient {}).await
     }
 
@@ -402,8 +402,21 @@ impl MetaGrpcClient {
             let req_name = req.name();
             let req_str = format!("{:?}", req);
 
-            let start = Instant::now();
+            // Deal with non-RPC request
+            #[allow(clippy::single_match)]
+            match req {
+                message::Request::GetEndpoints(_) => {
+                    let endpoints = self.get_cached_endpoints();
+                    let resp = message::Response::GetEndpoints(Ok(endpoints));
+                    Self::send_response(resp_tx, request_id, resp);
+                    continue;
+                }
+                _ => {}
+            }
 
+            // Deal with remote RPC request
+
+            let start = Instant::now();
             let resp = match req {
                 message::Request::Get(r) => {
                     let resp = self
@@ -480,8 +493,7 @@ impl MetaGrpcClient {
                     message::Response::MakeClient(resp)
                 }
                 message::Request::GetEndpoints(_) => {
-                    let resp = self.get_cached_endpoints();
-                    message::Response::GetEndpoints(Ok(resp))
+                    unreachable!("handled above");
                 }
                 message::Request::GetClusterStatus(_) => {
                     let resp = self.get_cluster_status().await;
@@ -493,69 +505,78 @@ impl MetaGrpcClient {
                 }
             };
 
-            debug!(
-                request_id = as_debug!(&request_id),
-                resp = as_debug!(&resp);
-                "MetaGrpcClient send response to the handle"
-            );
+            self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
 
-            let current_endpoint = {
-                let current_endpoint = self.current_endpoint.lock();
-                current_endpoint.clone()
-            };
-
-            if let Some(current_endpoint) = current_endpoint {
-                let elapsed = start.elapsed().as_millis() as f64;
-                grpc_metrics::record_meta_grpc_client_request_duration_ms(
-                    &current_endpoint,
-                    req_name,
-                    elapsed,
-                );
-                if elapsed > 1000_f64 {
-                    warn!(
-                        request_id = as_display!(request_id);
-                        "MetaGrpcClient slow request {} to {} takes {} ms: {}",
-                        req_name,
-                        current_endpoint,
-                        elapsed,
-                        req_str,
-                    );
-                }
-
-                if let Some(err) = resp.err() {
-                    grpc_metrics::incr_meta_grpc_client_request_failed(
-                        &current_endpoint,
-                        req_name,
-                        err,
-                    );
-                    error!(
-                        request_id = as_display!(request_id);
-                        "MetaGrpcClient error: {:?}", err
-                    );
-                } else {
-                    grpc_metrics::incr_meta_grpc_client_request_success(
-                        &current_endpoint,
-                        req_name,
-                    );
-                }
-            }
-
-            let send_res = resp_tx.send(resp);
-            if let Err(err) = send_res {
-                error!(
-                    request_id = as_display!(request_id),
-                    err = as_debug!(&err);
-                    "MetaGrpcClient failed to send response to the handle. recv-end closed"
-                );
-            }
+            Self::send_response(resp_tx, request_id, resp);
         }
     }
 
-    #[minitrace::trace]
-    pub async fn make_client(
+    fn send_response(tx: OneSend<message::Response>, request_id: u64, resp: message::Response) {
+        debug!(
+            request_id = as_debug!(&request_id),
+            resp = as_debug!(&resp);
+            "MetaGrpcClient send response to the handle"
+        );
+
+        let send_res = tx.send(resp);
+        if let Err(err) = send_res {
+            error!(
+                request_id = as_display!(request_id),
+                err = as_debug!(&err);
+                "MetaGrpcClient failed to send response to the handle. recv-end closed"
+            );
+        }
+    }
+
+    fn update_rpc_metrics(
         &self,
-    ) -> Result<MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>, MetaClientError>
-    {
+        req_name: &'static str,
+        req_str: &str,
+        request_id: u64,
+        start: Instant,
+        resp_err: Option<&(dyn std::error::Error + 'static)>,
+    ) {
+        let current_endpoint = {
+            let current_endpoint = self.current_endpoint.lock();
+            current_endpoint.clone()
+        };
+
+        let Some(endpoint) = current_endpoint else {
+            return;
+        };
+
+        // Duration metrics
+        {
+            let elapsed = start.elapsed().as_millis() as f64;
+            grpc_metrics::record_meta_grpc_client_request_duration_ms(&endpoint, req_name, elapsed);
+
+            if elapsed > 1000_f64 {
+                warn!(
+                    request_id = as_display!(request_id);
+                    "MetaGrpcClient slow request {} to {} takes {} ms: {}",
+                    req_name,
+                    endpoint,
+                    elapsed,
+                    req_str,
+                );
+            }
+        }
+
+        // Error metrics
+        if let Some(err) = resp_err {
+            grpc_metrics::incr_meta_grpc_client_request_failed(&endpoint, req_name, err);
+            error!(
+                request_id = as_display!(request_id);
+                "MetaGrpcClient error: {:?}", err
+            );
+        } else {
+            grpc_metrics::incr_meta_grpc_client_request_success(&endpoint, req_name);
+        }
+    }
+
+    /// Return a client for communication, and a server version in form of `{major:03}.{minor:03}.{patch:03}`.
+    #[minitrace::trace]
+    pub async fn make_client(&self) -> Result<(RealClient, u64), MetaClientError> {
         let all_endpoints = self.get_cached_endpoints();
         debug!("meta-service all endpoints: {:?}", all_endpoints);
         debug_assert!(!all_endpoints.is_empty());
@@ -595,7 +616,7 @@ impl MetaGrpcClient {
                         .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
                         .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
-                    let new_token = Self::handshake(
+                    let handshake_res = Self::handshake(
                         &mut client,
                         &METACLI_COMMIT_SEMVER,
                         &MIN_METASRV_SEMVER,
@@ -604,14 +625,14 @@ impl MetaGrpcClient {
                     )
                     .await;
 
-                    match new_token {
-                        Ok(token) => {
+                    match handshake_res {
+                        Ok((token, server_version)) => {
                             let client =
                                 MetaServiceClient::with_interceptor(c, AuthInterceptor { token })
                                     .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
                                     .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
-                            return Ok(client);
+                            return Ok((client, server_version));
                         }
                         Err(handshake_err) => {
                             warn!("handshake error when make client: {:?}", handshake_err);
@@ -724,7 +745,7 @@ impl MetaGrpcClient {
 
     #[minitrace::trace]
     pub async fn sync_endpoints(&self) -> Result<(), MetaError> {
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let result = client
             .member_list(Request::new(MemberListRequest {
                 data: "".to_string(),
@@ -735,7 +756,7 @@ impl MetaGrpcClient {
             Err(s) => {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy();
-                    let mut client = self.make_client().await?;
+                    let (mut client, _sver) = self.make_client().await?;
                     let req = Request::new(MemberListRequest {
                         data: "".to_string(),
                     });
@@ -817,7 +838,7 @@ impl MetaGrpcClient {
         min_metasrv_ver: &Version,
         username: &str,
         password: &str,
-    ) -> Result<Vec<u8>, MetaHandshakeError> {
+    ) -> Result<(Vec<u8>, u64), MetaHandshakeError> {
         debug!(
             client_ver = as_display!(client_ver),
             min_metasrv_ver = as_display!(min_metasrv_ver);
@@ -875,7 +896,9 @@ impl MetaGrpcClient {
         }
 
         let token = resp.payload;
-        Ok(token)
+        let server_version = resp.protocol_version;
+
+        Ok((token, server_version))
     }
 
     /// Create a watching stream that receives KV change events.
@@ -889,7 +912,7 @@ impl MetaGrpcClient {
             "MetaGrpcClient worker: handle watch request"
         );
 
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let res = client.watch(watch_request).await?;
         Ok(res.into_inner())
     }
@@ -905,7 +928,7 @@ impl MetaGrpcClient {
             "MetaGrpcClient worker: handle export request"
         );
 
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let res = client.export(Empty {}).await?;
         Ok(res.into_inner())
     }
@@ -915,7 +938,7 @@ impl MetaGrpcClient {
     pub(crate) async fn get_cluster_status(&self) -> Result<ClusterStatus, MetaError> {
         debug!("MetaGrpcClient::get_cluster_status");
 
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let res = client.get_cluster_status(Empty {}).await?;
         Ok(res.into_inner())
     }
@@ -925,7 +948,7 @@ impl MetaGrpcClient {
     pub(crate) async fn get_client_info(&self) -> Result<ClientInfo, MetaError> {
         debug!("MetaGrpcClient::get_client_info");
 
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let res = client.get_client_info(Empty {}).await?;
         Ok(res.into_inner())
     }
@@ -944,17 +967,15 @@ impl MetaGrpcClient {
             "MetaGrpcClient::kv_api request"
         );
 
-        let raft_req: RaftRequest = grpc_req
-            .to_raft_request()
-            .map_err(MetaNetworkError::InvalidArgument)?;
+        let raft_req: RaftRequest = grpc_req.into();
 
         for i in 0..RPC_RETRIES {
-            let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req.clone()));
-
-            let mut client = self
+            let (mut client, _server_version) = self
                 .make_client()
                 .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
+
+            let req = traced_req(raft_req.clone());
 
             let result = client
                 .kv_api(req)
@@ -973,9 +994,9 @@ impl MetaGrpcClient {
                 }
             }
 
-            let raft_reply = result?;
+            let raft_reply = result?.into_inner();
 
-            let resp: T::Reply = reply_to_api_result(raft_reply.into_inner())?;
+            let resp: T::Reply = reply_to_api_result(raft_reply)?;
             return Ok(resp);
         }
 
@@ -986,23 +1007,66 @@ impl MetaGrpcClient {
     pub(crate) async fn kv_read_v1(
         &self,
         grpc_req: MetaGrpcReadReq,
-    ) -> Result<Streaming<pb::StreamItem>, MetaError> {
+    ) -> Result<BoxStream<pb::StreamItem>, MetaError> {
         debug!(
             req = as_debug!(&grpc_req);
-            "MetaGrpcClient::kv_api request"
+            "MetaGrpcClient::kv_read_v1 request"
         );
 
-        let raft_req: RaftRequest = grpc_req
-            .to_raft_request()
-            .map_err(MetaNetworkError::InvalidArgument)?;
-
         for i in 0..RPC_RETRIES {
-            let req = common_tracing::inject_span_to_tonic_request(Request::new(raft_req.clone()));
-
-            let mut client = self
+            let (mut client, server_version) = self
                 .make_client()
                 .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client"))
                 .await?;
+
+            // TODO: remove this fallback when MIN_METASRV_SEMVER is bumped to at least 1.2.163
+
+            // 1.2.163
+            // in 1.2.163, kv_read_v1() API is added
+            let kv_read_v1_ver = 1002163;
+            if server_version < kv_read_v1_ver {
+                if let MetaGrpcReadReq::ListKV(list_req) = &grpc_req {
+                    // Fallback to call non-stream API
+
+                    info!(
+                        "meta-service version({} < 0.2.163) is too old, fallback to call non-stream API",
+                        server_version
+                    );
+
+                    let grpc_req = MetaGrpcReq::ListKV(list_req.clone());
+                    let raft_req: RaftRequest = grpc_req.into();
+
+                    let req = traced_req(raft_req.clone());
+
+                    let result = client
+                        .kv_api(req)
+                        .timed_ge(threshold(), info_spent("client::kv_read_v1"))
+                        .await;
+
+                    debug!(
+                        result = as_debug!(&result);
+                        "MetaGrpcClient::kv_read_v1 result, {}-th try", i
+                    );
+
+                    if let Err(ref e) = result {
+                        if status_is_retryable(e) {
+                            self.mark_as_unhealthy();
+                            continue;
+                        }
+                    }
+
+                    let raft_reply = result?.into_inner();
+                    let list_reply: ListKVReply = reply_to_api_result(raft_reply)?;
+                    let strm = futures::stream::iter(
+                        list_reply.into_iter().map(|x| Ok(pb::StreamItem::from(x))),
+                    );
+
+                    return Ok(strm.boxed());
+                }
+            }
+
+            let raft_req: RaftRequest = grpc_req.clone().into();
+            let req = traced_req(raft_req.clone());
 
             let result = client
                 .kv_read_v1(req)
@@ -1023,7 +1087,7 @@ impl MetaGrpcClient {
 
             let strm = result?.into_inner();
 
-            return Ok(strm);
+            return Ok(strm.boxed());
         }
 
         unreachable!("impossible to quit loop without error or success");
@@ -1041,7 +1105,7 @@ impl MetaGrpcClient {
         let req: Request<TxnRequest> = Request::new(txn.clone());
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client().await?;
+        let (mut client, _sver) = self.make_client().await?;
         let result = client.transaction(req).await;
 
         let result: Result<TxnReply, Status> = match result {
@@ -1049,7 +1113,7 @@ impl MetaGrpcClient {
             Err(s) => {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy();
-                    let mut client = self.make_client().await?;
+                    let (mut client, _sver) = self.make_client().await?;
                     let req: Request<TxnRequest> = Request::new(txn);
                     let req = common_tracing::inject_span_to_tonic_request(req);
                     let ret = client.transaction(req).await?.into_inner();
@@ -1075,6 +1139,12 @@ impl MetaGrpcClient {
         let mut ue = self.unhealthy_endpoints.lock();
         ue.insert((*ca).as_ref().unwrap().clone(), ());
     }
+}
+
+/// Inject span into a tonic request, so that on the remote peer the tracing context can be restored.
+fn traced_req<T>(t: T) -> Request<T> {
+    let req = Request::new(t);
+    common_tracing::inject_span_to_tonic_request(req)
 }
 
 fn status_is_retryable(status: &Status) -> bool {

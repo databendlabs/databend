@@ -2259,6 +2259,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "futures-util",
  "log",
  "minitrace",
  "serde",
