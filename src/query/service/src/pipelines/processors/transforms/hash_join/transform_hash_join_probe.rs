@@ -144,7 +144,6 @@ impl TransformHashJoinProbe {
     fn run(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
             self.input_port.finish();
-            println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
             return Ok(Event::Finished);
         }
 
@@ -211,7 +210,6 @@ impl TransformHashJoinProbe {
                     self.join_probe_state.finish_final_probe()?;
                 }
                 self.output_port.finish();
-                println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
                 Ok(Event::Finished)
             };
         }
@@ -305,7 +303,6 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::FastReturn => {
                 self.input_port.finish();
                 self.output_port.finish();
-                println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
                 Ok(Event::Finished)
             }
             HashJoinProbeStep::Running => self.run(),
@@ -349,7 +346,6 @@ impl Processor for TransformHashJoinProbe {
                         }
                         self.input_port.finish();
                         self.output_port.finish();
-                        println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
                         Ok(Event::Finished)
                     }
                 }
