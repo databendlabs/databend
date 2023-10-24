@@ -162,6 +162,7 @@ impl HashJoinProbeState {
         mut input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
+        let input_num_rows = input.num_rows();
         if matches!(
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::Right | JoinType::RightSingle | JoinType::Full
@@ -169,9 +170,9 @@ impl HashJoinProbeState {
             let nullable_columns = input
                 .columns()
                 .iter()
-                .map(|c| set_true_validity(c, input.num_rows(), &probe_state.true_validity))
+                .map(|c| set_true_validity(c, input_num_rows, &probe_state.true_validity))
                 .collect::<Vec<_>>();
-            input = DataBlock::new(nullable_columns, input.num_rows());
+            input = DataBlock::new(nullable_columns, input_num_rows);
         }
 
         let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
@@ -185,28 +186,24 @@ impl HashJoinProbeState {
                 Ok((
                     evaluator
                         .run(expr)?
-                        .convert_to_full_column(return_type, input.num_rows()),
+                        .convert_to_full_column(return_type, input_num_rows),
                     return_type.clone(),
                 ))
             })
             .collect::<Result<Vec<_>>>()?;
 
-        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark {
-            if input.num_rows() > probe_state.markers.as_ref().unwrap().len() {
-                probe_state.markers = Some(vec![MARKER_KIND_FALSE; input.num_rows()]);
-            }
-            if self
+        if self.hash_join_state.hash_join_desc.join_type == JoinType::RightMark
+            && self
                 .hash_join_state
                 .hash_join_desc
                 .other_predicate
                 .is_none()
-            {
-                self.hash_join_state.init_markers(
-                    &probe_keys,
-                    input.num_rows(),
-                    probe_state.markers.as_mut().unwrap(),
-                );
-            }
+        {
+            self.hash_join_state.init_markers(
+                &probe_keys,
+                input_num_rows,
+                probe_state.markers.as_mut().unwrap(),
+            );
         }
 
         let mut valids = None;
@@ -220,7 +217,7 @@ impl HashJoinProbeState {
             for (col, _) in probe_keys.iter() {
                 let (is_all_null, tmp_valids) = col.validity();
                 if is_all_null {
-                    valids = Some(Bitmap::new_constant(false, input.num_rows()));
+                    valids = Some(Bitmap::new_constant(false, input_num_rows));
                     break;
                 } else {
                     valids = and_validities(valids, tmp_valids.cloned());
@@ -240,25 +237,59 @@ impl HashJoinProbeState {
             return self.left_fast_return(input, probe_state.is_probe_projected);
         }
 
+        probe_state.key_nums += if let Some(valids) = &valids {
+            (valids.len() - valids.unset_bits()) as u64
+        } else {
+            input_num_rows as u64
+        };
+        // Adaptive early filtering.
+        let prefer_early_filtering =
+            (probe_state.key_hash_matched_nums as f64) / (probe_state.key_nums as f64) < 0.95;
+        match (prefer_early_filtering, probe_state.early_filtering) {
+            (true, false) => probe_state.early_filtering = true,
+            (false, true) => {
+                probe_state.early_filtering = false;
+                if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
+                    probe_state
+                        .selection
+                        .iter_mut()
+                        .enumerate()
+                        .for_each(|(i, idx)| *idx = i as u32);
+                }
+            }
+            _ => (),
+        };
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
         with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
                 let keys_state = table
                     .hash_method
-                    .build_keys_state(&probe_keys, input.num_rows())?;
+                    .build_keys_state(&probe_keys, input_num_rows)?;
                 let keys = table
                     .hash_method
                     .build_keys_accessor_and_hashes(keys_state, &mut probe_state.hashes)?;
                 // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
                 if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
-                    probe_state.selection_count = table.hash_table.probe_with_selection(
-                        &mut probe_state.hashes,
-                        valids,
-                        &mut probe_state.selection,
-                    );
+                    probe_state.selection_count = if prefer_early_filtering {
+                        table.hash_table.early_filtering_probe_with_selection(
+                            &mut probe_state.hashes,
+                            valids,
+                            &mut probe_state.selection,
+                        )
+                    } else {
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    };
+                    probe_state.key_hash_matched_nums += probe_state.selection_count as u64;
                 } else {
                     // For these join types, we don't use selection: full, left, left single, left anti.
-                    table.hash_table.probe(&mut probe_state.hashes, valids);
+                    let count = if prefer_early_filtering {
+                        table
+                            .hash_table
+                            .early_filtering_probe(&mut probe_state.hashes, valids)
+                    } else {
+                        table.hash_table.probe(&mut probe_state.hashes, valids)
+                    };
+                    probe_state.key_hash_matched_nums += count as u64;
                 }
                 self.result_blocks(&input, keys, &table.hash_table, probe_state)
             }

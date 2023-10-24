@@ -94,19 +94,64 @@ where A: Allocator + Clone + 'static
     type Key = [u8];
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) {
+    fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.unset_bits() == bitmap.len() {
                 hashes.iter_mut().for_each(|hash| {
                     *hash = 0;
                 });
-                return;
+                return 0;
             } else if bitmap.unset_bits() > 0 {
                 valids = Some(bitmap);
             }
         }
+        let mut count = 0;
+        match valids {
+            Some(valids) => {
+                hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
+                    if unsafe { valids.get_bit_unchecked(idx) } {
+                        let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                        if header != 0 {
+                            *hash = remove_header_tag(header);
+                            count += 1;
+                        } else {
+                            *hash = 0;
+                        }
+                    } else {
+                        *hash = 0;
+                    };
+                });
+            }
+            None => {
+                hashes.iter_mut().for_each(|hash| {
+                    let header = self.pointers[(*hash >> self.hash_shift) as usize];
+                    if header != 0 {
+                        *hash = remove_header_tag(header);
+                        count += 1;
+                    } else {
+                        *hash = 0;
+                    }
+                });
+            }
+        }
+        count
+    }
 
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize {
+        let mut valids = None;
+        if let Some(bitmap) = bitmap {
+            if bitmap.unset_bits() == bitmap.len() {
+                hashes.iter_mut().for_each(|hash| {
+                    *hash = 0;
+                });
+                return 0;
+            } else if bitmap.unset_bits() > 0 {
+                valids = Some(bitmap);
+            }
+        }
+        let mut count = 0;
         match valids {
             Some(valids) => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {
@@ -114,6 +159,7 @@ where A: Allocator + Clone + 'static
                         let header = self.pointers[(*hash >> self.hash_shift) as usize];
                         if header != 0 && early_filtering(header, *hash) {
                             *hash = remove_header_tag(header);
+                            count += 1;
                         } else {
                             *hash = 0;
                         }
@@ -127,22 +173,23 @@ where A: Allocator + Clone + 'static
                     let header = self.pointers[(*hash >> self.hash_shift) as usize];
                     if header != 0 && early_filtering(header, *hash) {
                         *hash = remove_header_tag(header);
+                        count += 1;
                     } else {
                         *hash = 0;
                     }
                 });
             }
         }
+        count
     }
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe_with_selection(
+    fn early_filtering_probe_with_selection(
         &self,
         hashes: &mut [u64],
         bitmap: Option<Bitmap>,
         selection: &mut [u32],
     ) -> usize {
-        let mut count = 0;
         let mut valids = None;
         if let Some(bitmap) = bitmap {
             if bitmap.unset_bits() == bitmap.len() {
@@ -151,6 +198,7 @@ where A: Allocator + Clone + 'static
                 valids = Some(bitmap);
             }
         }
+        let mut count = 0;
         match valids {
             Some(valids) => {
                 hashes.iter_mut().enumerate().for_each(|(idx, hash)| {

@@ -31,6 +31,9 @@ pub struct ProbeState {
     pub(crate) func_ctx: FunctionContext,
     pub(crate) selection_count: usize,
     pub(crate) is_probe_projected: bool,
+    pub(crate) early_filtering: bool,
+    pub(crate) key_nums: u64,
+    pub(crate) key_hash_matched_nums: u64,
     // In the probe phase, the probe block with N rows could join result into M rows
     // e.g.: [0, 1, 2, 3]  results into [0, 1, 2, 2, 3]
     // probe_indexes: the result index to the probe block row -> [0, 1, 2, 2, 3]
@@ -98,6 +101,9 @@ impl ProbeState {
             hashes: vec![0; max_block_size],
             selection_count: 0,
             is_probe_projected: false,
+            early_filtering: true,
+            key_nums: 1,
+            key_hash_matched_nums: 1,
             true_validity,
             func_ctx,
             row_state,

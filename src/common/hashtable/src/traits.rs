@@ -474,10 +474,13 @@ pub trait HashJoinHashtableLike {
     type Key: ?Sized;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe(&self, hashes: &mut [u64], valids: Option<Bitmap>);
+    fn probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
 
     // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
-    fn probe_with_selection(
+    fn early_filtering_probe(&self, hashes: &mut [u64], bitmap: Option<Bitmap>) -> usize;
+
+    // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
+    fn early_filtering_probe_with_selection(
         &self,
         hashes: &mut [u64],
         valids: Option<Bitmap>,
