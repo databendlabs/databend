@@ -135,6 +135,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 .append(pretty_expr(*right))
                 .append(RcDoc::text(")")),
         },
+        Expr::JsonOp {
+            op, left, right, ..
+        } => RcDoc::text("(")
+            .append(pretty_expr(*left))
+            .append(RcDoc::space())
+            .append(RcDoc::text(op.to_string()))
+            .append(RcDoc::space())
+            .append(pretty_expr(*right))
+            .append(RcDoc::text(")")),
         Expr::Cast {
             expr,
             target_type,

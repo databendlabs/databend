@@ -150,6 +150,17 @@ pub trait VisitorMut: Sized {
         Self::visit_expr(self, right);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &mut JsonOperator,
+        left: &mut Expr,
+        right: &mut Expr,
+    ) {
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
         Self::visit_expr(self, expr);
     }

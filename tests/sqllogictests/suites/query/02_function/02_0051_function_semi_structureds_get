@@ -198,92 +198,97 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 
 
 query T
-select NULL#>['0']
+select NULL#>'{0}'
 ----
 NULL
 
 query T
-select parse_json('false')#>['0']
+select parse_json('false')#>'{0}'
 ----
 NULL
 
 query T
-select parse_json('[1, 2, 3]')#>['a']
+select parse_json('[1, 2, 3]')#>NULL
+----
+NULL
+
+query T
+select parse_json('[1, 2, 3]')#>'{a}'
 ----
 NULL
 
 query I
-select parse_json('[1, 2, 3]')#>['1']
+select parse_json('[1, 2, 3]')#>'{1}'
 ----
 2
 
 query T
-select parse_json('[1, 2, 3]')#>['3']
+select parse_json('[1, 2, 3]')#>'{3}'
 ----
 NULL
 
 query T
-select parse_json('[1, 2, [0, [1, 2], 3]]')#>['2', '1']
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1}'
 ----
 [1,2]
 
 query T
-select parse_json('[1, 2, [0, [1, 2], 3]]')#>['2', '1', '0', '1']
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1, 0, 1}'
 ----
 NULL
 
 query T
-select parse_json('[1, {"a": 1, "b": 2}, 3]')#>['1']
+select parse_json('[1, {"a": 1, "b": 2}, 3]')#>'{1}'
 ----
 {"a":1,"b":2}
 
 query I
-select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>['1', 'b', '2', 'k1']
+select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>'{1, b, 2, k1}'
 ----
 1
 
 query T
-select NULL#>>['0']
+select NULL#>>'{0}'
 ----
 NULL
 
 query T
-select parse_json('false')#>>['0']
+select parse_json('false')#>>'{0}'
 ----
 NULL
 
 query T
-select parse_json('[1, 2, 3]')#>>['a']
+select parse_json('[1, 2, 3]')#>>'{a}'
 ----
 NULL
 
 query I
-select parse_json('[1, 2, 3]')#>>['1']
+select parse_json('[1, 2, 3]')#>>'{1}'
 ----
 2
 
 query T
-select parse_json('[1, 2, 3]')#>>['3']
+select parse_json('[1, 2, 3]')#>>'{3}'
 ----
 NULL
 
 query T
-select parse_json('[1, 2, [0, [1, 2], 3]]')#>>['2', '1']
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1}'
 ----
 [1,2]
 
 query T
-select parse_json('[1, 2, [0, [1, 2], 3]]')#>>['2', '1', '0', '1']
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1, 0, 1}'
 ----
 NULL
 
 query T
-select parse_json('[1, {"a": 1, "b": 2}, 3]')#>>['1']
+select parse_json('[1, {"a": 1, "b": 2}, 3]')#>>'{1}'
 ----
 {"a":1,"b":2}
 
 query I
-select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>['1', 'b', '2', 'k1']
+select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>'{1, b, 2, k1}'
 ----
 1
 
@@ -665,6 +670,36 @@ select json_path_query_first(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 "a"
 NULL
+
+query T
+SELECT arr #> '{3}' FROM t1;
+----
+["a","b","c"]
+
+query T
+SELECT arr #> '{3,1}' FROM t1;
+----
+"b"
+
+query I
+SELECT obj #> '{a}' FROM t2;
+----
+1
+
+query T
+SELECT arr #>> '{3}' FROM t1;
+----
+["a","b","c"]
+
+query T
+SELECT arr #>> '{3,1}' FROM t1;
+----
+"b"
+
+query I
+SELECT obj #>> '{a}' FROM t2;
+----
+1
 
 statement ok
 DROP DATABASE IF EXISTS db1

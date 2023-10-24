@@ -291,6 +291,24 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        op: &'ast JsonOperator,
+        left: &'ast Expr,
+        right: &'ast Expr,
+    ) {
+        self.visit_expr(left);
+        let left_child = self.children.pop().unwrap();
+        self.visit_expr(right);
+        let right_child = self.children.pop().unwrap();
+
+        let name = format!("JSON Function {op}");
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![left_child, right_child]);
+        self.children.push(node);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, op: &'ast UnaryOperator, expr: &'ast Expr) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();

@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::sync::Arc;
 
 use bstr::ByteSlice;
 use chrono::Datelike;
 use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::types::date::string_to_date;
 use common_expression::types::nullable::NullableColumn;
@@ -28,7 +30,6 @@ use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::variant::cast_scalar_to_variant;
 use common_expression::types::variant::cast_scalars_to_variants;
 use common_expression::types::AnyType;
-use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -72,6 +73,7 @@ use jsonb::get_by_path_first;
 use jsonb::is_array;
 use jsonb::is_object;
 use jsonb::jsonpath::parse_json_path;
+use jsonb::keypath::parse_key_paths;
 use jsonb::object_keys;
 use jsonb::parse_value;
 use jsonb::path_exists;
@@ -230,49 +232,51 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    registry
-        .register_combine_nullable_2_arg::<VariantType, ArrayType<StringType>, VariantType, _, _>(
-            "get_by_keypath",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<
-                VariantType,
-                ArrayType<StringType>,
-                NullableType<VariantType>,
-            >(|val, keypath, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match get_by_keypath(val, keypath.iter()) {
-                    Some(v) => output.push(&v),
-                    None => output.push_null(),
-                }
-            }),
-        );
+    registry.register_function_factory("get_by_keypath", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "get_by_keypath".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::Variant)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, false)),
+            },
+        }))
+    });
 
-    registry
-        .register_combine_nullable_2_arg::<VariantType, ArrayType<StringType>, StringType, _, _>(
-            "get_by_keypath_string",
-            |_, _, _| FunctionDomain::MayThrow,
-            vectorize_with_builder_2_arg::<
-                VariantType,
-                ArrayType<StringType>,
-                NullableType<StringType>,
-            >(|val, keypath, output, ctx| {
-                if let Some(validity) = &ctx.validity {
-                    if !validity.get_bit(output.len()) {
-                        output.push_null();
-                        return;
-                    }
-                }
-                match get_by_keypath(val, keypath.iter()) {
-                    Some(v) => output.push(to_string(&v).as_bytes()),
-                    None => output.push_null(),
-                }
-            }),
-        );
+    registry.register_function_factory("get_by_keypath_string", |_, args_type| {
+        if args_type.len() != 2 {
+            return None;
+        }
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
+        {
+            return None;
+        }
+        Some(Arc::new(Function {
+            signature: FunctionSignature {
+                name: "get_by_keypath_string".to_string(),
+                args_type: args_type.to_vec(),
+                return_type: DataType::Nullable(Box::new(DataType::String)),
+            },
+            eval: FunctionEval::Scalar {
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
+                eval: Box::new(|args, ctx| get_by_keypath_fn(args, ctx, true)),
+            },
+        }))
+    });
 
     registry.register_combine_nullable_2_arg::<VariantType, StringType, VariantType, _, _>(
         "get",
@@ -1284,4 +1288,95 @@ fn prepare_args_columns(
         columns.push(column);
     }
     (columns, len_opt)
+}
+
+fn get_by_keypath_fn(
+    args: &[ValueRef<AnyType>],
+    ctx: &mut EvalContext,
+    string_res: bool,
+) -> Value<AnyType> {
+    let scalar_keypath = match &args[1] {
+        ValueRef::Scalar(ScalarRef::String(v)) => Some(parse_key_paths(v)),
+        _ => None,
+    };
+    let len_opt = args.iter().find_map(|arg| match arg {
+        ValueRef::Column(col) => Some(col.len()),
+        _ => None,
+    });
+    let len = len_opt.unwrap_or(1);
+
+    let mut builder = StringColumnBuilder::with_capacity(len, len * 50);
+    let mut validity = MutableBitmap::with_capacity(len);
+
+    for idx in 0..len {
+        let keypath = match &args[1] {
+            ValueRef::Scalar(_) => Cow::Borrowed(&scalar_keypath),
+            ValueRef::Column(col) => {
+                let scalar = unsafe { col.index_unchecked(idx) };
+                let path = match scalar {
+                    ScalarRef::String(buf) => Some(parse_key_paths(buf)),
+                    _ => None,
+                };
+                Cow::Owned(path)
+            }
+        };
+
+        match keypath.as_ref() {
+            Some(result) => match result {
+                Ok(path) => {
+                    let json_row = match &args[0] {
+                        ValueRef::Scalar(scalar) => scalar.clone(),
+                        ValueRef::Column(col) => unsafe { col.index_unchecked(idx) },
+                    };
+                    match json_row {
+                        ScalarRef::Variant(json) => match get_by_keypath(json, path.paths.iter()) {
+                            Some(res) => {
+                                if string_res {
+                                    builder.put_slice(to_string(&res).as_bytes());
+                                } else {
+                                    builder.put_slice(&res);
+                                }
+                                validity.push(true);
+                            }
+                            None => validity.push(false),
+                        },
+                        _ => validity.push(false),
+                    }
+                }
+                Err(err) => {
+                    ctx.set_error(builder.len(), err.to_string());
+                    validity.push(false);
+                }
+            },
+            None => validity.push(false),
+        }
+
+        builder.commit_row();
+    }
+
+    let validity: Bitmap = validity.into();
+
+    match len_opt {
+        Some(_) => {
+            let column = builder.build();
+            let val = if string_res {
+                Value::Column(Column::String(column))
+            } else {
+                Value::Column(Column::Variant(column))
+            };
+            val.wrap_nullable(Some(validity))
+        }
+        None => {
+            if !validity.get_bit(0) {
+                Value::Scalar(Scalar::Null)
+            } else {
+                let row = builder.build_scalar();
+                if string_res {
+                    Value::Scalar(Scalar::String(row))
+                } else {
+                    Value::Scalar(Scalar::Variant(row))
+                }
+            }
+        }
+    }
 }
