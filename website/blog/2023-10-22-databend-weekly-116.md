@@ -102,7 +102,7 @@ Previously, Databend introduced [z3.rs](https://github.com/prove-rs/z3.rs) to so
 
 For example, after supporting string comparison, `t3.f >= '2000-08-23'` in `select * from t1 left join t3 on t3.e = t1.a where t3.f >= '2000-08-23';` can be pushed down to table `t3`.
 
-[Issue #13236 | Feature: z3 supports more type comparision](https://github.com/datafuselabs/databend/issues/13236)
+[Issue #13236 | Feature: z3 supports more type comparison](https://github.com/datafuselabs/databend/issues/13236)
 
 Please let us know if you're interested in contributing to this feature, or pick up a good first issue at <https://link.databend.rs/i-m-feeling-lucky> to get started.
 
