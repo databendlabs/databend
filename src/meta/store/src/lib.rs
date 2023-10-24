@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
