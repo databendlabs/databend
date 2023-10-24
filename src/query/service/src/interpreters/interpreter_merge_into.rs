@@ -24,6 +24,7 @@ use common_expression::ConstantFolder;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::SendableDataBlockStream;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
@@ -32,9 +33,17 @@ use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
+use common_sql::optimizer::SExpr;
+use common_sql::plans::AggregateFunction;
+use common_sql::plans::EvalScalar;
 use common_sql::plans::MergeInto as MergePlan;
+use common_sql::plans::Plan;
+use common_sql::plans::RelOperator;
+use common_sql::plans::ScalarItem;
 use common_sql::plans::UpdatePlan;
+use common_sql::BindContext;
 use common_sql::IndexType;
+use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::TypeCheck;
 use common_storages_factory::Table;
@@ -43,12 +52,14 @@ use common_storages_fuse::TableContext;
 use itertools::Itertools;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
+use tokio_stream::StreamExt;
 
 use super::Interpreter;
 use super::InterpreterPtr;
 use crate::interpreters::common::hook_compact;
 use crate::interpreters::common::CompactHookTraceCtx;
 use crate::interpreters::common::CompactTargetTableDescription;
+use crate::interpreters::InterpreterFactory;
 use crate::pipelines::PipelineBuildResult;
 use crate::schedulers::build_query_pipeline_without_render_result_set;
 use crate::sessions::QueryContext;
@@ -142,10 +153,15 @@ impl MergeIntoInterpreter {
             ..
         } = &self.plan;
         let table_name = table.clone();
+        let optimized_input = self
+            .build_static_filter(input, meta_data, self.ctx.clone(), bind_context.clone())
+            .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
         // build source for MergeInto
-        let join_input = builder.build(input, *columns_set.clone()).await?;
+        let join_input = builder
+            .build(&optimized_input, *columns_set.clone())
+            .await?;
 
         // find row_id column index
         let join_output_schema = join_input.output_schema()?;
@@ -341,6 +357,75 @@ impl MergeIntoInterpreter {
         }));
 
         Ok((physical_plan, table_info.clone()))
+    }
+
+    async fn build_static_filter(
+        &self,
+        join: &SExpr,
+        metadata: &MetadataRef,
+        ctx: Arc<QueryContext>,
+        bind_context: Box<BindContext>,
+    ) -> Result<Box<SExpr>> {
+        // 1. collect statistics from the build side
+        let build_side = join.child(1)?;
+        let join_op = match join.plan() {
+            RelOperator::Join(j) => j,
+            _ => unreachable!(),
+        };
+        if join_op.left_conditions.len() != 1 || join_op.right_conditions.len() != 1 {
+            return Ok(Box::new(join.clone()));
+        }
+        let build_side_expr = &join_op.right_conditions[0];
+        let min_display_name = format!("min({:?})", build_side_expr);
+        let max_display_name = format!("max({:?})", build_side_expr);
+        let min_index = metadata
+            .write()
+            .add_derived_column(min_display_name.clone(), build_side_expr.data_type()?);
+        let max_index = metadata
+            .write()
+            .add_derived_column(max_display_name.clone(), build_side_expr.data_type()?);
+        let min = ScalarItem {
+            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                func_name: "min".to_string(),
+                distinct: false,
+                params: vec![],
+                args: vec![build_side_expr.clone()],
+                return_type: Box::new(build_side_expr.data_type()?),
+                display_name: min_display_name,
+            }),
+            index: min_index,
+        };
+        let max = ScalarItem {
+            scalar: ScalarExpr::AggregateFunction(AggregateFunction {
+                func_name: "max".to_string(),
+                distinct: false,
+                params: vec![],
+                args: vec![build_side_expr.clone()],
+                return_type: Box::new(build_side_expr.data_type()?),
+                display_name: max_display_name,
+            }),
+            index: max_index,
+        };
+        let eval_scalar_op = EvalScalar {
+            items: vec![min, max],
+        };
+        let build_side_min_max_sexpr = SExpr::create_unary(
+            Arc::new(eval_scalar_op.into()),
+            Arc::new(build_side.clone()),
+        );
+        let plan = Plan::Query {
+            s_expr: Box::new(build_side_min_max_sexpr),
+            metadata: metadata.clone(),
+            bind_context: bind_context,
+            rewrite_kind: None,
+            formatted_ast: None,
+            ignore_result: false,
+        };
+        let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
+        let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
+        let blocks = stream.collect::<Result<Vec<_>>>().await?;
+        println!("blocks: {:?}", blocks);
+        todo!()
     }
 
     fn transform_scalar_expr2expr(
