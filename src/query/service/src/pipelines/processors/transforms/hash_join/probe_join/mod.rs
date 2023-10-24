@@ -14,9 +14,9 @@
 
 mod cross_join;
 mod inner_join;
+mod left_anti_join;
 mod left_join;
 mod left_mark_join;
-mod left_anti_join;
 mod left_semi_join;
 mod right_join;
 mod right_mark_join;
