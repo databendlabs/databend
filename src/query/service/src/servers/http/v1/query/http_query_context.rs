@@ -18,7 +18,6 @@ use poem::FromRequest;
 use poem::Request;
 use poem::RequestBody;
 use poem::Result as PoemResult;
-use uuid::Uuid;
 
 use crate::sessions::Session;
 use crate::sessions::SessionType;
