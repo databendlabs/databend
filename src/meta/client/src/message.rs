@@ -35,9 +35,6 @@ use common_meta_types::MetaError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use minitrace::Span;
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
-use tonic::Streaming;
 use tonic::codegen::BoxStream;
 
 use crate::grpc_client::RealClient;

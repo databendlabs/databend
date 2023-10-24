@@ -58,9 +58,9 @@ impl kvapi::KVApi for ClientHandle {
     }
 
     #[minitrace::trace]
-    async fn list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
-        let reply = self
-            .request(ListKVReq {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
+        let strm = self
+            .request(Streamed(ListKVReq {
                 prefix: prefix.to_string(),
             }))
             .await?;

@@ -37,6 +37,7 @@ use poem::IntoResponse;
 use poem::Middleware;
 use poem::Request;
 use poem::Response;
+use uuid::Uuid;
 
 use super::v1::HttpQueryContext;
 use crate::auth::AuthMgr;

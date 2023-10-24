@@ -49,7 +49,7 @@ impl kvapi::KVApi for MetaEmbedded {
     }
 
     #[minitrace::trace]
-    async fn list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
         sm.list_kv(prefix).await
     }
