@@ -303,6 +303,7 @@ impl Processor for TransformHashJoinProbe {
                 Ok(Event::NeedData)
             }
             HashJoinProbeStep::FastReturn => {
+                self.input_port.finish();
                 self.output_port.finish();
                 println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
                 Ok(Event::Finished)
@@ -311,7 +312,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::AsyncRunning => self.async_run(),
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
-                    println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
+                    self.input_port.finish();
                     return Ok(Event::Finished);
                 }
 
@@ -346,6 +347,7 @@ impl Processor for TransformHashJoinProbe {
                         {
                             self.join_probe_state.finish_final_probe()?;
                         }
+                        self.input_port.finish();
                         self.output_port.finish();
                         println!("early = {}", (self.probe_state.key_hash_matched_nums as f64) / (self.probe_state.key_nums as f64));
                         Ok(Event::Finished)

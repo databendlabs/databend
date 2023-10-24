@@ -527,7 +527,7 @@ dependencies = [
 [[package]]
 name = "arrow2"
 version = "0.17.4"
-source = "git+https://github.com/jorgecarleitao/arrow2?rev=9a26422#9a26422d00b83c65245f75e02eb436dedd91b5b8"
+source = "git+https://github.com/jorgecarleitao/arrow2?rev=b073454#b0734542c2fef5d2d0c7b6ffce5d094de371168a"
 dependencies = [
  "ahash 0.8.3",
  "arrow-array",
@@ -554,6 +554,7 @@ dependencies = [
  "json-deserializer",
  "lexical-core",
  "lz4",
+ "memchr",
  "multiversion",
  "num-traits",
  "parquet2",
@@ -1714,6 +1715,7 @@ dependencies = [
  "goldenfile",
  "itertools 0.10.5",
  "logos",
+ "minitrace",
  "nom",
  "nom-rule",
  "ordered-float 3.7.0",
@@ -2143,6 +2145,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-storage",
+ "minitrace",
  "mockall",
  "serde_json",
 ]
@@ -2249,6 +2252,7 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "log",
+ "minitrace",
  "once_cell",
  "tempfile",
 ]
@@ -2260,6 +2264,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
+ "common-tracing",
  "futures-util",
  "log",
  "minitrace",
@@ -2527,6 +2532,7 @@ dependencies = [
  "common-expression",
  "common-meta-app",
  "common-protos",
+ "common-tracing",
  "convert_case 0.6.0",
  "enumflags2",
  "maplit",
@@ -2638,6 +2644,7 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "log",
+ "minitrace",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -3895,6 +3902,7 @@ dependencies = [
  "h2",
  "headers",
  "hex",
+ "highway",
  "http",
  "humantime",
  "indicatif",
@@ -6667,6 +6675,12 @@ name = "hex"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
+name = "highway"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ba82c000837f4e74df01a5520f0dc48735d4aed955a99eae4428bab7cf3acd"
 
 [[package]]
 name = "hive_metastore"

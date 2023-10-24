@@ -64,6 +64,7 @@ use common_meta_types::MetaHandshakeError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
+use common_tracing::func_name;
 use futures::stream::StreamExt;
 use log::as_debug;
 use log::as_display;
@@ -71,6 +72,8 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use minitrace::future::FutureExt;
+use minitrace::Span;
 use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
@@ -163,6 +166,7 @@ pub struct ClientHandle {
 
 impl ClientHandle {
     /// Send a request to the internal worker task, which may be running in another runtime.
+    #[minitrace::trace]
     pub async fn request<Req, E>(&self, req: Req) -> Result<Req::Reply, E>
     where
         Req: RequestFor,
@@ -179,6 +183,7 @@ impl ClientHandle {
                 request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
                 resp_tx: tx,
                 req: req.into(),
+                span: Span::enter_with_local_parent("ClientWorkerRequest"),
             };
 
             debug!(
@@ -386,7 +391,7 @@ impl MetaGrpcClient {
                 Some(x) => x,
             };
 
-            debug!(req = as_debug!(&req); "MetaGrpcClient recv request");
+            let span = Span::enter_with_parent(func_name!(), &req.span);
 
             if req.resp_tx.is_closed() {
                 debug!(
@@ -414,100 +419,106 @@ impl MetaGrpcClient {
                 _ => {}
             }
 
-            // Deal with remote RPC request
+            async {
+                debug!(req = as_debug!(&req); "MetaGrpcClient recv request");
 
-            let start = Instant::now();
-            let resp = match req {
-                message::Request::Get(r) => {
-                    let resp = self
-                        .kv_api(r)
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                        .await;
-                    message::Response::Get(resp)
-                }
-                message::Request::StreamGet(r) => {
-                    let strm = self
-                        .kv_read_v1(MetaGrpcReadReq::GetKV(r.into_inner()))
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_read_v1(GetKV)"))
-                        .await;
-                    message::Response::StreamGet(strm)
-                }
-                message::Request::MGet(r) => {
-                    let resp = self
-                        .kv_api(r)
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                        .await;
-                    message::Response::MGet(resp)
-                }
-                message::Request::StreamMGet(r) => {
-                    let strm = self
-                        .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
-                        .timed_ge(
-                            threshold(),
-                            info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
-                        )
-                        .await;
-                    message::Response::StreamMGet(strm)
-                }
-                message::Request::List(r) => {
-                    let resp = self
-                        .kv_api(r)
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                        .await;
-                    message::Response::List(resp)
-                }
-                message::Request::StreamList(r) => {
-                    let strm = self
-                        .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
-                        .timed_ge(
-                            threshold(),
-                            info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
-                        )
-                        .await;
-                    message::Response::StreamMGet(strm)
-                }
-                message::Request::Upsert(r) => {
-                    let resp = self
-                        .kv_api(r)
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
-                        .await;
-                    message::Response::Upsert(resp)
-                }
-                message::Request::Txn(r) => {
-                    let resp = self
-                        .transaction(r)
-                        .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
-                        .await;
-                    message::Response::Txn(resp)
-                }
-                message::Request::Watch(r) => {
-                    let resp = self.watch(r).await;
-                    message::Response::Watch(resp)
-                }
-                message::Request::Export(r) => {
-                    let resp = self.export(r).await;
-                    message::Response::Export(resp)
-                }
-                message::Request::MakeClient(_) => {
-                    let resp = self.make_client().await;
-                    message::Response::MakeClient(resp)
-                }
-                message::Request::GetEndpoints(_) => {
-                    unreachable!("handled above");
-                }
-                message::Request::GetClusterStatus(_) => {
-                    let resp = self.get_cluster_status().await;
-                    message::Response::GetClusterStatus(resp)
-                }
-                message::Request::GetClientInfo(_) => {
-                    let resp = self.get_client_info().await;
-                    message::Response::GetClientInfo(resp)
-                }
-            };
+                // Deal with remote RPC request
 
-            self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
+                let start = Instant::now();
+                let resp = match req {
+                    message::Request::Get(r) => {
+                        let resp = self
+                            .kv_api(r)
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                            .await;
+                        message::Response::Get(resp)
+                    }
+                    message::Request::StreamGet(r) => {
+                        let strm = self
+                            .kv_read_v1(MetaGrpcReadReq::GetKV(r.into_inner()))
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_read_v1(GetKV)"))
+                            .await;
+                        message::Response::StreamGet(strm)
+                    }
+                    message::Request::MGet(r) => {
+                        let resp = self
+                            .kv_api(r)
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                            .await;
+                        message::Response::MGet(resp)
+                    }
+                    message::Request::StreamMGet(r) => {
+                        let strm = self
+                            .kv_read_v1(MetaGrpcReadReq::MGetKV(r.into_inner()))
+                            .timed_ge(
+                                threshold(),
+                                info_spent("MetaGrpcClient::kv_read_v1(MGetKV)"),
+                            )
+                            .await;
+                        message::Response::StreamMGet(strm)
+                    }
+                    message::Request::List(r) => {
+                        let resp = self
+                            .kv_api(r)
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                            .await;
+                        message::Response::List(resp)
+                    }
+                    message::Request::StreamList(r) => {
+                        let strm = self
+                            .kv_read_v1(MetaGrpcReadReq::ListKV(r.into_inner()))
+                            .timed_ge(
+                                threshold(),
+                                info_spent("MetaGrpcClient::kv_read_v1(ListKV)"),
+                            )
+                            .await;
+                        message::Response::StreamMGet(strm)
+                    }
+                    message::Request::Upsert(r) => {
+                        let resp = self
+                            .kv_api(r)
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                            .await;
+                        message::Response::Upsert(resp)
+                    }
+                    message::Request::Txn(r) => {
+                        let resp = self
+                            .transaction(r)
+                            .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
+                            .await;
+                        message::Response::Txn(resp)
+                    }
+                    message::Request::Watch(r) => {
+                        let resp = self.watch(r).await;
+                        message::Response::Watch(resp)
+                    }
+                    message::Request::Export(r) => {
+                        let resp = self.export(r).await;
+                        message::Response::Export(resp)
+                    }
+                    message::Request::MakeClient(_) => {
+                        let resp = self.make_client().await;
+                        message::Response::MakeClient(resp)
+                    }
+                    message::Request::GetEndpoints(_) => {
+                        unreachable!("handled above");
+                    }
+                    message::Request::GetClusterStatus(_) => {
+                        let resp = self.get_cluster_status().await;
+                        message::Response::GetClusterStatus(resp)
+                    }
+                    message::Request::GetClientInfo(_) => {
+                        let resp = self.get_client_info().await;
+                        message::Response::GetClientInfo(resp)
+                    }
+                };
 
-            Self::send_response(resp_tx, request_id, resp);
+                self.update_rpc_metrics(req_name, &req_str, request_id, start, resp.err());
+
+                Self::send_response(resp_tx, request_id, resp);
+            }
+            .in_span(span)
+            .await
         }
     }
 

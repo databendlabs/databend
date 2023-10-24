@@ -184,12 +184,19 @@ impl FlightService for DatabendQueryFlightService {
 
                     let spawner = ctx.clone();
                     let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
-                    if let Err(cause) = match_join_handle(spawner.spawn(async move {
-                        DataExchangeManager::instance().init_query_fragments_plan(
-                            &ctx,
-                            &init_query_fragments_plan.executor_packet,
-                        )
-                    }))
+                    if let Err(cause) = match_join_handle(
+                        spawner.spawn(
+                            async move {
+                                DataExchangeManager::instance().init_query_fragments_plan(
+                                    &ctx,
+                                    &init_query_fragments_plan.executor_packet,
+                                )
+                            }
+                            .in_span(Span::enter_with_local_parent(
+                                "DataExchangeManager::instance().init_query_fragments_plan",
+                            )),
+                        ),
+                    )
                     .await
                     {
                         DataExchangeManager::instance().on_finished_query(&query_id);
