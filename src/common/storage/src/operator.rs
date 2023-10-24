@@ -235,7 +235,8 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
     } else {
         warn!(
             "Region is not specified for S3 storage, we will attempt to load it from profiles. If it is still not found, we will use the default region of `us-east-1`."
-        )
+        );
+        builder.region("us-east-1");
     }
 
     // Credential.
