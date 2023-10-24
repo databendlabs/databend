@@ -81,6 +81,7 @@ where T: Processor + 'static
         }
     }
 
+    #[minitrace::trace(name = "ProcessorProfileWrapper::process")]
     fn process(&mut self) -> Result<()> {
         let instant = Instant::now();
         self.inner.process()?;
@@ -94,6 +95,7 @@ where T: Processor + 'static
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "ProcessorProfileWrapper::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         let instant = Instant::now();
         self.inner.async_process().await?;

@@ -229,7 +229,7 @@ async fn query_final_handler(
         info!("final http query: {}", query_id);
         let http_query_manager = HttpQueryManager::instance();
         match http_query_manager.remove_query(&query_id).await {
-            Some(query) => {
+            Some((query, _span)) => {
                 let mut response = query.get_response_state_only().await;
                 if response.state.state == ExecuteStateKind::Running {
                     return Err(PoemError::from_string(

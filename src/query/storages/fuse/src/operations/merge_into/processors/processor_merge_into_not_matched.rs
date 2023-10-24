@@ -148,6 +148,7 @@ impl Processor for MergeIntoNotMatchedProcessor {
         }
     }
 
+    #[minitrace::trace(name = "MergeIntoNotMatchedProcessor::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {

@@ -190,6 +190,7 @@ impl Processor for ReadParquetDataSource<false> {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "ReadParquetDataSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.partitions.steal(self.id, self.batch_size);
 

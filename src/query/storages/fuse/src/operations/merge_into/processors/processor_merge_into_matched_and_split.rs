@@ -223,6 +223,7 @@ impl Processor for MatchedSplitProcessor {
     }
 
     // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
+    #[minitrace::trace(name = "MatchedSplitProcessor::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if data_block.is_empty() {

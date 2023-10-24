@@ -101,6 +101,7 @@ impl Processor for FillInternalColumnProcessor {
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "FillInternalColumnProcessor::process")]
     fn process(&mut self) -> Result<()> {
         if let Some((internal_column_meta, data_block)) = self.data_blocks.pop_front() {
             let mut data_block = data_block;

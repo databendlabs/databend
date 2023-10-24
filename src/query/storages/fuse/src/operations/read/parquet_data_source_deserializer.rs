@@ -167,6 +167,7 @@ impl Processor for DeserializeDataTransform {
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "DeserializeDataTransform::process")]
     fn process(&mut self) -> Result<()> {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();

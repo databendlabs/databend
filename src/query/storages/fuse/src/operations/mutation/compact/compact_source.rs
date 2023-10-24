@@ -123,6 +123,7 @@ impl Processor for CompactSource {
         }
     }
 
+    #[minitrace::trace(name = "CompactSource::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::Concat {
@@ -169,6 +170,7 @@ impl Processor for CompactSource {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "CompactSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {

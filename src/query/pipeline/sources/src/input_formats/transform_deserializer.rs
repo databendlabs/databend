@@ -128,6 +128,7 @@ impl<I: InputFormatPipe> Processor for DeserializeTransformer<I> {
         }
     }
 
+    #[minitrace::trace(name = "DeserializeTransformer::process")]
     fn process(&mut self) -> Result<()> {
         self.processor.process()
     }

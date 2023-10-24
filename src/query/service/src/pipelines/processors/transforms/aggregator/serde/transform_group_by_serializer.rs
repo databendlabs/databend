@@ -102,6 +102,7 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySerializer<Method> 
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "TransformGroupBySerializer::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(stream) = &mut self.input_data {
             self.output_data = Option::transpose(stream.next())?;

@@ -110,6 +110,7 @@ impl<T: 'static + AsyncSource> Processor for AsyncSourcer<T> {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "AsyncSourcer::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match self.inner.generate().await? {
             None => self.is_finish = true,

@@ -2443,6 +2443,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "futures",
+ "minitrace",
  "petgraph",
  "serde",
  "serde_json",
@@ -2461,6 +2462,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "minitrace",
  "tokio",
 ]
 
@@ -2511,6 +2513,7 @@ dependencies = [
  "common-profile",
  "jsonb 0.3.0",
  "match-template",
+ "minitrace",
 ]
 
 [[package]]
@@ -2910,6 +2913,7 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
+ "minitrace",
  "opendal",
  "parquet",
  "serde",
@@ -3002,6 +3006,7 @@ dependencies = [
  "common-storage",
  "dashmap",
  "log",
+ "minitrace",
  "opendal",
  "parking_lot 0.12.1",
  "serde",

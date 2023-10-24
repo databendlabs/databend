@@ -1218,6 +1218,7 @@ where T: Number + ResultTypeOfUnary
         }
     }
 
+    #[minitrace::trace(name = "TransformWindow::process")]
     fn process(&mut self) -> Result<()> {
         if let ProcessorState::AddBlock(data) =
             std::mem::replace(&mut self.state, ProcessorState::Consume)

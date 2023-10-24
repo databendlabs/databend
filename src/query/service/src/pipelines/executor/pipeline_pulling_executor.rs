@@ -28,6 +28,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
 use log::warn;
+use minitrace::prelude::*;
 use parking_lot::Condvar;
 use parking_lot::Mutex;
 
@@ -148,6 +149,7 @@ impl PipelinePullingExecutor {
         })
     }
 
+    #[minitrace::trace]
     pub fn start(&mut self) {
         let state = self.state.clone();
         let threads_executor = self.executor.clone();
@@ -173,7 +175,9 @@ impl PipelinePullingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
+        let span = Span::enter_with_local_parent("PipelinePullingExecutor");
         move || {
+            let _g = span.set_local_parent();
             state.finished(executor.execute());
         }
     }

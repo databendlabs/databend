@@ -174,6 +174,7 @@ impl Processor for TransformMergeBlock {
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "TransformMergeBlock::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(input_data) = self.input_data.take() {
             if let Some(receiver_result) = self.receiver_result.take() {
@@ -192,6 +193,7 @@ impl Processor for TransformMergeBlock {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "TransformMergeBlock::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if !self.finished {
             if let Ok(result) = self.receiver.recv().await {

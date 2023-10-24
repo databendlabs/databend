@@ -145,6 +145,7 @@ impl Processor for MergeIntoSplitProcessor {
     }
 
     // Todo:(JackTan25) accutally, we should do insert-only optimization in the future.
+    #[minitrace::trace(name = "MergeIntoSplitProcessor::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             if self.target_table_empty {

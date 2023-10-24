@@ -220,6 +220,7 @@ where F: SnapshotGenerator + Send + 'static
         self.read_meta()
     }
 
+    #[minitrace::trace(name = "CommitSink::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSnapshot {
@@ -254,6 +255,7 @@ where F: SnapshotGenerator + Send + 'static
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "CommitSink::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::FillDefault => {

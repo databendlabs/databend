@@ -102,6 +102,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
         }
     }
 
+    #[minitrace::trace(name = "Aligner::process")]
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             Some(state) => {
@@ -139,6 +140,7 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "Aligner::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if !self.no_more_split {
             match &self.state {

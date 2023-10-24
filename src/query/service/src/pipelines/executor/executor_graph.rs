@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::EventCause;
 use log::debug;
 use log::trace;
+use minitrace::prelude::*;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -370,16 +371,17 @@ impl ScheduleQueue {
         unsafe {
             workers_condvar.inc_active_async_worker();
             let process_future = proc.async_process();
-            executor
-                .async_runtime
-                .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+            executor.async_runtime.spawn(
+                TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
                     wakeup_worker_id,
                     proc.clone(),
                     global_queue,
                     workers_condvar,
                     process_future,
-                )));
+                ))
+                .in_span(Span::enter_with_local_parent("ProcessorAsyncTask")),
+            );
         }
     }
 

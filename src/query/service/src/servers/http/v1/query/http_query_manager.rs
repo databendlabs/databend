@@ -24,6 +24,7 @@ use common_base::runtime::TrySpawn;
 use common_config::InnerConfig;
 use common_exception::Result;
 use log::warn;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 
 use super::expiring_map::ExpiringMap;
@@ -42,7 +43,7 @@ pub(crate) struct HttpQueryConfig {
 }
 
 pub struct HttpQueryManager {
-    pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
+    pub(crate) queries: Arc<RwLock<HashMap<String, (Arc<HttpQuery>, Span)>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) config: HttpQueryConfig,
 }
@@ -79,14 +80,20 @@ impl HttpQueryManager {
     #[async_backtrace::framed]
     pub(crate) async fn get_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
         let queries = self.queries.read().await;
-        queries.get(query_id).map(|q| q.to_owned())
+        queries.get(query_id).map(|(q, _)| q.to_owned())
     }
 
     #[async_backtrace::framed]
     #[minitrace::trace]
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Query", parent)
+        } else {
+            Span::noop()
+        };
+
         let mut queries = self.queries.write().await;
-        queries.insert(query_id.to_string(), query.clone());
+        queries.insert(query_id.to_string(), (query.clone(), span));
 
         let timeout = self.config.result_timeout_secs;
         let self_clone = self.clone();
@@ -120,10 +127,13 @@ impl HttpQueryManager {
 
     // not remove it until timeout or cancelled by user, even if query execution is aborted
     #[async_backtrace::framed]
-    pub(crate) async fn remove_query(self: &Arc<Self>, query_id: &str) -> Option<Arc<HttpQuery>> {
+    pub(crate) async fn remove_query(
+        self: &Arc<Self>,
+        query_id: &str,
+    ) -> Option<(Arc<HttpQuery>, Span)> {
         let mut queries = self.queries.write().await;
         let q = queries.remove(query_id);
-        if let Some(q) = &q {
+        if let Some((q, _)) = &q {
             q.mark_removed().await;
         }
         q

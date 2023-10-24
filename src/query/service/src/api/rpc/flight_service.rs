@@ -114,6 +114,7 @@ impl FlightService for DatabendQueryFlightService {
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
         let _guard = root.set_local_parent();
+
         match request.get_metadata("x-type")?.as_str() {
             "request_server_exchange" => {
                 let target = request.get_metadata("x-target")?;
@@ -192,9 +193,7 @@ impl FlightService for DatabendQueryFlightService {
                                     &init_query_fragments_plan.executor_packet,
                                 )
                             }
-                            .in_span(Span::enter_with_local_parent(
-                                "DataExchangeManager::instance().init_query_fragments_plan",
-                            )),
+                            .in_span(Span::enter_with_local_parent("init_query_fragments_plan")),
                         ),
                     )
                     .await

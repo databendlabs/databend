@@ -146,6 +146,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
         self.compactor.interrupt();
     }
 
+    #[minitrace::trace(name = "TransformCompact::process")]
     fn process(&mut self) -> Result<()> {
         match &mut self.state {
             ProcessorState::Consume(state) => {

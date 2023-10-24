@@ -132,6 +132,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "TransformSpillReader::process")]
     fn process(&mut self) -> Result<()> {
         if let Some((meta, mut read_data)) = self.deserializing_meta.take() {
             match meta {
@@ -172,6 +173,7 @@ impl<Method: HashMethodBounds, V: Send + Sync + 'static> Processor
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "TransformSpillReader::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(block_meta) = self.reading_meta.take() {
             match &block_meta {

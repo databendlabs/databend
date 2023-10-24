@@ -31,6 +31,7 @@ use common_sql::Planner;
 use futures::StreamExt;
 use log::error;
 use log::info;
+use minitrace::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 use ExecuteState::*;
@@ -219,6 +220,7 @@ impl ExecuteState {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
         plan: Plan,
@@ -246,7 +248,8 @@ impl ExecuteState {
             ctx_clone,
             block_sender,
             executor_clone.clone(),
-        );
+        )
+        .in_span(Span::enter_with_local_parent("ExecuteState::execute"));
         match CatchUnwindFuture::create(res).await {
             Ok(Err(err)) => {
                 Executor::stop(&executor_clone, Err(err.clone()), false).await;

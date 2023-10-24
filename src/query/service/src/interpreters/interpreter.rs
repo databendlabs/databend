@@ -43,7 +43,7 @@ pub trait Interpreter: Sync + Send {
 
     /// The core of the databend processor which will execute the logical plan and get the DataBlock
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[minitrace::trace(name = "Interpreter::execute")]
     async fn execute(&self, ctx: Arc<QueryContext>) -> Result<SendableDataBlockStream> {
         ctx.set_status_info("building pipeline");
         InterpreterMetrics::record_query_start(&ctx);

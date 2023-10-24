@@ -113,6 +113,7 @@ impl<Method: HashMethodBounds> Processor for TransformAggregateSerializer<Method
         Ok(Event::NeedData)
     }
 
+    #[minitrace::trace(name = "TransformAggregateSerializer::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(stream) = &mut self.input_data {
             self.output_data = Option::transpose(stream.next())?;

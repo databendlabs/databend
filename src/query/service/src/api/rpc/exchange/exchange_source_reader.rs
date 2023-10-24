@@ -107,6 +107,7 @@ impl Processor for ExchangeSourceReader {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "ExchangeSourceReader::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if self.output_data.is_empty() {
             let mut bytes = 0;

@@ -150,6 +150,7 @@ impl Processor for UnbranchedReplaceIntoProcessor {
         }
     }
 
+    #[minitrace::trace(name = "UnbranchedReplaceIntoProcessor::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_data.take() {
             let start = Instant::now();

@@ -172,6 +172,7 @@ impl Processor for AsyncParquet2Source {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "AsyncParquetSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         let parts = self.ctx.get_partitions(1);
 

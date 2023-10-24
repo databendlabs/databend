@@ -104,6 +104,7 @@ impl Processor for LimitFileSizeProcessor {
         }
     }
 
+    #[minitrace::trace(name = "LimitFileSizeProcessor::process")]
     fn process(&mut self) -> Result<()> {
         assert!(self.input_data.is_some());
         assert!(self.output_data.is_none());

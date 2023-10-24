@@ -142,6 +142,7 @@ impl<T: AsyncSink + 'static> Processor for AsyncSinker<T> {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "AsyncSinker::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;

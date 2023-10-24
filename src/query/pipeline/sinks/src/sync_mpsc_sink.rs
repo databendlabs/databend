@@ -147,6 +147,7 @@ impl<T: SyncMpscSink + 'static> Processor for SyncMpscSinker<T> {
         }
     }
 
+    #[minitrace::trace(name = "SyncMpscSinker::process")]
     fn process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;

@@ -222,6 +222,7 @@ impl Processor for TransformSerializeBlock {
         }
     }
 
+    #[minitrace::trace(name = "TransformSerializeBlock::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::NeedSerialize {
@@ -248,6 +249,7 @@ impl Processor for TransformSerializeBlock {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "TransformSerializeBlock::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized { serialized, index } => {

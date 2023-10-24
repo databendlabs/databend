@@ -26,6 +26,7 @@ common-storage = { path = "../../../common/storage" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
+minitrace = { workspace = true }
 dashmap = "5.4.0"
 log = { workspace = true }
 opendal = { workspace = true }

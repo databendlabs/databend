@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::runtime::Thread;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use minitrace::prelude::*;
 
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineExecutor;
@@ -66,10 +67,13 @@ impl PipelineCompleteExecutor {
         self.executor.finish(cause);
     }
 
+    #[minitrace::trace]
     pub fn execute(&self) -> Result<()> {
+        let span = Span::enter_with_local_parent("PipelineCompleteExecutor");
         let executor = self.executor.clone();
         let execute_thread =
             Thread::named_spawn(Some(String::from("CompleteExecutor")), move || {
+                let _g = span.set_local_parent();
                 executor.execute()
             });
 

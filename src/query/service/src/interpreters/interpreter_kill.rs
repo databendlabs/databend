@@ -119,7 +119,7 @@ impl Interpreter for KillInterpreter {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[minitrace::trace(name = "KillInterpreter::execute2")]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let id = &self.plan.id;
         // If press Ctrl + C, MySQL Client will create a new session and send query

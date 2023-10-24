@@ -134,6 +134,7 @@ impl Processor for TransformRuntimeFilter {
         }
     }
 
+    #[minitrace::trace(name = "TransformRuntimeFilter::process")]
     fn process(&mut self) -> Result<()> {
         match self.step {
             RuntimeFilterStep::Collect => Ok(()),
@@ -149,6 +150,7 @@ impl Processor for TransformRuntimeFilter {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace(name = "TransformRuntimeFilter::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if let RuntimeFilterStep::Collect = &self.step {
             self.connector.wait_finish().await?;
