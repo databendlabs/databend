@@ -2,7 +2,7 @@
 title: Input & Output File Formats
 ---
 
-Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or the Streaming Load API. You can also unload data from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md) command. 
+Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. This page explains the supported file formats and their available options.
 
 ## Syntax
 
