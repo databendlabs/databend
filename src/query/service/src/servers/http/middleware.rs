@@ -197,7 +197,8 @@ impl<E> HTTPSessionEndpoint<E> {
         let query_id = req
             .headers()
             .get(QUERY_ID)
-            .map(|id| id.to_str().unwrap().to_string());
+            .map(|id| id.to_str().unwrap().to_string())
+            .unwrap_or_else(|| Uuid::new_v4().to_string());
 
         Ok(HttpQueryContext::new(
             session,
