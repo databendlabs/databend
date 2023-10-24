@@ -53,6 +53,7 @@ pub fn display_rel_op(rel_op: &RelOperator) -> String {
         RelOperator::MaterializedCte(_) => "MaterializedCte".to_string(),
         RelOperator::Lambda(_) => "LambdaFunc".to_string(),
         RelOperator::ConstantTableScan(_) => "ConstantTableScan".to_string(),
+        RelOperator::AddRowNumber(_) => "AddRowNumber".to_string(),
     }
 }
 

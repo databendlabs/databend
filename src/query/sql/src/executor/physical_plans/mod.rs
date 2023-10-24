@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod common;
+pub mod physical_add_row_number;
 pub mod physical_aggregate_expand;
 pub mod physical_aggregate_final;
 pub mod physical_aggregate_partial;

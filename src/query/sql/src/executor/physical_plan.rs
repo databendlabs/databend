@@ -17,6 +17,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use enum_as_inner::EnumAsInner;
 
+use super::physical_plans::physical_add_row_number::AddRowNumber;
 use super::MergeIntoRowIdApply;
 use crate::executor::physical_plans::physical_aggregate_expand::AggregateExpand;
 use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
@@ -99,6 +100,7 @@ pub enum PhysicalPlan {
     MergeIntoSource(MergeIntoSource),
     MergeInto(Box<MergeInto>),
     MergeIntoRowIdApply(Box<MergeIntoRowIdApply>),
+    AddRowNumber(Box<AddRowNumber>),
 
     /// Compact
     CompactSource(Box<CompactSource>),
@@ -135,6 +137,7 @@ impl PhysicalPlan {
             PhysicalPlan::ConstantTableScan(v) => v.plan_id,
             PhysicalPlan::DeleteSource(_)
             | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::AddRowNumber(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::MergeIntoRowIdApply(_)
             | PhysicalPlan::CommitSink(_)
@@ -179,6 +182,7 @@ impl PhysicalPlan {
             PhysicalPlan::ConstantTableScan(plan) => plan.output_schema(),
             PhysicalPlan::MergeIntoSource(plan) => plan.input.output_schema(),
             PhysicalPlan::MergeInto(plan) => Ok(plan.output_schema.clone()),
+            PhysicalPlan::AddRowNumber(plan) => plan.input.output_schema(),
             PhysicalPlan::AsyncSourcer(_)
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
@@ -223,6 +227,7 @@ impl PhysicalPlan {
             PhysicalPlan::CteScan(_) => "PhysicalCteScan".to_string(),
             PhysicalPlan::MaterializedCte(_) => "PhysicalMaterializedCte".to_string(),
             PhysicalPlan::ConstantTableScan(_) => "PhysicalConstantTableScan".to_string(),
+            PhysicalPlan::AddRowNumber(_) => "AddRowNumber".to_string(),
         }
     }
 
@@ -270,6 +275,7 @@ impl PhysicalPlan {
             PhysicalPlan::Deduplicate(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ReplaceInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeInto(plan) => Box::new(std::iter::once(plan.input.as_ref())),
+            PhysicalPlan::AddRowNumber(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoSource(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::MergeIntoRowIdApply(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
@@ -313,6 +319,7 @@ impl PhysicalPlan {
             | PhysicalPlan::Deduplicate(_)
             | PhysicalPlan::ReplaceInto(_)
             | PhysicalPlan::MergeInto(_)
+            | PhysicalPlan::AddRowNumber(_)
             | PhysicalPlan::MergeIntoRowIdApply(_)
             | PhysicalPlan::MergeIntoSource(_)
             | PhysicalPlan::ConstantTableScan(_)

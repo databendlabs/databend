@@ -510,6 +510,7 @@ fn flatten_plan_node_profile(
         | PhysicalPlan::CopyIntoTable(_)
         | PhysicalPlan::AsyncSourcer(_)
         | PhysicalPlan::MergeInto(_)
+        | PhysicalPlan::AddRowNumber(_)
         | PhysicalPlan::MergeIntoRowIdApply(_)
         | PhysicalPlan::MergeIntoSource(_)
         | PhysicalPlan::Deduplicate(_)

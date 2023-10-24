@@ -205,35 +205,6 @@ impl MergeIntoInterpreter {
         let table_info = fuse_table.get_table_info();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
-        // // distributed execution
-        // if exchange.is_some() {
-        //     // rewrite plan: for now, we use right join, and the default
-        //     // distributed right join will use shuffle hash join, but its
-        //     // performance is very slow and poor. So we need to rewrite it.
-        //     // In new distributed plan, target partitions will be shuffled
-        //     // to query nodes, and source will be broadcasted to all nodes
-        //     // and build hashtable. It means all nodes hold the same hashtable.
-        //     match &mut join_input {
-        //         PhysicalPlan::HashJoin(join) => match &join.probe {
-        //             PhysicalPlan::Exchange(probe_exchange) => {
-        //                 join.probe = probe_exchange.input;
-        //             }
-        //             _ => {
-        //                 return Err(ErrorCode::BadArguments(format!(
-        //                     "find error plan {},it should be hash join",
-        //                     join_input.name()
-        //                 )));
-        //             }
-        //         },
-        //         _ => {
-        //             return Err(ErrorCode::BadArguments(format!(
-        //                 "find error plan {},it should be hash join",
-        //                 join_input.name()
-        //             )));
-        //         }
-        //     }
-        // }
-
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
         // datablocks.
         let merge_into_source = PhysicalPlan::MergeIntoSource(MergeIntoSource {

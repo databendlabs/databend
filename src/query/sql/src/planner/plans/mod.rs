@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod add_row_number;
 mod aggregate;
 mod call;
 mod constant_table_scan;

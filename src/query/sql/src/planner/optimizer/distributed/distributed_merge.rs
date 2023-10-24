@@ -33,6 +33,12 @@ impl MergeSourceOptimizer {
         }
     }
 
+    // rewrite plan: for now, we use right join, and the default
+    // distributed right join will use shuffle hash join, but its
+    // performance is very slow and poor. So we need to rewrite it.
+    // In new distributed plan, target partitions will be shuffled
+    // to query nodes, and source will be broadcasted to all nodes
+    // and build hashtable. It means all nodes hold the same hashtable.
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         if !s_expr.match_pattern(&self.merge_source_pattern) {
             return Err(ErrorCode::BadArguments(format!(
@@ -77,8 +83,8 @@ impl MergeSourceOptimizer {
         //         /  \
         //        /    \
         //       *     Exchange(Broadcast)
-        //                |
-        //                *
+        //                  |
+        //                AddRowNumber
         SExpr::create_unary(
             Arc::new(
                 PatternPlan {
@@ -114,12 +120,20 @@ impl MergeSourceOptimizer {
                         }
                         .into(),
                     ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::AddRowNumber,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_leaf(Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::Pattern,
+                            }
+                            .into(),
+                        ))),
+                    )),
                 )),
             )),
         )

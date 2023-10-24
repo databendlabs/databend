@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::ops::Not;
-
 use common_exception::Result;
 use common_expression::eval_function;
 use common_expression::types::BooleanType;

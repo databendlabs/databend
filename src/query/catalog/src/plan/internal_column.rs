@@ -29,6 +29,7 @@ use common_expression::TableDataType;
 use common_expression::Value;
 use common_expression::BLOCK_NAME_COLUMN_ID;
 use common_expression::ROW_ID_COLUMN_ID;
+use common_expression::ROW_NUMBER_COLUMN_ID;
 use common_expression::SEGMENT_NAME_COLUMN_ID;
 use common_expression::SNAPSHOT_NAME_COLUMN_ID;
 use storages_common_table_meta::meta::NUM_BLOCK_ID_BITS;

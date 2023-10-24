@@ -32,6 +32,7 @@ use common_expression::types::DataType;
 use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
 use common_expression::ROW_ID_COL_NAME;
+use common_expression::ROW_NUMBER_COL_NAME;
 use indexmap::IndexMap;
 
 use super::wrap_cast_scalar;
@@ -70,7 +71,7 @@ impl Binder {
             .unwrap_or_default()
         {
             return Err(ErrorCode::Unimplemented(
-                "merge into is unstable for now, you can use 'set enable_experimental_merge_into = 1' to set up it",
+                "merge into is experimental for now, you can use 'set enable_experimental_merge_into = 1' to set it up",
             ));
         }
         let MergeIntoStmt {
