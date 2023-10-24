@@ -426,14 +426,6 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 BinaryOperator::Modulo => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::StringConcat => Affix::Infix(Precedence(40), Associativity::Left),
                 BinaryOperator::Caret => Affix::Infix(Precedence(40), Associativity::Left),
-                // BinaryOperator::JsonGet => Affix::Infix(Precedence(40), Associativity::Left),
-                // BinaryOperator::JsonGetString => Affix::Infix(Precedence(40), Associativity::Left),
-                // BinaryOperator::JsonGetByKeyPath => {
-                //     Affix::Infix(Precedence(40), Associativity::Left)
-                // }
-                // BinaryOperator::JsonGetByKeyPathString => {
-                //     Affix::Infix(Precedence(40), Associativity::Left)
-                // }
             },
             ExprElement::JsonOp { .. } => Affix::Infix(Precedence(40), Associativity::Left),
             ExprElement::PgCast { .. } => Affix::Postfix(Precedence(60)),
@@ -1144,10 +1136,6 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
             value(BinaryOperator::Eq, rule! { "=" }),
             value(BinaryOperator::NotEq, rule! { "<>" | "!=" }),
             value(BinaryOperator::Caret, rule! { "^" }),
-            // value(BinaryOperator::JsonGet, rule! { "->" }),
-            // value(BinaryOperator::JsonGetString, rule! { "->>" }),
-            // value(BinaryOperator::JsonGetByKeyPath, rule! { "#>" }),
-            // value(BinaryOperator::JsonGetByKeyPathString, rule! { "#>>" }),
         )),
         alt((
             value(BinaryOperator::And, rule! { AND }),
