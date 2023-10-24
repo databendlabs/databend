@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -44,9 +44,9 @@ impl kvapi::KVApi for MetaEmbedded {
         sm.mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
-        sm.prefix_list_kv(prefix).await
+        sm.list_kv(prefix).await
     }
 
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {

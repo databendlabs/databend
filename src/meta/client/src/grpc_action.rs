@@ -23,7 +23,6 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
 use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::RaftRequest;
@@ -35,12 +34,10 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use log::as_debug;
 use log::debug;
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
+use tonic::codegen::BoxStream;
 use tonic::Request;
-use tonic::Streaming;
 
-use crate::grpc_client::AuthInterceptor;
+use crate::grpc_client::RealClient;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
 use crate::message::GetClusterStatus;
@@ -72,6 +69,22 @@ impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
         let req = serde_json::from_str::<MetaGrpcReq>(json_str)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
         Ok(req)
+    }
+}
+
+impl From<MetaGrpcReq> for RaftRequest {
+    fn from(v: MetaGrpcReq) -> Self {
+        let raft_request = RaftRequest {
+            // Safe unwrap(): serialize to string must be ok.
+            data: serde_json::to_string(&v).unwrap(),
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        raft_request
     }
 }
 
@@ -107,6 +120,32 @@ pub enum MetaGrpcReadReq {
     ListKV(ListKVReq),
 }
 
+impl From<MetaGrpcReadReq> for MetaGrpcReq {
+    fn from(v: MetaGrpcReadReq) -> Self {
+        match v {
+            MetaGrpcReadReq::GetKV(v) => MetaGrpcReq::GetKV(v),
+            MetaGrpcReadReq::MGetKV(v) => MetaGrpcReq::MGetKV(v),
+            MetaGrpcReadReq::ListKV(v) => MetaGrpcReq::ListKV(v),
+        }
+    }
+}
+
+impl From<MetaGrpcReadReq> for RaftRequest {
+    fn from(v: MetaGrpcReadReq) -> Self {
+        let raft_request = RaftRequest {
+            // Safe unwrap(): serialize to string must be ok.
+            data: serde_json::to_string(&v).unwrap(),
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        raft_request
+    }
+}
+
 impl MetaGrpcReadReq {
     pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
         let raft_request = RaftRequest {
@@ -127,24 +166,24 @@ impl RequestFor for GetKVReq {
     type Reply = GetKVReply;
 }
 
-impl RequestFor for Streamed<GetKVReq> {
-    type Reply = Streaming<StreamItem>;
-}
-
 impl RequestFor for MGetKVReq {
     type Reply = MGetKVReply;
-}
-
-impl RequestFor for Streamed<MGetKVReq> {
-    type Reply = Streaming<StreamItem>;
 }
 
 impl RequestFor for ListKVReq {
     type Reply = ListKVReply;
 }
 
+impl RequestFor for Streamed<GetKVReq> {
+    type Reply = BoxStream<StreamItem>;
+}
+
+impl RequestFor for Streamed<MGetKVReq> {
+    type Reply = BoxStream<StreamItem>;
+}
+
 impl RequestFor for Streamed<ListKVReq> {
-    type Reply = Streaming<StreamItem>;
+    type Reply = BoxStream<StreamItem>;
 }
 
 impl RequestFor for UpsertKVReq {
@@ -160,7 +199,7 @@ impl RequestFor for ExportReq {
 }
 
 impl RequestFor for MakeClient {
-    type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
+    type Reply = (RealClient, u64);
 }
 
 impl RequestFor for GetEndpoints {
