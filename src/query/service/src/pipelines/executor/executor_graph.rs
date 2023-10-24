@@ -118,7 +118,10 @@ impl ExecutingGraph {
             Self::init_graph(pipeline, &mut graph);
         }
 
-        Ok(ExecutingGraph { finished_nodes: AtomicUsize::new(0), graph })
+        Ok(ExecutingGraph {
+            finished_nodes: AtomicUsize::new(0),
+            graph,
+        })
     }
 
     fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
@@ -269,12 +272,12 @@ impl ExecutingGraph {
                 );
                 let processor_state = match event {
                     Event::Finished => {
-                        if !matches!(&*state_guard_cache, Some(State::Finished)) {
+                        if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
                             locker.finished_nodes.fetch_add(1, Ordering::Acquire);
                         }
 
                         State::Finished
-                    },
+                    }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
                         schedule_queue.push_sync(node.processor.clone());
