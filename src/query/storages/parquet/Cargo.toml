@@ -27,7 +27,6 @@ storages-common-pruner = { path = "../common/pruner" }
 storages-common-table-meta = { path = "../common/table-meta" }
 
 arrow-array = { workspace = true }
-minitrace = { workspace = true }
 arrow-buffer = { workspace = true }
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }
@@ -37,6 +36,7 @@ chrono = { workspace = true }
 ethnum = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
+minitrace = { workspace = true }
 opendal = { workspace = true }
 parquet = { workspace = true }
 serde = { workspace = true }
