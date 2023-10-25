@@ -98,5 +98,5 @@ SQLsmith generates most common SQLs and integrates with CI. Upcoming improvement
 
 - Add support for more SQL features like `UNION`, **Computed Column** etc.
 - Introduce more configurations like expression nesting depths, query complexity.
-- Improved SQL simplification.
+- Improve SQL Reducer.
 - Optimized query execution and analysis.
