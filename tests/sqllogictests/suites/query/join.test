@@ -718,10 +718,10 @@ statement ok
 drop table if exists t2;
 
 statement ok
-create table t1 (id int, val bigint unsigned DEFAULT 0);
+create table t1 (id int, val bigint unsigned default 0);
 
 statement ok
-create table t2 (id int, val bigint unsigned DEFAULT 0);
+create table t2 (id int, val bigint unsigned default 0);
 
 statement ok
 insert into t1 values(1, 1696549154011), (2, 1696549154013);
