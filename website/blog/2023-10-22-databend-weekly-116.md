@@ -69,7 +69,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Understanding Configuration Mapping in Databend
 
-For a complex database service like Databend, supporting many configurable options helps developers manage and tune the system. A recently published blog explains the mapping between command line options, environment variables, config files, and code in Databend.
+For a complex database service like Databend, supporting many configurable options helps developers manage and tune the system. A recently published blog explains the mappings between command line options, environment variables, config files, and code in Databend.
 
 Databend currently supports three configuration methods in decreasing order of priority:
 
