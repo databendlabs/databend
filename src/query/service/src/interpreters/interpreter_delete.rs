@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -62,7 +61,8 @@ use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLockHandlerWrapper;
+use table_lock::TableLevelLock;
+use table_lock::TableLockManager;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
@@ -112,11 +112,17 @@ impl Interpreter for DeleteInterpreter {
 
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
+
         // refresh table.
         let tbl = catalog
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
-        let table_info = tbl.get_table_info().clone();
+
+        // Add table lock heartbeat.
+        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let mut table_lock =
+            TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
+        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -193,12 +199,6 @@ impl Interpreter for DeleteInterpreter {
                     tbl.get_table_info().engine(),
                 )))?;
 
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
         if let Some(snapshot) = fuse_table
@@ -261,18 +261,7 @@ impl Interpreter for DeleteInterpreter {
                     .await?;
         }
 
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
+        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
 
         Ok(build_res)
     }

@@ -4390,9 +4390,9 @@ dependencies = [
  "common-license",
  "common-meta-api",
  "common-meta-app",
- "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
+ "common-pipeline-core",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -11556,14 +11556,19 @@ name = "table-lock"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-channel",
  "async-trait",
+ "chrono",
  "common-base",
  "common-catalog",
  "common-exception",
  "common-license",
  "common-meta-app",
+ "common-meta-kvapi",
+ "common-pipeline-core",
  "futures",
  "log",
+ "parking_lot 0.12.1",
  "rand 0.8.5",
 ]
 

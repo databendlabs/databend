@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
@@ -25,7 +24,6 @@ use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
@@ -42,7 +40,8 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLockHandlerWrapper;
+use table_lock::TableLevelLock;
+use table_lock::TableLockManager;
 
 use super::Interpreter;
 use super::InterpreterPtr;
@@ -76,27 +75,16 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let start = Instant::now();
-        let (physical_plan, table_info) = self.build_physical_plan().await?;
+        let (physical_plan, table_id) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock heartbeat before execution.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler.try_lock(self.ctx.clone(), table_info).await?;
-
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
+        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_id);
+        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -125,7 +113,7 @@ impl Interpreter for MergeIntoInterpreter {
 }
 
 impl MergeIntoInterpreter {
-    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
+    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, u64)> {
         let MergePlan {
             bind_context,
             input,
@@ -340,7 +328,7 @@ impl MergeIntoInterpreter {
             merge_meta: false,
         }));
 
-        Ok((physical_plan, table_info.clone()))
+        Ok((physical_plan, table_info.ident.table_id))
     }
 
     fn transform_scalar_expr2expr(

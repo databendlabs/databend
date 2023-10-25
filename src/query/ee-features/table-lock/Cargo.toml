@@ -18,11 +18,16 @@ common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-license = { path = "../../../common/license" }
 common-meta-app = { path = "../../../meta/app" }
+common-meta-kvapi = { path = "../../../meta/kvapi" }
+common-pipeline-core = { path = "../../pipeline/core" }
 
 async-backtrace = { workspace = true }
+async-channel = "1.7.1"
 async-trait = "0.1.57"
+chrono = { workspace = true }
 futures = "0.3.24"
 log = { workspace = true }
+parking_lot = "0.12.1"
 rand = "0.8.5"
 
 [build-dependencies]

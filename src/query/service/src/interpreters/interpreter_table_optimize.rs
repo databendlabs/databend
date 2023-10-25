@@ -34,6 +34,7 @@ use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
+use table_lock::ListTableLockReq;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
@@ -132,8 +133,11 @@ impl OptimizeTableInterpreter {
         let table_info = table.get_table_info().clone();
         // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let list_table_lock_req = ListTableLockReq {
+            table_id: table_info.ident.table_id,
+        };
         let reply = catalog
-            .list_table_lock_revs(table_info.ident.table_id)
+            .list_table_lock_revs(Box::new(list_table_lock_req))
             .await?;
         if !reply.is_empty() {
             return Err(ErrorCode::TableAlreadyLocked(format!(

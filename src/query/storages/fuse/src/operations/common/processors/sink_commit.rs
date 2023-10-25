@@ -27,6 +27,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_pipeline_core::TableLock;
 use log::debug;
 use log::error;
 use log::info;
@@ -37,8 +38,8 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use table_lock::TableLockHandlerWrapper;
-use table_lock::TableLockHeartbeat;
+use table_lock::TableLevelLock;
+use table_lock::TableLockManager;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
@@ -92,7 +93,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     abort_operation: AbortOperation,
-    heartbeat: TableLockHeartbeat,
+    table_lock: Option<Arc<dyn TableLock>>,
     need_lock: bool,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
@@ -121,7 +122,7 @@ where F: SnapshotGenerator + Send + 'static
             copied_files,
             snapshot_gen,
             abort_operation: AbortOperation::default(),
-            heartbeat: TableLockHeartbeat::default(),
+            table_lock: None,
             transient: table.transient(),
             backoff: ExponentialBackoff::default(),
             retries: 0,
@@ -287,11 +288,14 @@ where F: SnapshotGenerator + Send + 'static
                 }
             }
             State::TryLock => {
-                let table_info = self.table.get_table_info();
-                let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-                match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
-                    Ok(heartbeat) => {
-                        self.heartbeat = heartbeat;
+                let lock_mgr = TableLockManager::instance(self.ctx.clone());
+                let mut table_lock = TableLevelLock::create(
+                    lock_mgr.clone(),
+                    self.table.get_table_info().ident.table_id,
+                );
+                match lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await {
+                    Ok(_) => {
+                        self.table_lock = Some(Arc::new(table_lock));
                         self.state = State::FillDefault;
                     }
                     Err(e) => {
@@ -376,7 +380,6 @@ where F: SnapshotGenerator + Send + 'static
                                 SegmentInfo::VERSION,
                             ))?;
                         }
-                        self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
                     Err(e) if self.is_error_recoverable(&e) => {
@@ -438,7 +441,6 @@ where F: SnapshotGenerator + Send + 'static
                 metrics_inc_commit_aborts();
                 // todo: use histogram when it ready
                 metrics_inc_commit_milliseconds(duration.as_millis());
-                self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
                 return Err(ErrorCode::StorageOther(format!(

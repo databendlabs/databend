@@ -25,7 +25,7 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::TableInfo;
+use common_pipeline_core::TableLock;
 use futures::future::select;
 use futures::future::Either;
 use rand::thread_rng;
@@ -39,21 +39,22 @@ pub struct TableLockHeartbeat {
 }
 
 impl TableLockHeartbeat {
-    pub async fn start(
+    pub async fn start<T: TableLock + ?Sized>(
         &mut self,
         ctx: Arc<dyn TableContext>,
-        table_info: TableInfo,
-        revision: u64,
+        lock: &T,
     ) -> Result<()> {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
+        let delete_table_lock_req = lock.delete_table_lock_req();
+        let extend_table_lock_req = lock.extend_table_lock_req(expire_secs);
 
         self.shutdown_handler = Some(GlobalIORuntime::instance().spawn({
             let shutdown_flag = self.shutdown_flag.clone();
             let shutdown_notify = self.shutdown_notify.clone();
 
             async move {
-                let catalog = ctx.get_catalog(table_info.catalog()).await?;
+                let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
                 let mut notified = Box::pin(shutdown_notify.notified());
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     let mills = {
@@ -63,13 +64,13 @@ impl TableLockHeartbeat {
                     let sleep = Box::pin(sleep(Duration::from_millis(mills)));
                     match select(notified, sleep).await {
                         Either::Left((_, _)) => {
-                            catalog.delete_table_lock_rev(&table_info, revision).await?;
+                            catalog.delete_table_lock_rev(delete_table_lock_req).await?;
                             break;
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .extend_table_lock_rev(expire_secs, &table_info, revision)
+                                .extend_table_lock_rev(extend_table_lock_req.clone())
                                 .await?;
                         }
                     }

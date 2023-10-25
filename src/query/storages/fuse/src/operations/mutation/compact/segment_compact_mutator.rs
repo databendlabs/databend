@@ -23,7 +23,8 @@ use opendal::Operator;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
-use table_lock::TableLockHandlerWrapper;
+use table_lock::TableLevelLock;
+use table_lock::TableLockManager;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -137,11 +138,13 @@ impl SegmentCompactMutator {
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), fuse_table.table_info.clone())
-            .await?;
-        let res = fuse_table
+
+        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let mut table_lock =
+            TableLevelLock::create(lock_mgr.clone(), fuse_table.table_info.ident.table_id);
+        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+
+        fuse_table
             .commit_mutation(
                 &self.ctx,
                 self.compact_params.base_snapshot.clone(),
@@ -150,9 +153,7 @@ impl SegmentCompactMutator {
                 abort_action,
                 None,
             )
-            .await;
-        heartbeat.shutdown().await?;
-        res
+            .await
     }
 }
 

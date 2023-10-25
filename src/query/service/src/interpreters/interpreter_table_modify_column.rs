@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
@@ -48,7 +47,8 @@ use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use table_lock::TableLockHandlerWrapper;
+use table_lock::TableLevelLock;
+use table_lock::TableLockManager;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
@@ -269,10 +269,9 @@ impl ModifyTableColumnInterpreter {
         }
 
         // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
+        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
+        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();
@@ -344,19 +343,7 @@ impl ModifyTableColumnInterpreter {
             prev_snapshot_id,
         )?;
 
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
-        }
-
+        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
         Ok(build_res)
     }
 

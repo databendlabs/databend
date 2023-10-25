@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod table_level_lock;
 mod table_lock_handler;
 mod table_lock_heartbeat;
+mod table_lock_manager;
 
+pub use table_level_lock::*;
 pub use table_lock_handler::TableLockHandler;
-pub use table_lock_handler::TableLockHandlerWrapper;
 pub use table_lock_heartbeat::TableLockHeartbeat;
+pub use table_lock_manager::TableLockManager;

@@ -29,6 +29,7 @@ use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
+use crate::TableLock;
 use crate::TransformPipeBuilder;
 
 /// The struct of new pipeline
@@ -54,6 +55,7 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
+    table_locks: Vec<Arc<dyn TableLock>>,
 }
 
 impl Debug for Pipeline {
@@ -74,6 +76,7 @@ impl Pipeline {
             pipes: Vec::new(),
             on_init: None,
             on_finished: None,
+            table_locks: vec![],
         }
     }
 
@@ -126,6 +129,14 @@ impl Pipeline {
             None => 0,
             Some(pipe) => pipe.output_length,
         }
+    }
+
+    pub fn add_table_lock(&mut self, table_lock: Arc<dyn TableLock>) {
+        self.table_locks.push(table_lock);
+    }
+
+    pub fn take_table_locks(&mut self) -> Vec<Arc<dyn TableLock>> {
+        std::mem::take(&mut self.table_locks)
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {

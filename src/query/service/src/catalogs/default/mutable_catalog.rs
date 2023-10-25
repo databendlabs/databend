@@ -17,7 +17,6 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
-use chrono::Utc;
 use common_catalog::catalog::Catalog;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -30,7 +29,6 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableLockRevReply;
-use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -40,7 +38,6 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -50,7 +47,6 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
-use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
@@ -63,7 +59,6 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
-use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -91,7 +86,12 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
+use common_pipeline_core::table_lock::TableLockReq;
 use log::info;
+use table_lock::CreateTableLockReq;
+use table_lock::DeleteTableLockReq;
+use table_lock::ExtendTableLockReq;
+use table_lock::ListTableLockReq;
 
 use super::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -514,49 +514,45 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<u64>> {
-        let req = ListTableLockRevReq { table_id };
-        let res = self.ctx.meta.list_table_lock_revs(req).await?;
+    async fn list_table_lock_revs(&self, req: Box<dyn TableLockReq>) -> Result<Vec<u64>> {
+        let req = req
+            .as_any()
+            .downcast_ref::<ListTableLockReq>()
+            .expect("must success");
+        let res = self.ctx.meta.list_table_lock_revs(req.into()).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
     async fn create_table_lock_rev(
         &self,
-        expire_secs: u64,
-        table_info: &TableInfo,
+        req: Box<dyn TableLockReq>,
     ) -> Result<CreateTableLockRevReply> {
-        let req = CreateTableLockRevReq {
-            table_id: table_info.ident.table_id,
-            expire_at: Utc::now().timestamp() as u64 + expire_secs,
-        };
-        let res = self.ctx.meta.create_table_lock_rev(req).await?;
+        let req = req
+            .as_any()
+            .downcast_ref::<CreateTableLockReq>()
+            .expect("must success");
+        let res = self.ctx.meta.create_table_lock_rev(req.into()).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(
-        &self,
-        expire_secs: u64,
-        table_info: &TableInfo,
-        revision: u64,
-    ) -> Result<()> {
-        let req = ExtendTableLockRevReq {
-            table_id: table_info.ident.table_id,
-            expire_at: Utc::now().timestamp() as u64 + expire_secs,
-            revision,
-        };
-        self.ctx.meta.extend_table_lock_rev(req).await?;
+    async fn extend_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+        let req = req
+            .as_any()
+            .downcast_ref::<ExtendTableLockReq>()
+            .expect("must success");
+        self.ctx.meta.extend_table_lock_rev(req.into()).await?;
         Ok(())
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, table_info: &TableInfo, revision: u64) -> Result<()> {
-        let req = DeleteTableLockRevReq {
-            table_id: table_info.ident.table_id,
-            revision,
-        };
-        let reply = self.ctx.meta.delete_table_lock_rev(req).await?;
+    async fn delete_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+        let req = req
+            .as_any()
+            .downcast_ref::<DeleteTableLockReq>()
+            .expect("must success");
+        let reply = self.ctx.meta.delete_table_lock_rev(req.into()).await?;
         Ok(reply)
     }
 

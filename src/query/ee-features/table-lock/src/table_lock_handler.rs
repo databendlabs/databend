@@ -14,13 +14,9 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::TableInfo;
-use log::info;
+use common_pipeline_core::TableLock;
 
 use crate::TableLockHeartbeat;
 
@@ -29,7 +25,7 @@ pub trait TableLockHandler: Sync + Send {
     async fn try_lock(
         &self,
         ctx: Arc<dyn TableContext>,
-        table_info: TableInfo,
+        lock: &mut dyn TableLock,
     ) -> Result<TableLockHeartbeat>;
 }
 
@@ -41,50 +37,8 @@ impl TableLockHandler for DummyTableLock {
     async fn try_lock(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _table_info: TableInfo,
+        _lock: &mut dyn TableLock,
     ) -> Result<TableLockHeartbeat> {
         Ok(TableLockHeartbeat::default())
-    }
-}
-
-pub struct TableLockHandlerWrapper {
-    handler: Box<dyn TableLockHandler>,
-}
-
-impl TableLockHandlerWrapper {
-    pub fn new(handler: Box<dyn TableLockHandler>) -> Self {
-        Self { handler }
-    }
-
-    #[async_backtrace::framed]
-    pub async fn try_lock(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        table_info: TableInfo,
-    ) -> Result<TableLockHeartbeat> {
-        self.handler.try_lock(ctx, table_info).await
-    }
-
-    pub fn instance(ctx: Arc<dyn TableContext>) -> Arc<TableLockHandlerWrapper> {
-        let enabled_table_lock = ctx.get_settings().get_enable_table_lock().unwrap_or(false);
-
-        info!("Table lock enabled : [{}]", enabled_table_lock);
-
-        let dummy = Arc::new(TableLockHandlerWrapper::new(Box::new(DummyTableLock {})));
-
-        if !enabled_table_lock {
-            // dummy lock does nothing
-            return dummy;
-        }
-
-        let enterprise_enabled = get_license_manager()
-            .manager
-            .check_enterprise_enabled(ctx.get_license_key(), Feature::TableLock)
-            .is_ok();
-        if enterprise_enabled {
-            GlobalInstance::get()
-        } else {
-            dummy
-        }
     }
 }

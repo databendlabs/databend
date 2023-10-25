@@ -37,6 +37,7 @@ use log::warn;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use table_lock::ListTableLockReq;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
@@ -120,8 +121,12 @@ impl Interpreter for ReclusterTableInterpreter {
 
             // check if the table is locked.
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+
+            let list_table_lock_req = Box::new(ListTableLockReq {
+                table_id: table.get_table_info().ident.table_id,
+            });
             let reply = catalog
-                .list_table_lock_revs(table.get_table_info().ident.table_id)
+                .list_table_lock_revs(list_table_lock_req.clone())
                 .await?;
             if !reply.is_empty() {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
