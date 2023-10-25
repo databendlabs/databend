@@ -34,8 +34,7 @@ echo "attach table table_read_only 's3://testbucket/admin/data/$storage_prefix' 
 
 # READ_ONLY attach table is not allowed to be mutated
 
-# enterprise feature
-echo "virtual columns cases:"
+# mutation related enterprise features
 
 echo "create table test_json(id int, val json) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
 echo "insert into test_json values(1, '{\"a\":33,\"b\":44}'),(2, '{\"a\":55,\"b\":66}')" | $MYSQL_CLIENT_CONNECT
@@ -53,3 +52,9 @@ echo "DROP VIRTUAL COLUMN FOR table_read_only" | $MYSQL_CLIENT_CONNECT
 
 echo "refresh virtual column"
 echo "REFRESH VIRTUAL COLUMN FOR table_read_only" | $MYSQL_CLIENT_CONNECT
+
+
+# TODO WIP
+echo "vacuum dropped"
+echo "VACUUM DROP TABLE RETAIN 0 HOURS DRY RUN;" | $MYSQL_CLIENT_CONNECT
+
