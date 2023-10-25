@@ -18,6 +18,7 @@ use std::time::SystemTime;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;

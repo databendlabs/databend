@@ -106,6 +106,9 @@ impl Interpreter for ReclusterTableInterpreter {
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
+        // check mutability
+        table.check_mutable()?;
+
         let mut times = 0;
         let mut block_count = 0;
         let start = SystemTime::now();
@@ -118,16 +121,6 @@ impl Interpreter for ReclusterTableInterpreter {
                 );
                 return Err(err);
             }
-
-            let table = self
-                .ctx
-                .get_catalog(&plan.catalog)
-                .await?
-                .get_table(tenant.as_str(), &plan.database, &plan.table)
-                .await?;
-
-            // check mutability
-            table.check_mutable()?;
 
             // check if the table is locked.
             let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
