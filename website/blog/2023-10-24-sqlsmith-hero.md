@@ -45,7 +45,7 @@ The SQL Generator randomly generates ASTs including:
 - **Data Types**: Basic types, Nested types like `Array`, `Map`, `Tuple` etc.
 - **DDLs**: `CREATE`, `ALTER`, `DROP TABLE` etc. to create and modify test tables.
 - **DML**: `INSERT`, `UPDATE`, `DELETE`, `MERGE` etc. to populate test data.
-- **Query**: `WITH`, `SELECT`, `JOIN`, `SubQuery`, `ORDER BY` etc. `WITH` and `SubQuery` can generate complex queries.
+- **Queries**: `WITH`, `SELECT`, `JOIN`, `SubQuery`, `ORDER BY` etc. `WITH` and `SubQuery` can generate complex queries.
 - **Expressions**: `Column`, `Literal`, `Scalar Function` and `Aggregate Function` etc. Expressions can be nested.
 
 By randomly generating AST components, it covers all possible SQL syntax. Controlled recursion also creates complex nested SQLs to find obscure bugs. But depth is capped to avoid unexecutable SQLs.
