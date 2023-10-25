@@ -5,7 +5,7 @@ slug: 2023-10-24-sqlsmith-hero
 cover_url: 'sqlsmith-hero.png'
 image: 'sqlsmith-hero.png'
 tags: ["fuzz testing", "SQLsmith", "test"]
-description: "Discover bugs before your users do! Learn how we implement our SQLsmith, a  randomized SQL test generator, to find 50+ bugs in Databend. Read this blog to see how it works."
+description: "Discover bugs before your users do! Learn how we implement our SQLsmith, a randomized SQL test generator, to find bugs in Databend."
 authors:
   - name: b41sh
     url: https://github.com/b41sh
