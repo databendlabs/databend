@@ -105,16 +105,3 @@ echo "undrop table should work"
 echo "undrop table table_read_only" | $MYSQL_CLIENT_CONNECT
 echo "select * from table_read_only order by a;" | $MYSQL_CLIENT_CONNECT
 
-# 4.2 virtual columns
-
-# enterprise feature
-# echo "virtual columns"
-# echo "create table test_json(id int, val json) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
-# echo "insert into test_json values(1, '{\"a\":33,\"b\":44}'),(2, '{\"a\":55,\"b\":66}')" | $MYSQL_CLIENT_CONNECT
-# storage_prefix=$(mysql -uroot -h127.0.0.1 -P3307  -e "set global hide_options_in_show_create_table=0;show create table test_json" | grep -i snapshot_location | awk -F'SNAPSHOT_LOCATION='"'"'|_ss' '{print $2}')
-#
-# echo "attach table test_json_read_only 's3://testbucket/admin/data/$storage_prefix' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}') READ_ONLY;" | $MYSQL_CLIENT_CONNECT
-# echo "CREATE VIRTUAL COLUMN (val['a'], val['b']) FOR test_json" | $MYSQL_CLIENT_CONNECT
-# echo "ALTER VIRTUAL COLUMN (v['k1'], v:k2, v[0]) FOR test_json" | $MYSQL_CLIENT_CONNECT
-# echo "DROP VIRTUAL COLUMN FOR table_read_only" | $MYSQL_CLIENT_CONNECT
-# echo "REFRESH VIRTUAL COLUMN FOR table_read_only" | $MYSQL_CLIENT_CONNECT
