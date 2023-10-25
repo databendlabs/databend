@@ -49,3 +49,7 @@ ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission de
 93
 8
 2
+=== test UDF priv
++ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [UsageUDF] is required on *.* for user 'a'@'%' with roles [public].
++ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [UsageUDF] is required on *.* for user 'a'@'%' with roles [public].
++ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [UsageUDF] is required on *.* for user 'a'@'%' with roles [public].

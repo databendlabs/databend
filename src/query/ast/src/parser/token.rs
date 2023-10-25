@@ -1018,6 +1018,14 @@ pub enum TokenKind {
     ADDRESS,
     #[token("OWNERSHIP", ignore(ascii_case))]
     OWNERSHIP,
+    #[token("USAGEEXTERNALSTAGE", ignore(ascii_case))]
+    USAGEEXTERNALSTAGE,
+    #[token("READINTERNALSTAGE", ignore(ascii_case))]
+    READINTERNALSTAGE,
+    #[token("WRITEINTERNALSTAGE", ignore(ascii_case))]
+    WRITEINTERNALSTAGE,
+    #[token("USAGEUDF", ignore(ascii_case))]
+    USAGEUDF,
     #[token("HANDLER", ignore(ascii_case))]
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]

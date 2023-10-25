@@ -18,8 +18,10 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
+use common_sql::plans::PresignAction;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
 
@@ -115,15 +117,21 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?
             }
-            Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
+            Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
                     .await?;
             }
-            Plan::DropDatabase(_)
-            | Plan::UndropDatabase(_)
-            | Plan::DropUDF(_)
-            | Plan::DropIndex(_) => {
+            Plan::CreateUDF(_) | Plan::DropUDF(_) | Plan::AlterUDF(_) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Global,
+                        vec![UserPrivilegeType::UsageUDF],
+                        true,
+                    )
+                    .await?;
+            }
+            Plan::DropDatabase(_) | Plan::UndropDatabase(_) | Plan::DropIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
                     .await?;
@@ -594,7 +602,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterUser(_)
-            | Plan::AlterUDF(_)
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::RefreshIndex(_) => {
@@ -603,6 +610,26 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
+                match plan.stage_table_info.stage_info.stage_type {
+                    StageType::External => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::UsageExternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    _ => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::ReadInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                }
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -615,11 +642,26 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
-            Plan::CopyIntoLocation(_plan) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
-                    .await?;
-            }
+            Plan::CopyIntoLocation(plan) => match plan.stage.stage_type {
+                StageType::External => {
+                    session
+                        .validate_privilege(
+                            &GrantObject::Global,
+                            vec![UserPrivilegeType::UsageExternalStage],
+                            false,
+                        )
+                        .await?
+                }
+                _ => {
+                    session
+                        .validate_privilege(
+                            &GrantObject::Global,
+                            vec![UserPrivilegeType::WriteInternalStage],
+                            false,
+                        )
+                        .await?
+                }
+            },
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
             | Plan::DropShareEndpoint(_)
@@ -664,7 +706,39 @@ impl AccessChecker for PrivilegeAccess {
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
             Plan::ShowRoles(_) => {}
-            Plan::Presign(_) => {}
+            Plan::Presign(plan) => {
+                let stage = &plan.stage.stage_type;
+                let action = &plan.action;
+                match (stage, action) {
+                    (StageType::External, _) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::UsageExternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    (_, PresignAction::Upload) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::WriteInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    (_, PresignAction::Download) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::ReadInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                }
+            }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check

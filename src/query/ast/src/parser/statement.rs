@@ -1955,6 +1955,19 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
+        value(
+            UserPrivilegeType::UsageExternalStage,
+            rule! { USAGEEXTERNALSTAGE },
+        ),
+        value(
+            UserPrivilegeType::ReadInternalStage,
+            rule! { READINTERNALSTAGE },
+        ),
+        value(
+            UserPrivilegeType::WriteInternalStage,
+            rule! { WRITEINTERNALSTAGE },
+        ),
+        value(UserPrivilegeType::UsageUDF, rule! { USAGEUDF }),
     ))(i)
 }
 
