@@ -1,4 +1,4 @@
-/tmp/a1.txt	SUCCESS	5
-/tmp/a2.txt	SUCCESS	5
-/tmp/edf/a1.txt	SUCCESS	5
-/tmp/edf/a2.txt	SUCCESS	5
+/tmp/abc/books.parquet	SUCCESS	1882
+/tmp/edf/books.parquet	SUCCESS	1882
+Transaction Processing	Jim Gray	1992
+Readings in Database Systems	Michael Stonebraker	2004

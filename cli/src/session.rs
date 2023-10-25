@@ -30,7 +30,6 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
 
-use crate::ast::format_query;
 use crate::ast::{TokenKind, Tokenizer};
 use crate::config::Settings;
 use crate::config::TimeOption;
@@ -260,7 +259,7 @@ impl Session {
                 }
                 TokenKind::Newline => {
                     in_comment = false;
-                    self.query.push(' ');
+                    self.query.push('\n');
                 }
                 TokenKind::CommentBlockStart => {
                     if !self.in_comment_block {
@@ -312,12 +311,11 @@ impl Session {
             return Ok(Some(ServerStats::default()));
         }
 
-        let formatted_query = format_query(query);
         let start = Instant::now();
         let kind = QueryKind::from(query);
         match (kind, is_repl) {
             (QueryKind::Update, false) => {
-                let affected = self.conn.exec(&formatted_query).await?;
+                let affected = self.conn.exec(query).await?;
                 if is_repl {
                     if affected > 0 {
                         eprintln!(
@@ -356,7 +354,7 @@ impl Session {
                         }
                         self.conn.get_files(&args[1], &args[2]).await?
                     }
-                    _ => self.conn.query_iter_ext(&formatted_query).await?,
+                    _ => self.conn.query_iter_ext(query).await?,
                 };
 
                 let mut displayer = FormatDisplay::new(
