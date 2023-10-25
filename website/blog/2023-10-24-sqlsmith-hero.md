@@ -43,7 +43,7 @@ SQLsmith has three main components:
 The SQL Generator randomly generates ASTs including:
 
 - **Data Types**: Basic types, Nested types like `Array`, `Map`, `Tuple` etc.
-- **DDL**: `CREATE`, `ALTER`, `DROP TABLE` etc. to create and modify test tables.
+- **DDLs**: `CREATE`, `ALTER`, `DROP TABLE` etc. to create and modify test tables.
 - **DML**: `INSERT`, `UPDATE`, `DELETE`, `MERGE` etc. to populate test data.
 - **Query**: `WITH`, `SELECT`, `JOIN`, `SubQuery`, `ORDER BY` etc. `WITH` and `SubQuery` can generate complex queries.
 - **Expression**: `Column`, `Literal`, `Scalar Function` and `Aggregate Function` etc. Expressions can be nested.
