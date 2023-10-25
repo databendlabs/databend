@@ -13,11 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![allow(clippy::len_without_is_empty)]
-#![allow(clippy::needless_lifetimes)]
-// FIXME: we should avoid this by implementing Ord correctly.
-#![allow(clippy::non_canonical_partial_ord_impl)]
-#![allow(incomplete_features)]
 #![feature(fmt_internals)]
 #![feature(const_try)]
 #![feature(iterator_try_reduce)]
@@ -34,6 +29,9 @@
 #![feature(core_intrinsics)]
 #![feature(trusted_len)]
 #![feature(iter_order_by)]
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::needless_lifetimes)]
+#![allow(incomplete_features)]
 #![feature(int_roundings)]
 #![feature(trait_upcasting)]
 
