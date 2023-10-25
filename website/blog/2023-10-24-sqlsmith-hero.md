@@ -36,7 +36,7 @@ SQLsmith has three main components:
 
 - **SQL Generator**: Generates abstract syntax trees (ASTs) of various types
 - **SQL Reducer**: Simplifies complex SQLs to pinpoint bugs
-- **Runner**: Executes SQLs, records errors 
+- **Runner**: Executes SQLs and records errors 
 
 ## SQL Generator
 
