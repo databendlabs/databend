@@ -123,7 +123,7 @@ impl Rule for RuleLeftExchangeJoin {
         let contains_cross_join =
             join1.join_type == JoinType::Cross || join2.join_type == JoinType::Cross;
 
-        let predicates = [get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
+        let predicates = vec![get_join_predicates(&join1)?, get_join_predicates(&join2)?].concat();
 
         let mut join_3 = Join::default();
         let mut join_4 = Join::default();
