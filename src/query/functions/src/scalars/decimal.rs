@@ -1309,6 +1309,8 @@ fn decimal_256_to_128(
             .collect()
     } else {
         let factor = i256::e((from_size.scale - dest_size.scale) as u32);
+        let source_factor = i256::e(from_size.scale as u32);
+
         buffer
             .iter()
             .enumerate()
@@ -1316,7 +1318,9 @@ fn decimal_256_to_128(
                 let x = x * i128::one();
 
                 match x.checked_div(factor) {
-                    Some(y) if (y <= max && y >= min) && !(y == 0 && x > 0) => *y.low(),
+                    Some(y) if (y <= max && y >= min) && (y != 0 || x / source_factor == 0) => {
+                        *y.low()
+                    }
                     _ => {
                         ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                         i128::one()
@@ -1348,6 +1352,8 @@ macro_rules! m_decimal_to_decimal {
                 let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);
                 let min = <$dest_type_name>::min_for_precision($dest_size.precision);
+
+                let source_factor = <$from_type_name>::e($from_size.scale as u32);
                 $buffer
                     .iter()
                     .enumerate()
@@ -1355,7 +1361,9 @@ macro_rules! m_decimal_to_decimal {
                         let x = x * <$dest_type_name>::one();
 
                         match x.checked_div(factor) {
-                            Some(y) if y <= max && y >= min && !(y == 0 && x > 0) => {
+                            Some(y)
+                                if y <= max && y >= min && (y != 0 || x / source_factor == 0) =>
+                            {
                                 y as $dest_type_name
                             }
                             _ => {
