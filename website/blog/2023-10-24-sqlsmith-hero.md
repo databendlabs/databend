@@ -1,0 +1,104 @@
+---
+title: "Leveraging Randomized Testing with SQLsmith to Uncover Bugs"
+date: 2023-10-24
+slug: 2023-10-24-sqlsmith-hero
+cover_url: 'sqlsmith-hero.png'
+image: 'sqlsmith-hero.png'
+tags: ["fuzz testing", "SQLsmith", "test"]
+description: "Discover bugs before your users do! Learn how we implement our SQLsmith, a  randomized SQL test generator, to find 50+ bugs in Databend. Read this blog to see how it works."
+authors:
+  - name: b41sh
+    url: https://github.com/b41sh
+    image_url: https://github.com/b41sh.png
+---
+
+# Leveraging Randomized Testing with SQLsmith to Uncover Bugs
+
+Testing plays a crucial role in the development and maintenance of database systems. It not only verifies correctness of functionality but also uncovers potential issues to ensure performance and stability with each change and release. Databend’s CI already supports various test types including:
+
+- **Unit Tests**: Validate functionality of minimum testable code units like functions and modules. Ensure they execute and return expected results.
+- **SQL Logic Tests**: Verify SQL syntax and logic correctness via test cases. Cover different query scenarios to ensure queries run properly in all situations.
+- **Performance Tests**: Validate performance impact of new features and optimizations. Prevent performance regressions.
+
+While these tests ensure functional correctness and stability during rapid development, they have limitations. Test SQL queries are mostly handwritten and simple, lacking complex queries seen in real-world scenarios. They have insufficient coverage of edge cases and exceptions. 
+
+## Introducing SQLsmith
+
+[SQLsmith](https://github.com/anse1/sqlsmith) is a randomized SQL query generator that produces a high volume of diverse test cases to simulate real-world variability. Compared to other testing approaches, SQLsmith improves test coverage to uncover more potential issues and bugs.
+
+## Implementing Our SQLsmith
+
+The original SQLsmith for PostgreSQL fuzz testing was inspired by [Csmith](https://github.com/csmith-project/csmith). Now, many known open source databases have their own SQLsmith ports like [CockroachDB](https://github.com/cockroachdb/cockroach/blob/master/pkg/workload/sqlsmith/sqlsmith.go), [TiDB](https://github.com/PingCAP-QE/go-sqlsmith), [RisingWave](https://github.com/risingwavelabs/risingwave/tree/main/src/tests/sqlsmith) etc. 
+
+These open source SQLsmiths use diverse languages (C++, Go, Rust) with different syntax support suitable for their domains. We couldn't directly use them and had to build our own SQLsmith in Rust to fully support Databend's syntax and features.
+
+SQLsmith has three main components:
+
+- **SQL Generator**: Generates abstract syntax trees (ASTs) of various types
+- **SQL Reducer**: Simplifies failing SQLs to isolate bug causes
+- **Runner**: Executes SQLs, records errors 
+
+## SQL Generator
+
+The SQL Generator randomly generates ASTs including:
+
+- **Data Types**: Basic types, Nested types like `Array`, `Map`, `Tuple` etc.
+- **DDL**: `CREATE`, `ALTER`, `DROP TABLE` etc. to create and modify test tables.
+- **DML**: `INSERT`, `UPDATE`, `DELETE`, `MERGE` etc. to populate test data.
+- **Query**: `WITH`, `SELECT`, `JOIN`, `SubQuery`, `ORDER BY` etc. `WITH` and `SubQuery` can generate complex queries.
+- **Expression**: `Column`, `Literal`, `Scalar Function` and `Aggregate Function` etc. Expressions can be nested.
+
+By randomly generating AST components, it covers all possible SQL syntax. Controlled recursion also creates complex nested SQLs to find obscure bugs. But depth is capped to avoid unexecutable SQLs.
+
+## SQL Reducer
+
+Since generated SQLs can be very complex with the bug trigger buried, simplifying the original SQL makes bug isolation easier.
+
+The SQL Reducer iteratively removes AST components like `WITH`, `SubQuery`, `Expression` etc. If the simplified SQL still reproduces the bug, it's used. Else original SQL is retained. Ultimately, it outputs the smallest SQL to reproduce the bug by traversing all AST parts.
+
+## Runner 
+
+The SQL Runner loops generating test SQLs, executes them using Databend, and processes failures as:
+
+- Check for expected errors like syntax, semantics etc.
+- Verify if it's a known issue or unimplemented feature.
+- Call the SQL Reducer to generate the smallest reproducible SQL.
+- Log errors and simplified SQLs.
+
+The Runner is integrated into Databend's CI, executing on every release to log issues for further analysis.
+
+## Impact
+
+Thus far, SQLsmith has uncovered [50+ bugs](https://github.com/datafuselabs/databend/issues?q=is%3Aissue+label%3Afound-by-sqlsmith) in Databend after a month of running, including:
+  
+- Internal logic errors (17 bugs)
+- Invalid function/expression checks (12 bugs)  
+- Missing semantic checks (9 bugs)
+- Improper `unwrap`/`unreachable` handling (7 bugs) 
+- Parser failures (3 bugs)
+- Failed casts across types (4 bugs)
+- Parquet I/O errors (1 bug)
+
+## Key Takeaways
+
+Analyzing the uncovered bugs led to some key learnings to avoid common pitfalls:
+
+1. Thoroughly validate function parameters and edge cases. Main cases include:
+   - For `String` parameters, check for empty strings.
+   - For `Int` parameters, check for large number values.
+   - When supporting any parameter type, consider unusual types like `Null`, `EmptyArray`, `Bitmap` etc.
+   - When only supporting specific types, see if other types can auto-convert or check and return errors early.
+2. Use unwrap judiciously. Explicitly handle `Result` and `Option` instead of assuming success.
+3. Understand SQL semantic rules during development e.g. constraints around `GROUP BY`, `ORDER BY` etc. Perform semantic checks in the Binder phase to prevent runtime errors.
+4. Add more unit test cases for critical modules to prevent bugs from internal logic errors.
+
+## What's Next
+
+SQLsmith generates most common SQLs and integrates with CI. Upcoming improvements include:
+
+- Supporting more SQL features like `UNION`, **Computed Column** etc.
+- More configurations like expression nesting depths, query complexity.
+- Improved SQL simplification.
+- Optimized query execution and analysis.
+
+SQLsmith is a powerful tool to discover hidden bugs and improve Databend's stability and reliability. We look forward to its evolving role.
