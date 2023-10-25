@@ -28,7 +28,7 @@ While these tests ensure functional correctness and stability during rapid devel
 
 ## Implementing SQLsmith for Databend
 
-The original SQLsmith for PostgreSQL fuzz testing was inspired by [Csmith](https://github.com/csmith-project/csmith). Now, many known open source databases have their own SQLsmith ports like [CockroachDB](https://github.com/cockroachdb/cockroach/blob/master/pkg/workload/sqlsmith/sqlsmith.go), [TiDB](https://github.com/PingCAP-QE/go-sqlsmith), [RisingWave](https://github.com/risingwavelabs/risingwave/tree/main/src/tests/sqlsmith) etc. 
+The original SQLsmith for PostgreSQL fuzz testing was inspired by [Csmith](https://github.com/csmith-project/csmith). Several well-known open-source databases have adapted SQLsmith for their own use, such as [CockroachDB](https://github.com/cockroachdb/cockroach/blob/master/pkg/workload/sqlsmith/sqlsmith.go), [TiDB](https://github.com/PingCAP-QE/go-sqlsmith), and [RisingWave](https://github.com/risingwavelabs/risingwave/tree/main/src/tests/sqlsmith). 
 
 These open source SQLsmiths use diverse languages (C++, Go, Rust) with different syntax support suitable for their domains. We couldn't directly use them and had to build our own SQLsmith in Rust to fully support Databend's syntax and features.
 
