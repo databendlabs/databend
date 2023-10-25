@@ -79,7 +79,7 @@ Thus far, SQLsmith has uncovered [50+ bugs](https://github.com/datafuselabs/data
 - Failed casts across types (4 bugs)
 - Parquet I/O errors (1 bug)
 
-## Key Takeaways
+## Key Lessons Learned
 
 Analyzing the uncovered bugs led to some key learnings to avoid common pitfalls:
 
