@@ -69,15 +69,15 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Understanding Configuration Mapping in Databend
 
-For a complex database service like Databend, supporting many configurable options helps developers manage and tune the system. A recently published blog explains the mappings between command line options, environment variables, config files, and code in Databend.
+For a complex database service like Databend, supporting many configurable options helps developers manage and tune the system. A recently published blog explains the mappings between command line options, environment variables, and config files by reading the Databend code.
 
 Databend currently supports three configuration methods in decreasing order of priority:
 
-- Command line options are used to override a small number of configs.
-- For K8s clusters, environment variables enable flexibly changing some configs (e.g. feature flags) more elegantly.
-- Config files are generally recommended to record and manage configs.
+1. Command line options: Override configurations set elsewhere.
+2. Environment Variables: Provide configuration flexibility for Kubernetes clusters.
+3. Config files: A recommended approach for recording and managing configurations.
 
-Notably, Databend supports common environment variables like `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` through the rollback mechanism in [opendal](https://github.com/apache/incubator-opendal) without explicitly declaring them. This simplifies the code and reduces user learning cost.
+Please note that Databend also supports common environment variables from storage services such as `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` through the rollback mechanism in [opendal](https://github.com/apache/incubator-opendal). You can directly utilize these variables when working with Databend.
 
 If you are interested in learning more, please check out the resources below:
 
