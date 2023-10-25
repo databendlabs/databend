@@ -1039,7 +1039,7 @@ impl MetaGrpcClient {
                 if let MetaGrpcReadReq::ListKV(list_req) = &grpc_req {
                     // Fallback to call non-stream API
 
-                    info!(
+                    debug!(
                         "meta-service version({} < 0.2.163) is too old, fallback to call non-stream API",
                         server_version
                     );

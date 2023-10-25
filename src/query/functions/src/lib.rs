@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::arc_with_non_send_sync)]
 #![allow(clippy::uninlined_format_args)]
 #![feature(core_intrinsics)]
 #![feature(box_patterns)]

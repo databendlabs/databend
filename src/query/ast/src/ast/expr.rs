@@ -119,6 +119,13 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    /// JSON operation
+    JsonOp {
+        span: Span,
+        op: JsonOperator,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     /// Unary operation
     UnaryOp {
         span: Span,
@@ -433,7 +440,6 @@ pub enum BinaryOperator {
     BitwiseXor,
     BitwiseShiftLeft,
     BitwiseShiftRight,
-
     L2Distance,
 }
 
@@ -466,6 +472,29 @@ impl BinaryOperator {
                 let name = format!("{:?}", self);
                 name.to_lowercase()
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum JsonOperator {
+    /// -> keeps the value as json
+    Arrow,
+    /// ->> keeps the value as text or int.
+    LongArrow,
+    /// #> Extracts JSON sub-object at the specified path
+    HashArrow,
+    /// #>> Extracts JSON sub-object at the specified path as text
+    HashLongArrow,
+}
+
+impl JsonOperator {
+    pub fn to_func_name(&self) -> String {
+        match self {
+            JsonOperator::Arrow => "get".to_string(),
+            JsonOperator::LongArrow => "get_string".to_string(),
+            JsonOperator::HashArrow => "get_by_keypath".to_string(),
+            JsonOperator::HashLongArrow => "get_by_keypath_string".to_string(),
         }
     }
 }
@@ -506,6 +535,7 @@ impl Expr {
             | Expr::InSubquery { span, .. }
             | Expr::Between { span, .. }
             | Expr::BinaryOp { span, .. }
+            | Expr::JsonOp { span, .. }
             | Expr::UnaryOp { span, .. }
             | Expr::Cast { span, .. }
             | Expr::TryCast { span, .. }
@@ -700,6 +730,25 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::L2Distance => {
                 write!(f, "<->")
+            }
+        }
+    }
+}
+
+impl Display for JsonOperator {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            JsonOperator::Arrow => {
+                write!(f, "->")
+            }
+            JsonOperator::LongArrow => {
+                write!(f, "->>")
+            }
+            JsonOperator::HashArrow => {
+                write!(f, "#>")
+            }
+            JsonOperator::HashLongArrow => {
+                write!(f, "#>>")
             }
         }
     }
@@ -1025,6 +1074,11 @@ impl Display for Expr {
                 }
             }
             Expr::BinaryOp {
+                op, left, right, ..
+            } => {
+                write!(f, "({left} {op} {right})")?;
+            }
+            Expr::JsonOp {
                 op, left, right, ..
             } => {
                 write!(f, "({left} {op} {right})")?;

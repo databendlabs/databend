@@ -73,8 +73,8 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 /// - 2023-10-17: since 1.2.163:
 ///   Meta service: add: stream api: kv_read_v1().
 ///
-/// - 2023-10-20: since TODO(fill in when merged):
-///   Meta client: call stream api: kv_read_v1().
+/// - 2023-10-20: since 1.2.176:
+///   Meta client: call stream api: kv_read_v1(), revert to 1.1.32 if server < 1.2.163
 ///
 /// Server feature set:
 /// ```yaml

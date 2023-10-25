@@ -16,18 +16,21 @@ use std::sync::Arc;
 
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 
-use crate::executor::physical_plans::common::MutationKind;
 use crate::executor::PhysicalPlan;
 
-// TODO(sky): make TableMutationAggregator distributed
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct CommitSink {
+pub struct ReclusterSink {
     pub input: Box<PhysicalPlan>,
-    pub snapshot: Arc<TableSnapshot>,
+
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    pub mutation_kind: MutationKind,
-    pub merge_meta: bool,
+
+    pub snapshot: Arc<TableSnapshot>,
+    pub remained_blocks: Vec<Arc<BlockMeta>>,
+    pub removed_segment_indexes: Vec<usize>,
+    pub removed_segment_summary: Statistics,
 }

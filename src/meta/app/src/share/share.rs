@@ -590,7 +590,7 @@ impl ShareMeta {
     }
 
     pub fn get_accounts(&self) -> Vec<String> {
-        Vec::<String>::from_iter(self.accounts.clone())
+        Vec::<String>::from_iter(self.accounts.clone().into_iter())
     }
 
     pub fn has_account(&self, account: &String) -> bool {

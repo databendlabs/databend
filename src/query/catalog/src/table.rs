@@ -386,7 +386,7 @@ pub trait TableExt: Table {
         let tid = table_info.ident.table_id;
         let catalog = ctx.get_catalog(table_info.catalog()).await?;
         let (ident, meta) = catalog.get_table_meta_by_id(tid).await?;
-        let table_info: TableInfo = TableInfo {
+        let table_info = TableInfo {
             ident,
             desc: "".to_owned(),
             name,

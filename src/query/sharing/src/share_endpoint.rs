@@ -113,7 +113,7 @@ impl ShareEndpointManager {
         let endpoint_meta_config_vec = self
             .get_share_endpoint_config(from_tenant, Some(to_tenant.clone()))
             .await?;
-        let endpoint_config = match endpoint_meta_config_vec.first() {
+        let endpoint_config = match endpoint_meta_config_vec.get(0) {
             Some(endpoint_meta_config) => endpoint_meta_config,
             None => {
                 return Err(ErrorCode::UnknownShareEndpoint(format!(

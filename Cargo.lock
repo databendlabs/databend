@@ -4868,9 +4868,9 @@ dependencies = [
 
 [[package]]
 name = "futures-async-stream"
-version = "0.2.9"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "379790776b0d953337df4ab7ecc51936c66ea112484cad7912907b1d34253ebf"
+checksum = "f529ccdeacfa2446a9577041686cf1abb839b1b3e15fee4c1b1232ab3b7d799f"
 dependencies = [
  "futures-async-stream-macro",
  "futures-core",
@@ -4879,13 +4879,13 @@ dependencies = [
 
 [[package]]
 name = "futures-async-stream-macro"
-version = "0.2.9"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5df2c13d48c8cb8a3ec093ede6f0f4482f327d7bb781120c5fb483ef0f17e758"
+checksum = "ca2b48ee06dc8d2808ba5ebad075d06c3406085bb19deaac33be64c39113bf80"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.29",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -7196,8 +7196,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67ecc0ffa63ae2ba534a38128fdd9e1e86bf08515769c6252d2a2c1da66d1773"
+source = "git+https://github.com/datafuselabs/jsonb?rev=14143b5#14143b567086225c64729c233ce4dbc0f15d9868"
 dependencies = [
  "byteorder",
  "fast-float",
