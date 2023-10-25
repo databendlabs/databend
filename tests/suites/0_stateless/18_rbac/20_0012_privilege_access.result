@@ -53,3 +53,6 @@ Error: APIError: ResponseError with 1063: Permission denied, user 'a'@'%' don't 
 93
 8
 2
+=== test UDF priv
+Error: APIError: ResponseError with 1063: Permission denied, privilege [UsageUDF] is required on UDF test_alter_udf for user 'a'@'%' with roles [public]
+Error: APIError: ResponseError with 1063: Permission denied, privilege [UsageUDF] is required on UDF test_alter_udf for user 'a'@'%' with roles [public]

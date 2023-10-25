@@ -458,7 +458,7 @@ impl<'a> Binder {
                 udf_name,
             } => Plan::DropUDF(Box::new(DropUDFPlan {
                 if_exists: *if_exists,
-                name: udf_name.to_string(),
+                udf: udf_name.to_string(),
             })),
             Statement::Call(stmt) => self.bind_call(bind_context, stmt).await?,
 

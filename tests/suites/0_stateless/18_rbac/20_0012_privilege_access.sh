@@ -172,6 +172,17 @@ echo "select count(1) from information_schema.columns where table_schema in ('in
 echo "select count(1) from information_schema.tables where table_schema in ('information_schema', 'system');;" | $USER_A_CONNECT
 echo "select count(1) from information_schema.tables where table_schema not in ('information_schema', 'system');" | $USER_A_CONNECT
 
+echo "=== test UDF priv"
+echo "DROP FUNCTION IF EXISTS test_alter_udf;" |  $BENDSQL_CLIENT_CONNECT
+echo "CREATE FUNCTION test_alter_udf AS (p) -> not(is_null(p))" | $BENDSQL_CLIENT_CONNECT
+#error test
+echo "ALTER FUNCTION test_alter_udf AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'" | $USER_A_CONNECT
+echo "DROP FUNCTION IF EXISTS test_alter_udf;" |  $USER_A_CONNECT
+
+echo "grant UsageUDF on udf test_alter_udf to a;" |  $BENDSQL_CLIENT_CONNECT
+echo "ALTER FUNCTION test_alter_udf AS (d) -> not(is_not_null(d)) DESC = 'This is a new description'" | $USER_A_CONNECT
+echo "DROP FUNCTION test_alter_udf;" |  $USER_A_CONNECT
+
 ## Drop user
 echo "drop user a" | $BENDSQL_CLIENT_CONNECT
 echo "drop database if exists no_grant" | $BENDSQL_CLIENT_CONNECT

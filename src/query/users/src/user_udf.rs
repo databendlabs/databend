@@ -62,6 +62,20 @@ impl UserApiProvider {
         Ok(get_udf.await?.data)
     }
 
+    #[async_backtrace::framed]
+    pub async fn exists_udf(&self, tenant: &str, udf_name: &str) -> Result<bool> {
+        match self.get_udf(tenant, udf_name).await {
+            Ok(_) => Ok(true),
+            Err(err) => {
+                if err.code() == ErrorCode::UNKNOWN_U_D_F {
+                    Ok(false)
+                } else {
+                    Err(err)
+                }
+            }
+        }
+    }
+
     // Get all UDFs for the tenant.
     #[async_backtrace::framed]
     pub async fn get_udfs(&self, tenant: &str) -> Result<Vec<UserDefinedFunction>> {

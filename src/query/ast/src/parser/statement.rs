@@ -1926,13 +1926,46 @@ pub fn grant_source(i: Input) -> IResult<AccountMgrSource> {
         },
     );
     let all = map(
-        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_level },
+        rule! { ALL ~ PRIVILEGES? ~ ON ~ #grant_all_level },
         |(_, _, _, level)| AccountMgrSource::ALL { level },
+    );
+
+    let udf_privs = map(
+        rule! {
+            USAGEUDF ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::UsageUDF],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
+
+    let udf_all_privs = map(
+        rule! {
+            ALL ~ PRIVILEGES? ~ ON ~ UDF ~ #ident
+        },
+        |(_, _, _, _, udf)| AccountMgrSource::Privs {
+            privileges: vec![UserPrivilegeType::UsageUDF],
+            level: AccountMgrLevel::UDF(udf.to_string()),
+        },
+    );
+
+    let stage_privs = map(
+        rule! {
+            #comma_separated_list1(stage_priv_type) ~ ON ~ STAGE ~ #ident
+        },
+        |(privileges, _, _, stage_name)| AccountMgrSource::Privs {
+            privileges,
+            level: AccountMgrLevel::Stage(stage_name.to_string()),
+        },
     );
 
     rule!(
         #role : "ROLE <role_name>"
         | #privs : "<privileges> ON <privileges_level>"
+        | #udf_privs : "USAGEUDF ON UDF <udf_name>"
+        | #udf_all_privs : "ALL [ PRIVILEGES ] ON UDF <udf_name>"
+        | #stage_privs : "<stage_privileges> ON STAGE <stage_name>"
         | #all : "ALL [ PRIVILEGES ] ON <privileges_level>"
     )(i)
 }
@@ -1956,6 +1989,23 @@ pub fn priv_type(i: Input) -> IResult<UserPrivilegeType> {
         value(UserPrivilegeType::Drop, rule! { DROP }),
         value(UserPrivilegeType::Create, rule! { CREATE }),
         value(UserPrivilegeType::Ownership, rule! { OWNERSHIP }),
+    ))(i)
+}
+
+pub fn stage_priv_type(i: Input) -> IResult<UserPrivilegeType> {
+    alt((
+        value(
+            UserPrivilegeType::UsageExternalStage,
+            rule! { USAGEEXTERNALSTAGE },
+        ),
+        value(
+            UserPrivilegeType::ReadInternalStage,
+            rule! { READINTERNALSTAGE },
+        ),
+        value(
+            UserPrivilegeType::WriteInternalStage,
+            rule! { WRITEINTERNALSTAGE },
+        ),
     ))(i)
 }
 
@@ -2024,6 +2074,39 @@ pub fn grant_level(i: Input) -> IResult<AccountMgrLevel> {
         #global : "*.*"
         | #db : "<database>.*"
         | #table : "<database>.<table>"
+    )(i)
+}
+
+pub fn grant_all_level(i: Input) -> IResult<AccountMgrLevel> {
+    // *.*
+    let global = map(rule! { "*" ~ "." ~ "*" }, |_| AccountMgrLevel::Global);
+    // db.*
+    // "*": as current db or "table" with current db
+    let db = map(
+        rule! {
+            ( #ident ~ "." )? ~ "*"
+        },
+        |(database, _)| AccountMgrLevel::Database(database.map(|(database, _)| database.name)),
+    );
+
+    // `db01`.'tb1' or `db01`.`tb1` or `db01`.tb1
+    let table = map(
+        rule! {
+            ( #ident ~ "." )? ~ #parameter_to_string
+        },
+        |(database, table)| {
+            AccountMgrLevel::Table(database.map(|(database, _)| database.name), table)
+        },
+    );
+
+    let stage = map(rule! { STAGE ~ #ident}, |(_, stage_name)| {
+        AccountMgrLevel::Stage(stage_name.to_string())
+    });
+    rule!(
+        #global : "*.*"
+        | #db : "<database>.*"
+        | #table : "<database>.<table>"
+        | #stage : "STAGE <stage_name>"
     )(i)
 }
 
