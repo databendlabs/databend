@@ -58,7 +58,7 @@ The SQL Reducer iteratively removes AST components like `WITH`, `SubQuery`, `Exp
 
 ## Runner 
 
-The SQL Runner loops generating test SQLs, executes them using Databend, and processes failures as:
+The SQL Runner executes test SQL queries using Databend, and in case of failure, it proceeds with the following error-handling steps:
 
 - Check for expected errors like syntax, semantics etc.
 - Verify if it's a known issue or unimplemented feature.
