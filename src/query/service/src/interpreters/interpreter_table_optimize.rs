@@ -18,7 +18,6 @@ use std::time::SystemTime;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
-use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
@@ -33,8 +32,10 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
+use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
@@ -122,9 +123,10 @@ impl OptimizeTableInterpreter {
         target: CompactTarget,
         need_purge: bool,
     ) -> Result<PipelineBuildResult> {
-        let mut table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let mut table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
         let table_info = table.get_table_info().clone();
@@ -174,7 +176,6 @@ impl OptimizeTableInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
-        let mut reclustered_block_count = 0;
         let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         if need_recluster {
             if !compact_pipeline.is_empty() {
@@ -189,50 +190,70 @@ impl OptimizeTableInterpreter {
                 executor.execute()?;
 
                 // refresh table.
-                table = table.as_ref().refresh(self.ctx.as_ref()).await?;
+                table = catalog
+                    .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                    .await?;
             }
 
-            reclustered_block_count = table
-                .recluster(
-                    self.ctx.clone(),
-                    None,
-                    self.plan.limit,
-                    &mut build_res.main_pipeline,
-                )
-                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            if let Some(mutator) = fuse_table
+                .build_recluster_mutator(self.ctx.clone(), None, self.plan.limit)
+                .await?
+            {
+                if !mutator.tasks.is_empty() {
+                    let reclustered_block_count = mutator.recluster_blocks_count;
+                    let physical_plan = build_recluster_physical_plan(
+                        mutator.tasks,
+                        table.get_table_info().clone(),
+                        catalog.info(),
+                        mutator.snapshot,
+                        mutator.remained_blocks,
+                        mutator.removed_segment_indexes,
+                        mutator.removed_segment_summary,
+                    )?;
+
+                    build_res = build_query_pipeline_without_render_result_set(
+                        &self.ctx,
+                        &physical_plan,
+                        false,
+                    )
+                    .await?;
+
+                    let ctx = self.ctx.clone();
+                    let plan = self.plan.clone();
+                    let start = SystemTime::now();
+                    build_res
+                        .main_pipeline
+                        .set_on_finished(move |may_error| match may_error {
+                            None => InterpreterClusteringHistory::write_log(
+                                &ctx,
+                                start,
+                                &plan.database,
+                                &plan.table,
+                                reclustered_block_count,
+                            ),
+                            Some(error_code) => Err(error_code.clone()),
+                        });
+                }
+            }
         } else {
             build_res.main_pipeline = compact_pipeline;
         }
 
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
-        if build_res.main_pipeline.is_empty() {
-            if need_purge {
+        if need_purge {
+            if build_res.main_pipeline.is_empty() {
                 purge(ctx, plan, None).await?;
+            } else {
+                build_res
+                    .main_pipeline
+                    .set_on_finished(move |may_error| match may_error {
+                        None => GlobalIORuntime::instance()
+                            .block_on(async move { purge(ctx, plan, None).await }),
+                        Some(error_code) => Err(error_code.clone()),
+                    });
             }
-        } else {
-            let start = SystemTime::now();
-            build_res
-                .main_pipeline
-                .set_on_finished(move |may_error| match may_error {
-                    None => {
-                        if need_recluster {
-                            InterpreterClusteringHistory::write_log(
-                                &ctx,
-                                start,
-                                &plan.database,
-                                &plan.table,
-                                reclustered_block_count,
-                            )?;
-                        }
-                        if need_purge {
-                            GlobalIORuntime::instance()
-                                .block_on(async move { purge(ctx, plan, None).await })?;
-                        }
-                        Ok(())
-                    }
-                    Some(error_code) => Err(error_code.clone()),
-                });
         }
 
         Ok(build_res)
