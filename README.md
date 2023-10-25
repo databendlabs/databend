@@ -38,23 +38,23 @@
 
 **Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to Snowflake. In Databend, everything is distributed execution.
 
-- **🌐 Cloud-Agnostic**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
+- **🌐 Cloud-Friendly**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
 
 - **⚡ Performance-Driven**: Built with Rust and leveraging advanced technologies like SIMD and vectorized query processing, Databend ensures [exceptional analytic speeds](https://benchmark.clickhouse.com/), outperforming traditional cloud data warehouses.
 
 - **📈 Cost-Efficient Elasticity**: With its unique architecture, Databend decouples storage and computation. You can dynamically scale based on your needs, optimizing costs and performance.
 
-- **🔄 Simplified Data Management**: Say goodbye to traditional ETL complications. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
+- **🔄 Easy Data Management**: Say goodbye to Third-Party ETL tools. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
 
 - **🏡 Lakehouse Design**: Combining data lake scalability with data warehouse efficiency, Databend smoothly integrates with Hive and Iceberg, granting the best of both domains.
 
-- **🕰 Snapshot and MVCC**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
+- **🕰 Time-Travel Features**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
 
-- **📑 Rich Data Support**: Whether it's semi-structured data like JSON, CSV, or Parquet, or data types like ARRAY, TUPLE, or MAP, Databend handles them with ease.
+- **📑 Rich Data Support**: Whether it's semi-structured data like JSON, CSV, or Parquet, or data types like [ARRAY, TUPLE, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/) Databend handles them with ease.
 
-- **🤖 AI-Integrated Analytics**: Elevate your data analytics with integrated AI capabilities, opening new avenues for insights.
+- **🤖 AI-Enhanced Analytics**: Get deeper insights with integrated [AI features](https://databend.rs/doc/sql-functions/ai-functions/).
 
-- **👥 Open Source & Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
+- **👥 Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
 
 ## 📐 Architecture
 

@@ -28,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use log::info;
 use log::warn;
+use minitrace::prelude::*;
 use serde::Deserialize;
 use serde::Serialize;
 
@@ -210,6 +211,7 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -291,13 +293,11 @@ impl HttpQuery {
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
-        if let Some(query_id) = query_id {
-            // TODO: validate the query_id to be uuid format
-            ctx.set_id(query_id);
-        }
+
+        // TODO: validate the query_id to be uuid format
+        ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let query_id = ctx.get_id();
         let sql = &request.sql;
         info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
 
@@ -329,9 +329,8 @@ impl HttpQuery {
         let schema = plan.schema();
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
-        http_query_runtime_instance
-            .runtime()
-            .try_spawn(async move {
+        http_query_runtime_instance.runtime().try_spawn(
+            async move {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
@@ -358,7 +357,11 @@ impl HttpQuery {
                         .await;
                     block_sender_closer.close();
                 }
-            })?;
+            }
+            .in_span(Span::enter_with_local_parent(
+                "ExecuteState::try_start_query",
+            )),
+        )?;
 
         let format_settings = ctx.get_format_settings()?;
         let data = Arc::new(TokioMutex::new(PageManager::new(
@@ -382,6 +385,7 @@ impl HttpQuery {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn get_response_page(&self, page_no: usize) -> Result<HttpQueryResponseInternal> {
         let data = Some(self.get_page(page_no).await?);
         let state = self.get_state().await;

@@ -421,12 +421,7 @@ pub trait VisitorMut: Sized {
     fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(
-        &mut self,
-        _table_reference: &mut TableReference,
-        _selection: &mut Option<Expr>,
-    ) {
-    }
+    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
 
     fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 

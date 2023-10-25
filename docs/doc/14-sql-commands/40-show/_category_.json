@@ -1,7 +1,3 @@
 {
-  "label": "Show Commands",
-  "link": {
-    "type": "generated-index",
-    "slug": "/sql-commands/show"
-  }
+  "label": "Show Commands"
 }

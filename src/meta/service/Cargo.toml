@@ -50,7 +50,7 @@ async-trait = "0.1.57"
 backon = "0.4"
 clap = { workspace = true }
 derive_more = { workspace = true }
-futures = "0.3.24"
+futures = { workspace = true }
 futures-async-stream = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }

@@ -1414,7 +1414,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if cluster_key.used_columns().len() != 1 || !cluster_key.valid_for_clustering() {
+            if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
                     cluster_by

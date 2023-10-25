@@ -1563,6 +1563,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
         Ok(InnerQueryConfig {
             tenant_id: self.tenant_id,
             cluster_id: self.cluster_id,
+            node_id: "".to_string(),
             num_cpus: self.num_cpus,
             mysql_handler_host: self.mysql_handler_host,
             mysql_handler_port: self.mysql_handler_port,

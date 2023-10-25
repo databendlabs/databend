@@ -16,8 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
-use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -31,10 +29,4 @@ pub struct DeleteSource {
     pub col_indices: Vec<usize>,
     pub query_row_id_col: bool,
     pub snapshot: Arc<TableSnapshot>,
-}
-
-impl DeleteSource {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
 }

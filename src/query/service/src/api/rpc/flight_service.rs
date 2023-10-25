@@ -152,6 +152,7 @@ impl FlightService for DatabendQueryFlightService {
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
         async {
             let action = request.into_inner();
             let flight_action: FlightAction = action.try_into()?;
@@ -183,12 +184,19 @@ impl FlightService for DatabendQueryFlightService {
 
                     let spawner = ctx.clone();
                     let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
-                    if let Err(cause) = match_join_handle(spawner.spawn(async move {
-                        DataExchangeManager::instance().init_query_fragments_plan(
-                            &ctx,
-                            &init_query_fragments_plan.executor_packet,
-                        )
-                    }))
+                    if let Err(cause) = match_join_handle(
+                        spawner.spawn(
+                            async move {
+                                DataExchangeManager::instance().init_query_fragments_plan(
+                                    &ctx,
+                                    &init_query_fragments_plan.executor_packet,
+                                )
+                            }
+                            .in_span(Span::enter_with_local_parent(
+                                "DataExchangeManager::instance().init_query_fragments_plan",
+                            )),
+                        ),
+                    )
                     .await
                     {
                         DataExchangeManager::instance().on_finished_query(&query_id);
@@ -260,6 +268,7 @@ impl FlightService for DatabendQueryFlightService {
     #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
         let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+
         async {
             Result::Ok(RawResponse::new(
                 Box::pin(tokio_stream::iter(vec![
@@ -270,7 +279,7 @@ impl FlightService for DatabendQueryFlightService {
                 ])) as FlightStream<ActionType>
             ))
         }
-            .in_span(root)
-            .await
+        .in_span(root)
+        .await
     }
 }

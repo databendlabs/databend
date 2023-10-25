@@ -64,6 +64,7 @@ impl Interpreter for TruncateTableInterpreter {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let table = self
             .ctx
