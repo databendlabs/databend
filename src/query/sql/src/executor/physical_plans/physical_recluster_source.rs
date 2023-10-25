@@ -12,18 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(impl_trait_in_assoc_type)]
-#![feature(return_position_impl_trait_in_trait)]
+use common_catalog::plan::PartStatistics;
+use common_catalog::plan::Partitions;
+use common_meta_app::schema::CatalogInfo;
+use common_meta_app::schema::TableInfo;
 
-// #![allow(incomplete_features)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReclusterTask {
+    pub parts: Partitions,
+    pub stats: PartStatistics,
+    pub total_rows: usize,
+    pub total_bytes: usize,
+    pub level: i32,
+}
 
-pub mod applier;
-pub(crate) mod compat07;
-pub mod config;
-pub mod key_spaces;
-pub mod log;
-pub mod ondisk;
-pub mod sm_v002;
-pub mod state;
-pub mod state_machine;
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct ReclusterSource {
+    pub tasks: Vec<ReclusterTask>,
+    pub table_info: TableInfo,
+    pub catalog_info: CatalogInfo,
+}

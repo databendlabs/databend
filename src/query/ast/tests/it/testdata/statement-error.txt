@@ -516,6 +516,18 @@ error:
 
 
 ---------- Input ----------
+select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+---------- Output ---------
+error: 
+  --> SQL:1:57
+  |
+1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+  | ------                                                  ^^^^^^^ expected `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | |                                                        
+  | while parsing `SELECT ...`
+
+
+---------- Input ----------
 copy into t1 from "" FILE_FORMAT
 ---------- Output ---------
 error: 
