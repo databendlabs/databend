@@ -83,6 +83,9 @@ impl ToNapiValue for Value {
                     NaiveDateTime::new(v, NaiveTime::from_hms_opt(0, 0, 0).unwrap()),
                 )
             }
+            databend_driver::Value::Array(_) => String::to_napi_value(env, format!("{}", val.0)),
+            databend_driver::Value::Map(_) => String::to_napi_value(env, format!("{}", val.0)),
+            databend_driver::Value::Tuple(_) => String::to_napi_value(env, format!("{}", val.0)),
             databend_driver::Value::Bitmap(s) => String::to_napi_value(env, s),
             databend_driver::Value::Variant(s) => String::to_napi_value(env, s),
         }

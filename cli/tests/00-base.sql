@@ -30,6 +30,12 @@ insert into test_decimal select number, number from numbers(3);
 
 select * from test_decimal;
 
+drop table if exists test_nested;
+create table test_nested(a array(int), b map(string, string), c tuple(x int, y string null));
+insert into test_nested values([1,2,3], null, (1, 'ab')), (null, {'k1':'v1', 'k2':'v2'}, (2, null));
+select * from test_nested;
+select a[1], b['k1'], c:x, c:y from test_nested;
+
 select 'bye';
 drop table test;
 drop table test_decimal;

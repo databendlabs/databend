@@ -71,7 +71,6 @@ impl DecimalDataType {
 #[derive(Debug, Clone)]
 pub enum DataType {
     Null,
-    Nothing,
     EmptyArray,
     EmptyMap,
     Boolean,
@@ -103,7 +102,6 @@ impl std::fmt::Display for DataType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             DataType::Null => write!(f, "Null"),
-            DataType::Nothing => write!(f, "Nothing"),
             DataType::EmptyArray => write!(f, "EmptyArray"),
             DataType::EmptyMap => write!(f, "EmptyMap"),
             DataType::Boolean => write!(f, "Boolean"),
@@ -170,7 +168,6 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
     fn try_from(desc: &TypeDesc) -> Result<Self> {
         let dt = match desc.name {
             "Null" | "NULL" => DataType::Null,
-            "Nothing" => DataType::Nothing,
             "Boolean" => DataType::Boolean,
             "String" => DataType::String,
             "Int8" => DataType::Number(NumberDataType::Int8),
@@ -328,6 +325,25 @@ impl TryFrom<&Arc<ArrowField>> for Field {
                         precision: *p,
                         scale: *s as u8,
                     }))
+                }
+                ArrowDataType::List(f) | ArrowDataType::LargeList(f) => {
+                    let inner_field = Field::try_from(f)?;
+                    let inner_ty = inner_field.data_type;
+                    DataType::Array(Box::new(inner_ty))
+                }
+                ArrowDataType::Map(f, _) => {
+                    let inner_field = Field::try_from(f)?;
+                    let inner_ty = inner_field.data_type;
+                    DataType::Map(Box::new(inner_ty))
+                }
+                ArrowDataType::Struct(fs) => {
+                    let mut inner_tys = Vec::with_capacity(fs.len());
+                    for f in fs {
+                        let inner_field = Field::try_from(f)?;
+                        let inner_ty = inner_field.data_type;
+                        inner_tys.push(inner_ty);
+                    }
+                    DataType::Tuple(inner_tys)
                 }
                 _ => {
                     return Err(Error::Parsing(format!(

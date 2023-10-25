@@ -35,8 +35,8 @@ use {
     arrow_array::{
         Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Decimal128Array,
         Decimal256Array, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
-        LargeBinaryArray, LargeStringArray, StringArray, TimestampMicrosecondArray, UInt16Array,
-        UInt32Array, UInt64Array, UInt8Array,
+        LargeBinaryArray, LargeListArray, LargeStringArray, ListArray, MapArray, StringArray,
+        StructArray, TimestampMicrosecondArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
     },
     arrow_schema::{DataType as ArrowDataType, Field as ArrowField, TimeUnit},
     std::sync::Arc,
@@ -71,9 +71,9 @@ pub enum Value {
     /// Microseconds from 1970-01-01 00:00:00 UTC
     Timestamp(i64),
     Date(i32),
-    // Array(Vec<Value>),
-    // Map(Vec<(Value, Value)>),
-    // Tuple(Vec<Value>),
+    Array(Vec<Value>),
+    Map(Vec<(Value, Value)>),
+    Tuple(Vec<Value>),
     Bitmap(String),
     Variant(String),
 }
@@ -103,10 +103,25 @@ impl Value {
             Self::Timestamp(_) => DataType::Timestamp,
 
             Self::Date(_) => DataType::Date,
-            // TODO:(everpcpc) fix nested type
-            // Self::Array(v) => DataType::Array(Box::new(v[0].get_type())),
-            // Self::Map(_) => DataType::Map(Box::new(DataType::Null)),
-            // Self::Tuple(_) => DataType::Tuple(vec![]),
+            Self::Array(vals) => {
+                if vals.is_empty() {
+                    DataType::EmptyArray
+                } else {
+                    DataType::Array(Box::new(vals[0].get_type()))
+                }
+            }
+            Self::Map(kvs) => {
+                if kvs.is_empty() {
+                    DataType::EmptyMap
+                } else {
+                    let inner_ty = DataType::Tuple(vec![kvs[0].0.get_type(), kvs[0].1.get_type()]);
+                    DataType::Map(Box::new(inner_ty))
+                }
+            }
+            Self::Tuple(vals) => {
+                let inner_tys = vals.iter().map(|v| v.get_type()).collect::<Vec<_>>();
+                DataType::Tuple(inner_tys)
+            }
             Self::Bitmap(_) => DataType::Bitmap,
             Self::Variant(_) => DataType::Variant,
         }
@@ -360,20 +375,61 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                 Some(array) => Ok(Value::Date(array.value(seq))),
                 None => Err(ConvertError::new("date", format!("{:?}", array)).into()),
             },
-            ArrowDataType::Date64
-            | ArrowDataType::Time32(_)
-            | ArrowDataType::Time64(_)
-            | ArrowDataType::Interval(_)
-            | ArrowDataType::Duration(_) => {
-                Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into())
-            }
-            // ArrowDataType::List(_) | ArrowDataType::LargeList(_) => {
-            //     let v = array.as_list_opt::<i64>().unwrap().value(seq);
-            //     Ok(Value::String(format!("{:?}", v)))
-            // }
-            // Struct(Vec<Field>),
-            // Map(Box<Field>, bool),
-            // RunEndEncoded(Box<Field>, Box<Field>),
+            ArrowDataType::List(f) => match array.as_any().downcast_ref::<ListArray>() {
+                Some(array) => {
+                    let inner_array = unsafe { array.value_unchecked(seq) };
+                    let mut values = Vec::with_capacity(inner_array.len());
+                    for i in 0..inner_array.len() {
+                        let value = Value::try_from((f.as_ref(), &inner_array, i))?;
+                        values.push(value);
+                    }
+                    Ok(Value::Array(values))
+                }
+                None => Err(ConvertError::new("list", format!("{:?}", array)).into()),
+            },
+            ArrowDataType::LargeList(f) => match array.as_any().downcast_ref::<LargeListArray>() {
+                Some(array) => {
+                    let inner_array = unsafe { array.value_unchecked(seq) };
+                    let mut values = Vec::with_capacity(inner_array.len());
+                    for i in 0..inner_array.len() {
+                        let value = Value::try_from((f.as_ref(), &inner_array, i))?;
+                        values.push(value);
+                    }
+                    Ok(Value::Array(values))
+                }
+                None => Err(ConvertError::new("large list", format!("{:?}", array)).into()),
+            },
+            ArrowDataType::Map(f, _) => match array.as_any().downcast_ref::<MapArray>() {
+                Some(array) => {
+                    if let ArrowDataType::Struct(fs) = f.data_type() {
+                        let inner_array = unsafe { array.value_unchecked(seq) };
+                        let mut values = Vec::with_capacity(inner_array.len());
+                        for i in 0..inner_array.len() {
+                            let key = Value::try_from((fs[0].as_ref(), inner_array.column(0), i))?;
+                            let val = Value::try_from((fs[1].as_ref(), inner_array.column(1), i))?;
+                            values.push((key, val));
+                        }
+                        Ok(Value::Map(values))
+                    } else {
+                        Err(
+                            ConvertError::new("invalid map inner type", format!("{:?}", array))
+                                .into(),
+                        )
+                    }
+                }
+                None => Err(ConvertError::new("map", format!("{:?}", array)).into()),
+            },
+            ArrowDataType::Struct(fs) => match array.as_any().downcast_ref::<StructArray>() {
+                Some(array) => {
+                    let mut values = Vec::with_capacity(array.len());
+                    for (f, inner_array) in fs.iter().zip(array.columns().iter()) {
+                        let value = Value::try_from((f.as_ref(), inner_array, seq))?;
+                        values.push(value);
+                    }
+                    Ok(Value::Tuple(values))
+                }
+                None => Err(ConvertError::new("struct", format!("{:?}", array)).into()),
+            },
             _ => Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into()),
         }
     }
@@ -533,26 +589,78 @@ impl std::fmt::Display for NumberValue {
 
 impl std::fmt::Display for Value {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Value::Null => write!(f, "NULL"),
-            Value::EmptyArray => write!(f, "[]"),
-            Value::EmptyMap => write!(f, "{{}}"),
-            Value::Boolean(b) => write!(f, "{}", b),
-            Value::Number(n) => write!(f, "{}", n),
-            Value::String(s) => write!(f, "{}", s),
-            Value::Timestamp(i) => {
-                let secs = i / 1_000_000;
-                let nanos = ((i % 1_000_000) * 1000) as u32;
-                let t = NaiveDateTime::from_timestamp_opt(secs, nanos).unwrap_or_default();
+        encode_value(f, self, true)
+    }
+}
+
+// Compatible with Databend, inner values of nested types are quoted.
+fn encode_value(f: &mut std::fmt::Formatter<'_>, val: &Value, raw: bool) -> std::fmt::Result {
+    match val {
+        Value::Null => write!(f, "NULL"),
+        Value::EmptyArray => write!(f, "[]"),
+        Value::EmptyMap => write!(f, "{{}}"),
+        Value::Boolean(b) => write!(f, "{}", b),
+        Value::Number(n) => write!(f, "{}", n),
+        Value::String(s) | Value::Bitmap(s) | Value::Variant(s) => {
+            if raw {
+                write!(f, "{}", s)
+            } else {
+                write!(f, "'{}'", s)
+            }
+        }
+        Value::Timestamp(i) => {
+            let secs = i / 1_000_000;
+            let nanos = ((i % 1_000_000) * 1000) as u32;
+            let t = NaiveDateTime::from_timestamp_opt(secs, nanos).unwrap_or_default();
+            if raw {
                 write!(f, "{}", t)
+            } else {
+                write!(f, "'{}'", t)
             }
-            Value::Date(i) => {
-                let days = i + DAYS_FROM_CE;
-                let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
+        }
+        Value::Date(i) => {
+            let days = i + DAYS_FROM_CE;
+            let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
+            if raw {
                 write!(f, "{}", d)
+            } else {
+                write!(f, "'{}'", d)
             }
-            Value::Bitmap(s) => write!(f, "{}", s),
-            Value::Variant(s) => write!(f, "{}", s),
+        }
+        Value::Array(vals) => {
+            write!(f, "[")?;
+            for (i, val) in vals.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                encode_value(f, val, false)?;
+            }
+            write!(f, "]")?;
+            Ok(())
+        }
+        Value::Map(kvs) => {
+            write!(f, "{{")?;
+            for (i, (key, val)) in kvs.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                encode_value(f, key, false)?;
+                write!(f, ":")?;
+                encode_value(f, val, false)?;
+            }
+            write!(f, "}}")?;
+            Ok(())
+        }
+        Value::Tuple(vals) => {
+            write!(f, "(")?;
+            for (i, val) in vals.iter().enumerate() {
+                if i > 0 {
+                    write!(f, ",")?;
+                }
+                encode_value(f, val, false)?;
+            }
+            write!(f, ")")?;
+            Ok(())
         }
     }
 }
