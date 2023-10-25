@@ -21,6 +21,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
@@ -38,7 +39,9 @@ use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
 use common_sql::plans::AggregateMode;
 use common_sql::plans::BoundColumnRef;
+use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
+use common_sql::plans::FunctionCall;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::RelOperator;
@@ -480,7 +483,88 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
-        todo!()
+
+        debug_assert_eq!(blocks.len(), 1);
+        let block = &blocks[0];
+        debug_assert_eq!(block.num_columns(), 2);
+
+        let get_scalar_expr = |block: &DataBlock, index: usize| {
+            let block_entry = &block.columns()[index];
+            let scalar = match &block_entry.value {
+                common_expression::Value::Scalar(scalar) => scalar.clone(),
+                common_expression::Value::Column(column) => {
+                    debug_assert_eq!(column.len(), 1);
+                    let value_ref = column.index(0).unwrap();
+                    value_ref.to_owned()
+                }
+            };
+            ScalarExpr::ConstantExpr(ConstantExpr {
+                span: None,
+                value: scalar,
+            })
+        };
+
+        let min_scalar = get_scalar_expr(block, 0);
+        let max_scalar = get_scalar_expr(block, 1);
+
+        // 2. build filter and push down to probe side
+        let probe_side_expr = &join_op.left_conditions[0];
+        let gte_min = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "gte".to_string(),
+            params: vec![],
+            arguments: vec![probe_side_expr.clone(), min_scalar],
+        });
+        let lte_max = ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "lte".to_string(),
+            params: vec![],
+            arguments: vec![probe_side_expr.clone(), max_scalar],
+        });
+
+        let filters = vec![gte_min, lte_max];
+        let mut probe_side = join.child(0)?.clone();
+        Self::push_down_filters(&mut probe_side, &filters)?;
+        let new_sexpr =
+            join.replace_children(vec![Arc::new(probe_side), Arc::new(build_side.clone())]);
+        Ok(Box::new(new_sexpr))
+    }
+
+    fn push_down_filters(s_expr: &mut SExpr, filters: &[ScalarExpr]) -> Result<()> {
+        match s_expr.plan() {
+            RelOperator::Scan(s) => {
+                let mut new_scan = s.clone();
+                if let Some(preds) = new_scan.push_down_predicates {
+                    new_scan.push_down_predicates =
+                        Some(preds.iter().chain(filters).cloned().collect());
+                } else {
+                    new_scan.push_down_predicates = Some(filters.to_vec());
+                }
+                *s_expr = SExpr::create_leaf(Arc::new(RelOperator::Scan(new_scan)));
+            }
+            RelOperator::EvalScalar(_)
+            | RelOperator::Filter(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_) => {
+                let mut new_child = s_expr.child(0)?.clone();
+                Self::push_down_filters(&mut new_child, filters)?;
+                *s_expr = s_expr.replace_children(vec![Arc::new(new_child)]);
+            }
+            RelOperator::CteScan(_) => {}
+            RelOperator::Join(_) => {}
+            RelOperator::Exchange(_) => {}
+            RelOperator::UnionAll(_) => {}
+            RelOperator::DummyTableScan(_) => {}
+            RelOperator::RuntimeFilterSource(_) => {}
+            RelOperator::Window(_) => {}
+            RelOperator::ProjectSet(_) => {}
+            RelOperator::MaterializedCte(_) => {}
+            RelOperator::Lambda(_) => {}
+            RelOperator::ConstantTableScan(_) => {}
+            RelOperator::Pattern(_) => {}
+        }
+        Ok(())
     }
 
     fn transform_scalar_expr2expr(
