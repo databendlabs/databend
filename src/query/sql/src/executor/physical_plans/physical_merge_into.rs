@@ -45,14 +45,14 @@ pub struct MergeInto {
     // used to record the index of target table's field in merge_source_schema
     pub field_index_of_input_schema: HashMap<FieldIndex, usize>,
     pub row_id_idx: usize,
-    pub segments: Option<Vec<(usize, Location)>>,
+    pub segments: Vec<(usize, Location)>,
     pub output_schema: DataSchemaRef,
+    pub distributed: bool,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct MergeIntoRowIdApply {
+pub struct MergeIntoAppendNotMatched {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
-    pub segments: Vec<(usize, Location)>,
 }

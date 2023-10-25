@@ -13,10 +13,16 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::ROW_NUMBER_COL_NAME;
 
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
@@ -28,6 +34,7 @@ use crate::optimizer::SExpr;
 pub struct AddRowNumber {
     pub cluster_index: BTreeMap<String, usize>,
     pub input: Box<PhysicalPlan>,
+    pub output_schema: DataSchemaRef,
 }
 
 impl AddRowNumber {
@@ -52,9 +59,18 @@ impl PhysicalPlanBuilder {
         for (id, node) in self.ctx.get_cluster().nodes.iter().enumerate() {
             cluster_index.insert(node.id.clone(), id);
         }
+        let input_schema = input_plan.output_schema()?;
+        let mut fields = input_schema.fields.clone();
+        fields.push(DataField::new(
+            ROW_NUMBER_COL_NAME,
+            DataType::Number(NumberDataType::UInt64),
+        ));
+        let meta = input_schema.meta().clone();
+
         Ok(PhysicalPlan::AddRowNumber(Box::new(AddRowNumber {
             cluster_index,
             input: Box::new(input_plan),
+            output_schema: Arc::new(DataSchema::new_from(fields, meta)),
         })))
     }
 }

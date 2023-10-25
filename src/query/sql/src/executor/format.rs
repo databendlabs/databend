@@ -213,8 +213,8 @@ fn to_format_tree(
         PhysicalPlan::MergeInto(_) => Ok(FormatTreeNode::new("MergeInto".to_string())),
         PhysicalPlan::MergeIntoSource(_) => Ok(FormatTreeNode::new("MergeIntoSource".to_string())),
         PhysicalPlan::AddRowNumber(_) => Ok(FormatTreeNode::new("AddRowNumber".to_string())),
-        PhysicalPlan::MergeIntoRowIdApply(_) => {
-            Ok(FormatTreeNode::new("MergeIntoRowIdApply".to_string()))
+        PhysicalPlan::MergeIntoAppendNotMatched(_) => {
+            Ok(FormatTreeNode::new("MergeIntoAppendNotMatched".to_string()))
         }
         PhysicalPlan::CteScan(plan) => cte_scan_to_format_tree(plan),
         PhysicalPlan::MaterializedCte(plan) => {

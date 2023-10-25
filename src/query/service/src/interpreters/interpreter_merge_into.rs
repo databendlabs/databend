@@ -25,13 +25,14 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind::Merge;
 use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoRowIdApply;
+use common_sql::executor::MergeIntoAppendNotMatched;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
@@ -177,11 +178,16 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
+        let mut row_number_idx = -1;
         for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
                 break;
+            }
+
+            if exchange.is_some() && data_field.name() == ROW_NUMBER_COL_NAME {
+                row_number_idx = idx as i32;
             }
         }
 
@@ -189,6 +195,12 @@ impl MergeIntoInterpreter {
         if !found_row_id {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_id_idx when running merge into",
+            ));
+        }
+
+        if exchange.is_some() && row_number_idx == -1 {
+            return Err(ErrorCode::InvalidRowIdIndex(
+                "can't get internal row_number_idx when running merge into",
             ));
         }
 
@@ -325,7 +337,7 @@ impl MergeIntoInterpreter {
                 .insert(*field_index, join_output_schema.index_of(value).unwrap());
         }
 
-        let segments = base_snapshot
+        let segments: Vec<_> = base_snapshot
             .segments
             .clone()
             .into_iter()
@@ -343,7 +355,8 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments: Some(segments),
+                segments: segments.clone(),
+                distributed: false,
                 output_schema: DataSchemaRef::default(),
             }))
         } else {
@@ -355,13 +368,14 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments: None,
+                segments,
+                distributed: true,
                 output_schema: DataSchemaRef::new(DataSchema::new(vec![
-                    join_output_schema.fields[row_id_idx].clone(),
+                    join_output_schema.fields[row_number_idx as usize].clone(),
                 ])),
             }));
 
-            PhysicalPlan::MergeIntoRowIdApply(Box::new(MergeIntoRowIdApply {
+            PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
                 input: Box::new(PhysicalPlan::Exchange(Exchange {
                     plan_id: 0,
                     input: Box::new(merge_append),
@@ -371,7 +385,6 @@ impl MergeIntoInterpreter {
                 })),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
-                segments,
             }))
         };
 

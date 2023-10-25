@@ -43,6 +43,7 @@ use common_expression::FunctionContext;
 use common_expression::HashMethodKind;
 use common_expression::Scalar;
 use common_expression::SortColumnDescription;
+use common_expression::ROW_NUMBER_COL_NAME;
 use common_formats::FastFieldDecoderValues;
 use common_formats::FastValuesDecodeFallback;
 use common_formats::FastValuesDecoder;
@@ -97,7 +98,7 @@ use common_sql::executor::Lambda;
 use common_sql::executor::Limit;
 use common_sql::executor::MaterializedCte;
 use common_sql::executor::MergeInto;
-use common_sql::executor::MergeIntoRowIdApply;
+use common_sql::executor::MergeIntoAppendNotMatched;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -294,7 +295,7 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::MergeIntoRowIdApply(merge_into_row_id_apply) => {
+            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
                 self.build_merge_into_row_id_apply(merge_into_row_id_apply)
             }
             PhysicalPlan::AddRowNumber(add_row_number) => {
@@ -334,19 +335,17 @@ impl PipelineBuilder {
                     row_number.clone(),
                 )
             })?;
-        todo!()
+        Ok(())
     }
 
     fn build_merge_into_row_id_apply(
         &mut self,
-        merge_into_row_id_apply: &MergeIntoRowIdApply,
+        merge_into_row_id_apply: &MergeIntoAppendNotMatched,
     ) -> Result<()> {
-        let MergeIntoRowIdApply {
+        let MergeIntoAppendNotMatched {
             input,
             table_info,
             catalog_info,
-
-            segments,
         } = merge_into_row_id_apply;
         // receive rowids and MutationLogs
         self.build_pipeline(input)?;
@@ -355,7 +354,7 @@ impl PipelineBuilder {
         self.main_pipeline
             .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
 
-        let mut pipe_items = Vec::with_capacity(1);
+        // let mut pipe_items = Vec::with_capacity(1);
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -367,30 +366,31 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
-        // this TransformSerializeBlock is just used to get block_builder
-        let block_builder = TransformSerializeBlock::try_create(
-            self.ctx.clone(),
-            InputPort::create(),
-            OutputPort::create(),
-            table,
-            cluster_stats_gen,
-        )?
-        .get_block_builder();
+        // // this TransformSerializeBlock is just used to get block_builder
+        // let block_builder = TransformSerializeBlock::try_create(
+        //     self.ctx.clone(),
+        //     InputPort::create(),
+        //     OutputPort::create(),
+        //     table,
+        //     cluster_stats_gen,
+        // )?
+        // .get_block_builder();
 
-        let max_threads = self.settings.get_max_threads()?;
-        let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+        // let max_threads = self.settings.get_max_threads()?;
+        // let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
 
-        pipe_items.push(table.rowid_aggregate_mutator(
-            self.ctx.clone(),
-            block_builder,
-            io_request_semaphore,
-            segments.clone(),
-            true,
-        )?);
+        // pipe_items.push(table.rowid_aggregate_mutator(
+        //     self.ctx.clone(),
+        //     block_builder,
+        //     io_request_semaphore,
+        //     segments.clone(),
+        //     true,
+        // )?);
 
-        self.main_pipeline
-            .add_pipe(Pipe::create(self.main_pipeline.output_len(), 1, pipe_items));
-        Ok(())
+        // self.main_pipeline
+        //     .add_pipe(Pipe::create(self.main_pipeline.output_len(), 1, pipe_items));
+        // Ok(())
+        todo!()
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
@@ -555,12 +555,12 @@ impl PipelineBuilder {
             field_index_of_input_schema,
             row_id_idx,
             segments,
+            distributed,
             ..
         } = merge_into;
 
         self.build_pipeline(input)?;
 
-        let apply_row_id = segments.is_some();
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
@@ -650,43 +650,88 @@ impl PipelineBuilder {
         // not macthed insert data port1_3
         // ......
         assert_eq!(self.main_pipeline.output_len() % 3, 0);
-
-        // merge rowid and serialize_blocks
         let mut ranges = Vec::with_capacity(self.main_pipeline.output_len() / 3 * 2);
-        for idx in (0..self.main_pipeline.output_len()).step_by(3) {
-            ranges.push(vec![idx]);
-            ranges.push(vec![idx + 1, idx + 2]);
-        }
-        self.main_pipeline.resize_partial_one(ranges.clone())?;
-        assert_eq!(self.main_pipeline.output_len() % 2, 0);
+        if !*distributed {
+            // merge rowid and serialize_blocks
+            for idx in (0..self.main_pipeline.output_len()).step_by(3) {
+                ranges.push(vec![idx]);
+                ranges.push(vec![idx + 1, idx + 2]);
+            }
+            self.main_pipeline.resize_partial_one(ranges.clone())?;
+            assert_eq!(self.main_pipeline.output_len() % 2, 0);
 
-        // shuffle outputs and resize row_id
-        // ----------------------------------------------------------------------
-        // row_id port0_1               row_id port0_1
-        // data port0_2                 row_id port1_1              row_id port
-        // row_id port1_1   ======>     ......           ======>
-        // data port1_2                 data port0_2                data port0
-        // ......                       data port1_2                data port1
-        // ......                       .....                       .....
-        // ----------------------------------------------------------------------
-        let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
-        for idx in 0..(self.main_pipeline.output_len() / 2) {
-            rules.push(idx);
-            rules.push(idx + self.main_pipeline.output_len() / 2);
-        }
-        self.main_pipeline.reorder_inputs(rules);
-        // resize row_id
-        ranges.clear();
-        let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
-        for idx in 0..(self.main_pipeline.output_len() / 2) {
-            vec.push(idx);
-        }
-        ranges.push(vec.clone());
-        for idx in 0..(self.main_pipeline.output_len() / 2) {
-            ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
-        }
-        self.main_pipeline.resize_partial_one(ranges.clone())?;
+            // shuffle outputs and resize row_id
+            // ----------------------------------------------------------------------
+            // row_id port0_1               row_id port0_1
+            // data port0_2                 row_id port1_1              row_id port
+            // row_id port1_1   ======>     ......           ======>
+            // data port1_2                 data port0_2                data port0
+            // ......                       data port1_2                data port1
+            // ......                       .....                       .....
+            // ----------------------------------------------------------------------
+            let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
+            for idx in 0..(self.main_pipeline.output_len() / 2) {
+                rules.push(idx);
+                rules.push(idx + self.main_pipeline.output_len() / 2);
+            }
+            self.main_pipeline.reorder_inputs(rules);
+            // resize row_id
+            ranges.clear();
+            let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 2);
+            for idx in 0..(self.main_pipeline.output_len() / 2) {
+                vec.push(idx);
+            }
+            ranges.push(vec.clone());
+            for idx in 0..(self.main_pipeline.output_len() / 2) {
+                ranges.push(vec![idx + self.main_pipeline.output_len() / 2]);
+            }
+            self.main_pipeline.resize_partial_one(ranges.clone())?;
+        } else {
+            // shuffle outputs and resize row_id
+            // ----------------------------------------------------------------------
+            // row_id port0_1              row_id port0_1              row_id port
+            // matched data port0_2        row_id port1_1            matched data port0_2
+            // unmatched data port0_3      matched data port0_2      matched data port1_2
+            // row_id port1_1              matched data port1_2          ......
+            // matched data port1_2  ===>       .....           ====>    ......
+            // unmatched data port1_2           .....                    ......
+            // unmatched data port0_3    unmatched data port0_3      unmatched data port
+            // ......                    unmatched data port1_3
+            // ......                           .....
+            // ----------------------------------------------------------------------
+            // do shuffle
+            let mut rules = Vec::with_capacity(self.main_pipeline.output_len());
+            for idx in 0..(self.main_pipeline.output_len() / 3) {
+                rules.push(idx);
+                rules.push(idx + self.main_pipeline.output_len() / 3);
+                rules.push(idx + self.main_pipeline.output_len() / 3 * 2);
+            }
+            self.main_pipeline.reorder_inputs(rules);
 
+            // resize row_id
+            ranges.clear();
+            let mut vec = Vec::with_capacity(self.main_pipeline.output_len() / 3);
+            for idx in 0..(self.main_pipeline.output_len() / 3) {
+                vec.push(idx);
+            }
+            ranges.push(vec.clone());
+            for idx in 0..(self.main_pipeline.output_len() / 3) {
+                ranges.push(vec![idx + self.main_pipeline.output_len() / 3]);
+            }
+            vec.clear();
+            for idx in 0..(self.main_pipeline.output_len() / 3) {
+                vec.push(idx + self.main_pipeline.output_len() / 3 * 2);
+            }
+            self.main_pipeline.resize_partial_one(ranges.clone())?;
+        }
+
+        let fill_default_len = if !*distributed {
+            // remove first row_id port
+            self.main_pipeline.output_len() - 1
+        } else {
+            // remove first row_id port and last unmatched_port
+            self.main_pipeline.output_len() - 2
+        };
         // fill default columns
         let table_default_schema = &table.schema().remove_computed_fields();
         let mut builder = self.main_pipeline.add_transform_with_specified_len(
@@ -699,10 +744,42 @@ impl PipelineBuilder {
                     tbl.clone(),
                 )
             },
-            self.main_pipeline.output_len() - 1,
+            fill_default_len,
         )?;
-        builder.add_items_prepend(vec![create_dummy_item()]);
-        self.main_pipeline.add_pipe(builder.finalize());
+
+        if !*distributed {
+            builder.add_items_prepend(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+        } else {
+            let input_num_columns = input.output_schema()?.num_fields();
+            assert_eq!(
+                input.output_schema()?.field(input_num_columns - 1).name(),
+                ROW_NUMBER_COL_NAME
+            );
+            let input_port = InputPort::create();
+            let output_port = OutputPort::create();
+            // project row number column
+            let proc = ProcessorPtr::create(CompoundBlockOperator::create(
+                input_port.clone(),
+                output_port.clone(),
+                input_num_columns,
+                self.func_ctx.clone(),
+                vec![BlockOperator::Project {
+                    projection: vec![input_num_columns - 1],
+                }],
+            ));
+            builder.add_items_prepend(vec![create_dummy_item()]);
+            builder.add_transform(input_port, output_port, proc);
+            self.main_pipeline.add_pipe(builder.finalize());
+        }
+
+        let fill_computed_len = if !*distributed {
+            // remove first row_id port
+            self.main_pipeline.output_len() - 1
+        } else {
+            // remove first row_id port and last row_number_port
+            self.main_pipeline.output_len() - 2
+        };
 
         // fill computed columns
         let table_computed_schema = &table.schema().remove_virtual_computed_fields();
@@ -719,10 +796,17 @@ impl PipelineBuilder {
                         computed_schema.clone(),
                     )
                 },
-                self.main_pipeline.output_len() - 1,
+                fill_computed_len,
             )?;
-            builder.add_items_prepend(vec![create_dummy_item()]);
-            self.main_pipeline.add_pipe(builder.finalize());
+            if !*distributed {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+                self.main_pipeline.add_pipe(builder.finalize());
+            } else {
+                builder.add_items_prepend(vec![create_dummy_item()]);
+                // recieve row_number
+                builder.add_items(vec![create_dummy_item()]);
+                self.main_pipeline.add_pipe(builder.finalize());
+            }
         }
 
         let max_threads = self.settings.get_max_threads()?;
@@ -730,30 +814,41 @@ impl PipelineBuilder {
 
         // after filling default columns, we need to add cluster‘s blocksort if it's a cluster table
         let output_lens = self.main_pipeline.output_len();
-        table.cluster_gen_for_append_with_specified_last_len(
-            self.ctx.clone(),
-            &mut self.main_pipeline,
-            block_thresholds,
-            output_lens - 1,
-        )?;
+        if !*distributed {
+            table.cluster_gen_for_append_with_specified_len(
+                self.ctx.clone(),
+                &mut self.main_pipeline,
+                block_thresholds,
+                output_lens - 1,
+                0,
+            )?;
+        } else {
+            table.cluster_gen_for_append_with_specified_len(
+                self.ctx.clone(),
+                &mut self.main_pipeline,
+                block_thresholds,
+                output_lens - 2,
+                1,
+            )?;
+        }
 
         pipe_items.clear();
 
-        // standalone execution
-        if apply_row_id {
-            pipe_items.push(table.rowid_aggregate_mutator(
-                self.ctx.clone(),
-                block_builder,
-                io_request_semaphore,
-                segments.clone().unwrap(),
-                false,
-            )?);
-        } else {
-            // distributed execution
-            pipe_items.push(create_dummy_item())
-        }
+        pipe_items.push(table.rowid_aggregate_mutator(
+            self.ctx.clone(),
+            block_builder,
+            io_request_semaphore,
+            segments.clone(),
+            false,
+        )?);
 
-        for _ in 0..self.main_pipeline.output_len() - 1 {
+        let serialize_len = if !*distributed {
+            self.main_pipeline.output_len() - 1
+        } else {
+            self.main_pipeline.output_len() - 2
+        };
+
+        for _ in 0..serialize_len {
             let serialize_block_transform = TransformSerializeBlock::try_create(
                 self.ctx.clone(),
                 InputPort::create(),
@@ -762,6 +857,11 @@ impl PipelineBuilder {
                 cluster_stats_gen.clone(),
             )?;
             pipe_items.push(serialize_block_transform.into_pipe_item());
+        }
+
+        // recieve row_number
+        if *distributed {
+            pipe_items.push(create_dummy_item());
         }
 
         self.main_pipeline.add_pipe(Pipe::create(
@@ -775,27 +875,45 @@ impl PipelineBuilder {
         // serialize_block port0                    ======>
         // serialize_block port1                                serialize_block port
         // .......
+        // row_number_port (distributed)                        row_number_port(distributed)
         ranges.clear();
         ranges.push(vec![0]);
-        vec.clear();
-        for idx in 0..self.main_pipeline.output_len() - 1 {
+        let mut vec = Vec::with_capacity(self.main_pipeline.output_len());
+        let output_lens = if !*distributed {
+            self.main_pipeline.output_len() - 1
+        } else {
+            self.main_pipeline.output_len() - 2
+        };
+        for idx in 0..output_lens {
             vec.push(idx + 1);
+        }
+        if *distributed {
+            ranges.push(vec![self.main_pipeline.output_len() - 1]);
         }
         ranges.push(vec);
         self.main_pipeline.resize_partial_one(ranges)?;
 
-        let pipe_items = vec![
-            create_dummy_item(),
-            serialize_segment_transform.into_pipe_item(),
-        ];
+        let pipe_items = if !distributed {
+            vec![
+                create_dummy_item(),
+                serialize_segment_transform.into_pipe_item(),
+            ]
+        } else {
+            vec![
+                create_dummy_item(),
+                serialize_segment_transform.into_pipe_item(),
+                create_dummy_item(),
+            ]
+        };
 
-        // apply_row_id: true
+        // distributed: false
         //      output_port0: MutationLogs
         //      output_port1: MutationLogs
         //
-        // apply_row_id: false
-        //      output_port0: row_ids
+        // distributed: true
+        //      output_port0: MutationLogs
         //      output_port1: MutationLogs
+        //      output_port2: row_numbers
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
             get_output_len(&pipe_items),
@@ -803,7 +921,7 @@ impl PipelineBuilder {
         ));
 
         // distributed execution
-        if !apply_row_id {
+        if *distributed {
             self.main_pipeline.try_resize(1)?;
             self.main_pipeline
                 .add_pipe(TransformDistributedMergeIntoBlockSerialize::into_pipe())

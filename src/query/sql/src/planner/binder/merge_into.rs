@@ -32,7 +32,6 @@ use common_expression::types::DataType;
 use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
 use common_expression::ROW_ID_COL_NAME;
-use common_expression::ROW_NUMBER_COL_NAME;
 use indexmap::IndexMap;
 
 use super::wrap_cast_scalar;
