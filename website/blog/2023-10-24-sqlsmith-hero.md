@@ -65,7 +65,7 @@ The SQL Runner executes test SQL queries using Databend, and in case of failure,
 - Call the SQL Reducer to generate the smallest reproducible SQL.
 - Log errors and simplified SQLs.
 
-The Runner is integrated into Databend's CI, executing on every release to log issues for further analysis.
+The Runner is now integrated into Databend's CI, running with each release to log errors for further analysis.
 
 ## Impact
 
