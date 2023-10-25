@@ -727,10 +727,15 @@ statement ok
 insert into t1 values(1, 1696549154011), (2, 1696549154013);
 
 statement ok
-insert into t2 values(1, 1697650260000), (3, 1696549154009), (2, 1696549154010);
+insert into t2 values(1, 1697650260000), (3, 1696549154009), (2, 1696549154010), (2, 1696549154013);
 
 query I
 select t1.id from t1 left join t2 on t1.id = t2.id where t1.val >= t2.val;
+----
+2
+
+query I
+select t1.id, t1.val from t1 left join t2 on t1.id = t2.id and t1.val = t2.val where t1.val >= t2.val;
 ----
 2
 
