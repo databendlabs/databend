@@ -26,7 +26,7 @@ While these tests ensure functional correctness and stability during rapid devel
 
 [SQLsmith](https://github.com/anse1/sqlsmith) is a randomized SQL query generator that produces a high volume of diverse test cases to simulate real-world variability. Compared to other testing approaches, SQLsmith improves test coverage to uncover more potential issues and bugs.
 
-## Implementing Our SQLsmith
+## Implementing SQLsmith for Databend
 
 The original SQLsmith for PostgreSQL fuzz testing was inspired by [Csmith](https://github.com/csmith-project/csmith). Now, many known open source databases have their own SQLsmith ports like [CockroachDB](https://github.com/cockroachdb/cockroach/blob/master/pkg/workload/sqlsmith/sqlsmith.go), [TiDB](https://github.com/PingCAP-QE/go-sqlsmith), [RisingWave](https://github.com/risingwavelabs/risingwave/tree/main/src/tests/sqlsmith) etc. 
 
