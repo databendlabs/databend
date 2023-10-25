@@ -87,7 +87,7 @@ If you are interested in learning more, please check out the resources below:
 
 We have also made these improvements to Databend that we hope you will find helpful:
 
-- Added new table function `fuse_encoding` .
+- Added a new table function `fuse_encoding` .
 - Added new string functions `split` and `split_part`.
 - SQLsmith now supports for `MERGE INTO`.
 - `databend-metactl` supports viewing cluster status.
