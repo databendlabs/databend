@@ -35,7 +35,7 @@ These open source SQLsmiths use diverse languages (C++, Go, Rust) with different
 SQLsmith has three main components:
 
 - **SQL Generator**: Generates abstract syntax trees (ASTs) of various types
-- **SQL Reducer**: Simplifies failing SQLs to isolate bug causes
+- **SQL Reducer**: Simplifies complex SQLs to pinpoint bugs
 - **Runner**: Executes SQLs, records errors 
 
 ## SQL Generator
