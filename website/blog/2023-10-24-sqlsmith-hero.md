@@ -100,5 +100,3 @@ SQLsmith generates most common SQLs and integrates with CI. Upcoming improvement
 - Introduce more configurations like expression nesting depths, query complexity.
 - Improved SQL simplification.
 - Optimized query execution and analysis.
-
-SQLsmith is a powerful tool to discover hidden bugs and improve Databend's stability and reliability. We look forward to its evolving role.
