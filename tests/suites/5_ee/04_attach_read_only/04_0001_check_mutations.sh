@@ -55,8 +55,7 @@ echo "DROP VIRTUAL COLUMN FOR test_attach_only.test_json" | $MYSQL_CLIENT_CONNEC
 echo "refresh virtual column"
 echo "REFRESH VIRTUAL COLUMN FOR test_attach_only.test_json" | $MYSQL_CLIENT_CONNECT
 
-
-# TODO WIP
+# vacuum
 echo "vacuum dropped"
-echo "VACUUM DROP TABLE RETAIN 0 HOURS DRY RUN;" | $MYSQL_CLIENT_CONNECT
+echo "VACUUM DROP TABLE test_attach_only.test_json RETAIN 0 HOURSN;" | $MYSQL_CLIENT_CONNECT
 
