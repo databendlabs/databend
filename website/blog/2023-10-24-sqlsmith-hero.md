@@ -16,7 +16,7 @@ authors:
 
 Testing plays a crucial role in the development and maintenance of database systems. It helps verify functionality correctness and proactively identify potential issues to maintain performance and stability. Databend’s CI already supports these test types:
 
-- **Unit Tests**: Validate functionality of minimum testable code units like functions and modules. Ensure they execute and return expected results.
+- **Unit Test**: A unit test validates the functionality of minimum testable code units like functions and modules, and ensure they execute successfully and return the expected results.
 - **SQL Logic Tests**: Verify SQL syntax and logic correctness via test cases. Cover different query scenarios to ensure queries run properly in all situations.
 - **Performance Tests**: Validate performance impact of new features and optimizations. Prevent performance regressions.
 
