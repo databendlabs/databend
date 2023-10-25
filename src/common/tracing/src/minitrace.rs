@@ -112,10 +112,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
         .join()
         .unwrap();
 
-        minitrace::set_reporter(
-            otlp_reporter,
-            minitrace::collector::Config::default().max_spans_per_trace(Some(1000)),
-        );
+        minitrace::set_reporter(otlp_reporter, minitrace::collector::Config::default());
 
         guards.push(Box::new(defer::defer(minitrace::flush)));
         guards.push(Box::new(defer::defer(|| {
