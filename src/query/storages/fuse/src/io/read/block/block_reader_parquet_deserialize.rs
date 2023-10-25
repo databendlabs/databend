@@ -228,7 +228,6 @@ impl BlockReader {
         };
         Ok(array_iter)
     }
-
     pub fn deserialize_field<'a>(
         &self,
         deserialization_context: &'a FieldDeserializationContext,
