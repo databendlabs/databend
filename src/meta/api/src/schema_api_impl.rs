@@ -1647,7 +1647,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         debug!("SchemaApi: {}", func_name!());
 
         let reply = self
-            .prefix_list_kv(&[TableId::PREFIX, ""].join("/"))
+            .prefix_list_kv(&vec![TableId::PREFIX, ""].join("/"))
             .await?;
 
         let mut res = vec![];
@@ -2799,7 +2799,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 });
             } else {
                 let resp = responses
-                    .first()
+                    .get(0)
                     // fail fast if response is None (which should not happen)
                     .expect("internal error: expect one response if update_table_meta txn failed.");
 

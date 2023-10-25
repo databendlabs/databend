@@ -725,6 +725,29 @@ pub fn convert_hdfs_path(hdfs_path: &str, is_dir: bool) -> String {
     format_path
 }
 
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::convert_hdfs_path;
+
+    #[test]
+    fn test_convert_hdfs_path() {
+        let mut m = HashMap::new();
+        m.insert("hdfs://namenode:8020/user/a", "/user/a/");
+        m.insert("hdfs://namenode:8020/user/a/", "/user/a/");
+        m.insert("hdfs://namenode:8020/", "/");
+        m.insert("hdfs://namenode:8020", "/");
+        m.insert("/user/a", "/user/a/");
+        m.insert("/", "/");
+
+        for (hdfs_path, expected_path) in &m {
+            let path = convert_hdfs_path(hdfs_path, true);
+            assert_eq!(path, *expected_path);
+        }
+    }
+}
+
 #[async_recursion]
 async fn list_files_from_dir(
     operator: Operator,
@@ -795,27 +818,4 @@ async fn do_list_files_from_dir(
         }
     }
     Ok((all_files, all_dirs))
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use super::convert_hdfs_path;
-
-    #[test]
-    fn test_convert_hdfs_path() {
-        let mut m = HashMap::new();
-        m.insert("hdfs://namenode:8020/user/a", "/user/a/");
-        m.insert("hdfs://namenode:8020/user/a/", "/user/a/");
-        m.insert("hdfs://namenode:8020/", "/");
-        m.insert("hdfs://namenode:8020", "/");
-        m.insert("/user/a", "/user/a/");
-        m.insert("/", "/");
-
-        for (hdfs_path, expected_path) in &m {
-            let path = convert_hdfs_path(hdfs_path, true);
-            assert_eq!(path, *expected_path);
-        }
-    }
 }

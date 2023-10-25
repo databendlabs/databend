@@ -143,32 +143,32 @@ impl<'a> InMemoryRowGroup<'a> {
                 .iter()
                 .zip(self.metadata.columns())
                 .enumerate()
-                .filter(|&(idx, (chunk, _chunk_meta))| {
-                    chunk.is_none() && projection.leaf_included(idx)
-                })
-                .flat_map(|(idx, (_chunk, chunk_meta))| {
-                    // If the first page does not start at the beginning of the column,
-                    // then we need to also fetch a dictionary page.
-                    let mut ranges = vec![];
-                    let (start, _len) = chunk_meta.byte_range();
-                    match page_locations[idx].first() {
-                        Some(first) if first.offset as u64 != start => {
-                            ranges.push(start..first.offset as u64);
+                .filter_map(|(idx, (chunk, chunk_meta))| {
+                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
+                        // If the first page does not start at the beginning of the column,
+                        // then we need to also fetch a dictionary page.
+                        let mut ranges = vec![];
+                        let (start, _len) = chunk_meta.byte_range();
+                        match page_locations[idx].first() {
+                            Some(first) if first.offset as u64 != start => {
+                                ranges.push(start..first.offset as u64);
+                            }
+                            _ => (),
                         }
-                        _ => (),
-                    }
 
-                    ranges.extend(
-                        selection
-                            .scan_ranges(&page_locations[idx])
-                            .iter()
-                            .map(|r| r.start as u64..r.end as u64),
-                    );
-                    page_start_offsets
-                        .push(ranges.iter().map(|range| range.start as usize).collect());
+                        ranges.extend(
+                            selection
+                                .scan_ranges(&page_locations[idx])
+                                .iter()
+                                .map(|r| r.start as u64..r.end as u64),
+                        );
+                        page_start_offsets
+                            .push(ranges.iter().map(|range| range.start as usize).collect());
 
-                    ranges
+                        ranges
+                    })
                 })
+                .flatten()
                 .collect::<Vec<_>>();
 
             // Fetch ranges in different async tasks.
@@ -198,11 +198,12 @@ impl<'a> InMemoryRowGroup<'a> {
                 .column_chunks
                 .iter()
                 .enumerate()
-                .filter(|&(idx, chunk)| (chunk.is_none() && projection.leaf_included(idx)))
-                .map(|(idx, _chunk)| {
-                    let column = self.metadata.column(idx);
-                    let (start, length) = column.byte_range();
-                    start..(start + length)
+                .filter_map(|(idx, chunk)| {
+                    (chunk.is_none() && projection.leaf_included(idx)).then(|| {
+                        let column = self.metadata.column(idx);
+                        let (start, length) = column.byte_range();
+                        start..(start + length)
+                    })
                 })
                 .collect::<Vec<_>>();
 
