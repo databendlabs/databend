@@ -710,6 +710,30 @@ select t1.a, t2.b, t1.b from t1 inner join t2 on t1.a = t2.a order by t1.a, t2.b
 2 8 2
 2 8 4
 
+# test probe to build with other condition
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1 (id int, val bigint unsigned DEFAULT 0);
+
+statement ok
+create table t2 (id int, val bigint unsigned DEFAULT 0);
+
+statement ok
+insert into t1 values(1, 1696549154011), (2, 1696549154013);
+
+statement ok
+insert into t2 values(1, 1697650260000), (3, 1696549154009), (2, 1696549154010);
+
+query I
+select t1.id from t1 left join t2 on t1.id = t2.id where t1.val >= t2.val;
+----
+2
+
 statement ok
 drop table t1;
 
