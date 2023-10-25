@@ -27,7 +27,6 @@ use common_expression::SortColumnDescription;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::create_dummy_items;
 use common_pipeline_transforms::processors::transforms::transform_block_compact_for_copy::BlockCompactorForCopy;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;

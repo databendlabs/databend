@@ -369,8 +369,16 @@ impl Settings {
         self.try_get_u64("recluster_timeout_secs")
     }
 
+    pub fn set_recluster_block_size(&self, val: u64) -> Result<()> {
+        self.try_set_u64("recluster_block_size", val)
+    }
+
     pub fn get_recluster_block_size(&self) -> Result<u64> {
         self.try_get_u64("recluster_block_size")
+    }
+
+    pub fn get_enable_distributed_recluster(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_recluster")? != 0)
     }
 
     pub fn get_enable_refresh_aggregating_index_after_write(&self) -> Result<bool> {

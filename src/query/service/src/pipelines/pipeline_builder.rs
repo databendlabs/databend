@@ -104,6 +104,8 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
 use common_sql::executor::RangeJoin;
+use common_sql::executor::ReclusterSink;
+use common_sql::executor::ReclusterSource;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
@@ -300,6 +302,12 @@ impl PipelineBuilder {
             }
             PhysicalPlan::AddRowNumber(add_row_number) => {
                 self.build_add_row_number(&add_row_number)
+            }
+            PhysicalPlan::ReclusterSource(recluster_source) => {
+                self.build_recluster_source(recluster_source)
+            }
+            PhysicalPlan::ReclusterSink(recluster_sink) => {
+                self.build_recluster_sink(recluster_sink)
             }
         }
     }
@@ -839,7 +847,6 @@ impl PipelineBuilder {
             block_builder,
             io_request_semaphore,
             segments.clone(),
-            false,
         )?);
 
         let serialize_len = if !*distributed {
@@ -1137,6 +1144,43 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    fn build_recluster_source(&mut self, recluster_source: &ReclusterSource) -> Result<()> {
+        match recluster_source.tasks.len() {
+            0 => self.main_pipeline.add_source(EmptySource::create, 1),
+            1 => {
+                let table = self.ctx.build_table_by_table_info(
+                    &recluster_source.catalog_info,
+                    &recluster_source.table_info,
+                    None,
+                )?;
+                let table = FuseTable::try_from_table(table.as_ref())?;
+
+                table.build_recluster_source(
+                    self.ctx.clone(),
+                    recluster_source.tasks[0].clone(),
+                    recluster_source.catalog_info.clone(),
+                    &mut self.main_pipeline,
+                )
+            }
+            _ => Err(ErrorCode::Internal(
+                "A node can only execute one recluster task".to_string(),
+            )),
+        }
+    }
+
+    fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {
+        self.build_pipeline(&recluster_sink.input)?;
+
+        let table = self.ctx.build_table_by_table_info(
+            &recluster_sink.catalog_info,
+            &recluster_sink.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        table.build_recluster_sink(self.ctx.clone(), recluster_sink, &mut self.main_pipeline)
+    }
+
     fn build_compact_source(&mut self, compact_block: &CompactSource) -> Result<()> {
         let table = self.ctx.build_table_by_table_info(
             &compact_block.catalog_info,
@@ -1265,8 +1309,7 @@ impl PipelineBuilder {
             plan.snapshot.clone(),
             plan.mutation_kind,
             plan.merge_meta,
-        )?;
-        Ok(())
+        )
     }
 
     fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
@@ -1341,7 +1384,8 @@ impl PipelineBuilder {
             }
         })?;
         self.pipelines.push(right_res.main_pipeline);
-        self.pipelines.extend(right_res.sources_pipelines);
+        self.pipelines
+            .extend(right_res.sources_pipelines.into_iter());
         Ok(())
     }
 
@@ -1425,7 +1469,8 @@ impl PipelineBuilder {
         }
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines.extend(build_res.sources_pipelines);
+        self.pipelines
+            .extend(build_res.sources_pipelines.into_iter());
         Ok(())
     }
 
@@ -2426,7 +2471,8 @@ impl PipelineBuilder {
         })?;
 
         self.pipelines.push(build_res.main_pipeline);
-        self.pipelines.extend(build_res.sources_pipelines);
+        self.pipelines
+            .extend(build_res.sources_pipelines.into_iter());
         Ok(rx)
     }
 
@@ -2633,7 +2679,8 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
         self.pipelines.push(left_side_pipeline.main_pipeline);
-        self.pipelines.extend(left_side_pipeline.sources_pipelines);
+        self.pipelines
+            .extend(left_side_pipeline.sources_pipelines.into_iter());
         Ok(())
     }
 }

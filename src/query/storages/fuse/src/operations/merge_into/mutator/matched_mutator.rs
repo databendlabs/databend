@@ -81,8 +81,6 @@ pub struct MatchedAggregator {
     segment_locations: AHashMap<SegmentIndex, Location>,
     block_mutation_row_offset: HashMap<u64, (HashSet<usize>, HashSet<usize>)>,
     aggregation_ctx: Arc<AggregationContext>,
-    entries: Vec<MutationLogEntry>,
-    distributed_receive: bool,
 }
 
 impl MatchedAggregator {
@@ -96,7 +94,6 @@ impl MatchedAggregator {
         block_builder: BlockBuilder,
         io_request_semaphore: Arc<Semaphore>,
         segment_locations: Vec<(SegmentIndex, Location)>,
-        distributed_receive: bool,
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
@@ -127,21 +124,11 @@ impl MatchedAggregator {
             segment_reader,
             block_mutation_row_offset: HashMap::new(),
             segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
-            entries: Vec::new(),
-            distributed_receive,
         })
     }
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
-        // we need to distinct MutationLogs and RowIds
-        // this operation is lightweight.
-        let logs = MutationLogs::try_from(data_block.clone());
-        if self.distributed_receive && logs.is_ok() {
-            self.entries.extend(logs.unwrap().entries);
-            return Ok(());
-        }
-
         if data_block.is_empty() {
             return Ok(());
         }
@@ -273,7 +260,7 @@ impl MatchedAggregator {
                 ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
                     .add_message_back(e.to_string())
             })?;
-        let mut mutation_logs: Vec<MutationLogEntry> = self.entries.drain(..).collect();
+        let mut mutation_logs = Vec::new();
         for maybe_log_entry in log_entries {
             if let Some(segment_mutation_log) = maybe_log_entry? {
                 mutation_logs.push(segment_mutation_log);
