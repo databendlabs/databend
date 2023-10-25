@@ -69,7 +69,7 @@ The Runner is now integrated into Databend's CI, running with each release to lo
 
 ## Impact
 
-Thus far, SQLsmith has uncovered [50+ bugs](https://github.com/datafuselabs/databend/issues?q=is%3Aissue+label%3Afound-by-sqlsmith) in Databend after a month of running, including:
+After a month of running, SQLsmith has uncovered [50+ bugs](https://github.com/datafuselabs/databend/issues?q=is%3Aissue+label%3Afound-by-sqlsmith) in Databend, including:
   
 - Internal logic errors (17 bugs)
 - Invalid function/expression checks (12 bugs)  
