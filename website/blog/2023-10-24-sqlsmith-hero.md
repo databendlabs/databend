@@ -14,7 +14,7 @@ authors:
 
 # Leveraging Randomized Testing with SQLsmith to Uncover Bugs
 
-Testing plays a crucial role in the development and maintenance of database systems. It not only verifies correctness of functionality but also uncovers potential issues to ensure performance and stability with each change and release. Databend’s CI already supports various test types including:
+Testing plays a crucial role in the development and maintenance of database systems. It helps verify functionality correctness and proactively identify potential issues to maintain performance and stability. Databend’s CI already supports these test types:
 
 - **Unit Tests**: Validate functionality of minimum testable code units like functions and modules. Ensure they execute and return expected results.
 - **SQL Logic Tests**: Verify SQL syntax and logic correctness via test cases. Cover different query scenarios to ensure queries run properly in all situations.
