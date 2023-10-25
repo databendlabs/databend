@@ -100,7 +100,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 Previously, Databend introduced [z3.rs](https://github.com/prove-rs/z3.rs) to solve constraints by finding solutions that satisfy given conditions. [Z3](https://github.com/Z3Prover/z3) from Microsoft Research is a theorem prover commonly used to solve SMT problems. However, currently Databend's z3 solving only supports integer comparisons and needs to cover more types.
 
-For example, after supporting string comparison, `t3.f >= '2000-08-23'` in `select * from t1 left join t3 on t3.e = t1.a where t3.f >= '2000-08-23';` can be pushed down to table `t3`.
+For example, after string comparison is supported, `t3.f >= '2000-08-23'` in `select * from t1 left join t3 on t3.e = t1.a where t3.f >= '2000-08-23';` can be pushed down to table `t3`.
 
 [Issue #13236 | Feature: z3 supports more type comparison](https://github.com/datafuselabs/databend/issues/13236)
 
