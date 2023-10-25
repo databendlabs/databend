@@ -293,13 +293,11 @@ impl HttpQuery {
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
-        if let Some(query_id) = query_id {
-            // TODO: validate the query_id to be uuid format
-            ctx.set_id(query_id);
-        }
+
+        // TODO: validate the query_id to be uuid format
+        ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let query_id = ctx.get_id();
         let sql = &request.sql;
         info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
 

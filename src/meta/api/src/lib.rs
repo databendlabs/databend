@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
-#![allow(clippy::diverging_sub_expression)]
 extern crate common_meta_types;
 
 mod background_api;

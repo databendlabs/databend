@@ -54,7 +54,7 @@ impl CreateDatabaseInterpreter {
                 Some(share_name.clone()),
             )
             .await?;
-        match share_specs.first() {
+        match share_specs.get(0) {
             Some((_, share_spec)) => {
                 if !share_spec.tenants.contains(tenant) {
                     return Err(ErrorCode::UnknownShareAccounts(format!(

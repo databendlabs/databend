@@ -24,6 +24,7 @@ use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserIdentity;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::ListKVReply;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
@@ -57,6 +58,8 @@ mock! {
         ) -> Result<MGetKVReply,MetaError>;
 
         async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError>;
+
+        async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError>;
 
         async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, MetaError>;
 

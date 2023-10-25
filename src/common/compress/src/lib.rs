@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 //! This mod provides compress support for BytesWrite and decompress support for BytesRead.
 
 mod compress_algorithms;

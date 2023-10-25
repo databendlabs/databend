@@ -63,6 +63,9 @@ fn inner_project_field_default_values(default_vals: &[Scalar], paths: &[usize]) 
 
     match &default_vals[index] {
         Scalar::Tuple(s) => inner_project_field_default_values(s, &paths[1..]),
+        // If the default value of a tuple type is Null,
+        // the default value of inner fields are also Null.
+        Scalar::Null => Ok(Scalar::Null),
         _ => {
             if paths.len() > 1 {
                 return Err(ErrorCode::BadArguments(
