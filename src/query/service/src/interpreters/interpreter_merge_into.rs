@@ -34,7 +34,10 @@ use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::optimizer::SExpr;
+use common_sql::plans::Aggregate;
 use common_sql::plans::AggregateFunction;
+use common_sql::plans::AggregateMode;
+use common_sql::plans::BoundColumnRef;
 use common_sql::plans::EvalScalar;
 use common_sql::plans::MergeInto as MergePlan;
 use common_sql::plans::Plan;
@@ -42,10 +45,12 @@ use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
 use common_sql::plans::UpdatePlan;
 use common_sql::BindContext;
+use common_sql::ColumnBindingBuilder;
 use common_sql::IndexType;
 use common_sql::MetadataRef;
 use common_sql::ScalarExpr;
 use common_sql::TypeCheck;
+use common_sql::Visibility;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
@@ -154,7 +159,7 @@ impl MergeIntoInterpreter {
         } = &self.plan;
         let table_name = table.clone();
         let optimized_input = self
-            .build_static_filter(input, meta_data, self.ctx.clone(), bind_context.clone())
+            .build_static_filter(input, meta_data, self.ctx.clone())
             .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
@@ -364,7 +369,6 @@ impl MergeIntoInterpreter {
         join: &SExpr,
         metadata: &MetadataRef,
         ctx: Arc<QueryContext>,
-        bind_context: Box<BindContext>,
     ) -> Result<Box<SExpr>> {
         // 1. collect statistics from the build side
         let build_side = join.child(1)?;
@@ -384,6 +388,22 @@ impl MergeIntoInterpreter {
         let max_index = metadata
             .write()
             .add_derived_column(max_display_name.clone(), build_side_expr.data_type()?);
+        let mut bind_context = Box::new(BindContext::new());
+        let min_binding = ColumnBindingBuilder::new(
+            min_display_name.clone(),
+            min_index,
+            Box::new(build_side_expr.data_type()?),
+            Visibility::Visible,
+        )
+        .build();
+        let max_binding = ColumnBindingBuilder::new(
+            max_display_name.clone(),
+            max_index,
+            Box::new(build_side_expr.data_type()?),
+            Visibility::Visible,
+        )
+        .build();
+        bind_context.columns = vec![min_binding.clone(), max_binding.clone()];
         let min = ScalarItem {
             scalar: ScalarExpr::AggregateFunction(AggregateFunction {
                 func_name: "min".to_string(),
@@ -391,7 +411,7 @@ impl MergeIntoInterpreter {
                 params: vec![],
                 args: vec![build_side_expr.clone()],
                 return_type: Box::new(build_side_expr.data_type()?),
-                display_name: min_display_name,
+                display_name: min_display_name.clone(),
             }),
             index: min_index,
         };
@@ -402,21 +422,57 @@ impl MergeIntoInterpreter {
                 params: vec![],
                 args: vec![build_side_expr.clone()],
                 return_type: Box::new(build_side_expr.data_type()?),
-                display_name: max_display_name,
+                display_name: max_display_name.clone(),
+            }),
+            index: max_index,
+        };
+        let agg_partial_op = Aggregate {
+            mode: AggregateMode::Partial,
+            group_items: vec![],
+            aggregate_functions: vec![min.clone(), max.clone()],
+            from_distinct: false,
+            limit: None,
+            grouping_sets: None,
+        };
+        let agg_partial_sexpr = SExpr::create_unary(
+            Arc::new(agg_partial_op.into()),
+            Arc::new(build_side.clone()),
+        );
+        let agg_final_op = Aggregate {
+            mode: AggregateMode::Final,
+            group_items: vec![],
+            aggregate_functions: vec![min.clone(), max.clone()],
+            from_distinct: false,
+            limit: None,
+            grouping_sets: None,
+        };
+        let agg_final_sexpr =
+            SExpr::create_unary(Arc::new(agg_final_op.into()), Arc::new(agg_partial_sexpr));
+        let min_col = ScalarItem {
+            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: min_binding,
+            }),
+            index: min_index,
+        };
+        let max_col = ScalarItem {
+            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span: None,
+                column: max_binding,
             }),
             index: max_index,
         };
         let eval_scalar_op = EvalScalar {
-            items: vec![min, max],
+            items: vec![min_col, max_col],
         };
-        let build_side_min_max_sexpr = SExpr::create_unary(
+        let eval_scalar_sexpr = SExpr::create_unary(
             Arc::new(eval_scalar_op.into()),
-            Arc::new(build_side.clone()),
+            Arc::new(agg_final_sexpr.clone()),
         );
         let plan = Plan::Query {
-            s_expr: Box::new(build_side_min_max_sexpr),
+            s_expr: Box::new(eval_scalar_sexpr),
             metadata: metadata.clone(),
-            bind_context: bind_context,
+            bind_context,
             rewrite_kind: None,
             formatted_ast: None,
             ignore_result: false,
@@ -424,7 +480,6 @@ impl MergeIntoInterpreter {
         let interpreter: InterpreterPtr = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
-        println!("blocks: {:?}", blocks);
         todo!()
     }
 
