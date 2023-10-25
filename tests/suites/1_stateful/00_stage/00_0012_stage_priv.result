@@ -1,0 +1,14 @@
+==== check internal stage write priv ===
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [WriteInternalStage] is required on *.* for user 'u1'@'%' with roles [public].
+1
+==== check external stage priv ===
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [UsageExternalStage] is required on *.* for user 'u1'@'%' with roles [public].
+20
+==== check internal stage read priv ===
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [ReadInternalStage] is required on *.* for user 'u1'@'%' with roles [public].
+20
+=== check presign ===
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [WriteInternalStage] is required on *.* for user 'u1'@'%' with roles [public].
+000
+ERROR 1105 (HY000) at line 1: PermissionDenied. Code: 1063, Text = Permission denied, privilege [ReadInternalStage] is required on *.* for user 'u1'@'%' with roles [public].
+000

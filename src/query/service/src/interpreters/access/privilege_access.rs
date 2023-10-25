@@ -19,8 +19,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::StageType;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
+use common_sql::plans::PresignAction;
 use common_sql::plans::RewriteKind;
 use common_users::RoleCacheManager;
 
@@ -195,15 +197,23 @@ impl AccessChecker for PrivilegeAccess {
                 )
                 .await?
             }
-            Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
+            Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
                     .await?;
             }
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
-            | Plan::DropUDF(_)
             | Plan::DropIndex(_) => {
                 self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
+                    .await?;
+            }
+            Plan::CreateUDF(_) | Plan::DropUDF(_) | Plan::AlterUDF(_) => {
+                self
+                    .validate_privilege(
+                        &GrantObject::Global,
+                        vec![UserPrivilegeType::UsageUDF],
+                        true,
+                    )
                     .await?;
             }
             Plan::UseDatabase(plan) => {
@@ -634,7 +644,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterUser(_)
-            | Plan::AlterUDF(_)
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::RefreshIndex(_) => {
@@ -642,20 +651,57 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                self.validate_access(
-                    &GrantObject::Table(
-                        plan.catalog_info.catalog_name().to_string(),
-                        plan.database_name.to_string(),
-                        plan.table_name.to_string(),
-                    ),
-                    vec![UserPrivilegeType::Insert],
-                    true,
-                )
-                .await?;
-            }
-            Plan::CopyIntoLocation(_plan) => {
-                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                match plan.stage_table_info.stage_info.stage_type {
+                    StageType::External => {
+                        self
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::UsageExternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    _ => {
+                        self
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::ReadInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                }
+                self
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog_info.catalog_name().to_string(),
+                            plan.database_name.to_string(),
+                            plan.table_name.to_string(),
+                        ),
+                        vec![UserPrivilegeType::Insert],
+                        true,
+                    )
                     .await?;
+            }
+            Plan::CopyIntoLocation(plan) => match plan.stage.stage_type {
+                StageType::External => {
+                    self
+                        .validate_privilege(
+                            &GrantObject::Global,
+                            vec![UserPrivilegeType::UsageExternalStage],
+                            false,
+                        )
+                        .await?
+                }
+                _ => {
+                    self
+                        .validate_privilege(
+                            &GrantObject::Global,
+                            vec![UserPrivilegeType::WriteInternalStage],
+                            false,
+                        )
+                        .await?
+                }
             }
             Plan::CreateShareEndpoint(_)
             | Plan::ShowShareEndpoint(_)
@@ -699,7 +745,39 @@ impl AccessChecker for PrivilegeAccess {
             // SET ROLE & SHOW ROLES is a session-local statement (have same semantic with the SET ROLE in postgres), no need to check privileges
             Plan::SetRole(_) => {}
             Plan::ShowRoles(_) => {}
-            Plan::Presign(_) => {}
+            Plan::Presign(plan) => {
+                let stage = &plan.stage.stage_type;
+                let action = &plan.action;
+                match (stage, action) {
+                    (StageType::External, _) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::UsageExternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    (_, PresignAction::Upload) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::WriteInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                    (_, PresignAction::Download) => {
+                        session
+                            .validate_privilege(
+                                &GrantObject::Global,
+                                vec![UserPrivilegeType::ReadInternalStage],
+                                false,
+                            )
+                            .await?
+                    }
+                }
+            }
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
