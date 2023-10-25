@@ -20,7 +20,7 @@ Testing plays a crucial role in the development and maintenance of database syst
 - **SQL Logic Test**: A SQL logic test verifies SQL syntax and logic correctness using test cases, covering various scenarios.
 - **Performance Test**: A performance test validates performance impact of new features and optimizations. This helps prevent performance regressions.
 
-While these tests ensure functional correctness and stability during rapid development, they have limitations. Test SQL queries are mostly handwritten and simple, lacking complex queries seen in real-world scenarios. They have insufficient coverage of edge cases and exceptions. 
+While these tests ensure functional correctness and stability during rapid development, they have limitations. Handwritten SQL queries are often simplistic and lack coverage of complex real-world scenarios, edge cases, and exceptions.
 
 ## Introducing SQLsmith
 
