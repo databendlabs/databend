@@ -97,7 +97,7 @@ Analyzing the uncovered bugs led to some key learnings to avoid common pitfalls:
 SQLsmith generates most common SQLs and integrates with CI. Upcoming improvements include:
 
 - Supporting more SQL features like `UNION`, **Computed Column** etc.
-- More configurations like expression nesting depths, query complexity.
+- Introduce more configurations like expression nesting depths, query complexity.
 - Improved SQL simplification.
 - Optimized query execution and analysis.
 
