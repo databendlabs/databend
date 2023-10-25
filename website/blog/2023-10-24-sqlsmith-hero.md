@@ -54,7 +54,7 @@ By randomly generating AST components, it covers all possible SQL syntax. Contro
 
 Since generated SQLs can be very complex with the bug trigger buried, simplifying the original SQL makes bug isolation easier.
 
-The SQL Reducer iteratively removes AST components like `WITH`, `SubQuery`, `Expression` etc. If the simplified SQL still reproduces the bug, it's used. Else original SQL is retained. Ultimately, it outputs the smallest SQL to reproduce the bug by traversing all AST parts.
+The SQL Reducer iteratively removes AST components like `WITH`, `SubQuery`, `Expression` etc. If the simplified SQL continues to trigger the bug, it is adopted; otherwise, the original SQL is preserved. In the end, it generates the most concise SQL to reproduce the bug by systematically examining all AST components.
 
 ## Runner 
 
