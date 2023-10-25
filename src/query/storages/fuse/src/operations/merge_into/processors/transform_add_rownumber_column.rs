@@ -24,8 +24,6 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::Value;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -42,50 +40,20 @@ pub struct TransformAddRowNumberColumnProcessor {
 }
 
 impl TransformAddRowNumberColumnProcessor {
-    #[allow(dead_code)]
-    fn create(
+    pub fn create(
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         node_id: u16,
         row_number: Arc<AtomicU64>,
-    ) -> ProcessorPtr {
-        ProcessorPtr::create(Transformer::create(
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Transformer::create(
             input,
             output,
             TransformAddRowNumberColumnProcessor {
                 prefix: node_id,
                 row_number,
             },
-        ))
-    }
-
-    fn create_row_number_column_transform_item(
-        node_id: u16,
-        row_number: Arc<AtomicU64>,
-    ) -> PipeItem {
-        let input = InputPort::create();
-        let output = OutputPort::create();
-        PipeItem::create(
-            TransformAddRowNumberColumnProcessor::create(
-                input.clone(),
-                output.clone(),
-                node_id,
-                row_number,
-            ),
-            vec![input],
-            vec![output],
-        )
-    }
-
-    pub fn into_pipe(node_id: u16, num_threads: usize) -> Pipe {
-        let mut pipe_items = Vec::with_capacity(num_threads);
-        let row_number = Arc::new(AtomicU64::new(0));
-        for _ in 0..num_threads {
-            let pipe_item =
-                Self::create_row_number_column_transform_item(node_id, row_number.clone());
-            pipe_items.push(pipe_item);
-        }
-        Pipe::create(num_threads, num_threads, pipe_items)
+        )))
     }
 }
 

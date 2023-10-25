@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -72,6 +73,7 @@ use common_profile::SharedProcessorProfiles;
 use common_settings::Settings;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
+use common_sql::executor::AddRowNumber;
 use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
@@ -122,6 +124,7 @@ use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
+use common_storages_fuse::operations::merge_into::TransformAddRowNumberColumnProcessor;
 use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockDeserialize;
 use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockSerialize;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
@@ -294,6 +297,9 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoRowIdApply(merge_into_row_id_apply) => {
                 self.build_merge_into_row_id_apply(merge_into_row_id_apply)
             }
+            PhysicalPlan::AddRowNumber(add_row_number) => {
+                self.build_add_row_number(&add_row_number)
+            }
         }
     }
 
@@ -304,6 +310,31 @@ impl PipelineBuilder {
         // check if cast needed
         let cast_needed = select_schema != output_schema;
         Ok(cast_needed)
+    }
+
+    fn build_add_row_number(&mut self, add_row_number: &AddRowNumber) -> Result<()> {
+        // it must be distributed merge into execution
+        let node_index = add_row_number
+            .cluster_index
+            .get(&self.ctx.get_cluster().local_id);
+        if node_index.is_none() {
+            return Err(ErrorCode::NotFoundClusterNode(format!(
+                "can't find out {} when build distributed merge into pipeline",
+                self.ctx.get_cluster().local_id
+            )));
+        }
+        let node_index = *node_index.unwrap() as u16;
+        let row_number = Arc::new(AtomicU64::new(0));
+        self.main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformAddRowNumberColumnProcessor::create(
+                    transform_input_port,
+                    transform_output_port,
+                    node_index,
+                    row_number.clone(),
+                )
+            })?;
+        todo!()
     }
 
     fn build_merge_into_row_id_apply(

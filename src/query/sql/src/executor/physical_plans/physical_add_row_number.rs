@@ -40,7 +40,7 @@ impl PhysicalPlanBuilder {
     pub(crate) async fn build_add_row_number(
         &mut self,
         s_expr: &SExpr,
-        mut required: ColumnSet,
+        required: ColumnSet,
     ) -> Result<PhysicalPlan> {
         let input_plan = self.build(s_expr.child(0)?, required).await?;
         if self.ctx.get_cluster().is_empty() {

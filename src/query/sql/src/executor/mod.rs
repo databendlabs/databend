@@ -30,6 +30,7 @@ pub use physical_plans::common::AggregateFunctionDesc;
 pub use physical_plans::common::FragmentKind;
 pub use physical_plans::common::MutationKind;
 pub use physical_plans::common::OnConflictField;
+pub use physical_plans::physical_add_row_number::AddRowNumber;
 pub use physical_plans::physical_aggregate_expand::AggregateExpand;
 pub use physical_plans::physical_aggregate_final::AggregateFinal;
 pub use physical_plans::physical_aggregate_partial::AggregatePartial;
