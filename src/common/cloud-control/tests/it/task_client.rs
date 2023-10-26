@@ -62,7 +62,7 @@ impl TaskService for MockTaskService {
         Ok(Response::new(DescribeTaskResponse {
             task: Some(Task {
                 task_id: 0,
-                task_name: request.into_inner().task_name.to_string(),
+                task_name: request.into_inner().task_name,
                 query_text: "".to_string(),
                 comment: None,
                 owner: "".to_string(),
