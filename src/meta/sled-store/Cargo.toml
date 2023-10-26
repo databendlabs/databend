@@ -26,7 +26,7 @@ anyerror = { workspace = true }
 byteorder = "1.4.3"
 log = { workspace = true }
 minitrace = { workspace = true }
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = "3.4.0"

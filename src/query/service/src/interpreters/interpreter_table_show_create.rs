@@ -92,6 +92,11 @@ impl ShowCreateTableInterpreter {
         {
             let mut columns = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
+                let nullable = if field.is_nullable() {
+                    " NULL".to_string()
+                } else {
+                    " NOT NULL".to_string()
+                };
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
                         format!(" DEFAULT {expr}")
@@ -119,9 +124,10 @@ impl ShowCreateTableInterpreter {
                     "".to_string()
                 };
                 let column = format!(
-                    "  `{}` {}{}{}{}",
+                    "  `{}` {}{}{}{}{}",
                     field.name(),
-                    field.data_type().sql_name(),
+                    field.data_type().remove_recursive_nullable().sql_name(),
+                    nullable,
                     default_expr,
                     computed_expr,
                     comment
