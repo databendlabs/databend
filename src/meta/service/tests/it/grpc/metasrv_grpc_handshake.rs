@@ -24,7 +24,6 @@ use common_meta_client::to_digit_ver;
 use common_meta_client::MetaGrpcClient;
 use common_meta_client::METACLI_COMMIT_SEMVER;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;
 use log::info;
