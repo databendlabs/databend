@@ -23,8 +23,9 @@ use common_meta_api::txn_op_put;
 use common_meta_api::SchemaApi;
 use common_meta_api::TXN_MAX_RETRY_TIMES;
 use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::GrantOwnershipInfo;
 use common_meta_app::principal::GrantOwnershipObject;
+use common_meta_app::principal::RoleInfo;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::GetDatabaseReq;
@@ -46,10 +47,12 @@ use common_meta_types::TxnRequest;
 use crate::role::role_api::RoleApi;
 
 static ROLE_API_KEY_PREFIX: &str = "__fd_roles";
+static OBJECT_OWNER_API_KEY_PREFIX: &str = "__fd_object_owners";
 
 pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     role_prefix: String,
+    object_owner_prefix: String,
     tenant: String,
 }
 
@@ -68,6 +71,7 @@ impl RoleMgr {
             kv_api,
             tenant: tenant.clone(),
             role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
+            object_owner_prefix: format!("{}/{}", OBJECT_OWNER_API_KEY_PREFIX, tenant),
         })
     }
 
@@ -95,6 +99,17 @@ impl RoleMgr {
 
     fn make_role_key(&self, role: &str) -> String {
         format!("{}/{}", self.role_prefix, role)
+    }
+
+    fn make_object_owner_key(&self, object: &GrantOwnershipObject) -> String {
+        match object {
+            GrantOwnershipObject::Database { database_id } => {
+                format!("{}/database-by-id/{}", self.object_owner_prefix, database_id)
+            }
+            GrantOwnershipObject::Table { table_id } => {
+                format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
+            }
+        }
     }
 
     #[async_backtrace::framed]
@@ -307,25 +322,25 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn grant_ownership(
         &self,
-        from: &String,
-        to: &String,
         object: &GrantOwnershipObject,
+        role: &str,
     ) -> common_exception::Result<()> {
-        match object {
-            GrantObject::Database(catalog, db) => {
-                self.grant_database_ownership(from, to, catalog, db).await?;
-            }
-            GrantObject::Table(catalog, db, table) => {
-                self.grant_table_ownership(from, to, catalog, db, table)
-                    .await?;
-            }
-            _ => {
-                return Err(ErrorCode::Unimplemented(format!(
-                    "grant object {:?} not implemented",
-                    object
-                )));
-            }
-        }
+        let match_seq = MatchSeq::Exact(0);
+        let key = self.make_object_owner_key(object);
+
+        let value = serde_json::to_vec(&GrantOwnershipInfo {
+            object: object.clone(),
+            role: role.to_string(),
+        })?;
+
+        let kv_api = self.kv_api.clone();
+        kv_api.upsert_kv(UpsertKVReq::new(
+            &key,
+            match_seq,
+            Operation::Update(value),
+            None,
+        )).await?;
+
         Ok(())
     }
 
