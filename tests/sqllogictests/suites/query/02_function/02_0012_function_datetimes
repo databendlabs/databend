@@ -1018,12 +1018,8 @@ create table tc(a int, b Date)
 statement ok
 insert into tc values(1, '2022-02-03'),(2,'2022-02-04'),(3,'2022-02-05');
 
-query T
-select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc group by b;
-----
-53
-52
-52
+statement error 1006
+select arg_min(DATE_ADD(MINUTE, COUNT(*), b), a) FROM tc ;
 
 statement ok
 drop table tc

@@ -925,6 +925,23 @@ impl<'a> TypeChecker<'a> {
             }
 
             Expr::CountAll { span, window } => {
+                if self.in_aggregate_function {
+                    if self.in_window_function {
+                        // The aggregate function can be in window function call,
+                        // but it cannot be nested.
+                        // E.g. `select sum(sum(x)) over (partition by y) from t group by y;` is allowed.
+                        // But `select sum(sum(sum(x))) from t;` is not allowed.
+                        self.in_window_function = false;
+                    } else {
+                        // Reset the state
+                        self.in_aggregate_function = false;
+                        return Err(ErrorCode::SemanticError(
+                            "aggregate function calls cannot be nested".to_string(),
+                        )
+                        .set_span(*span));
+                    }
+                }
+
                 let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
 
                 let (new_agg_func, data_type) = (
