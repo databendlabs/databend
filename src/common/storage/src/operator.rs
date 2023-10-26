@@ -41,6 +41,7 @@ use common_meta_app::storage::StorageWebhdfsConfig;
 use log::warn;
 use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
+use opendal::layers::MinitraceLayer;
 use opendal::layers::RetryLayer;
 use opendal::layers::TimeoutLayer;
 use opendal::raw::HttpClient;
