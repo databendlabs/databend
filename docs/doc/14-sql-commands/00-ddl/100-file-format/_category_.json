@@ -1,7 +1,3 @@
 {
-  "label": "File Format",
-  "link": {
-    "type": "generated-index",
-    "slug": "/sql-commands/ddl/file-format"
-  }
+  "label": "File Format"
 }

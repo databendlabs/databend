@@ -55,6 +55,12 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             left,
             right,
         } => visitor.visit_binary_op(*span, op, left, right),
+        Expr::JsonOp {
+            span,
+            op,
+            left,
+            right,
+        } => visitor.visit_json_op(*span, op, left, right),
         Expr::UnaryOp { span, op, expr } => visitor.visit_unary_op(*span, op, expr),
         Expr::Cast {
             span,
@@ -338,11 +344,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::Insert(insert) => visitor.visit_insert(insert),
         Statement::Replace(replace) => visitor.visit_replace(replace),
         Statement::MergeInto(merge_into) => visitor.visit_merge_into(merge_into),
-        Statement::Delete {
-            table_reference,
-            selection,
-            ..
-        } => visitor.visit_delete(table_reference, selection),
+        Statement::Delete(delete) => visitor.visit_delete(delete),
         Statement::Update(update) => visitor.visit_update(update),
         Statement::CopyIntoTable(stmt) => visitor.visit_copy_into_table(stmt),
         Statement::CopyIntoLocation(stmt) => visitor.visit_copy_into_location(stmt),

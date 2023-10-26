@@ -383,7 +383,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, `::`, `EXTRACT`, `DATE_PART`, `POSITION`, `SUBSTRING`, `SUBSTR`, `TRIM`, `COUNT`, <Ident>, <QuotedString>, `CASE`, `ColumnPosition`, or 15 more ...
+  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, `-`, `*`, `/`, `//`, `DIV`, `%`, `||`, `<->`, `>`, `<`, `>=`, `<=`, `=`, `<>`, `!=`, `^`, `AND`, `OR`, `XOR`, `LIKE`, `NOT`, `REGEXP`, `RLIKE`, `SOUNDS`, <BitWiseOr>, <BitWiseAnd>, <BitWiseXor>, <ShiftLeft>, <ShiftRight>, `->`, `->>`, `#>`, `#>>`, <Factorial>, <SquareRoot>, <BitWiseNot>, <CubeRoot>, <Abs>, `CAST`, `TRY_CAST`, `DATE_ADD`, `DATE_SUB`, `DATE_TRUNC`, `DATE`, `TIMESTAMP`, `INTERVAL`, `::`, `EXTRACT`, `DATE_PART`, `POSITION`, `SUBSTRING`, `SUBSTR`, `TRIM`, `COUNT`, or 19 more ...
   | |                                        
   | while parsing `SELECT ...`
 
@@ -513,6 +513,18 @@ error:
                 [ PATTERN = '<regex_pattern>' ]
                 [ VALIDATION_MODE = RETURN_ROWS ]
                 [ copyOptions ]`
+
+
+---------- Input ----------
+select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+---------- Output ---------
+error: 
+  --> SQL:1:57
+  |
+1 | select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')
+  | ------                                                  ^^^^^^^ expected `PATTERN`, `FILE_FORMAT`, `)`, `,`, `FILES`, or `CONNECTION`
+  | |                                                        
+  | while parsing `SELECT ...`
 
 
 ---------- Input ----------

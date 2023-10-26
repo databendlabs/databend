@@ -83,6 +83,7 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());

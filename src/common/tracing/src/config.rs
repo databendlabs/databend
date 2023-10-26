@@ -46,7 +46,7 @@ impl Config {
             tracing: TracingConfig {
                 on: true,
                 capture_log_level: "TRACE".to_string(),
-                jaeger_endpoint: "http://localhost:14268/api/traces".to_string(),
+                otlp_endpoint: "http://127.0.0.1:4317".to_string(),
             },
         }
     }
@@ -140,7 +140,7 @@ impl Default for QueryLogConfig {
 pub struct TracingConfig {
     pub on: bool,
     pub capture_log_level: String,
-    pub jaeger_endpoint: String,
+    pub otlp_endpoint: String,
 }
 
 impl TracingConfig {
@@ -148,11 +148,11 @@ impl TracingConfig {
     pub fn from_env() -> Self {
         let capture_log_level = std::env::var("DATABEND_TRACING_CAPTURE_LOG_LEVEL")
             .unwrap_or_else(|_| "INFO".to_string());
-        let jaeger_endpoint = std::env::var("DATABEND_JAEGER_ENDPOINT");
+        let otlp_endpoint = std::env::var("DATABEND_OTEL_EXPORTER_OTLP_ENDPOINT");
         Self {
-            on: jaeger_endpoint.is_ok(),
+            on: otlp_endpoint.is_ok(),
             capture_log_level,
-            jaeger_endpoint: jaeger_endpoint.unwrap_or_default(),
+            otlp_endpoint: otlp_endpoint.unwrap_or_default(),
         }
     }
 }
@@ -161,15 +161,15 @@ impl Display for TracingConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), jaeger_endpoint={}",
+            "enabled={}{}, capture_log_level={}(To override: DATABEND_TRACING_CAPTURE_LOG_LEVEL=info), otlp_endpoint={}",
             self.on,
             if !self.on {
-                "(To enable: DATABEND_JAEGER_ENDPOINT=http://localhost:14268/api/traces)"
+                "(To enable: DATABEND_OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4317)"
             } else {
                 ""
             },
             self.capture_log_level,
-            self.jaeger_endpoint
+            self.otlp_endpoint
         )
     }
 }
@@ -179,7 +179,7 @@ impl Default for TracingConfig {
         Self {
             on: false,
             capture_log_level: "INFO".to_string(),
-            jaeger_endpoint: "".to_string(),
+            otlp_endpoint: "".to_string(),
         }
     }
 }

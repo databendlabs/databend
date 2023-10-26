@@ -19,6 +19,7 @@ use common_ast::ast::AddColumnOption;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::ColumnDefinition;
+use common_ast::ast::DeleteStmt;
 use common_ast::ast::Identifier;
 use common_ast::ast::InsertOperation;
 use common_ast::ast::InsertSource;
@@ -30,7 +31,6 @@ use common_ast::ast::MergeOption;
 use common_ast::ast::MergeSource;
 use common_ast::ast::MergeUpdateExpr;
 use common_ast::ast::NullableConstraint;
-use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
 use common_ast::ast::UnmatchedClause;
 use common_ast::ast::UpdateExpr;
@@ -89,7 +89,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         }
     }
 
-    pub(crate) fn gen_delete(&mut self) -> Statement {
+    pub(crate) fn gen_delete(&mut self) -> DeleteStmt {
         let idx = self.rng.gen_range(0..self.tables.len());
         let table = self.tables[idx].clone();
 
@@ -105,9 +105,9 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
         };
         let selection = Some(self.gen_expr(&DataType::Boolean));
 
-        Statement::Delete {
+        DeleteStmt {
             hints: None,
-            table_reference,
+            table: table_reference,
             selection,
         }
     }
@@ -319,8 +319,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 }
             }
             MutTableAction::RenameColumn((old_column, new_column)) => {
-                let field_index = new_schema.column_id_of(&old_column.name).unwrap();
-                let field = &mut new_schema.fields[field_index as usize];
+                let field_index = new_schema.index_of(&old_column.name).unwrap();
+                let field = &mut new_schema.fields[field_index];
                 field.name = new_column.name;
             }
             MutTableAction::ModifyColumnDataType(column) => {

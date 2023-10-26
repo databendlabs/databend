@@ -500,3 +500,41 @@ COPY INTO books_with_extra_columns
 :::note
 Extra columns in a table can have default values specified by [CREATE TABLE](../00-ddl/20-table/10-ddl-create-table.md) or [ALTER TABLE COLUMN](../00-ddl/20-table/90-alter-table-column.md). If a default value is not explicitly set for an extra column, the default value associated with its data type will be applied. For instance, an integer-type column will default to 0 if no other value is specified. 
 :::
+
+### Example 6: Loading JSON with Custom Format
+
+This example loads data from a CSV file "data.csv" with the following content:
+
+```json
+1,"U00010","{\"carPriceList\":[{\"carTypeId":10,\"distance":5860},{\"carTypeId":11,\"distance\":5861}]}"
+2,"U00011","{\"carPriceList\":[{\"carTypeId":12,\"distance":5862},{\"carTypeId":13,\"distance\":5863}]}"
+```
+
+Each line contains three columns of data, with the third column being a string containing JSON data. To load CSV data correctly with JSON fields, we need to set the correct escape character. This example uses the backslash \ as the escape character, as the JSON data contains double quotes ".
+
+#### Step 1: Create custom file format.
+
+```sql
+-- Define a custom CSV file format with the escape character set to backslash \
+CREATE FILE FORMAT my_csv_format
+    TYPE = CSV
+    ESCAPE = '\\';
+```
+
+#### Step 2: Create target table.
+
+```sql
+CREATE TABLE t
+  (
+     id       INT,
+     seq      VARCHAR,
+     p_detail VARCHAR
+  ); 
+```
+
+#### Step 3: Load with custom file format.
+
+```sql
+COPY INTO t FROM @t_stage FILES=('data.csv') 
+FILE_FORMAT=(FORMAT_NAME='my_csv_format');
+```

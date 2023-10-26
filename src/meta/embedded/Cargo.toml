@@ -27,7 +27,8 @@ common-meta-types = { path = "../types" }
 # Crates.io dependencies
 async-trait = "0.1.57"
 log = { workspace = true }
-once_cell = "1.15.0"
+minitrace = { workspace = true }
+once_cell = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]

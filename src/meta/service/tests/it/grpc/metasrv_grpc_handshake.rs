@@ -24,7 +24,6 @@ use common_meta_client::to_digit_ver;
 use common_meta_client::MetaGrpcClient;
 use common_meta_client::METACLI_COMMIT_SEMVER;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use databend_meta::version::MIN_METACLI_SEMVER;
 use log::debug;
 use log::info;
@@ -55,7 +54,7 @@ async fn test_metasrv_handshake() -> anyhow::Result<()> {
 
     let c = ConnectionFactory::create_rpc_channel(addr, Some(Duration::from_millis(1000)), None)
         .await?;
-    let mut client = MetaServiceClient::new(c);
+    let (mut client, _once) = MetaGrpcClient::new_real_client(c);
 
     info!("--- client has smaller ver than S.min_cli_ver");
     {

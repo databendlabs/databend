@@ -24,6 +24,7 @@ mod test_suite;
 pub use api::ApiBuilder;
 pub use api::AsKVApi;
 pub use api::KVApi;
+pub use api::KVStream;
 pub use key::Key;
 pub use key::KeyError;
 pub use key_builder::KeyBuilder;

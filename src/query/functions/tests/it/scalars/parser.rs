@@ -195,6 +195,20 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 },
             },
         },
+        AExpr::JsonOp {
+            span,
+            op,
+            left,
+            right,
+        } => RawExpr::FunctionCall {
+            span,
+            name: op.to_func_name(),
+            params: vec![],
+            args: vec![
+                transform_expr(*left, columns),
+                transform_expr(*right, columns),
+            ],
+        },
         AExpr::Position {
             span,
             substr_expr,

@@ -156,8 +156,8 @@ impl FlightClient {
     }
 
     // Execute do_action.
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn do_action(&mut self, action: FlightAction, timeout: u64) -> Result<Vec<u8>> {
         let action: Action = action.try_into()?;
         let action_type = action.r#type.clone();

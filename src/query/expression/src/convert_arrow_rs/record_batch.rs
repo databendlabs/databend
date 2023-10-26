@@ -17,7 +17,6 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use arrow_schema::ArrowError;
 
-use crate::convert_arrow_rs::schema::data_schema_to_arrow_schema;
 use crate::Column;
 use crate::DataBlock;
 use crate::DataSchema;
@@ -30,20 +29,6 @@ impl DataBlock {
             arrays.push(column.into_arrow_rs()?)
         }
         let schema = Arc::new(data_schema.into());
-        RecordBatch::try_new(schema, arrays)
-    }
-
-    /// Convert DataBlock to RecordBatch, and keep the schema not change.
-    pub fn to_record_batch_keep_schema(
-        self,
-        data_schema: &DataSchema,
-    ) -> Result<RecordBatch, ArrowError> {
-        let mut arrays = Vec::with_capacity(self.columns().len());
-        for entry in self.convert_to_full().columns() {
-            let column = entry.value.to_owned().into_column().unwrap();
-            arrays.push(column.into_arrow_rs()?)
-        }
-        let schema = Arc::new(data_schema_to_arrow_schema(data_schema));
         RecordBatch::try_new(schema, arrays)
     }
 

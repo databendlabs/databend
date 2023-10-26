@@ -3,7 +3,7 @@ title: Querying Staged Files
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced or updated: v1.2.148"/>
+<FunctionDescription description="Introduced or updated: v1.2.177"/>
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 
@@ -126,7 +126,7 @@ This example shows how to query data in a Parquet file stored in different locat
 <Tabs groupId="query2stage">
 <TabItem value="Stages" label="Stages">
 
-Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [PRESIGN](/14-sql-commands/00-ddl/80-presign/presign.md) method.
+Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [PRESIGN](../../14-sql-commands/00-ddl/80-presign.md) method.
 
 ```sql
 -- Query file in user stage
@@ -145,13 +145,13 @@ Let's assume you have a sample file named [books.parquet](https://datafuse-12537
 
 ```sql
 SELECT *  FROM 's3://databend-toronto' 
-(
- access_key_id => '<your-access-key-id>', 
- secret_access_key => '<your-secret-access-key>',
- endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region => 'us-east-2',
- files => ('books.parquet')
-);  
+connection => (
+ access_key_id = '<your-access-key-id>', 
+ secret_access_key = '<your-secret-access-key>',
+ endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+ region = 'us-east-2'
+),
+ files => ('books.parquet');  
 ```
 </TabItem>
 <TabItem value="Remote" label="Remote">
@@ -181,24 +181,24 @@ To query data from all Parquet files in the folder, you can use the PATTERN opti
 
 ```sql
 SELECT * FROM 's3://databend-toronto' 
-(
- access_key_id => '<your-access-key-id>', 
- secret_access_key => '<your-secret-access-key>',
- endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region => 'us-east-2', 
- pattern => '.*parquet'
-); 
+connection => (
+ access_key_id = '<your-access-key-id>', 
+ secret_access_key = '<your-secret-access-key>',
+ endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+ region = 'us-east-2'
+)
+ pattern => '.*parquet'; 
 ```
 
 To query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet" in the folder, you can use the FILES option:
 
 ```sql
 SELECT * FROM 's3://databend-toronto' 
-(
- access_key_id => '<your-access-key-id>', 
- secret_access_key => '<your-secret-access-key>',
- endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region => 'us-east-2',
- files => ('books-2023.parquet','books-2022.parquet','books-2021.parquet')
-); 
+connection => (
+ access_key_id = '<your-access-key-id>', 
+ secret_access_key = '<your-secret-access-key>',
+ endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+ region = 'us-east-2'
+)
+ files => ('books-2023.parquet','books-2022.parquet','books-2021.parquet'); 
 ```
