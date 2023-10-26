@@ -22,7 +22,7 @@ use lazy_static::lazy_static;
 const METRIC_TABLE_LOCK_NUMS: &str = "table_lock_nums";
 
 lazy_static! {
-    static ref TABLE_LEVEL_LOCK_NUMS: Family<VecLabels, Counter> =
+    static ref TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
         register_counter_family(METRIC_TABLE_LOCK_NUMS);
 }
 
@@ -34,5 +34,5 @@ pub fn record_table_lock_nums(level: TableLockLevel, table_id: u64, c: u64) {
         (LABEL_LEVEL, level.to_string()),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
-    TABLE_LEVEL_LOCK_NUMS.get_or_create(labels).inc_by(c);
+    TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);
 }

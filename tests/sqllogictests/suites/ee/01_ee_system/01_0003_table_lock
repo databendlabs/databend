@@ -13,38 +13,41 @@
 ## limitations under the License.
 
 statement ok
-drop database if exists test_index
+create database if not exists test_table_lock
 
 statement ok
-create database test_index
+use test_table_lock
 
 statement ok
-use test_index
-
-
-statement ok
-DROP AGGREGATING INDEX IF EXISTS testi;
+create table if not exists t1(a int, b int)
 
 statement ok
-CREATE TABLE t (a int, b int, c int)
+insert into t1 values(1,2),(3,4)
+
+onlyif mysql
+statement ok
+truncate table system.metrics
+
+statement error 1006
+update t1 set a=2 where to_timestamp(8472945773481)
 
 statement ok
-INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
-
-statement ok
-CREATE AGGREGATING INDEX testi AS SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b
-
-statement ok
-REFRESH AGGREGATING INDEX testi
-
-query I
-SELECT b from t WHERE c > 1 GROUP BY b ORDER BY b
-----
-1
-2
+update t1 set a=2 where b=2
 
 query II
-SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b ORDER BY b
+select * from t1 order by a
 ----
-1 1
-2 3
+2 2
+3 4
+
+onlyif mysql
+query B
+SELECT COUNT() >= 1 FROM system.metrics where metric = 'table_lock_nums_total'
+----
+1
+
+statement ok
+drop table t1 all
+
+statement ok
+drop database if exists test_table_lock
