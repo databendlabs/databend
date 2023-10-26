@@ -110,5 +110,10 @@ echo "drop table table_read_only" | $MYSQL_CLIENT_CONNECT
 
 echo "undrop table should work"
 echo "undrop table table_read_only" | $MYSQL_CLIENT_CONNECT
-echo "select * from table_read_only order by a;" | $MYSQL_CLIENT_CONNECT
+echo "select * from table_read_only order by a" | $MYSQL_CLIENT_CONNECT
+
+
+# 4.2 show create table
+echo "show create attach table"
+echo "show create table table_read_only" | $MYSQL_CLIENT_CONNECT
 

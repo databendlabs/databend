@@ -79,6 +79,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use storages_common_table_meta::table::OPT_KEY_TABLE_DATA_URI;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -625,6 +626,12 @@ impl Binder {
         let root = format!("{}/", parts.join("/"));
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
+
+        // keep a copy of table data uri_location, will be used in "show create table"
+        options.insert(
+            OPT_KEY_TABLE_DATA_URI.to_string(),
+            stmt.uri_location.to_string(),
+        );
 
         let mut uri = stmt.uri_location.clone();
         uri.path = root;

@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use once_cell::sync::Lazy;
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_STORAGE_PREFIX: &str = "storage_prefix";
+pub const OPT_KEY_TABLE_DATA_URI: &str = "table_data_uri";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_READ_ONLY_ATTACHED: &str = "read_only_attached";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";

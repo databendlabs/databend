@@ -40,3 +40,5 @@ Mutation not allowed, table [table_read_only] is READ ONLY..
 drop table IS allowed
 undrop table should work
 0
+show create attach table
+table_read_only	ATTACH TABLE `default`.`table_read_only` 's3://testbucket/admin/data/1/10/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' ) READ_ONLY
