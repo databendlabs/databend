@@ -69,5 +69,8 @@ runs:
         cargo -Zbuild-std -Zgitoxide=fetch,shallow-index,shallow-deps build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin open-sharing
         ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
-    - shell: bash
-      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+    - name: Read elf
+      if: env.BUILD_PROFILE == 'debug' && endsWith(inputs.target, '-gnu')
+      shell: bash
+      run: |
+        readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
