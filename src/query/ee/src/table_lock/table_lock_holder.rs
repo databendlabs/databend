@@ -31,7 +31,6 @@ use futures::future::Either;
 use rand::thread_rng;
 use rand::Rng;
 
-#[derive(Default)]
 pub struct TableLockHolder {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
@@ -39,6 +38,15 @@ pub struct TableLockHolder {
 }
 
 impl TableLockHolder {
+    pub fn create() -> TableLockHolder {
+        TableLockHolder {
+            shutdown_flag: Arc::new(AtomicBool::new(false)),
+            shutdown_notify: Arc::new(Notify::new()),
+            shutdown_handler: None,
+        }
+    }
+
+    #[async_backtrace::framed]
     pub async fn start<T: TableLock + ?Sized>(
         &mut self,
         ctx: Arc<dyn TableContext>,

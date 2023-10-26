@@ -131,7 +131,7 @@ impl TableLockManager for RealTableLockManager {
             }?;
         }
 
-        let mut lock_holder = TableLockHolder::default();
+        let mut lock_holder = TableLockHolder::create();
         lock_holder.start(ctx, lock).await?;
 
         let revision = lock.revision();
@@ -139,7 +139,8 @@ impl TableLockManager for RealTableLockManager {
 
         let lock_holder = Arc::new(Mutex::new(lock_holder));
         let mut active_locks = self.active_locks.write();
-        active_locks.insert(revision, Arc::downgrade(&lock_holder));
+        let prev = active_locks.insert(revision, Arc::downgrade(&lock_holder));
+        assert!(prev.is_none());
         Ok(())
     }
 
