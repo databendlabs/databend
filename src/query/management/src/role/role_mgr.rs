@@ -24,6 +24,7 @@ use common_meta_api::SchemaApi;
 use common_meta_api::TXN_MAX_RETRY_TIMES;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::RoleInfo;
+use common_meta_app::principal::GrantOwnershipObject;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::GetDatabaseReq;
@@ -308,7 +309,7 @@ impl RoleApi for RoleMgr {
         &self,
         from: &String,
         to: &String,
-        object: &GrantObject,
+        object: &GrantOwnershipObject,
     ) -> common_exception::Result<()> {
         match object {
             GrantObject::Database(catalog, db) => {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantOwnershipObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_types::MatchSeq;
 use common_meta_types::SeqV;
@@ -35,6 +35,7 @@ pub trait RoleApi: Sync + Send {
     #[allow(clippy::ptr_arg)]
     async fn update_role_with<F>(&self, role: &String, seq: MatchSeq, f: F) -> Result<Option<u64>>
     where F: FnOnce(&mut RoleInfo) + Send;
+
     /// Grant ownership would transfer ownership of a object from one role to another role
     ///
     ///
@@ -43,8 +44,7 @@ pub trait RoleApi: Sync + Send {
     /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
     /// None RoleInfo means the role is built-in role, could only update grant object metadata
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(&self, from: &String, to: &String, object: &GrantObject)
-    -> Result<()>;
+    async fn grant_ownership(&self, from: &String, to: &String, object: &GrantOwnershipObject) -> Result<()>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

@@ -27,6 +27,27 @@ pub struct GrantOwnershipInfo {
     pub role: String,
 }
 
+/// [`GrantOwnershipOject`] is used to grant the object of an ownership to a role.
+/// Currently GrantObject is based on the name of the object, which is suffering 
+/// the issue of lost privileges entries after any renaming.
+/// We already have made the plan to migrte the name based GrantObject to id based 
+/// GrantObject. But it's not a short time work, so we use the GrantOwnershipObject
+/// on the ownerships before it is done.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum GrantOwnershipObject {
+    /// used on the fuse databases
+    Database {
+        catalog: String,
+        database_id: u64
+    },
+
+    /// used on the fuse tables
+    Table {
+        catalog: String,
+        table_id: u64
+    },
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,

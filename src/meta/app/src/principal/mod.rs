@@ -55,3 +55,5 @@ pub use user_quota::UserQuota;
 pub use user_setting::UserSetting;
 pub use user_setting::UserSettingValue;
 pub use user_stage::*;
+pub use user_grant::GrantOwnershipObject;
+pub use user_grant::GrantOwnershipInfo;
