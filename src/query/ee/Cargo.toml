@@ -24,11 +24,11 @@ common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
-common-metrics = { path = "../../common/metrics" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
+common-metrics = { path = "../../common/metrics" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-tracing = { path = "../../common/tracing" }

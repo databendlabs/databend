@@ -59,7 +59,7 @@ Separates records in an input file.
 **Available Values**:
 
 - `\r\n`
-- An arbitrary character, such as `a` and `|`.
+- A non-alphanumeric character, such as `#` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\n`
@@ -70,8 +70,7 @@ Separates fields in a record.
 
 **Available Values**:
 
-- `\r\n`
-- An arbitrary character, such as `a` and `|`.
+- A non-alphanumeric character, such as `#` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `,` (comma)
@@ -162,7 +161,7 @@ Separates records in an input file.
 **Available Values**:
 
 - `\r\n`
-- An arbitrary character, such as `a` and `|`.
+- An arbitrary character, such as `#` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\n`
@@ -173,8 +172,7 @@ Separates fields in a record.
 
 **Available Values**:
 
-- `\r\n`
-- An arbitrary character, such as `a` and `|`.
+- A non-alphanumeric character, such as `#` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
 
 **Default**: `\t` (TAB)

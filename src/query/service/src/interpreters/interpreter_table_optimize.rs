@@ -16,8 +16,11 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::catalog::Catalog;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CatalogInfo;
@@ -67,18 +70,32 @@ impl Interpreter for OptimizeTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
+
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .await?;
+        // check mutability
+        table.check_mutable()?;
+
         match self.plan.action.clone() {
             OptimizeTableAction::CompactBlocks => {
-                self.build_pipeline(CompactTarget::Blocks, false).await
+                self.build_pipeline(catalog, table, CompactTarget::Blocks, false)
+                    .await
             }
             OptimizeTableAction::CompactSegments => {
-                self.build_pipeline(CompactTarget::Segments, false).await
+                self.build_pipeline(catalog, table, CompactTarget::Segments, false)
+                    .await
             }
             OptimizeTableAction::Purge(point) => {
-                purge(ctx, plan, point).await?;
+                purge(ctx, catalog, plan, point).await?;
                 Ok(PipelineBuildResult::create())
             }
-            OptimizeTableAction::All => self.build_pipeline(CompactTarget::Blocks, true).await,
+            OptimizeTableAction::All => {
+                self.build_pipeline(catalog, table, CompactTarget::Blocks, true)
+                    .await
+            }
         }
     }
 }
@@ -121,18 +138,14 @@ impl OptimizeTableInterpreter {
 
     async fn build_pipeline(
         &self,
+        catalog: Arc<dyn Catalog>,
+        mut table: Arc<dyn Table>,
         target: CompactTarget,
         need_purge: bool,
     ) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let tenant = self.ctx.get_tenant();
-        let mut table = catalog
-            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
-            .await?;
-
         let table_info = table.get_table_info().clone();
         // check if the table is locked.
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let list_table_lock_req = ListTableLockReq {
             table_id: table_info.ident.table_id,
         };
@@ -248,13 +261,13 @@ impl OptimizeTableInterpreter {
         let plan = self.plan.clone();
         if need_purge {
             if build_res.main_pipeline.is_empty() {
-                purge(ctx, plan, None).await?;
+                purge(ctx, catalog, plan, None).await?;
             } else {
                 build_res
                     .main_pipeline
                     .set_on_finished(move |may_error| match may_error {
                         None => GlobalIORuntime::instance()
-                            .block_on(async move { purge(ctx, plan, None).await }),
+                            .block_on(async move { purge(ctx, catalog, plan, None).await }),
                         Some(error_code) => Err(error_code.clone()),
                     });
             }
@@ -266,14 +279,13 @@ impl OptimizeTableInterpreter {
 
 async fn purge(
     ctx: Arc<QueryContext>,
+    catalog: Arc<dyn Catalog>,
     plan: OptimizeTablePlan,
     instant: Option<NavigationPoint>,
 ) -> Result<()> {
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
-    let table = ctx
-        .get_catalog(&plan.catalog)
-        .await?
+    let table = catalog
         .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
         .await?;
 

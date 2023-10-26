@@ -85,6 +85,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 filter,
             })
             .await?;
+
+        // TODO buggy, table as catalog obj should be allowed to drop
+        // also drop ids
+        // filter out read-only tables
+        let tables = tables
+            .into_iter()
+            .filter(|tbl| !tbl.as_ref().is_read_only())
+            .collect::<Vec<_>>();
+
         let handler = get_vacuum_handler();
         let files_opt = handler
             .do_vacuum_drop_tables(
