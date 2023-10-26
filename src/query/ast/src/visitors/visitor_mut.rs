@@ -150,6 +150,17 @@ pub trait VisitorMut: Sized {
         Self::visit_expr(self, right);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &mut JsonOperator,
+        left: &mut Expr,
+        right: &mut Expr,
+    ) {
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
         Self::visit_expr(self, expr);
     }
@@ -421,12 +432,7 @@ pub trait VisitorMut: Sized {
     fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(
-        &mut self,
-        _table_reference: &mut TableReference,
-        _selection: &mut Option<Expr>,
-    ) {
-    }
+    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
 
     fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 

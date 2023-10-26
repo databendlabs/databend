@@ -159,10 +159,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 
 <TabItem value="APIs" label="APIs" default>
 
-* [HTTP Handler](../03-develop/00-api/00-rest.md)
-* [MySQL Handler](../03-develop/00-api/01-mysql-handler.md)
-* [ClickHouse Handler](../03-develop/00-api/02-clickhouse-handler.md)
-* [Streaming Load API](../03-develop/00-api/03-streaming-load.md)
+* [REST API](../03-develop/00-apis/index.md)
 
 </TabItem>
 

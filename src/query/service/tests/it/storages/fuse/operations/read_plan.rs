@@ -64,6 +64,7 @@ fn test_to_partitions() -> Result<()> {
     let col_nodes_gen = |field_index| ColumnNode {
         field: ArrowField::new("".to_string(), ArrowType::Int64, false),
         is_nested: false,
+        init: vec![],
         leaf_indices: vec![field_index],
         leaf_column_ids: vec![field_index as ColumnId],
         children: None,

@@ -81,17 +81,17 @@ SET enable_experimental_merge_into = 1;
 
 -- Merge data into 'salaries' based on employee details from 'employees'
 MERGE INTO salaries
-USING (SELECT * FROM employees)
-ON salaries.employee_id = employees.employee_id
-WHEN MATCHED AND employees.department = 'HR' THEN
-    UPDATE SET
-        salaries.salary = salaries.salary + 1000.00
-WHEN MATCHED THEN
-    UPDATE SET
-        salaries.salary = salaries.salary + 500.00
-WHEN NOT MATCHED THEN
-    INSERT (employee_id, salary)
-    VALUES (employees.employee_id, 55000.00);
+    USING (SELECT * FROM employees)
+    ON salaries.employee_id = employees.employee_id
+    WHEN MATCHED AND employees.department = 'HR' THEN
+        UPDATE SET
+            salaries.salary = salaries.salary + 1000.00
+    WHEN MATCHED THEN
+        UPDATE SET
+            salaries.salary = salaries.salary + 500.00
+    WHEN NOT MATCHED THEN
+        INSERT (employee_id, salary)
+            VALUES (employees.employee_id, 55000.00);
 
 -- Retrieve all records from the 'salaries' table after merging
 SELECT * FROM salaries;
@@ -144,12 +144,12 @@ SET enable_experimental_merge_into = 1;
 
 -- Merge data from source_table into target_table
 MERGE INTO target_table AS T
-USING (SELECT * FROM source_table) AS S
-ON T.ID = S.ID
-WHEN MATCHED THEN
-  UPDATE *
-WHEN NOT MATCHED THEN 
-  INSERT *;
+    USING (SELECT * FROM source_table) AS S
+    ON T.ID = S.ID
+    WHEN MATCHED THEN
+        UPDATE *
+    WHEN NOT MATCHED THEN
+    INSERT *;
 
 -- Retrieve all records from the 'target_table' after merging
 SELECT * FROM target_table order by ID;

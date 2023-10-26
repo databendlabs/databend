@@ -358,7 +358,15 @@ where F: SnapshotGenerator + Send + 'static
                             }
                         }
                         metrics_inc_commit_mutation_success();
-                        let duration = self.start_time.elapsed();
+                        {
+                            let elapsed_time = self.start_time.elapsed().as_millis();
+                            let status = format!(
+                                "commit mutation success after {} retries, which took {} ms",
+                                self.retries, elapsed_time
+                            );
+                            metrics_inc_commit_milliseconds(elapsed_time);
+                            self.ctx.set_status_info(&status);
+                        }
                         if let Some(files) = &self.copied_files {
                             metrics_inc_commit_copied_files(files.file_info.len() as u64);
                         }
@@ -368,7 +376,6 @@ where F: SnapshotGenerator + Send + 'static
                                 SegmentInfo::VERSION,
                             ))?;
                         }
-                        metrics_inc_commit_milliseconds(duration.as_millis());
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }

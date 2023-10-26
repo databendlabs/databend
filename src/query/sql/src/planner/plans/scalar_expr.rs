@@ -167,20 +167,17 @@ impl ScalarExpr {
         }
     }
 
-    pub fn valid_for_clustering(&self) -> bool {
+    /// Returns true if the expression can be evaluated from a row of data.
+    pub fn evaluable(&self) -> bool {
         match self {
             ScalarExpr::BoundColumnRef(_) | ScalarExpr::ConstantExpr(_) => true,
             ScalarExpr::WindowFunction(_)
             | ScalarExpr::AggregateFunction(_)
             | ScalarExpr::SubqueryExpr(_)
             | ScalarExpr::UDFServerCall(_) => false,
-            ScalarExpr::FunctionCall(func) => {
-                func.arguments.iter().all(|arg| arg.valid_for_clustering())
-            }
-            ScalarExpr::LambdaFunction(func) => {
-                func.args.iter().all(|arg| arg.valid_for_clustering())
-            }
-            ScalarExpr::CastExpr(expr) => expr.argument.valid_for_clustering(),
+            ScalarExpr::FunctionCall(func) => func.arguments.iter().all(|arg| arg.evaluable()),
+            ScalarExpr::LambdaFunction(func) => func.args.iter().all(|arg| arg.evaluable()),
+            ScalarExpr::CastExpr(expr) => expr.argument.evaluable(),
         }
     }
 }

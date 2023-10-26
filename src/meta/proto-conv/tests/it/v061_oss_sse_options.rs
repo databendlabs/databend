@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_meta_app::storage::StorageOssConfig;
+use common_tracing::func_name;
 
 use crate::common;
 

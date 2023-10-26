@@ -88,7 +88,7 @@ CREATE TABLE `05_0003_at_t3`(a int not null, b int not null, c int not null) blo
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `b` INT,   `c` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `b` INT NOT NULL,   `c` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` drop column c
@@ -96,7 +96,7 @@ ALTER TABLE `05_0003_at_t3` drop column c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `b` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `b` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,b' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement ok
 ALTER TABLE `05_0003_at_t3` rename column b to c
@@ -104,7 +104,7 @@ ALTER TABLE `05_0003_at_t3` rename column b to c
 query TT
 SHOW CREATE TABLE `05_0003_at_t3`
 ----
-05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT,   `c` INT ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
+05_0003_at_t3 CREATE TABLE `05_0003_at_t3` (   `a` INT NOT NULL,   `c` INT NOT NULL ) ENGINE=FUSE BLOOM_INDEX_COLUMNS='a,c' COMPRESSION='zstd' STORAGE_FORMAT='native'
 
 statement error 1301
 ALTER TABLE `05_0003_at_t3` MODIFY COLUMN c decimal(5,2) not null
