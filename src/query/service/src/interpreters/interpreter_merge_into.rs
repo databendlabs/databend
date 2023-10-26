@@ -383,6 +383,36 @@ impl MergeIntoInterpreter {
             return Ok(Box::new(join.clone()));
         }
         let source_side_expr = &join_op.left_conditions[0];
+        let target_side_expr = &join_op.right_conditions[0];
+
+        // eval source side join expr
+        let source_side_join_expr_index = metadata.write().add_derived_column(
+            "source_side_join_expr".to_string(),
+            source_side_expr.data_type()?,
+        );
+        let source_side_join_expr_binding = ColumnBindingBuilder::new(
+            "source_side_join_expr".to_string(),
+            source_side_join_expr_index,
+            Box::new(source_side_expr.data_type()?),
+            Visibility::Visible,
+        )
+        .build();
+        let evaled_source_side_join_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
+            span: None,
+            column: source_side_join_expr_binding.clone(),
+        });
+        let eval_source_side_join_expr_op = EvalScalar {
+            items: vec![ScalarItem {
+                scalar: source_side_expr.clone(),
+                index: source_side_join_expr_index,
+            }],
+        };
+        let eval_target_side_condition_sexpr = SExpr::create_unary(
+            Arc::new(eval_source_side_join_expr_op.into()),
+            Arc::new(source_plan.clone()),
+        );
+
+        // eval min/max of source side join expr
         let min_display_name = format!("min({:?})", source_side_expr);
         let max_display_name = format!("max({:?})", source_side_expr);
         let min_index = metadata
@@ -412,7 +442,7 @@ impl MergeIntoInterpreter {
                 func_name: "min".to_string(),
                 distinct: false,
                 params: vec![],
-                args: vec![source_side_expr.clone()],
+                args: vec![evaled_source_side_join_expr.clone()],
                 return_type: Box::new(source_side_expr.data_type()?),
                 display_name: min_display_name.clone(),
             }),
@@ -423,7 +453,7 @@ impl MergeIntoInterpreter {
                 func_name: "max".to_string(),
                 distinct: false,
                 params: vec![],
-                args: vec![source_side_expr.clone()],
+                args: vec![evaled_source_side_join_expr],
                 return_type: Box::new(source_side_expr.data_type()?),
                 display_name: max_display_name.clone(),
             }),
@@ -439,7 +469,7 @@ impl MergeIntoInterpreter {
         };
         let agg_partial_sexpr = SExpr::create_unary(
             Arc::new(agg_partial_op.into()),
-            Arc::new(source_plan.clone()),
+            Arc::new(eval_target_side_condition_sexpr),
         );
         let agg_final_op = Aggregate {
             mode: AggregateMode::Final,
@@ -451,29 +481,8 @@ impl MergeIntoInterpreter {
         };
         let agg_final_sexpr =
             SExpr::create_unary(Arc::new(agg_final_op.into()), Arc::new(agg_partial_sexpr));
-        let min_col = ScalarItem {
-            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: min_binding,
-            }),
-            index: min_index,
-        };
-        let max_col = ScalarItem {
-            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: None,
-                column: max_binding,
-            }),
-            index: max_index,
-        };
-        let eval_scalar_op = EvalScalar {
-            items: vec![min_col, max_col],
-        };
-        let eval_scalar_sexpr = SExpr::create_unary(
-            Arc::new(eval_scalar_op.into()),
-            Arc::new(agg_final_sexpr.clone()),
-        );
         let plan = Plan::Query {
-            s_expr: Box::new(eval_scalar_sexpr),
+            s_expr: Box::new(agg_final_sexpr),
             metadata: metadata.clone(),
             bind_context,
             rewrite_kind: None,
@@ -508,7 +517,6 @@ impl MergeIntoInterpreter {
         let max_scalar = get_scalar_expr(block, 1);
 
         // 2. build filter and push down to target side
-        let target_side_expr = &join_op.right_conditions[0];
         let gte_min = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "gte".to_string(),

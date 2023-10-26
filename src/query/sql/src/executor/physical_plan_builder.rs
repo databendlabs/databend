@@ -73,6 +73,11 @@ impl PhysicalPlanBuilder {
     pub async fn build(&mut self, s_expr: &SExpr, required: ColumnSet) -> Result<PhysicalPlan> {
         // Build stat info.
         let stat_info = self.build_plan_stat_info(s_expr)?;
+        println!(
+            "s_expr.plan = {:?}, required = {:?}",
+            s_expr.plan(),
+            required
+        );
         match s_expr.plan() {
             RelOperator::Scan(scan) => self.build_table_scan(scan, required, stat_info).await,
             RelOperator::DummyTableScan(_) => self.build_dummy_table_scan().await,
