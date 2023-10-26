@@ -1944,7 +1944,7 @@ dependencies = [
  "goldenfile",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "lexical-core",
  "log",
  "match-template",
@@ -1978,7 +1978,7 @@ dependencies = [
  "common-io",
  "common-meta-app",
  "common-settings",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "lexical-core",
  "match-template",
  "micromarshal",
@@ -2025,7 +2025,7 @@ dependencies = [
  "h3o",
  "hex",
  "itertools 0.10.5",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "lexical-core",
  "libm",
  "match-template",
@@ -2509,7 +2509,7 @@ dependencies = [
  "common-expression",
  "common-pipeline-core",
  "common-profile",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "match-template",
 ]
 
@@ -2743,7 +2743,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.0.0",
  "itertools 0.10.5",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "lazy_static",
  "log",
  "metrics",
@@ -3038,7 +3038,7 @@ dependencies = [
  "common-users",
  "futures",
  "itertools 0.10.5",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "log",
  "once_cell",
  "opendal",
@@ -3718,9 +3718,9 @@ dependencies = [
 
 [[package]]
 name = "databend-client"
-version = "0.9.0"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad2404b24c7e8f1a63a9816664229212677689ff70df7c655f6709e0c1400ac"
+checksum = "cf95ef3187aba71396542f6405f79c0ea119df796d0deb634c2747f445932260"
 dependencies = [
  "http",
  "once_cell",
@@ -3738,9 +3738,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver"
-version = "0.9.0"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1d1b1e4f90361e46ff0a0717195043ec4e6974a316a9425b2f5aec0e9e7dd35"
+checksum = "09d009d865dadc1b985379aa8271ebe0f0155eafa4d286e13a58cbbab917f8d2"
 dependencies = [
  "arrow",
  "async-trait",
@@ -3759,9 +3759,9 @@ dependencies = [
 
 [[package]]
 name = "databend-driver-macros"
-version = "0.9.0"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "161021d4bcffb7d7a68119dd3d24456ebe6c28c1e24c27b2ab4c0af6363f8fd3"
+checksum = "9240a97a704642f3c4c63a3efe403208c5a8dbdfaf64d72e6fcce8289e26e80c"
 dependencies = [
  "quote",
  "syn 2.0.29",
@@ -3906,7 +3906,7 @@ dependencies = [
  "humantime",
  "indicatif",
  "itertools 0.10.5",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "jwt-simple",
  "lazy_static",
  "log",
@@ -3969,16 +3969,16 @@ dependencies = [
 
 [[package]]
 name = "databend-sql"
-version = "0.9.0"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "368c2cca4ba8cc6a464970f8aa54e5f6f4c36c09390d94194122dc53949d21e2"
+checksum = "019e19140341144a28e08c6e0670f99ae3a137c94f141a3f0f098a5c8017124a"
 dependencies = [
  "arrow",
  "chrono",
  "databend-client",
  "glob",
  "itertools 0.11.0",
- "jsonb 0.2.3",
+ "jsonb 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "roaring",
  "serde",
  "serde_json",
@@ -4023,12 +4023,14 @@ dependencies = [
  "common-sql",
  "databend-client",
  "databend-driver",
+ "databend-sql",
  "ethnum",
  "itertools 0.11.0",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "rand 0.8.5",
  "roaring",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
@@ -4402,7 +4404,7 @@ dependencies = [
  "databend-query",
  "futures",
  "futures-util",
- "jsonb 0.3.0",
+ "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "jwt-simple",
  "log",
  "opendal",
@@ -7180,16 +7182,15 @@ dependencies = [
 
 [[package]]
 name = "jsonb"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08ae16a0692aca385098643d7c09b7e9a9f7de2443345c799ff37bca8d24971a"
+checksum = "67ecc0ffa63ae2ba534a38128fdd9e1e86bf08515769c6252d2a2c1da66d1773"
 dependencies = [
  "byteorder",
  "fast-float",
  "nom",
- "ordered-float 3.7.0",
+ "ordered-float 4.1.1",
  "rand 0.8.5",
- "serde",
  "serde_json",
 ]
 
