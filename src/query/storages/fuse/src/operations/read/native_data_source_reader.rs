@@ -205,7 +205,8 @@ impl Processor for ReadNativeDataSource<false> {
                 let virtual_reader = self.virtual_reader.clone();
                 let ctx = self.partitions.ctx.clone();
                 chunks.push(async move {
-                    let handler = tokio::spawn(async_backtrace::location!().frame(async move {
+                    let query_id = ctx.get_id();
+                    let handler = tokio::spawn(async_backtrace::location!(query_id).frame(async move {
                         let fuse_part = FusePartInfo::from_part(&part)?;
                         if let Some(index_reader) = index_reader.as_ref() {
                             let loc =
