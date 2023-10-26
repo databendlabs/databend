@@ -1548,6 +1548,9 @@ pub struct QueryConfig {
     /// A list of allowed udf server addresses.
     #[clap(long)]
     pub udf_server_allow_list: Vec<String>,
+
+    #[clap(long)]
+    pub cloud_control_grpc_server_address: Option<String>,
 }
 
 impl Default for QueryConfig {
@@ -1624,6 +1627,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
+            cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
         })
     }
 }
@@ -1710,6 +1714,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
+            cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
         }
     }
 }

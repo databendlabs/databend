@@ -221,6 +221,8 @@ pub struct QueryConfig {
 
     pub enable_udf_server: bool,
     pub udf_server_allow_list: Vec<String>,
+
+    pub cloud_control_grpc_server_address: Option<String>,
 }
 
 impl Default for QueryConfig {
@@ -287,6 +289,7 @@ impl Default for QueryConfig {
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
             enable_udf_server: false,
             udf_server_allow_list: Vec::new(),
+            cloud_control_grpc_server_address: None,
         }
     }
 }

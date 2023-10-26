@@ -190,6 +190,11 @@ build_exceptions! {
     // Index related errors.
     UnsupportedIndex(1601),
     RefreshIndexError(1602),
+
+    // Cloud control error codes
+    CloudControlConnectError(1701),
+    CloudControlNotEnabled(1702),
+    IllegalCloudControlMessageFormat(1703)
 }
 
 // Meta service errors [2001, 3000].
