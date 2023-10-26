@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-class AsyncDatabendDriver:
-    def __init__(self, dsn: str): ...  # NOQA
-    async def exec(self, sql: str) -> int: ...  # NOQA
+# flake8: noqa
+class Row:
+    def values(self) -> tuple: ...
+
+# flake8: noqa
+class AsyncDatabendConnection:
+    async def exec(self, sql: str) -> int: ...
+    async def query_row(self, sql: str) -> Row: ...
+
+# flake8: noqa
+class AsyncDatabendClient:
+    def __init__(self, dsn: str): ...
+    async def get_conn(self) -> AsyncDatabendConnection: ...

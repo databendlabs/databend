@@ -19,22 +19,47 @@ from behave.api.async_step import async_run_until_complete
 import databend_driver
 
 
-@given("A new Databend-Driver Async Connector")
+@given("A new Databend Driver Client")
 @async_run_until_complete
 async def _(context):
     dsn = os.getenv(
         "TEST_DATABEND_DSN", "databend+http://root:root@localhost:8000/?sslmode=disable"
     )
-    context.ad = databend_driver.AsyncDatabendDriver(dsn)
+    client = databend_driver.AsyncDatabendClient(dsn)
+    context.conn = await client.get_conn()
 
 
-@when('Async exec "{sql}"')
+@when("Create a test table")
 @async_run_until_complete
-async def _(context, sql):
-    await context.ad.exec(sql)
+async def _(context):
+    # TODO:
+    pass
 
 
-@then('The select "{select_sql}" should run')
+@then("Select string {input} should be equal to {output}")
 @async_run_until_complete
-async def _(context, select_sql):
-    await context.ad.exec(select_sql)
+async def _(context, input, output):
+    row = await context.conn.query_row(f"SELECT '{input}'")
+    value = row.values()[0]
+    assert output == value
+
+
+@then("Select numbers should iterate all rows")
+@async_run_until_complete
+async def _(context):
+    # TODO:
+    pass
+
+
+@then("Insert and Select should be equal")
+@async_run_until_complete
+async def _(context):
+    # TODO:
+    pass
+
+
+@then("Stream load and Select should be equal")
+@async_run_until_complete
+async def _(context):
+    # TODO:
+    pass

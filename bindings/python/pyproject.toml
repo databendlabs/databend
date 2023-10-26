@@ -1,7 +1,3 @@
-[build-system]
-build-backend = "maturin"
-requires = ["maturin>=1.0,<2.0"]
-
 [project]
 classifiers = [
     "Programming Language :: Rust",
@@ -25,4 +21,8 @@ Repository = "https://github.com/datafuselabs/bendsql"
 [tool.maturin]
 features = ["pyo3/extension-module"]
 module-name = "databend_driver._databend_driver"
-python-source = "python"
+python-source = "package"
+
+[build-system]
+build-backend = "maturin"
+requires = ["maturin>=1.0,<2.0"]

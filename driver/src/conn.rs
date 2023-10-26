@@ -33,6 +33,7 @@ use databend_sql::value::{NumberValue, Value};
 
 use crate::rest_api::RestAPIConnection;
 
+#[derive(Clone)]
 pub struct Client {
     dsn: String,
 }

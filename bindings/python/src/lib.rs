@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod asyncio;
-
-use crate::asyncio::*;
-
-use databend_driver::{Client, Connection};
-
 use pyo3::create_exception;
 use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
-use std::sync::Arc;
+use pyo3::types::{PyDict, PyList, PyTuple};
+use pyo3_asyncio::tokio::future_into_py;
+
 create_exception!(
     databend_client,
     Error,
@@ -29,32 +25,147 @@ create_exception!(
     "databend_client related errors"
 );
 
-#[derive(Clone)]
-pub struct Connector {
-    pub connector: FusedConnector,
+#[pymodule]
+fn _databend_driver(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_class::<AsyncDatabendClient>()?;
+    m.add_class::<AsyncDatabendConnection>()?;
+    Ok(())
 }
 
-pub type FusedConnector = Arc<dyn Connection>;
+#[pyclass(module = "databend_driver")]
+pub struct AsyncDatabendClient(databend_driver::Client);
 
-// For bindings
-impl Connector {
-    pub fn new_connector(dsn: &str) -> Result<Box<Self>, Error> {
-        let client = Client::new(dsn.to_string());
-        let conn = futures::executor::block_on(client.get_conn()).unwrap();
-        let r = Self {
-            connector: FusedConnector::from(conn),
-        };
-        Ok(Box::new(r))
+#[pymethods]
+impl AsyncDatabendClient {
+    #[new]
+    #[pyo3(signature = (dsn))]
+    pub fn new(dsn: String) -> PyResult<Self> {
+        let client = databend_driver::Client::new(dsn);
+        Ok(Self(client))
+    }
+
+    pub fn get_conn<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let conn = this.get_conn().await.unwrap();
+            Ok(AsyncDatabendConnection(conn))
+        })
     }
 }
 
-fn build_connector(dsn: &str) -> PyResult<Connector> {
-    let conn = Connector::new_connector(dsn).unwrap();
-    Ok(*conn)
+#[pyclass(module = "databend_driver")]
+pub struct AsyncDatabendConnection(Box<dyn databend_driver::Connection>);
+
+#[pymethods]
+impl AsyncDatabendConnection {
+    pub fn exec<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let res = this.exec(&sql).await.unwrap();
+            Ok(res)
+        })
+    }
+
+    pub fn query_row<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let row = this.query_row(&sql).await.unwrap();
+            let row = row.unwrap();
+            Ok(Row(row))
+        })
+    }
 }
 
-#[pymodule]
-fn _databend_driver(_py: Python, m: &PyModule) -> PyResult<()> {
-    m.add_class::<AsyncDatabendDriver>()?;
-    Ok(())
+#[pyclass(module = "databend_driver")]
+pub struct Row(databend_driver::Row);
+
+#[pymethods]
+impl Row {
+    pub fn values<'p>(&'p self, py: Python<'p>) -> PyResult<PyObject> {
+        let res = PyTuple::new(
+            py,
+            self.0
+                .values()
+                .into_iter()
+                .map(|v| Value(v.clone()).into_py(py)), // FIXME: do not clone
+        );
+        Ok(res.into_py(py))
+    }
+}
+
+pub struct Value(databend_driver::Value);
+
+impl IntoPy<PyObject> for Value {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self.0 {
+            databend_driver::Value::Null => py.None(),
+            databend_driver::Value::EmptyArray => {
+                let list = PyList::empty(py);
+                list.into_py(py)
+            }
+            databend_driver::Value::EmptyMap => {
+                let dict = PyDict::new(py);
+                dict.into_py(py)
+            }
+            databend_driver::Value::Boolean(b) => b.into_py(py),
+            databend_driver::Value::String(s) => s.into_py(py),
+            databend_driver::Value::Number(n) => {
+                let v = NumberValue(n);
+                v.into_py(py)
+            }
+            databend_driver::Value::Timestamp(_) => {
+                let s = self.0.to_string();
+                s.into_py(py)
+            }
+            databend_driver::Value::Date(_) => {
+                let s = self.0.to_string();
+                s.into_py(py)
+            }
+            databend_driver::Value::Array(inner) => {
+                let list = PyList::new(py, inner.into_iter().map(|v| Value(v).into_py(py)));
+                list.into_py(py)
+            }
+            databend_driver::Value::Map(inner) => {
+                let dict = PyDict::new(py);
+                for (k, v) in inner {
+                    dict.set_item(Value(k).into_py(py), Value(v).into_py(py))
+                        .unwrap();
+                }
+                dict.into_py(py)
+            }
+            databend_driver::Value::Tuple(inner) => {
+                let tuple = PyTuple::new(py, inner.into_iter().map(|v| Value(v).into_py(py)));
+                tuple.into_py(py)
+            }
+            databend_driver::Value::Bitmap(s) => s.into_py(py),
+            databend_driver::Value::Variant(s) => s.into_py(py),
+        }
+    }
+}
+
+pub struct NumberValue(databend_driver::NumberValue);
+
+impl IntoPy<PyObject> for NumberValue {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self.0 {
+            databend_driver::NumberValue::Int8(i) => i.into_py(py),
+            databend_driver::NumberValue::Int16(i) => i.into_py(py),
+            databend_driver::NumberValue::Int32(i) => i.into_py(py),
+            databend_driver::NumberValue::Int64(i) => i.into_py(py),
+            databend_driver::NumberValue::UInt8(i) => i.into_py(py),
+            databend_driver::NumberValue::UInt16(i) => i.into_py(py),
+            databend_driver::NumberValue::UInt32(i) => i.into_py(py),
+            databend_driver::NumberValue::UInt64(i) => i.into_py(py),
+            databend_driver::NumberValue::Float32(i) => i.into_py(py),
+            databend_driver::NumberValue::Float64(i) => i.into_py(py),
+            databend_driver::NumberValue::Decimal128(_, _) => {
+                let s = self.0.to_string();
+                s.into_py(py)
+            }
+            databend_driver::NumberValue::Decimal256(_, _) => {
+                let s = self.0.to_string();
+                s.into_py(py)
+            }
+        }
+    }
 }
