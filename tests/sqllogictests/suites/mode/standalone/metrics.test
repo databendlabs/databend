@@ -1,0 +1,68 @@
+#################################################################################
+# test merge into pruning                                                                  #
+#################################################################################
+statement ok
+set enable_experimental_merge_into = 1;
+
+statement ok
+drop table if exists t1;
+
+statement ok
+drop table if exists t2;
+
+statement ok
+create table t1(a int,b string, c string);
+
+statement ok
+create table t2(a int,b string, c string);
+
+statement ok
+insert into t1 values(1,'b1','c1'),(2,'b2','c2');
+
+statement ok
+insert into t1 values(2,'b3','c3'),(3,'b4','c4');
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+2 b3 c3
+3 b4 c4
+
+statement ok
+insert into t2 values(3,'b_6','c_6');
+
+query TTT
+select * from t2 order by a,b,c;
+----
+3 b_6 c_6
+
+statement ok
+truncate table system.metrics;
+
+statement ok
+merge into t1 using (select * from t2 ) as t2 on t1.a = t2.a  when matched then update set t1.c = t2.c;
+
+query T
+select value from system.metrics where metric = 'fuse_segments_range_pruning_before_total';
+----
+4.0
+
+query T
+select value from system.metrics where metric = 'fuse_segments_range_pruning_after_total';
+----
+3.0
+
+query TTT
+select * from t1 order by a,b,c;
+----
+1 b1 c1
+2 b2 c2
+2 b3 c3
+3 b4 c_6
+
+statement ok
+set enable_experimental_merge_into = 0;
+
+#################################################################################
