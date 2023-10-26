@@ -14,7 +14,6 @@
 
 #![feature(try_blocks)]
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
 
 mod config;
 mod minitrace;

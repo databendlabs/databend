@@ -250,6 +250,16 @@ SELECT quantile_tdigest(0, 0.5, 0.6, 1)(number) from numbers_mt(10000)
 ----
 [0.0,4999.5,5999.5,9999.0]
 
+query F
+SELECT quantile_tdigest_weighted(0.6)(number, 1) from numbers_mt(10000)
+----
+5999.5
+
+query T
+SELECT quantile_tdigest_weighted(0, 0.5, 0.6, 1)(number, 1) from numbers_mt(10000)
+----
+[0.0,4999.5,5999.5,9999.0]
+
 query T
 SELECT list(number) from numbers_mt(10)
 ----

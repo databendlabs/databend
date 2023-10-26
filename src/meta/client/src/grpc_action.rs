@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::fmt;
 use std::fmt::Debug;
 
 use common_meta_kvapi::kvapi::GetKVReply;
@@ -46,7 +47,7 @@ use crate::message::MakeClient;
 use crate::message::Streamed;
 
 /// Bind a request type to its corresponding response type.
-pub trait RequestFor {
+pub trait RequestFor: Clone + fmt::Debug {
     type Reply;
 }
 
@@ -118,6 +119,11 @@ pub enum MetaGrpcReadReq {
     GetKV(GetKVReq),
     MGetKV(MGetKVReq),
     ListKV(ListKVReq),
+}
+
+// All Read requests returns a stream of KV pairs.
+impl RequestFor for MetaGrpcReadReq {
+    type Reply = BoxStream<StreamItem>;
 }
 
 impl From<MetaGrpcReadReq> for MetaGrpcReq {

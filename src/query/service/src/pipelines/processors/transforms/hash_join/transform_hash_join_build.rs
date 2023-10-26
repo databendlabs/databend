@@ -212,7 +212,10 @@ impl Processor for TransformHashJoinBuild {
                     }
                 }
             },
-            HashJoinBuildStep::FastReturn | HashJoinBuildStep::Finished => Ok(Event::Finished),
+            HashJoinBuildStep::FastReturn | HashJoinBuildStep::Finished => {
+                self.input_port.finish();
+                Ok(Event::Finished)
+            }
             HashJoinBuildStep::FirstSpill
             | HashJoinBuildStep::FollowSpill
             | HashJoinBuildStep::WaitSpill

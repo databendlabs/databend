@@ -154,6 +154,7 @@ impl RoleMgr {
             db_name, from, to
         )))
     }
+
     #[async_backtrace::framed]
     async fn grant_table_ownership(
         &self,
@@ -218,6 +219,7 @@ impl RoleMgr {
 #[async_trait::async_trait]
 impl RoleApi for RoleMgr {
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn add_role(&self, role_info: RoleInfo) -> common_exception::Result<u64> {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_role_key(role_info.identity());
@@ -239,6 +241,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_role(&self, role: &String, seq: MatchSeq) -> Result<SeqV<RoleInfo>, ErrorCode> {
         let key = self.make_role_key(role);
         let res = self.kv_api.get_kv(&key).await?;
@@ -252,6 +255,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn get_roles(&self) -> Result<Vec<SeqV<RoleInfo>>, ErrorCode> {
         let role_prefix = self.role_prefix.clone();
         let kv_api = self.kv_api.clone();
@@ -274,6 +278,7 @@ impl RoleApi for RoleMgr {
     ///
     /// Seq number ensures there is no other write happens between get and set.
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn update_role_with<F>(
         &self,
         role: &String,
@@ -298,6 +303,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn grant_ownership(
         &self,
         from: &String,
@@ -323,6 +329,7 @@ impl RoleApi for RoleMgr {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();

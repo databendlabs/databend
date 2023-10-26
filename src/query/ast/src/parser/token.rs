@@ -72,7 +72,7 @@ impl<'a> Iterator for Tokenizer<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.lexer.next() {
-            Some(TokenKind::Error) => Some(Err(ErrorCode::SyntaxException(
+            Some(kind) if kind == TokenKind::Error => Some(Err(ErrorCode::SyntaxException(
                 "unable to recognize the rest tokens".to_string(),
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
@@ -232,8 +232,14 @@ pub enum TokenKind {
     RBrace,
     #[token("->")]
     RArrow,
+    #[token("->>")]
+    LongRArrow,
     #[token("=>")]
     FatRArrow,
+    #[token("#>")]
+    HashRArrow,
+    #[token("#>>")]
+    HashLongRArrow,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -1088,6 +1094,9 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | LongRArrow
+                | HashRArrow
+                | HashLongRArrow
                 | FatRArrow
                 | BitWiseXor
                 | BitWiseNot

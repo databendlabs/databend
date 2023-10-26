@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(coroutines)]
+#![feature(generators)]
 #![allow(clippy::uninlined_format_args)]
 
 pub mod api;

@@ -445,7 +445,7 @@ fn test_statement() {
         r#"select table0.c1, table1.c2 from
             @stage1/dir/file ( FILE_FORMAT => 'parquet', FILES => ('file1', 'file2')) table0
             left join table1;"#,
-        r#"SELECT c1 FROM 's3://test/bucket' (ENDPOINT_URL => 'xxx', PATTERN => '*.parquet') t;"#,
+        r#"SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;"#,
         r#"CREATE FILE FORMAT my_csv
             type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1;"#,
         r#"SHOW FILE FORMATS"#,
@@ -550,6 +550,7 @@ fn test_statement_error() {
         r#"select * from aa.bb limit 10,2,3;"#,
         r#"with a as (select 1) with b as (select 2) select * from aa.bb;"#,
         r#"copy into t1 from "" FILE"#,
+        r#"select $1 from @data/csv/books.csv (file_format => 'aa' bad_arg => 'x', pattern => 'bb')"#,
         r#"copy into t1 from "" FILE_FORMAT"#,
         r#"copy into t1 from "" FILE_FORMAT = "#,
         r#"copy into t1 from "" FILE_FORMAT = ("#,
