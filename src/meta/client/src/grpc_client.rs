@@ -784,6 +784,8 @@ impl MetaGrpcClient {
     }
 
     /// Create a MetaServiceClient with authentication interceptor
+    ///
+    /// The returned `OnceCell` is used to fill in a token for the interceptor.
     pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
         let once = Arc::new(OnceCell::new());
 

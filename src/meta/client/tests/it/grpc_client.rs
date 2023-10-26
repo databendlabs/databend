@@ -68,7 +68,9 @@ async fn test_grpc_client_handshake_timeout() {
         let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None)
             .await
             .unwrap();
-        let mut client = MetaServiceClient::new(c);
+
+        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+
         let res = MetaGrpcClient::handshake(
             &mut client,
             &MIN_METASRV_SEMVER,
@@ -91,7 +93,9 @@ async fn test_grpc_client_handshake_timeout() {
         let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None)
             .await
             .unwrap();
-        let mut client = MetaServiceClient::new(c);
+
+        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+
         let res = MetaGrpcClient::handshake(
             &mut client,
             &MIN_METASRV_SEMVER,
