@@ -180,6 +180,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -203,6 +204,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -237,6 +239,7 @@ impl TestFixture {
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -280,6 +283,7 @@ impl TestFixture {
             schema: TestFixture::computed_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE

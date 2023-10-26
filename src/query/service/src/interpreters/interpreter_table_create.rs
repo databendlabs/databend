@@ -57,6 +57,7 @@ use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
+use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -152,6 +153,11 @@ impl Interpreter for CreateTableInterpreter {
 impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
+        assert!(
+            !self.plan.read_only_attach,
+            "There should be no CREATE(not ATTACH) TABLE plan which is READ_ONLY"
+        );
+
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
 
@@ -311,6 +317,11 @@ impl CreateTableInterpreter {
         let snapshot_loc = snapshot_loc[root.len()..].to_string();
         let mut options = self.plan.options.clone();
         options.insert(OPT_KEY_SNAPSHOT_LOCATION.to_string(), snapshot_loc.clone());
+
+        if self.plan.read_only_attach {
+            // mark table as read_only attached
+            options.insert(OPT_KEY_READ_ONLY_ATTACHED.to_string(), "T".to_string());
+        }
 
         let params = LoadParams {
             location: snapshot_loc.clone(),

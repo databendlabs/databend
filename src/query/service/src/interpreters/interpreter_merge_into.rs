@@ -18,6 +18,7 @@ use std::time::Instant;
 use std::u64::MAX;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
@@ -152,7 +153,7 @@ impl MergeIntoInterpreter {
             columns_set,
             catalog,
             database,
-            table,
+            table: table_name,
             target_alias,
             matched_evaluators,
             unmatched_evaluators,
@@ -160,7 +161,11 @@ impl MergeIntoInterpreter {
             field_index_map,
             ..
         } = &self.plan;
-        let table_name = table.clone();
+
+        // check mutability
+        let table = self.ctx.get_table(catalog, database, table_name).await?;
+        table.check_mutable()?;
+
         let optimized_input = self
             .build_static_filter(input, meta_data, self.ctx.clone())
             .await?;
@@ -202,7 +207,6 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        let table = self.ctx.get_table(catalog, database, &table_name).await?;
         let fuse_table =
             table
                 .as_any()
@@ -212,6 +216,7 @@ impl MergeIntoInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
         let table_info = fuse_table.get_table_info();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
