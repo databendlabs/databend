@@ -21,7 +21,6 @@ use common_meta_api::SchemaApi;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_client::MetaGrpcClient;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 
