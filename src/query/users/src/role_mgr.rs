@@ -18,6 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantOwnershipInfo;
+use common_meta_app::principal::GrantOwnershipObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType;
@@ -143,7 +145,7 @@ impl UserApiProvider {
         tenant: &str,
         from: &String,
         to: &String,
-        object: GrantObject,
+        object: &GrantOwnershipObject,
     ) -> Result<()> {
         // from and to role must exists
         self.get_role(tenant, from.clone()).await?;
@@ -151,9 +153,23 @@ impl UserApiProvider {
 
         let client = self.get_role_api_client(tenant)?;
         client
-            .grant_ownership(from, to, &object)
+            .grant_ownership(object, to)
             .await
             .map_err(|e| e.add_message_back("(while set role ownership)"))
+    }
+
+    #[async_backtrace::framed]
+    pub async fn get_ownership(
+        &self,
+        tenant: &str,
+        object: &GrantOwnershipObject,
+    ) -> Result<Option<GrantOwnershipInfo>> {
+        let client = self.get_role_api_client(tenant)?;
+        let ownership = client
+            .get_ownership(object)
+            .await
+            .map_err(|e| e.add_message_back("(while get ownership)"))?;
+        Ok(ownership)
     }
 
     #[async_backtrace::framed]

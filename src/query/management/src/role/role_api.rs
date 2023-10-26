@@ -45,17 +45,13 @@ pub trait RoleApi: Sync + Send {
     /// to: the role that will own the object, to.0 is the owner role name, to.1 is the role details
     /// None RoleInfo means the role is built-in role, could only update grant object metadata
     #[allow(clippy::ptr_arg)]
-    async fn grant_ownership(
-        &self,
-        object: &GrantOwnershipObject,
-        role: &str,
-    ) -> Result<()>;
+    async fn grant_ownership(&self, object: &GrantOwnershipObject, role: &str) -> Result<()>;
 
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
     async fn get_ownership(
         &self,
         object: &GrantOwnershipObject,
-    ) -> Result<SeqV<GrantOwnershipInfo>>;
+    ) -> Result<Option<GrantOwnershipInfo>>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

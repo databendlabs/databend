@@ -104,7 +104,10 @@ impl RoleMgr {
     fn make_object_owner_key(&self, object: &GrantOwnershipObject) -> String {
         match object {
             GrantOwnershipObject::Database { database_id } => {
-                format!("{}/database-by-id/{}", self.object_owner_prefix, database_id)
+                format!(
+                    "{}/database-by-id/{}",
+                    self.object_owner_prefix, database_id
+                )
             }
             GrantOwnershipObject::Table { table_id } => {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
@@ -334,12 +337,14 @@ impl RoleApi for RoleMgr {
         })?;
 
         let kv_api = self.kv_api.clone();
-        kv_api.upsert_kv(UpsertKVReq::new(
-            &key,
-            match_seq,
-            Operation::Update(value),
-            None,
-        )).await?;
+        kv_api
+            .upsert_kv(UpsertKVReq::new(
+                &key,
+                match_seq,
+                Operation::Update(value),
+                None,
+            ))
+            .await?;
 
         Ok(())
     }
@@ -349,17 +354,15 @@ impl RoleApi for RoleMgr {
     async fn get_ownership(
         &self,
         object: &GrantOwnershipObject,
-    ) -> common_exception::Result<SeqV<GrantOwnershipInfo>> {
+    ) -> common_exception::Result<Option<GrantOwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;
         let res_value = match res {
-            Some(res_value) => res_value,
-            None => return Ok(SeqV::new(0, GrantOwnershipInfo {
-                object: object.clone(),
-                role: "".to_string(),
-            }))
+            Some(value) => value,
+            None => return Ok(None),
         };
-        Ok(res_value.into_seqv()?)
+        let ownership: SeqV<GrantOwnershipInfo> = res_value.into_seqv()?;
+        Ok(Some(ownership.data))
     }
 
     #[async_backtrace::framed]

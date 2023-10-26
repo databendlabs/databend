@@ -16,8 +16,8 @@ use std::collections::HashSet;
 use std::fmt;
 use std::fmt::Display;
 use std::ops;
-use anyerror::AnyError;
 
+use anyerror::AnyError;
 use common_exception::ErrorCode;
 use enumflags2::BitFlags;
 
@@ -35,7 +35,6 @@ pub struct GrantOwnershipInfoSerdeError {
     pub message: String,
     pub source: AnyError,
 }
-
 
 impl Display for GrantOwnershipInfoSerdeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
