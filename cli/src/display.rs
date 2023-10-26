@@ -27,6 +27,7 @@ use tokio_stream::StreamExt;
 
 use indicatif::{HumanBytes, ProgressBar, ProgressState, ProgressStyle};
 
+use crate::config::OutputQuoteStyle;
 use crate::{
     ast::format_query,
     config::{ExpandMode, OutputFormat, Settings},
@@ -175,8 +176,14 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_csv(&mut self) -> Result<()> {
+        let quote_style = match self.settings.quote_style {
+            OutputQuoteStyle::Always => csv::QuoteStyle::Always,
+            OutputQuoteStyle::Necessary => csv::QuoteStyle::Necessary,
+            OutputQuoteStyle::NonNumeric => csv::QuoteStyle::NonNumeric,
+            OutputQuoteStyle::Never => csv::QuoteStyle::Never,
+        };
         let mut wtr = csv::WriterBuilder::new()
-            .quote_style(csv::QuoteStyle::Necessary)
+            .quote_style(quote_style)
             .from_writer(std::io::stdout());
         while let Some(line) = self.data.next().await {
             match line {
@@ -198,9 +205,16 @@ impl<'a> FormatDisplay<'a> {
     }
 
     async fn display_tsv(&mut self) -> Result<()> {
+        let quote_style = match self.settings.quote_style {
+            OutputQuoteStyle::Always => csv::QuoteStyle::Always,
+            OutputQuoteStyle::Necessary => csv::QuoteStyle::Necessary,
+            OutputQuoteStyle::NonNumeric => csv::QuoteStyle::NonNumeric,
+            OutputQuoteStyle::Never => csv::QuoteStyle::Never,
+        };
         let mut wtr = csv::WriterBuilder::new()
             .delimiter(b'\t')
-            .quote_style(csv::QuoteStyle::Necessary)
+            .quote(b'"')
+            .quote_style(quote_style)
             .from_writer(std::io::stdout());
         while let Some(line) = self.data.next().await {
             match line {

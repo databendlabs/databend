@@ -83,6 +83,8 @@ pub struct Settings {
     pub max_width: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
+    // Output Quote Style.
+    pub quote_style: OutputQuoteStyle,
     /// Expand table format display, default off, could be on/off/auto.
     /// only works with output format `table`.
     pub expand: ExpandMode,
@@ -103,6 +105,14 @@ pub enum OutputFormat {
     CSV,
     TSV,
     Null,
+}
+
+#[derive(ValueEnum, Clone, Debug, PartialEq, Deserialize)]
+pub enum OutputQuoteStyle {
+    Always,
+    Necessary,
+    NonNumeric,
+    Never,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq)]
@@ -155,6 +165,15 @@ impl Settings {
                     "tsv" => OutputFormat::TSV,
                     "null" => OutputFormat::Null,
                     _ => return Err(anyhow!("Unknown output format: {}", cmd_value)),
+                }
+            }
+            "quote_style" => {
+                self.quote_style = match cmd_value.to_ascii_lowercase().as_str() {
+                    "necessary" => OutputQuoteStyle::Necessary,
+                    "always" => OutputQuoteStyle::Always,
+                    "never" => OutputQuoteStyle::Never,
+                    "nonnumeric" => OutputQuoteStyle::NonNumeric,
+                    _ => return Err(anyhow!("Unknown quote style: {}", cmd_value)),
                 }
             }
             "expand" => self.expand = cmd_value.into(),
@@ -217,6 +236,7 @@ impl Default for Settings {
             progress_color: "cyan".to_string(),
             prompt: "{user}@{warehouse}/{database}> ".to_string(),
             output_format: OutputFormat::Table,
+            quote_style: OutputQuoteStyle::Necessary,
             expand: ExpandMode::Off,
             show_progress: false,
             max_display_rows: 40,

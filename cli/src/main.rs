@@ -25,6 +25,7 @@ use std::{
     io::{stdin, IsTerminal},
 };
 
+use crate::config::OutputQuoteStyle;
 use anyhow::{anyhow, Result};
 use clap::{ArgAction, CommandFactory, Parser, ValueEnum};
 use config::{Config, OutputFormat, Settings, TimeOption};
@@ -148,6 +149,9 @@ struct Args {
 
     #[clap(short = 'o', long, help = "Output format")]
     output: Option<OutputFormat>,
+
+    #[clap(short = 's', long, help = "Output quote style")]
+    quote_style: Option<OutputQuoteStyle>,
 
     #[clap(
         long,
@@ -313,6 +317,9 @@ pub async fn main() -> Result<()> {
 
     if let Some(output) = args.output {
         settings.output_format = output;
+    }
+    if let Some(quote_style) = args.quote_style {
+        settings.quote_style = quote_style
     }
     if args.progress {
         settings.show_progress = true;
