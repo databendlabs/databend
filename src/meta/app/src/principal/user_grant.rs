@@ -22,6 +22,12 @@ use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub struct GrantOwnershipInfo {
+    pub object: GrantObject,
+    pub role: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
     Database(String, String),
