@@ -751,6 +751,7 @@ pub const ALL_SIMPLE_CAST_FUNCTIONS: &[&str] = &[
     "to_variant",
     "to_boolean",
     "to_decimal",
+    "to_bitmap",
 ];
 
 pub fn is_simple_cast_function(name: &str) -> bool {
