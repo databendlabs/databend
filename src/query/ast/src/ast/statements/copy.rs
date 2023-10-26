@@ -401,7 +401,7 @@ impl Display for UriLocation {
         if !self.part_prefix.is_empty() {
             write!(f, " LOCATION_PREFIX = '{}'", self.part_prefix)?;
         }
-        write!(f, "{}", self.connection)?;
+        write!(f, "{}", self.connection.mask())?;
         Ok(())
     }
 }

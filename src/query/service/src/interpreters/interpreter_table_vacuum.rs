@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
@@ -61,6 +62,10 @@ impl Interpreter for VacuumTableInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let hours = match self.plan.option.retain_hours {
             Some(hours) => hours as i64,
             None => ctx.get_settings().get_retention_period()? as i64,

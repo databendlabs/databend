@@ -71,6 +71,16 @@ impl Interpreter for DropTableInterpreter {
             }
             let catalog = self.ctx.get_catalog(catalog_name).await?;
 
+            // Although even if data is in READ_ONLY mode,
+            // as a catalog object, the table itself is allowed to be dropped (and undropped later),
+            // `drop table ALL` is NOT allowed, which implies that the table data need to be truncated.
+            if self.plan.all {
+                // check mutability, if the table is read only, we cannot truncate the data
+                tbl.check_mutable().map_err(|e| {
+                    e.add_message(" drop table ALL is not allowed for read only table, please consider remove the option ALL")
+                })?
+            }
+
             let resp = catalog
                 .drop_table_by_id(DropTableByIdReq {
                     if_exists: self.plan.if_exists,
