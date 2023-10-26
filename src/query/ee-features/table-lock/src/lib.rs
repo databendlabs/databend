@@ -13,11 +13,12 @@
 // limitations under the License.
 
 mod table_level_lock;
-mod table_lock_handler;
-mod table_lock_heartbeat;
 mod table_lock_manager;
 
-pub use table_level_lock::*;
-pub use table_lock_handler::TableLockHandler;
-pub use table_lock_heartbeat::TableLockHeartbeat;
+pub use table_level_lock::CreateTableLockReq;
+pub use table_level_lock::DeleteTableLockReq;
+pub use table_level_lock::ExtendTableLockReq;
+pub use table_level_lock::ListTableLockReq;
+pub use table_level_lock::TableLevelLock;
 pub use table_lock_manager::TableLockManager;
+pub use table_lock_manager::TableLockManagerWrapper;

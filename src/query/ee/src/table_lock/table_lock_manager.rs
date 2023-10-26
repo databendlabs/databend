@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+use async_channel::Sender;
 use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
+use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_types::protobuf::watch_request::FilterType;
@@ -25,20 +29,42 @@ use common_pipeline_core::TableLock;
 use common_storages_fuse::TableContext;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
-use table_lock::TableLockHandler;
-use table_lock::TableLockHeartbeat;
+use parking_lot::RwLock;
 use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
-pub struct RealTableLockHandler {}
+use crate::table_lock::table_lock_heartbeat::TableLockHeartbeat;
+
+pub struct RealTableLockManager {
+    active_lock: Arc<RwLock<HashMap<u64, TableLockHeartbeat>>>,
+    tx: Sender<u64>,
+}
+
+impl RealTableLockManager {
+    fn create() -> Self {
+        let (tx, rx) = async_channel::unbounded();
+        let active_lock = Arc::new(RwLock::new(HashMap::<u64, TableLockHeartbeat>::new()));
+        GlobalIORuntime::instance().spawn({
+            let active_lock = active_lock.clone();
+            async move {
+                while let Ok(revision) = rx.recv().await {
+                    let lock = active_lock.write().remove(&revision);
+                    if let Some(mut lock) = lock {
+                        if let Err(cause) = lock.shutdown().await {
+                            log::warn!("Cannot shutdown table lock heartbeat, cause {:?}", cause);
+                        }
+                    }
+                }
+            }
+        });
+        Self { active_lock, tx }
+    }
+}
 
 #[async_trait::async_trait]
-impl TableLockHandler for RealTableLockHandler {
+impl TableLockManager for RealTableLockManager {
     #[async_backtrace::framed]
-    async fn try_lock(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        lock: &mut dyn TableLock,
-    ) -> Result<TableLockHeartbeat> {
+    async fn try_lock(&self, ctx: Arc<dyn TableContext>, lock: &mut dyn TableLock) -> Result<()> {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
 
@@ -70,7 +96,7 @@ impl TableLockHandler for RealTableLockHandler {
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
-                key: lock.watch_key(reply[position - 1]),
+                key: lock.watch_delete_key(reply[position - 1]),
                 key_end: None,
                 filter_type: FilterType::Delete.into(),
             };
@@ -101,15 +127,25 @@ impl TableLockHandler for RealTableLockHandler {
 
         let mut heartbeat = TableLockHeartbeat::default();
         heartbeat.start(ctx, lock).await?;
-        Ok(heartbeat)
+
+        let revision = lock.revision();
+        assert!(revision > 0);
+
+        let mut active_lock = self.active_lock.write();
+        active_lock.insert(revision, heartbeat);
+        Ok(())
+    }
+
+    fn unlock(&self, revision: u64) {
+        let _ = self.tx.send_blocking(revision);
     }
 }
 
-impl RealTableLockHandler {
+impl RealTableLockManager {
     pub fn init() -> Result<()> {
-        let handler = RealTableLockHandler {};
-        let manager = TableLockManager::create(Box::new(handler));
-        GlobalInstance::set(Arc::new(manager));
+        let manager = RealTableLockManager::create();
+        let wrapper = TableLockManagerWrapper::new(Box::new(manager));
+        GlobalInstance::set(Arc::new(wrapper));
         Ok(())
     }
 }

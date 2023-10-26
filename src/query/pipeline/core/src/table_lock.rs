@@ -19,7 +19,7 @@ pub trait TableLock: Sync + Send {
 
     fn revision(&self) -> u64;
 
-    fn watch_key(&self, revision: u64) -> String;
+    fn watch_delete_key(&self, revision: u64) -> String;
 
     fn create_table_lock_req(&self, expire_secs: u64) -> Box<dyn TableLockReq>;
 

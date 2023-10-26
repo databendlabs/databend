@@ -28,7 +28,7 @@ use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::Visibility;
 use log::debug;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_refresh_agg_index;
@@ -80,7 +80,7 @@ impl Interpreter for UpdateInterpreter {
             .await?;
 
         // Add table lock heartbeat.
-        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock =
             TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
         lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;

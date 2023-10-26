@@ -41,7 +41,7 @@ use common_storages_fuse::TableContext;
 use itertools::Itertools;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use super::Interpreter;
 use super::InterpreterPtr;
@@ -81,7 +81,7 @@ impl Interpreter for MergeIntoInterpreter {
                 .await?;
 
         // Add table lock heartbeat before execution.
-        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_id);
         lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
         build_res.main_pipeline.add_table_lock(Arc::new(table_lock));

@@ -39,7 +39,7 @@ use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
@@ -288,7 +288,7 @@ where F: SnapshotGenerator + Send + 'static
                 }
             }
             State::TryLock => {
-                let lock_mgr = TableLockManager::instance(self.ctx.clone());
+                let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
                 let mut table_lock = TableLevelLock::create(
                     lock_mgr.clone(),
                     self.table.get_table_info().ident.table_id,

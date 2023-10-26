@@ -24,7 +24,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
@@ -139,7 +139,7 @@ impl SegmentCompactMutator {
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock =
             TableLevelLock::create(lock_mgr.clone(), fuse_table.table_info.ident.table_id);
         lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;

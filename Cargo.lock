@@ -4375,6 +4375,7 @@ dependencies = [
  "aggregating-index",
  "arrow-array",
  "async-backtrace",
+ "async-channel",
  "async-trait",
  "background-service",
  "chrono",
@@ -4406,6 +4407,8 @@ dependencies = [
  "jwt-simple",
  "log",
  "opendal",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
  "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
@@ -11556,7 +11559,6 @@ name = "table-lock"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
- "async-channel",
  "async-trait",
  "chrono",
  "common-base",
@@ -11566,10 +11568,6 @@ dependencies = [
  "common-meta-app",
  "common-meta-kvapi",
  "common-pipeline-core",
- "futures",
- "log",
- "parking_lot 0.12.1",
- "rand 0.8.5",
 ]
 
 [[package]]

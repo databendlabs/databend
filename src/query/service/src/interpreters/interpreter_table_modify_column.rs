@@ -48,7 +48,7 @@ use data_mask_feature::get_datamask_handler;
 use storages_common_index::BloomIndex;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
@@ -269,7 +269,7 @@ impl ModifyTableColumnInterpreter {
         }
 
         // Add table lock heartbeat.
-        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
         lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
 

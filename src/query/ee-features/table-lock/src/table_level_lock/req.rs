@@ -13,92 +13,13 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::sync::Arc;
 
 use chrono::Utc;
 use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::ListTableLockRevReq;
-use common_meta_app::schema::TableLockKey;
-use common_meta_kvapi::kvapi::Key;
 use common_pipeline_core::table_lock::TableLockReq;
-use common_pipeline_core::TableLock;
-
-use crate::TableLockManager;
-
-pub struct TableLevelLock {
-    lock_mgr: Arc<TableLockManager>,
-    table_id: u64,
-    revision: u64,
-}
-
-impl TableLevelLock {
-    pub fn create(lock_mgr: Arc<TableLockManager>, table_id: u64) -> Self {
-        TableLevelLock {
-            lock_mgr,
-            table_id,
-            revision: 0,
-        }
-    }
-}
-
-#[async_trait::async_trait]
-impl TableLock for TableLevelLock {
-    fn set_revision(&mut self, revision: u64) {
-        self.revision = revision;
-    }
-
-    fn revision(&self) -> u64 {
-        self.revision
-    }
-
-    fn watch_key(&self, revision: u64) -> String {
-        // Get the previous revision, watch the delete event.
-        let lock_key = TableLockKey {
-            table_id: self.table_id,
-            revision,
-        };
-        lock_key.to_string_key()
-    }
-
-    fn create_table_lock_req(&self, expire_secs: u64) -> Box<dyn TableLockReq> {
-        Box::new(CreateTableLockReq {
-            table_id: self.table_id,
-            expire_secs,
-        })
-    }
-
-    fn extend_table_lock_req(&self, expire_secs: u64) -> Box<dyn TableLockReq> {
-        Box::new(ExtendTableLockReq {
-            table_id: self.table_id,
-            expire_secs,
-            revision: self.revision,
-        })
-    }
-
-    fn delete_table_lock_req(&self) -> Box<dyn TableLockReq> {
-        Box::new(DeleteTableLockReq {
-            table_id: self.table_id,
-            revision: self.revision,
-        })
-    }
-
-    fn list_table_lock_req(&self) -> Box<dyn TableLockReq> {
-        Box::new(ListTableLockReq {
-            table_id: self.table_id,
-        })
-    }
-}
-
-impl Drop for TableLevelLock {
-    fn drop(&mut self) {
-        let revision = self.revision();
-        if revision > 0 {
-            self.lock_mgr.unlock(revision);
-        }
-    }
-}
 
 #[derive(Clone)]
 pub struct ListTableLockReq {

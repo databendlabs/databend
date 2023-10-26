@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2021 Datafuse Labs
 //
-// Licensed under the Elastic License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.elastic.co/licensing/elastic-license
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod table_lock_heartbeat;
-mod table_lock_manager;
+mod lock;
+mod req;
 
-pub use table_lock_manager::RealTableLockManager;
+pub use lock::TableLevelLock;
+pub use req::CreateTableLockReq;
+pub use req::DeleteTableLockReq;
+pub use req::ExtendTableLockReq;
+pub use req::ListTableLockReq;

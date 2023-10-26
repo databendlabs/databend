@@ -12,77 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
-use async_channel::Sender;
 use common_base::base::GlobalInstance;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_pipeline_core::TableLock;
-use parking_lot::RwLock;
 
-use crate::table_lock_handler::DummyTableLock;
-use crate::TableLockHandler;
-use crate::TableLockHeartbeat;
+#[async_trait::async_trait]
+pub trait TableLockManager: Sync + Send {
+    async fn try_lock(&self, ctx: Arc<dyn TableContext>, lock: &mut dyn TableLock) -> Result<()>;
 
-pub struct TableLockManager {
-    active_lock: Arc<RwLock<HashMap<u64, TableLockHeartbeat>>>,
-    handler: Box<dyn TableLockHandler>,
-    tx: Sender<u64>,
+    fn unlock(&self, revision: u64);
 }
 
-impl TableLockManager {
-    pub fn create(handler: Box<dyn TableLockHandler>) -> Self {
-        let (tx, rx) = async_channel::unbounded();
-        let active_lock = Arc::new(RwLock::new(HashMap::<u64, TableLockHeartbeat>::new()));
-        GlobalIORuntime::instance().spawn({
-            let active_lock = active_lock.clone();
-            async move {
-                while let Ok(revision) = rx.recv().await {
-                    let lock = active_lock.write().remove(&revision);
-                    if let Some(mut lock) = lock {
-                        if let Err(cause) = lock.shutdown().await {
-                            log::warn!("Cannot shutdown table lock heartbeat, cause {:?}", cause);
-                        }
-                    }
-                }
-            }
-        });
-        TableLockManager {
-            active_lock,
-            handler,
-            tx,
-        }
-    }
+pub struct DummyTableLock {}
 
-    pub async fn try_lock(
-        self: &Arc<Self>,
-        ctx: Arc<dyn TableContext>,
-        lock: &mut dyn TableLock,
-    ) -> Result<()> {
-        let heartbeat = self.handler.try_lock(ctx, lock).await?;
-
-        let revision = lock.revision();
-        assert!(revision > 0);
-
-        let mut active_lock = self.active_lock.write();
-        active_lock.insert(revision, heartbeat);
+#[async_trait::async_trait]
+impl TableLockManager for DummyTableLock {
+    #[async_backtrace::framed]
+    async fn try_lock(&self, _ctx: Arc<dyn TableContext>, _lock: &mut dyn TableLock) -> Result<()> {
         Ok(())
     }
 
-    pub fn unlock(&self, revision: u64) {
-        let _ = self.tx.send_blocking(revision);
+    fn unlock(&self, _revision: u64) {}
+}
+
+pub struct TableLockManagerWrapper {
+    handler: Box<dyn TableLockManager>,
+}
+
+impl TableLockManagerWrapper {
+    pub fn new(handler: Box<dyn TableLockManager>) -> Self {
+        Self { handler }
     }
 
-    pub fn instance(ctx: Arc<dyn TableContext>) -> Arc<TableLockManager> {
+    #[async_backtrace::framed]
+    pub async fn try_lock(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        lock: &mut dyn TableLock,
+    ) -> Result<()> {
+        self.handler.try_lock(ctx, lock).await
+    }
+
+    pub fn unlock(&self, revision: u64) {
+        self.handler.unlock(revision)
+    }
+
+    pub fn instance(ctx: Arc<dyn TableContext>) -> Arc<TableLockManagerWrapper> {
         let enabled_table_lock = ctx.get_settings().get_enable_table_lock().unwrap_or(false);
 
-        let dummy = Arc::new(TableLockManager::create(Box::new(DummyTableLock {})));
+        let dummy = Arc::new(TableLockManagerWrapper::new(Box::new(DummyTableLock {})));
 
         if !enabled_table_lock {
             // dummy lock does nothing

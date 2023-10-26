@@ -62,7 +62,7 @@ use log::debug;
 use log::info;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLevelLock;
-use table_lock::TableLockManager;
+use table_lock::TableLockManagerWrapper;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
@@ -119,7 +119,7 @@ impl Interpreter for DeleteInterpreter {
             .await?;
 
         // Add table lock heartbeat.
-        let lock_mgr = TableLockManager::instance(self.ctx.clone());
+        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock =
             TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
         lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
