@@ -28,7 +28,7 @@ common-meta-types = { path = "../types" }
 async-trait = "0.1.57"
 log = { workspace = true }
 minitrace = { workspace = true }
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 tempfile = "3.4.0"
 
 [dev-dependencies]

@@ -74,6 +74,7 @@ use log::info;
 use log::warn;
 use minitrace::future::FutureExt;
 use minitrace::Span;
+use once_cell::sync::OnceCell;
 use parking_lot::Mutex;
 use prost::Message;
 use semver::Version;
@@ -547,10 +548,7 @@ impl MetaGrpcClient {
         start: Instant,
         resp_err: Option<&(dyn std::error::Error + 'static)>,
     ) {
-        let current_endpoint = {
-            let current_endpoint = self.current_endpoint.lock();
-            current_endpoint.clone()
-        };
+        let current_endpoint = self.get_current_endpoint();
 
         let Some(endpoint) = current_endpoint else {
             return;
@@ -614,68 +612,56 @@ impl MetaGrpcClient {
             endpoints
         };
 
-        for (addr, is_last) in endpoints
-            .iter()
-            .enumerate()
-            .map(|(i, a)| (a, i == endpoints.len() - 1))
-        {
-            debug!("make_channel to {}", addr);
-            let channel = self.make_channel(Some(addr)).await;
-            match channel {
-                Ok(c) => {
-                    let mut client = MetaServiceClient::new(c.clone())
-                        .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-                        .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+        let mut last_err = None;
 
-                    let handshake_res = Self::handshake(
-                        &mut client,
-                        &METACLI_COMMIT_SEMVER,
-                        &MIN_METASRV_SEMVER,
-                        &self.username,
-                        &self.password,
-                    )
-                    .await;
+        for addr in endpoints.iter() {
+            self.set_current_endpoint(addr);
 
-                    match handshake_res {
-                        Ok((token, server_version)) => {
-                            let client =
-                                MetaServiceClient::with_interceptor(c, AuthInterceptor { token })
-                                    .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
-                                    .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
-
-                            return Ok((client, server_version));
-                        }
-                        Err(handshake_err) => {
-                            warn!("handshake error when make client: {:?}", handshake_err);
-                            {
-                                let mut ue = self.unhealthy_endpoints.lock();
-                                ue.insert(addr.to_string(), ());
-                            }
-                            if is_last {
-                                // reach to last addr
-                                let cli_err = MetaClientError::HandshakeError(handshake_err);
-                                return Err(cli_err);
-                            }
-                            continue;
-                        }
-                    };
-                }
-
+            let chan_res = self.make_channel(addr).await;
+            let chan = match chan_res {
+                Ok(chan) => chan,
                 Err(net_err) => {
                     warn!("{} when make_channel to {}", net_err, addr);
+                    self.mark_current_endpoint_unhealthy();
 
-                    {
-                        let mut ue = self.unhealthy_endpoints.lock();
-                        ue.insert(addr.to_string(), ());
-                    }
-
-                    if is_last {
-                        let cli_err = MetaClientError::NetworkError(net_err);
-                        return Err(cli_err);
-                    }
+                    let cli_err = MetaClientError::NetworkError(net_err);
+                    last_err = Some(cli_err);
                     continue;
                 }
-            }
+            };
+
+            let (mut client, once) = Self::new_real_client(chan);
+
+            let handshake_res = Self::handshake(
+                &mut client,
+                &METACLI_COMMIT_SEMVER,
+                &MIN_METASRV_SEMVER,
+                &self.username,
+                &self.password,
+            )
+            .await;
+
+            let (token, server_version) = match handshake_res {
+                Ok(x) => x,
+                Err(handshake_err) => {
+                    warn!("handshake error when make client: {:?}", handshake_err);
+                    self.mark_current_endpoint_unhealthy();
+
+                    let cli_err = MetaClientError::HandshakeError(handshake_err);
+                    last_err = Some(cli_err);
+                    continue;
+                }
+            };
+
+            // Update the token for the client interceptor.
+            // Safe unwrap(): it is the first time setting it.
+            once.set(token).unwrap();
+
+            return Ok((client, server_version));
+        }
+
+        if let Some(e) = last_err {
+            return Err(e);
         }
 
         let conn_err = ConnectionError::new(
@@ -692,29 +678,20 @@ impl MetaGrpcClient {
     }
 
     #[minitrace::trace]
-    async fn make_channel(&self, addr: Option<&String>) -> Result<Channel, MetaNetworkError> {
-        let addr = if let Some(addr) = addr {
-            addr.clone()
-        } else {
-            let eps = self.endpoints.lock();
-            eps.first().unwrap().clone()
-        };
-        let ch = self.conn_pool.get(&addr).await;
-        {
-            let mut current_endpoint = self.current_endpoint.lock();
-            *current_endpoint = Some(addr.clone());
+    async fn make_channel(&self, addr: &String) -> Result<Channel, MetaNetworkError> {
+        debug!("make_channel to {}", addr);
+
+        let ch = self.conn_pool.get(addr).await;
+
+        if let Err(ref e) = ch {
+            warn!(
+                "grpc_client create channel with {} failed, err: {:?}",
+                addr, e
+            );
+            grpc_metrics::incr_meta_grpc_make_client_fail(addr);
         }
-        match ch {
-            Ok(c) => Ok(c),
-            Err(e) => {
-                warn!(
-                    "grpc_client create channel with {} failed, err: {:?}",
-                    addr, e
-                );
-                grpc_metrics::incr_meta_grpc_make_client_fail(&addr);
-                Err(e)
-            }
-        }
+
+        ch
     }
 
     pub fn endpoints_non_empty(endpoints: &[String]) -> Result<(), MetaClientError> {
@@ -766,7 +743,7 @@ impl MetaGrpcClient {
             Ok(r) => Ok(r.into_inner()),
             Err(s) => {
                 if status_is_retryable(&s) {
-                    self.mark_as_unhealthy();
+                    self.mark_current_endpoint_unhealthy();
                     let (mut client, _sver) = self.make_client().await?;
                     let req = Request::new(MemberListRequest {
                         data: "".to_string(),
@@ -804,6 +781,23 @@ impl MetaGrpcClient {
                 }
             }
         }
+    }
+
+    /// Create a MetaServiceClient with authentication interceptor
+    ///
+    /// The returned `OnceCell` is used to fill in a token for the interceptor.
+    pub fn new_real_client(chan: Channel) -> (RealClient, Arc<OnceCell<Vec<u8>>>) {
+        let once = Arc::new(OnceCell::new());
+
+        let interceptor = AuthInterceptor {
+            token: once.clone(),
+        };
+
+        let client = MetaServiceClient::with_interceptor(chan, interceptor)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+
+        (client, once)
     }
 
     /// Handshake with metasrv.
@@ -844,7 +838,7 @@ impl MetaGrpcClient {
     /// ```
     #[minitrace::trace]
     pub async fn handshake(
-        client: &mut MetaServiceClient<Channel>,
+        client: &mut RealClient,
         client_ver: &Version,
         min_metasrv_ver: &Version,
         username: &str,
@@ -861,6 +855,8 @@ impl MetaGrpcClient {
             password: password.to_string(),
         };
         let mut payload = vec![];
+
+        // TODO: return MetaNetworkError
         auth.encode(&mut payload)
             .map_err(|e| MetaHandshakeError::new("encode auth payload", &e))?;
 
@@ -872,12 +868,14 @@ impl MetaGrpcClient {
             }
         }));
 
+        // TODO: return MetaNetworkError
         let rx = client
             .handshake(req)
             .await
             .map_err(|e| MetaHandshakeError::new("when sending handshake rpc", &e))?;
         let mut rx = rx.into_inner();
 
+        // TODO: return MetaNetworkError
         let res = rx.next().await.ok_or_else(|| {
             MetaHandshakeError::new(
                 "when recv from handshake stream",
@@ -1000,7 +998,7 @@ impl MetaGrpcClient {
 
             if let Err(ref e) = result {
                 if status_is_retryable(e) {
-                    self.mark_as_unhealthy();
+                    self.mark_current_endpoint_unhealthy();
                     continue;
                 }
             }
@@ -1061,7 +1059,7 @@ impl MetaGrpcClient {
 
                     if let Err(ref e) = result {
                         if status_is_retryable(e) {
-                            self.mark_as_unhealthy();
+                            self.mark_current_endpoint_unhealthy();
                             continue;
                         }
                     }
@@ -1091,7 +1089,7 @@ impl MetaGrpcClient {
 
             if let Err(ref e) = result {
                 if status_is_retryable(e) {
-                    self.mark_as_unhealthy();
+                    self.mark_current_endpoint_unhealthy();
                     continue;
                 }
             }
@@ -1123,7 +1121,7 @@ impl MetaGrpcClient {
             Ok(r) => return Ok(r.into_inner()),
             Err(s) => {
                 if status_is_retryable(&s) {
-                    self.mark_as_unhealthy();
+                    self.mark_current_endpoint_unhealthy();
                     let (mut client, _sver) = self.make_client().await?;
                     let req: Request<TxnRequest> = Request::new(txn);
                     let req = common_tracing::inject_span_to_tonic_request(req);
@@ -1145,10 +1143,21 @@ impl MetaGrpcClient {
         Ok(reply)
     }
 
-    fn mark_as_unhealthy(&self) {
-        let ca = self.current_endpoint.lock();
+    fn set_current_endpoint(&self, addr: impl ToString) {
+        let mut ce = self.current_endpoint.lock();
+        *ce = Some(addr.to_string());
+    }
+
+    fn get_current_endpoint(&self) -> Option<String> {
+        let ce = self.current_endpoint.lock();
+        ce.as_ref().cloned()
+    }
+
+    fn mark_current_endpoint_unhealthy(&self) {
+        let endpoint = self.get_current_endpoint().unwrap();
+
         let mut ue = self.unhealthy_endpoints.lock();
-        ue.insert((*ca).as_ref().unwrap().clone(), ());
+        ue.insert(endpoint, ());
     }
 }
 
@@ -1165,15 +1174,26 @@ fn status_is_retryable(status: &Status) -> bool {
     )
 }
 
+/// Fill in auth token into request metadata.
+///
+/// The token is stored in a `OnceCell`, which is fill in when handshake is done.
 #[derive(Clone)]
 pub struct AuthInterceptor {
-    pub token: Vec<u8>,
+    pub token: Arc<OnceCell<Vec<u8>>>,
 }
 
 impl Interceptor for AuthInterceptor {
     fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
         let metadata = req.metadata_mut();
-        metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&self.token));
+
+        // The handshake does not need token.
+        // When the handshake is done, token is filled.
+        let Some(token) = self.token.get() else {
+            return Ok(req);
+        };
+
+        let meta_value = MetadataValue::from_bytes(token.as_ref());
+        metadata.insert_bin(AUTH_TOKEN_KEY, meta_value);
         Ok(req)
     }
 }
