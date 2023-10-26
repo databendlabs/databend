@@ -77,12 +77,17 @@ impl<'a> Evaluator<'a> {
     #[cfg(debug_assertions)]
     fn check_expr(&self, expr: &Expr) {
         let column_refs = expr.column_refs();
-        for (index, datatype) in column_refs.iter() {
+        for (index, data_type) in column_refs.iter() {
             let column = self.input_columns.get_by_offset(*index);
+            if (column.data_type == DataType::Null && data_type.is_nullable())
+                || (column.data_type.is_nullable() && data_type == &DataType::Null)
+            {
+                continue;
+            }
             assert_eq!(
                 &column.data_type,
-                datatype,
-                "column datatype mismatch at index: {index}, expr: {}",
+                data_type,
+                "column data type mismatch at index: {index}, expr: {}",
                 expr.sql_display(),
             );
         }

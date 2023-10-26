@@ -59,6 +59,9 @@ impl Display for ReplaceStmt {
             write_comma_separated_list(f, &self.on_conflict_columns)?;
             write!(f, ") ")?;
         }
+        if let Some(expr) = &self.delete_when {
+            write!(f, "DELETE WHEN {expr} ")?;
+        }
 
         write!(f, "{}", self.source)
     }
