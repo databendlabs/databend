@@ -85,8 +85,8 @@ message ShowTasksRequest {// every owner has a roles list like ["role1", "role2"
   string tenant_id = 1;
   string name_like = 2;
   int32 result_limit = 4;
-  repeated string owners = 5;   // 根据ownership role拿到的列表，直接在cloud control里面查
-  repeated string task_ids = 6; // meta 里面需要查询的信息, privilege 相关
+  repeated string owners = 5;   // all available roles under current client
+  repeated string task_ids = 6; // all task ids which permit to access for given user
 }
 
 message ShowTasksResponse {
