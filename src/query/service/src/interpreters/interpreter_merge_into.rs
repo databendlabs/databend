@@ -103,7 +103,9 @@ impl Interpreter for MergeIntoInterpreter {
         // Add table lock heartbeat before execution.
         let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_id);
-        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+        lock_mgr
+            .try_lock(self.ctx.clone(), &mut table_lock, &self.plan.catalog)
+            .await?;
         build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
 
         // Compact if 'enable_recluster_after_write' on.

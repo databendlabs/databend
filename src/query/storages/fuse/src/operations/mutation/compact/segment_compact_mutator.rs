@@ -142,7 +142,13 @@ impl SegmentCompactMutator {
         let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock =
             TableLevelLock::create(lock_mgr.clone(), fuse_table.table_info.ident.table_id);
-        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+        lock_mgr
+            .try_lock(
+                self.ctx.clone(),
+                &mut table_lock,
+                fuse_table.table_info.catalog(),
+            )
+            .await?;
 
         fuse_table
             .commit_mutation(

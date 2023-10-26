@@ -68,9 +68,14 @@ impl RealTableLockManager {
 #[async_trait::async_trait]
 impl TableLockManager for RealTableLockManager {
     #[async_backtrace::framed]
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>, lock: &mut dyn TableLock) -> Result<()> {
+    async fn try_lock(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        lock: &mut dyn TableLock,
+        catalog: &str,
+    ) -> Result<()> {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
-        let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
+        let catalog = ctx.get_catalog(catalog).await?;
 
         // get a new table lock revision.
         let res = catalog
@@ -130,7 +135,7 @@ impl TableLockManager for RealTableLockManager {
         }
 
         let mut lock_holder = TableLockHolder::create();
-        lock_holder.start(ctx, lock).await?;
+        lock_holder.start(ctx, catalog, lock).await?;
 
         // metrics.
         record_table_lock_nums(lock.level(), lock.table_id(), 1);

@@ -22,6 +22,7 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_catalog::catalog::Catalog;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -50,6 +51,7 @@ impl TableLockHolder {
     pub async fn start<T: TableLock + ?Sized>(
         &mut self,
         ctx: Arc<dyn TableContext>,
+        catalog: Arc<dyn Catalog>,
         lock: &T,
     ) -> Result<()> {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
@@ -62,7 +64,6 @@ impl TableLockHolder {
             let shutdown_notify = self.shutdown_notify.clone();
 
             async move {
-                let catalog = ctx.get_catalog(&ctx.get_current_catalog()).await?;
                 let mut notified = Box::pin(shutdown_notify.notified());
                 while !shutdown_flag.load(Ordering::Relaxed) {
                     let mills = {

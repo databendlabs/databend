@@ -23,7 +23,12 @@ use common_pipeline_core::TableLock;
 
 #[async_trait::async_trait]
 pub trait TableLockManager: Sync + Send {
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>, lock: &mut dyn TableLock) -> Result<()>;
+    async fn try_lock(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        lock: &mut dyn TableLock,
+        catalog: &str,
+    ) -> Result<()>;
 
     fn unlock(&self, revision: u64);
 }
@@ -33,7 +38,12 @@ pub struct DummyTableLock {}
 #[async_trait::async_trait]
 impl TableLockManager for DummyTableLock {
     #[async_backtrace::framed]
-    async fn try_lock(&self, _ctx: Arc<dyn TableContext>, _lock: &mut dyn TableLock) -> Result<()> {
+    async fn try_lock(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        _lock: &mut dyn TableLock,
+        _catalog: &str,
+    ) -> Result<()> {
         Ok(())
     }
 
@@ -54,8 +64,9 @@ impl TableLockManagerWrapper {
         &self,
         ctx: Arc<dyn TableContext>,
         lock: &mut dyn TableLock,
+        catalog: &str,
     ) -> Result<()> {
-        self.handler.try_lock(ctx, lock).await
+        self.handler.try_lock(ctx, lock, catalog).await
     }
 
     pub fn unlock(&self, revision: u64) {

@@ -87,7 +87,9 @@ impl Interpreter for UpdateInterpreter {
         let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock =
             TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
-        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+        lock_mgr
+            .try_lock(self.ctx.clone(), &mut table_lock, catalog_name)
+            .await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();

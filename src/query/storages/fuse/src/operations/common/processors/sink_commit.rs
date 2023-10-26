@@ -288,12 +288,14 @@ where F: SnapshotGenerator + Send + 'static
                 }
             }
             State::TryLock => {
+                let table_info = self.table.get_table_info();
                 let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-                let mut table_lock = TableLevelLock::create(
-                    lock_mgr.clone(),
-                    self.table.get_table_info().ident.table_id,
-                );
-                match lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await {
+                let mut table_lock =
+                    TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
+                match lock_mgr
+                    .try_lock(self.ctx.clone(), &mut table_lock, table_info.catalog())
+                    .await
+                {
                     Ok(_) => {
                         self.table_lock = Some(Arc::new(table_lock));
                         self.state = State::FillDefault;

@@ -212,7 +212,8 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
+        let catalog_name = table_info.catalog();
+        let catalog = self.ctx.get_catalog(catalog_name).await?;
         let catalog_info = catalog.info();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
@@ -272,7 +273,9 @@ impl ModifyTableColumnInterpreter {
         // Add table lock heartbeat.
         let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
         let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
-        lock_mgr.try_lock(self.ctx.clone(), &mut table_lock).await?;
+        lock_mgr
+            .try_lock(self.ctx.clone(), &mut table_lock, catalog_name)
+            .await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();
