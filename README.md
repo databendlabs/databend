@@ -192,6 +192,10 @@ RestAPI client:
 | `max_rows_in_buffer` | Max rows for page buffer |
 | `max_rows_per_page` | Max response rows for a single page |
 
+Example to disable presign using set
+```
+bendsql --set presigned_url_disabled=1
+```
 
 FlightSQL client:
 
