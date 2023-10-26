@@ -14,7 +14,6 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Weak;
 use std::time::Duration;
 
 use async_channel::Sender;
@@ -38,7 +37,7 @@ use table_lock::TableLockManagerWrapper;
 use crate::table_lock::table_lock_holder::TableLockHolder;
 
 pub struct RealTableLockManager {
-    active_locks: Arc<RwLock<HashMap<u64, Weak<Mutex<TableLockHolder>>>>>,
+    active_locks: Arc<RwLock<HashMap<u64, Arc<Mutex<TableLockHolder>>>>>,
     tx: Sender<u64>,
 }
 
@@ -53,11 +52,9 @@ impl RealTableLockManager {
                 while let Ok(revision) = rx.recv().await {
                     let lock = active_locks.write().remove(&revision);
                     if let Some(lock) = lock {
-                        if let Some(lock) = lock.upgrade() {
-                            let mut guard = lock.lock().await;
-                            if let Err(cause) = guard.shutdown().await {
-                                log::warn!("Cannot release table lock, cause {:?}", cause);
-                            }
+                        let mut guard = lock.lock().await;
+                        if let Err(cause) = guard.shutdown().await {
+                            log::warn!("Cannot release table lock, cause {:?}", cause);
                         }
                     }
                 }
@@ -137,9 +134,8 @@ impl TableLockManager for RealTableLockManager {
         let revision = lock.revision();
         assert!(revision > 0);
 
-        let lock_holder = Arc::new(Mutex::new(lock_holder));
         let mut active_locks = self.active_locks.write();
-        let prev = active_locks.insert(revision, Arc::downgrade(&lock_holder));
+        let prev = active_locks.insert(revision, Arc::new(Mutex::new(lock_holder)));
         assert!(prev.is_none());
         Ok(())
     }
