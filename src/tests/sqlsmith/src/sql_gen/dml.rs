@@ -319,8 +319,8 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                 }
             }
             MutTableAction::RenameColumn((old_column, new_column)) => {
-                let field_index = new_schema.column_id_of(&old_column.name).unwrap();
-                let field = &mut new_schema.fields[field_index as usize];
+                let field_index = new_schema.index_of(&old_column.name).unwrap();
+                let field = &mut new_schema.fields[field_index];
                 field.name = new_column.name;
             }
             MutTableAction::ModifyColumnDataType(column) => {

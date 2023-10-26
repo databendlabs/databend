@@ -18,6 +18,7 @@ use std::collections::BTreeSet;
 use chrono::TimeZone;
 use chrono::Utc;
 use common_meta_app::share;
+use common_tracing::func_name;
 
 use crate::common;
 
@@ -52,17 +53,18 @@ fn test_decode_v2_share_meta() -> anyhow::Result<()> {
             now,
         );
         let mut entries = BTreeMap::new();
-        let entry = share::ShareGrantEntry::new(
+        for entry in vec![share::ShareGrantEntry::new(
             share::ShareGrantObject::Table(19),
             share::ShareGrantObjectPrivilege::Select,
             now,
-        );
-        entries.insert(entry.to_string().clone(), entry);
+        )] {
+            entries.insert(entry.to_string().clone(), entry);
+        }
 
         share::ShareMeta {
             database: Some(db_entry),
             entries,
-            accounts: BTreeSet::from_iter(vec![s("a"), s("b")]),
+            accounts: BTreeSet::from_iter(vec![s("a"), s("b")].into_iter()),
             share_from_db_ids: BTreeSet::new(),
             comment: Some(s("comment")),
             share_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),

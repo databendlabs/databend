@@ -89,8 +89,6 @@ impl<T> SeqValue<T> for Marked<T> {
     }
 }
 
-// FIXME: do we need to remove function like max_ref?
-#[allow(dead_code)]
 impl<T> Marked<T> {
     pub const fn empty() -> Self {
         Marked::TombStone { internal_seq: 0 }

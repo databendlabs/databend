@@ -111,7 +111,7 @@ impl Processor for LimitFileSizeProcessor {
         let buffers = FileOutputBuffers::downcast_from(block_meta).unwrap();
         let buffers = buffers.buffers;
 
-        self.buffers.extend(buffers);
+        self.buffers.extend(buffers.into_iter());
 
         let mut size = 0;
         let mut buffers = mem::take(&mut self.buffers);

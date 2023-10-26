@@ -158,6 +158,17 @@ pub trait Visitor<'ast>: Sized {
         walk_expr(self, right);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &'ast JsonOperator,
+        left: &'ast Expr,
+        right: &'ast Expr,
+    ) {
+        walk_expr(self, left);
+        walk_expr(self, right);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, _op: &'ast UnaryOperator, expr: &'ast Expr) {
         walk_expr(self, expr);
     }
