@@ -115,5 +115,6 @@ echo "select * from table_read_only order by a" | $MYSQL_CLIENT_CONNECT
 
 # 4.2 show create table
 echo "show create attach table"
-echo "show create table table_read_only" | $MYSQL_CLIENT_CONNECT
+# replace s3://testbucket/admin/data/1/401/ to s3://testbucket/admin/data/db_id/table_id/
+echo "show create table table_read_only" | $MYSQL_CLIENT_CONNECT | sed 's/[0-9]\+/PLACE_HOLDER/g'
 
