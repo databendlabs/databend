@@ -24,7 +24,7 @@ use common_io::constants::NAN_BYTES_SNAKE;
 use common_io::constants::NULL_BYTES_UPPER;
 use common_io::constants::TRUE_BYTES_NUM;
 
-use super::helpers::write_escaped_string;
+use crate::field_encoder::helpers::write_quoted_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
@@ -95,7 +95,12 @@ impl FieldEncoderRowBased for FieldEncoderValues {
             out_buf.extend_from_slice(in_buf);
         } else {
             out_buf.push(self.quote_char);
-            write_escaped_string(in_buf, out_buf, self.quote_char);
+            // currently we do not support `Values` Output Format,
+            // only use FieldEncoderValues internally.
+            // so we do not expect the scalar literal to be used in sql.
+            // it is better to keep it simple: minimal escape.
+            // it make result easier to decode csv, tsv and http handler result.
+            write_quoted_string(in_buf, out_buf, self.quote_char);
             out_buf.push(self.quote_char);
         }
     }

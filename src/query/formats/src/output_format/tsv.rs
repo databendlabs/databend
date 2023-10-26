@@ -18,7 +18,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::TsvFileFormatParams;
 
-use crate::field_encoder::helpers::write_escaped_string;
+use crate::field_encoder::helpers::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderTSV;
 use crate::output_format::OutputFormat;
@@ -60,7 +60,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> TSVOutputFormatBase<WITH_NA
             if col_index != 0 {
                 buf.push(fd);
             }
-            write_escaped_string(v.as_bytes(), &mut buf, self.quote);
+            write_tsv_escaped_string(v.as_bytes(), &mut buf, self.quote, self.field_delimiter);
         }
 
         buf.extend_from_slice(&self.record_delimiter);
