@@ -79,7 +79,7 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use common_pipeline_core::table_lock::TableLockReq;
+use common_pipeline_core::TableLockReq;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;

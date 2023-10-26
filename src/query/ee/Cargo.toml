@@ -24,6 +24,7 @@ common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
+common-metrics = { path = "../../common/metrics" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
@@ -51,6 +52,7 @@ chrono-tz = { workspace = true }
 dashmap = "5.4"
 futures = "0.3.24"
 futures-util = { workspace = true }
+lazy_static = { workspace = true }
 parking_lot = "0.12.1"
 rand = "0.8.5"
 

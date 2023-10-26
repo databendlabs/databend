@@ -14,5 +14,7 @@
 
 mod table_lock_holder;
 mod table_lock_manager;
+mod table_lock_metrics;
 
 pub use table_lock_manager::RealTableLockManager;
+pub use table_lock_metrics::*;

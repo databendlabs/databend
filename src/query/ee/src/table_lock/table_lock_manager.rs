@@ -34,6 +34,7 @@ use parking_lot::RwLock;
 use table_lock::TableLockManager;
 use table_lock::TableLockManagerWrapper;
 
+use crate::table_lock::record_table_lock_nums;
 use crate::table_lock::table_lock_holder::TableLockHolder;
 
 pub struct RealTableLockManager {
@@ -130,6 +131,9 @@ impl TableLockManager for RealTableLockManager {
 
         let mut lock_holder = TableLockHolder::create();
         lock_holder.start(ctx, lock).await?;
+
+        // metrics.
+        record_table_lock_nums(lock.level(), lock.table_id(), 1);
 
         let revision = lock.revision();
         assert!(revision > 0);

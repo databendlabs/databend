@@ -80,7 +80,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_app::storage::StorageParams;
 use common_meta_types::*;
-use common_pipeline_core::table_lock::TableLockReq;
+use common_pipeline_core::TableLockReq;
 use hive_metastore::Partition;
 use hive_metastore::TThriftHiveMetastoreSyncClient;
 use hive_metastore::ThriftHiveMetastoreSyncClient;

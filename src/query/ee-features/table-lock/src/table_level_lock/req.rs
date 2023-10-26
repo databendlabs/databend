@@ -19,7 +19,7 @@ use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::ListTableLockRevReq;
-use common_pipeline_core::table_lock::TableLockReq;
+use common_pipeline_core::TableLockReq;
 
 #[derive(Clone)]
 pub struct ListTableLockReq {

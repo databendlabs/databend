@@ -16,8 +16,9 @@ use std::sync::Arc;
 
 use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
-use common_pipeline_core::table_lock::TableLockReq;
 use common_pipeline_core::TableLock;
+use common_pipeline_core::TableLockLevel;
+use common_pipeline_core::TableLockReq;
 
 use crate::table_level_lock::req::*;
 use crate::TableLockManagerWrapper;
@@ -40,6 +41,14 @@ impl TableLevelLock {
 
 #[async_trait::async_trait]
 impl TableLock for TableLevelLock {
+    fn level(&self) -> TableLockLevel {
+        TableLockLevel::Table
+    }
+
+    fn table_id(&self) -> u64 {
+        self.table_id
+    }
+
     fn set_revision(&mut self, revision: u64) {
         self.revision = revision;
     }

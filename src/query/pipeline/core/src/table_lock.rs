@@ -13,8 +13,14 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 pub trait TableLock: Sync + Send {
+    fn level(&self) -> TableLockLevel;
+
+    fn table_id(&self) -> u64;
+
     fn set_revision(&mut self, revision: u64);
 
     fn revision(&self) -> u64;
@@ -28,6 +34,18 @@ pub trait TableLock: Sync + Send {
     fn delete_table_lock_req(&self) -> Box<dyn TableLockReq>;
 
     fn list_table_lock_req(&self) -> Box<dyn TableLockReq>;
+}
+
+pub enum TableLockLevel {
+    Table,
+}
+
+impl Display for TableLockLevel {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            TableLockLevel::Table => write!(f, "Table"),
+        }
+    }
 }
 
 pub trait TableLockReq: Send + Sync {

@@ -28,3 +28,5 @@ pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
 pub use table_lock::TableLock;
+pub use table_lock::TableLockLevel;
+pub use table_lock::TableLockReq;
