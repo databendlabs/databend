@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Weak;
 use std::time::Duration;
 
 use async_channel::Sender;
+use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
@@ -33,31 +35,35 @@ use parking_lot::RwLock;
 use table_lock::TableLockManager;
 use table_lock::TableLockManagerWrapper;
 
-use crate::table_lock::table_lock_heartbeat::TableLockHeartbeat;
+use crate::table_lock::table_lock_holder::TableLockHolder;
 
 pub struct RealTableLockManager {
-    active_lock: Arc<RwLock<HashMap<u64, TableLockHeartbeat>>>,
+    active_locks: Arc<RwLock<HashMap<u64, Weak<Mutex<TableLockHolder>>>>>,
     tx: Sender<u64>,
 }
 
 impl RealTableLockManager {
     fn create() -> Self {
         let (tx, rx) = async_channel::unbounded();
-        let active_lock = Arc::new(RwLock::new(HashMap::<u64, TableLockHeartbeat>::new()));
+        let active_locks = Arc::new(RwLock::new(HashMap::new()));
+        let lock_manager = Self { active_locks, tx };
         GlobalIORuntime::instance().spawn({
-            let active_lock = active_lock.clone();
+            let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Ok(revision) = rx.recv().await {
-                    let lock = active_lock.write().remove(&revision);
-                    if let Some(mut lock) = lock {
-                        if let Err(cause) = lock.shutdown().await {
-                            log::warn!("Cannot shutdown table lock heartbeat, cause {:?}", cause);
+                    let lock = active_locks.write().remove(&revision);
+                    if let Some(lock) = lock {
+                        if let Some(lock) = lock.upgrade() {
+                            let mut guard = lock.lock().await;
+                            if let Err(cause) = guard.shutdown().await {
+                                log::warn!("Cannot release table lock, cause {:?}", cause);
+                            }
                         }
                     }
                 }
             }
         });
-        Self { active_lock, tx }
+        lock_manager
     }
 }
 
@@ -125,14 +131,15 @@ impl TableLockManager for RealTableLockManager {
             }?;
         }
 
-        let mut heartbeat = TableLockHeartbeat::default();
-        heartbeat.start(ctx, lock).await?;
+        let mut lock_holder = TableLockHolder::default();
+        lock_holder.start(ctx, lock).await?;
 
         let revision = lock.revision();
         assert!(revision > 0);
 
-        let mut active_lock = self.active_lock.write();
-        active_lock.insert(revision, heartbeat);
+        let lock_holder = Arc::new(Mutex::new(lock_holder));
+        let mut active_locks = self.active_locks.write();
+        active_locks.insert(revision, Arc::downgrade(&lock_holder));
         Ok(())
     }
 

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod table_lock_heartbeat;
+mod table_lock_holder;
 mod table_lock_manager;
 
 pub use table_lock_manager::RealTableLockManager;

@@ -32,13 +32,13 @@ use rand::thread_rng;
 use rand::Rng;
 
 #[derive(Default)]
-pub struct TableLockHeartbeat {
+pub struct TableLockHolder {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
     shutdown_handler: Option<JoinHandle<Result<()>>>,
 }
 
-impl TableLockHeartbeat {
+impl TableLockHolder {
     pub async fn start<T: TableLock + ?Sized>(
         &mut self,
         ctx: Arc<dyn TableContext>,
