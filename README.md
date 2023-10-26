@@ -30,7 +30,7 @@
 </div>
 </div>
 
-## 📖 Introduction
+## 🐋 Introduction
 
 **Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to [Snowflake](https://snowflake.com). 
 
