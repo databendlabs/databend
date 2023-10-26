@@ -352,10 +352,14 @@ impl RoleApi for RoleMgr {
     ) -> common_exception::Result<SeqV<GrantOwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;
-        let seq_value =
-            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown object {:?}", object)))?;
-
-        Ok(seq_value.into_seqv()?)
+        let res_value = match res {
+            Some(res_value) => res_value,
+            None => return Ok(SeqV::new(0, GrantOwnershipInfo {
+                object: object.clone(),
+                role: "".to_string(),
+            }))
+        };
+        Ok(res_value.into_seqv()?)
     }
 
     #[async_backtrace::framed]
