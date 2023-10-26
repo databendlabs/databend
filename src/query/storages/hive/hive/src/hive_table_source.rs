@@ -324,7 +324,6 @@ impl Processor for HiveTableSource {
         }
     }
 
-    #[minitrace::trace(name = "HiveTableSource::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::PrewhereFilter(hive_blocks, rowgroup_deserializer) => {
@@ -338,7 +337,6 @@ impl Processor for HiveTableSource {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "HiveTableSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadMeta(Some(part)) => {

@@ -477,7 +477,6 @@ where R: Rows + Send + 'static
         }
     }
 
-    #[minitrace::trace(name = "MultiSortMerge::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, ProcessorState::Consume) {
             ProcessorState::Preserve(blocks) => {

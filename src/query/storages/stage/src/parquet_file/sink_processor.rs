@@ -99,7 +99,6 @@ impl Processor for ParquetFileSink {
         }
     }
 
-    #[minitrace::trace(name = "ParquetFileSink::process")]
     fn process(&mut self) -> Result<()> {
         let block = self.input_data.take().unwrap();
         let block_meta = block.get_owned_meta().unwrap();
@@ -112,7 +111,6 @@ impl Processor for ParquetFileSink {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "ParquetFileSink::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         assert!(!self.output_data.is_empty());
         let path = unload_path(

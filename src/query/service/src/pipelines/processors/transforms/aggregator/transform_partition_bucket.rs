@@ -399,7 +399,6 @@ impl<Method: HashMethodBounds, V: Copy + Send + Sync + 'static> Processor
         Ok(Event::Finished)
     }
 
-    #[minitrace::trace(name = "TransformPartitionBucket::process")]
     fn process(&mut self) -> Result<()> {
         let block_meta = self
             .unsplitted_blocks

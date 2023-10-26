@@ -211,7 +211,7 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     #[async_backtrace::framed]
-    #[minitrace::trace]
+    #[minitrace::trace(name = "HttpQuery::try_create")]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -328,6 +328,12 @@ impl HttpQuery {
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("ExecuteState::try_start_query", parent)
+        } else {
+            Span::noop()
+        };
+
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance.runtime().try_spawn(
             async move {
@@ -358,9 +364,7 @@ impl HttpQuery {
                     block_sender_closer.close();
                 }
             }
-            .in_span(Span::enter_with_local_parent(
-                "ExecuteState::try_start_query",
-            )),
+            .in_span(span),
         )?;
 
         let format_settings = ctx.get_format_settings()?;

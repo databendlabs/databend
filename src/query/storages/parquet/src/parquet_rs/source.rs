@@ -141,7 +141,6 @@ impl Processor for ParquetSource {
         }
     }
 
-    #[minitrace::trace(name = "ParquetSource::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
             State::ReadRowGroup(mut reader) => {
@@ -190,7 +189,6 @@ impl Processor for ParquetSource {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "ParquetSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Init) {
             State::Init => {

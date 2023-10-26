@@ -106,7 +106,6 @@ impl Processor for RowBasedFileSink {
         }
     }
 
-    #[minitrace::trace(name = "RowBasedFileSink::process")]
     fn process(&mut self) -> Result<()> {
         let block = self.input_data.take().unwrap();
         let block_meta = block.get_owned_meta().unwrap();
@@ -125,7 +124,6 @@ impl Processor for RowBasedFileSink {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "RowBasedFileSink::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         let path = unload_path(
             &self.table_info,

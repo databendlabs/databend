@@ -188,7 +188,6 @@ impl<const MODE: usize> Processor for TransformLimitImpl<MODE> {
         Ok(Event::Sync)
     }
 
-    #[minitrace::trace(name = "TransformLimit::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data_block.take() {
             self.output_data_block = match MODE {

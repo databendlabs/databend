@@ -199,7 +199,7 @@ async-backtrace = "0.2.2"
 # observability
 logcall = "0.1.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
-minitrace = "0.5.1"
+minitrace = { version = "0.6", features = ["enable"] }
 prometheus-client = "0.21.2"
 
 # test
@@ -256,3 +256,5 @@ metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ec
 icelake = { git = "https://github.com/icelake-io/icelake", rev = "f06cdf3" }
 sentry = { git = "https://github.com/getsentry/sentry-rust", rev = "6ef6d97" }
 mysql_async = { git = "https://github.com/datafuse-extras/mysql_async", rev = "1adbbcf" }
+minitrace = { git = "https://github.com/tikv/minitrace-rust", rev = "d48892d" }
+minitrace-opentelemetry = { git = "https://github.com/tikv/minitrace-rust", rev = "d48892d" }

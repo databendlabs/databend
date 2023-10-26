@@ -583,7 +583,7 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "analyze")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.do_analyze(&ctx).await

@@ -109,7 +109,6 @@ impl Processor for IcebergTableSource {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "IcebergTableSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(mut stream) = self.stream.take() {
             if let Some(block) = self

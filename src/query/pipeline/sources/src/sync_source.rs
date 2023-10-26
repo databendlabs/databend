@@ -93,7 +93,6 @@ impl<T: 'static + SyncSource> Processor for SyncSourcer<T> {
         }
     }
 
-    #[minitrace::trace(name = "SyncSourcer::process")]
     fn process(&mut self) -> Result<()> {
         match self.inner.generate()? {
             None => self.is_finish = true,

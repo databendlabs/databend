@@ -124,7 +124,6 @@ impl Processor for TransformRangeJoinLeft {
         }
     }
 
-    #[minitrace::trace(name = "TransformRangeJoinLeft::process")]
     fn process(&mut self) -> Result<()> {
         match self.step {
             RangeJoinStep::Sink => {
@@ -154,7 +153,6 @@ impl Processor for TransformRangeJoinLeft {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformRangeJoinLeft::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if let RangeJoinStep::Merging = self.step {
             self.state.wait_merge_finish().await?;

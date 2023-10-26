@@ -147,7 +147,6 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "TransformGroupBySpillWriter::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(spilling_meta) = self.spilling_meta.take() {
             if let AggregateMeta::Spilling(payload) = spilling_meta {
@@ -171,7 +170,6 @@ impl<Method: HashMethodBounds> Processor for TransformGroupBySpillWriter<Method>
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformGroupBySpillWriter::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(spilling_future) = self.spilling_future.take() {
             self.spilled_block = Some(spilling_future.await?);

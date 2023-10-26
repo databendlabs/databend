@@ -108,7 +108,6 @@ impl<T: Sink + 'static> Processor for Sinker<T> {
         self.inner.interrupt()
     }
 
-    #[minitrace::trace(name = "Sinker::process")]
     fn process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;

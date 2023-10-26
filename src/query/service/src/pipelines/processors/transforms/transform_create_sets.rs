@@ -126,7 +126,6 @@ impl Processor for TransformCreateSets {
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "TransformCreateSets::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data) = self.input_data.take() {
             let num_rows = data.num_rows();
@@ -145,7 +144,6 @@ impl Processor for TransformCreateSets {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformCreateSets::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         if !self.initialized {
             self.initialized = true;

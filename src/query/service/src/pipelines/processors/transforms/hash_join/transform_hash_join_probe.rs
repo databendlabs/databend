@@ -382,7 +382,6 @@ impl Processor for TransformHashJoinProbe {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformHashJoinProbe::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match self.step {
             HashJoinProbeStep::WaitBuild => {

@@ -381,7 +381,6 @@ impl Processor for Parquet2DeserializeTransform {
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "ParquetDeserializeTransform::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(deserializer) = &mut self.current_row_group {
             let data_block = deserializer.next().unwrap()?;

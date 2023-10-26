@@ -120,7 +120,6 @@ impl<T: AccumulatingTransform + 'static> Processor for AccumulatingTransformer<T
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "AccumulatingTransformer::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             self.output_data.extend(self.inner.transform(data_block)?);
@@ -239,7 +238,6 @@ impl<B: BlockMetaInfo, T: BlockMetaAccumulatingTransform<B>> Processor
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "BlockMetaAccumulatingTransformer::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(mut data_block) = self.input_data.take() {
             debug_assert!(data_block.is_empty());

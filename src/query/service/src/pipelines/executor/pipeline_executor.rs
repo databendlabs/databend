@@ -335,7 +335,7 @@ impl PipelineExecutor {
             }
 
             let span = Span::enter_with_local_parent("PipelineExecutor::execute_threads")
-                .with_property(|| ("thread_name".into(), name.clone().into()));
+                .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
                 let this_clone = this.clone();

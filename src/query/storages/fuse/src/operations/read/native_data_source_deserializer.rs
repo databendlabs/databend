@@ -553,7 +553,6 @@ impl Processor for NativeDeserializeDataTransform {
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "NativeDeserializeDataTransform::process")]
     fn process(&mut self) -> Result<()> {
         if let Some(chunks) = self.chunks.front_mut() {
             let chunks = match chunks {

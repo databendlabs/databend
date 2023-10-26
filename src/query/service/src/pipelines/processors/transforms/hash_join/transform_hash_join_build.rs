@@ -227,7 +227,6 @@ impl Processor for TransformHashJoinBuild {
         self.build_state.hash_join_state.interrupt()
     }
 
-    #[minitrace::trace(name = "TransformHashJoinBuild::process")]
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinBuildStep::Running => {
@@ -295,7 +294,6 @@ impl Processor for TransformHashJoinBuild {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformHashJoinBuild::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
             HashJoinBuildStep::Running => {

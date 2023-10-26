@@ -181,7 +181,6 @@ impl Processor for TransformSerializeSegment {
         Ok(Event::NeedData)
     }
 
-    #[minitrace::trace(name = "TransformSerializeSegment::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::GenerateSegment => {
@@ -233,7 +232,6 @@ impl Processor for TransformSerializeSegment {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "TransformSerializeSegment::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::SerializedSegment {

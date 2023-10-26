@@ -170,7 +170,6 @@ impl Processor for MutationSource {
         }
     }
 
-    #[minitrace::trace(name = "MutationSource::process")]
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
@@ -345,7 +344,6 @@ impl Processor for MutationSource {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "MutationSource::async_process")]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::ReadData(Some(part)) => {

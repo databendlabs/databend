@@ -428,24 +428,15 @@ struct QueryCoordinator {
 
     statistics_exchanges: HashMap<String, FlightExchange>,
     fragment_exchanges: HashMap<(String, usize, u8), FlightExchange>,
-
-    span: Span,
 }
 
 impl QueryCoordinator {
     pub fn create() -> QueryCoordinator {
-        let span = if let Some(parent) = SpanContext::current_local_parent() {
-            Span::root("QueryCoordinator", parent)
-        } else {
-            Span::noop()
-        };
-
         QueryCoordinator {
             info: None,
             fragments_coordinator: HashMap::new(),
             fragment_exchanges: HashMap::new(),
             statistics_exchanges: HashMap::new(),
-            span,
         }
     }
 
@@ -737,7 +728,12 @@ impl QueryCoordinator {
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
-        let span = Span::enter_with_parent("Distributed-Executor", &self.span);
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             let _g = span.set_local_parent();
             statistics_sender.shutdown(executor.execute().err());
