@@ -127,6 +127,7 @@ use common_storages_fuse::operations::common::TransformSerializeSegment;
 use common_storages_fuse::operations::merge_into::MatchedSplitProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
+use common_storages_fuse::operations::merge_into::RowNumberAndLogSplitProcessor;
 use common_storages_fuse::operations::merge_into::TransformAddRowNumberColumnProcessor;
 use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockDeserialize;
 use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockSerialize;
@@ -297,8 +298,8 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
             }
-            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_row_id_apply) => {
-                self.build_merge_into_row_id_apply(merge_into_row_id_apply)
+            PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
+                self.build_merge_into_append_not_matched(merge_into_append_not_matched)
             }
             PhysicalPlan::AddRowNumber(add_row_number) => {
                 self.build_add_row_number(&add_row_number)
@@ -346,7 +347,7 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_merge_into_row_id_apply(
+    fn build_merge_into_append_not_matched(
         &mut self,
         merge_into_row_id_apply: &MergeIntoAppendNotMatched,
     ) -> Result<()> {
@@ -355,12 +356,18 @@ impl PipelineBuilder {
             table_info,
             catalog_info,
         } = merge_into_row_id_apply;
-        // receive rowids and MutationLogs
+        // receive row numbers and MutationLogs
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
 
+        // split row_number and log
+        //      output_port_row_number
+        //      output_port_log
         self.main_pipeline
-            .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
+            .add_pipe(RowNumberAndLogSplitProcessor::create()?.into_pipe());
+
+        // self.main_pipeline
+        //     .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
 
         // let mut pipe_items = Vec::with_capacity(1);
         let tbl = self
@@ -374,7 +381,7 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
 
-        // // this TransformSerializeBlock is just used to get block_builder
+        // this TransformSerializeBlock is just used to get block_builder
         // let block_builder = TransformSerializeBlock::try_create(
         //     self.ctx.clone(),
         //     InputPort::create(),
@@ -928,11 +935,11 @@ impl PipelineBuilder {
         ));
 
         // distributed execution
-        if *distributed {
-            self.main_pipeline.try_resize(1)?;
-            self.main_pipeline
-                .add_pipe(TransformDistributedMergeIntoBlockSerialize::into_pipe())
-        }
+        // if *distributed {
+        //     self.main_pipeline.try_resize(1)?;
+        //     self.main_pipeline
+        //         .add_pipe(TransformDistributedMergeIntoBlockSerialize::into_pipe())
+        // }
         Ok(())
     }
 

@@ -30,7 +30,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
-use super::processor_merge_into_matched_and_split::MixRowIdKindAndLog;
+use super::processor_merge_into_matched_and_split::MixRowNumberKindAndLog;
 use super::RowIdKind;
 use crate::operations::common::MutationLogs;
 
@@ -79,7 +79,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 vec![entry],
                 1,
-                Some(Box::new(MixRowIdKindAndLog {
+                Some(Box::new(MixRowNumberKindAndLog {
                     log: Some(log),
                     kind: 0,
                 })),
@@ -90,7 +90,7 @@ impl Transform for TransformDistributedMergeIntoBlockSerialize {
             Ok(DataBlock::new_with_meta(
                 data.columns().to_vec(),
                 data.num_rows(),
-                Some(Box::new(MixRowIdKindAndLog {
+                Some(Box::new(MixRowNumberKindAndLog {
                     log: None,
                     kind: match row_id_kind {
                         RowIdKind::Update => 1,
