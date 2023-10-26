@@ -153,11 +153,10 @@ impl Interpreter for CreateTableInterpreter {
 impl CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn create_table_as_select(&self, select_plan: Box<Plan>) -> Result<PipelineBuildResult> {
-        if self.plan.read_only_attach {
-            return Err(ErrorCode::InvalidArgument(
-                "READ_ ONLY attached table does not support create-as-select",
-            ));
-        }
+        assert!(
+            !self.plan.read_only_attach,
+            "There should be no CREATE(not ATTACH) TABLE plan which is READ_ONLY"
+        );
 
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
