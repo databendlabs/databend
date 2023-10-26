@@ -117,7 +117,7 @@ opendal = { version = "0.41", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { version = "0.3.0" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "14143b5" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -130,6 +130,7 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alph
 derive_more = "0.99.17"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
+once_cell = "1.15.0"
 
 # future and async
 futures = "0.3.24"

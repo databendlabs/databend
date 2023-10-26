@@ -905,10 +905,11 @@ select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7,
 34343.00 1.000
 34343.00 2.000
 
-query TT
-select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4)
+query TTT
+select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0))
 ----
-1.2 1.2340
+1.2 1.2340 0
+
 
 statement ok
 create table t(c1 decimal(28) not null)

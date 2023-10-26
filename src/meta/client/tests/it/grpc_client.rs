@@ -21,7 +21,6 @@ use common_meta_api::SchemaApi;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_client::MetaGrpcClient;
 use common_meta_client::MIN_METASRV_SEMVER;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
 
@@ -68,7 +67,9 @@ async fn test_grpc_client_handshake_timeout() {
         let c = ConnectionFactory::create_rpc_channel(srv_addr.clone(), Some(timeout), None)
             .await
             .unwrap();
-        let mut client = MetaServiceClient::new(c);
+
+        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+
         let res = MetaGrpcClient::handshake(
             &mut client,
             &MIN_METASRV_SEMVER,
@@ -91,7 +92,9 @@ async fn test_grpc_client_handshake_timeout() {
         let c = ConnectionFactory::create_rpc_channel(srv_addr, Some(timeout), None)
             .await
             .unwrap();
-        let mut client = MetaServiceClient::new(c);
+
+        let (mut client, _once) = MetaGrpcClient::new_real_client(c);
+
         let res = MetaGrpcClient::handshake(
             &mut client,
             &MIN_METASRV_SEMVER,

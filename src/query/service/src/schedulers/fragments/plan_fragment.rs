@@ -26,6 +26,8 @@ use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::Deduplicate;
 use common_sql::executor::DeleteSource;
 use common_sql::executor::QuerySource;
+use common_sql::executor::ReclusterSource;
+use common_sql::executor::ReclusterTask;
 use common_sql::executor::ReplaceInto;
 use common_storages_fuse::TableContext;
 use storages_common_table_meta::meta::BlockSlotDescription;
@@ -60,6 +62,7 @@ pub enum FragmentType {
     /// Intermediate fragment of a replace into plan, which contains a `ReplaceInto` operator.
     ReplaceInto,
     Compact,
+    Recluster,
 }
 
 #[derive(Clone)]
@@ -93,10 +96,6 @@ impl PlanFragment {
                     self.plan.clone(),
                 );
                 fragment_actions.add_action(action);
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
             }
             FragmentType::Intermediate => {
                 if self
@@ -118,48 +117,38 @@ impl PlanFragment {
                         fragment_actions.add_action(action);
                     }
                 }
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
             }
             FragmentType::Source => {
                 // Redistribute partitions
-                let mut fragment_actions = self.redistribute_source_fragment(ctx)?;
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
+                self.redistribute_source_fragment(ctx, &mut fragment_actions)?;
             }
             FragmentType::DeleteLeaf => {
-                let mut fragment_actions = self.redistribute_delete_leaf(ctx)?;
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
+                self.redistribute_delete_leaf(ctx, &mut fragment_actions)?;
             }
             FragmentType::ReplaceInto => {
                 // Redistribute partitions
-                let mut fragment_actions = self.redistribute_replace_into(ctx)?;
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
+                self.redistribute_replace_into(ctx, &mut fragment_actions)?;
             }
             FragmentType::Compact => {
-                let mut fragment_actions = self.redistribute_compact(ctx)?;
-                if let Some(ref exchange) = self.exchange {
-                    fragment_actions.set_exchange(exchange.clone());
-                }
-                actions.add_fragment_actions(fragment_actions)?;
+                self.redistribute_compact(ctx, &mut fragment_actions)?;
+            }
+            FragmentType::Recluster => {
+                self.redistribute_recluster(ctx, &mut fragment_actions)?;
             }
         }
 
-        Ok(())
+        if let Some(ref exchange) = self.exchange {
+            fragment_actions.set_exchange(exchange.clone());
+        }
+        actions.add_fragment_actions(fragment_actions)
     }
 
     /// Redistribute partitions of current source fragment to executors.
-    fn redistribute_source_fragment(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+    fn redistribute_source_fragment(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
         if self.fragment_type != FragmentType::Source {
             return Err(ErrorCode::Internal(
                 "Cannot redistribute a non-source fragment".to_string(),
@@ -170,8 +159,6 @@ impl PlanFragment {
 
         let executors = Fragmenter::get_executors(ctx);
         // Redistribute partitions of ReadDataSourcePlan.
-        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
-
         let partitions = &read_source.parts;
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
@@ -190,10 +177,14 @@ impl PlanFragment {
                 .add_action(QueryFragmentAction::create(executor.clone(), plan.clone()));
         }
 
-        Ok(fragment_actions)
+        Ok(())
     }
 
-    fn redistribute_delete_leaf(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+    fn redistribute_delete_leaf(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
         let plan = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
             _ => unreachable!("logic error"),
@@ -205,7 +196,6 @@ impl PlanFragment {
 
         let partitions: &Partitions = &plan.parts;
         let executors = Fragmenter::get_executors(ctx);
-        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
@@ -218,10 +208,14 @@ impl PlanFragment {
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
-        Ok(fragment_actions)
+        Ok(())
     }
 
-    fn redistribute_replace_into(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+    fn redistribute_replace_into(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
         let plan = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
             _ => unreachable!("logic error"),
@@ -232,7 +226,6 @@ impl PlanFragment {
         };
         let partitions = &plan.segments;
         let executors = Fragmenter::get_executors(ctx.clone());
-        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
         let local_id = ctx.get_cluster().local_id.clone();
         match ctx.get_settings().get_replace_into_shuffle_strategy()? {
             ReplaceIntoShuffleStrategy::SegmentLevelShuffling => {
@@ -272,10 +265,14 @@ impl PlanFragment {
                 }
             }
         }
-        Ok(fragment_actions)
+        Ok(())
     }
 
-    fn redistribute_compact(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
+    fn redistribute_compact(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
         let exchange_sink = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
             _ => unreachable!("logic error"),
@@ -287,7 +284,6 @@ impl PlanFragment {
 
         let partitions: &Partitions = &compact_block.parts;
         let executors = Fragmenter::get_executors(ctx);
-        let mut fragment_actions = QueryFragmentActions::create(self.fragment_id);
 
         let partition_reshuffle = partitions.reshuffle(executors)?;
 
@@ -300,7 +296,42 @@ impl PlanFragment {
             fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
         }
 
-        Ok(fragment_actions)
+        Ok(())
+    }
+
+    fn redistribute_recluster(
+        &self,
+        ctx: Arc<QueryContext>,
+        fragment_actions: &mut QueryFragmentActions,
+    ) -> Result<()> {
+        let exchange_sink = match &self.plan {
+            PhysicalPlan::ExchangeSink(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+        let recluster = match exchange_sink.input.as_ref() {
+            PhysicalPlan::ReclusterSource(plan) => plan,
+            _ => unreachable!("logic error"),
+        };
+
+        let tasks = recluster.tasks.clone();
+        let executors = Fragmenter::get_executors(ctx);
+        if tasks.len() > executors.len() {
+            return Err(ErrorCode::Internal(format!(
+                "Cannot recluster {} tasks to {} executors",
+                tasks.len(),
+                executors.len()
+            )));
+        }
+
+        let task_reshuffle = Self::reshuffle(executors, tasks)?;
+        for (executor, tasks) in task_reshuffle.into_iter() {
+            let mut plan = self.plan.clone();
+            let mut replace_recluster = ReplaceReclusterSource { tasks };
+            plan = replace_recluster.replace(&plan)?;
+            fragment_actions.add_action(QueryFragmentAction::create(executor, plan));
+        }
+
+        Ok(())
     }
 
     fn reshuffle<T: Clone>(
@@ -419,6 +450,19 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
                 },
             ))),
         }
+    }
+}
+
+struct ReplaceReclusterSource {
+    pub tasks: Vec<ReclusterTask>,
+}
+
+impl PhysicalPlanReplacer for ReplaceReclusterSource {
+    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ReclusterSource(Box::new(ReclusterSource {
+            tasks: self.tasks.clone(),
+            ..plan.clone()
+        })))
     }
 }
 

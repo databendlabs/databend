@@ -44,6 +44,7 @@ pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;
 pub use mutation::DeletedSegmentInfo;
 pub use mutation::Mutation;
+pub use mutation::ReclusterAggregator;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;

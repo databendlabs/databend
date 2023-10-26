@@ -293,8 +293,8 @@ impl PhysicalPlanBuilder {
                 }
                 if !is_tail {
                     build_fields.push(field.clone());
+                    merged_fields.push(field.clone());
                 }
-                merged_fields.push(field.clone());
             }
         }
         build_fields.extend(tail_fields.clone());
