@@ -36,21 +36,21 @@
 
 ## 🚀 Why Databend
 
-- **🌐 Cloud-Friendly**: Works with cloud storage like AWS S3, Azure Blob, Google Cloud Storage, Alibaba Cloud OSS, Cloudflare R2, Wasabi or MinIO, etc.
+- **Cloud-Friendly**: Works with cloud storage like AWS S3, Azure Blob, Google Cloud Storage, Alibaba Cloud OSS, Cloudflare R2, Wasabi or MinIO, etc.
 
-- **⚡ High Performance**: Rust-built with SIMD and vectorized processing for top-speed analytics. [ClickBench](https://databend.rs/blog/clickbench-databend-top).
+- **High Performance**: Rust-built with SIMD and vectorized processing for top-speed analytics. [ClickBench](https://databend.rs/blog/clickbench-databend-top).
 
-- **📈 Cost-Efficient Elasticity**: Unique architecture allows for separate scaling of storage and computation, optimizing both costs and performance.
+- **Cost-Efficient Elasticity**: Unique architecture allows for separate scaling of storage and computation, optimizing both costs and performance.
 
-- **🔄 Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
+- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
-- **🕰 Time-Travel Features**: Provides Git-like MVCC storage, enabling easy data querying, cloning, and reverting from any point in time.
+- **Time-Travel Features**: Provides Git-like MVCC storage, enabling easy data querying, cloning, and reverting from any point in time.
 
-- **📑 Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
+- **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-- **🤖 AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
 
-- **👥 Community-Driven**: Benefit from a growing community, ensuring transparency, frequent updates, and an open platform for all your cloud analytics requirements.
+- **Community-Driven**: Benefit from a growing community, ensuring transparency, frequent updates, and an open platform for all your cloud analytics requirements.
 
 ## 📐 Architecture
 
