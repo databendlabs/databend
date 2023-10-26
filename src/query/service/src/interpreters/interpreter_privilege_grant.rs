@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::database::Database;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -49,30 +50,63 @@ impl GrantPrivilegeInterpreter {
     #[async_backtrace::framed]
     async fn grant_ownership(
         &self,
+        ctx: &Arc<QueryContext>,
         tenant: &str,
-        catalog: Arc<dyn Catalog>,
         object: &GrantObject,
-        current_role: &RoleInfo,
         role: &String,
     ) -> Result<()> {
         let user_mgr = UserApiProvider::instance();
+        let catalog_mgr = CatalogManager::instance();
+        let session = ctx.get_current_session();
+        let current_role = session.get_current_role();
+        let available_roles = session.get_all_available_roles().await?;
+
         debug!(
             "grant ownership from role: {} to {}",
             current_role.name, role
         );
 
+        let (catalog, catalog_name) = match plan.on.catalog() {
+            Some(catalog_name) => (
+                self.ctx.get_catalog(&catalog_name).await?,
+                catalog_name.clone(),
+            ),
+            None => {
+                return Err(ErrorCode::IllegalGrant(
+                    "Illegal GRANT/REVOKE command, unknown catalog",
+                ));
+            }
+        };
+
         let ownership_object = match object {
             GrantObject::Database(_, db_name) => {
-                let db = catalog.get_database(tenant, db_name).await?;
-                let database_id = db.get_db_info().ident.db_id;
-                GrantObjectByID::Database { db_id }
+                let db_id = catalog
+                    .get_database(tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                GrantObjectByID::Database {
+                    catalog_name,
+                    db_id,
+                }
             }
             GrantObject::Table(_, db_name, table_name) => {
-                let table = catalog
+                let db_id = catalog
+                    .get_database(tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                let table_id = catalog
                     .get_table(tenant, db_name.as_str(), table_name)
-                    .await?;
-                let table_id = table.get_id();
-                GrantObjectByID::Table { table_id }
+                    .await?
+                    .get_id();
+                GrantObjectByID::Table {
+                    catalog_name,
+                    db_id,
+                    table_id,
+                }
             }
             _ => {
                 return Err(ErrorCode::IllegalGrant(
@@ -80,6 +114,19 @@ impl GrantPrivilegeInterpreter {
                 ));
             }
         };
+
+        // if the object's owner is None, it's considered as PUBLIC, everyone could access it
+        let owner = user_mgr.get_ownership(tenant, &ownership_object).await?;
+        if let Some(owner) = owner {
+            let can_grant_ownership = available_roles
+                .iter()
+                .any(|r| r.name == owner.role);
+            if !can_grant_ownership {
+                return Err(ErrorCode::IllegalGrant(
+                    "Illegal GRANT/REVOKE command; only owner can grant ownership",
+                ));
+            }
+        }
 
         user_mgr
             .grant_ownership_to_role(tenant, &current_role.name, role, &ownership_object)
@@ -127,17 +174,12 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         }
                     };
 
-                    let catalog = match plan.on.catalog() {
-                        Some(catalog) => self.ctx.get_catalog(&catalog).await?,
-                        None => {
-                            return Err(ErrorCode::IllegalGrant(
-                                "Illegal GRANT/REVOKE command, unknown catalog",
-                            ));
-                        }
-                    };
-
-                    self.grant_ownership(&tenant, catalog, &plan.on, &current_role, &role)
-                        .await?;
+                    self.grant_ownership(
+                        &self.ctx,
+                        &tenant,
+                        &plan.on,
+                        &role)
+                    .await?;
                 } else {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)

@@ -26,7 +26,6 @@ use common_meta_app::principal::UserPrivilegeType;
 use common_users::GrantObjectVisibilityChecker;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
-use petgraph::visit::Data;
 
 use crate::sessions::SessionContext;
 

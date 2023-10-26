@@ -33,6 +33,7 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::runtime::TrySpawn;
+use common_catalog::catalog::CatalogManager;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
@@ -501,6 +502,10 @@ impl TableContext for QueryContext {
 
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
+    }
+
+    fn get_available_roles(&self) -> Vec<RoleInfo> {
+        self.shared.get_available_roles()
     }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
