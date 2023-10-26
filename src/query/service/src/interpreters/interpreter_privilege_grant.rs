@@ -58,16 +58,23 @@ impl GrantPrivilegeInterpreter {
         let user_mgr = UserApiProvider::instance();
         let catalog_mgr = CatalogManager::instance();
         let session = ctx.get_current_session();
-        let current_role = session.get_current_role();
         let available_roles = session.get_all_available_roles().await?;
+        let current_role = match self.ctx.get_current_role() {
+            Some(current_role) => current_role,
+            None => {
+                return Err(common_exception::ErrorCode::UnknownRole(
+                    "No current role, cannot grant ownership",
+                ));
+            }
+        };
 
         debug!(
             "grant ownership from role: {} to {}",
             current_role.name, role
         );
 
-        let (catalog, catalog_name) = match plan.on.catalog() {
-            Some(catalog_name) => (
+        let (catalog, catalog_name) = match object.catalog() {
+            Some(ref catalog_name) => (
                 self.ctx.get_catalog(&catalog_name).await?,
                 catalog_name.clone(),
             ),
@@ -165,14 +172,7 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) {
-                    let current_role = match self.ctx.get_current_role() {
-                        Some(current_role) => current_role,
-                        None => {
-                            return Err(common_exception::ErrorCode::UnknownRole(
-                                "No current role, cannot grant ownership",
-                            ));
-                        }
-                    };
+
 
                     self.grant_ownership(
                         &self.ctx,

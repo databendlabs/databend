@@ -136,7 +136,7 @@ impl SessionPrivilegeManagerImpl {
                     .ident
                     .db_id;
                 GrantObjectByID::Database {
-                    catalog_name,
+                    catalog_name: catalog_name.clone(),
                     db_id,
                 }
             }
@@ -151,7 +151,7 @@ impl SessionPrivilegeManagerImpl {
                 let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
                 GrantObjectByID::Table {
-                    catalog_name,
+                    catalog_name: catalog_name.clone(),
                     db_id,
                     table_id,
                 }
