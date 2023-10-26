@@ -21,7 +21,7 @@ use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_NUM;
 use common_meta_app::principal::TsvFileFormatParams;
 
-use super::helpers::write_escaped_string;
+use super::helpers::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
@@ -29,6 +29,7 @@ use crate::FileFormatOptionsExt;
 pub struct FieldEncoderTSV {
     pub common_settings: CommonSettings,
     pub quote_char: u8,
+    pub record_delimiter: u8,
 }
 
 impl FieldEncoderTSV {
@@ -44,6 +45,7 @@ impl FieldEncoderTSV {
                 disable_variant_check: options_ext.disable_variant_check,
             },
             quote_char: params.quote.as_bytes().to_vec()[0],
+            record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
         }
     }
 }
@@ -55,10 +57,10 @@ impl FieldEncoderRowBased for FieldEncoderTSV {
 
     fn write_string_inner(&self, in_buf: &[u8], out_buf: &mut Vec<u8>, raw: bool) {
         if raw {
-            write_escaped_string(in_buf, out_buf, self.quote_char);
+            write_tsv_escaped_string(in_buf, out_buf, self.quote_char, self.record_delimiter);
         } else {
             out_buf.push(self.quote_char);
-            write_escaped_string(in_buf, out_buf, self.quote_char);
+            write_tsv_escaped_string(in_buf, out_buf, self.quote_char, self.record_delimiter);
             out_buf.push(self.quote_char);
         }
     }
