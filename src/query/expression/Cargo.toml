@@ -43,7 +43,7 @@ log = { workspace = true }
 match-template = "0.0.1"
 micromarshal = "0.4.0"
 num-traits = "0.2.15"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 ordered-float = { workspace = true, features = ["serde", "rand"] }
 rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = { version = "0.10.1", features = ["serde"] }
