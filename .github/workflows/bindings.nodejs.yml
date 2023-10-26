@@ -91,7 +91,11 @@ jobs:
             export CFLAGS="-isysroot $SYSROOT -isystem $SYSROOT"
           fi
           export NAPI_TARGET=${{ matrix.target }}
-          yarn build
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            yarn build:debug
+          else
+            yarn build
+          fi
       - name: strip for macos
         if: matrix.os == 'macos'
         working-directory: bindings/nodejs
