@@ -23,11 +23,16 @@ alter table set options not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
 alter table flashback not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
-alter table recluster
+alter table recluster not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
-optimize table (expects 3 errors)
+analyze table not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table
+optimize table compact not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table compact segment not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table purge not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
 drop table ALL not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text =  drop table ALL is not allowed for read only table, please consider remove the option ALL
