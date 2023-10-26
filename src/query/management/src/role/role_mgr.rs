@@ -346,6 +346,20 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
+    async fn get_ownership(
+        &self,
+        object: &GrantOwnershipObject,
+    ) -> common_exception::Result<SeqV<GrantOwnershipInfo>> {
+        let key = self.make_object_owner_key(object);
+        let res = self.kv_api.get_kv(&key).await?;
+        let seq_value =
+            res.ok_or_else(|| ErrorCode::UnknownRole(format!("unknown object {:?}", object)))?;
+
+        Ok(seq_value.into_seqv()?)
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();

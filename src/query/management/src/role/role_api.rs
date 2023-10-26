@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_meta_app::principal::GrantOwnershipInfo;
 use common_meta_app::principal::GrantOwnershipObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_types::MatchSeq;
@@ -49,6 +50,12 @@ pub trait RoleApi: Sync + Send {
         object: &GrantOwnershipObject,
         role: &str,
     ) -> Result<()>;
+
+    /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
+    async fn get_ownership(
+        &self,
+        object: &GrantOwnershipObject,
+    ) -> Result<SeqV<GrantOwnershipInfo>>;
 
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<()>;
 }

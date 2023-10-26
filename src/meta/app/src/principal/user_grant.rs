@@ -14,8 +14,11 @@
 
 use std::collections::HashSet;
 use std::fmt;
+use std::fmt::Display;
 use std::ops;
+use anyerror::AnyError;
 
+use common_exception::ErrorCode;
 use enumflags2::BitFlags;
 
 use crate::principal::UserPrivilegeSet;
@@ -25,6 +28,39 @@ use crate::principal::UserPrivilegeType;
 pub struct GrantOwnershipInfo {
     pub object: GrantOwnershipObject,
     pub role: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
+pub struct GrantOwnershipInfoSerdeError {
+    pub message: String,
+    pub source: AnyError,
+}
+
+
+impl Display for GrantOwnershipInfoSerdeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} cause: {}", self.message, self.source)
+    }
+}
+
+impl TryFrom<Vec<u8>> for GrantOwnershipInfo {
+    type Error = GrantOwnershipInfoSerdeError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        match serde_json::from_slice(&value) {
+            Ok(role_info) => Ok(role_info),
+            Err(serialize_error) => Err(GrantOwnershipInfoSerdeError {
+                message: "Cannot deserialize GrantOwnershipInfo from bytes".to_string(),
+                source: AnyError::new(&serialize_error),
+            }),
+        }
+    }
+}
+
+impl From<GrantOwnershipInfoSerdeError> for ErrorCode {
+    fn from(e: GrantOwnershipInfoSerdeError) -> Self {
+        ErrorCode::InvalidReply(e.to_string())
+    }
 }
 
 /// [`GrantOwnershipOject`] is used to grant the object of an ownership to a role.
