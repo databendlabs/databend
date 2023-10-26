@@ -20,7 +20,6 @@ common-pipeline-core = { path = "../core" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-minitrace = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true }

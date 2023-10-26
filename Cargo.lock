@@ -2468,7 +2468,6 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-pipeline-core",
- "minitrace 0.6.0",
  "tokio",
 ]
 
@@ -2519,7 +2518,6 @@ dependencies = [
  "common-profile",
  "jsonb 0.3.0",
  "match-template",
- "minitrace 0.6.0",
 ]
 
 [[package]]
@@ -2919,7 +2917,6 @@ dependencies = [
  "ethnum",
  "futures",
  "log",
- "minitrace 0.6.0",
  "opendal",
  "parquet",
  "serde",
@@ -3012,7 +3009,6 @@ dependencies = [
  "common-storage",
  "dashmap",
  "log",
- "minitrace 0.6.0",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
