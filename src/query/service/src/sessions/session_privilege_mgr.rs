@@ -129,20 +129,33 @@ impl SessionPrivilegeManagerImpl {
         let object = match object {
             GrantObject::Database(catalog_name, db_name) => {
                 let db_id = catalog_mgr
-                    .get_catalog(&tenant, catalog_name).await?
+                    .get_catalog(&tenant, catalog_name)
+                    .await?
                     .get_database(&tenant, db_name)
                     .await?
                     .get_db_info()
                     .ident
                     .db_id;
-                GrantObjectByID::Database{ catalog_name, db_id } 
+                GrantObjectByID::Database {
+                    catalog_name,
+                    db_id,
+                }
             }
             GrantObject::Table(catalog_name, db_name, table_name) => {
                 let catalog = catalog_mgr.get_catalog(&tenant, catalog_name).await?;
-                let db_id = catalog.get_database(&tenant, db_name).await?.get_db_info().ident.db_id;
+                let db_id = catalog
+                    .get_database(&tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
                 let table = catalog.get_table(&tenant, db_name, table_name).await?;
                 let table_id = table.get_id();
-                GrantObjectByID::Table{ catalog_name, db_id, table_id } 
+                GrantObjectByID::Table {
+                    catalog_name,
+                    db_id,
+                    table_id,
+                }
             }
             _ => return Ok(None),
         };

@@ -23,8 +23,8 @@ use common_meta_api::txn_op_put;
 use common_meta_api::SchemaApi;
 use common_meta_api::TXN_MAX_RETRY_TIMES;
 use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantOwnershipInfo;
 use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::OwnershipInfo;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
@@ -331,7 +331,7 @@ impl RoleApi for RoleMgr {
         let match_seq = MatchSeq::Exact(0);
         let key = self.make_object_owner_key(object);
 
-        let value = serde_json::to_vec(&GrantOwnershipInfo {
+        let value = serde_json::to_vec(&OwnershipInfo {
             object: object.clone(),
             role: role.to_string(),
         })?;
@@ -354,14 +354,14 @@ impl RoleApi for RoleMgr {
     async fn get_ownership(
         &self,
         object: &GrantObjectByID,
-    ) -> common_exception::Result<Option<GrantOwnershipInfo>> {
+    ) -> common_exception::Result<Option<OwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;
         let res_value = match res {
             Some(value) => value,
             None => return Ok(None),
         };
-        let ownership: SeqV<GrantOwnershipInfo> = res_value.into_seqv()?;
+        let ownership: SeqV<OwnershipInfo> = res_value.into_seqv()?;
         Ok(Some(ownership.data))
     }
 

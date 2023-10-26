@@ -24,44 +24,6 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub struct GrantOwnershipInfo {
-    pub object: GrantObjectByID,
-    pub role: String,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-pub struct GrantOwnershipInfoSerdeError {
-    pub message: String,
-    pub source: AnyError,
-}
-
-impl Display for GrantOwnershipInfoSerdeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} cause: {}", self.message, self.source)
-    }
-}
-
-impl TryFrom<Vec<u8>> for GrantOwnershipInfo {
-    type Error = GrantOwnershipInfoSerdeError;
-
-    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
-        match serde_json::from_slice(&value) {
-            Ok(role_info) => Ok(role_info),
-            Err(serialize_error) => Err(GrantOwnershipInfoSerdeError {
-                message: "Cannot deserialize GrantOwnershipInfo from bytes".to_string(),
-                source: AnyError::new(&serialize_error),
-            }),
-        }
-    }
-}
-
-impl From<GrantOwnershipInfoSerdeError> for ErrorCode {
-    fn from(e: GrantOwnershipInfoSerdeError) -> Self {
-        ErrorCode::InvalidReply(e.to_string())
-    }
-}
-
 /// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
 /// have many benefits, it can avoid lost privileges after the object get renamed.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
@@ -70,7 +32,11 @@ pub enum GrantObjectByID {
     Database { catalog_name: String, db_id: u64 },
 
     /// used on the fuse tables
-    Table { catalog_name: String, db_id: u64, table_id: u64 },
+    Table {
+        catalog_name: String,
+        db_id: u64,
+        table_id: u64,
+    },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]

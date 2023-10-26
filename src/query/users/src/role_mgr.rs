@@ -18,8 +18,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantOwnershipInfo;
 use common_meta_app::principal::GrantObjectByID;
+use common_meta_app::principal::OwnershipInfo;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType;
@@ -163,7 +163,7 @@ impl UserApiProvider {
         &self,
         tenant: &str,
         object: &GrantObjectByID,
-    ) -> Result<Option<GrantOwnershipInfo>> {
+    ) -> Result<Option<OwnershipInfo>> {
         let client = self.get_role_api_client(tenant)?;
         let ownership = client
             .get_ownership(object)

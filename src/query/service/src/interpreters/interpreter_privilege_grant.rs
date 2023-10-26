@@ -47,9 +47,19 @@ impl GrantPrivilegeInterpreter {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
-    async fn grant_ownership(&self, tenant: &str, catalog: Arc<dyn Catalog>, object: &GrantObject, current_role: &RoleInfo, role: &String) -> Result<()> {
+    async fn grant_ownership(
+        &self,
+        tenant: &str,
+        catalog: Arc<dyn Catalog>,
+        object: &GrantObject,
+        current_role: &RoleInfo,
+        role: &String,
+    ) -> Result<()> {
         let user_mgr = UserApiProvider::instance();
-        debug!("grant ownership from role: {} to {}", current_role.name, role);
+        debug!(
+            "grant ownership from role: {} to {}",
+            current_role.name, role
+        );
 
         let ownership_object = match object {
             GrantObject::Database(_, db_name) => {
@@ -58,7 +68,9 @@ impl GrantPrivilegeInterpreter {
                 GrantObjectByID::Database { db_id }
             }
             GrantObject::Table(_, db_name, table_name) => {
-                let table = catalog.get_table(tenant, db_name.as_str(), table_name).await?;
+                let table = catalog
+                    .get_table(tenant, db_name.as_str(), table_name)
+                    .await?;
                 let table_id = table.get_id();
                 GrantObjectByID::Table { table_id }
             }
@@ -124,7 +136,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
                         }
                     };
 
-                    self.grant_ownership(&tenant, catalog, &plan.on, &current_role, &role).await?;
+                    self.grant_ownership(&tenant, catalog, &plan.on, &current_role, &role)
+                        .await?;
                 } else {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)
