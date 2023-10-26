@@ -85,13 +85,20 @@ echo "ALTER table table_read_only SET OPTIONS(bloom_index_columns='a');" | $MYSQ
 echo "alter table flashback not allowed"
 echo "ALTER TABLE table_read_only FLASHBACK TO (SNAPSHOT => 'c5c538d6b8bc42f483eefbddd000af7d')" | $MYSQL_CLIENT_CONNECT
 
-echo "alter table recluster"
+echo "alter table recluster not allowed"
 echo "ALTER TABLE table_read_only recluster" | $MYSQL_CLIENT_CONNECT
 
-echo "optimize table (expects 3 errors)"
+
+echo "analyze table not allowed"
+echo "ANALYZE TABLE table_read_only" | $MYSQL_CLIENT_CONNECT
+
+echo "optimize table"
+echo "optimize table compact not allowed"
 echo "OPTIMIZE TABLE table_read_only compact" | $MYSQL_CLIENT_CONNECT
+echo "optimize table compact segment not allowed"
 echo "OPTIMIZE TABLE table_read_only compact segment" | $MYSQL_CLIENT_CONNECT
-echo "OPTIMIZE TABLE table_read_only compact" | $MYSQL_CLIENT_CONNECT
+echo "optimize table purge not allowed"
+echo "OPTIMIZE TABLE table_read_only purge" | $MYSQL_CLIENT_CONNECT
 
 # 4.1 drop table
 
