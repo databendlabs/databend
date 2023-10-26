@@ -17,10 +17,10 @@ use std::collections::BTreeMap;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
-use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 
 use crate::sm_v002::leveled_store::map_api::AsMap;
+use crate::sm_v002::leveled_store::map_api::EntryStream;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
@@ -92,17 +92,19 @@ impl MapApiRO<String> for Level {
         self.kv.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'f, Q, R>(
-        &'f self,
-        range: R,
-    ) -> BoxStream<'f, (String, Marked<<String as MapKey>::V>)>
+    async fn range<Q, R>(&self, range: R) -> EntryStream<String>
     where
         String: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let it = self.kv.range(range).map(|(k, v)| (k.clone(), v.clone()));
-        futures::stream::iter(it).boxed()
+        let vec = self
+            .kv
+            .range(range)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>();
+
+        futures::stream::iter(vec.into_iter()).boxed()
     }
 }
 
@@ -141,21 +143,19 @@ impl MapApiRO<ExpireKey> for Level {
         self.expire.get(key).cloned().unwrap_or(Marked::empty())
     }
 
-    async fn range<'f, Q, R>(
-        &'f self,
-        range: R,
-    ) -> BoxStream<'f, (ExpireKey, Marked<<ExpireKey as MapKey>::V>)>
+    async fn range<Q, R>(&self, range: R) -> EntryStream<ExpireKey>
     where
         ExpireKey: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
         R: RangeBounds<Q> + Clone + Send + Sync,
     {
-        let it = self
+        let vec = self
             .expire
             .range(range)
-            .map(|(k, v)| (k.clone(), v.clone()));
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect::<Vec<_>>();
 
-        futures::stream::iter(it).boxed()
+        futures::stream::iter(vec.into_iter()).boxed()
     }
 }
 
