@@ -113,6 +113,14 @@ impl GrantObject {
             GrantObject::Table(_, _, _) => UserPrivilegeSet::available_privileges_on_table(),
         }
     }
+
+    pub fn catalog(&self) -> Option<String> {
+        match self {
+            GrantObject::Global => None,
+            GrantObject::Database(cat, _) => Some(cat.clone()),
+            GrantObject::Table(cat, _, _) => Some(cat.clone()),
+        }
+    }
 }
 
 impl fmt::Display for GrantObject {

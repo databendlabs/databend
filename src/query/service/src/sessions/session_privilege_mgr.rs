@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantOwnershipObject;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
@@ -116,7 +117,7 @@ impl SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn get_object_owner(&self, owner: &GrantObject) -> Result<Option<RoleInfo>> {
+    async fn get_object_owner(&self, owner: &GrantOwnershipObject) -> Result<Option<RoleInfo>> {
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
         // return true only if grant object owner is the role itself
