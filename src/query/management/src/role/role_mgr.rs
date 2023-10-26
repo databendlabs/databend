@@ -24,7 +24,7 @@ use common_meta_api::SchemaApi;
 use common_meta_api::TXN_MAX_RETRY_TIMES;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantOwnershipInfo;
-use common_meta_app::principal::GrantOwnershipObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseNameIdent;
@@ -101,15 +101,15 @@ impl RoleMgr {
         format!("{}/{}", self.role_prefix, role)
     }
 
-    fn make_object_owner_key(&self, object: &GrantOwnershipObject) -> String {
+    fn make_object_owner_key(&self, object: &GrantObjectByID) -> String {
         match object {
-            GrantOwnershipObject::Database { database_id } => {
+            GrantObjectByID::Database { db_id: database_id } => {
                 format!(
                     "{}/database-by-id/{}",
                     self.object_owner_prefix, database_id
                 )
             }
-            GrantOwnershipObject::Table { table_id } => {
+            GrantObjectByID::Table { table_id } => {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
         }
@@ -325,7 +325,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn grant_ownership(
         &self,
-        object: &GrantOwnershipObject,
+        object: &GrantObjectByID,
         role: &str,
     ) -> common_exception::Result<()> {
         let match_seq = MatchSeq::Exact(0);
@@ -353,7 +353,7 @@ impl RoleApi for RoleMgr {
     #[minitrace::trace]
     async fn get_ownership(
         &self,
-        object: &GrantOwnershipObject,
+        object: &GrantObjectByID,
     ) -> common_exception::Result<Option<GrantOwnershipInfo>> {
         let key = self.make_object_owner_key(object);
         let res = self.kv_api.get_kv(&key).await?;

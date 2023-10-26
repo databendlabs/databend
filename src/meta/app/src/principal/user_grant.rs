@@ -26,7 +26,7 @@ use crate::principal::UserPrivilegeType;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub struct GrantOwnershipInfo {
-    pub object: GrantOwnershipObject,
+    pub object: GrantObjectByID,
     pub role: String,
 }
 
@@ -62,19 +62,15 @@ impl From<GrantOwnershipInfoSerdeError> for ErrorCode {
     }
 }
 
-/// [`GrantOwnershipOject`] is used to grant the object of an ownership to a role.
-/// Currently GrantObject is based on the name of the object, which is suffering
-/// the issue of lost privileges entries after any renaming.
-/// We already have made the plan to migrte the name based GrantObject to id based
-/// GrantObject. But it's not a short time work, so we use the GrantOwnershipObject
-/// on the ownerships before it is done.
+/// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
+/// have many benefits, it can avoid lost privileges after the object get renamed.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
-pub enum GrantOwnershipObject {
+pub enum GrantObjectByID {
     /// used on the fuse databases
-    Database { database_id: u64 },
+    Database { catalog_name: String, db_id: u64 },
 
     /// used on the fuse tables
-    Table { table_id: u64 },
+    Table { catalog_name: String, db_id: u64, table_id: u64 },
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]

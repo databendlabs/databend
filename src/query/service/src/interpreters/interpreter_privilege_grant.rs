@@ -19,7 +19,7 @@ use common_catalog::database::Database;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantOwnershipObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
@@ -55,12 +55,12 @@ impl GrantPrivilegeInterpreter {
             GrantObject::Database(_, db_name) => {
                 let db = catalog.get_database(tenant, db_name).await?;
                 let database_id = db.get_db_info().ident.db_id;
-                GrantOwnershipObject::Database { database_id }
+                GrantObjectByID::Database { db_id }
             }
             GrantObject::Table(_, db_name, table_name) => {
                 let table = catalog.get_table(tenant, db_name.as_str(), table_name).await?;
                 let table_id = table.get_id();
-                GrantOwnershipObject::Table { table_id }
+                GrantObjectByID::Table { table_id }
             }
             _ => {
                 return Err(ErrorCode::IllegalGrant(

@@ -19,7 +19,7 @@ use common_exception::Result;
 use common_management::RoleApi;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantOwnershipInfo;
-use common_meta_app::principal::GrantOwnershipObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType;
@@ -145,7 +145,7 @@ impl UserApiProvider {
         tenant: &str,
         from: &String,
         to: &String,
-        object: &GrantOwnershipObject,
+        object: &GrantObjectByID,
     ) -> Result<()> {
         // from and to role must exists
         self.get_role(tenant, from.clone()).await?;
@@ -162,7 +162,7 @@ impl UserApiProvider {
     pub async fn get_ownership(
         &self,
         tenant: &str,
-        object: &GrantOwnershipObject,
+        object: &GrantObjectByID,
     ) -> Result<Option<GrantOwnershipInfo>> {
         let client = self.get_role_api_client(tenant)?;
         let ownership = client

@@ -14,16 +14,19 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::CatalogManager;
+use common_catalog::database;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
-use common_meta_app::principal::GrantOwnershipObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
 use common_users::GrantObjectVisibilityChecker;
 use common_users::RoleCacheManager;
 use common_users::BUILTIN_ROLE_PUBLIC;
+use petgraph::visit::Data;
 
 use crate::sessions::SessionContext;
 
@@ -117,11 +120,35 @@ impl SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn get_object_owner(&self, owner: &GrantOwnershipObject) -> Result<Option<RoleInfo>> {
+    async fn get_object_owner(&self, object: &GrantObject) -> Result<Option<RoleInfo>> {
+        let catalog_mgr = CatalogManager::instance();
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
+
+        // TODO(liyz): move the convertion between GrantObject into GrantObjectByID into interpreter
+        let object = match object {
+            GrantObject::Database(catalog_name, db_name) => {
+                let db_id = catalog_mgr
+                    .get_catalog(&tenant, catalog_name).await?
+                    .get_database(&tenant, db_name)
+                    .await?
+                    .get_db_info()
+                    .ident
+                    .db_id;
+                GrantObjectByID::Database{ catalog_name, db_id } 
+            }
+            GrantObject::Table(catalog_name, db_name, table_name) => {
+                let catalog = catalog_mgr.get_catalog(&tenant, catalog_name).await?;
+                let db_id = catalog.get_database(&tenant, db_name).await?.get_db_info().ident.db_id;
+                let table = catalog.get_table(&tenant, db_name, table_name).await?;
+                let table_id = table.get_id();
+                GrantObjectByID::Table{ catalog_name, db_id, table_id } 
+            }
+            _ => return Ok(None),
+        };
+
         // return true only if grant object owner is the role itself
-        role_mgr.find_object_owner(&tenant, owner).await
+        role_mgr.find_object_owner(&tenant, &object).await
     }
 }
 
