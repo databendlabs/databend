@@ -772,15 +772,25 @@ impl Column {
     pub fn take_block_vec_boolean_types(col: &[Bitmap], indices: &[RowPtr]) -> Bitmap {
         let num_rows = indices.len();
         // Fast path: avoid iterating column to generate a new bitmap.
+        // If all [`Bitmap`] are all_true or all_false and `num_rows <= bitmap.len()`,
+        // we can just slice it.
+        let mut all_true = true;
+        let mut all_false = true;
         for bitmap in col.iter() {
-            // If this [`Bitmap`] is all true or all false and `num_rows <= bitmap.len()``,
-            // we can just slice it.
-            if num_rows <= bitmap.len()
-                && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
-            {
-                let mut bitmap = bitmap.clone();
-                bitmap.slice(0, num_rows);
-                return bitmap;
+            if bitmap.unset_bits() > 0 {
+                all_true = false;
+            }
+            if bitmap.unset_bits() != bitmap.len() {
+                all_false = false;
+            }
+        }
+        if all_true || all_false {
+            for bitmap in col.iter() {
+                if num_rows <= bitmap.len() {
+                    let mut bitmap = bitmap.clone();
+                    bitmap.slice(0, num_rows);
+                    return bitmap;
+                }
             }
         }
 
