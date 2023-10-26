@@ -374,6 +374,15 @@ impl MergeIntoInterpreter {
         ctx: Arc<QueryContext>,
     ) -> Result<Box<SExpr>> {
         // 1. collect statistics from the source side
+        // plan of source table is extended to:
+        //
+        // AggregateFinal(min(source_join_side_expr),max(source_join_side_expr))
+        //        \
+        //     AggregatePartial(min(source_join_side_expr),max(source_join_side_expr))
+        //         \
+        //       EvalScalar(source_join_side_expr)
+        //          \
+        //         SourcePlan
         let source_plan = join.child(0)?;
         let join_op = match join.plan() {
             RelOperator::Join(j) => j,
