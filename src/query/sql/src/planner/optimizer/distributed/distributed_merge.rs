@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::optimizer::SExpr;
 use crate::plans::Exchange::Broadcast;
+use crate::plans::Join;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
@@ -62,6 +63,10 @@ impl MergeSourceOptimizer {
                     Arc::new(right_exchange_input.clone()),
                 )),
             ];
+
+            let mut join: Join = join_s_expr.plan().clone().try_into()?;
+            join.need_hold_hash_table = true;
+            let join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
             Ok(join_s_expr.replace_children(new_join_children))
         }
     }

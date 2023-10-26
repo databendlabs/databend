@@ -129,8 +129,6 @@ use common_storages_fuse::operations::merge_into::MergeIntoNotMatchedProcessor;
 use common_storages_fuse::operations::merge_into::MergeIntoSplitProcessor;
 use common_storages_fuse::operations::merge_into::RowNumberAndLogSplitProcessor;
 use common_storages_fuse::operations::merge_into::TransformAddRowNumberColumnProcessor;
-use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockDeserialize;
-use common_storages_fuse::operations::merge_into::TransformDistributedMergeIntoBlockSerialize;
 use common_storages_fuse::operations::replace_into::BroadcastProcessor;
 use common_storages_fuse::operations::replace_into::ReplaceIntoProcessor;
 use common_storages_fuse::operations::replace_into::UnbranchedReplaceIntoProcessor;
@@ -179,6 +177,7 @@ use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
+use crate::pipelines::processors::DeduplicateRowNumber;
 use crate::pipelines::processors::HashJoinState;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
@@ -351,6 +350,9 @@ impl PipelineBuilder {
         &mut self,
         merge_into_row_id_apply: &MergeIntoAppendNotMatched,
     ) -> Result<()> {
+        // self.main_pipeline
+        //     .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
+
         let MergeIntoAppendNotMatched {
             input,
             table_info,
@@ -360,52 +362,110 @@ impl PipelineBuilder {
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
 
+        assert!(self.join_state.is_some());
+        let join_state = self.join_state.clone().unwrap();
         // split row_number and log
         //      output_port_row_number
         //      output_port_log
         self.main_pipeline
             .add_pipe(RowNumberAndLogSplitProcessor::create()?.into_pipe());
 
-        // self.main_pipeline
-        //     .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
+        // accumulate source data which is not matched from hashstate
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(DeduplicateRowNumber::create(join_state.clone())?.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-        // let mut pipe_items = Vec::with_capacity(1);
+        // split row_number and log
+        //      output_port_not_matched_data
+        //      output_port_log
+        // start to append data
         let tbl = self
             .ctx
             .build_table_by_table_info(catalog_info, table_info, None)?;
+        // 1.fill default columns
+        let table_default_schema = &tbl.schema().remove_computed_fields();
+        let mut builder = self.main_pipeline.add_transform_with_specified_len(
+            |transform_input_port, transform_output_port| {
+                TransformResortAddOnWithoutSourceSchema::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    Arc::new(DataSchema::from(table_default_schema)),
+                    tbl.clone(),
+                )
+            },
+            1,
+        )?;
+        builder.add_items(vec![create_dummy_item()]);
+        self.main_pipeline.add_pipe(builder.finalize());
 
+        // 2.fill computed columns
+        // fill computed columns
+        let table_computed_schema = &tbl.schema().remove_virtual_computed_fields();
+        let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+        let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+        if default_schema != computed_schema {
+            builder = self.main_pipeline.add_transform_with_specified_len(
+                |transform_input_port, transform_output_port| {
+                    TransformAddComputedColumns::try_create(
+                        self.ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        default_schema.clone(),
+                        computed_schema.clone(),
+                    )
+                },
+                1,
+            )?;
+            builder.add_items(vec![create_dummy_item()]);
+            self.main_pipeline.add_pipe(builder.finalize());
+        }
+
+        // 3. cluster sort
         let table = FuseTable::try_from_table(tbl.as_ref())?;
-
         let block_thresholds = table.get_block_thresholds();
+        table.cluster_gen_for_append_with_specified_len(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            block_thresholds,
+            1,
+            1,
+        )?;
 
+        // 4. serialize block
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, block_thresholds, None)?;
+        let serialize_block_transform = TransformSerializeBlock::try_create(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            cluster_stats_gen.clone(),
+        )?;
 
-        // this TransformSerializeBlock is just used to get block_builder
-        // let block_builder = TransformSerializeBlock::try_create(
-        //     self.ctx.clone(),
-        //     InputPort::create(),
-        //     OutputPort::create(),
-        //     table,
-        //     cluster_stats_gen,
-        // )?
-        // .get_block_builder();
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(serialize_block_transform.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-        // let max_threads = self.settings.get_max_threads()?;
-        // let io_request_semaphore = Arc::new(Semaphore::new(max_threads as usize));
+        // 5. serialize segment
+        let serialize_segment_transform = TransformSerializeSegment::new(
+            self.ctx.clone(),
+            InputPort::create(),
+            OutputPort::create(),
+            table,
+            block_thresholds,
+        );
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(serialize_segment_transform.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-        // pipe_items.push(table.rowid_aggregate_mutator(
-        //     self.ctx.clone(),
-        //     block_builder,
-        //     io_request_semaphore,
-        //     segments.clone(),
-        //     true,
-        // )?);
+        // resize to one, because they are all mutation logs now.
+        self.main_pipeline.try_resize(1)?;
 
-        // self.main_pipeline
-        //     .add_pipe(Pipe::create(self.main_pipeline.output_len(), 1, pipe_items));
-        // Ok(())
-        todo!()
+        Ok(())
     }
 
     fn build_merge_into_source(&mut self, merge_into_source: &MergeIntoSource) -> Result<()> {
@@ -1469,9 +1529,12 @@ impl PipelineBuilder {
         };
         if hash_join_plan.contain_runtime_filter {
             build_res.main_pipeline.duplicate(false)?;
-            self.join_state = Some(build_state);
+            self.join_state = Some(build_state.clone());
             self.index = Some(self.pipelines.len());
         } else {
+            if hash_join_plan.need_hold_hash_table {
+                self.join_state = Some(build_state.clone())
+            }
             build_res.main_pipeline.add_sink(create_sink_processor)?;
         }
 

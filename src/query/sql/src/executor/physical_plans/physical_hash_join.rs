@@ -62,6 +62,9 @@ pub struct HashJoin {
     pub output_schema: DataSchemaRef,
     // It means that join has a corresponding runtime filter
     pub contain_runtime_filter: bool,
+    // if we execute distributed merge into, we need to hold the
+    // hash table to get not match data from source.
+    pub need_hold_hash_table: bool,
 
     // Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -383,6 +386,7 @@ impl PhysicalPlanBuilder {
             probe_to_build,
             output_schema,
             contain_runtime_filter: join.contain_runtime_filter,
+            need_hold_hash_table: join.need_hold_hash_table,
             stat_info: Some(stat_info),
         }))
     }

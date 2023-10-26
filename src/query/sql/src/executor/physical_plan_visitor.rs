@@ -232,6 +232,7 @@ pub trait PhysicalPlanReplacer {
             probe_to_build: plan.probe_to_build.clone(),
             output_schema: plan.output_schema.clone(),
             contain_runtime_filter: plan.contain_runtime_filter,
+            need_hold_hash_table: plan.need_hold_hash_table,
             stat_info: plan.stat_info.clone(),
         }))
     }
