@@ -16,6 +16,7 @@ mod escape;
 mod json;
 mod number_helpers;
 
-pub use escape::write_escaped_string;
+pub use escape::write_quoted_string;
+pub use escape::write_tsv_escaped_string;
 pub use json::write_json_string;
 pub use number_helpers::PrimitiveWithFormat;
