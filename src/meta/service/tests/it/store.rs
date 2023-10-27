@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::state_machine::testing::snapshot_logs;
 use common_meta_sled_store::openraft::async_trait::async_trait;
 use common_meta_sled_store::openraft::entry::RaftEntry;
@@ -251,6 +252,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 .state_machine
                 .write()
                 .await
+                .sys_data_ref()
                 .last_membership_ref()
                 .clone();
 
@@ -262,7 +264,12 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
                 mem
             );
 
-            let last_applied = *sto.state_machine.write().await.last_applied_ref();
+            let last_applied = *sto
+                .state_machine
+                .write()
+                .await
+                .sys_data_ref()
+                .last_applied_ref();
             assert_eq!(Some(log_id(1, 0, 9)), last_applied);
         }
 

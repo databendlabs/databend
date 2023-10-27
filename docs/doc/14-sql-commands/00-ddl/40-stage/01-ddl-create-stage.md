@@ -130,7 +130,7 @@ For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-s
 
 ### copyOptions
 
-```
+```sql
 copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]

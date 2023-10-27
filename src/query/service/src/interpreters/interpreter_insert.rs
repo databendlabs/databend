@@ -16,6 +16,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
@@ -86,6 +87,9 @@ impl Interpreter for InsertInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         let mut build_res = PipelineBuildResult::create();
 

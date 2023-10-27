@@ -17,6 +17,7 @@ use std::fmt;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
+use futures::stream::StreamExt;
 use futures_util::stream::BoxStream;
 use stream_more::KMerge;
 use stream_more::StreamMore;
@@ -46,6 +47,9 @@ pub(in crate::sm_v002) trait MapValue:
 {
 }
 
+/// A stream of key-value entry returned by `range()`.
+pub(in crate::sm_v002) type EntryStream<K> = BoxStream<'static, (K, Marked<<K as MapKey>::V>)>;
+
 // Auto implement MapValue for all types that satisfy the constraints.
 impl<V> MapValue for V where V: Clone + Send + Sync + Unpin + 'static {}
 
@@ -73,7 +77,7 @@ where K: MapKey
     /// Iterate over a range of entries by keys.
     ///
     /// The returned iterator contains tombstone entries: [`Marked::TombStone`].
-    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    async fn range<Q, R>(&self, range: R) -> EntryStream<K>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -209,7 +213,7 @@ where
 pub(in crate::sm_v002) async fn compacted_range<'d, K, Q, R, L>(
     range: R,
     levels: impl IntoIterator<Item = &'d L>,
-) -> BoxStream<'d, (K, Marked<K::V>)>
+) -> EntryStream<K>
 where
     K: MapKey,
     K: Borrow<Q>,
@@ -225,10 +229,9 @@ where
     }
 
     // Merge entries with the same key, keep the one with larger internal-seq
-    let m = kmerge.coalesce(util::choose_greater);
+    let coalesce = kmerge.coalesce(util::choose_greater);
 
-    let strm: BoxStream<'_, (K, Marked<K::V>)> = Box::pin(m);
-    strm
+    coalesce.boxed()
 }
 
 #[cfg(test)]
