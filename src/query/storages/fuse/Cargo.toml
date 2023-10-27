@@ -33,7 +33,6 @@ common-pipeline-transforms = { path = "../../pipeline/transforms" }
 common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
-common-tracing = { path = "../../../common/tracing" }
 jsonb = { workspace = true }
 table-lock = { path = "../../ee-features/table-lock" }
 
