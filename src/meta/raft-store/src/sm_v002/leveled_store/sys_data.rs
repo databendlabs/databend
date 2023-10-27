@@ -94,15 +94,15 @@ impl SysData {
         self.sequence
     }
 
-    pub(crate) fn last_applied_mut(&mut self) -> &mut Option<LogId> {
+    pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
         &mut self.last_applied
     }
 
-    pub(crate) fn last_membership_mut(&mut self) -> &mut StoredMembership {
+    pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
         &mut self.last_membership
     }
 
-    pub(crate) fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
+    pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
         &mut self.nodes
     }
 }
