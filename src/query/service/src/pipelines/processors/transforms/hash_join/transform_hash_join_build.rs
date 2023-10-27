@@ -85,10 +85,9 @@ impl TransformHashJoinBuild {
         }))
     }
 
-    fn wait_spill(&mut self, data_block: DataBlock) -> Result<()> {
+    fn wait_spill(&mut self) -> Result<()> {
         let spill_state = self.spill_state.as_mut().unwrap();
         let wait = spill_state.spill_coordinator.wait_spill()?;
-        self.input_data = Some(data_block);
         if wait {
             self.step = HashJoinBuildStep::WaitSpill;
         } else {
@@ -188,6 +187,20 @@ impl Processor for TransformHashJoinBuild {
                     return Ok(Event::Async);
                 }
 
+                if let Some(spill_state) = self.spill_state.as_ref() {
+                    if spill_state.check_need_spill()? {
+                        spill_state.spill_coordinator.need_spill()?;
+                        self.wait_spill()?;
+                        // WaitProbe or FirstSpill, so set Event to Async
+                        return Ok(Event::Async);
+                    } else if spill_state.spill_coordinator.get_need_spill() {
+                        // even if input can fit into memory, but there exists one processor need to spill,
+                        // then it needs to wait spill.
+                        self.wait_spill()?;
+                        return Ok(Event::Async);
+                    }
+                }
+
                 match self.input_port.has_data() {
                     true => {
                         self.input_data = Some(self.input_port.pull_data().unwrap()?);
@@ -234,33 +247,11 @@ impl Processor for TransformHashJoinBuild {
                     if self.from_spill {
                         return self.build_state.build(data_block);
                     }
-                    if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() {
-                        // Check if need to spill
-                        let need_spill = spill_state.check_need_spill()?;
-                        if need_spill {
-                            spill_state.spill_coordinator.need_spill()?;
-                            self.wait_spill(data_block)?;
-                        } else if spill_state.spill_coordinator.get_need_spill() {
-                                // even if input can fit into memory, but there exists one processor need to spill,
-                                // then it needs to wait spill.
-                                self.wait_spill(data_block)?;
-                            } else {
-                                // If the processor had spilled data, we should continue to spill
-                                if spill_state.spiller.is_any_spilled() {
-                                    self.step = HashJoinBuildStep::FollowSpill;
-                                    self.spill_data = Some(data_block);
-                                } else {
-                                    self.build_state.build(data_block)?;
-                                }
-                            }
+                    if let Some(spill_state) = &mut self.spill_state && spill_state.spiller.is_any_spilled() {
+                        // If the processor had spilled data, we should continue to spill
+                        self.step = HashJoinBuildStep::FollowSpill;
+                        self.spill_data = Some(data_block);
                     } else {
-                        if let Some(spill_state) = &mut self.spill_state {
-                            if spill_state.spiller.is_all_spilled() {
-                                self.step = HashJoinBuildStep::FollowSpill;
-                                self.spill_data = Some(data_block);
-                                return Ok(());
-                            }
-                        }
                         self.build_state.build(data_block)?;
                     }
                 }
@@ -368,7 +359,7 @@ impl Processor for TransformHashJoinBuild {
                 {
                     let spilled_data = spill_state
                         .spiller
-                        .read_spilled_data(&(partition_id as u8))
+                        .read_spilled_data(&(partition_id as u8), self.processor_id)
                         .await?;
                     self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 }
