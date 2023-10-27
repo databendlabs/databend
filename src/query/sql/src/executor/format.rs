@@ -30,7 +30,6 @@ use crate::executor::physical_plans::physical_commit_sink::CommitSink;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
-use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
 use crate::executor::physical_plans::physical_exchange::Exchange;
@@ -45,6 +44,7 @@ use crate::executor::physical_plans::physical_project::Project;
 use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
 use crate::executor::physical_plans::physical_range_join::RangeJoinType;
+use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
 use crate::executor::physical_plans::physical_sort::Sort;
@@ -195,9 +195,9 @@ fn to_format_tree(
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, profs)
         }
-        PhysicalPlan::DeleteSource(plan) => {
-            delete_source_to_format_tree(plan.as_ref(), metadata, profs)
-        }
+        PhysicalPlan::DeleteSource(_) => Ok(FormatTreeNode::new("DeleteSource".to_string())),
+        PhysicalPlan::ReclusterSource(_) => Ok(FormatTreeNode::new("ReclusterSource".to_string())),
+        PhysicalPlan::ReclusterSink(plan) => recluster_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::CompactSource(_) => Ok(FormatTreeNode::new("CompactSource".to_string())),
         PhysicalPlan::CommitSink(plan) => commit_sink_to_format_tree(plan, metadata, profs),
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, profs),
@@ -1057,12 +1057,16 @@ fn distributed_insert_to_format_tree(
     ))
 }
 
-fn delete_source_to_format_tree(
-    _plan: &DeleteSource,
-    _metadata: &Metadata,
-    _prof_span_set: &SharedProcessorProfiles,
+fn recluster_sink_to_format_tree(
+    plan: &ReclusterSink,
+    metadata: &Metadata,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::new("DeleteSource".to_string()))
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    Ok(FormatTreeNode::with_children(
+        "ReclusterSink".to_string(),
+        children,
+    ))
 }
 
 fn commit_sink_to_format_tree(

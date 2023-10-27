@@ -18,8 +18,8 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_meta_app::share;
-use minitrace::func_name;
 use maplit::btreemap;
+use minitrace::func_name;
 
 use crate::common;
 

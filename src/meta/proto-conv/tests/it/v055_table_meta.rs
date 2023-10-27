@@ -19,9 +19,9 @@ use common_expression::ComputedExpr;
 use common_meta_app::schema as mt;
 use common_meta_app::schema::Ownership;
 use common_meta_app::share;
-use minitrace::func_name;
 use maplit::btreemap;
 use maplit::btreeset;
+use minitrace::func_name;
 
 use crate::common;
 

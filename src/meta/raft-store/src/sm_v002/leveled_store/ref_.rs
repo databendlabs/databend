@@ -16,11 +16,10 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::ops::RangeBounds;
 
-use futures_util::stream::BoxStream;
-
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
+use crate::sm_v002::leveled_store::map_api::EntryStream;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::leveled_store::static_levels::StaticLevels;
@@ -65,7 +64,7 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    async fn range<Q, R>(&self, range: R) -> EntryStream<K>
     where
         K: Borrow<Q>,
         R: RangeBounds<Q> + Clone + Send + Sync,

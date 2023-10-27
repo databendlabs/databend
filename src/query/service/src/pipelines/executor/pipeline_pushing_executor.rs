@@ -23,8 +23,8 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
-use minitrace::full_name;
 use log::warn;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 

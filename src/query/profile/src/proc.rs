@@ -71,7 +71,10 @@ impl<K> ProcessorProfiles<K>
 where K: std::hash::Hash + Eq + PartialEq + Clone + Debug
 {
     pub fn update(&mut self, key: K, span: ProcessorProfile) {
-        let entry = self.spans.entry(key).or_default();
+        let entry = self
+            .spans
+            .entry(key)
+            .or_insert_with(ProcessorProfile::default);
         *entry = *entry + span;
     }
 

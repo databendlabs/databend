@@ -63,6 +63,14 @@ lazy_static! {
         register_histogram_in_milliseconds(key!("compact_block_read_milliseconds"));
     static ref COMPACT_BLOCK_BUILD_TASK_MILLISECONDS: Histogram =
         register_histogram_in_milliseconds(key!("compact_block_build_task_milliseconds"));
+    static ref RECLUSTER_BLOCK_NUMS_TO_READ: Counter =
+        register_counter(key!("recluster_block_nums_to_read"));
+    static ref RECLUSTER_BLOCK_BYTES_TO_READ: Counter =
+        register_counter(key!("recluster_block_bytes_to_read"));
+    static ref RECLUSTER_ROW_NUMS_TO_READ: Counter =
+        register_counter(key!("recluster_row_nums_to_read"));
+    static ref RECLUSTER_WRITE_BLOCK_NUMS: Counter =
+        register_counter(key!("recluster_write_block_nums"));
     static ref SEGMENTS_RANGE_PRUNING_BEFORE: Counter =
         register_counter(key!("segments_range_pruning_before"));
     static ref SEGMENTS_RANGE_PRUNING_AFTER: Counter =
@@ -412,4 +420,20 @@ pub fn metrics_inc_replace_deleted_blocks_rows(c: u64) {
 // rows of blocks that are appended
 pub fn metrics_inc_replace_append_blocks_rows(c: u64) {
     REPLACE_INTO_APPEND_BLOCKS_ROWS.inc_by(c);
+}
+
+pub fn metrics_inc_recluster_block_nums_to_read(c: u64) {
+    RECLUSTER_BLOCK_NUMS_TO_READ.inc_by(c);
+}
+
+pub fn metrics_inc_recluster_block_bytes_to_read(c: u64) {
+    RECLUSTER_BLOCK_BYTES_TO_READ.inc_by(c);
+}
+
+pub fn metrics_inc_recluster_row_nums_to_read(c: u64) {
+    RECLUSTER_ROW_NUMS_TO_READ.inc_by(c);
+}
+
+pub fn metrics_inc_recluster_write_block_nums() {
+    RECLUSTER_WRITE_BLOCK_NUMS.inc();
 }

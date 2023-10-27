@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -80,6 +81,10 @@ impl Interpreter for UpdateInterpreter {
             .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
+
+        // check mutability
+        tbl.check_mutable()?;
+
         let table_info = tbl.get_table_info().clone();
 
         let selection = if !self.plan.subquery_desc.is_empty() {

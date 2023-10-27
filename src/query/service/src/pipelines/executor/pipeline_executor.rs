@@ -25,12 +25,12 @@ use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use minitrace::full_name;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
 use log::warn;
 use log::LevelFilter;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
@@ -225,19 +225,19 @@ impl PipelineExecutor {
             {
                 let finished_error_guard = self.finished_error.lock();
                 if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = error.clone();
+                    let may_error = Some(error.clone());
                     drop(finished_error_guard);
 
-                    self.on_finished(&Some(may_error.clone()))?;
-                    return Err(may_error);
+                    self.on_finished(&may_error)?;
+                    return Err(may_error.unwrap());
                 }
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = thread_res.unwrap_err();
-                self.on_finished(&Some(may_error.clone()))?;
-                return Err(may_error);
+                let may_error = Some(thread_res.unwrap_err());
+                self.on_finished(&may_error)?;
+                return Err(may_error.unwrap());
             }
         }
 

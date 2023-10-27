@@ -14,10 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
-use minitrace::full_name;
 use highway::HighwayHash;
 use log::error;
 use log::info;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;

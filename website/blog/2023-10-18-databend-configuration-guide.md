@@ -77,8 +77,7 @@ and port that the admin API will listen on.
 - Command-line option, however, do not follow the same naming convention as
   environment variable or configuration file. Instead, the configuration option
   is used. So, you can adjust this value using the `--admin-api-address` command
-  line argument. For example, to set the admin API address to `0.0.0.0:8081`,
-  you can use the following command:
+  line argument.
 
   ```
   databend-query --admin-api-address=0.0.0.0:8080

@@ -226,6 +226,9 @@ pub fn select_stage_option(i: Input) -> IResult<SelectStageOption> {
             rule! { FILE_FORMAT ~ ^"=>" ~ ^#literal_string },
             |(_, _, file_format)| SelectStageOption::FileFormat(file_format),
         ),
-        map(connection_opt("=>"), SelectStageOption::Connection),
+        map(
+            rule! { CONNECTION ~ ^"=>" ~ ^#connection_options },
+            |(_, _, file_format)| SelectStageOption::Connection(file_format),
+        ),
     ))(i)
 }
