@@ -18,6 +18,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::UserGrantSet;
 use common_meta_app::principal::UserPrivilegeType;
 use common_sql::plans::RewriteKind;
@@ -34,6 +35,14 @@ pub struct PrivilegeAccess {
 impl PrivilegeAccess {
     pub fn create(ctx: Arc<QueryContext>) -> Box<dyn AccessChecker> {
         Box::new(PrivilegeAccess { ctx })
+    }
+
+    async fn convert_grant_object_by_id(&self, object: &GrantObject) -> Result<GrantObjectByID> {
+        todo!()
+    }
+
+    async fn validate_access(&self, object: &GrantObject, privileges: Vec<UserPrivilegeType>, verify_ownership: bool) -> Result<()> {
+        Ok(())
     }
 }
 
@@ -88,8 +97,8 @@ impl AccessChecker for PrivilegeAccess {
                     if table.is_source_of_view() {
                         continue;
                     }
-                    session
-                        .validate_privilege(
+                    self
+                        .validate_access(
                             &GrantObject::Table(
                                 table.catalog().to_string(),
                                 table.database().to_string(),
@@ -107,8 +116,8 @@ impl AccessChecker for PrivilegeAccess {
 
             // Database.
             Plan::ShowCreateDatabase(plan) => {
-                session
-                    .validate_privilege(
+                self
+                    .validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Select],
                         true,
@@ -116,16 +125,16 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
+                self
+                    .validate_access(&GrantObject::Global, vec![UserPrivilegeType::Create], true)
                     .await?;
             }
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
             | Plan::DropIndex(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
+                self
+                    .validate_access(&GrantObject::Global, vec![UserPrivilegeType::Drop], true)
                     .await?;
             }
             Plan::UseDatabase(plan) => {
@@ -146,8 +155,7 @@ impl AccessChecker for PrivilegeAccess {
 
             // Virtual Column.
             Plan::CreateVirtualColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -159,8 +167,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterVirtualColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -172,8 +179,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropVirtualColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -185,8 +191,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RefreshVirtualColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -200,8 +205,7 @@ impl AccessChecker for PrivilegeAccess {
 
             // Table.
             Plan::ShowCreateTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -213,8 +217,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::DescribeTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -226,8 +229,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
             Plan::CreateTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Create],
                         true,
@@ -235,8 +237,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Drop],
                         true,
@@ -244,8 +245,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::UndropTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Drop],
                         true,
@@ -255,8 +255,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::RenameTable(plan) => {
                 // You must have ALTER and DROP privileges for the original table,
                 // and CREATE and INSERT privileges for the new table.
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -268,8 +267,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
                 // TODO(liyz): need only check the create privilege on the target database? the target
                 // table may still not existed yet.
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.new_database.clone(),
@@ -281,8 +279,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::SetOptions(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -294,8 +291,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AddTableColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -307,8 +303,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::RenameTableColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -320,8 +315,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ModifyTableColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -333,8 +327,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropTableColumn(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -346,8 +339,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterTableClusterKey(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -359,8 +351,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropTableClusterKey(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -372,8 +363,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::ReclusterTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -385,8 +375,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::TruncateTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -398,8 +387,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::OptimizeTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -411,8 +399,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::VacuumTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -424,8 +411,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::VacuumDropTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Super],
                         true,
@@ -433,8 +419,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AnalyzeTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -447,8 +432,7 @@ impl AccessChecker for PrivilegeAccess {
             }
             // Others.
             Plan::Insert(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -460,8 +444,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Replace(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -473,8 +456,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::MergeInto(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -486,8 +468,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Delete(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog_name.clone(),
                             plan.database_name.clone(),
@@ -499,8 +480,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Update(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog.clone(),
                             plan.database.clone(),
@@ -512,8 +492,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateView(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Create],
                         true,
@@ -521,8 +500,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AlterView(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Alter],
                         true,
@@ -530,8 +508,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropView(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Database(plan.catalog.clone(), plan.database.clone()),
                         vec![UserPrivilegeType::Drop],
                         true,
@@ -539,8 +516,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateUser(_) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Global,
                         vec![UserPrivilegeType::CreateUser],
                         false,
@@ -548,8 +524,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropUser(_) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Global,
                         vec![UserPrivilegeType::DropUser],
                         false,
@@ -557,8 +532,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CreateRole(_) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Global,
                         vec![UserPrivilegeType::CreateRole],
                         false,
@@ -566,8 +540,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::DropRole(_) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Global,
                         vec![UserPrivilegeType::DropRole],
                         false,
@@ -584,13 +557,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::GrantPriv(_)
             | Plan::RevokePriv(_)
             | Plan::RevokeRole(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Grant], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Grant], false)
                     .await?;
             }
             Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
                     .await?;
             }
             Plan::AlterUser(_)
@@ -598,13 +569,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::RenameDatabase(_)
             | Plan::RevertTable(_)
             | Plan::RefreshIndex(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Alter], false)
                     .await?;
             }
             Plan::CopyIntoTable(plan) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Table(
                             plan.catalog_info.catalog_name().to_string(),
                             plan.database_name.to_string(),
@@ -616,8 +585,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::CopyIntoLocation(_plan) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
                     .await?;
             }
             Plan::CreateShareEndpoint(_)
@@ -647,13 +615,11 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::ExecuteTask(_)
             | Plan::DropTask(_)
             | Plan::AlterTask(_) => {
-                session
-                    .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
+                self.validate_access(&GrantObject::Global, vec![UserPrivilegeType::Super], false)
                     .await?;
             }
             Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
-                session
-                    .validate_privilege(
+                self.validate_access(
                         &GrantObject::Global,
                         vec![UserPrivilegeType::CreateDataMask],
                         false,

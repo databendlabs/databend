@@ -58,10 +58,7 @@ pub trait SessionPrivilegeManager {
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()>;
 
-    async fn validate_ownership(
-        &self,
-        object: &GrantObjectByID,
-    ) -> Result<()>;
+    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
 
@@ -128,41 +125,39 @@ impl SessionPrivilegeManagerImpl {
         let tenant = self.session_ctx.get_current_tenant();
 
         // TODO(liyz): move the convertion between GrantObject into GrantObjectByID into interpreter
-        /* 
-        let object = match object {
-            GrantObject::Database(catalog_name, db_name) => {
-                let db_id = catalog_mgr
-                    .get_catalog(&tenant, catalog_name)
-                    .await?
-                    .get_database(&tenant, db_name)
-                    .await?
-                    .get_db_info()
-                    .ident
-                    .db_id;
-                GrantObjectByID::Database {
-                    catalog_name: catalog_name.clone(),
-                    db_id,
-                }
-            }
-            GrantObject::Table(catalog_name, db_name, table_name) => {
-                let catalog = catalog_mgr.get_catalog(&tenant, catalog_name).await?;
-                let db_id = catalog
-                    .get_database(&tenant, db_name)
-                    .await?
-                    .get_db_info()
-                    .ident
-                    .db_id;
-                let table = catalog.get_table(&tenant, db_name, table_name).await?;
-                let table_id = table.get_id();
-                GrantObjectByID::Table {
-                    catalog_name: catalog_name.clone(),
-                    db_id,
-                    table_id,
-                }
-            }
-            _ => return Ok(None),
-        };
-        */
+        // let object = match object {
+        // GrantObject::Database(catalog_name, db_name) => {
+        // let db_id = catalog_mgr
+        // .get_catalog(&tenant, catalog_name)
+        // .await?
+        // .get_database(&tenant, db_name)
+        // .await?
+        // .get_db_info()
+        // .ident
+        // .db_id;
+        // GrantObjectByID::Database {
+        // catalog_name: catalog_name.clone(),
+        // db_id,
+        // }
+        // }
+        // GrantObject::Table(catalog_name, db_name, table_name) => {
+        // let catalog = catalog_mgr.get_catalog(&tenant, catalog_name).await?;
+        // let db_id = catalog
+        // .get_database(&tenant, db_name)
+        // .await?
+        // .get_db_info()
+        // .ident
+        // .db_id;
+        // let table = catalog.get_table(&tenant, db_name, table_name).await?;
+        // let table_id = table.get_id();
+        // GrantObjectByID::Table {
+        // catalog_name: catalog_name.clone(),
+        // db_id,
+        // table_id,
+        // }
+        // }
+        // _ => return Ok(None),
+        // };
 
         // return true only if grant object owner is the role itself
         role_mgr.find_object_owner(&tenant, &object).await
@@ -264,7 +259,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         )))
     }
 
-    
     #[async_backtrace::framed]
     async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()> {
         let role_mgr = RoleCacheManager::instance();
@@ -278,7 +272,10 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
 
         let available_roles = self.get_all_available_roles().await?;
         if !available_roles.iter().any(|r| r.name == owner_role.name) {
-            return Err(ErrorCode::PermissionDenied("Permission denied, current session do not have the ownership of this object".to_string()));
+            return Err(ErrorCode::PermissionDenied(
+                "Permission denied, current session do not have the ownership of this object"
+                    .to_string(),
+            ));
         }
 
         Ok(())
