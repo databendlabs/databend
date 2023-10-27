@@ -774,17 +774,14 @@ impl Column {
         // Fast path: avoid iterating column to generate a new bitmap.
         // If all [`Bitmap`] are all_true or all_false and `num_rows <= bitmap.len()`,
         // we can just slice it.
-        let mut all_true = true;
-        let mut all_false = true;
+        let mut total_len = 0;
+        let mut unset_bits = 0;
         for bitmap in col.iter() {
-            if bitmap.unset_bits() > 0 {
-                all_true = false;
-            }
-            if bitmap.unset_bits() != bitmap.len() {
-                all_false = false;
-            }
+            unset_bits += bitmap.unset_bits();
+            total_len += bitmap.len();
         }
-        if all_true || all_false {
+        if unset_bits == total_len || unset_bits == 0 {
+            // Goes fast path.
             for bitmap in col.iter() {
                 if num_rows <= bitmap.len() {
                     let mut bitmap = bitmap.clone();
