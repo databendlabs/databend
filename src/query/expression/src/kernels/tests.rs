@@ -169,7 +169,7 @@ fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     Ok(())
 }
 
-/// Add more test for take_compact.rs.
+/// Add more tests for take_compact.rs.
 #[test]
 fn test_take_compact() -> common_exception::Result<()> {
     use rand::Rng;
