@@ -130,13 +130,15 @@ impl Interpreter for CreateDatabaseInterpreter {
         // the future.
         let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
         if let Some(current_role) = self.ctx.get_current_role() {
-            role_api.grant_ownership(
-                &GrantObjectByID::Database {
-                    catalog_name: self.plan.catalog.clone(),
-                    db_id: reply.db_id,
-                },
-                &current_role.name,
-            ).await?;
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Database {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id: reply.db_id,
+                    },
+                    &current_role.name,
+                )
+                .await?;
         }
 
         Ok(PipelineBuildResult::create())

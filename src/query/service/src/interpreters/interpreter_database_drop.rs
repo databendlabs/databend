@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_sql::plans::DropDatabasePlan;
 use common_storages_share::save_share_spec;
-use common_meta_app::principal::GrantObjectByID;
 use common_users::UserApiProvider;
-use common_management::RoleApi;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,10 +51,12 @@ impl Interpreter for DropDatabaseInterpreter {
         let db = catalog.get_database(&tenant, &self.plan.database).await?;
 
         // unset the ownership of the database
-        role_api.drop_ownership(&GrantObjectByID::Database {
-            catalog_name: self.plan.catalog.clone(),
-            db_id: db.get_db_info().ident.db_id,
-        }).await?;
+        role_api
+            .drop_ownership(&GrantObjectByID::Database {
+                catalog_name: self.plan.catalog.clone(),
+                db_id: db.get_db_info().ident.db_id,
+            })
+            .await?;
 
         // actual drop database
         let resp = catalog.drop_database(self.plan.clone().into()).await?;
