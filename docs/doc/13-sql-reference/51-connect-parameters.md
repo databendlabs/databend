@@ -7,10 +7,45 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 The connection parameters refer to a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. These parameters are enclosed within parentheses and consists of key-value pairs separated by commas. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
 
-For example, the following statement creates an external stage on MinIO with the connection parameters:
+### Syntax and Examples
 
-```sql
-CREATE STAGE my_minio_stage URL = 's3://databend' CONNECTION = (ENDPOINT_URL = 'http://localhost:9000', ACCESS_KEY_ID = 'ROOTUSER', SECRET_ACCESS_KEY = 'CHANGEME123', region = 'us-west-2');
+The connection parameters are specified using a CONNECTION clause and are separated by comma. When [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md), the CONNECTION clause is enclosed in an additional set of parentheses.
+
+```sql title='Examples:'
+-- This example illustrates a 'CREATE STAGE' command where 'CONNECTION' is followed by '=', establishing a Minio stage with specific connection parameters.
+CREATE STAGE my_minio_stage
+  URL = 's3://databend'
+  CONNECTION = (
+    ENDPOINT_URL = 'http://localhost:9000',
+    ACCESS_KEY_ID = 'ROOTUSER',
+    SECRET_ACCESS_KEY = 'CHANGEME123',
+    REGION = 'us-west-2'
+  );
+
+-- This example showcases a 'COPY INTO' command, employing '=' after 'CONNECTION' to copy data, while also specifying file format details.
+COPY INTO mytable
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    )
+    SIZE_LIMIT = 10;
+
+-- This example uses a 'SELECT' statement to query staged files. 
+-- 'CONNECTION' is followed by '=>' to access Minio data, and the connection clause is enclosed in an additional set of parentheses.
+SELECT * FROM 's3://testbucket/admin/data/parquet/tuple.parquet' 
+    (CONNECTION => (
+        ACCESS_KEY_ID = 'minioadmin', 
+        SECRET_ACCESS_KEY = 'minioadmin', 
+        ENDPOINT_URL = 'http://127.0.0.1:9900/'
+        )
+    );
 ```
 
 The connection parameters vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.
