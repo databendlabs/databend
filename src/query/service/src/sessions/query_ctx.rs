@@ -33,7 +33,6 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_base::runtime::TrySpawn;
-use common_catalog::catalog::CatalogManager;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;

@@ -14,15 +14,11 @@
 
 use std::sync::Arc;
 
-use common_catalog::catalog::Catalog;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::database::Database;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::PrincipalIdentity;
-use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
@@ -56,7 +52,6 @@ impl GrantPrivilegeInterpreter {
         role: &String,
     ) -> Result<()> {
         let user_mgr = UserApiProvider::instance();
-        let catalog_mgr = CatalogManager::instance();
         let session = ctx.get_current_session();
         let available_roles = session.get_all_available_roles().await?;
         let current_role = match self.ctx.get_current_role() {

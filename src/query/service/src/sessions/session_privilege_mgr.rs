@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
-use common_catalog::database;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::principal::GrantObject;

@@ -14,35 +14,19 @@
 
 use std::sync::Arc;
 
-use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::ToErrorCode;
-use common_meta_api::serialize_struct;
-use common_meta_api::txn_cond_seq;
-use common_meta_api::txn_op_put;
-use common_meta_api::SchemaApi;
-use common_meta_api::TXN_MAX_RETRY_TIMES;
-use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::OwnershipInfo;
 use common_meta_app::principal::RoleInfo;
-use common_meta_app::schema::DatabaseId;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::Ownership;
-use common_meta_app::schema::TableId;
-use common_meta_app::schema::TableNameIdent;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::ConditionResult::Eq;
 use common_meta_types::IntoSeqV;
 use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
-use common_meta_types::TxnRequest;
 
 use crate::role::role_api::RoleApi;
 
@@ -53,7 +37,6 @@ pub struct RoleMgr {
     kv_api: Arc<dyn kvapi::KVApi<Error = MetaError> + Send + Sync>,
     role_prefix: String,
     object_owner_prefix: String,
-    tenant: String,
 }
 
 impl RoleMgr {
@@ -69,7 +52,6 @@ impl RoleMgr {
         let tenant = tenant.to_string();
         Ok(RoleMgr {
             kv_api,
-            tenant: tenant.clone(),
             role_prefix: format!("{}/{}", ROLE_API_KEY_PREFIX, tenant),
             object_owner_prefix: format!("{}/{}", OBJECT_OWNER_API_KEY_PREFIX, tenant),
         })
@@ -113,125 +95,6 @@ impl RoleMgr {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn grant_database_ownership(
-        &self,
-        from: &String,
-        to: &String,
-        _catalog: &str,
-        db_name: &String,
-    ) -> common_exception::Result<()> {
-        let mut retry = 0;
-        let tenant = self.tenant.clone();
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-
-            let db_info = self
-                .kv_api
-                .get_database(GetDatabaseReq {
-                    inner: DatabaseNameIdent {
-                        tenant: tenant.clone(),
-                        db_name: db_name.clone(),
-                    },
-                })
-                .await?;
-            let mut db_meta = db_info.meta.clone();
-
-            let db_meta_seq = db_info.ident.seq;
-            let db_id_key = DatabaseId {
-                db_id: db_info.ident.db_id,
-            };
-            db_meta.owner = Some(Ownership {
-                owner_role_name: to.clone(),
-                updated_on: Utc::now(),
-            });
-            let condition = vec![txn_cond_seq(&db_id_key, Eq, db_meta_seq)];
-
-            let if_then = vec![txn_op_put(
-                &db_id_key,
-                serialize_struct(&db_meta).map_err_to_code(
-                    ErrorCode::IllegalGrant,
-                    || "failed to serialize database meta",
-                )?,
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-            let reply = self.kv_api.clone().transaction(txn_req).await?;
-            let succ = reply.success;
-            if succ {
-                return Ok(());
-            }
-        }
-        Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update database ownership {} from: {:?} to: {:?}",
-            db_name, from, to
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn grant_table_ownership(
-        &self,
-        from: &String,
-        to: &String,
-        _catalog: &str,
-        db_name: &String,
-        table_name: &String,
-    ) -> common_exception::Result<()> {
-        let mut retry = 0;
-        let tenant = self.tenant.clone();
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-            let table_info = self
-                .kv_api
-                .get_table(GetTableReq {
-                    inner: TableNameIdent {
-                        tenant: tenant.clone(),
-                        db_name: db_name.clone(),
-                        table_name: table_name.clone(),
-                    },
-                })
-                .await?;
-            let mut table_meta = table_info.meta.clone();
-
-            let tb_meta_seq = table_info.ident.seq;
-            let tb_id_key = TableId {
-                table_id: table_info.ident.table_id,
-            };
-
-            table_meta.owner = Some(Ownership {
-                owner_role_name: to.clone(),
-                updated_on: Utc::now(),
-            });
-            let condition = vec![txn_cond_seq(&tb_id_key, Eq, tb_meta_seq)];
-
-            let if_then = vec![txn_op_put(
-                &tb_id_key,
-                serialize_struct(&table_meta).map_err_to_code(
-                    ErrorCode::IllegalGrant,
-                    || "failed to serialize table meta",
-                )?,
-            )];
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-            let reply = self.kv_api.clone().transaction(txn_req).await?;
-            let succ = reply.success;
-            if succ {
-                return Ok(());
-            }
-        }
-        Err(ErrorCode::TxnRetryMaxTimes(format!(
-            "failed to update table ownership {}.{} from: {:?} to: {:?}",
-            db_name, table_name, from, to
-        )))
     }
 }
 
