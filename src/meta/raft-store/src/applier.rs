@@ -218,7 +218,6 @@ impl<'a> Applier<'a> {
             upsert_kv, prev, result
         );
 
-        // dbg!("push_change", &upsert_kv.key, prev.clone(), result.clone());
         self.push_change(&upsert_kv.key, prev.clone(), result.clone());
 
         (prev, result)
@@ -267,7 +266,11 @@ impl<'a> Applier<'a> {
         debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = &cond.key;
-        let seqv = self.sm.get_kv(key).await;
+        // No expiration check:
+        // If the key expired, it should be treated as `None` value.
+        // sm.get_kv() does not check expiration.
+        // Expired keys are cleaned before applying a log, see: `clean_expired_kvs()`.
+        let seqv = self.sm.get_maybe_expired_kv(key).await;
 
         debug!(
             "txn_execute_one_condition: key: {} curr: seq:{} value:{:?}",
@@ -342,7 +345,7 @@ impl<'a> Applier<'a> {
     }
 
     async fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
-        let sv = self.sm.get_kv(&get.key).await;
+        let sv = self.sm.get_maybe_expired_kv(&get.key).await;
         let value = sv.map(pb::SeqV::from);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
@@ -444,19 +447,17 @@ impl<'a> Applier<'a> {
 
         {
             let mut strm = std::pin::pin!(strm);
-            while let Some((expire_key, expire_value)) = strm.next().await {
-                // dbg!("check expired", &expire_key, &expire_value);
-                // dbg!(expire_key.is_expired(log_time_ms));
-
+            while let Some((expire_key, key)) = strm.next().await {
                 if !expire_key.is_expired(log_time_ms) {
                     break;
                 }
-                to_clean.push((expire_key.clone(), expire_value.clone()));
+
+                to_clean.push((expire_key, key));
             }
         }
 
         for (expire_key, key) in to_clean {
-            let curr = self.sm.get_kv(&key).await;
+            let curr = self.sm.get_maybe_expired_kv(&key).await;
             if let Some(seq_v) = &curr {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);

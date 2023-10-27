@@ -28,7 +28,6 @@ use common_meta_stoerr::MetaBytesError;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
-use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
@@ -79,7 +78,7 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
     }
 
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        let got = self.sm.get_kv(key).await;
+        let got = self.sm.get_maybe_expired_kv(key).await;
 
         let local_now_ms = SeqV::<()>::now_ms();
         let got = Self::non_expired(got, local_now_ms);
@@ -92,7 +91,7 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         let mut values = Vec::with_capacity(keys.len());
 
         for k in keys {
-            let got = self.sm.get_kv(k.as_str()).await;
+            let got = self.sm.get_maybe_expired_kv(k.as_str()).await;
             let v = Self::non_expired(got, local_now_ms);
             values.push(v);
         }
@@ -253,7 +252,7 @@ impl SMV002 {
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
+    pub async fn get_maybe_expired_kv(&self, key: &str) -> Option<SeqV> {
         let got = self.levels.str_map().get(key).await;
         Into::<Option<SeqV>>::into(got)
     }
@@ -303,14 +302,10 @@ impl SMV002 {
             .range(&self.expire_cursor..)
             .await
             // Return only non-deleted records
-            .filter_map(|(k, v)| async move {
-                //
-                v.unpack().map(|(v, _v_meta)| (k, v))
+            .filter_map(|(k, marked)| {
+                let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
+                future::ready(expire_entry)
             })
-    }
-
-    pub fn curr_seq(&self) -> u64 {
-        self.levels.writable_ref().curr_seq()
     }
 
     pub fn sys_data_ref(&self) -> &SysData {

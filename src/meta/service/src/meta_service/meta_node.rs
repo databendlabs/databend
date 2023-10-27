@@ -942,7 +942,7 @@ impl MetaNode {
 
     pub(crate) async fn get_last_seq(&self) -> u64 {
         let sm = self.sto.state_machine.read().await;
-        sm.curr_seq()
+        sm.sys_data_ref().curr_seq()
     }
 
     #[minitrace::trace]
