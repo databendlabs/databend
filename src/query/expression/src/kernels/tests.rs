@@ -86,9 +86,9 @@ fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
         }
 
         let mut block_entries = Vec::with_capacity(data_types.len());
-        let mut filterd_block_entries = Vec::with_capacity(data_types.len());
+        let mut filtered_block_entries = Vec::with_capacity(data_types.len());
         for (col, data_type) in columns.into_iter().zip(data_types.iter()) {
-            filterd_block_entries.push(BlockEntry::new(
+            filtered_block_entries.push(BlockEntry::new(
                 data_type.clone(),
                 Value::Column(col.filter(&filter)),
             ));
@@ -97,7 +97,7 @@ fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
 
         blocks.push(DataBlock::new(block_entries, len));
         filtered_blocks.push(DataBlock::new(
-            filterd_block_entries,
+            filtered_block_entries,
             len - filter.unset_bits(),
         ));
 
