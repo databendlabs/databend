@@ -213,8 +213,10 @@ docker run --net=host  datafuselabs/databend
 
 <details>
 <summary>Performance</summary>
-
+  
+- [Review Clickbench](https://databend.rs/blog/clickbench-databend-top)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+  
 </details>
 
 
@@ -243,10 +245,10 @@ For guidance on using Databend, we recommend starting with the official document
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
-- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
-- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
-- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
+- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
+- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 
 
