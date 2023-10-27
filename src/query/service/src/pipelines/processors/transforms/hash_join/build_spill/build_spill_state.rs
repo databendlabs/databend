@@ -127,7 +127,7 @@ impl BuildSpillState {
 
     // Check if need to spill.
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
-    pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
+    pub(crate) fn check_need_spill(&self) -> Result<bool> {
         let settings = self.build_state.ctx.get_settings();
         let spill_threshold = settings.get_join_spilling_threshold()?;
         // If `spill_threshold` is 0, we won't limit memory.
@@ -137,16 +137,17 @@ impl BuildSpillState {
             return Ok(false);
         }
 
-        // Estimates the total amount of data held by all processors in the current build pipeline.
-        let mut total_bytes =
-            self.build_state.build_worker_num.load(Ordering::Relaxed) as usize * input.num_rows();
+        let mut total_bytes = 0;
 
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        if buffer.is_empty() && chunks.is_empty() {
+            return Ok(false);
+        }
         for block in buffer.iter() {
             total_bytes += block.memory_size();
         }
 
-        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
         for block in chunks.iter() {
             total_bytes += block.memory_size();
         }
