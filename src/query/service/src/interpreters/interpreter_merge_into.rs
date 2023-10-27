@@ -446,7 +446,7 @@ impl MergeIntoInterpreter {
         //       EvalScalar(source_join_side_expr)
         //          \
         //         SourcePlan
-        let source_plan = join.child(0)?;
+        let source_plan = join.child(1)?;
         let join_op = match join.plan() {
             RelOperator::Join(j) => j,
             _ => unreachable!(),
@@ -603,7 +603,7 @@ impl MergeIntoInterpreter {
         });
 
         let filters = vec![gte_min, lte_max];
-        let mut target_plan = join.child(1)?.clone();
+        let mut target_plan = join.child(0)?.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
         let new_sexpr =
             join.replace_children(vec![Arc::new(source_plan.clone()), Arc::new(target_plan)]);
