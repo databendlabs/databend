@@ -135,6 +135,13 @@ impl GrantPrivilegeInterpreter {
             }
         }
 
+        // the new owner must be one of the available roles
+        if !available_roles.iter().any(|r| &r.name == role) {
+            return Err(ErrorCode::IllegalGrant(
+                "Illegal GRANT/REVOKE command; invalid new owner",
+            ));
+        }
+
         user_mgr
             .grant_ownership_to_role(tenant, &current_role.name, role, &ownership_object)
             .await?;
