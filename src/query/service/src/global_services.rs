@@ -33,6 +33,7 @@ use common_tracing::GlobalLogger;
 use common_users::RoleCacheManager;
 use common_users::UserApiProvider;
 use storages_common_cache_manager::CacheManager;
+use storages_common_locks::LockManager;
 
 use crate::api::DataExchangeManager;
 use crate::auth::AuthMgr;
@@ -99,7 +100,7 @@ impl GlobalServices {
         HttpQueryManager::init(&config).await?;
         DataExchangeManager::init()?;
         SessionManager::init(&config)?;
-
+        LockManager::init()?;
         AuthMgr::init(&config)?;
         UserApiProvider::init(
             config.meta.to_meta_grpc_client_conf(),

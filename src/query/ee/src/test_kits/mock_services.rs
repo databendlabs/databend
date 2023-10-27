@@ -23,7 +23,6 @@ use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
 use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
-use crate::table_lock::RealTableLockManager;
 use crate::virtual_column::RealVirtualColumnHandler;
 
 pub struct MockServices;
@@ -37,7 +36,6 @@ impl MockServices {
         GlobalInstance::set(Arc::new(wrapper));
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
-        RealTableLockManager::init()?;
         RealDatamaskHandler::init()?;
         RealVirtualColumnHandler::init()?;
         Ok(())

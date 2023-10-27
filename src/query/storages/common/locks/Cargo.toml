@@ -13,27 +13,26 @@ test = false
 [dependencies]
 # Workspace dependencies
 
-common-metrics = { path = "../../../../common/metrics" }
 common-base = { path = "../../../../common/base" }
 common-catalog = { path = "../../../catalog" }
 common-exception = { path = "../../../../common/exception" }
-common-license = { path = "../../../../common/license" }
 common-meta-app = { path = "../../../../meta/app" }
 common-meta-kvapi = { path = "../../../../meta/kvapi" }
-common-pipeline-core = { path = "../../../pipeline/core" }
 common-meta-types = { path = "../../../../meta/types" }
+common-metrics = { path = "../../../../common/metrics" }
+common-pipeline-core = { path = "../../../pipeline/core" }
 common-users = { path = "../../../users" }
 
-log = { workspace = true }
-parking_lot = "0.12.1"
-futures-util = { workspace = true }
-async-channel = "1.7.1"
-lazy_static = { workspace = true }
 async-backtrace = { workspace = true }
+async-channel = "1.7.1"
 async-trait = "0.1.57"
 chrono = { workspace = true }
-rand = "0.8.5"
 futures = "0.3.24"
+futures-util = { workspace = true }
+lazy_static = { workspace = true }
+log = { workspace = true }
+parking_lot = "0.12.1"
+rand = "0.8.5"
 
 [build-dependencies]
 

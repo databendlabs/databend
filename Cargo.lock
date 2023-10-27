@@ -2764,7 +2764,6 @@ dependencies = [
  "storages-common-table-meta",
  "streaming-decompression",
  "sys-info",
- "table-lock",
  "typetag",
  "uuid",
 ]
@@ -3951,7 +3950,6 @@ dependencies = [
  "storages-common-table-meta",
  "strength_reduce",
  "sysinfo",
- "table-lock",
  "temp-env",
  "tempfile",
  "time",
@@ -4379,7 +4377,6 @@ dependencies = [
  "aggregating-index",
  "arrow-array",
  "async-backtrace",
- "async-channel",
  "async-trait",
  "background-service",
  "chrono",
@@ -4396,9 +4393,6 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-store",
- "common-meta-types",
- "common-metrics",
- "common-pipeline-core",
  "common-sql",
  "common-storages-fuse",
  "common-tracing",
@@ -4410,15 +4404,11 @@ dependencies = [
  "futures-util",
  "jsonb 0.3.0 (git+https://github.com/datafuselabs/jsonb?rev=14143b5)",
  "jwt-simple",
- "lazy_static",
  "log",
  "opendal",
- "parking_lot 0.12.1",
- "rand 0.8.5",
  "storage-encryption",
  "storages-common-cache",
  "storages-common-table-meta",
- "table-lock",
  "tempfile",
  "vacuum-handler",
  "virtual-column",
@@ -11229,7 +11219,6 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-exception",
- "common-license",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-types",
@@ -11583,22 +11572,6 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
-]
-
-[[package]]
-name = "table-lock"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "chrono",
- "common-base",
- "common-catalog",
- "common-exception",
- "common-license",
- "common-meta-app",
- "common-meta-kvapi",
- "common-pipeline-core",
 ]
 
 [[package]]
