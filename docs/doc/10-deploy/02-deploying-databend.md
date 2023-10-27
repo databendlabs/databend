@@ -293,7 +293,11 @@ endpoint_url = "https://s3.amazonaws.com"
 access_key_id = "<your-key-id>"
 // highlight-next-line
 secret_access_key = "<your-access-key>"
+
+region = "<your-region-name>"
 ```
+
+The **region** parameter is not required, but it is highly recommended. When you omit this parameter, Databend will attempt to automatically detect the region information. However, if the detection fails, Databend will default to using 'us-east-1' as the region. In such a scenario, errors may occur if your actual region is different from the default setting.
 
 </TabItem>
 
@@ -504,6 +508,8 @@ endpoint_url = "http://127.0.0.1:9900"
 access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
 ```
+
+When deploying Databend with MinIO, and the region information isn't configured, it will automatically default to using 'us-east-1,' and this setup will work correctly.
 
 </TabItem>
 

@@ -30,31 +30,27 @@
 </div>
 </div>
 
-<h4 align="center">
-<img src="https://github.com/datafuselabs/databend/assets/172204/0db97eea-7f25-48a6-b038-6d153378a6d4" width="600" alt="databend" />
-</h4>
+## 🐋 Introduction
 
-## 🚀 Why Databend?
+**Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to [Snowflake](https://snowflake.com). 
 
-**Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to Snowflake. In Databend, everything is distributed execution.
+## 🚀 Why Databend
 
-- **🌐 Cloud-Friendly**: Deploy on any cloud platform, including [S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/) or [MinIO](https://min.io).
+- **Cloud-Friendly**: Works with cloud storage like AWS S3, Azure Blob, Google Cloud Storage, Alibaba Cloud OSS, Cloudflare R2, Wasabi or MinIO, etc.
 
-- **⚡ Performance-Driven**: Built with Rust and leveraging advanced technologies like SIMD and vectorized query processing, Databend ensures [exceptional analytic speeds](https://benchmark.clickhouse.com/), outperforming traditional cloud data warehouses.
+- **High Performance**: Rust-built with SIMD and vectorized processing for top-speed analytics. [ClickBench](https://databend.rs/blog/clickbench-databend-top).
 
-- **📈 Cost-Efficient Elasticity**: With its unique architecture, Databend decouples storage and computation. You can dynamically scale based on your needs, optimizing costs and performance.
+- **Cost-Efficient Elasticity**: Unique architecture allows for separate scaling of storage and computation, optimizing both costs and performance.
 
-- **🔄 Easy Data Management**: Say goodbye to Third-Party ETL tools. [Databend preprocesses data during ingestion](https://databend.rs/doc/load-data/load), simplifying your data flow.
+- **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
-- **🏡 Lakehouse Design**: Combining data lake scalability with data warehouse efficiency, Databend smoothly integrates with Hive and Iceberg, granting the best of both domains.
+- **Time-Travel Features**: Provides Git-like MVCC storage, enabling easy data querying, cloning, and reverting from any point in time.
 
-- **🕰 Time-Travel Features**: Tap into Git-like MVCC storage to conveniently query, clone, or revert data from any historical moment.
+- **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
-- **📑 Rich Data Support**: Whether it's semi-structured data like JSON, CSV, or Parquet, or data types like [ARRAY, TUPLE, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/) Databend handles them with ease.
+- **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
 
-- **🤖 AI-Enhanced Analytics**: Get deeper insights with integrated [AI features](https://databend.rs/doc/sql-functions/ai-functions/).
-
-- **👥 Community-Driven**: With a growing community, Databend ensures transparency, constant updates, and an open platform for all your cloud analytics needs.
+- **Community-Driven**: Benefit from a growing community, ensuring transparency, frequent updates, and an open platform for all your cloud analytics requirements.
 
 ## 📐 Architecture
 
@@ -217,8 +213,10 @@ docker run --net=host  datafuselabs/databend
 
 <details>
 <summary>Performance</summary>
-
+  
+- [Review Clickbench](https://databend.rs/blog/clickbench-databend-top)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+  
 </details>
 
 
@@ -247,10 +245,10 @@ For guidance on using Databend, we recommend starting with the official document
 Stay updated with Databend's development journey. Here are our roadmap milestones:
 
 - [Roadmap 2023](https://github.com/datafuselabs/databend/issues/9448)
-- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
-- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
-- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
 - [Roadmap v1.3](https://github.com/datafuselabs/databend/issues/11868)
+- [Roadmap v1.2](https://github.com/datafuselabs/databend/issues/11073)
+- [Roadmap v1.1](https://github.com/datafuselabs/databend/issues/10334)
+- [Roadmap v1.0](https://github.com/datafuselabs/databend/issues/9604)
 - [Roadmap v0.9](https://github.com/datafuselabs/databend/issues/7052)
 
 

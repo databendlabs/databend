@@ -50,7 +50,7 @@ impl Interpreter for PresignInterpreter {
         "PresignInterpreter"
     }
 
-    #[minitrace::trace(name = "presign_interpreter_execute")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "presign_interpreter_execute");

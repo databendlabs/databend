@@ -177,11 +177,11 @@ use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnPutRequest;
 use common_meta_types::TxnRequest;
-use common_tracing::func_name;
 use log::as_debug;
 use log::as_display;
 use log::debug;
 use log::error;
+use minitrace::func_name;
 use ConditionResult::Eq;
 
 use crate::assert_table_exist;

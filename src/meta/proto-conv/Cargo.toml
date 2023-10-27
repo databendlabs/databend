@@ -14,14 +14,13 @@ test = true
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../app" }
 common-protos = { path = "../protos" }
-common-tracing = { path = "../../common/tracing" }
 
 chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }
+enumflags2 = { version = "0.7.7", features = ["serde"] }
+minitrace = { workspace = true }
 num = "0.4.0"
 thiserror = { workspace = true }
-
-enumflags2 = { version = "0.7.7", features = ["serde"] }
 
 [build-dependencies]
 

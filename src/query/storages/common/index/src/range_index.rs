@@ -74,7 +74,7 @@ impl RangeIndex {
         }))
     }
 
-    #[minitrace::trace(name = "range_filter_eval")]
+    #[minitrace::trace]
     pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
     where F: Fn(&ColumnId) -> bool {
         let input_domains = self
