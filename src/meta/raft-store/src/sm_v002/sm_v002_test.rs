@@ -62,7 +62,7 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
 
-    let got = sm.prefix_list_kv("").await;
+    let got = sm.list_kv("").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(3, b("a00"))),
         (s("b"), SeqV::new(2, b("b0")))
@@ -114,14 +114,14 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // prefix_list_kv()
 
-    let got = sm.prefix_list_kv("").await;
+    let got = sm.list_kv("").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(1, b("a0"))),
         (s("c"), SeqV::new(4, b("c1"))),
         (s("d"), SeqV::new(5, b("d1"))),
     ]);
 
-    let got = sm.prefix_list_kv("a").await;
+    let got = sm.list_kv("a").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![(s("a"), SeqV::new(1, b("a0"))),]);
     Ok(())
 }

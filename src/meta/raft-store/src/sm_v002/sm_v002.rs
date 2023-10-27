@@ -262,15 +262,6 @@ impl SMV002 {
     /// List kv entries by prefix.
     ///
     /// If a value is expired, it is not returned.
-    // TODO: #[deprecated]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
-        let strm = self.list_kv(prefix).await;
-        strm.collect::<Vec<_>>().await
-    }
-
-    /// List kv entries by prefix.
-    ///
-    /// If a value is expired, it is not returned.
     pub async fn list_kv(&self, prefix: &str) -> BoxStream<'static, (String, SeqV)> {
         let p = prefix.to_string();
 
