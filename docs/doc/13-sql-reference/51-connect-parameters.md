@@ -45,7 +45,12 @@ COPY INTO mytable
 -- This example uses a 'SELECT' statement to query staged files. 
 -- 'CONNECTION' is followed by '=>' to access Minio data, and the  connection clause is enclosed in an additional set of parentheses.
 SELECT * FROM 's3://testbucket/admin/data/parquet/tuple.parquet' 
-(CONNECTION => (ACCESS_KEY_ID = 'minioadmin', SECRET_ACCESS_KEY = 'minioadmin', ENDPOINT_URL = 'http://127.0.0.1:9900/'));
+    (CONNECTION => (
+        ACCESS_KEY_ID = 'minioadmin', 
+        SECRET_ACCESS_KEY = 'minioadmin', 
+        ENDPOINT_URL = 'http://127.0.0.1:9900/'
+        )
+    );
 ```
 
 The connection parameters vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.
