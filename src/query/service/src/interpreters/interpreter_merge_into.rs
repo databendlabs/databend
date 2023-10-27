@@ -454,8 +454,8 @@ impl MergeIntoInterpreter {
         if join_op.left_conditions.len() != 1 || join_op.right_conditions.len() != 1 {
             return Ok(Box::new(join.clone()));
         }
-        let source_side_expr = &join_op.left_conditions[0];
-        let target_side_expr = &join_op.right_conditions[0];
+        let source_side_expr = &join_op.right_conditions[0];
+        let target_side_expr = &join_op.left_conditions[0];
 
         // eval source side join expr
         let source_side_join_expr_index = metadata.write().add_derived_column(
@@ -606,7 +606,7 @@ impl MergeIntoInterpreter {
         let mut target_plan = join.child(0)?.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
         let new_sexpr =
-            join.replace_children(vec![Arc::new(source_plan.clone()), Arc::new(target_plan)]);
+            join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
         Ok(Box::new(new_sexpr))
     }
 
