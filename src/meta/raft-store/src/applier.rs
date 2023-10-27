@@ -84,9 +84,7 @@ impl<'a> Applier<'a> {
 
         self.clean_expired_kvs(log_time_ms).await;
 
-        // TODO: it could persist the last_applied log id so that when starting up,
-        //       it could re-apply the logs without waiting for the `committed` message from a leader.
-        *self.sm.last_applied_mut() = Some(*log_id);
+        *self.sm.sys_data_mut().last_applied_mut() = Some(*log_id);
 
         let applied_state = match entry.payload {
             EntryPayload::Blank => {
@@ -103,7 +101,8 @@ impl<'a> Applier<'a> {
             EntryPayload::Membership(ref mem) => {
                 info!("apply: membership: {:?}", mem);
 
-                *self.sm.last_membership_mut() = StoredMembership::new(Some(*log_id), mem.clone());
+                *self.sm.sys_data_mut().last_membership_mut() =
+                    StoredMembership::new(Some(*log_id), mem.clone());
                 AppliedState::None
             }
         };
@@ -149,16 +148,22 @@ impl<'a> Applier<'a> {
     /// Insert a node only when it does not exist or `overriding` is true.
     #[minitrace::trace]
     fn apply_add_node(&mut self, node_id: &u64, node: &Node, overriding: bool) -> AppliedState {
-        let prev = self.sm.nodes_mut().get(node_id).cloned();
+        let prev = self.sm.sys_data_mut().nodes_mut().get(node_id).cloned();
 
         if prev.is_none() {
-            self.sm.nodes_mut().insert(*node_id, node.clone());
+            self.sm
+                .sys_data_mut()
+                .nodes_mut()
+                .insert(*node_id, node.clone());
             info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
             return (prev, Some(node.clone())).into();
         }
 
         if overriding {
-            self.sm.nodes_mut().insert(*node_id, node.clone());
+            self.sm
+                .sys_data_mut()
+                .nodes_mut()
+                .insert(*node_id, node.clone());
             info!("applied AddNode(overriding): {}={:?}", node_id, node);
             (prev, Some(node.clone())).into()
         } else {
@@ -168,7 +173,7 @@ impl<'a> Applier<'a> {
 
     #[minitrace::trace]
     fn apply_remove_node(&mut self, node_id: &u64) -> AppliedState {
-        let prev = self.sm.nodes_mut().remove(node_id);
+        let prev = self.sm.sys_data_mut().nodes_mut().remove(node_id);
         info!("applied RemoveNode: {}={:?}", node_id, prev);
 
         (prev, None).into()

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::fmt::Debug;
 use std::future;
@@ -31,13 +30,10 @@ use common_meta_types::AppliedState;
 use common_meta_types::Entry;
 use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::SeqValue;
 use common_meta_types::SnapshotData;
-use common_meta_types::StoredMembership;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
@@ -59,6 +55,7 @@ use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::sys_data::SysData;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
@@ -188,11 +185,13 @@ impl SMV002 {
             // The snapshot is empty but contains Nodes data that are manually added.
             //
             // See: `databend_metactl::snapshot`
-            if &new_last_applied <= sm.last_applied_ref() && sm.last_applied_ref().is_some() {
+            if &new_last_applied <= sm.sys_data_ref().last_applied_ref()
+                && sm.sys_data_ref().last_applied_ref().is_some()
+            {
                 info!(
                     "no need to install: snapshot({:?}) <= sm({:?})",
                     new_last_applied,
-                    sm.last_applied_ref()
+                    sm.sys_data_ref().last_applied_ref()
                 );
                 return Ok(());
             }
@@ -314,31 +313,12 @@ impl SMV002 {
         self.levels.writable_ref().curr_seq()
     }
 
-    pub fn last_applied_ref(&self) -> &Option<LogId> {
-        self.levels.writable_ref().last_applied_ref()
+    pub fn sys_data_ref(&self) -> &SysData {
+        self.levels.writable_ref().sys_data_ref()
     }
 
-    pub fn last_membership_ref(&self) -> &StoredMembership {
-        self.levels.writable_ref().last_membership_ref()
-    }
-
-    pub fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        self.levels.writable_ref().nodes_ref()
-    }
-
-    pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.levels.writable_mut().sys_data_mut().last_applied_mut()
-    }
-
-    pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.levels
-            .writable_mut()
-            .sys_data_mut()
-            .last_membership_mut()
-    }
-
-    pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.levels.writable_mut().sys_data_mut().nodes_mut()
+    pub fn sys_data_mut(&mut self) -> &mut SysData {
+        self.levels.writable_mut().sys_data_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
@@ -376,14 +356,16 @@ impl SMV002 {
         self.expire_cursor = ExpireKey::new(0, 0);
     }
 
-    /// Keep the top(writable) level, replace the base level and all levels below it.
-    pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
+    /// Keep the top(writable) level, replace all the frozen levels.
+    ///
+    /// This is called after compacting some of the frozen levels.
+    pub fn replace_frozen(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(
                 self.levels.frozen_ref().newest().unwrap(),
                 snapshot.original_ref().newest().unwrap()
             ),
-            "the base must not be changed"
+            "the frozen must not change"
         );
 
         self.levels.replace_frozen(snapshot.compacted());

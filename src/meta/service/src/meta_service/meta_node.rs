@@ -35,6 +35,7 @@ use common_meta_client::RequestFor;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
@@ -786,7 +787,7 @@ impl MetaNode {
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
         let membership = {
             let sm = self.sto.get_state_machine().await;
-            sm.last_membership_ref().membership().clone()
+            sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("is_in_cluster: membership: {:?}", membership);
 
@@ -870,7 +871,7 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let n = sm.nodes_ref().get(node_id).cloned();
+        let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -879,7 +880,12 @@ impl MetaNode {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let nodes = sm.nodes_ref().values().cloned().collect::<Vec<_>>();
+        let nodes = sm
+            .sys_data_ref()
+            .nodes_ref()
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
         nodes
     }
 
@@ -945,7 +951,11 @@ impl MetaNode {
 
         let nodes = {
             let sm = self.sto.state_machine.read().await;
-            sm.nodes_ref().values().cloned().collect::<Vec<_>>()
+            sm.sys_data_ref()
+                .nodes_ref()
+                .values()
+                .cloned()
+                .collect::<Vec<_>>()
         };
 
         let endpoints: Vec<String> = nodes
