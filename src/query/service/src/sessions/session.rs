@@ -232,13 +232,25 @@ impl Session {
         self: &Arc<Self>,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr
-            .validate_privilege(object, privilege, verify_ownership)
+            .validate_privilege(object, privilege)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn validate_ownership(
+        self: &Arc<Self>,
+        object: &GrantObjectByID,
+    ) -> Result<()> {
+        if matches!(self.get_type(), SessionType::Local) {
+            return Ok(());
+        }
+        self.privilege_mgr
+            .validate_ownership(object)
             .await
     }
 

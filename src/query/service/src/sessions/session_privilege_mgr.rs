@@ -56,7 +56,11 @@ pub trait SessionPrivilegeManager {
         &self,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
+    ) -> Result<()>;
+
+    async fn validate_ownership(
+        &self,
+        object: &GrantObjectByID,
     ) -> Result<()>;
 
     async fn validate_available_role(&self, role_name: &str) -> Result<RoleInfo>;
@@ -118,12 +122,13 @@ impl SessionPrivilegeManagerImpl {
     }
 
     #[async_backtrace::framed]
-    async fn get_object_owner(&self, object: &GrantObject) -> Result<Option<RoleInfo>> {
+    async fn get_object_owner(&self, object: &GrantObjectByID) -> Result<Option<RoleInfo>> {
         let catalog_mgr = CatalogManager::instance();
         let role_mgr = RoleCacheManager::instance();
         let tenant = self.session_ctx.get_current_tenant();
 
         // TODO(liyz): move the convertion between GrantObject into GrantObjectByID into interpreter
+        /* 
         let object = match object {
             GrantObject::Database(catalog_name, db_name) => {
                 let db_id = catalog_mgr
@@ -157,6 +162,7 @@ impl SessionPrivilegeManagerImpl {
             }
             _ => return Ok(None),
         };
+        */
 
         // return true only if grant object owner is the role itself
         role_mgr.find_object_owner(&tenant, &object).await
@@ -223,7 +229,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         &self,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
@@ -244,17 +249,6 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             return Ok(());
         }
 
-        if verify_ownership {
-            let object_owner = self.get_object_owner(object).await?;
-            if let Some(owner) = object_owner.as_ref() {
-                for role in &available_roles {
-                    if *role.identity() == *owner.identity() {
-                        return Ok(());
-                    }
-                }
-            }
-        }
-
         let roles_name = available_roles
             .iter()
             .map(|r| r.name.clone())
@@ -268,6 +262,26 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
             &current_user.identity(),
             roles_name,
         )))
+    }
+
+    
+    #[async_backtrace::framed]
+    async fn validate_ownership(&self, object: &GrantObjectByID) -> Result<()> {
+        let role_mgr = RoleCacheManager::instance();
+        let tenant = self.session_ctx.get_current_tenant();
+
+        // if the object is not owned by any role, then considered as PUBLIC, which is always true
+        let owner_role = match role_mgr.find_object_owner(&tenant, &object).await? {
+            Some(owner_role) => owner_role,
+            None => return Ok(()),
+        };
+
+        let available_roles = self.get_all_available_roles().await?;
+        if !available_roles.iter().any(|r| r.name == owner_role.name) {
+            return Err(ErrorCode::PermissionDenied("Permission denied, current session do not have the ownership of this object".to_string()));
+        }
+
+        Ok(())
     }
 
     #[async_backtrace::framed]
