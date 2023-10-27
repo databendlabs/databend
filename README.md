@@ -213,8 +213,10 @@ docker run --net=host  datafuselabs/databend
 
 <details>
 <summary>Performance</summary>
-
+  
+- [Review Clickbench](https://databend.rs/blog/clickbench-databend-top)
 - [How to Benchmark Databend using TPC-H](https://databend.rs/blog/2022/08/08/benchmark-tpc-h)
+  
 </details>
 
 
