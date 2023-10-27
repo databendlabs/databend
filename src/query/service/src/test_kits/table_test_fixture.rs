@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::str;
 use std::sync::Arc;
+use std::vec;
 
 use common_ast::ast::Engine;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
@@ -180,6 +182,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -203,6 +206,7 @@ impl TestFixture {
             schema: TestFixture::default_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -237,6 +241,7 @@ impl TestFixture {
             schema: TestFixture::variant_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -280,6 +285,7 @@ impl TestFixture {
             schema: TestFixture::computed_table_schema(),
             engine: Engine::Fuse,
             storage_params: None,
+            read_only_attach: false,
             part_prefix: "".to_string(),
             options: [
                 // database id is required for FUSE
@@ -735,6 +741,61 @@ pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixtur
         .await
 }
 
+pub async fn get_data_dir_files(
+    exclude_files: Option<Vec<HashSet<String>>>,
+) -> Result<HashSet<String>> {
+    let data_path = match &GlobalConfig::instance().storage.params {
+        StorageParams::Fs(v) => v.root.clone(),
+        _ => panic!("storage type is not fs"),
+    };
+    let root = data_path.as_str();
+    let prefix_snapshot = FUSE_TBL_SNAPSHOT_PREFIX;
+    let prefix_snapshot_statistics = FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
+    let prefix_segment = FUSE_TBL_SEGMENT_PREFIX;
+    let prefix_block = FUSE_TBL_BLOCK_PREFIX;
+    let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
+    let mut return_files = HashSet::new();
+
+    fn update_return_files(
+        return_files: &mut HashSet<String>,
+        exclude_files: &Option<Vec<HashSet<String>>>,
+        file: String,
+    ) {
+        if let Some(exclude_files) = exclude_files {
+            for exclude_file_set in exclude_files {
+                if exclude_file_set.contains(&file) {
+                    return;
+                }
+            }
+        }
+        return_files.insert(file);
+    }
+
+    for entry in WalkDir::new(root) {
+        let entry = entry.unwrap();
+        if entry.file_type().is_file() {
+            let (_, entry_path) = entry.path().to_str().unwrap().split_at(root.len());
+            // trim the leading prefix, e.g. "/db_id/table_id/"
+            let path = entry_path.split('/').skip(3).collect::<Vec<_>>();
+            let path = path[0];
+            if path.starts_with(prefix_snapshot)
+                || path.starts_with(prefix_segment)
+                || path.starts_with(prefix_block)
+                || path.starts_with(prefix_index)
+                || path.starts_with(prefix_snapshot_statistics)
+            {
+                update_return_files(
+                    &mut return_files,
+                    &exclude_files,
+                    entry_path[1..].to_string(),
+                );
+            }
+        }
+    }
+
+    Ok(return_files)
+}
+
 pub async fn check_data_dir(
     fixture: &TestFixture,
     case_name: &str,
@@ -764,6 +825,7 @@ pub async fn check_data_dir(
     let prefix_block = FUSE_TBL_BLOCK_PREFIX;
     let prefix_index = FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
     let prefix_last_snapshot_hint = FUSE_TBL_LAST_SNAPSHOT_HINT;
+
     for entry in WalkDir::new(root) {
         let entry = entry.unwrap();
         if entry.file_type().is_file() {
