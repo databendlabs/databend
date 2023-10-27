@@ -9,11 +9,7 @@ The connection parameters refer to a set of essential connection details require
 
 ### Syntax and Examples
 
-The connection parameters are specified using a CONNECTION clause and are separated by comma. 
-
-- The CONNECTION keyword is followed by either '=' or '=>', depending on the context: '=' is used with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) or [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) commands, whereas '=>' is employed when [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md).
-
-- When [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md), the CONNECTION clause is enclosed in an additional set of parentheses.
+The connection parameters are specified using a CONNECTION clause and are separated by comma. When [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md), the CONNECTION clause is enclosed in an additional set of parentheses.
 
 ```sql title='Examples:'
 -- This example illustrates a 'CREATE STAGE' command where 'CONNECTION' is followed by '=', establishing a Minio stage with specific connection parameters.
@@ -25,7 +21,6 @@ CREATE STAGE my_minio_stage
     SECRET_ACCESS_KEY = 'CHANGEME123',
     REGION = 'us-west-2'
   );
-
 
 -- This example showcases a 'COPY INTO' command, employing '=' after 'CONNECTION' to copy data, while also specifying file format details.
 COPY INTO mytable
