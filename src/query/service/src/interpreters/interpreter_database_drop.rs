@@ -42,8 +42,21 @@ impl Interpreter for DropDatabaseInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+        let db = catalog.get_database(&tenant, &self.plan.database).await?;
+
+        // unset the ownership of the database
+        role_api.unset_ownership(&GrantObjectByID::Database {
+            catalog_name: self.plan.catalog.clone(),
+            db_id: db.get_db_info().ident.db_id,
+        })?;
+
+        // actual drop database
         let resp = catalog.drop_database(self.plan.clone().into()).await?;
+
+        // handle share cleanups with the DropDatabaseReply
         if let Some(spec_vec) = resp.spec_vec {
             let mut share_table_into = Vec::with_capacity(spec_vec.len());
             for share_spec in &spec_vec {
