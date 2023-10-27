@@ -107,6 +107,7 @@ impl OptimizeTableInterpreter {
         snapshot: Arc<TableSnapshot>,
         catalog_info: CatalogInfo,
         is_distributed: bool,
+        need_lock: bool,
     ) -> Result<PhysicalPlan> {
         let merge_meta = parts.is_lazy;
         let mut root = PhysicalPlan::CompactSource(Box::new(CompactSource {
@@ -133,6 +134,7 @@ impl OptimizeTableInterpreter {
             snapshot,
             mutation_kind: MutationKind::Compact,
             merge_meta,
+            need_lock,
         })))
     }
 
@@ -181,6 +183,7 @@ impl OptimizeTableInterpreter {
                 snapshot,
                 catalog_info,
                 is_distributed,
+                self.plan.need_lock,
             )?;
 
             let build_res =

@@ -101,7 +101,7 @@ impl Interpreter for MergeIntoInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
-        // Add table lock heartbeat before execution.
+        // Add table lock before execution.
         let table_lock = LockManager::create_table_lock(table_info);
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
         build_res.main_pipeline.add_lock_guard(lock_guard);
@@ -124,6 +124,7 @@ impl Interpreter for MergeIntoInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 compact_hook_trace_ctx,
+                false,
             )
             .await;
         }
@@ -355,6 +356,7 @@ impl MergeIntoInterpreter {
             // let's use update first, we will do some optimizeations and select exact strategy
             mutation_kind: MutationKind::Update,
             merge_meta: false,
+            need_lock: false,
         }));
 
         Ok((physical_plan, table_info))

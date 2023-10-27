@@ -175,6 +175,13 @@ select * from t1 order by id1;
 1 9
 2 9
 
+onlyif mysql
+statement ok
+truncate table system.metrics
+
+statement error 1006
+update t1 set id1=2 where to_timestamp(8472945773481)
+
 statement ok
 update t1 set val1 = '10' where id1 = any(select id2 from t2 where t1.id1 = t2.id2) or id1 < any(select id2 from t2);
 
@@ -183,6 +190,12 @@ select * from t1 order by id1;
 ----
 1 10
 2 10
+
+onlyif mysql
+query B
+SELECT COUNT() >= 1 FROM system.metrics where metric = 'table_lock_nums_total'
+----
+1
 
 statement ok
 drop table t1;

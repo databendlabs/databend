@@ -114,7 +114,7 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update, false)
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot, MutationKind::Update, false, false)
     }
 
     #[async_backtrace::framed]

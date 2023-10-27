@@ -83,7 +83,7 @@ impl Interpreter for UpdateInterpreter {
         // check mutability
         tbl.check_mutable()?;
 
-        // Add table lock heartbeat.
+        // Add table lock.
         let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone());
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 

@@ -206,6 +206,8 @@ where F: SnapshotGenerator + Send + 'static
         }
 
         if matches!(self.state, State::Finish) {
+            // release the lock manually.
+            std::mem::take(&mut self.lock_guard);
             return Ok(Event::Finished);
         }
 

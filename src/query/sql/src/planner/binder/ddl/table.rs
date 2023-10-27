@@ -1031,6 +1031,7 @@ impl Binder {
             table,
             action,
             limit: limit.map(|v| v as usize),
+            need_lock: true,
         })))
     }
 

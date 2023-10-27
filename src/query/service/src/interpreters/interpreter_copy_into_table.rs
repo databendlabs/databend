@@ -304,6 +304,7 @@ impl Interpreter for CopyIntoTableInterpreter {
                 &mut build_res.main_pipeline,
                 compact_target,
                 trace_ctx,
+                true,
             )
             .await;
         }
