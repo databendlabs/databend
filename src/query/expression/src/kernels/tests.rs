@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// The test Cover take.rs, take_chunks.rs, take_compact.rs, filter.rs, concat.rs.
+/// The test Covers take.rs, take_chunks.rs, take_compact.rs, filter.rs, concat.rs.
 #[test]
 fn test_take_and_filter_and_concat() -> common_exception::Result<()> {
     use common_hashtable::RowPtr;
