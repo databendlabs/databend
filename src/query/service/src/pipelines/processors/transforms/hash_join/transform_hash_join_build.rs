@@ -293,6 +293,7 @@ impl Processor for TransformHashJoinBuild {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match &self.step {
             HashJoinBuildStep::Running => {

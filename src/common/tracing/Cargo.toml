@@ -23,10 +23,10 @@ defer = "0.1"
 fern = "0.6.2"
 humantime = "2.1.0"
 log = { workspace = true }
-minitrace = { version = "0.5", features = ["enable"] }
-minitrace-opentelemetry = "0.5"
-opentelemetry = { version = "0.19", features = ["trace"] }
-opentelemetry-otlp = { version = "0.12", features = ["trace"] }
+minitrace = { workspace = true }
+minitrace-opentelemetry = "0.6"
+opentelemetry = { version = "0.20", features = ["trace"] }
+opentelemetry-otlp = { version = "0.13", features = ["trace"] }
 serde = { workspace = true }
 serde_json = "1"
 tonic = { workspace = true }

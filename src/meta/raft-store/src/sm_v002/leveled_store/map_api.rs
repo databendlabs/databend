@@ -17,6 +17,7 @@ use std::fmt;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
+use futures::stream::StreamExt;
 use futures_util::stream::BoxStream;
 use stream_more::KMerge;
 use stream_more::StreamMore;
@@ -45,6 +46,9 @@ pub(in crate::sm_v002) trait MapValue:
     Clone + Send + Sync + Unpin + 'static
 {
 }
+
+/// A key-value pair used in a map.
+pub(in crate::sm_v002) type MapKV<K> = (K, Marked<<K as MapKey>::V>);
 
 /// A stream of key-value entry returned by `range()`.
 pub(in crate::sm_v002) type EntryStream<K> = BoxStream<'static, (K, Marked<<K as MapKey>::V>)>;
@@ -228,10 +232,9 @@ where
     }
 
     // Merge entries with the same key, keep the one with larger internal-seq
-    let m = kmerge.coalesce(util::choose_greater);
+    let coalesce = kmerge.coalesce(util::choose_greater);
 
-    let strm: EntryStream<K> = Box::pin(m);
-    strm
+    coalesce.boxed()
 }
 
 #[cfg(test)]

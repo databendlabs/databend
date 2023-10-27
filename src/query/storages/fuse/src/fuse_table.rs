@@ -539,7 +539,7 @@ impl Table for FuseTable {
         .await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_partitions")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -550,7 +550,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_data")]
+    #[minitrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -581,14 +581,14 @@ impl Table for FuseTable {
         self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
     }
 
-    #[minitrace::trace(name = "fuse_table_truncate")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let purge = false;
         self.do_truncate(ctx, purge).await
     }
 
-    #[minitrace::trace(name = "fuse_table_optimize")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn purge(
         &self,
@@ -612,7 +612,7 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "analyze")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.do_analyze(&ctx).await
@@ -654,7 +654,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace(name = "fuse_table_navigate_to")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {

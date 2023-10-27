@@ -64,6 +64,10 @@ impl Level {
         }
     }
 
+    pub(in crate::sm_v002) fn sys_data_ref(&self) -> &SysData {
+        &self.sys_data
+    }
+
     pub(in crate::sm_v002) fn sys_data_mut(&mut self) -> &mut SysData {
         &mut self.sys_data
     }

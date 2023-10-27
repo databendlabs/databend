@@ -18,6 +18,7 @@ common-expression = { path = "../../expression" }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 futures = "0.3.24"
+minitrace = { workspace = true }
 petgraph = "0.6.2"
 
 [dev-dependencies]
