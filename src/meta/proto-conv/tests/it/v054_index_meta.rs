@@ -16,7 +16,7 @@ use chrono::TimeZone;
 use chrono::Utc;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexType;
-use common_tracing::func_name;
+use minitrace::func_name;
 
 use crate::common;
 

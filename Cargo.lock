@@ -1301,6 +1301,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "cache-padded"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "981520c98f422fcc584dc1a95c334e6953900b9106bc47a9839b81790009eb21"
+
+[[package]]
 name = "camino"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1715,7 +1721,7 @@ dependencies = [
  "goldenfile",
  "itertools 0.10.5",
  "logos",
- "minitrace",
+ "minitrace 0.6.1",
  "nom",
  "nom-rule",
  "ordered-float 3.7.0",
@@ -1757,7 +1763,7 @@ dependencies = [
  "libc",
  "log",
  "logcall",
- "minitrace",
+ "minitrace 0.6.1",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2144,7 +2150,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-storage",
- "minitrace",
+ "minitrace 0.6.1",
  "mockall",
  "serde_json",
 ]
@@ -2164,12 +2170,11 @@ dependencies = [
  "common-meta-types",
  "common-proto-conv",
  "common-protos",
- "common-tracing",
  "enumflags2",
  "log",
  "logcall",
  "maplit",
- "minitrace",
+ "minitrace 0.6.1",
  "serde",
  "serde_json",
  "thiserror",
@@ -2226,7 +2231,7 @@ dependencies = [
  "lazy_static",
  "log",
  "logcall",
- "minitrace",
+ "minitrace 0.6.1",
  "once_cell",
  "parking_lot 0.12.1",
  "prost 0.12.1",
@@ -2251,7 +2256,7 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "once_cell",
  "tempfile",
 ]
@@ -2263,10 +2268,9 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common-meta-types",
- "common-tracing",
  "futures-util",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "serde",
  "thiserror",
  "tokio",
@@ -2315,7 +2319,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "minitrace",
+ "minitrace 0.6.1",
  "num",
  "once_cell",
  "openraft 0.8.4",
@@ -2342,7 +2346,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
@@ -2443,6 +2447,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "futures",
+ "minitrace 0.6.1",
  "petgraph",
  "serde",
  "serde_json",
@@ -2489,7 +2494,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
@@ -2531,10 +2536,10 @@ dependencies = [
  "common-expression",
  "common-meta-app",
  "common-protos",
- "common-tracing",
  "convert_case 0.6.0",
  "enumflags2",
  "maplit",
+ "minitrace 0.6.1",
  "num",
  "pretty_assertions",
  "thiserror",
@@ -2643,7 +2648,7 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2747,7 +2752,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "minitrace",
+ "minitrace 0.6.1",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
@@ -2791,7 +2796,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "opendal",
  "ordered-float 3.7.0",
  "serde",
@@ -2825,7 +2830,7 @@ dependencies = [
  "futures",
  "icelake",
  "match-template",
- "minitrace",
+ "minitrace 0.6.1",
  "opendal",
  "parquet",
  "serde",
@@ -3074,7 +3079,7 @@ dependencies = [
  "fern",
  "humantime",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -3701,7 +3706,7 @@ dependencies = [
  "futures",
  "limits-rs",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "opendal",
  "poem",
  "sentry",
@@ -3799,7 +3804,7 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace",
+ "minitrace 0.6.1",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -3914,7 +3919,7 @@ dependencies = [
  "maplit",
  "match-template",
  "metrics",
- "minitrace",
+ "minitrace 0.6.1",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -7856,12 +7861,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "823c2c0be9db5d4a0497700a405a231c9db19e67a24f5fe1ef4e3fdaca6a9b7e"
 dependencies = [
  "futures",
- "minitrace-macro",
+ "minitrace-macro 0.5.1",
  "minstant",
  "once_cell",
  "parking_lot 0.12.1",
  "pin-project",
  "rand 0.8.5",
+]
+
+[[package]]
+name = "minitrace"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
+dependencies = [
+ "futures",
+ "minitrace-macro 0.6.1",
+ "minstant",
+ "once_cell",
+ "parking_lot 0.12.1",
+ "pin-project",
+ "rand 0.8.5",
+ "rtrb",
 ]
 
 [[package]]
@@ -7877,14 +7897,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "minitrace-macro"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
+dependencies = [
+ "proc-macro-error 1.0.4",
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "minitrace-opentelemetry"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d61606cd574afbd111bb32e3f78f96e3aab3c86703ac74ece63b6ee51c104b7"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
 dependencies = [
  "futures",
  "log",
- "minitrace",
+ "minitrace 0.6.1",
  "opentelemetry",
 ]
 
@@ -8409,7 +8439,7 @@ dependencies = [
  "hyper",
  "log",
  "md-5",
- "minitrace",
+ "minitrace 0.5.1",
  "moka",
  "once_cell",
  "parking_lot 0.12.1",
@@ -8502,9 +8532,9 @@ checksum = "ff011a302c396a5197692431fc1948019154afc178baf7d8e37367442a4601cf"
 
 [[package]]
 name = "opentelemetry"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f4b8347cc26099d3aeee044065ecc3ae11469796b4d65d065a23a584ed92a6f"
+checksum = "9591d937bc0e6d2feb6f71a559540ab300ea49955229c347a517a28d27784c54"
 dependencies = [
  "opentelemetry_api",
  "opentelemetry_sdk",
@@ -8512,45 +8542,54 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry-otlp"
-version = "0.12.0"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8af72d59a4484654ea8eb183fea5ae4eb6a41d7ac3e3bae5f4d2a282a3a7d3ca"
+checksum = "7e5e5a5c4135864099f3faafbe939eb4d7f9b80ebf68a8448da961b32a7c1275"
 dependencies = [
  "async-trait",
- "futures",
- "futures-util",
+ "futures-core",
  "http",
- "opentelemetry",
  "opentelemetry-proto",
+ "opentelemetry-semantic-conventions",
+ "opentelemetry_api",
+ "opentelemetry_sdk",
  "prost 0.11.9",
  "thiserror",
  "tokio",
- "tonic 0.8.3",
+ "tonic 0.9.2",
 ]
 
 [[package]]
 name = "opentelemetry-proto"
-version = "0.2.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "045f8eea8c0fa19f7d48e7bc3128a39c2e5c533d5c61298c548dfefc1064474c"
+checksum = "b1e3f814aa9f8c905d0ee4bde026afd3b2577a97c10e1699912e3e44f0c4cbeb"
 dependencies = [
- "futures",
- "futures-util",
- "opentelemetry",
+ "opentelemetry_api",
+ "opentelemetry_sdk",
  "prost 0.11.9",
- "tonic 0.8.3",
+ "tonic 0.9.2",
+]
+
+[[package]]
+name = "opentelemetry-semantic-conventions"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73c9f9340ad135068800e7f1b24e9e09ed9e7143f5bf8518ded3d3ec69789269"
+dependencies = [
+ "opentelemetry",
 ]
 
 [[package]]
 name = "opentelemetry_api"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed41783a5bf567688eb38372f2b7a8530f5a607a4b49d38dd7573236c23ca7e2"
+checksum = "8a81f725323db1b1206ca3da8bb19874bbd3f57c3bcd59471bfb04525b265b9b"
 dependencies = [
- "fnv",
  "futures-channel",
  "futures-util",
  "indexmap 1.9.2",
+ "js-sys",
  "once_cell",
  "pin-project-lite",
  "thiserror",
@@ -8559,21 +8598,22 @@ dependencies = [
 
 [[package]]
 name = "opentelemetry_sdk"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b3a2a91fdbfdd4d212c0dcc2ab540de2c2bcbbd90be17de7a7daf8822d010c1"
+checksum = "fa8e705a0612d48139799fcbaba0d4a90f06277153e43dd2bdc16c6f0edd8026"
 dependencies = [
  "async-trait",
  "crossbeam-channel",
- "dashmap",
- "fnv",
  "futures-channel",
  "futures-executor",
  "futures-util",
  "once_cell",
  "opentelemetry_api",
+ "ordered-float 3.7.0",
  "percent-encoding",
  "rand 0.8.5",
+ "regex",
+ "serde_json",
  "thiserror",
 ]
 
@@ -10229,6 +10269,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtrb"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99e704dd104faf2326a320140f70f0b736d607c1caa1b1748a6c568a79819109"
+dependencies = [
+ "cache-padded",
+]
+
+[[package]]
 name = "rust-ini"
 version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11203,7 +11252,7 @@ dependencies = [
  "common-functions",
  "criterion",
  "match-template",
- "minitrace",
+ "minitrace 0.6.1",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",
@@ -11938,14 +11987,13 @@ dependencies = [
 
 [[package]]
 name = "tonic"
-version = "0.8.3"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f219fad3b929bef19b1f86fbc0358d35daed8f2cac972037ac0dc10bbb8d5fb"
+checksum = "3082666a3a6433f7f511c7192923fa1fe07c69332d3c6a2e6bb040b569199d5a"
 dependencies = [
- "async-stream",
  "async-trait",
  "axum",
- "base64 0.13.1",
+ "base64 0.21.0",
  "bytes",
  "futures-core",
  "futures-util",
@@ -11957,15 +12005,12 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.11.9",
- "prost-derive 0.11.9",
  "tokio",
  "tokio-stream",
- "tokio-util",
  "tower",
  "tower-layer",
  "tower-service",
  "tracing",
- "tracing-futures",
 ]
 
 [[package]]

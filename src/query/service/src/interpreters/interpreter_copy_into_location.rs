@@ -130,7 +130,7 @@ impl Interpreter for CopyIntoLocationInterpreter {
         "CopyIntoLocationInterpreterV2"
     }
 
-    #[minitrace::trace(name = "copy_into_location_interpreter_execute_v2")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "copy_into_location_interpreter_execute_v2");
