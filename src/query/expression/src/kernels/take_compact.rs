@@ -82,9 +82,9 @@ impl DataBlock {
 impl Column {
     pub fn take_compacted_indices(&self, indices: &[(u32, u32)], num_rows: usize) -> Self {
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..num_rows)
-            }
+            Column::Null { .. } => Column::Null { len: num_rows },
+            Column::EmptyArray { .. } => Column::EmptyArray { len: num_rows },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: num_rows },
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => {
                     let builder = Self::take_compacted_primitive_types(values, indices, num_rows);
