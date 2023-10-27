@@ -34,12 +34,12 @@ use common_pipeline_sources::input_formats::StreamingReadBatch;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
 use common_sql::Planner;
-use common_tracing::func_name;
 use futures::StreamExt;
 use http::HeaderMap;
 use log::debug;
 use log::info;
 use log::warn;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use naive_cityhash::cityhash128;
 use poem::error::BadRequest;
@@ -230,7 +230,7 @@ pub async fn clickhouse_handler_get(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<WithContentType<Body>> {
-    let root = Span::root(func_name!(), SpanContext::random());
+    let root = Span::root(full_name!(), SpanContext::random());
 
     async {
         let session = ctx.get_session(SessionType::ClickHouseHttpHandler);
@@ -279,7 +279,7 @@ pub async fn clickhouse_handler_post(
     Query(params): Query<StatementHandlerParams>,
     headers: &HeaderMap,
 ) -> PoemResult<impl IntoResponse> {
-    let root = Span::root(func_name!(), SpanContext::random());
+    let root = Span::root(full_name!(), SpanContext::random());
 
     async {
         info!(

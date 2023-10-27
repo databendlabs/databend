@@ -98,6 +98,7 @@ impl<T: AsyncTransform + 'static> Processor for AsyncTransformer<T> {
         }
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if !self.called_on_start {
             self.called_on_start = true;

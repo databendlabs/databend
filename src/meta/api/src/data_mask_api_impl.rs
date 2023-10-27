@@ -36,9 +36,9 @@ use common_meta_types::MetaError;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnOp;
 use common_meta_types::TxnRequest;
-use common_tracing::func_name;
 use log::as_debug;
 use log::debug;
+use minitrace::func_name;
 
 use crate::data_mask_api::DatamaskApi;
 use crate::fetch_id;

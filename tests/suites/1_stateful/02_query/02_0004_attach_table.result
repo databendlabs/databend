@@ -41,4 +41,4 @@ drop table IS allowed
 undrop table should work
 0
 show create attach table
-table_read_only	ATTACH TABLE `default`.`table_read_only` 'sPLACE_HOLDER://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' ) READ_ONLY
+table_read_only	ATTACH TABLE `default`.`table_read_only` 'sPLACE_HOLDER://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/' CONNECTION = ( access_key_id = '********', endpoint_url = '********', secret_access_key = '********' ) READ_ONLY
