@@ -502,7 +502,10 @@ impl Processor for TransformHashJoinProbe {
                     .spilled_partition_set
                     .contains(&(p_id as u8))
                 {
-                    let spilled_data = spill_state.spiller.read_spilled_data(&(p_id as u8)).await?;
+                    let spilled_data = spill_state
+                        .spiller
+                        .read_spilled_data(&(p_id as u8), self.processor_id)
+                        .await?;
                     if !spilled_data.is_empty() {
                         self.input_data.extend(spilled_data);
                     }

@@ -233,7 +233,7 @@ impl Processor for TransformHashJoinBuild {
                     }
                     if let Some(spill_state) = &mut self.spill_state && !spill_state.spiller.is_all_spilled() {
                         // Check if need to spill
-                        let need_spill = spill_state.check_need_spill()?;
+                        let need_spill = spill_state.check_need_spill(&data_block)?;
                         if need_spill {
                             spill_state.spill_coordinator.need_spill()?;
                             self.wait_spill(data_block)?;
@@ -364,7 +364,7 @@ impl Processor for TransformHashJoinBuild {
                 {
                     let spilled_data = spill_state
                         .spiller
-                        .read_spilled_data(&(partition_id as u8))
+                        .read_spilled_data(&(partition_id as u8), self.processor_id)
                         .await?;
                     self.input_data = Some(DataBlock::concat(&spilled_data)?);
                 }

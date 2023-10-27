@@ -99,9 +99,9 @@ impl BuildSpillState {
             self.get_hashes(block, &mut hashes)?;
             let mut indices = Vec::with_capacity(hashes.len());
             for hash in hashes {
-                indices.push(hash2bucket::<2, false>(hash as usize) as u8);
+                indices.push(hash2bucket::<3, false>(hash as usize) as u8);
             }
-            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 2)?;
+            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 3)?;
             for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {
                 partition_blocks
                     .entry(p_id as u8)
@@ -127,7 +127,7 @@ impl BuildSpillState {
 
     // Check if need to spill.
     // Notes: even if the method returns false, but there exists one processor need to spill, then it needs to wait spill.
-    pub(crate) fn check_need_spill(&self) -> Result<bool> {
+    pub(crate) fn check_need_spill(&self, input: &DataBlock) -> Result<bool> {
         let settings = self.build_state.ctx.get_settings();
         let spill_threshold = settings.get_join_spilling_threshold()?;
         // If `spill_threshold` is 0, we won't limit memory.
@@ -137,9 +137,9 @@ impl BuildSpillState {
             return Ok(false);
         }
 
-        // Todo: if this is the first batch data, directly return false.
-
-        let mut total_bytes = 0;
+        // Estimates the total amount of data held by all processors in the current build pipeline.
+        let mut total_bytes =
+            self.build_state.build_worker_num.load(Ordering::Relaxed) as usize * input.num_rows();
 
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
         for block in buffer.iter() {
