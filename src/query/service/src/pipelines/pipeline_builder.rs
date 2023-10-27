@@ -37,6 +37,7 @@ use common_expression::with_mappedhash_method;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FunctionContext;
@@ -162,6 +163,7 @@ use crate::pipelines::processors::transforms::hash_join::TransformHashJoinProbe;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::range_join::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::AggregateInjector;
+use crate::pipelines::processors::transforms::ExtractHashTableByRowNumber;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::MaterializedCteSink;
@@ -197,6 +199,8 @@ pub struct PipelineBuilder {
     func_ctx: FunctionContext,
     settings: Arc<Settings>,
 
+    // probe data_fields for merge into
+    pub probe_data_fields: Option<Vec<DataField>>,
     // Used in runtime filter source
     pub join_state: Option<Arc<HashJoinBuildState>>,
     // record the index of join build side pipeline in `pipelines`
@@ -230,6 +234,7 @@ impl PipelineBuilder {
             exchange_injector: DefaultExchangeInjector::create(),
             index: None,
             cte_state: HashMap::new(),
+            probe_data_fields: None,
         }
     }
 
@@ -363,6 +368,8 @@ impl PipelineBuilder {
         self.main_pipeline.try_resize(1)?;
 
         assert!(self.join_state.is_some());
+        assert!(self.probe_data_fields.is_some());
+
         let join_state = self.join_state.clone().unwrap();
         // split row_number and log
         //      output_port_row_number
@@ -372,7 +379,18 @@ impl PipelineBuilder {
 
         // accumulate source data which is not matched from hashstate
         let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(DeduplicateRowNumber::create(join_state.clone())?.into_pipe_item());
+        pipe_items.push(DeduplicateRowNumber::create()?.into_pipe_item());
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
+
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(
+            ExtractHashTableByRowNumber::create(
+                join_state.clone(),
+                self.probe_data_fields.clone().unwrap(),
+            )?
+            .into_pipe_item(),
+        );
         pipe_items.push(create_dummy_item());
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
@@ -1532,6 +1550,7 @@ impl PipelineBuilder {
             self.join_state = Some(build_state.clone());
             self.index = Some(self.pipelines.len());
         } else {
+            // for merge into
             if hash_join_plan.need_hold_hash_table {
                 self.join_state = Some(build_state.clone())
             }
@@ -2483,6 +2502,16 @@ impl PipelineBuilder {
                         .accumulate_output_bytes(),
                 )))
             })?;
+        }
+
+        if join.need_hold_hash_table {
+            let mut projected_probe_fields = vec![];
+            for (i, field) in probe_state.probe_schema.fields().iter().enumerate() {
+                if probe_state.probe_projections.contains(&i) {
+                    projected_probe_fields.push(field.clone());
+                }
+            }
+            self.probe_data_fields = Some(projected_probe_fields);
         }
 
         Ok(())
