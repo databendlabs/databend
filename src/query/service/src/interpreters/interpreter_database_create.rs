@@ -132,11 +132,11 @@ impl Interpreter for CreateDatabaseInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             role_api.grant_ownership(
                 &GrantObjectByID::Database {
-                    catalog_name: self.plan.catalog,
+                    catalog_name: self.plan.catalog.clone(),
                     db_id: reply.db_id,
                 },
                 &current_role.name,
-            );
+            ).await?;
         }
 
         Ok(PipelineBuildResult::create())

@@ -219,7 +219,7 @@ impl SessionPrivilegeManager for SessionPrivilegeManagerImpl {
         let tenant = self.session_ctx.get_current_tenant();
 
         // if the object is not owned by any role, then considered as PUBLIC, which is always true
-        let owner_role = match role_mgr.find_object_owner(&tenant, &object).await? {
+        let owner_role = match role_mgr.find_object_owner(&tenant, object).await? {
             Some(owner_role) => owner_role,
             None => return Ok(()),
         };

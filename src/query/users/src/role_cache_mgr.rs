@@ -126,7 +126,7 @@ impl RoleCacheManager {
 
         // cache manager would not look into built-in roles.
         let role = self.user_manager.get_role(tenant, owner.role).await?;
-        return Ok(Some(role));
+        Ok(Some(role))
     }
 
     // find_related_roles is called on validating an user's privileges.

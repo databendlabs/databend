@@ -70,7 +70,7 @@ impl GrantPrivilegeInterpreter {
 
         let (catalog, catalog_name) = match object.catalog() {
             Some(ref catalog_name) => (
-                self.ctx.get_catalog(&catalog_name).await?,
+                self.ctx.get_catalog(catalog_name).await?,
                 catalog_name.clone(),
             ),
             None => {
@@ -136,7 +136,7 @@ impl GrantPrivilegeInterpreter {
         }
 
         user_mgr
-            .grant_ownership_to_role(tenant, &current_role.name, role, &ownership_object)
+            .grant_ownership_to_role(tenant, &ownership_object, role)
             .await?;
         Ok(())
     }
