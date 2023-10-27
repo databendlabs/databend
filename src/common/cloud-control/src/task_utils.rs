@@ -48,11 +48,12 @@ pub struct Task {
     pub owner: String,
     pub schedule_options: Option<String>,
     pub warehouse_options: Option<WarehouseOptions>,
-    pub next_scheduled_at: DateTime<Utc>,
+    pub next_scheduled_at: Option<DateTime<Utc>>,
     pub suspend_task_after_num_failures: Option<i32>,
     pub status: Status,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_suspended_at: Option<DateTime<Utc>>,
 }
 
 pub fn format_schedule_options(s: &ScheduleOptions) -> Result<String> {
@@ -121,14 +122,35 @@ impl TryFrom<crate::pb::Task> for Task {
             })?
             .with_timezone(&Utc);
 
-        let next_scheduled_at = DateTime::parse_from_rfc3339(&value.next_scheduled_at)
-            .map_err(|e| {
-                ErrorCode::IllegalCloudControlMessageFormat(format!(
-                    "illegal next_scheduled_at message {}, {e}",
-                    value.next_scheduled_at
-                ))
-            })?
-            .with_timezone(&Utc);
+        let next_scheduled_at = value
+            .next_scheduled_at
+            .as_ref()
+            .map(|s| {
+                DateTime::parse_from_rfc3339(s)
+                    .map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal next_scheduled_at message {:?}, {e}",
+                            value.next_scheduled_at
+                        ))
+                    })
+                    .map(|d| d.with_timezone(&Utc))
+            })
+            .transpose()?;
+
+        let last_suspended_at = value
+            .last_suspended_at
+            .as_ref()
+            .map(|s| {
+                DateTime::parse_from_rfc3339(s)
+                    .map_err(|e| {
+                        ErrorCode::IllegalCloudControlMessageFormat(format!(
+                            "illegal next_scheduled_at message {:?}, {e}",
+                            value.last_suspended_at
+                        ))
+                    })
+                    .map(|d| d.with_timezone(&Utc))
+            })
+            .transpose()?;
 
         let schedule = match value.schedule_options {
             None => None,
@@ -151,6 +173,7 @@ impl TryFrom<crate::pb::Task> for Task {
             schedule_options: schedule,
             warehouse_options: value.warehouse_options,
             next_scheduled_at,
+            last_suspended_at,
             suspend_task_after_num_failures: value.suspend_task_after_num_failures,
             status,
             created_at,

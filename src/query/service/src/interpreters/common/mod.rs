@@ -30,7 +30,6 @@ pub use table::check_referenced_computed_columns;
 pub use task::get_client_config;
 pub use task::make_schedule_options;
 pub use task::make_warehouse_options;
-pub use task::parse_tasks_to_datablock;
 pub use util::check_deduplicate_label;
 pub use util::create_push_down_filters;
 

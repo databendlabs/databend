@@ -25,6 +25,8 @@ use common_cloud_control::pb::DescribeTaskRequest;
 use common_cloud_control::pb::DescribeTaskResponse;
 use common_cloud_control::pb::DropTaskRequest;
 use common_cloud_control::pb::DropTaskResponse;
+use common_cloud_control::pb::ExecuteTaskRequest;
+use common_cloud_control::pb::ExecuteTaskResponse;
 use common_cloud_control::pb::ShowTaskRunsRequest;
 use common_cloud_control::pb::ShowTaskRunsResponse;
 use common_cloud_control::pb::ShowTasksRequest;
@@ -73,9 +75,17 @@ impl TaskService for MockTaskService {
                 status: i32::from(Suspended),
                 created_at: Default::default(),
                 updated_at: Default::default(),
+                last_suspended_at: None,
             }),
             error: None,
         }))
+    }
+
+    async fn execute_task(
+        &self,
+        _request: Request<ExecuteTaskRequest>,
+    ) -> Result<Response<ExecuteTaskResponse>, Status> {
+        Ok(Response::new(ExecuteTaskResponse { error: None }))
     }
 
     async fn drop_task(

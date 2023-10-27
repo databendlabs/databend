@@ -29,6 +29,8 @@ use crate::pb::DescribeTaskRequest;
 use crate::pb::DescribeTaskResponse;
 use crate::pb::DropTaskRequest;
 use crate::pb::DropTaskResponse;
+use crate::pb::ExecuteTaskRequest;
+use crate::pb::ExecuteTaskResponse;
 use crate::pb::ShowTasksRequest;
 use crate::pb::ShowTasksResponse;
 
@@ -52,7 +54,10 @@ pub fn make_request<T>(t: T, config: ClientConfig) -> Request<T> {
         metadata.insert(key, v.parse().unwrap());
     }
     metadata.insert(
-        TASK_CLIENT_VERSION_NAME,
+        TASK_CLIENT_VERSION_NAME
+            .to_string()
+            .parse::<tonic::metadata::MetadataKey<tonic::metadata::Ascii>>()
+            .unwrap(),
         TASK_CLIENT_VERSION.to_string().parse().unwrap(),
     );
     request
@@ -83,6 +88,16 @@ impl TaskClient {
     ) -> Result<DescribeTaskResponse> {
         let mut client = self.task_client.clone();
         let resp = client.describe_task(req).await?;
+        Ok(resp.into_inner())
+    }
+
+    // TODO: richer error handling on Task Error
+    pub async fn execute_task(
+        &self,
+        req: Request<ExecuteTaskRequest>,
+    ) -> Result<ExecuteTaskResponse> {
+        let mut client = self.task_client.clone();
+        let resp = client.execute_task(req).await?;
         Ok(resp.into_inner())
     }
 

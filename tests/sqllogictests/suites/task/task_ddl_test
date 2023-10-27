@@ -1,0 +1,22 @@
+# Please start the UDF Server first before running this test:
+#   python3 tests/cloud-control-server/simple_server.py
+#
+
+statement ok
+CREATE TASK mytask
+  WAREHOUSE = mywh
+  SCHEDULE = 'USING CRON 0 0 0 1 1 ? 2100'
+  AS SELECT 1;
+
+statement ok
+ALTER TASK mytask RESUME;
+
+statement ok
+ALTER TASK mytask SUSPEND;
+
+statement ok
+ALTER TASK mytask MODIFY AS SELECT 2;
+
+statement ok
+SHOW TASKS
+

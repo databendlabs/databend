@@ -115,4 +115,7 @@ clean:
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
+genproto:
+	python  -m grpc_tools.protoc -Isrc/common/cloud-control/proto/ --python_out=tests/cloud-control-server/ --grpc_python_out=tests/cloud-control-server/ src/common/cloud-control/proto/task.proto
+
 .PHONY: setup test run build fmt lint clean docs

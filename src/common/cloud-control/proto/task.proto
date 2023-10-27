@@ -52,6 +52,15 @@ message DropTaskResponse {
   optional TaskError error = 1;
 }
 
+message ExecuteTaskRequest {
+  string tenant_id = 1;
+  string task_name = 2;
+}
+
+message ExecuteTaskResponse {
+  optional TaskError error = 2;
+}
+
 message DescribeTaskRequest {
   string tenant_id = 1;
   string task_name = 2;
@@ -70,17 +79,19 @@ message Task {
   string owner = 6;
   ScheduleOptions schedule_options = 7;
   WarehouseOptions warehouse_options = 8;
-  string next_scheduled_at = 9;
+  optional string next_scheduled_at = 9;
   optional int32 suspend_task_after_num_failures = 10; //SUSPEND_TASK_AFTER_NUM_FAILURES
   Status status = 12;
   string created_at = 14; // RFC 3339 format time
   string updated_at = 15;
+  optional string last_suspended_at = 16;
 }
 
 message DescribeTaskResponse {
   Task task = 1;
   optional TaskError error = 2;
 }
+
 message ShowTasksRequest {// every owner has a roles list like ["role1", "role2"], list tasks in the role list
   string tenant_id = 1;
   string name_like = 2;
@@ -109,6 +120,7 @@ message AlterTaskRequest {
   string owner = 6;
   ScheduleOptions schedule_options = 7;
   bool if_exist = 8;
+  WarehouseOptions warehouse_options = 9;
 }
 
 message AlterTaskResponse {
@@ -126,6 +138,7 @@ message ShowTaskRunsRequest {
   repeated string task_ids = 7;
   string task_name = 8;
 }
+
 message TaskRun {
   enum State {
     SCHEDULED = 0;
@@ -148,7 +161,7 @@ message TaskRun {
   int64 error_code = 12;
   optional string error_message = 13;
   string scheduled_time = 14;
-  string completed_time = 16;
+  optional string completed_time = 16;
 
   string query_id = 17;
 }
@@ -161,6 +174,7 @@ message ShowTaskRunsResponse {
 service TaskService {
   rpc CreateTask(CreateTaskRequest) returns (CreateTaskResponse);
   rpc DescribeTask(DescribeTaskRequest) returns (DescribeTaskResponse);
+  rpc ExecuteTask(ExecuteTaskRequest) returns (ExecuteTaskResponse);
   rpc DropTask(DropTaskRequest) returns (DropTaskResponse);
   rpc AlterTask(AlterTaskRequest) returns(AlterTaskResponse);
   rpc ShowTasks(ShowTasksRequest) returns (ShowTasksResponse);

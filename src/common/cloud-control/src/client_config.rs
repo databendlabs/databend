@@ -16,6 +16,9 @@ use std::fmt::Debug;
 use std::time::Duration;
 
 use crate::cloud_api::CLOUD_REQUEST_TIMEOUT_SEC;
+use crate::cloud_api::QUERY_ID;
+use crate::cloud_api::REQUESTER;
+use crate::cloud_api::TENANT_ID;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ClientConfig {
@@ -52,4 +55,12 @@ impl Default for ClientConfig {
     fn default() -> Self {
         Self::new()
     }
+}
+
+pub fn build_client_config(tenant: String, user: String, query_id: String) -> ClientConfig {
+    let mut config = ClientConfig::new();
+    config.add_metadata(TENANT_ID, tenant);
+    config.add_metadata(REQUESTER, user);
+    config.add_metadata(QUERY_ID, query_id);
+    config
 }

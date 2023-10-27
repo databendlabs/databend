@@ -3029,6 +3029,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-cloud-control",
  "common-config",
  "common-exception",
  "common-expression",

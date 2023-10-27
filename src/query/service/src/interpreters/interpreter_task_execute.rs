@@ -15,18 +15,15 @@
 use std::sync::Arc;
 
 use common_cloud_control::cloud_api::CloudControlApiProvider;
-use common_cloud_control::pb::DescribeTaskRequest;
+use common_cloud_control::pb::ExecuteTaskRequest;
 use common_cloud_control::task_client::make_request;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::ExecuteTaskPlan;
-use common_sql::Planner;
-use tokio_stream::StreamExt;
 
 use crate::interpreters::common::get_client_config;
 use crate::interpreters::Interpreter;
-use crate::interpreters::InterpreterFactory;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -59,22 +56,14 @@ impl Interpreter for ExecuteTaskInterpreter {
         }
         let cloud_api = CloudControlApiProvider::instance();
         let task_client = cloud_api.get_task_client();
-        let req = DescribeTaskRequest {
+        let req = ExecuteTaskRequest {
             task_name: self.plan.task_name.clone(),
             tenant_id: self.plan.tenant.clone(),
-            if_exist: false,
         };
-        let mut config = get_client_config(self.ctx.clone())?;
-        config.add_metadata("X-REQUEST-TYPE", "execute");
+        let config = get_client_config(self.ctx.clone())?;
         let req = make_request(req, config);
 
-        let resp = task_client.describe_task(req).await?;
-        let query = resp.task.expect("task is none").query_text;
-        let mut planner = Planner::new(self.ctx.clone());
-        let (plan, _) = planner.plan_sql(query.as_str()).await?;
-        let interpreter = InterpreterFactory::get(self.ctx.clone(), &plan).await?;
-        let stream = interpreter.execute(self.ctx.clone()).await?;
-        let res = stream.collect::<Result<Vec<_>>>().await?;
-        PipelineBuildResult::from_blocks(res)
+        task_client.execute_task(req).await?;
+        Ok(PipelineBuildResult::create())
     }
 }

@@ -24,7 +24,7 @@ use crate::task_client::TaskClient;
 pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 180; // 180 seconds
 
 // commonly used metadata
-pub const TENANT_ID: &str = "X-DATABEND-TENANT-ID";
+pub const TENANT_ID: &str = "X-DATABEND-TENANT";
 pub const REQUESTER: &str = "X-DATABEND-USER";
 pub const QUERY_ID: &str = "X-DATABEND-QUERY-ID";
 
