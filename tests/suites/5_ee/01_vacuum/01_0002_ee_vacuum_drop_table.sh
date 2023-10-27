@@ -61,7 +61,7 @@ echo "drop database if exists test_vacuum_drop_4" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists table_drop_external_location;" | $MYSQL_CLIENT_CONNECT
 
 ## Create table
-echo "create table table_drop_external_location(a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
+echo "create table table_drop_external_location(a int) 's3://testbucket/admin/data/' connection=(access_key_id ='minioadmin' secret_access_key ='minioadmin' endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
 
 table_inserts=(
   "insert into table_drop_external_location(a) values(888)"
