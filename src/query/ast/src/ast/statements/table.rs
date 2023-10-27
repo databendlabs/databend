@@ -182,6 +182,7 @@ pub struct AttachTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub uri_location: UriLocation,
+    pub read_only: bool,
 }
 
 impl Display for AttachTableStmt {
@@ -195,7 +196,11 @@ impl Display for AttachTableStmt {
                 .chain(Some(&self.table)),
         )?;
 
-        write!(f, " FROM {0}", self.uri_location)?;
+        write!(f, " FROM {}", self.uri_location)?;
+
+        if self.read_only {
+            write!(f, " READ_ONLY")?;
+        }
 
         Ok(())
     }

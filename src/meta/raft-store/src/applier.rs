@@ -84,9 +84,7 @@ impl<'a> Applier<'a> {
 
         self.clean_expired_kvs(log_time_ms).await;
 
-        // TODO: it could persist the last_applied log id so that when starting up,
-        //       it could re-apply the logs without waiting for the `committed` message from a leader.
-        *self.sm.last_applied_mut() = Some(*log_id);
+        *self.sm.sys_data_mut().last_applied_mut() = Some(*log_id);
 
         let applied_state = match entry.payload {
             EntryPayload::Blank => {
@@ -103,7 +101,8 @@ impl<'a> Applier<'a> {
             EntryPayload::Membership(ref mem) => {
                 info!("apply: membership: {:?}", mem);
 
-                *self.sm.last_membership_mut() = StoredMembership::new(Some(*log_id), mem.clone());
+                *self.sm.sys_data_mut().last_membership_mut() =
+                    StoredMembership::new(Some(*log_id), mem.clone());
                 AppliedState::None
             }
         };
@@ -149,16 +148,22 @@ impl<'a> Applier<'a> {
     /// Insert a node only when it does not exist or `overriding` is true.
     #[minitrace::trace]
     fn apply_add_node(&mut self, node_id: &u64, node: &Node, overriding: bool) -> AppliedState {
-        let prev = self.sm.nodes_mut().get(node_id).cloned();
+        let prev = self.sm.sys_data_mut().nodes_mut().get(node_id).cloned();
 
         if prev.is_none() {
-            self.sm.nodes_mut().insert(*node_id, node.clone());
+            self.sm
+                .sys_data_mut()
+                .nodes_mut()
+                .insert(*node_id, node.clone());
             info!("applied AddNode(non-overriding): {}={:?}", node_id, node);
             return (prev, Some(node.clone())).into();
         }
 
         if overriding {
-            self.sm.nodes_mut().insert(*node_id, node.clone());
+            self.sm
+                .sys_data_mut()
+                .nodes_mut()
+                .insert(*node_id, node.clone());
             info!("applied AddNode(overriding): {}={:?}", node_id, node);
             (prev, Some(node.clone())).into()
         } else {
@@ -168,7 +173,7 @@ impl<'a> Applier<'a> {
 
     #[minitrace::trace]
     fn apply_remove_node(&mut self, node_id: &u64) -> AppliedState {
-        let prev = self.sm.nodes_mut().remove(node_id);
+        let prev = self.sm.sys_data_mut().nodes_mut().remove(node_id);
         info!("applied RemoveNode: {}={:?}", node_id, prev);
 
         (prev, None).into()
@@ -213,7 +218,6 @@ impl<'a> Applier<'a> {
             upsert_kv, prev, result
         );
 
-        // dbg!("push_change", &upsert_kv.key, prev.clone(), result.clone());
         self.push_change(&upsert_kv.key, prev.clone(), result.clone());
 
         (prev, result)
@@ -262,7 +266,11 @@ impl<'a> Applier<'a> {
         debug!(cond = as_display!(cond); "txn_execute_one_condition");
 
         let key = &cond.key;
-        let seqv = self.sm.get_kv(key).await;
+        // No expiration check:
+        // If the key expired, it should be treated as `None` value.
+        // sm.get_kv() does not check expiration.
+        // Expired keys are cleaned before applying a log, see: `clean_expired_kvs()`.
+        let seqv = self.sm.get_maybe_expired_kv(key).await;
 
         debug!(
             "txn_execute_one_condition: key: {} curr: seq:{} value:{:?}",
@@ -337,7 +345,7 @@ impl<'a> Applier<'a> {
     }
 
     async fn txn_execute_get(&self, get: &TxnGetRequest, resp: &mut TxnReply) {
-        let sv = self.sm.get_kv(&get.key).await;
+        let sv = self.sm.get_maybe_expired_kv(&get.key).await;
         let value = sv.map(pb::SeqV::from);
         let get_resp = TxnGetResponse {
             key: get.key.clone(),
@@ -403,12 +411,13 @@ impl<'a> Applier<'a> {
         delete_by_prefix: &TxnDeleteByPrefixRequest,
         resp: &mut TxnReply,
     ) {
-        let kvs = self.sm.prefix_list_kv(&delete_by_prefix.prefix).await;
-        let count = kvs.len() as u32;
+        let mut strm = self.sm.list_kv(&delete_by_prefix.prefix).await;
+        let mut count = 0;
 
-        for (key, _seq_v) in kvs {
+        while let Some((key, _seq_v)) = strm.next().await {
             let (prev, res) = self.upsert_kv(&UpsertKV::delete(&key)).await;
             self.push_change(key, prev, res);
+            count += 1;
         }
 
         let del_resp = TxnDeleteByPrefixResponse {
@@ -438,19 +447,17 @@ impl<'a> Applier<'a> {
 
         {
             let mut strm = std::pin::pin!(strm);
-            while let Some((expire_key, expire_value)) = strm.next().await {
-                // dbg!("check expired", &expire_key, &expire_value);
-                // dbg!(expire_key.is_expired(log_time_ms));
-
+            while let Some((expire_key, key)) = strm.next().await {
                 if !expire_key.is_expired(log_time_ms) {
                     break;
                 }
-                to_clean.push((expire_key.clone(), expire_value.clone()));
+
+                to_clean.push((expire_key, key));
             }
         }
 
         for (expire_key, key) in to_clean {
-            let curr = self.sm.get_kv(&key).await;
+            let curr = self.sm.get_maybe_expired_kv(&key).await;
             if let Some(seq_v) = &curr {
                 assert_eq!(expire_key.seq, seq_v.seq);
                 info!("clean expired: {}, {}", key, expire_key);

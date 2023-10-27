@@ -18,6 +18,7 @@ use std::time::Instant;
 use std::u64::MAX;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
@@ -157,7 +158,7 @@ impl MergeIntoInterpreter {
             columns_set,
             catalog,
             database,
-            table,
+            table: table_name,
             target_alias,
             matched_evaluators,
             unmatched_evaluators,
@@ -166,7 +167,11 @@ impl MergeIntoInterpreter {
             ..
         } = &self.plan;
 
-        let table_name = table.clone();
+        // check mutability
+        let check_table = self.ctx.get_table(catalog, database, table_name).await?;
+        check_table.check_mutable()?;
+
+        let table_name = table_name.clone();
         let input = input.clone();
         let (exchange, input) = if let RelOperator::Exchange(exchange) = input.plan() {
             (Some(exchange), Box::new(input.child(0)?.clone()))
@@ -236,6 +241,7 @@ impl MergeIntoInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
         let table_info = fuse_table.get_table_info();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
