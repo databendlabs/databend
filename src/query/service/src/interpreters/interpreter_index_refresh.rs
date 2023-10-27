@@ -150,7 +150,7 @@ impl RefreshIndexInterpreter {
         } else {
             let mut source = source.remove(0);
             let partitions = match segments {
-                Some(segment_locs) => {
+                Some(segment_locs) if !segment_locs.is_empty() => {
                     let segment_locations = create_segment_location_vector(segment_locs, None);
                     self.get_partitions_with_given_segments(
                         &source,
@@ -160,7 +160,7 @@ impl RefreshIndexInterpreter {
                     )
                     .await?
                 }
-                None => self.get_partitions(&source, fuse_table, dal).await?,
+                Some(_) | None => self.get_partitions(&source, fuse_table, dal).await?,
             };
             if let Some(parts) = partitions {
                 source.parts = parts;
@@ -218,11 +218,9 @@ impl Interpreter for RefreshIndexInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Feature::AggregateIndex,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Feature::AggregateIndex)?;
         let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
@@ -303,11 +301,13 @@ impl Interpreter for RefreshIndexInterpreter {
             let index = input_schema.index_of(field.name())?;
             projections.push(index);
         }
+        let num_input_columns = input_schema.num_fields();
         let func_ctx = self.ctx.get_function_context()?;
         build_res.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),

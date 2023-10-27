@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
@@ -49,11 +50,9 @@ impl Interpreter for VacuumTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Vacuum,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
@@ -63,6 +62,10 @@ impl Interpreter for VacuumTableInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let hours = match self.plan.option.retain_hours {
             Some(hours) => hours as i64,
             None => ctx.get_settings().get_retention_period()? as i64,

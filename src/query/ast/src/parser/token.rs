@@ -232,8 +232,14 @@ pub enum TokenKind {
     RBrace,
     #[token("->")]
     RArrow,
+    #[token("->>")]
+    LongRArrow,
     #[token("=>")]
     FatRArrow,
+    #[token("#>")]
+    HashRArrow,
+    #[token("#>>")]
+    HashLongRArrow,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -736,6 +742,8 @@ pub enum TokenKind {
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
     RAWDEFLATE,
+    #[token("READ_ONLY", ignore(ascii_case))]
+    READ_ONLY,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
@@ -1016,6 +1024,24 @@ pub enum TokenKind {
     HANDLER,
     #[token("LANGUAGE", ignore(ascii_case))]
     LANGUAGE,
+    #[token("TASK", ignore(ascii_case))]
+    TASK,
+    #[token("TASKS", ignore(ascii_case))]
+    TASKS,
+    #[token("WAREHOUSE", ignore(ascii_case))]
+    WAREHOUSE,
+    #[token("SCHEDULE", ignore(ascii_case))]
+    SCHEDULE,
+    #[token("SUSPEND_TASK_AFTER_NUM_FAILURES", ignore(ascii_case))]
+    SUSPEND_TASK_AFTER_NUM_FAILURES,
+    #[token("CRON", ignore(ascii_case))]
+    CRON,
+    #[token("EXECUTE", ignore(ascii_case))]
+    EXECUTE,
+    #[token("SUSPEND", ignore(ascii_case))]
+    SUSPEND,
+    #[token("RESUME", ignore(ascii_case))]
+    RESUME,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -1070,6 +1096,9 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | LongRArrow
+                | HashRArrow
+                | HashLongRArrow
                 | FatRArrow
                 | BitWiseXor
                 | BitWiseNot
@@ -1357,6 +1386,7 @@ impl TokenKind {
             | TokenKind::IGNORE_RESULT
             | TokenKind::MASKING
             | TokenKind::POLICY
+            | TokenKind::TASK
             if !after_as => true,
             _ => false
         }

@@ -15,6 +15,8 @@
 use std::vec;
 
 use common_exception::Result;
+use common_expression::arrow::deserialize_column;
+use common_expression::arrow::serialize_column;
 use common_expression::types::DataType;
 use common_expression::types::StringType;
 use common_expression::Column;
@@ -63,5 +65,20 @@ fn test_serde_expr() -> Result<()> {
     let new_expr = serde_json::from_slice::<RemoteExpr>(&json).unwrap();
 
     assert!(expr == new_expr);
+    Ok(())
+}
+
+#[test]
+fn test_serde_bin_column() -> Result<()> {
+    let columns = vec![
+        StringType::from_data(vec!["SM CASE", "a", "b", "e", "f", "g"]),
+        StringType::from_data(vec!["SM CASE", "axx", "bxx", "xxe", "eef", "fg"]),
+    ];
+
+    for col in columns {
+        let data = serialize_column(&col);
+        let t = deserialize_column(&data).unwrap();
+        assert_eq!(col, t);
+    }
     Ok(())
 }

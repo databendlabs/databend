@@ -13,24 +13,6 @@ DATADIR="fs://$DATADIR_PATH/"
 echo "copy into '${DATADIR}' from t1 FILE_FORMAT = (type = PARQUET);" | $MYSQL_CLIENT_CONNECT
 touch ${DATADIR_PATH}/transform.csv
 
-echo "drop stage if exists s1;" | $MYSQL_CLIENT_CONNECT
-echo "create stage s1 url = '${DATADIR}' FILE_FORMAT = (type = TSV);"  | $MYSQL_CLIENT_CONNECT
-
-echo '--- copy 1'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet) PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT | wc -l
-echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
-
-echo '--- copy 2'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet)  PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT
-echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
-
-echo '--- copy 3'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet)  PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT | wc -l
-echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
-
-echo '--- copy XML'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = XML)  PATTERN='.*csv' force=true;" | $MYSQL_CLIENT_CONNECT
-echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy from uri with transform'
 echo "drop table if exists t2;" | $MYSQL_CLIENT_CONNECT

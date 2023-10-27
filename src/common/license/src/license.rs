@@ -29,6 +29,7 @@ pub enum Feature {
     DataMask,
     AggregateIndex,
     ComputedColumn,
+    StorageEncryption,
 }
 
 impl Display for Feature {
@@ -60,6 +61,9 @@ impl Display for Feature {
             }
             Feature::ComputedColumn => {
                 write!(f, "computed_column")
+            }
+            Feature::StorageEncryption => {
+                write!(f, "storage_encryption")
             }
         }
     }

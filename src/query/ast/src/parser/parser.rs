@@ -39,6 +39,7 @@ pub fn tokenize_sql(sql: &str) -> Result<Vec<Token>> {
 }
 
 /// Parse a SQL string into `Statement`s.
+#[minitrace::trace]
 pub fn parse_sql<'a>(
     sql_tokens: &'a [Token<'a>],
     dialect: Dialect,

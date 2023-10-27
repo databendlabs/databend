@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::ColumnBuilder;
+use common_expression::Scalar;
 use common_expression::TableSchemaRef;
 use common_formats::FieldDecoder;
 use common_formats::FieldDecoderRowBased;
@@ -50,9 +51,17 @@ impl InputFormatTSV {
         col_data: &[u8],
         column_index: usize,
         schema: &TableSchemaRef,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         if col_data.is_empty() {
-            builder.push_default();
+            match default_values {
+                None => {
+                    builder.push_default();
+                }
+                Some(values) => {
+                    builder.push(values[column_index].as_ref());
+                }
+            }
             Ok(())
         } else {
             let mut reader = Cursor::new(col_data);
@@ -75,6 +84,7 @@ impl InputFormatTSV {
         columns: &mut Vec<ColumnBuilder>,
         schema: &TableSchemaRef,
         columns_to_read: &Option<Vec<usize>>,
+        default_values: &Option<Vec<Scalar>>,
     ) -> std::result::Result<(), FileParseError> {
         let num_columns = columns.len();
         let mut column_index = 0;
@@ -94,6 +104,7 @@ impl InputFormatTSV {
                             &buf[field_start..field_end],
                             column_index,
                             schema,
+                            default_values,
                         ) {
                             error = Some(e);
                             break;
@@ -123,6 +134,7 @@ impl InputFormatTSV {
                         &buf[field_start..field_end],
                         column_index,
                         schema,
+                        default_values,
                     ) {
                         error = Some(err);
                         break;
@@ -216,6 +228,7 @@ impl InputFormatTextBase for InputFormatTSV {
                 columns,
                 schema,
                 &builder.projection,
+                &builder.ctx.default_values,
             ) {
                 builder.ctx.on_error(
                     e,

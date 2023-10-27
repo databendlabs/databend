@@ -15,10 +15,13 @@
 use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::fmt::Formatter;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_base::runtime::TrackedFuture;
 use common_base::runtime::TrySpawn;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::EventCause;
 use log::debug;
@@ -92,6 +95,7 @@ impl Node {
 }
 
 struct ExecutingGraph {
+    finished_nodes: AtomicUsize,
     graph: StableGraph<Arc<Node>, EdgeInfo>,
 }
 
@@ -101,7 +105,10 @@ impl ExecutingGraph {
     pub fn create(mut pipeline: Pipeline) -> Result<ExecutingGraph> {
         let mut graph = StableGraph::new();
         Self::init_graph(&mut pipeline, &mut graph);
-        Ok(ExecutingGraph { graph })
+        Ok(ExecutingGraph {
+            graph,
+            finished_nodes: AtomicUsize::new(0),
+        })
     }
 
     pub fn from_pipelines(mut pipelines: Vec<Pipeline>) -> Result<ExecutingGraph> {
@@ -111,7 +118,10 @@ impl ExecutingGraph {
             Self::init_graph(pipeline, &mut graph);
         }
 
-        Ok(ExecutingGraph { graph })
+        Ok(ExecutingGraph {
+            finished_nodes: AtomicUsize::new(0),
+            graph,
+        })
     }
 
     fn init_graph(pipeline: &mut Pipeline, graph: &mut StableGraph<Arc<Node>, EdgeInfo>) {
@@ -242,6 +252,8 @@ impl ExecutingGraph {
                 if matches!(*node_state, State::Idle) {
                     state_guard_cache = Some(node_state);
                     need_schedule_nodes.push_back(target_index);
+                } else {
+                    node.processor.un_reacted(event_cause.clone())?;
                 }
             }
 
@@ -259,7 +271,13 @@ impl ExecutingGraph {
                     event
                 );
                 let processor_state = match event {
-                    Event::Finished => State::Finished,
+                    Event::Finished => {
+                        if !matches!(state_guard_cache.as_deref(), Some(State::Finished)) {
+                            locker.finished_nodes.fetch_add(1, Ordering::SeqCst);
+                        }
+
+                        State::Finished
+                    }
                     Event::NeedData | Event::NeedConsume => State::Idle,
                     Event::Sync => {
                         schedule_queue.push_sync(node.processor.clone());
@@ -408,6 +426,18 @@ impl RunningGraph {
             for node_index in self.0.graph.node_indices() {
                 self.0.graph[node_index].processor.interrupt();
             }
+        }
+    }
+
+    pub fn assert_finished_graph(&self) -> Result<()> {
+        let finished_nodes = self.0.finished_nodes.load(Ordering::SeqCst);
+
+        match finished_nodes >= self.0.graph.node_count() {
+            true => Ok(()),
+            false => Err(ErrorCode::Internal(format!(
+                "Pipeline graph is not finished, details: {}",
+                self.format_graph_nodes()
+            ))),
         }
     }
 

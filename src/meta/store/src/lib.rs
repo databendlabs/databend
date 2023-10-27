@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![deny(unused_crate_dependencies)]
-
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Context;
@@ -25,7 +23,7 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -111,10 +109,10 @@ impl kvapi::KVApi for MetaStore {
         }
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, MetaError> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<MetaError>, MetaError> {
         match self {
-            MetaStore::L(x) => x.prefix_list_kv(prefix).await,
-            MetaStore::R(x) => x.prefix_list_kv(prefix).await,
+            MetaStore::L(x) => x.list_kv(prefix).await,
+            MetaStore::R(x) => x.list_kv(prefix).await,
         }
     }
 

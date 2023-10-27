@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_meta_app::schema::CatalogInfo;
 use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -32,10 +30,4 @@ pub struct CommitSink {
     pub catalog_info: CatalogInfo,
     pub mutation_kind: MutationKind,
     pub merge_meta: bool,
-}
-
-impl CommitSink {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRef::default())
-    }
 }

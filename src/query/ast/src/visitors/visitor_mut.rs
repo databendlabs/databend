@@ -150,6 +150,17 @@ pub trait VisitorMut: Sized {
         Self::visit_expr(self, right);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        _op: &mut JsonOperator,
+        left: &mut Expr,
+        right: &mut Expr,
+    ) {
+        Self::visit_expr(self, left);
+        Self::visit_expr(self, right);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, _op: &mut UnaryOperator, expr: &mut Expr) {
         Self::visit_expr(self, expr);
     }
@@ -421,12 +432,7 @@ pub trait VisitorMut: Sized {
     fn visit_merge_into(&mut self, _merge_into: &mut MergeIntoStmt) {}
     fn visit_insert_source(&mut self, _insert_source: &mut InsertSource) {}
 
-    fn visit_delete(
-        &mut self,
-        _table_reference: &mut TableReference,
-        _selection: &mut Option<Expr>,
-    ) {
-    }
+    fn visit_delete(&mut self, _delete: &mut DeleteStmt) {}
 
     fn visit_update(&mut self, _update: &mut UpdateStmt) {}
 
@@ -600,6 +606,18 @@ pub trait VisitorMut: Sized {
     fn visit_desc_network_policy(&mut self, _stmt: &mut DescNetworkPolicyStmt) {}
 
     fn visit_show_network_policies(&mut self) {}
+
+    fn visit_create_task(&mut self, _stmt: &mut CreateTaskStmt) {}
+
+    fn visit_drop_task(&mut self, _stmt: &mut DropTaskStmt) {}
+
+    fn visit_show_tasks(&mut self, _stmt: &mut ShowTasksStmt) {}
+
+    fn visit_execute_task(&mut self, _stmt: &mut ExecuteTaskStmt) {}
+
+    fn visit_describe_task(&mut self, _stmt: &mut DescribeTaskStmt) {}
+
+    fn visit_alter_task(&mut self, _stmt: &mut AlterTaskStmt) {}
 
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;

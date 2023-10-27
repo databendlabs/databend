@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -100,25 +101,27 @@ impl Interpreter for ReplaceInterpreter {
             )?;
         }
 
-        // hook compact
-        let compact_target = CompactTargetTableDescription {
-            catalog: self.plan.catalog.clone(),
-            database: self.plan.database.clone(),
-            table: self.plan.table.clone(),
-        };
+        // Compact if 'enable_recluster_after_write' on.
+        {
+            let compact_target = CompactTargetTableDescription {
+                catalog: self.plan.catalog.clone(),
+                database: self.plan.database.clone(),
+                table: self.plan.table.clone(),
+            };
 
-        let compact_hook_trace_ctx = CompactHookTraceCtx {
-            start,
-            operation_name: "replace_into".to_owned(),
-        };
+            let compact_hook_trace_ctx = CompactHookTraceCtx {
+                start,
+                operation_name: "replace_into".to_owned(),
+            };
 
-        hook_compact(
-            self.ctx.clone(),
-            &mut pipeline.main_pipeline,
-            compact_target,
-            compact_hook_trace_ctx,
-        )
-        .await;
+            hook_compact(
+                self.ctx.clone(),
+                &mut pipeline.main_pipeline,
+                compact_target,
+                compact_hook_trace_ctx,
+            )
+            .await;
+        }
 
         Ok(pipeline)
     }
@@ -133,6 +136,10 @@ impl ReplaceInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let catalog = self.ctx.get_catalog(&plan.catalog).await?;
         let schema = table.schema();
         let mut on_conflicts = Vec::with_capacity(plan.on_conflict_fields.len());
@@ -160,6 +167,7 @@ impl ReplaceInterpreter {
                     table.name(),
                     table.get_table_info().engine(),
                 )))?;
+
         let table_info = fuse_table.get_table_info();
         let base_snapshot = fuse_table.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))

@@ -641,6 +641,10 @@ impl TableContext for CtxDelegation {
     fn get_copy_status(&self) -> Arc<CopyStatus> {
         todo!()
     }
+
+    fn get_license_key(&self) -> String {
+        todo!()
+    }
 }
 
 #[derive(Clone, Debug)]

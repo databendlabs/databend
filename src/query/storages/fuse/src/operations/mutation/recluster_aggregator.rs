@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::runtime::execute_futures_in_parallel;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -35,14 +36,17 @@ use storages_common_table_meta::meta::Versioned;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
+use crate::metrics::metrics_inc_recluster_write_block_nums;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotChanges;
-use crate::operations::ReclusterMutator;
 use crate::statistics::reduce_block_metas;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::sort_by_cluster_stats;
+use crate::FuseTable;
+use crate::DEFAULT_BLOCK_PER_SEGMENT;
+use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
 pub struct ReclusterAggregator {
     ctx: Arc<dyn TableContext>,
@@ -73,6 +77,7 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
             self.merged_blocks.push(Arc::new(meta));
             // Refresh status
             {
+                metrics_inc_recluster_write_block_nums();
                 let status = format!(
                     "recluster: generate new blocks:{}, cost:{} sec",
                     self.abort_operation.blocks.len(),
@@ -138,21 +143,25 @@ impl AsyncAccumulatingTransform for ReclusterAggregator {
 
 impl ReclusterAggregator {
     pub fn new(
-        mutator: &ReclusterMutator,
-        dal: Operator,
-        location_gen: TableMetaLocationGenerator,
-        block_per_seg: usize,
+        table: &FuseTable,
+        ctx: Arc<dyn TableContext>,
+        merged_blocks: Vec<Arc<BlockMeta>>,
+        removed_segment_indexes: Vec<usize>,
+        removed_statistics: Statistics,
     ) -> Self {
+        let block_per_seg =
+            table.get_option(FUSE_OPT_KEY_BLOCK_PER_SEGMENT, DEFAULT_BLOCK_PER_SEGMENT);
+        let default_cluster_key = table.cluster_key_meta.clone().unwrap().0;
         ReclusterAggregator {
-            ctx: mutator.ctx.clone(),
-            dal,
-            location_gen,
-            default_cluster_key: mutator.cluster_key_id,
-            block_thresholds: mutator.block_thresholds,
+            ctx,
+            dal: table.get_operator(),
+            location_gen: table.meta_location_generator().clone(),
+            default_cluster_key,
+            block_thresholds: table.get_block_thresholds(),
             block_per_seg,
-            merged_blocks: mutator.remained_blocks.clone(),
-            removed_segment_indexes: mutator.removed_segment_indexes.clone(),
-            removed_statistics: mutator.removed_segment_summary.clone(),
+            merged_blocks,
+            removed_segment_indexes,
+            removed_statistics,
             start_time: Instant::now(),
             abort_operation: AbortOperation::default(),
         }
@@ -176,13 +185,23 @@ impl ReclusterAggregator {
             let location_gen = self.location_gen.clone();
             let op = self.dal.clone();
             tasks.push(async move {
-                let new_summary =
+                let location = location_gen.gen_segment_info_location();
+                let mut new_summary =
                     reduce_block_metas(&new_blocks, block_thresholds, default_cluster_key);
+                if new_summary.block_count > 1 {
+                    // To fix issue #13217.
+                    if new_summary.block_count > new_summary.perfect_block_count {
+                        log::warn!(
+                            "compact: generate new segment: {}, perfect_block_count: {}, block_count: {}",
+                            location, new_summary.perfect_block_count, new_summary.block_count,
+                        );
+                        new_summary.perfect_block_count = new_summary.block_count;
+                    }
+                }
                 // create new segment info
                 let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                 // write the segment info.
-                let location = location_gen.gen_segment_info_location();
                 let serialized_segment = SerializedSegment {
                     path: location.clone(),
                     segment: Arc::new(new_segment),

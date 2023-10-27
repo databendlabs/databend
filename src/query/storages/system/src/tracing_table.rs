@@ -118,6 +118,7 @@ impl Table for TracingTable {
         ctx: Arc<dyn TableContext>,
         _: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _: bool,
     ) -> Result<()> {
         let settings = ctx.get_settings();
 

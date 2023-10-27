@@ -156,7 +156,7 @@ impl ClusterStatsGenerator {
         let level = if min == max
             && self
                 .block_thresholds
-                .check_perfect_block(data_block.num_rows(), data_block.memory_size())
+                .check_large_enough(data_block.num_rows(), data_block.memory_size())
         {
             -1
         } else {

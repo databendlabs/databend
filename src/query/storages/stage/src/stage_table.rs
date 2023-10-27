@@ -151,6 +151,7 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
+        _put_cache: bool,
     ) -> Result<()> {
         let projection = if let Some(PushDownInfo {
             projection: Some(Projection::Columns(columns)),
@@ -215,6 +216,7 @@ impl Table for StageTable {
             on_error_map,
             self.table_info.is_select,
             projection,
+            self.table_info.default_values.clone(),
         )?);
         debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;

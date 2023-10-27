@@ -19,14 +19,14 @@ use crate::executor::physical_plans::physical_aggregate_final::AggregateFinal;
 use crate::executor::physical_plans::physical_aggregate_partial::AggregatePartial;
 use crate::executor::physical_plans::physical_async_source::AsyncSourcerPlan;
 use crate::executor::physical_plans::physical_commit_sink::CommitSink;
-use crate::executor::physical_plans::physical_compact_partial::CompactPartial;
+use crate::executor::physical_plans::physical_compact_source::CompactSource;
 use crate::executor::physical_plans::physical_constant_table_scan::ConstantTableScan;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTablePhysicalPlan;
 use crate::executor::physical_plans::physical_copy_into::CopyIntoTableSource;
 use crate::executor::physical_plans::physical_copy_into::QuerySource;
 use crate::executor::physical_plans::physical_cte_scan::CteScan;
 use crate::executor::physical_plans::physical_deduplicate::Deduplicate;
-use crate::executor::physical_plans::physical_delete_partial::DeletePartial;
+use crate::executor::physical_plans::physical_delete_source::DeleteSource;
 use crate::executor::physical_plans::physical_distributed_insert_select::DistributedInsertSelect;
 use crate::executor::physical_plans::physical_eval_scalar::EvalScalar;
 use crate::executor::physical_plans::physical_exchange::Exchange;
@@ -42,6 +42,8 @@ use crate::executor::physical_plans::physical_merge_into::MergeIntoSource;
 use crate::executor::physical_plans::physical_project::Project;
 use crate::executor::physical_plans::physical_project_set::ProjectSet;
 use crate::executor::physical_plans::physical_range_join::RangeJoin;
+use crate::executor::physical_plans::physical_recluster_sink::ReclusterSink;
+use crate::executor::physical_plans::physical_recluster_source::ReclusterSource;
 use crate::executor::physical_plans::physical_replace_into::ReplaceInto;
 use crate::executor::physical_plans::physical_row_fetch::RowFetch;
 use crate::executor::physical_plans::physical_runtime_filter_source::RuntimeFilterSource;
@@ -75,8 +77,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::Lambda(plan) => self.replace_lambda(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
-            PhysicalPlan::CompactPartial(plan) => self.replace_compact_partial(plan),
-            PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
+            PhysicalPlan::CompactSource(plan) => self.replace_compact_source(plan),
+            PhysicalPlan::DeleteSource(plan) => self.replace_delete_source(plan),
             PhysicalPlan::CommitSink(plan) => self.replace_commit_sink(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
             PhysicalPlan::CopyIntoTable(plan) => self.replace_copy_into_table(plan),
@@ -87,7 +89,21 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MaterializedCte(plan) => self.replace_materialized_cte(plan),
             PhysicalPlan::ConstantTableScan(plan) => self.replace_constant_table_scan(plan),
+            PhysicalPlan::ReclusterSource(plan) => self.replace_recluster_source(plan),
+            PhysicalPlan::ReclusterSink(plan) => self.replace_recluster_sink(plan),
         }
+    }
+
+    fn replace_recluster_source(&mut self, plan: &ReclusterSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::ReclusterSource(Box::new(plan.clone())))
+    }
+
+    fn replace_recluster_sink(&mut self, plan: &ReclusterSink) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::ReclusterSink(Box::new(ReclusterSink {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_table_scan(&mut self, plan: &TableScan) -> Result<PhysicalPlan> {
@@ -370,12 +386,12 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
-    fn replace_compact_partial(&mut self, plan: &CompactPartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::CompactPartial(Box::new(plan.clone())))
+    fn replace_compact_source(&mut self, plan: &CompactSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::CompactSource(Box::new(plan.clone())))
     }
 
-    fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
+    fn replace_delete_source(&mut self, plan: &DeleteSource) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DeleteSource(Box::new(plan.clone())))
     }
 
     fn replace_commit_sink(&mut self, plan: &CommitSink) -> Result<PhysicalPlan> {
@@ -472,7 +488,11 @@ impl PhysicalPlan {
                 PhysicalPlan::TableScan(_)
                 | PhysicalPlan::AsyncSourcer(_)
                 | PhysicalPlan::CteScan(_)
-                | PhysicalPlan::ConstantTableScan(_) => {}
+                | PhysicalPlan::ConstantTableScan(_)
+                | PhysicalPlan::ReclusterSource(_)
+                | PhysicalPlan::ExchangeSource(_)
+                | PhysicalPlan::CompactSource(_)
+                | PhysicalPlan::DeleteSource(_) => {}
                 PhysicalPlan::Filter(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -510,7 +530,6 @@ impl PhysicalPlan {
                 PhysicalPlan::Exchange(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::ExchangeSource(_) => {}
                 PhysicalPlan::ExchangeSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
@@ -541,8 +560,9 @@ impl PhysicalPlan {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::CompactPartial(_) => {}
-                PhysicalPlan::DeletePartial(_) => {}
+                PhysicalPlan::ReclusterSink(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
                 PhysicalPlan::CommitSink(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }

@@ -21,6 +21,7 @@ use common_cache::DefaultHashBuilder;
 use common_config::CacheConfig;
 use common_config::CacheStorageTypeInnerConfig;
 use common_exception::Result;
+use log::info;
 use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::Named;
@@ -66,9 +67,26 @@ impl CacheManager {
                     let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
                         .join(tenant_id.into())
                         .join("v1");
+
+                    let queue_size: u32 = if config.table_data_cache_population_queue_size > 0 {
+                        config.table_data_cache_population_queue_size
+                    } else {
+                        std::cmp::max(
+                            1,
+                            std::thread::available_parallelism()
+                                .expect("Cannot get thread count")
+                                .get() as u32,
+                        )
+                    };
+
+                    info!(
+                        "disk cache enabled, cache population queue size {}",
+                        queue_size
+                    );
+
                     Self::new_block_data_cache(
                         &real_disk_cache_root,
-                        config.table_data_cache_population_queue_size,
+                        queue_size,
                         config.disk_cache_config.max_bytes,
                     )?
                 }

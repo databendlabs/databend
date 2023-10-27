@@ -15,16 +15,18 @@
 use std::collections::BTreeMap;
 use std::convert::Infallible;
 use std::fmt::Debug;
+use std::future;
 use std::io;
 use std::sync::Arc;
 
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_stoerr::MetaBytesError;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
 use common_meta_types::LogId;
@@ -40,6 +42,7 @@ use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use futures::Stream;
+use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
 use log::debug;
 use log::info;
@@ -100,17 +103,17 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         Ok(values)
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let local_now_ms = SeqV::<()>::now_ms();
 
-        let kvs = self
+        let strm = self
             .sm
-            .prefix_list_kv(prefix)
+            .list_kv(prefix)
             .await
-            .into_iter()
-            .filter(|(_k, v)| !v.is_expired(local_now_ms));
+            .filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
+            .map(|kv: (String, SeqV)| Ok(StreamItem::from(kv)));
 
-        Ok(kvs.collect())
+        Ok(strm.boxed())
     }
 
     async fn transaction(&self, _txn: TxnRequest) -> Result<TxnReply, Self::Error> {
@@ -259,28 +262,27 @@ impl SMV002 {
     /// List kv entries by prefix.
     ///
     /// If a value is expired, it is not returned.
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
+    pub async fn list_kv(&self, prefix: &str) -> BoxStream<'static, (String, SeqV)> {
         let p = prefix.to_string();
-        let mut res = Vec::new();
-        let strm = self.levels.str_map().range(p..).await;
 
-        {
-            let mut strm = std::pin::pin!(strm);
+        let strm = self.levels.str_map().range(p.clone()..).await;
 
-            while let Some((k, marked)) = strm.next().await {
-                if k.starts_with(prefix) {
-                    let seqv = Into::<Option<SeqV>>::into(marked.clone());
+        let strm = strm
+            // Return only keys with the expected prefix
+            .take_while(move |(k, _)| future::ready(k.starts_with(&p)))
+            // Skip tombstone
+            .filter_map(|(k, marked)| {
+                let seqv = Into::<Option<SeqV>>::into(marked);
+                let res = seqv.map(|x| (k, x));
+                future::ready(res)
+            });
 
-                    if let Some(x) = seqv {
-                        res.push((k.clone(), x));
-                    }
-                } else {
-                    break;
-                }
-            }
-        }
+        // Make it static
 
-        res
+        let vs = strm.collect::<Vec<_>>().await;
+        let strm = futures::stream::iter(vs);
+
+        strm.boxed()
     }
 
     pub(crate) fn update_expire_cursor(&mut self, log_time_ms: u64) {

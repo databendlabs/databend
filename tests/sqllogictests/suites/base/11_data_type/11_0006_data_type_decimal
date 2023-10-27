@@ -91,7 +91,7 @@ select 1::Decimal(41, 3)::Float64, 2::Decimal(42, 4)::Float64, 3::Decimal(55, 5)
 1.0 2.0 3.0 10.0
 
 ## to_decimal(decimal) overflow
-statement error 1001
+statement error 1006
 select 10000::decimal(5,0)::decimal(3,0);
 
 ## parser overflow
@@ -100,7 +100,7 @@ select 2::Decimal(2000, 3);
 
 
 ## runtime overflow
-statement error 1001
+statement error 1006
 select 20000::Decimal(4, 3);
 
 query I
@@ -108,7 +108,7 @@ select '010.010'::decimal(6,4);
 ----
 10.0100
 
-statement error 1001
+statement error 1006
 select '010.010'::decimal(5,4);
 
 ## tests from chatgpt
@@ -490,7 +490,7 @@ select count(*) from t_decimal_4_2;
 0
 
 ## overflow
-statement error 1001
+statement error 1006
 insert into t_decimal_4_2 values (11111);
 
 statement ok
@@ -501,7 +501,7 @@ select count(*) from t_decimal_4_2;
 ----
 0
 
-statement error 1001
+statement error 1006
 insert into t_decimal_4_2 values (1e4);
 
 query I
@@ -905,10 +905,11 @@ select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7,
 34343.00 1.000
 34343.00 2.000
 
-query TT
-select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4)
+query TTT
+select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0))
 ----
-1.2 1.2340
+1.2 1.2340 0
+
 
 statement ok
 create table t(c1 decimal(28) not null)
@@ -986,3 +987,19 @@ select * from t
 
 statement ok
 drop table t
+
+
+statement error 1006
+select to_decimal(2,1)(10.1);
+
+statement error 1006
+select to_decimal(2,1)(10.11);
+
+statement ok
+create table if not exists test_decimal_insert(num DECIMAL(2,1));
+
+statement error 1006
+insert into test_decimal_insert values(10.9);
+
+statement ok
+drop table test_decimal_insert

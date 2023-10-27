@@ -9,7 +9,7 @@ doctest = false
 test = false
 
 [dependencies]
-common-ast = { path = "../../query/ast" }
+common-ast = { path = "../ast" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-meta-app = { path = "../../meta/app" }
@@ -22,5 +22,5 @@ dashmap = "5.4"
 itertools = "0.10.5"
 log = { workspace = true }
 num_cpus = "1.13.1"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 sys-info = "0.9"

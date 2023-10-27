@@ -39,3 +39,6 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}"
 
 echo "----JSONCompactStringsEachRowWithNamesAndTypes"
 curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "select number, number::varchar from numbers(2) FORMAT JSONCompactStringsEachRowWithNamesAndTypes"
+
+echo "----JSON"
+curl -s -u root: -XPOST "http://localhost:${QUERY_CLICKHOUSE_HTTP_HANDLER_PORT}" -d "select number, number::varchar from numbers(2) FORMAT JSON"

@@ -113,6 +113,9 @@ pub trait ScalarStateFunc<T: ValueType>:
     Serialize + DeserializeOwned + Send + Sync + 'static
 {
     fn new() -> Self;
+    fn mem_size() -> Option<usize> {
+        None
+    }
     fn add(&mut self, other: Option<T::ScalarRef<'_>>);
     fn add_batch(&mut self, column: &T::Column, validity: Option<&Bitmap>) -> Result<()>;
     fn merge(&mut self, rhs: &Self) -> Result<()>;

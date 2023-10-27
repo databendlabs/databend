@@ -291,6 +291,24 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_json_op(
+        &mut self,
+        _span: Span,
+        op: &'ast JsonOperator,
+        left: &'ast Expr,
+        right: &'ast Expr,
+    ) {
+        self.visit_expr(left);
+        let left_child = self.children.pop().unwrap();
+        self.visit_expr(right);
+        let right_child = self.children.pop().unwrap();
+
+        let name = format!("JSON Function {op}");
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![left_child, right_child]);
+        self.children.push(node);
+    }
+
     fn visit_unary_op(&mut self, _span: Span, op: &'ast UnaryOperator, expr: &'ast Expr) {
         self.visit_expr(expr);
         let expr_child = self.children.pop().unwrap();
@@ -1062,15 +1080,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_delete(
-        &mut self,
-        table_reference: &'ast TableReference,
-        selection: &'ast Option<Expr>,
-    ) {
+    fn visit_delete(&mut self, delete: &'ast DeleteStmt) {
         let mut children = Vec::new();
-        self.visit_table_reference(table_reference);
+        self.visit_table_reference(&delete.table);
         children.push(self.children.pop().unwrap());
-        if let Some(selection) = selection {
+        if let Some(selection) = &delete.selection {
             self.visit_expr(selection);
             children.push(self.children.pop().unwrap());
         }

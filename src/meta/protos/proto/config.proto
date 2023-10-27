@@ -74,6 +74,14 @@ message OssStorageConfig {
   string root = 3;
   string access_key_id = 4;
   string access_key_secret = 5;
+
+  //  We used to have role_arn (6) and oidc_token (7) but removed later, keep those index reserved.
+  //  string role_arn = 6;
+  //  string oidc_token = 7;
+  reserved 6, 7;
+
+  string server_side_encryption = 8;
+  string server_side_encryption_key_id = 9;
 }
 
 message WebhdfsStorageConfig {

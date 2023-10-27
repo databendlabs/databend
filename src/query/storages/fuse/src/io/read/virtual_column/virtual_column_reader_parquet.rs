@@ -141,10 +141,15 @@ impl VirtualColumnReader {
                 None,
             );
 
-            let merge_io_result =
-                BlockReader::merge_io_read(read_settings, self.dal.clone(), loc, ranges)
-                    .await
-                    .ok()?;
+            let merge_io_result = BlockReader::merge_io_read(
+                read_settings,
+                self.dal.clone(),
+                loc,
+                ranges,
+                self.reader.put_cache,
+            )
+            .await
+            .ok()?;
 
             Some(VirtualMergeIOReadResult::create(
                 part,

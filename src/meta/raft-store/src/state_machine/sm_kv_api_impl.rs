@@ -14,9 +14,11 @@
 
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Cmd;
 use common_meta_types::MetaError;
@@ -24,6 +26,7 @@ use common_meta_types::SeqV;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
+use futures_util::StreamExt;
 use log::debug;
 
 use crate::state_machine::StateMachine;
@@ -99,10 +102,7 @@ impl kvapi::KVApi for StateMachine {
         Ok(res)
     }
 
-    async fn prefix_list_kv(
-        &self,
-        prefix: &str,
-    ) -> Result<Vec<(String, SeqV<Vec<u8>>)>, Self::Error> {
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let kvs = self.kvs();
         let kv_pairs = kvs.scan_prefix(&prefix.to_string())?;
 
@@ -111,12 +111,12 @@ impl kvapi::KVApi for StateMachine {
         let local_now_ms = SeqV::<()>::now_ms();
 
         // Convert expired to None
-        let x = x.map(|(k, v)| (k, Self::expire_seq_v(Some(v), local_now_ms).1));
+        let x = x.map(move |(k, v)| (k, Self::expire_seq_v(Some(v), local_now_ms).1));
         // Remove None
         let x = x.filter(|(_k, v)| v.is_some());
-        // Extract from an Option
-        let x = x.map(|(k, v)| (k, v.unwrap()));
 
-        Ok(x.collect())
+        let x = x.map(|kv: (String, Option<SeqV>)| Ok(StreamItem::from(kv)));
+
+        Ok(futures::stream::iter(x).boxed())
     }
 }

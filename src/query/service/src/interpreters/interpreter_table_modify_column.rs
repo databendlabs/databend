@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
@@ -76,11 +77,9 @@ impl ModifyTableColumnInterpreter {
         mask_name: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
@@ -145,11 +144,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            DataMask,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), DataMask)?;
 
         let table_info = table.get_table_info();
         let table_id = table_info.ident.table_id;
@@ -215,12 +212,6 @@ impl ModifyTableColumnInterpreter {
             }
         }
 
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         let catalog = self.ctx.get_catalog(table_info.catalog()).await?;
         let catalog_info = catalog.info();
 
@@ -277,6 +268,12 @@ impl ModifyTableColumnInterpreter {
         if schema == new_schema {
             return Ok(PipelineBuildResult::create());
         }
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();
@@ -372,11 +369,9 @@ impl ModifyTableColumnInterpreter {
         column: String,
     ) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            ComputedColumn,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
 
         let table_info = table.get_table_info();
         let schema = table.schema();
@@ -452,6 +447,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ok();
 
         let table = if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
             table
         } else {
             return Ok(PipelineBuildResult::create());

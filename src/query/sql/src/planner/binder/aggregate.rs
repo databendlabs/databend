@@ -106,7 +106,6 @@ use crate::MetadataRef;
 /// --- |  ---   | --- |   ---
 ///  1  |  NULL  |  3  |    1 (0b01)
 ///  4  |  NULL  |  6  |    1 (0b01)
-///    
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct GroupingSetsInfo {
     /// Index for virtual column `grouping_id`.
@@ -336,6 +335,26 @@ impl<'a> AggregateRewriter<'a> {
                     index: column_ref.column.index,
                     scalar: arg.clone(),
                 });
+            } else if let Some(item) = agg_info
+                .group_items
+                .iter()
+                .chain(agg_info.aggregate_arguments.iter())
+                .find(|x| &x.scalar == arg)
+            {
+                // check if the arg is in group items
+                // we can reuse the index
+                let column_binding = ColumnBindingBuilder::new(
+                    name,
+                    item.index,
+                    Box::new(arg.data_type()?),
+                    Visibility::Visible,
+                )
+                .build();
+
+                replaced_args.push(ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: arg.span(),
+                    column: column_binding,
+                }));
             } else {
                 let index = self
                     .metadata
@@ -437,6 +456,7 @@ impl<'a> AggregateRewriter<'a> {
         Ok(replaced_func.into())
     }
 }
+
 impl Binder {
     /// Analyze aggregates in select clause, this will rewrite aggregate functions.
     /// See [`AggregateRewriter`] for more details.
@@ -902,7 +922,7 @@ impl Binder {
             let (column_binding, scalar) = available_aliases[result[0]].clone();
             // We will add the alias to BindContext, so we can reference it
             // in `HAVING` and `ORDER BY` clause.
-            bind_context.columns.push(column_binding.clone());
+            bind_context.add_column_binding(column_binding.clone());
 
             let index = column_binding.index;
             bind_context.aggregate_info.group_items.push(ScalarItem {

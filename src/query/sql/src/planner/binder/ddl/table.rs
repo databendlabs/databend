@@ -79,6 +79,7 @@ use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use storages_common_table_meta::table::OPT_KEY_TABLE_DATA_URI;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -576,6 +577,7 @@ impl Binder {
             schema: schema.clone(),
             engine,
             storage_params,
+            read_only_attach: false,
             part_prefix,
             options,
             field_comments,
@@ -625,6 +627,12 @@ impl Binder {
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
+        // keep a copy of table data uri_location, will be used in "show create table"
+        options.insert(
+            OPT_KEY_TABLE_DATA_URI.to_string(),
+            stmt.uri_location.to_string(),
+        );
+
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
         let (sp, _) = parse_uri_location(&mut uri).await?;
@@ -645,14 +653,15 @@ impl Binder {
             catalog,
             database,
             table,
-            options,
+            schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            storage_params: Some(sp),
+            read_only_attach: stmt.read_only,
+            part_prefix,
+            options,
+            field_comments: vec![],
             cluster_key: None,
             as_select: None,
-            schema: Arc::new(TableSchema::default()),
-            field_comments: vec![],
-            storage_params: Some(sp),
-            part_prefix,
         })))
     }
 
@@ -1395,7 +1404,7 @@ impl Binder {
             )
             .build();
 
-            bind_context.columns.push(column);
+            bind_context.add_column_binding(column);
         }
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
@@ -1412,7 +1421,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            if cluster_key.used_columns().len() != 1 || !cluster_key.valid_for_clustering() {
+            if cluster_key.used_columns().len() != 1 || !cluster_key.evaluable() {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is invalid",
                     cluster_by

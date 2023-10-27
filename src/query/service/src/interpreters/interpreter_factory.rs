@@ -445,6 +445,13 @@ impl InterpreterFactory {
             Plan::ShowNetworkPolicies(_) => {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
+
+            Plan::CreateTask(_) => todo!(),
+            Plan::AlterTask(_) => todo!(),
+            Plan::DropTask(_) => todo!(),
+            Plan::DescribeTask(_) => todo!(),
+            Plan::ExecuteTask(_) => todo!(),
+            Plan::ShowTasks(_) => todo!(),
         }
     }
 }

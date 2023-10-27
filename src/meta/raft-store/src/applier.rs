@@ -403,12 +403,13 @@ impl<'a> Applier<'a> {
         delete_by_prefix: &TxnDeleteByPrefixRequest,
         resp: &mut TxnReply,
     ) {
-        let kvs = self.sm.prefix_list_kv(&delete_by_prefix.prefix).await;
-        let count = kvs.len() as u32;
+        let mut strm = self.sm.list_kv(&delete_by_prefix.prefix).await;
+        let mut count = 0;
 
-        for (key, _seq_v) in kvs {
+        while let Some((key, _seq_v)) = strm.next().await {
             let (prev, res) = self.upsert_kv(&UpsertKV::delete(&key)).await;
             self.push_change(key, prev, res);
+            count += 1;
         }
 
         let del_resp = TxnDeleteByPrefixResponse {

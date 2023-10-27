@@ -184,6 +184,14 @@ impl Plan {
             Plan::DropNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DescNetworkPolicy(p) => Ok(format!("{:?}", p)),
             Plan::ShowNetworkPolicies(p) => Ok(format!("{:?}", p)),
+
+            // task
+            Plan::CreateTask(p) => Ok(format!("{:?}", p)),
+            Plan::DropTask(p) => Ok(format!("{:?}", p)),
+            Plan::AlterTask(p) => Ok(format!("{:?}", p)),
+            Plan::DescribeTask(p) => Ok(format!("{:?}", p)),
+            Plan::ExecuteTask(p) => Ok(format!("{:?}", p)),
+            Plan::ShowTasks(p) => Ok(format!("{:?}", p)),
         }
     }
 }

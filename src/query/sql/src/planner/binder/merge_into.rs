@@ -35,6 +35,7 @@ use common_expression::ROW_ID_COL_NAME;
 use indexmap::IndexMap;
 
 use super::wrap_cast_scalar;
+use super::Finder;
 use crate::binder::Binder;
 use crate::binder::InternalColumnBinding;
 use crate::normalize_identifier;
@@ -77,7 +78,6 @@ impl Binder {
             database,
             table_ident,
             source,
-            source_alias,
             target_alias,
             join_expr,
             merge_options,
@@ -121,7 +121,7 @@ impl Binder {
         };
 
         // get_source_table_reference
-        let source_data = source.transform_table_reference(source_alias.clone());
+        let source_data = source.transform_table_reference();
 
         // bind source data
         let (source_expr, mut left_context) =
@@ -321,10 +321,29 @@ impl Binder {
         schema: TableSchemaRef,
         update_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
     ) -> Result<MatchedEvaluator> {
+        // not supported for update clauses
+        let f = |scalar: &ScalarExpr| {
+            matches!(
+                scalar,
+                ScalarExpr::WindowFunction(_)
+                    | ScalarExpr::AggregateFunction(_)
+                    | ScalarExpr::SubqueryExpr(_)
+            )
+        };
+
         let condition = if let Some(expr) = &clause.selection {
             let (scalar_expr, _) = scalar_binder.bind(expr).await?;
             for idx in scalar_expr.used_columns() {
                 columns.insert(idx);
+            }
+            let finder = Finder::new(&f);
+            let finder = scalar_expr.accept(finder)?;
+            if !finder.scalars().is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "update clause's condition can't contain subquery|window|aggregate functions"
+                        .to_string(),
+                )
+                .set_span(scalar_expr.span()));
             }
             Some(scalar_expr)
         } else {
@@ -364,11 +383,15 @@ impl Binder {
                         )));
                     }
 
-                    if matches!(scalar_expr, ScalarExpr::SubqueryExpr(_)) {
-                        return Err(ErrorCode::Internal(
-                            "update_list in update clause does not support subquery temporarily",
-                        ));
+                    let finder = Finder::new(&f);
+                    let finder = scalar_expr.accept(finder)?;
+                    if !finder.scalars().is_empty() {
+                        return Err(ErrorCode::SemanticError(
+                            "update_list in update clause can't contain subquery|window|aggregate functions".to_string(),
+                        )
+                        .set_span(scalar_expr.span()));
                     }
+
                     update_columns.insert(index, scalar_expr.clone());
                 }
 

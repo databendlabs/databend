@@ -3,6 +3,13 @@ title: Deploying a Standalone Databend
 sidebar_label: Deploying a Standalone Databend
 description: Deploying a Standalone Databend
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced or updated: v1.2.168"/>
+
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='Storage Encryption'/>
 
 import GetLatest from '@site/src/components/GetLatest';
 
@@ -306,7 +313,7 @@ bucket = "databend"
 # GCS also supports changing the endpoint URL
 # but the endpoint should be compatible with GCS's JSON API
 # default:
-# endpoint_url = "https://storage.googleapis.com/"
+# endpoint_url = "https://storage.googleapis.com"
 
 # working directory of GCS
 # default:
@@ -392,11 +399,9 @@ bucket = "databend"
 
 ```toml
 [storage]
-# s3
 type = "oss"
 
 [storage.oss]
-# How to create a bucket:
 // highlight-next-line
 bucket = "databend"
 
@@ -406,6 +411,7 @@ bucket = "databend"
 // highlight-next-line
 # https://<bucket-name>.<region-id>[-internal].aliyuncs.com
 // highlight-next-line
+# This example uses OSS region id: oss-cn-beijing-internal.
 endpoint_url = "https://oss-cn-beijing-internal.aliyuncs.com"
 # enable_virtual_host_style = true
 
@@ -417,10 +423,14 @@ access_key_id = "<your-key-id>"
 secret_access_key = "<your-access-key>"
 ```
 
-:::tip
-In this example OSS region id is `oss-cn-beijing-internal`.
-:::
+Databend Enterprise Edition supports server-side encryption in OSS. This feature enables you to enhance data security and privacy by activating server-side encryption for data stored in OSS. You can choose the encryption method that best suits your needs. Please note that you must have a valid Databend Enterprise Edition license to utilize this feature. To obtain one, see [Licensing Databend](../02-enterprise/20-license.md).
 
+To enable server-side encryption in Databend, add the following parameters to the [storage.oss] section:
+
+| Parameter                     | Description                                                                                                                                                                               | Available Values                                        |
+|-------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------|
+| server_side_encryption        | Specifies the server-side encryption method for OSS data. "AES256" uses an OSS-managed AES256 key for encryption, while "KMS" utilizes the key defined in server_side_encryption_key_id. | "AES256" or "KMS"                                       |
+| server_side_encryption_key_id | When server_side_encryption is set to "KMS," this parameter is used to specify the server-side encryption key ID for OSS. It is only applicable when using the KMS encryption mode.       | String, a unique identifier for the KMS encryption key. |
 </TabItem>
 
 

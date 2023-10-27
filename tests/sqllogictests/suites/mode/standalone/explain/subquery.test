@@ -180,13 +180,13 @@ HashJoin
 │       └── AggregateFinal
 │           ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │           ├── group by: []
-│           ├── aggregate functions: [count(number), any(number)]
+│           ├── aggregate functions: [count(), any(number)]
 │           ├── limit: 1
 │           ├── estimated rows: 1.00
 │           └── AggregatePartial
 │               ├── output columns: [_count_scalar_subquery (#2), _any_scalar_subquery (#3)]
 │               ├── group by: []
-│               ├── aggregate functions: [count(number), any(number)]
+│               ├── aggregate functions: [count(), any(number)]
 │               ├── estimated rows: 1.00
 │               └── Filter
 │                   ├── output columns: [numbers.number (#1)]
@@ -500,3 +500,20 @@ HashJoin
         ├── partitions scanned: 1
         ├── push downs: [filters: [], limit: NONE]
         └── estimated rows: 1.00
+
+query T
+explain select * from (select number as a from numbers(10)) as t(b) where t.b > 5
+----
+Filter
+├── output columns: [numbers.number (#0)]
+├── filters: [numbers.number (#0) > 5]
+├── estimated rows: 2.00
+└── TableScan
+    ├── table: default.system.numbers
+    ├── output columns: [number (#0)]
+    ├── read rows: 10
+    ├── read bytes: 80
+    ├── partitions total: 1
+    ├── partitions scanned: 1
+    ├── push downs: [filters: [numbers.number (#0) > 5], limit: NONE]
+    └── estimated rows: 10.00

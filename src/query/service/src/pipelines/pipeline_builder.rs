@@ -60,6 +60,7 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
+use common_pipeline_sources::EmptySource;
 use common_pipeline_sources::OneBlockSource;
 use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_pipeline_transforms::processors::profile_wrapper::ProfileStub;
@@ -77,13 +78,13 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::AsyncSourcerPlan;
 use common_sql::executor::CommitSink;
-use common_sql::executor::CompactPartial;
+use common_sql::executor::CompactSource;
 use common_sql::executor::ConstantTableScan;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::CteScan;
 use common_sql::executor::Deduplicate;
-use common_sql::executor::DeletePartial;
+use common_sql::executor::DeleteSource;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -99,6 +100,8 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
 use common_sql::executor::RangeJoin;
+use common_sql::executor::ReclusterSink;
+use common_sql::executor::ReclusterSource;
 use common_sql::executor::ReplaceInto;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
@@ -272,10 +275,8 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
-            PhysicalPlan::CompactPartial(compact_partial) => {
-                self.build_compact_partial(compact_partial)
-            }
+            PhysicalPlan::DeleteSource(delete) => self.build_delete_source(delete),
+            PhysicalPlan::CompactSource(compact) => self.build_compact_source(compact),
             PhysicalPlan::CommitSink(plan) => self.build_commit_sink(plan),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
             PhysicalPlan::MaterializedCte(materialized_cte) => {
@@ -288,6 +289,12 @@ impl PipelineBuilder {
             PhysicalPlan::MergeInto(merge_into) => self.build_merge_into(merge_into),
             PhysicalPlan::MergeIntoSource(merge_into_source) => {
                 self.build_merge_into_source(merge_into_source)
+            }
+            PhysicalPlan::ReclusterSource(recluster_source) => {
+                self.build_recluster_source(recluster_source)
+            }
+            PhysicalPlan::ReclusterSink(recluster_sink) => {
+                self.build_recluster_sink(recluster_sink)
             }
         }
     }
@@ -888,7 +895,7 @@ impl PipelineBuilder {
             CopyIntoTableSource::Stage(source) => {
                 let stage_table = StageTable::try_create(copy.stage_table_info.clone())?;
                 stage_table.set_block_thresholds(to_table.get_block_thresholds());
-                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline)?;
+                stage_table.read_data(self.ctx.clone(), source, &mut self.main_pipeline, false)?;
                 copy.required_source_schema.clone()
             }
         };
@@ -902,14 +909,56 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_compact_partial(&mut self, compact_block: &CompactPartial) -> Result<()> {
+    fn build_recluster_source(&mut self, recluster_source: &ReclusterSource) -> Result<()> {
+        match recluster_source.tasks.len() {
+            0 => self.main_pipeline.add_source(EmptySource::create, 1),
+            1 => {
+                let table = self.ctx.build_table_by_table_info(
+                    &recluster_source.catalog_info,
+                    &recluster_source.table_info,
+                    None,
+                )?;
+                let table = FuseTable::try_from_table(table.as_ref())?;
+
+                table.build_recluster_source(
+                    self.ctx.clone(),
+                    recluster_source.tasks[0].clone(),
+                    recluster_source.catalog_info.clone(),
+                    &mut self.main_pipeline,
+                )
+            }
+            _ => Err(ErrorCode::Internal(
+                "A node can only execute one recluster task".to_string(),
+            )),
+        }
+    }
+
+    fn build_recluster_sink(&mut self, recluster_sink: &ReclusterSink) -> Result<()> {
+        self.build_pipeline(&recluster_sink.input)?;
+
+        let table = self.ctx.build_table_by_table_info(
+            &recluster_sink.catalog_info,
+            &recluster_sink.table_info,
+            None,
+        )?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+
+        table.build_recluster_sink(self.ctx.clone(), recluster_sink, &mut self.main_pipeline)
+    }
+
+    fn build_compact_source(&mut self, compact_block: &CompactSource) -> Result<()> {
         let table = self.ctx.build_table_by_table_info(
             &compact_block.catalog_info,
             &compact_block.table_info,
             None,
         )?;
         let table = FuseTable::try_from_table(table.as_ref())?;
-        table.build_compact_partial(
+
+        if compact_block.parts.is_empty() {
+            return self.main_pipeline.add_source(EmptySource::create, 1);
+        }
+
+        table.build_compact_source(
             self.ctx.clone(),
             compact_block.parts.clone(),
             compact_block.column_ids.clone(),
@@ -926,11 +975,16 @@ impl PipelineBuilder {
     /// +---------------+      +-----------------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|
     /// +---------------+      +-----------------------+
-    fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
+    fn build_delete_source(&mut self, delete: &DeleteSource) -> Result<()> {
         let table =
             self.ctx
                 .build_table_by_table_info(&delete.catalog_info, &delete.table_info, None)?;
         let table = FuseTable::try_from_table(table.as_ref())?;
+
+        if delete.parts.is_empty() {
+            return self.main_pipeline.add_source(EmptySource::create, 1);
+        }
+
         if delete.parts.is_lazy {
             let ctx = self.ctx.clone();
             let projection = Projection::Columns(delete.col_indices.clone());
@@ -1020,8 +1074,7 @@ impl PipelineBuilder {
             plan.snapshot.clone(),
             plan.mutation_kind,
             plan.merge_meta,
-        )?;
-        Ok(())
+        )
     }
 
     fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
@@ -1203,10 +1256,12 @@ impl PipelineBuilder {
             let index = column_binding.index;
             projections.push(input_schema.index_of(index.to_string().as_str())?);
         }
+        let num_input_columns = input_schema.num_fields();
         pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: projections.clone(),
@@ -1220,7 +1275,12 @@ impl PipelineBuilder {
     fn build_table_scan(&mut self, scan: &TableScan) -> Result<()> {
         let table = self.ctx.build_table_from_source_plan(&scan.source)?;
         self.ctx.set_partitions(scan.source.parts.clone())?;
-        table.read_data(self.ctx.clone(), &scan.source, &mut self.main_pipeline)?;
+        table.read_data(
+            self.ctx.clone(),
+            &scan.source,
+            &mut self.main_pipeline,
+            true,
+        )?;
 
         if self.enable_profiling {
             self.main_pipeline.add_transform(|input, output| {
@@ -1278,10 +1338,12 @@ impl PipelineBuilder {
         // if projection is sequential, no need to add projection
         if projection != (0..schema.fields().len()).collect::<Vec<usize>>() {
             let ops = vec![BlockOperator::Project { projection }];
+            let num_input_columns = schema.num_fields();
             self.main_pipeline.add_transform(|input, output| {
                 Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                     input,
                     output,
+                    num_input_columns,
                     self.func_ctx.clone(),
                     ops.clone(),
                 )))
@@ -1338,6 +1400,7 @@ impl PipelineBuilder {
                 ))
             })?;
 
+        let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
@@ -1345,6 +1408,7 @@ impl PipelineBuilder {
                     expr: predicate.clone(),
                 }],
                 self.func_ctx.clone(),
+                num_input_columns,
             );
 
             if self.enable_profiling {
@@ -1367,10 +1431,12 @@ impl PipelineBuilder {
 
     fn build_project(&mut self, project: &Project) -> Result<()> {
         self.build_pipeline(&project.input)?;
+        let num_input_columns = project.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
             Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                 input,
                 output,
+                num_input_columns,
                 self.func_ctx.clone(),
                 vec![BlockOperator::Project {
                     projection: project.projections.clone(),
@@ -1382,6 +1448,7 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
+        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
@@ -1397,8 +1464,14 @@ impl PipelineBuilder {
             projections: Some(eval_scalar.projections.clone()),
         };
 
+        let num_input_columns = input_schema.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1430,8 +1503,14 @@ impl PipelineBuilder {
                 .collect(),
         };
 
+        let num_input_columns = project_set.input.output_schema()?.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1455,8 +1534,15 @@ impl PipelineBuilder {
         let funcs = lambda.lambda_funcs.clone();
         let op = BlockOperator::LambdaMap { funcs };
 
+        let input_schema = lambda.input.output_schema()?;
+        let num_input_columns = input_schema.num_fields();
+
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::new(vec![op.clone()], self.func_ctx.clone());
+            let transform = CompoundBlockOperator::new(
+                vec![op.clone()],
+                self.func_ctx.clone(),
+                num_input_columns,
+            );
 
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(TransformProfileWrapper::create(
@@ -1922,6 +2008,7 @@ impl PipelineBuilder {
                     Ok(ProcessorPtr::create(CompoundBlockOperator::create(
                         input,
                         output,
+                        input_schema.num_fields(),
                         self.func_ctx.clone(),
                         vec![BlockOperator::Project {
                             projection: projection.clone(),

@@ -101,7 +101,8 @@ The following is an illustration of current query-meta compatibility:
 | [0.8.35, 0.9.23) | ✅                | ✅                | ✅                | ❌            |
 | [0.9.23, 0.9.42) | ❌                | ✅                | ✅                | ❌            |
 | [0.9.42, 1.1.32) | ❌                | ❌                | ✅                | ❌            |
-| [1.1.32, +∞)     | ❌                | ❌                | ✅                | ✅            |
+| [1.1.32, 1.2.63) | ❌                | ❌                | ✅                | ✅            |
+| [1.2.63, +∞)     | ❌                | ❌                | ✅                | ✅            |
 
 <img src="/img/deploy/compatibility.excalidraw.png"/>
 

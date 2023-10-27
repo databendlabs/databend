@@ -24,7 +24,6 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 use serde::Deserialize;
@@ -37,7 +36,6 @@ use crate::type_check::try_unify_signature;
 use crate::types::nullable::NullableColumn;
 use crate::types::nullable::NullableDomain;
 use crate::types::*;
-use crate::utils::arrow::constant_bitmap;
 use crate::values::Value;
 use crate::values::ValueRef;
 use crate::Column;
@@ -53,15 +51,12 @@ pub type AutoCastRules<'a> = &'a [(DataType, DataType)];
 pub trait FunctionFactory =
     Fn(&[usize], &[DataType]) -> Option<Arc<Function>> + Send + Sync + 'static;
 
-#[derive(Educe)]
-#[educe(PartialEq, Eq, Hash)]
 pub struct Function {
     pub signature: FunctionSignature,
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
     pub eval: FunctionEval,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone)]
 pub struct FunctionSignature {
     pub name: String,
     pub args_type: Vec<DataType>,
@@ -262,7 +257,7 @@ impl Function {
                     Value::Column(column) => {
                         Value::Column(Column::Nullable(Box::new(NullableColumn {
                             column,
-                            validity: constant_bitmap(true, num_rows).into(),
+                            validity: Bitmap::new_constant(true, num_rows),
                         })))
                     }
                 }
@@ -554,7 +549,7 @@ impl<'a> EvalContext<'a> {
                 valids.set(row, false);
             }
             None => {
-                let mut valids = constant_bitmap(true, self.num_rows.max(1));
+                let mut valids = Bitmap::new_constant(true, self.num_rows.max(1)).make_mut();
                 valids.set(row, false);
                 self.errors = Some((valids, error_msg.into()));
             }
@@ -595,7 +590,7 @@ impl<'a> EvalContext<'a> {
                     )
                 };
 
-                Err(ErrorCode::Internal(err_msg).set_span(span))
+                Err(ErrorCode::BadArguments(err_msg).set_span(span))
             }
             None => Ok(()),
         }
@@ -632,7 +627,7 @@ where F: Fn(&[ValueRef<AnyType>], &mut EvalContext) -> Value<AnyType> {
             }
         }
         let results = f(&nonull_args, ctx);
-        let bitmap = bitmap.unwrap_or_else(|| constant_bitmap(true, len));
+        let bitmap = bitmap.unwrap_or_else(|| Bitmap::new_constant(true, len).make_mut());
         if let Some((error_bitmap, _)) = ctx.errors.as_mut() {
             // If the original value is NULL, we can ignore the error.
             let rhs: Bitmap = bitmap.clone().not().into();
@@ -694,7 +689,7 @@ pub fn error_to_null<I1: ArgType, O: ArgType>(
                 Value::Scalar(scalar) => Value::Scalar(Some(scalar)),
                 Value::Column(column) => Value::Column(NullableColumn {
                     column,
-                    validity: constant_bitmap(true, ctx.num_rows).into(),
+                    validity: Bitmap::new_constant(true, ctx.num_rows),
                 }),
             }
         }

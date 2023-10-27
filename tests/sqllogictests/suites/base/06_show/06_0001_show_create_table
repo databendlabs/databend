@@ -10,7 +10,7 @@ CREATE TABLE `test`.`a` (    a bigint not null, b int not null default 3, c varc
 query TT
 SHOW CREATE TABLE `test`.`a`
 ----
-a CREATE TABLE `a` (   `a` BIGINT,   `b` INT DEFAULT 3,   `c` VARCHAR DEFAULT 'x',   `d` SMALLINT NULL,   `e` DATE ) ENGINE=NULL
+a CREATE TABLE `a` (   `a` BIGINT NOT NULL,   `b` INT NOT NULL DEFAULT 3,   `c` VARCHAR NOT NULL DEFAULT 'x',   `d` SMALLINT NULL,   `e` DATE NOT NULL ) ENGINE=NULL
 
 statement ok
 CREATE TABLE `test`.`b` (    a bigint not null, b int null default null, c varchar(255) not null, d smallint unsigned null) Engine = Null COMMENT = 'test b'
@@ -18,7 +18,7 @@ CREATE TABLE `test`.`b` (    a bigint not null, b int null default null, c varch
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL
+b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL
 
 statement ok
 set hide_options_in_show_create_table=0
@@ -26,7 +26,7 @@ set hide_options_in_show_create_table=0
 query TT
 SHOW CREATE TABLE `test`.`b`
 ----
-b CREATE TABLE `b` (   `a` BIGINT,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
+b CREATE TABLE `b` (   `a` BIGINT NOT NULL,   `b` INT NULL DEFAULT NULL,   `c` VARCHAR NOT NULL,   `d` SMALLINT UNSIGNED NULL ) ENGINE=NULL COMMENT='test b'
 
 statement ok
 create view test.v_b as select * from `test`.`b`
@@ -42,7 +42,7 @@ CREATE TABLE test.c (a int not null) CLUSTER BY (a, a % 3) COMPRESSION='lz4' STO
 query TT
 SHOW CREATE TABLE `test`.`c`
 ----
-c CREATE TABLE `c` (   `a` INT ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
+c CREATE TABLE `c` (   `a` INT NOT NULL ) ENGINE=FUSE CLUSTER BY (a, (a % 3)) COMPRESSION='lz4' STORAGE_FORMAT='parquet'
 
 statement ok
 DROP TABLE `test`.`a`

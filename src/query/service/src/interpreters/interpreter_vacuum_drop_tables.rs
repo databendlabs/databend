@@ -57,11 +57,9 @@ impl Interpreter for VacuumDropTablesInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        license_manager.manager.check_enterprise_enabled(
-            &self.ctx.get_settings(),
-            self.ctx.get_tenant(),
-            Vacuum,
-        )?;
+        license_manager
+            .manager
+            .check_enterprise_enabled(self.ctx.get_license_key(), Vacuum)?;
 
         let ctx = self.ctx.clone();
         let hours = match self.plan.option.retain_hours {
@@ -87,6 +85,15 @@ impl Interpreter for VacuumDropTablesInterpreter {
                 filter,
             })
             .await?;
+
+        // TODO buggy, table as catalog obj should be allowed to drop
+        // also drop ids
+        // filter out read-only tables
+        let tables = tables
+            .into_iter()
+            .filter(|tbl| !tbl.as_ref().is_read_only())
+            .collect::<Vec<_>>();
+
         let handler = get_vacuum_handler();
         let files_opt = handler
             .do_vacuum_drop_tables(

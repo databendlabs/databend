@@ -97,6 +97,99 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_task = map(
+        rule! {
+            CREATE ~ TASK ~ ( IF ~ ^NOT ~ ^EXISTS )?
+            ~ #ident ~ #task_warehouse_option
+            ~ SCHEDULE ~ "=" ~ #task_schedule_option
+            ~ (SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64)?
+            ~ ( (COMMENT | COMMENTS) ~ ^"=" ~ ^#literal_string )?
+            ~ AS ~ #statement
+        },
+        |(
+            _,
+            _,
+            opt_if_not_exists,
+            task,
+            warehouse_opts,
+            _,
+            _,
+            schedule_opts,
+            suspend_opt,
+            comment_opt,
+            _,
+            sql,
+        )| {
+            let sql = pretty_statement(sql.stmt, 10)
+                .map_err(|_| ErrorKind::Other("invalid statement"))
+                .unwrap();
+            Statement::CreateTask(CreateTaskStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: task.to_string(),
+                warehouse_opts,
+                schedule_opts,
+                suspend_task_after_num_failures: suspend_opt.map(|(_, _, num)| num),
+                comments: comment_opt.map(|v| v.2).unwrap_or_default(),
+                sql,
+            })
+        },
+    );
+
+    let alter_task = map(
+        rule! {
+            ALTER ~ TASK ~ ( IF ~ ^EXISTS )?
+            ~ #ident ~ #alter_task_option
+        },
+        |(_, _, opt_if_exists, task, options)| {
+            Statement::AlterTask(AlterTaskStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+                options,
+            })
+        },
+    );
+
+    let drop_task = map(
+        rule! {
+            DROP ~ TASK ~ ( IF ~ ^EXISTS )?
+            ~ #ident
+        },
+        |(_, _, opt_if_exists, task)| {
+            Statement::DropTask(DropTaskStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: task.to_string(),
+            })
+        },
+    );
+    let show_tasks = map(
+        rule! {
+            SHOW ~ TASKS ~ #show_limit?
+        },
+        |(_, _, limit)| Statement::ShowTasks(ShowTasksStmt { limit }),
+    );
+
+    let execute_task = map(
+        rule! {
+            EXECUTE ~ TASK ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::ExecuteTask(ExecuteTaskStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
+    let desc_task = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ TASK ~ #ident
+        },
+        |(_, _, task)| {
+            Statement::DescribeTask(DescribeTaskStmt {
+                name: task.to_string(),
+            })
+        },
+    );
+
     let insert = map(
         rule! {
             INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
@@ -155,8 +248,8 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let merge = map(
         rule! {
-            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3  ~ #table_alias? ~ USING
-            ~ #merge_source  ~ #table_alias? ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
+            MERGE ~ #hint? ~ INTO ~ #dot_separated_idents_1_to_3 ~ #table_alias? ~ USING
+            ~ #merge_source ~ ON ~ #expr ~ (#match_clause | #unmatch_clause)*
         },
         |(
             _,
@@ -166,7 +259,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             target_alias,
             _,
             source,
-            source_alias,
             _,
             join_expr,
             merge_options,
@@ -177,7 +269,6 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 database,
                 table_ident: table,
                 source,
-                source_alias,
                 target_alias,
                 join_expr,
                 merge_options,
@@ -187,13 +278,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let delete = map(
         rule! {
-            DELETE ~ #hint? ~ FROM ~ #table_reference_only
+            DELETE ~ #hint? ~ FROM ~ #table_reference_with_alias
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, _, table_reference, opt_selection)| Statement::Delete {
-            hints: opt_hints,
-            table_reference,
-            selection: opt_selection.map(|(_, selection)| selection),
+        |(_, hints, _, table, opt_selection)| {
+            Statement::Delete(DeleteStmt {
+                hints,
+                table,
+                selection: opt_selection.map(|(_, selection)| selection),
+            })
         },
     );
 
@@ -203,9 +296,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, opt_hints, table, _, update_list, opt_selection)| {
+        |(_, hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
-                hints: opt_hints,
+                hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -524,14 +617,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
+                read_only: opt_read_only.is_some(),
             })
         },
     );
@@ -1550,6 +1644,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
         | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
         ),
+        rule!(
+            #create_task : "`CREATE TASK [ IF NOT EXISTS ] <name>
+  [ { WAREHOUSE = <string> }
+  [ SCHEDULE = { <num> MINUTE | USING CRON <expr> <time_zone> } ]
+  [ SUSPEND_TASK_AFTER_NUM_FAILURES = <num> ]
+  [ COMMENT = '<string_literal>' ]
+AS
+  <sql>`"
+         | #drop_task : "`DROP TASK [ IF EXISTS ] <name>`"
+         | #alter_task : "`ALTER TASK [ IF EXISTS ] <name> SUSPEND | RESUME | SET <option> = <value>` | UNSET <option> | MODIFY AS <sql>`"
+         | #show_tasks : "`SHOW TASKS [<show_limit>]`"
+         | #desc_task : "`DESC | DESCRIBE TASK <name>`"
+         | #execute_task: "`EXECUTE TASK <name>`"
+        ),
     ));
 
     map(
@@ -1618,8 +1726,11 @@ pub fn merge_source(i: Input) -> IResult<MergeSource> {
         },
     );
 
-    let query = map(query, |query| MergeSource::Select {
-        query: Box::new(query),
+    let query = map(rule! {#query ~ #table_alias}, |(query, source_alias)| {
+        MergeSource::Select {
+            query: Box::new(query),
+            source_alias,
+        }
     });
 
     rule!(
@@ -2345,6 +2456,95 @@ pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     ),))(i)
 }
 
+pub fn alter_task_option(i: Input) -> IResult<AlterTaskOptions> {
+    let suspend = map(
+        rule! {
+             SUSPEND
+        },
+        |_| AlterTaskOptions::Suspend,
+    );
+    let resume = map(
+        rule! {
+             RESUME
+        },
+        |_| AlterTaskOptions::Resume,
+    );
+    let modify_as = map(
+        rule! {
+             MODIFY ~ AS ~ #statement
+        },
+        |(_, _, sql)| {
+            let sql = pretty_statement(sql.stmt, 10)
+                .map_err(|_| ErrorKind::Other("invalid statement"))
+                .expect("failed to alter task");
+            AlterTaskOptions::ModifyAs(sql)
+        },
+    );
+    let set = map(
+        rule! {
+             SET
+             ~ ( WAREHOUSE  ~ "=" ~  #literal_string )?
+             ~ ( SCHEDULE ~ "=" ~ #task_schedule_option )?
+             ~ ( SUSPEND_TASK_AFTER_NUM_FAILURES ~ "=" ~ #literal_u64 )?
+             ~ ( COMMENT ~ "=" ~ #literal_string )?
+        },
+        |(_, warehouse_opts, schedule_opts, suspend_opts, comment)| AlterTaskOptions::Set {
+            warehouse: warehouse_opts.map(|(_, _, warehouse)| warehouse),
+            schedule: schedule_opts.map(|(_, _, schedule)| schedule),
+            suspend_task_after_num_failures: suspend_opts.map(|(_, _, num)| num),
+            comments: comment.map(|(_, _, comment)| comment),
+        },
+    );
+    let unset = map(
+        rule! {
+             UNSET ~ WAREHOUSE
+        },
+        |_| AlterTaskOptions::Unset { warehouse: true },
+    );
+    rule!(
+        #suspend
+        | #resume
+        | #modify_as
+        | #set
+        | #unset
+    )(i)
+}
+
+pub fn task_warehouse_option(i: Input) -> IResult<WarehouseOptions> {
+    alt((map(
+        rule! {
+            (WAREHOUSE  ~ "=" ~  #literal_string)?
+        },
+        |warehouse_opt| {
+            let warehouse = match warehouse_opt {
+                Some(warehouse) => Some(warehouse.2),
+                None => None,
+            };
+            WarehouseOptions { warehouse }
+        },
+    ),))(i)
+}
+
+pub fn task_schedule_option(i: Input) -> IResult<ScheduleOptions> {
+    let interval = map(
+        rule! {
+             #literal_u64 ~ MINUTE
+        },
+        |(minutes, _)| ScheduleOptions::IntervalMinutes(minutes),
+    );
+    let cron_expr = map(
+        rule! {
+            USING ~ CRON ~ #literal_string ~ #literal_string?
+        },
+        |(_, _, expr, timezone)| ScheduleOptions::CronExpression(expr, timezone),
+    );
+
+    rule!(
+        #interval
+        | #cron_expr
+    )(i)
+}
+
 pub fn kill_target(i: Input) -> IResult<KillTarget> {
     alt((
         value(KillTarget::Query, rule! { QUERY }),
@@ -2548,6 +2748,27 @@ pub fn presign_option(i: Input) -> IResult<PresignOption> {
             |(_, _, v)| PresignOption::ContentType(v),
         ),
     ))(i)
+}
+
+pub fn table_reference_with_alias(i: Input) -> IResult<TableReference> {
+    map(
+        consumed(rule! {
+            #dot_separated_idents_1_to_3 ~ #alias_name?
+        }),
+        |(span, ((catalog, database, table), alias))| TableReference::Table {
+            span: transform_span(span.0),
+            catalog,
+            database,
+            table,
+            alias: alias.map(|v| TableAlias {
+                name: v,
+                columns: vec![],
+            }),
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+    )(i)
 }
 
 pub fn table_reference_only(i: Input) -> IResult<TableReference> {

@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_license::license::Feature::ComputedColumn;
@@ -65,6 +66,9 @@ impl Interpreter for AddTableColumnInterpreter {
             .ok();
 
         if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
+
             let table_info = table.get_table_info();
             if table_info.engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(
@@ -84,11 +88,9 @@ impl Interpreter for AddTableColumnInterpreter {
             let field = self.plan.field.clone();
             if field.computed_expr().is_some() {
                 let license_manager = get_license_manager();
-                license_manager.manager.check_enterprise_enabled(
-                    &self.ctx.get_settings(),
-                    self.plan.tenant.clone(),
-                    ComputedColumn,
-                )?;
+                license_manager
+                    .manager
+                    .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
             }
 
             if field.default_expr().is_some() {

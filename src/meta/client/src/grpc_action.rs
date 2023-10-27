@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::convert::TryInto;
+use std::fmt;
 use std::fmt::Debug;
 
 use common_meta_kvapi::kvapi::GetKVReply;
@@ -23,25 +24,30 @@ use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::MGetKVReq;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::protobuf::meta_service_client::MetaServiceClient;
 use common_meta_types::protobuf::ClientInfo;
+use common_meta_types::protobuf::ClusterStatus;
 use common_meta_types::protobuf::RaftRequest;
+use common_meta_types::protobuf::StreamItem;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
+use common_meta_types::InvalidArgument;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use tonic::codegen::InterceptedService;
-use tonic::transport::Channel;
+use log::as_debug;
+use log::debug;
+use tonic::codegen::BoxStream;
 use tonic::Request;
 
-use crate::grpc_client::AuthInterceptor;
+use crate::grpc_client::RealClient;
 use crate::message::ExportReq;
 use crate::message::GetClientInfo;
+use crate::message::GetClusterStatus;
 use crate::message::GetEndpoints;
 use crate::message::MakeClient;
+use crate::message::Streamed;
 
 /// Bind a request type to its corresponding response type.
-pub trait RequestFor {
+pub trait RequestFor: Clone + fmt::Debug {
     type Reply;
 }
 
@@ -67,16 +73,98 @@ impl TryInto<MetaGrpcReq> for Request<RaftRequest> {
     }
 }
 
-impl TryInto<Request<RaftRequest>> for MetaGrpcReq {
-    type Error = serde_json::Error;
-
-    fn try_into(self) -> Result<Request<RaftRequest>, Self::Error> {
+impl From<MetaGrpcReq> for RaftRequest {
+    fn from(v: MetaGrpcReq) -> Self {
         let raft_request = RaftRequest {
-            data: serde_json::to_string(&self)?,
+            // Safe unwrap(): serialize to string must be ok.
+            data: serde_json::to_string(&v).unwrap(),
         };
 
-        let request = tonic::Request::new(raft_request);
-        Ok(request)
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        raft_request
+    }
+}
+
+impl MetaGrpcReq {
+    pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
+        let raft_request = RaftRequest {
+            data: serde_json::to_string(self)
+                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        Ok(raft_request)
+    }
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Debug,
+    Clone,
+    PartialEq,
+    Eq,
+    derive_more::From,
+    derive_more::TryInto,
+)]
+pub enum MetaGrpcReadReq {
+    GetKV(GetKVReq),
+    MGetKV(MGetKVReq),
+    ListKV(ListKVReq),
+}
+
+// All Read requests returns a stream of KV pairs.
+impl RequestFor for MetaGrpcReadReq {
+    type Reply = BoxStream<StreamItem>;
+}
+
+impl From<MetaGrpcReadReq> for MetaGrpcReq {
+    fn from(v: MetaGrpcReadReq) -> Self {
+        match v {
+            MetaGrpcReadReq::GetKV(v) => MetaGrpcReq::GetKV(v),
+            MetaGrpcReadReq::MGetKV(v) => MetaGrpcReq::MGetKV(v),
+            MetaGrpcReadReq::ListKV(v) => MetaGrpcReq::ListKV(v),
+        }
+    }
+}
+
+impl From<MetaGrpcReadReq> for RaftRequest {
+    fn from(v: MetaGrpcReadReq) -> Self {
+        let raft_request = RaftRequest {
+            // Safe unwrap(): serialize to string must be ok.
+            data: serde_json::to_string(&v).unwrap(),
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        raft_request
+    }
+}
+
+impl MetaGrpcReadReq {
+    pub fn to_raft_request(&self) -> Result<RaftRequest, InvalidArgument> {
+        let raft_request = RaftRequest {
+            data: serde_json::to_string(self)
+                .map_err(|e| InvalidArgument::new(e, "fail to encode request"))?,
+        };
+
+        debug!(
+            req = as_debug!(&raft_request);
+            "build raft_request"
+        );
+
+        Ok(raft_request)
     }
 }
 
@@ -92,6 +180,18 @@ impl RequestFor for ListKVReq {
     type Reply = ListKVReply;
 }
 
+impl RequestFor for Streamed<GetKVReq> {
+    type Reply = BoxStream<StreamItem>;
+}
+
+impl RequestFor for Streamed<MGetKVReq> {
+    type Reply = BoxStream<StreamItem>;
+}
+
+impl RequestFor for Streamed<ListKVReq> {
+    type Reply = BoxStream<StreamItem>;
+}
+
 impl RequestFor for UpsertKVReq {
     type Reply = UpsertKVReply;
 }
@@ -105,7 +205,7 @@ impl RequestFor for ExportReq {
 }
 
 impl RequestFor for MakeClient {
-    type Reply = MetaServiceClient<InterceptedService<Channel, AuthInterceptor>>;
+    type Reply = (RealClient, u64);
 }
 
 impl RequestFor for GetEndpoints {
@@ -114,6 +214,10 @@ impl RequestFor for GetEndpoints {
 
 impl RequestFor for TxnRequest {
     type Reply = TxnReply;
+}
+
+impl RequestFor for GetClusterStatus {
+    type Reply = ClusterStatus;
 }
 
 impl RequestFor for GetClientInfo {

@@ -64,26 +64,23 @@ use crate::export_meta;
 use crate::Config;
 
 pub async fn export_data(config: &Config) -> anyhow::Result<()> {
-    let raft_config = &config.raft_config;
-
-    // export from grpc api if metasrv is running
-    if config.grpc_api_address.is_empty() {
-        init_sled_db(raft_config.raft_dir.clone());
-        export_from_dir(config).await?;
-    } else {
-        export_from_running_node(config).await?;
+    match config.raft_dir {
+        None => export_from_running_node(config).await?,
+        Some(ref dir) => {
+            init_sled_db(dir.clone());
+            export_from_dir(config).await?;
+        }
     }
-
     Ok(())
 }
 
 pub async fn import_data(config: &Config) -> anyhow::Result<()> {
-    let raft_config = &config.raft_config;
-    eprintln!("    Into Meta Dir: '{}'", raft_config.raft_dir);
+    let raft_dir = config.raft_dir.clone().unwrap_or_default();
+    eprintln!("    Into Meta Dir: '{}'", raft_dir);
 
-    let nodes = build_nodes(config.initial_cluster.clone(), raft_config.id)?;
+    let nodes = build_nodes(config.initial_cluster.clone(), config.id)?;
 
-    init_sled_db(raft_config.raft_dir.clone());
+    init_sled_db(raft_dir.clone());
 
     clear(config)?;
     let max_log_id = import_from_stdin_or_file(config).await?;
@@ -92,7 +89,7 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    init_new_cluster(config, nodes, max_log_id, config.raft_config.id).await?;
+    init_new_cluster(config, nodes, max_log_id, config.id).await?;
     Ok(())
 }
 
@@ -207,7 +204,7 @@ async fn import_v002(
     config: &Config,
     lines: impl IntoIterator<Item = Result<String, io::Error>>,
 ) -> anyhow::Result<Option<LogId>> {
-    let raft_config: RaftConfig = config.raft_config.clone().into();
+    let raft_config: RaftConfig = config.clone().into();
 
     let db = get_sled_db();
 
@@ -289,7 +286,7 @@ async fn import_from_stdin_or_file(config: &Config) -> anyhow::Result<Option<Log
 
 /// Upgrade the data in raft_dir to the latest version.
 async fn upgrade(config: &Config) -> anyhow::Result<()> {
-    let raft_config: RaftConfig = config.raft_config.clone().into();
+    let raft_config: RaftConfig = config.clone().into();
 
     let db = get_sled_db();
 
@@ -366,7 +363,7 @@ async fn init_new_cluster(
     eprintln!("Initialize Cluster with: {:?}", nodes);
 
     let db = get_sled_db();
-    let raft_config: RaftConfig = config.raft_config.clone().into();
+    let raft_config: RaftConfig = config.clone().into();
 
     let mut sto = RaftStore::open_create(&raft_config, Some(()), None).await?;
 
@@ -449,7 +446,7 @@ fn clear(config: &Config) -> anyhow::Result<()> {
         eprintln!("Clear sled tree {} Done", name);
     }
 
-    let df_meta_path = format!("{}/df_meta", &config.raft_config.raft_dir);
+    let df_meta_path = format!("{}/df_meta", config.raft_dir.clone().unwrap_or_default());
     if Path::new(&df_meta_path).exists() {
         remove_dir_all(&df_meta_path)?;
     }
@@ -466,7 +463,7 @@ fn clear(config: &Config) -> anyhow::Result<()> {
 async fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     upgrade(config).await?;
 
-    let raft_config: RaftConfig = config.raft_config.clone().into();
+    let raft_config: RaftConfig = config.clone().into();
 
     let sto_inn = StoreInner::open_create(&raft_config, Some(()), None).await?;
     let mut lines = Arc::new(sto_inn).export();

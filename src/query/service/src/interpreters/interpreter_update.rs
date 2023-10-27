@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -31,6 +32,8 @@ use log::debug;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::common::hook_refresh_agg_index;
+use crate::interpreters::common::RefreshAggIndexDesc;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
@@ -71,16 +74,6 @@ impl Interpreter for UpdateInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
-
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
         // refresh table.
         let tbl = self
             .ctx
@@ -88,6 +81,11 @@ impl Interpreter for UpdateInterpreter {
             .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
+
+        // check mutability
+        tbl.check_mutable()?;
+
+        let table_info = tbl.get_table_info().clone();
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -166,12 +164,16 @@ impl Interpreter for UpdateInterpreter {
 
         if !computed_list.is_empty() {
             let license_manager = get_license_manager();
-            license_manager.manager.check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                ComputedColumn,
-            )?;
+            license_manager
+                .manager
+                .check_enterprise_enabled(self.ctx.get_license_key(), ComputedColumn)?;
         }
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
@@ -184,6 +186,22 @@ impl Interpreter for UpdateInterpreter {
             &mut build_res.main_pipeline,
         )
         .await?;
+
+        // generate sync aggregating indexes if `enable_refresh_aggregating_index_after_write` on.
+        {
+            let refresh_agg_index_desc = RefreshAggIndexDesc {
+                catalog: catalog_name.to_string(),
+                database: db_name.to_string(),
+                table: tbl_name.to_string(),
+            };
+
+            hook_refresh_agg_index(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                refresh_agg_index_desc,
+            )
+            .await?;
+        }
 
         if build_res.main_pipeline.is_empty() {
             heartbeat.shutdown().await?;

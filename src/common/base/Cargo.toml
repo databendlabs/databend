@@ -39,7 +39,7 @@ log = { workspace = true }
 logcall = { workspace = true }
 minitrace = { workspace = true }
 num_cpus = "1.13.1"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 parking_lot = "0.12"
 pin-project-lite = "0.2.9"
 pprof = { version = "0.11.1", features = [

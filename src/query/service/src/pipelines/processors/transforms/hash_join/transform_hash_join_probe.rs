@@ -144,12 +144,6 @@ impl TransformHashJoinProbe {
     fn run(&mut self) -> Result<Event> {
         if self.output_port.is_finished() {
             self.input_port.finish();
-
-            if self.join_probe_state.hash_join_state.need_outer_scan()
-                || self.join_probe_state.hash_join_state.need_mark_scan()
-            {
-                self.join_probe_state.probe_done()?;
-            }
             return Ok(Event::Finished);
         }
 
@@ -223,7 +217,7 @@ impl TransformHashJoinProbe {
         Ok(Event::NeedData)
     }
 
-    fn reset(&mut self) -> Result<()> {
+    async fn reset(&mut self) -> Result<()> {
         self.step = HashJoinProbeStep::Running;
         // self.probe_state.reset();
         if (self.join_probe_state.hash_join_state.need_outer_scan()
@@ -238,7 +232,7 @@ impl TransformHashJoinProbe {
         if self
             .join_probe_state
             .final_probe_workers
-            .load(Ordering::Relaxed)
+            .fetch_add(1, Ordering::Acquire)
             == 0
         {
             // Before probe processor into `WaitBuild` state, send `1` to channel
@@ -248,11 +242,9 @@ impl TransformHashJoinProbe {
                 .build_done_watcher
                 .send(1)
                 .map_err(|_| ErrorCode::TokioError("build_done_watcher channel is closed"))?;
-            self.join_probe_state
-                .final_probe_workers
-                .store(self.join_probe_state.processor_count, Ordering::Relaxed);
         }
         self.outer_scan_finished = false;
+        self.join_probe_state.restore_barrier.wait().await;
         Ok(())
     }
 }
@@ -309,6 +301,7 @@ impl Processor for TransformHashJoinProbe {
                 Ok(Event::NeedData)
             }
             HashJoinProbeStep::FastReturn => {
+                self.input_port.finish();
                 self.output_port.finish();
                 Ok(Event::Finished)
             }
@@ -316,6 +309,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinProbeStep::AsyncRunning => self.async_run(),
             HashJoinProbeStep::FinalScan => {
                 if self.output_port.is_finished() {
+                    self.input_port.finish();
                     return Ok(Event::Finished);
                 }
 
@@ -350,6 +344,7 @@ impl Processor for TransformHashJoinProbe {
                         {
                             self.join_probe_state.finish_final_probe()?;
                         }
+                        self.input_port.finish();
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }
@@ -516,7 +511,7 @@ impl Processor for TransformHashJoinProbe {
                     }
                 }
                 self.join_probe_state.restore_barrier.wait().await;
-                self.reset()?;
+                self.reset().await?;
             }
             HashJoinProbeStep::FinalScan | HashJoinProbeStep::FastReturn => unreachable!(),
         };

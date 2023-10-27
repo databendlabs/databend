@@ -24,6 +24,7 @@ pub mod meta_service;
 pub mod metrics;
 pub mod network;
 pub mod raft_client;
+pub(crate) mod request_handling;
 pub mod store;
 pub mod version;
 pub mod watcher;

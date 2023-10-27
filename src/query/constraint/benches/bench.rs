@@ -15,73 +15,126 @@
 #[macro_use]
 extern crate criterion;
 
-use common_constraint::prelude::*;
+use common_constraint::mir::MirBinaryOperator;
+use common_constraint::mir::MirConstant;
+use common_constraint::mir::MirDataType;
+use common_constraint::mir::MirExpr;
+use common_constraint::problem::variable_must_not_null;
+use common_constraint::simplify::simplify;
 use criterion::black_box;
 use criterion::Criterion;
-use z3::ast::Int;
-use z3::Config;
-use z3::Context;
-use z3::Solver;
 
 fn bench(c: &mut Criterion) {
-    let mut group = c.benchmark_group("bench_parser");
+    let mut group = c.benchmark_group("bench_solver");
     group.sample_size(10);
 
-    group.bench_function("solve_int_not_null_shared_context", |b| {
-        let ctx = Context::new(&Config::default());
-        let solver = Solver::new(&ctx);
-
+    group.bench_function("solve_variable_not_null", |b| {
         b.iter(|| {
-            // a > 0 and a < 1 -> a is not null
-            let proposition = is_true(
-                &ctx,
-                &and_nullable_bool(
-                    &ctx,
-                    &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                    &lt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                ),
-            );
-            let result = assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition,
-            );
+            // a > 0 and a < 1 => a is not null
+            let assertion = MirExpr::BinaryOperator {
+                op: MirBinaryOperator::And,
+                left: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::Gt,
+                    left: Box::new(MirExpr::Variable {
+                        name: "a".to_string(),
+                        data_type: MirDataType::Int,
+                    }),
+                    right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                }),
+                right: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::Lt,
+                    left: Box::new(MirExpr::Variable {
+                        name: "a".to_string(),
+                        data_type: MirDataType::Int,
+                    }),
+                    right: Box::new(MirExpr::Constant(MirConstant::Int(1))),
+                }),
+            };
+            let result = variable_must_not_null(&assertion, "a");
             black_box(result);
         });
     });
 
-    group.bench_function("solve_int_not_null_multiple_variables", |b| {
-        let ctx = Context::new(&Config::default());
-        let solver = Solver::new(&ctx);
-
+    group.bench_function("solve_variable_not_null_multiple_variables", |b| {
         b.iter(|| {
-            // (a > 0 and b > 0) or (a < 0 and b < 0) -> a is not null and b is not null
-            let proposition = is_true(
-                &ctx,
-                &or_nullable_bool(
-                    &ctx,
-                    &and_nullable_bool(
-                        &ctx,
-                        &gt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                        &gt_int(&ctx, &Int::new_const(&ctx, "b"), &Int::from_i64(&ctx, 0)),
-                    ),
-                    &and_nullable_bool(
-                        &ctx,
-                        &lt_int(&ctx, &Int::new_const(&ctx, "a"), &Int::from_i64(&ctx, 0)),
-                        &lt_int(&ctx, &Int::new_const(&ctx, "b"), &Int::from_i64(&ctx, 0)),
-                    ),
-                ),
-            );
-            let result = assert_int_is_not_null(
-                &ctx,
-                &solver,
-                &[Int::new_const(&ctx, "a")],
-                &Int::new_const(&ctx, "a"),
-                &proposition,
-            );
+            // (a > 0 and b > 0) or (a < 0 and b < 0) => a is not null
+            let assertion = MirExpr::BinaryOperator {
+                op: MirBinaryOperator::Or,
+                left: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::And,
+                    left: Box::new(MirExpr::BinaryOperator {
+                        op: MirBinaryOperator::Gt,
+                        left: Box::new(MirExpr::Variable {
+                            name: "a".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                        right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                    }),
+                    right: Box::new(MirExpr::BinaryOperator {
+                        op: MirBinaryOperator::Gt,
+                        left: Box::new(MirExpr::Variable {
+                            name: "b".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                        right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                    }),
+                }),
+                right: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::And,
+                    left: Box::new(MirExpr::BinaryOperator {
+                        op: MirBinaryOperator::Lt,
+                        left: Box::new(MirExpr::Variable {
+                            name: "a".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                        right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                    }),
+                    right: Box::new(MirExpr::BinaryOperator {
+                        op: MirBinaryOperator::Lt,
+                        left: Box::new(MirExpr::Variable {
+                            name: "b".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                        right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                    }),
+                }),
+            };
+            let result = variable_must_not_null(&assertion, "a");
             black_box(result);
+        });
+    });
+
+    group.bench_function("simplify", |b| {
+        b.iter(|| {
+            // a + b < 1 and a >= 0
+            let expr = MirExpr::BinaryOperator {
+                op: MirBinaryOperator::And,
+                left: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::Lt,
+                    left: Box::new(MirExpr::BinaryOperator {
+                        op: MirBinaryOperator::Plus,
+                        left: Box::new(MirExpr::Variable {
+                            name: "a".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                        right: Box::new(MirExpr::Variable {
+                            name: "b".to_string(),
+                            data_type: MirDataType::Int,
+                        }),
+                    }),
+                    right: Box::new(MirExpr::Constant(MirConstant::Int(1))),
+                }),
+                right: Box::new(MirExpr::BinaryOperator {
+                    op: MirBinaryOperator::Gte,
+                    left: Box::new(MirExpr::Variable {
+                        name: "a".to_string(),
+                        data_type: MirDataType::Int,
+                    }),
+                    right: Box::new(MirExpr::Constant(MirConstant::Int(0))),
+                }),
+            };
+            let simplified = simplify(&expr).unwrap();
+            black_box(simplified);
         });
     });
 }
