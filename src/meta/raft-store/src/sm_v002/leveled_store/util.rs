@@ -14,14 +14,14 @@
 
 use std::fmt;
 
+use crate::sm_v002::leveled_store::map_api::MapKV;
+use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::marked::Marked;
-
-type Tuple<K, V> = (K, Marked<V>);
 
 /// Sort by key and internal_seq.
 /// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
-pub(in crate::sm_v002) fn by_key_seq<K, V>((k1, v1): &Tuple<K, V>, (k2, v2): &Tuple<K, V>) -> bool
-where K: Ord + fmt::Debug {
+pub(in crate::sm_v002) fn by_key_seq<K>((k1, v1): &MapKV<K>, (k2, v2): &MapKV<K>) -> bool
+where K: MapKey + Ord + fmt::Debug {
     assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
 
     // Put entries with the same key together, smaller internal-seq first
@@ -31,12 +31,12 @@ where K: Ord + fmt::Debug {
 
 /// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
 #[allow(clippy::type_complexity)]
-pub(in crate::sm_v002) fn choose_greater<K, V>(
-    (k1, v1): Tuple<K, V>,
-    (k2, v2): Tuple<K, V>,
-) -> Result<Tuple<K, V>, (Tuple<K, V>, Tuple<K, V>)>
+pub(in crate::sm_v002) fn choose_greater<K>(
+    (k1, v1): MapKV<K>,
+    (k2, v2): MapKV<K>,
+) -> Result<MapKV<K>, (MapKV<K>, MapKV<K>)>
 where
-    K: Ord,
+    K: MapKey + Ord,
 {
     if k1 == k2 {
         Ok((k1, Marked::max(v1, v2)))
