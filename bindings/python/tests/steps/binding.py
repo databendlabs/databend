@@ -32,8 +32,20 @@ async def _(context):
 @when("Create a test table")
 @async_run_until_complete
 async def _(context):
-    # TODO:
-    pass
+    await context.conn.exec("DROP TABLE IF EXISTS test")
+    await context.conn.exec(
+        """
+        CREATE TABLE test (
+            i64 Int64,
+            u64 UInt64,
+            f64 Float64,
+            s   String,
+            s2  String,
+            d   Date,
+            t   DateTime
+        )
+        """
+    )
 
 
 @then("Select string {input} should be equal to {output}")
@@ -47,15 +59,35 @@ async def _(context, input, output):
 @then("Select numbers should iterate all rows")
 @async_run_until_complete
 async def _(context):
-    # TODO:
-    pass
+    rows = await context.conn.query_iter("SELECT number FROM numbers(5)")
+    ret = []
+    async for row in rows:
+        ret.append(row.values()[0])
+    expected = [0, 1, 2, 3, 4]
+    assert ret == expected
 
 
 @then("Insert and Select should be equal")
 @async_run_until_complete
 async def _(context):
-    # TODO:
-    pass
+    await context.conn.exec(
+        """
+        INSERT INTO test VALUES
+            (-1, 1, 1.0, '1', '1', '2011-03-06', '2011-03-06 06:20:00'),
+            (-2, 2, 2.0, '2', '2', '2012-05-31', '2012-05-31 11:20:00'),
+            (-3, 3, 3.0, '3', '2', '2016-04-04', '2016-04-04 11:30:00')
+        """
+    )
+    rows = await context.conn.query_iter("SELECT * FROM test")
+    ret = []
+    async for row in rows:
+        ret.append(row.values())
+    expected = [
+        (-1, 1, 1.0, "1", "1", "2011-03-06", "2011-03-06 06:20:00"),
+        (-2, 2, 2.0, "2", "2", "2012-05-31", "2012-05-31 11:20:00"),
+        (-3, 3, 3.0, "3", "2", "2016-04-04", "2016-04-04 11:30:00"),
+    ]
+    assert ret == expected
 
 
 @then("Stream load and Select should be equal")

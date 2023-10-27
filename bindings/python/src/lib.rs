@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use pyo3::create_exception;
-use pyo3::exceptions::PyException;
+use pyo3::exceptions::{PyException, PyStopAsyncIteration};
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyTuple};
 use pyo3_asyncio::tokio::future_into_py;
+use tokio::sync::Mutex;
+use tokio_stream::StreamExt;
 
 create_exception!(
     databend_client,
@@ -72,6 +76,14 @@ impl AsyncDatabendConnection {
             let row = this.query_row(&sql).await.unwrap();
             let row = row.unwrap();
             Ok(Row(row))
+        })
+    }
+
+    pub fn query_iter<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let streamer = this.query_iter(&sql).await.unwrap();
+            Ok(RowIterator(Arc::new(Mutex::new(streamer))))
         })
     }
 }
@@ -167,5 +179,28 @@ impl IntoPy<PyObject> for NumberValue {
                 s.into_py(py)
             }
         }
+    }
+}
+
+#[pyclass(module = "databend_driver")]
+pub struct RowIterator(Arc<Mutex<databend_driver::RowIterator>>);
+
+#[pymethods]
+impl RowIterator {
+    fn __aiter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+    fn __anext__<'a>(&self, py: Python<'a>) -> PyResult<Option<PyObject>> {
+        let streamer = self.0.clone();
+        let future = future_into_py(py, async move {
+            match streamer.lock().await.next().await {
+                Some(val) => match val {
+                    Err(e) => Err(PyException::new_err(format!("{}", e))),
+                    Ok(ret) => Ok(Row(ret)),
+                },
+                None => Err(PyStopAsyncIteration::new_err("The iterator is exhausted")),
+            }
+        });
+        Ok(Some(future?.into()))
     }
 }
