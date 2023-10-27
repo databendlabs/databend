@@ -24,6 +24,11 @@ class TaskServiceStub(object):
             request_serializer=task__pb2.DescribeTaskRequest.SerializeToString,
             response_deserializer=task__pb2.DescribeTaskResponse.FromString,
         )
+        self.ExecuteTask = channel.unary_unary(
+            "/taskproto.TaskService/ExecuteTask",
+            request_serializer=task__pb2.ExecuteTaskRequest.SerializeToString,
+            response_deserializer=task__pb2.ExecuteTaskResponse.FromString,
+        )
         self.DropTask = channel.unary_unary(
             "/taskproto.TaskService/DropTask",
             request_serializer=task__pb2.DropTaskRequest.SerializeToString,
@@ -56,6 +61,12 @@ class TaskServiceServicer(object):
         raise NotImplementedError("Method not implemented!")
 
     def DescribeTask(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
+    def ExecuteTask(self, request, context):
         """Missing associated documentation comment in .proto file."""
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details("Method not implemented!")
@@ -97,6 +108,11 @@ def add_TaskServiceServicer_to_server(servicer, server):
             servicer.DescribeTask,
             request_deserializer=task__pb2.DescribeTaskRequest.FromString,
             response_serializer=task__pb2.DescribeTaskResponse.SerializeToString,
+        ),
+        "ExecuteTask": grpc.unary_unary_rpc_method_handler(
+            servicer.ExecuteTask,
+            request_deserializer=task__pb2.ExecuteTaskRequest.FromString,
+            response_serializer=task__pb2.ExecuteTaskResponse.SerializeToString,
         ),
         "DropTask": grpc.unary_unary_rpc_method_handler(
             servicer.DropTask,
@@ -177,6 +193,35 @@ class TaskService(object):
             "/taskproto.TaskService/DescribeTask",
             task__pb2.DescribeTaskRequest.SerializeToString,
             task__pb2.DescribeTaskResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+        )
+
+    @staticmethod
+    def ExecuteTask(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/taskproto.TaskService/ExecuteTask",
+            task__pb2.ExecuteTaskRequest.SerializeToString,
+            task__pb2.ExecuteTaskResponse.FromString,
             options,
             channel_credentials,
             insecure,

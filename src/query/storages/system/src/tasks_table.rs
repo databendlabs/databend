@@ -50,6 +50,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
     let mut schedule: Vec<Option<Vec<u8>>> = Vec::with_capacity(tasks.len());
     let mut state: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
     let mut definition: Vec<Vec<u8>> = Vec::with_capacity(tasks.len());
+    let mut suspend_after_num_failures: Vec<Option<u64>> = Vec::with_capacity(tasks.len());
     let mut last_committed_on: Vec<i64> = Vec::with_capacity(tasks.len());
     let mut next_schedule_time: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
     let mut last_suspended_on: Vec<Option<i64>> = Vec::with_capacity(tasks.len());
@@ -68,6 +69,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         schedule.push(tsk.schedule_options.map(|s| s.into_bytes()));
         state.push(tsk.status.to_string().into_bytes());
         definition.push(tsk.query_text.into_bytes());
+        suspend_after_num_failures.push(tsk.suspend_task_after_num_failures.map(|v| v as u64));
         next_schedule_time.push(tsk.next_scheduled_at.map(|t| t.timestamp_micros()));
         last_committed_on.push(tsk.updated_at.timestamp_micros());
         last_suspended_on.push(tsk.last_suspended_at.map(|t| t.timestamp_micros()));
@@ -82,6 +84,7 @@ pub fn parse_tasks_to_datablock(tasks: Vec<Task>) -> Result<DataBlock> {
         StringType::from_opt_data(schedule),
         StringType::from_data(state),
         StringType::from_data(definition),
+        UInt64Type::from_opt_data(suspend_after_num_failures),
         TimestampType::from_opt_data(next_schedule_time),
         TimestampType::from_data(last_committed_on),
         TimestampType::from_opt_data(last_suspended_on),

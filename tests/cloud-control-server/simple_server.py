@@ -30,15 +30,24 @@ def load_data_from_json():
 
 def create_task_request_to_task(id, create_task_request):
     # Convert CreateTaskRequest to dictionary
-    request_dict = vars(create_task_request)
-    current_time = datetime.now(timezone.utc)
-    current_time = current_time.isoformat()
-    request_dict["created_at"] = current_time
-    request_dict["updated_at"] = current_time
-    request_dict["next_scheduled_at"] = current_time
-    request_dict["task_id"] = id
-    # Create a new Task object from the dictionary
-    task = task_pb2.Task(**request_dict)
+    task = task_pb2.Task()
+
+    # Copy fields from CreateTaskRequest to Task
+    task.task_name = create_task_request.task_name
+    task.task_id = id
+    task.query_text = create_task_request.query_text
+    task.owner = create_task_request.owner
+    task.comment = (
+        create_task_request.comment if create_task_request.HasField("comment") else ""
+    )
+    task.schedule_options.CopyFrom(create_task_request.schedule_options)
+    task.warehouse_options.CopyFrom(create_task_request.warehouse_options)
+    task.status = task_pb2.Task.Suspended
+    task.suspend_task_after_num_failures = (
+        create_task_request.suspend_task_after_num_failures
+    )
+    task.created_at = datetime.now(timezone.utc).isoformat()
+    task.updated_at = datetime.now(timezone.utc).isoformat()
 
     return task
 
@@ -106,9 +115,27 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         elif request.alter_task_type == task_pb2.AlterTaskRequest.Set:
             has_options = False
             if request.HasField("schedule_options"):
-                task.schedule_options = request.schedule_options
+                task.schedule_options.CopyFrom(request.schedule_options)
                 has_options = True
-
+            if request.HasField("warehouse_options"):
+                task.warehouse_options.CopyFrom(request.warehouse_options)
+                has_options = True
+            if request.HasField("comment"):
+                task.comment = request.comment
+                has_options = True
+            if request.HasField("suspend_task_after_num_failures"):
+                task.suspend_task_after_num_failures = (
+                    request.suspend_task_after_num_failures
+                )
+                has_options = True
+            if has_options is False:
+                return task_pb2.AlterTaskResponse(
+                    error=task_pb2.TaskError(
+                        kind="INVALID_ARGUMENT",
+                        message="No options provided for SET",
+                        code=8,
+                    )
+                )
         else:
             # not supported
             return task_pb2.AlterTaskResponse(
@@ -121,7 +148,13 @@ class TaskService(task_pb2_grpc.TaskServiceServicer):
         current_time = datetime.now(timezone.utc)
         current_time = current_time.isoformat()
         task.updated_at = current_time
+        task_name = task.task_name
+        TASK_DB[task_name] = task
         return task_pb2.AlterTaskResponse(task=task)
+
+    def ExecuteTask(self, request, context):
+        print("ExecuteTask", request)
+        return task_pb2.ExecuteTaskResponse(error=None)
 
     def ShowTasks(self, request, context):
         print("ShowTasks", request)

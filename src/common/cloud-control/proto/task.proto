@@ -121,6 +121,8 @@ message AlterTaskRequest {
   ScheduleOptions schedule_options = 7;
   bool if_exist = 8;
   WarehouseOptions warehouse_options = 9;
+  optional int32 suspend_task_after_num_failures = 10; //SUSPEND_TASK_AFTER_NUM_FAILURES
+
 }
 
 message AlterTaskResponse {

@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_cloud_control::cloud_api::CloudControlApiProvider;
 use common_cloud_control::pb::alter_task_request::AlterTaskType;
 use common_cloud_control::pb::AlterTaskRequest;
+use common_cloud_control::pb::WarehouseOptions;
 use common_cloud_control::task_client::make_request;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
@@ -62,6 +63,8 @@ impl AlterTaskInterpreter {
             query_text: None,
             comment: None,
             schedule_options: None,
+            warehouse_options: None,
+            suspend_task_after_num_failures: None,
         };
         match plan.alter_options {
             AlterTaskOptions::Resume => {
@@ -71,12 +74,20 @@ impl AlterTaskInterpreter {
                 req.alter_task_type = AlterTaskType::Suspend as i32;
             }
             AlterTaskOptions::Set {
-                schedule, comments, ..
+                schedule,
+                comments,
+                warehouse,
+                suspend_task_after_num_failures,
             } => {
                 req.alter_task_type = AlterTaskType::Set as i32;
                 req.schedule_options = schedule.map(make_schedule_options);
                 req.comment = comments;
-                // TODO add remain alter fields
+                req.warehouse_options = warehouse.map(|w| WarehouseOptions {
+                    warehouse: Some(w),
+                    using_warehouse_size: None,
+                });
+                req.suspend_task_after_num_failures =
+                    suspend_task_after_num_failures.map(|i| i as i32);
             }
             AlterTaskOptions::Unset { .. } => {
                 todo!()

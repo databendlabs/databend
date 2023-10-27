@@ -21,7 +21,7 @@ use common_exception::Result;
 
 use crate::task_client::TaskClient;
 
-pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 180; // 180 seconds
+pub const CLOUD_REQUEST_TIMEOUT_SEC: u64 = 5; // 5 seconds
 
 // commonly used metadata
 pub const TENANT_ID: &str = "X-DATABEND-TENANT";

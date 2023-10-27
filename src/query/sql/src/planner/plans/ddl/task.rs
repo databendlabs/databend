@@ -36,6 +36,10 @@ pub fn task_schema() -> DataSchemaRef {
         DataField::new("schedule", DataType::String.wrap_nullable()),
         DataField::new("state", DataType::String),
         DataField::new("definition", DataType::String),
+        DataField::new(
+            "suspend_task_after_num_failures",
+            DataType::Number(UInt64).wrap_nullable(),
+        ),
         DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
         DataField::new("last_committed_on", DataType::Timestamp),
         DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
