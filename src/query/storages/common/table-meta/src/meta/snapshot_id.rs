@@ -17,6 +17,7 @@ use chrono::Utc;
 use common_base::base::uuid::NoContext;
 use common_base::base::uuid::Timestamp;
 use common_base::base::uuid::Uuid;
+use common_exception::Result;
 
 pub type SnapshotId = Uuid;
 
@@ -30,5 +31,21 @@ pub fn new_snapshot_id_with_timestamp(timestamp: Option<DateTime<Utc>>) -> Snaps
             Uuid::new_v7(ts)
         }
         None => Uuid::now_v7(),
+    }
+}
+
+pub fn snapshot_id_from_string(snapshot_id_str: &str) -> Result<SnapshotId> {
+    Ok(Uuid::parse_str(snapshot_id_str)?)
+}
+
+pub fn time_from_snapshot_id(snapshot_id: &SnapshotId) -> Option<DateTime<Utc>> {
+    let timestamp_opt = snapshot_id.get_timestamp().map(|timestamp| {
+        let (sec, ns) = timestamp.to_unix();
+        DateTime::<Utc>::from_timestamp(sec as i64, ns)
+    });
+
+    match timestamp_opt {
+        Some(timestamp) => timestamp,
+        None => None,
     }
 }

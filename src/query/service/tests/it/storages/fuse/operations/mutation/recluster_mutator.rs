@@ -215,10 +215,9 @@ async fn test_safety_for_recluster() -> Result<()> {
             merge_statistics_mut(&mut summary, &seg.summary, Some(cluster_key_id));
         }
 
-        let id = Uuid::new_v4();
         let snapshot = Arc::new(TableSnapshot::new(
-            id,
             &None,
+            None,
             None,
             schema.as_ref().clone(),
             summary,

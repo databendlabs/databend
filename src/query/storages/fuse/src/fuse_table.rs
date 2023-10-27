@@ -280,17 +280,26 @@ impl FuseTable {
 
     #[minitrace::trace]
     #[async_backtrace::framed]
+    pub async fn read_table_snapshot_by_location(
+        &self,
+        location: String,
+    ) -> Result<Option<Arc<TableSnapshot>>> {
+        let reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = self.snapshot_format_version(Some(location.clone())).await?;
+        let params = LoadParams {
+            location,
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        Ok(Some(reader.read(&params).await?))
+    }
+
+    #[minitrace::trace]
+    #[async_backtrace::framed]
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
-            let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-            let ver = self.snapshot_format_version(Some(loc.clone())).await?;
-            let params = LoadParams {
-                location: loc,
-                len_hint: None,
-                ver,
-                put_cache: true,
-            };
-            Ok(Some(reader.read(&params).await?))
+            self.read_table_snapshot_by_location(loc).await
         } else {
             Ok(None)
         }

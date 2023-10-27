@@ -66,6 +66,8 @@ pub struct TableSnapshot {
     /// id of snapshot
     pub snapshot_id: SnapshotId,
 
+    /// table version when commit
+    /// for backward compatibility, `Option` is used
     pub table_version: Option<TableVersion>,
 
     /// timestamp of this snapshot
@@ -219,7 +221,7 @@ impl From<v2::TableSnapshot> for TableSnapshot {
     fn from(s: v2::TableSnapshot) -> Self {
         let prev_snapshot_id = s
             .prev_snapshot_id
-            // v4 snapshot file name has no table version, so prev table version is None
+            // v2 snapshot file name has no table version, so prev table version is None
             .map(|prev_snapshot_id| (prev_snapshot_id.0, prev_snapshot_id.1, None));
         Self {
             // NOTE: it is important to let the format_version return from here
@@ -245,7 +247,7 @@ where T: Into<v3::TableSnapshot>
         let s: v3::TableSnapshot = s.into();
         let prev_snapshot_id = s
             .prev_snapshot_id
-            // v4 snapshot file name has no table version, so prev table version is None
+            // v3 snapshot file name has no table version, so prev table version is None
             .map(|prev_snapshot_id| (prev_snapshot_id.0, prev_snapshot_id.1, None));
         Self {
             // NOTE: it is important to let the format_version return from here

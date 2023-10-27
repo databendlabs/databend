@@ -16,8 +16,10 @@ use std::marker::PhantomData;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use storages_common_table_meta::meta::snapshot_id_from_string;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use storages_common_table_meta::meta::TableVersion;
@@ -144,10 +146,20 @@ impl TableMetaLocationGenerator {
         let v: Vec<&str> = location.split('/').collect();
         let v: Vec<&str> = v[v.len() - 1].split('_').collect();
         if v.len() > 1 {
-            Some(v[1].parse().unwrap())
+            match v[1].parse() {
+                Ok(v) => Some(v),
+                Err(_) => None,
+            }
         } else {
             None
         }
+    }
+
+    pub fn snapshot_id_from_location(location: &str) -> Result<SnapshotId> {
+        let v: Vec<&str> = location.split('/').collect();
+        let v: Vec<&str> = v[v.len() - 1].split('_').collect();
+        let snapshot_str = v[0];
+        snapshot_id_from_string(snapshot_str)
     }
 
     pub fn snapshot_statistics_location_from_uuid(
@@ -259,6 +271,7 @@ impl SnapshotLocationCreator for TableSnapshotStatisticsVersion {
     fn suffix(&self) -> String {
         match self {
             TableSnapshotStatisticsVersion::V0(_) => "_ts_v0.json".to_string(),
+            TableSnapshotStatisticsVersion::V1(_) => "_ts_v5.json".to_string(),
         }
     }
 }
