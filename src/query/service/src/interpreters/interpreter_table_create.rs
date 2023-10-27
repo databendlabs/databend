@@ -28,6 +28,8 @@ use common_expression::SNAPSHOT_NAME_COL_NAME;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
+use common_management::RoleApi;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::Ownership;
 use common_meta_app::schema::TableMeta;
@@ -160,9 +162,31 @@ impl CreateTableInterpreter {
         if !reply.new_table {
             return Ok(PipelineBuildResult::create());
         }
+
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
+
+        // grant the ownership of the table to the current role.
+        let current_role = self.ctx.get_current_role();
+        if let Some(current_role) = current_role {
+            let db = catalog
+                .get_database(tenant.as_str(), &self.plan.database)
+                .await?;
+            let db_id = db.get_db_info().ident.db_id;
+
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Table {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id,
+                        table_id: table.get_id(),
+                    },
+                    &current_role.name,
+                )
+                .await?;
+        }
 
         // If the table creation query contains column definitions, like 'CREATE TABLE t1(a int) AS SELECT * from t2',
         // we use the definitions to create the table schema. It may happen that the "AS SELECT" query's schema doesn't
@@ -224,7 +248,29 @@ impl CreateTableInterpreter {
         if let Some(current_role) = self.ctx.get_current_role() {
             req.table_meta.owner = Some(Ownership::new(current_role.name));
         }
-        catalog.create_table(req.clone()).await?;
+
+        let reply = catalog.create_table(req.clone()).await?;
+
+        // grant the ownership of the table to the current role, the above req.table_meta.owner could be removed in future.
+        if let Some(current_role) = self.ctx.get_current_role() {
+            let tenant = self.ctx.get_tenant();
+            let db = catalog
+                .get_database(tenant.as_str(), &self.plan.database)
+                .await?;
+            let db_id = db.get_db_info().ident.db_id;
+
+            let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
+            role_api
+                .grant_ownership(
+                    &GrantObjectByID::Table {
+                        catalog_name: self.plan.catalog.clone(),
+                        db_id,
+                        table_id: reply.table_id,
+                    },
+                    &current_role.name,
+                )
+                .await?;
+        }
 
         Ok(PipelineBuildResult::create())
     }
