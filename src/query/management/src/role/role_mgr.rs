@@ -237,6 +237,17 @@ impl RoleApi for RoleMgr {
 
     #[async_backtrace::framed]
     #[minitrace::trace]
+    async fn unset_ownership(&self, object: &GrantObjectByID) -> common_exception::Result<()> {
+        let key = self.make_object_owner_key(object);
+        let kv_api = self.kv_api.clone();
+        let res = kv_api
+            .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
+            .await?;
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn drop_role(&self, role: String, seq: MatchSeq) -> Result<(), ErrorCode> {
         let key = self.make_role_key(&role);
         let kv_api = self.kv_api.clone();

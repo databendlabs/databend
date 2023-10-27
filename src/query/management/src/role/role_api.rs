@@ -47,6 +47,9 @@ pub trait RoleApi: Sync + Send {
     #[allow(clippy::ptr_arg)]
     async fn grant_ownership(&self, object: &GrantObjectByID, role: &str) -> Result<()>;
 
+    /// Remember to call this method when you dropped a database/table, etc.
+    async fn unset_ownership(&self, object: &GrantObjectByID) -> Result<()>;
+
     /// Get the ownership info by object. If it's not granted to any role, return PUBLIC
     async fn get_ownership(&self, object: &GrantObjectByID) -> Result<Option<OwnershipInfo>>;
 
