@@ -15,7 +15,7 @@
 use std::collections::HashSet;
 
 use common_meta_app::principal::UserPrivilegeType;
-use common_tracing::func_name;
+use minitrace::func_name;
 use enumflags2::make_bitflags;
 
 use crate::common;

@@ -25,6 +25,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
+use minitrace::full_name;
 use indexmap::IndexSet;
 use itertools::Itertools;
 use log::error;
@@ -260,7 +261,7 @@ impl ReclusterMutator {
                     v.block_metas()
                         .map_err(|_| ErrorCode::Internal("Failed to get block metas"))
                 }
-                .in_span(Span::enter_with_local_parent("try_from_segments"))
+                .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 

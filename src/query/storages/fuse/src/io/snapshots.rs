@@ -24,6 +24,7 @@ use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use minitrace::full_name;
 use futures::stream::StreamExt;
 use futures_util::TryStreamExt;
 use log::info;
@@ -120,8 +121,8 @@ impl SnapshotsIO {
         Ok(TableSnapshotLite::from((snapshot.as_ref(), ver)))
     }
 
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     async fn read_snapshot_lites(
         &self,
         snapshot_files: &[String],
@@ -136,7 +137,7 @@ impl SnapshotsIO {
                     self.operator.clone(),
                     min_snapshot_timestamp,
                 )
-                .in_span(Span::enter_with_local_parent("read_snapshot"))
+                .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 
@@ -288,8 +289,8 @@ impl SnapshotsIO {
     }
 
     // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn read_snapshot_lite_extends(
         &self,
         snapshot_files: &[String],
@@ -306,7 +307,7 @@ impl SnapshotsIO {
                     root_snapshot.clone(),
                     ignore_timestamp,
                 )
-                .in_span(Span::enter_with_local_parent("read_snapshot"))
+                .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 

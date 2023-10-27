@@ -21,7 +21,7 @@ use common_meta_stoerr::MetaStorageError;
 use common_meta_types::anyerror::AnyError;
 use common_meta_types::Change;
 use common_meta_types::SeqV;
-use common_tracing::func_name;
+use minitrace::func_name;
 use log::debug;
 use log::warn;
 use sled::transaction::ConflictableTransactionError;

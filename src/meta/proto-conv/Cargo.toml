@@ -20,7 +20,7 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true, features = ["serde"] }
 num = "0.4.0"
 thiserror = { workspace = true }
-
+minitrace = { workspace = true }
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 
 [build-dependencies]

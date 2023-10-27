@@ -28,7 +28,7 @@ use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
 use common_meta_types::TypeConfig;
 use common_meta_types::Vote;
-use common_tracing::func_name;
+use minitrace::full_name;
 use databend_meta::meta_service::meta_node::LogStore;
 use databend_meta::meta_service::meta_node::SMStore;
 use databend_meta::store::RaftStore;
@@ -61,7 +61,7 @@ impl StoreBuilder<TypeConfig, LogStore, SMStore, MetaSrvTestContext> for MetaSto
 #[test(harness = meta_service_test_harness_sync)]
 #[minitrace::trace]
 fn test_impl_raft_storage() -> anyhow::Result<()> {
-    let root = Span::root(func_name!(), SpanContext::random());
+    let root = Span::root(full_name!(), SpanContext::random());
     let _guard = root.set_local_parent();
 
     common_meta_sled_store::openraft::testing::Suite::test_all(MetaStoreBuilder {})?;

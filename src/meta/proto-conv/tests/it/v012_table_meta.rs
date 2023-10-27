@@ -21,7 +21,7 @@ use common_expression as ce;
 use common_expression::types::NumberDataType;
 use common_meta_app::schema as mt;
 use common_meta_app::storage::StorageParams;
-use common_tracing::func_name;
+use minitrace::func_name;
 use maplit::btreemap;
 
 use crate::common;

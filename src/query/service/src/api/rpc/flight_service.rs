@@ -34,7 +34,7 @@ use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_config::GlobalConfig;
 use common_settings::Settings;
-use common_tracing::func_name;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use tokio_stream::Stream;
 use tonic::Request;
@@ -112,7 +112,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_get(&self, request: Request<Ticket>) -> Response<Self::DoGetStream> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
         let _guard = root.set_local_parent();
 
         match request.get_metadata("x-type")?.as_str() {
@@ -152,7 +152,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn do_action(&self, request: Request<Action>) -> Response<Self::DoActionStream> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let action = request.into_inner();
@@ -193,7 +193,7 @@ impl FlightService for DatabendQueryFlightService {
                                     &init_query_fragments_plan.executor_packet,
                                 )
                             }
-                            .in_span(Span::enter_with_local_parent("init_query_fragments_plan")),
+                            .in_span(Span::enter_with_local_parent(full_name!())),
                         ),
                     )
                     .await
@@ -266,7 +266,7 @@ impl FlightService for DatabendQueryFlightService {
 
     #[async_backtrace::framed]
     async fn list_actions(&self, request: Request<Empty>) -> Response<Self::ListActionsStream> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             Result::Ok(RawResponse::new(

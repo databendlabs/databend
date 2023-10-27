@@ -380,7 +380,9 @@ impl ScheduleQueue {
                     workers_condvar,
                     process_future,
                 ))
-                .in_span(Span::enter_with_local_parent("ProcessorAsyncTask")),
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
             );
         }
     }

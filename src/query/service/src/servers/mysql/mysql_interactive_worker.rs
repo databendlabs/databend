@@ -29,7 +29,7 @@ use common_expression::SendableDataBlockStream;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::UserIdentity;
 use common_sql::Planner;
-use common_tracing::func_name;
+use minitrace::full_name;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;
@@ -187,7 +187,7 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
         query: &'a str,
         writer: QueryResultWriter<'a, W>,
     ) -> Result<()> {
-        let root = Span::root(func_name!(), SpanContext::random());
+        let root = Span::root(full_name!(), SpanContext::random());
 
         async {
             if self.base.session.is_aborting() {
@@ -406,7 +406,7 @@ impl InteractiveWorkerBase {
 
                 Ok::<_, ErrorCode>(intercepted_stream.boxed())
             }
-            .in_span(Span::enter_with_local_parent("exec_query"))
+            .in_span(Span::enter_with_local_parent(full_name!()))
         })?;
 
         let query_result = query_result.await.map_err_to_code(

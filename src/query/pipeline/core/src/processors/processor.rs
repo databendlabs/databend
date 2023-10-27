@@ -145,12 +145,19 @@ impl ProcessorPtr {
 
     /// # Safety
     pub unsafe fn async_process(&self) -> BoxFuture<'static, Result<()>> {
+        let id = self.id();
         let mut name = self.name();
         name.push_str("::async_process");
-        let span = Span::enter_with_local_parent(name)
-            .with_property(|| ("graph-node-id", self.id().index().to_string()));
 
-        (*self.inner.get()).async_process().in_span(span).boxed()
+        let task = (*self.inner.get()).async_process();
+
+        async move {
+            let span = Span::enter_with_local_parent(name)
+                .with_property(|| ("graph-node-id", id.index().to_string()));
+
+            task.in_span(span).await
+        }
+        .boxed()
     }
 }
 

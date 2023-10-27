@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
+use minitrace::full_name;
 use log::warn;
 use minitrace::prelude::*;
 use parking_lot::Mutex;
@@ -112,7 +113,7 @@ impl PipelinePushingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
-        let span = Span::enter_with_local_parent("PipelinePushingExecutor");
+        let span = Span::enter_with_local_parent(full_name!());
         move || {
             let _g = span.set_local_parent();
             if let Err(cause) = executor.execute() {

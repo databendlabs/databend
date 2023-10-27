@@ -15,7 +15,7 @@
 use chrono::TimeZone;
 use chrono::Utc;
 use common_meta_app::schema::VirtualColumnMeta;
-use common_tracing::func_name;
+use minitrace::func_name;
 
 use crate::common;
 

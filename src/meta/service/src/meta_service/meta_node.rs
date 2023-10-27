@@ -63,7 +63,7 @@ use common_meta_types::Node;
 use common_meta_types::NodeId;
 use common_meta_types::RaftMetrics;
 use common_meta_types::TypeConfig;
-use common_tracing::func_name;
+use minitrace::func_name;
 use futures::channel::oneshot;
 use itertools::Itertools;
 use log::as_debug;

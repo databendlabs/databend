@@ -27,6 +27,7 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 use common_pipeline_sinks::Sinker;
+use minitrace::full_name;
 use log::warn;
 use minitrace::prelude::*;
 use parking_lot::Condvar;
@@ -175,7 +176,7 @@ impl PipelinePullingExecutor {
     }
 
     fn thread_function(state: Arc<State>, executor: Arc<PipelineExecutor>) -> impl Fn() {
-        let span = Span::enter_with_local_parent("PipelinePullingExecutor");
+        let span = Span::enter_with_local_parent(full_name!());
         move || {
             let _g = span.set_local_parent();
             state.finished(executor.execute());

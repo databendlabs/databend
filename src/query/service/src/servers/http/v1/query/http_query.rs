@@ -211,7 +211,7 @@ pub struct HttpQuery {
 
 impl HttpQuery {
     #[async_backtrace::framed]
-    #[minitrace::trace(name = "HttpQuery::try_create")]
+    #[minitrace::trace]
     pub(crate) async fn try_create(
         ctx: &HttpQueryContext,
         request: HttpQueryRequest,
@@ -329,7 +329,7 @@ impl HttpQuery {
         let schema = plan.schema();
 
         let span = if let Some(parent) = SpanContext::current_local_parent() {
-            Span::root("ExecuteState::try_start_query", parent)
+            Span::root(std::any::type_name::<ExecuteState>(), parent)
         } else {
             Span::noop()
         };

@@ -1721,7 +1721,7 @@ dependencies = [
  "goldenfile",
  "itertools 0.10.5",
  "logos",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "nom",
  "nom-rule",
  "ordered-float 3.7.0",
@@ -1763,7 +1763,7 @@ dependencies = [
  "libc",
  "log",
  "logcall",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "num_cpus",
  "once_cell",
  "parking_lot 0.12.1",
@@ -2150,7 +2150,7 @@ dependencies = [
  "common-proto-conv",
  "common-protos",
  "common-storage",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "mockall",
  "serde_json",
 ]
@@ -2175,7 +2175,7 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "serde",
  "serde_json",
  "thiserror",
@@ -2232,7 +2232,7 @@ dependencies = [
  "lazy_static",
  "log",
  "logcall",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "once_cell",
  "parking_lot 0.12.1",
  "prost 0.12.1",
@@ -2257,7 +2257,7 @@ dependencies = [
  "common-meta-stoerr",
  "common-meta-types",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "once_cell",
  "tempfile",
 ]
@@ -2272,7 +2272,7 @@ dependencies = [
  "common-tracing",
  "futures-util",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "serde",
  "thiserror",
  "tokio",
@@ -2321,7 +2321,7 @@ dependencies = [
  "lazy_static",
  "log",
  "maplit",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "num",
  "once_cell",
  "openraft 0.8.4",
@@ -2348,7 +2348,7 @@ dependencies = [
  "common-meta-types",
  "common-tracing",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
@@ -2449,7 +2449,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "futures",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "petgraph",
  "serde",
  "serde_json",
@@ -2496,7 +2496,7 @@ dependencies = [
  "futures",
  "futures-util",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opendal",
  "parking_lot 0.12.1",
  "serde",
@@ -2542,6 +2542,7 @@ dependencies = [
  "convert_case 0.6.0",
  "enumflags2",
  "maplit",
+ "minitrace 0.6.1",
  "num",
  "pretty_assertions",
  "thiserror",
@@ -2650,7 +2651,7 @@ dependencies = [
  "indexmap 2.0.0",
  "itertools 0.10.5",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "num-derive",
  "num-traits",
  "once_cell",
@@ -2745,6 +2746,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "common-tracing",
  "enum-as-inner",
  "futures",
  "futures-util",
@@ -2754,7 +2756,7 @@ dependencies = [
  "lazy_static",
  "log",
  "metrics",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
@@ -2798,7 +2800,7 @@ dependencies = [
  "futures",
  "hive_metastore",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opendal",
  "ordered-float 3.7.0",
  "serde",
@@ -2832,7 +2834,7 @@ dependencies = [
  "futures",
  "icelake",
  "match-template",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opendal",
  "parquet",
  "serde",
@@ -3081,7 +3083,7 @@ dependencies = [
  "fern",
  "humantime",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "minitrace-opentelemetry",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -3708,7 +3710,7 @@ dependencies = [
  "futures",
  "limits-rs",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opendal",
  "poem",
  "sentry",
@@ -3806,7 +3808,7 @@ dependencies = [
  "log",
  "logcall",
  "maplit",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "once_cell",
  "poem",
  "pretty_assertions",
@@ -3921,7 +3923,7 @@ dependencies = [
  "maplit",
  "match-template",
  "metrics",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "mysql_async",
  "naive-cityhash",
  "num",
@@ -7873,11 +7875,11 @@ dependencies = [
 
 [[package]]
 name = "minitrace"
-version = "0.6.0"
-source = "git+https://github.com/tikv/minitrace-rust?rev=d48892d#d48892dc82e3d778d541d09dc38ccf55a56e5618"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
 dependencies = [
  "futures",
- "minitrace-macro 0.6.0",
+ "minitrace-macro 0.6.1",
  "minstant",
  "once_cell",
  "parking_lot 0.12.1",
@@ -7900,8 +7902,8 @@ dependencies = [
 
 [[package]]
 name = "minitrace-macro"
-version = "0.6.0"
-source = "git+https://github.com/tikv/minitrace-rust?rev=d48892d#d48892dc82e3d778d541d09dc38ccf55a56e5618"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7911,12 +7913,12 @@ dependencies = [
 
 [[package]]
 name = "minitrace-opentelemetry"
-version = "0.6.0"
-source = "git+https://github.com/tikv/minitrace-rust?rev=d48892d#d48892dc82e3d778d541d09dc38ccf55a56e5618"
+version = "0.6.1"
+source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
 dependencies = [
  "futures",
  "log",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "opentelemetry",
 ]
 
@@ -11254,7 +11256,7 @@ dependencies = [
  "common-functions",
  "criterion",
  "match-template",
- "minitrace 0.6.0",
+ "minitrace 0.6.1",
  "rand 0.8.5",
  "serde",
  "storages-common-table-meta",

@@ -25,6 +25,7 @@ use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use minitrace::full_name;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -334,7 +335,7 @@ impl PipelineExecutor {
                 }
             }
 
-            let span = Span::enter_with_local_parent("PipelineExecutor::execute_threads")
+            let span = Span::enter_with_local_parent(full_name!())
                 .with_property(|| ("thread_name", name.clone()));
             thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
                 let _g = span.set_local_parent();
