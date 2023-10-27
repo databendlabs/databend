@@ -12,17 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod lock;
+mod request;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock_api;
-pub mod plan;
-pub mod query_kind;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+pub use lock::TableLock;
+pub use request::*;

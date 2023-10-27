@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::lock_api::LockApi;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -61,9 +62,8 @@ use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLevelLock;
-use table_lock::TableLockManagerWrapper;
 
 use crate::interpreters::common::create_push_down_filters;
 use crate::interpreters::Interpreter;
@@ -123,12 +123,8 @@ impl Interpreter for DeleteInterpreter {
         tbl.check_mutable()?;
 
         // Add table lock heartbeat.
-        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-        let mut table_lock =
-            TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
-        lock_mgr
-            .try_lock(self.ctx.clone(), &mut table_lock, catalog_name)
-            .await?;
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone());
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -267,7 +263,7 @@ impl Interpreter for DeleteInterpreter {
                     .await?;
         }
 
-        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         Ok(build_res)
     }

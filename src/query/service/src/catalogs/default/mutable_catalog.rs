@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
+use common_catalog::lock_api::LockRequest;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
@@ -86,14 +87,13 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
-use common_pipeline_core::TableLockReq;
 use log::info;
-use table_lock::CreateTableLockReq;
-use table_lock::DeleteTableLockReq;
-use table_lock::ExtendTableLockReq;
-use table_lock::ListTableLockReq;
+use storages_common_locks::CreateTableLockReq;
+use storages_common_locks::DeleteTableLockReq;
+use storages_common_locks::ExtendTableLockReq;
+use storages_common_locks::ListTableLockReq;
 
-use super::catalog_context::CatalogContext;
+use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
 use crate::databases::DatabaseContext;
 use crate::databases::DatabaseFactory;
@@ -514,7 +514,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, req: Box<dyn TableLockReq>) -> Result<Vec<u64>> {
+    async fn list_table_lock_revs(&self, req: Box<dyn LockRequest>) -> Result<Vec<u64>> {
         let req = req
             .as_any()
             .downcast_ref::<ListTableLockReq>()
@@ -526,7 +526,7 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn create_table_lock_rev(
         &self,
-        req: Box<dyn TableLockReq>,
+        req: Box<dyn LockRequest>,
     ) -> Result<CreateTableLockRevReply> {
         let req = req
             .as_any()
@@ -537,7 +537,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn extend_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
         let req = req
             .as_any()
             .downcast_ref::<ExtendTableLockReq>()
@@ -547,7 +547,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn delete_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
         let req = req
             .as_any()
             .downcast_ref::<DeleteTableLockReq>()

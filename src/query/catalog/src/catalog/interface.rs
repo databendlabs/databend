@@ -75,10 +75,10 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use common_pipeline_core::TableLockReq;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
+use crate::lock_api::LockRequest;
 use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
@@ -260,16 +260,16 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
-    async fn list_table_lock_revs(&self, req: Box<dyn TableLockReq>) -> Result<Vec<u64>>;
+    async fn list_table_lock_revs(&self, req: Box<dyn LockRequest>) -> Result<Vec<u64>>;
 
     async fn create_table_lock_rev(
         &self,
-        req: Box<dyn TableLockReq>,
+        req: Box<dyn LockRequest>,
     ) -> Result<CreateTableLockRevReply>;
 
-    async fn extend_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()>;
+    async fn extend_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()>;
 
-    async fn delete_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()>;
+    async fn delete_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()>;
 
     /// Table function
 

@@ -20,6 +20,7 @@ use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
+use common_catalog::lock_api::LockRequest;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
@@ -79,7 +80,6 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use common_pipeline_core::TableLockReq;
 use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;
@@ -363,25 +363,25 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, _req: Box<dyn TableLockReq>) -> Result<Vec<u64>> {
+    async fn list_table_lock_revs(&self, _req: Box<dyn LockRequest>) -> Result<Vec<u64>> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
     async fn create_table_lock_rev(
         &self,
-        _req: Box<dyn TableLockReq>,
+        _req: Box<dyn LockRequest>,
     ) -> Result<CreateTableLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, _req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn extend_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, _req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn delete_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         unimplemented!()
     }
 

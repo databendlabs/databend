@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
+use common_catalog::lock_api::LockApi;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
@@ -47,9 +48,8 @@ use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
 use data_mask_feature::get_datamask_handler;
 use storages_common_index::BloomIndex;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
-use table_lock::TableLevelLock;
-use table_lock::TableLockManagerWrapper;
 
 use super::common::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
@@ -270,12 +270,9 @@ impl ModifyTableColumnInterpreter {
             return Ok(PipelineBuildResult::create());
         }
 
-        // Add table lock heartbeat.
-        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-        let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
-        lock_mgr
-            .try_lock(self.ctx.clone(), &mut table_lock, catalog_name)
-            .await?;
+        // Add table lock.
+        let table_lock = LockManager::create_table_lock(table_info.clone());
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         // 1. construct sql for selecting data from old table
         let mut sql = "select".to_string();
@@ -347,7 +344,7 @@ impl ModifyTableColumnInterpreter {
             prev_snapshot_id,
         )?;
 
-        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 

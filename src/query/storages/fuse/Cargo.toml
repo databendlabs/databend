@@ -38,6 +38,7 @@ table-lock = { path = "../../ee-features/table-lock" }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }
+storages-common-locks = { path = "../common/locks" }
 storages-common-cache-manager = { path = "../common/cache-manager" }
 storages-common-index = { path = "../common/index" }
 storages-common-pruner = { path = "../common/pruner" }

@@ -35,10 +35,10 @@ use common_storages_fuse::FuseTable;
 use log::error;
 use log::info;
 use log::warn;
+use storages_common_locks::ListTableLockReq;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::ListTableLockReq;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;

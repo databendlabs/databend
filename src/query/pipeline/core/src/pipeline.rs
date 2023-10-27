@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::lock_guard::LockGuard;
 use crate::pipe::Pipe;
 use crate::pipe::PipeItem;
 use crate::processors::port::InputPort;
@@ -29,7 +30,6 @@ use crate::processors::ResizeProcessor;
 use crate::processors::ShuffleProcessor;
 use crate::SinkPipeBuilder;
 use crate::SourcePipeBuilder;
-use crate::TableLock;
 use crate::TransformPipeBuilder;
 
 /// The struct of new pipeline
@@ -55,7 +55,7 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
-    table_locks: Vec<Arc<dyn TableLock>>,
+    lock_guards: Vec<Arc<LockGuard>>,
 }
 
 impl Debug for Pipeline {
@@ -76,7 +76,7 @@ impl Pipeline {
             pipes: Vec::new(),
             on_init: None,
             on_finished: None,
-            table_locks: vec![],
+            lock_guards: vec![],
         }
     }
 
@@ -131,12 +131,14 @@ impl Pipeline {
         }
     }
 
-    pub fn add_table_lock(&mut self, table_lock: Arc<dyn TableLock>) {
-        self.table_locks.push(table_lock);
+    pub fn add_lock_guard(&mut self, guard: Option<LockGuard>) {
+        if let Some(guard) = guard {
+            self.lock_guards.push(Arc::new(guard));
+        }
     }
 
-    pub fn take_table_locks(&mut self) -> Vec<Arc<dyn TableLock>> {
-        std::mem::take(&mut self.table_locks)
+    pub fn take_lock_guards(&mut self) -> Vec<Arc<LockGuard>> {
+        std::mem::take(&mut self.lock_guards)
     }
 
     pub fn set_max_threads(&mut self, max_threads: usize) {

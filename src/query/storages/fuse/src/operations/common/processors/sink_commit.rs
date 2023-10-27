@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
+use common_catalog::lock_api::LockApi;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
@@ -27,19 +28,18 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::TableLock;
+use common_pipeline_core::lock_guard::LockGuard;
 use log::debug;
 use log::error;
 use log::info;
 use log::warn;
 use opendal::Operator;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use table_lock::TableLevelLock;
-use table_lock::TableLockManagerWrapper;
 
 use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_commit_aborts;
@@ -93,7 +93,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     backoff: ExponentialBackoff,
 
     abort_operation: AbortOperation,
-    table_lock: Option<Arc<dyn TableLock>>,
+    lock_guard: Option<LockGuard>,
     need_lock: bool,
     start_time: Instant,
     prev_snapshot_id: Option<SnapshotId>,
@@ -122,7 +122,7 @@ where F: SnapshotGenerator + Send + 'static
             copied_files,
             snapshot_gen,
             abort_operation: AbortOperation::default(),
-            table_lock: None,
+            lock_guard: None,
             transient: table.transient(),
             backoff: ExponentialBackoff::default(),
             retries: 0,
@@ -288,16 +288,11 @@ where F: SnapshotGenerator + Send + 'static
                 }
             }
             State::TryLock => {
-                let table_info = self.table.get_table_info();
-                let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-                let mut table_lock =
-                    TableLevelLock::create(lock_mgr.clone(), table_info.ident.table_id);
-                match lock_mgr
-                    .try_lock(self.ctx.clone(), &mut table_lock, table_info.catalog())
-                    .await
-                {
-                    Ok(_) => {
-                        self.table_lock = Some(Arc::new(table_lock));
+                let table_lock =
+                    LockManager::create_table_lock(self.table.get_table_info().clone());
+                match table_lock.try_lock(self.ctx.clone()).await {
+                    Ok(guard) => {
+                        self.lock_guard = guard;
                         self.state = State::FillDefault;
                     }
                     Err(e) => {

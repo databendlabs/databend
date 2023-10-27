@@ -15,6 +15,7 @@
 pub mod processors;
 
 pub mod input_error;
+pub mod lock_guard;
 pub mod pipe;
 pub mod pipeline;
 pub mod pipeline_display;
@@ -22,6 +23,7 @@ pub mod table_lock;
 pub mod unsafe_cell_wrap;
 
 pub use input_error::InputError;
+pub use lock_guard::UnlockApi;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;

@@ -16,6 +16,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_catalog::lock_api::LockApi;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,8 +29,7 @@ use common_sql::binder::ColumnBindingBuilder;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::Visibility;
 use log::debug;
-use table_lock::TableLevelLock;
-use table_lock::TableLockManagerWrapper;
+use storages_common_locks::LockManager;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::common::hook_refresh_agg_index;
@@ -84,12 +84,8 @@ impl Interpreter for UpdateInterpreter {
         tbl.check_mutable()?;
 
         // Add table lock heartbeat.
-        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-        let mut table_lock =
-            TableLevelLock::create(lock_mgr.clone(), tbl.get_table_info().ident.table_id);
-        lock_mgr
-            .try_lock(self.ctx.clone(), &mut table_lock, catalog_name)
-            .await?;
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone());
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -201,7 +197,7 @@ impl Interpreter for UpdateInterpreter {
             .await?;
         }
 
-        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
+        build_res.main_pipeline.add_lock_guard(lock_guard);
         Ok(build_res)
     }
 }

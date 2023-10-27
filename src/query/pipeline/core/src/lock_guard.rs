@@ -12,17 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+use std::sync::Arc;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock_api;
-pub mod plan;
-pub mod query_kind;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+pub trait UnlockApi: Sync + Send {
+    fn unlock(&self, revision: u64);
+}
+
+pub struct LockGuard {
+    lock_mgr: Arc<dyn UnlockApi>,
+    revision: u64,
+}
+
+impl LockGuard {
+    pub fn new(lock_mgr: Arc<dyn UnlockApi>, revision: u64) -> Self {
+        LockGuard { lock_mgr, revision }
+    }
+}
+
+impl Drop for LockGuard {
+    fn drop(&mut self) {
+        self.lock_mgr.unlock(self.revision);
+    }
+}

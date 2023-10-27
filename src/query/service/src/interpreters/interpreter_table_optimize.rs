@@ -36,8 +36,8 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 use common_storages_fuse::FuseTable;
+use storages_common_locks::ListTableLockReq;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::ListTableLockReq;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;

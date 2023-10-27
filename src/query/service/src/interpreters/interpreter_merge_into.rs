@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
+use common_catalog::lock_api::LockApi;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -27,6 +28,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::SendableDataBlockStream;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
 use common_sql::executor::MergeInto;
 use common_sql::executor::MergeIntoSource;
@@ -57,9 +59,8 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 use itertools::Itertools;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLevelLock;
-use table_lock::TableLockManagerWrapper;
 use tokio_stream::StreamExt;
 
 use super::Interpreter;
@@ -95,18 +96,15 @@ impl Interpreter for MergeIntoInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let start = Instant::now();
-        let (physical_plan, table_id) = self.build_physical_plan().await?;
+        let (physical_plan, table_info) = self.build_physical_plan().await?;
         let mut build_res =
             build_query_pipeline_without_render_result_set(&self.ctx, &physical_plan, false)
                 .await?;
 
         // Add table lock heartbeat before execution.
-        let lock_mgr = TableLockManagerWrapper::instance(self.ctx.clone());
-        let mut table_lock = TableLevelLock::create(lock_mgr.clone(), table_id);
-        lock_mgr
-            .try_lock(self.ctx.clone(), &mut table_lock, &self.plan.catalog)
-            .await?;
-        build_res.main_pipeline.add_table_lock(Arc::new(table_lock));
+        let table_lock = LockManager::create_table_lock(table_info);
+        let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
+        build_res.main_pipeline.add_lock_guard(lock_guard);
 
         // Compact if 'enable_recluster_after_write' on.
         {
@@ -135,7 +133,7 @@ impl Interpreter for MergeIntoInterpreter {
 }
 
 impl MergeIntoInterpreter {
-    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, u64)> {
+    async fn build_physical_plan(&self) -> Result<(PhysicalPlan, TableInfo)> {
         let MergePlan {
             bind_context,
             input,
@@ -207,7 +205,7 @@ impl MergeIntoInterpreter {
                     table.get_table_info().engine(),
                 )))?;
 
-        let table_info = fuse_table.get_table_info();
+        let table_info = fuse_table.get_table_info().clone();
         let catalog_ = self.ctx.get_catalog(catalog).await?;
 
         // merge_into_source is used to recv join's datablocks and split them into macthed and not matched
@@ -359,7 +357,7 @@ impl MergeIntoInterpreter {
             merge_meta: false,
         }));
 
-        Ok((physical_plan, table_info.ident.table_id))
+        Ok((physical_plan, table_info))
     }
 
     async fn build_static_filter(

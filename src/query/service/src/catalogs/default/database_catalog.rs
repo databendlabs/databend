@@ -20,6 +20,7 @@ use std::sync::Arc;
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
+use common_catalog::lock_api::LockRequest;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
@@ -82,7 +83,6 @@ use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
-use common_pipeline_core::TableLockReq;
 use log::info;
 
 use crate::catalogs::default::ImmutableCatalog;
@@ -610,25 +610,25 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, req: Box<dyn TableLockReq>) -> Result<Vec<u64>> {
+    async fn list_table_lock_revs(&self, req: Box<dyn LockRequest>) -> Result<Vec<u64>> {
         self.mutable_catalog.list_table_lock_revs(req).await
     }
 
     #[async_backtrace::framed]
     async fn create_table_lock_rev(
         &self,
-        req: Box<dyn TableLockReq>,
+        req: Box<dyn LockRequest>,
     ) -> Result<CreateTableLockRevReply> {
         self.mutable_catalog.create_table_lock_rev(req).await
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn extend_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
         self.mutable_catalog.extend_table_lock_rev(req).await
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn delete_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
         self.mutable_catalog.delete_table_lock_rev(req).await
     }
 

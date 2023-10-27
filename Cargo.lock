@@ -2759,6 +2759,7 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
@@ -3946,6 +3947,7 @@ dependencies = [
  "storages-common-cache",
  "storages-common-cache-manager",
  "storages-common-index",
+ "storages-common-locks",
  "storages-common-table-meta",
  "strength_reduce",
  "sysinfo",
@@ -11214,6 +11216,32 @@ dependencies = [
  "storages-common-table-meta",
  "thiserror",
  "xorfilter-rs",
+]
+
+[[package]]
+name = "storages-common-locks"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-channel",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-license",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-types",
+ "common-metrics",
+ "common-pipeline-core",
+ "common-users",
+ "futures",
+ "futures-util",
+ "lazy_static",
+ "log",
+ "parking_lot 0.12.1",
+ "rand 0.8.5",
 ]
 
 [[package]]

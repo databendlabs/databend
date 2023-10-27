@@ -74,78 +74,78 @@ impl TableLockManager for RealTableLockManager {
         lock: &mut dyn TableLock,
         catalog: &str,
     ) -> Result<()> {
-        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
-        let catalog = ctx.get_catalog(catalog).await?;
-
+        // let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
+        // let catalog = ctx.get_catalog(catalog).await?;
+        //
         // get a new table lock revision.
-        let res = catalog
-            .create_table_lock_rev(lock.create_table_lock_req(expire_secs))
-            .await?;
-        let revision = res.revision;
-        lock.set_revision(revision);
-
-        let duration = Duration::from_secs(expire_secs);
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let list_table_lock_req = lock.list_table_lock_req();
-        let delete_table_lock_req = lock.delete_table_lock_req();
-        loop {
-            // List all revisions and check if the current is the minimum.
-            let reply = catalog
-                .list_table_lock_revs(list_table_lock_req.clone())
-                .await?;
-            let position = reply.iter().position(|x| *x == revision).ok_or(
-                // If the current is not found in list,  it means that the current has expired.
-                ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
-            )?;
-
-            if position == 0 {
-                // The lock is acquired by current session.
-                break;
-            }
-
-            // Get the previous revision, watch the delete event.
-            let req = WatchRequest {
-                key: lock.watch_delete_key(reply[position - 1]),
-                key_end: None,
-                filter_type: FilterType::Delete.into(),
-            };
-            let mut watch_stream = meta_api.watch(req).await?;
-            // Add a timeout period for watch.
-            match timeout(duration, async move {
-                while let Some(Ok(resp)) = watch_stream.next().await {
-                    if let Some(event) = resp.event {
-                        if event.current.is_none() {
-                            break;
-                        }
-                    }
-                }
-            })
-            .await
-            {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    catalog
-                        .delete_table_lock_rev(delete_table_lock_req.clone())
-                        .await?;
-                    Err(ErrorCode::TableAlreadyLocked(
-                        "table is locked by other session, please retry later".to_string(),
-                    ))
-                }
-            }?;
-        }
-
-        let mut lock_holder = TableLockHolder::create();
-        lock_holder.start(ctx, catalog, lock).await?;
-
+        // let res = catalog
+        // .create_table_lock_rev(lock.create_table_lock_req(expire_secs))
+        // .await?;
+        // let revision = res.revision;
+        // lock.set_revision(revision);
+        //
+        // let duration = Duration::from_secs(expire_secs);
+        // let meta_api = UserApiProvider::instance().get_meta_store_client();
+        // let list_table_lock_req = lock.list_table_lock_req();
+        // let delete_table_lock_req = lock.delete_table_lock_req();
+        // loop {
+        // List all revisions and check if the current is the minimum.
+        // let reply = catalog
+        // .list_table_lock_revs(list_table_lock_req.clone())
+        // .await?;
+        // let position = reply.iter().position(|x| *x == revision).ok_or(
+        // If the current is not found in list,  it means that the current has expired.
+        // ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
+        // )?;
+        //
+        // if position == 0 {
+        // The lock is acquired by current session.
+        // break;
+        // }
+        //
+        // Get the previous revision, watch the delete event.
+        // let req = WatchRequest {
+        // key: lock.watch_delete_key(reply[position - 1]),
+        // key_end: None,
+        // filter_type: FilterType::Delete.into(),
+        // };
+        // let mut watch_stream = meta_api.watch(req).await?;
+        // Add a timeout period for watch.
+        // match timeout(duration, async move {
+        // while let Some(Ok(resp)) = watch_stream.next().await {
+        // if let Some(event) = resp.event {
+        // if event.current.is_none() {
+        // break;
+        // }
+        // }
+        // }
+        // })
+        // .await
+        // {
+        // Ok(_) => Ok(()),
+        // Err(_) => {
+        // catalog
+        // .delete_table_lock_rev(delete_table_lock_req.clone())
+        // .await?;
+        // Err(ErrorCode::TableAlreadyLocked(
+        // "table is locked by other session, please retry later".to_string(),
+        // ))
+        // }
+        // }?;
+        // }
+        //
+        // let mut lock_holder = TableLockHolder::create();
+        // lock_holder.start(ctx, catalog, lock).await?;
+        //
         // metrics.
-        record_table_lock_nums(lock.level(), lock.table_id(), 1);
-
-        let revision = lock.revision();
-        assert!(revision > 0);
-
-        let mut active_locks = self.active_locks.write();
-        let prev = active_locks.insert(revision, Arc::new(Mutex::new(lock_holder)));
-        assert!(prev.is_none());
+        // record_table_lock_nums(lock.level(), lock.table_id(), 1);
+        //
+        // let revision = lock.revision();
+        // assert!(revision > 0);
+        //
+        // let mut active_locks = self.active_locks.write();
+        // let prev = active_locks.insert(revision, Arc::new(Mutex::new(lock_holder)));
+        // assert!(prev.is_none());
         Ok(())
     }
 

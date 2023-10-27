@@ -25,7 +25,7 @@ use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::TableLock;
+use common_pipeline_core::lock_guard::LockGuard;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;
@@ -59,7 +59,7 @@ pub struct PipelineExecutor {
     finished_notify: Arc<Notify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
-    table_locks: Vec<Arc<dyn TableLock>>,
+    lock_guards: Vec<Arc<LockGuard>>,
 }
 
 impl PipelineExecutor {
@@ -77,7 +77,7 @@ impl PipelineExecutor {
 
         let on_init_callback = pipeline.take_on_init();
         let on_finished_callback = pipeline.take_on_finished();
-        let table_locks = pipeline.take_table_locks();
+        let lock_guards = pipeline.take_lock_guards();
 
         match RunningGraph::create(pipeline) {
             Err(cause) => {
@@ -90,7 +90,7 @@ impl PipelineExecutor {
                 Mutex::new(Some(on_init_callback)),
                 Mutex::new(Some(on_finished_callback)),
                 settings,
-                table_locks,
+                lock_guards,
             ),
         }
     }
@@ -143,9 +143,9 @@ impl PipelineExecutor {
             })
         };
 
-        let table_locks = pipelines
+        let lock_guards = pipelines
             .iter_mut()
-            .flat_map(|x| x.take_table_locks())
+            .flat_map(|x| x.take_lock_guards())
             .collect::<Vec<_>>();
 
         match RunningGraph::from_pipelines(pipelines) {
@@ -162,7 +162,7 @@ impl PipelineExecutor {
                 Mutex::new(on_init_callback),
                 Mutex::new(on_finished_callback),
                 settings,
-                table_locks,
+                lock_guards,
             ),
         }
     }
@@ -173,7 +173,7 @@ impl PipelineExecutor {
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
         settings: ExecutorSettings,
-        table_locks: Vec<Arc<dyn TableLock>>,
+        lock_guards: Vec<Arc<LockGuard>>,
     ) -> Result<Arc<PipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
@@ -189,7 +189,7 @@ impl PipelineExecutor {
             settings,
             finished_error: Mutex::new(None),
             finished_notify: Arc::new(Notify::new()),
-            table_locks,
+            lock_guards,
         }))
     }
 

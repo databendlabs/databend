@@ -12,17 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod lock_holder;
+mod lock_manager;
+mod lock_metrics;
+mod table_level;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod lock_api;
-pub mod plan;
-pub mod query_kind;
-pub mod statistics;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
+pub use lock_holder::LockHolder;
+pub use lock_manager::LockManager;
+pub use lock_metrics::record_table_lock_nums;
+pub use table_level::*;

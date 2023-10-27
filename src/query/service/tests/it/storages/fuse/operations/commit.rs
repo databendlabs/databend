@@ -23,6 +23,7 @@ use common_base::base::ProgressValues;
 use common_catalog::catalog::Catalog;
 use common_catalog::cluster_info::Cluster;
 use common_catalog::database::Database;
+use common_catalog::lock_api::LockRequest;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
@@ -95,7 +96,6 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
-use common_pipeline_core::TableLockReq;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::CopyStatus;
@@ -857,22 +857,22 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_table_lock_revs(&self, _req: Box<dyn TableLockReq>) -> Result<Vec<u64>> {
+    async fn list_table_lock_revs(&self, _req: Box<dyn LockRequest>) -> Result<Vec<u64>> {
         todo!()
     }
 
     async fn create_table_lock_rev(
         &self,
-        _req: Box<dyn TableLockReq>,
+        _req: Box<dyn LockRequest>,
     ) -> Result<CreateTableLockRevReply> {
         todo!()
     }
 
-    async fn extend_table_lock_rev(&self, _req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn extend_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         todo!()
     }
 
-    async fn delete_table_lock_rev(&self, _req: Box<dyn TableLockReq>) -> Result<()> {
+    async fn delete_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         todo!()
     }
 }
