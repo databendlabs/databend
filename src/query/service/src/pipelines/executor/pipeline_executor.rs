@@ -25,7 +25,7 @@ use common_base::runtime::ThreadJoinHandle;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_pipeline_core::lock_guard::LockGuard;
+use common_pipeline_core::LockGuard;
 use futures::future::select;
 use futures_util::future::Either;
 use log::info;

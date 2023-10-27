@@ -28,7 +28,7 @@ use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_pipeline_core::lock_guard::LockGuard;
+use common_pipeline_core::LockGuard;
 use log::debug;
 use log::error;
 use log::info;

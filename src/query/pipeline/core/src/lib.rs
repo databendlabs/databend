@@ -22,6 +22,7 @@ pub mod pipeline_display;
 pub mod unsafe_cell_wrap;
 
 pub use input_error::InputError;
+pub use lock_guard::LockGuard;
 pub use lock_guard::UnlockApi;
 pub use pipe::SinkPipeBuilder;
 pub use pipe::SourcePipeBuilder;

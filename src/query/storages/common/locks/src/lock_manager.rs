@@ -29,7 +29,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
-use common_pipeline_core::lock_guard::LockGuard;
+use common_pipeline_core::LockGuard;
 use common_pipeline_core::UnlockApi;
 use common_users::UserApiProvider;
 use futures_util::StreamExt;

@@ -22,7 +22,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
-use common_pipeline_core::lock_guard::LockGuard;
+use common_pipeline_core::LockGuard;
 
 use crate::table_lock::CreateTableLockReq;
 use crate::table_lock::DeleteTableLockReq;

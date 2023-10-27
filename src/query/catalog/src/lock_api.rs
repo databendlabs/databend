@@ -18,7 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_pipeline_core::lock_guard::LockGuard;
+use common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
 use crate::table_context::TableContext;
