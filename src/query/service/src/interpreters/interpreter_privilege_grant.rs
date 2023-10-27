@@ -120,9 +120,7 @@ impl GrantPrivilegeInterpreter {
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
         let owner = user_mgr.get_ownership(tenant, &ownership_object).await?;
         if let Some(owner) = owner {
-            let can_grant_ownership = available_roles
-                .iter()
-                .any(|r| r.name == owner.role);
+            let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
             if !can_grant_ownership {
                 return Err(ErrorCode::IllegalGrant(
                     "Illegal GRANT/REVOKE command; only owner can grant ownership",
@@ -174,14 +172,8 @@ impl Interpreter for GrantPrivilegeInterpreter {
             }
             PrincipalIdentity::Role(role) => {
                 if plan.priv_types.has_privilege(Ownership) {
-
-
-                    self.grant_ownership(
-                        &self.ctx,
-                        &tenant,
-                        &plan.on,
-                        &role)
-                    .await?;
+                    self.grant_ownership(&self.ctx, &tenant, &plan.on, &role)
+                        .await?;
                 } else {
                     user_mgr
                         .grant_privileges_to_role(&tenant, &role, plan.on, plan.priv_types)

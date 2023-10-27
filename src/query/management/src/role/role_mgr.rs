@@ -85,13 +85,20 @@ impl RoleMgr {
 
     fn make_object_owner_key(&self, object: &GrantObjectByID) -> String {
         match object {
-            GrantObjectByID::Database { catalog_name: _, db_id: database_id } => {
+            GrantObjectByID::Database {
+                catalog_name: _,
+                db_id: database_id,
+            } => {
                 format!(
                     "{}/database-by-id/{}",
                     self.object_owner_prefix, database_id
                 )
             }
-            GrantObjectByID::Table { catalog_name: _, db_id: _, table_id } => {
+            GrantObjectByID::Table {
+                catalog_name: _,
+                db_id: _,
+                table_id,
+            } => {
                 format!("{}/table-by-id/{}", self.object_owner_prefix, table_id)
             }
         }
