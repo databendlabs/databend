@@ -38,7 +38,7 @@ COPY INTO mytable
     SIZE_LIMIT = 10;
 
 -- This example uses a 'SELECT' statement to query staged files. 
--- 'CONNECTION' is followed by '=>' to access Minio data, and the  connection clause is enclosed in an additional set of parentheses.
+-- 'CONNECTION' is followed by '=>' to access Minio data, and the connection clause is enclosed in an additional set of parentheses.
 SELECT * FROM 's3://testbucket/admin/data/parquet/tuple.parquet' 
     (CONNECTION => (
         ACCESS_KEY_ID = 'minioadmin', 
