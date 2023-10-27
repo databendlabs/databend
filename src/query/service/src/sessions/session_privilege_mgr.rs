@@ -117,51 +117,6 @@ impl SessionPrivilegeManagerImpl {
         self.session_ctx.set_current_role(Some(role));
         Ok(())
     }
-
-    #[async_backtrace::framed]
-    async fn get_object_owner(&self, object: &GrantObjectByID) -> Result<Option<RoleInfo>> {
-        let catalog_mgr = CatalogManager::instance();
-        let role_mgr = RoleCacheManager::instance();
-        let tenant = self.session_ctx.get_current_tenant();
-
-        // TODO(liyz): move the convertion between GrantObject into GrantObjectByID into interpreter
-        // let object = match object {
-        // GrantObject::Database(catalog_name, db_name) => {
-        // let db_id = catalog_mgr
-        // .get_catalog(&tenant, catalog_name)
-        // .await?
-        // .get_database(&tenant, db_name)
-        // .await?
-        // .get_db_info()
-        // .ident
-        // .db_id;
-        // GrantObjectByID::Database {
-        // catalog_name: catalog_name.clone(),
-        // db_id,
-        // }
-        // }
-        // GrantObject::Table(catalog_name, db_name, table_name) => {
-        // let catalog = catalog_mgr.get_catalog(&tenant, catalog_name).await?;
-        // let db_id = catalog
-        // .get_database(&tenant, db_name)
-        // .await?
-        // .get_db_info()
-        // .ident
-        // .db_id;
-        // let table = catalog.get_table(&tenant, db_name, table_name).await?;
-        // let table_id = table.get_id();
-        // GrantObjectByID::Table {
-        // catalog_name: catalog_name.clone(),
-        // db_id,
-        // table_id,
-        // }
-        // }
-        // _ => return Ok(None),
-        // };
-
-        // return true only if grant object owner is the role itself
-        role_mgr.find_object_owner(&tenant, &object).await
-    }
 }
 
 #[async_trait::async_trait]
