@@ -47,6 +47,9 @@ pub(in crate::sm_v002) trait MapValue:
 {
 }
 
+/// A key-value pair used in a map.
+pub(in crate::sm_v002) type MapKV<K> = (K, Marked<<K as MapKey>::V>);
+
 /// A stream of key-value entry returned by `range()`.
 pub(in crate::sm_v002) type EntryStream<K> = BoxStream<'static, (K, Marked<<K as MapKey>::V>)>;
 
