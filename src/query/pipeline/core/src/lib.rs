@@ -19,7 +19,6 @@ pub mod lock_guard;
 pub mod pipe;
 pub mod pipeline;
 pub mod pipeline_display;
-pub mod table_lock;
 pub mod unsafe_cell_wrap;
 
 pub use input_error::InputError;
@@ -29,6 +28,3 @@ pub use pipe::SourcePipeBuilder;
 pub use pipe::TransformPipeBuilder;
 pub use pipeline::query_spill_prefix;
 pub use pipeline::Pipeline;
-pub use table_lock::TableLock;
-pub use table_lock::TableLockLevel;
-pub use table_lock::TableLockReq;

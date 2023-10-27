@@ -24,10 +24,10 @@ use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
 use common_pipeline_core::lock_guard::LockGuard;
 
-use crate::table_level::CreateTableLockReq;
-use crate::table_level::DeleteTableLockReq;
-use crate::table_level::ExtendTableLockReq;
-use crate::table_level::ListTableLockReq;
+use crate::table_lock::CreateTableLockReq;
+use crate::table_lock::DeleteTableLockReq;
+use crate::table_lock::ExtendTableLockReq;
+use crate::table_lock::ListTableLockReq;
 use crate::LockManager;
 
 pub struct TableLock {

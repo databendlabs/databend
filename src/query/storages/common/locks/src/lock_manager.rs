@@ -36,7 +36,7 @@ use futures_util::StreamExt;
 use parking_lot::RwLock;
 
 use crate::record_table_lock_nums;
-use crate::table_level::TableLock;
+use crate::table_lock::TableLock;
 use crate::LockHolder;
 
 pub struct LockManager {
