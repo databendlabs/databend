@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
+use common_catalog::lock_api::LockApi;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;
@@ -36,7 +37,7 @@ use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 use common_storages_fuse::FuseTable;
-use storages_common_locks::ListTableLockReq;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
@@ -147,14 +148,10 @@ impl OptimizeTableInterpreter {
     ) -> Result<PipelineBuildResult> {
         let tenant = self.ctx.get_tenant();
         let table_info = table.get_table_info().clone();
+
         // check if the table is locked.
-        let list_table_lock_req = ListTableLockReq {
-            table_id: table_info.ident.table_id,
-        };
-        let reply = catalog
-            .list_table_lock_revs(Box::new(list_table_lock_req))
-            .await?;
-        if !reply.is_empty() {
+        let table_lock = LockManager::create_table_lock(table_info.clone());
+        if table_lock.check_lock(catalog.clone()).await? {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table

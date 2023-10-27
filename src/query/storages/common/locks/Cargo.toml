@@ -11,8 +11,6 @@ doctest = false
 test = false
 
 [dependencies]
-# Workspace dependencies
-
 common-base = { path = "../../../../common/base" }
 common-catalog = { path = "../../../catalog" }
 common-exception = { path = "../../../../common/exception" }
@@ -33,8 +31,3 @@ lazy_static = { workspace = true }
 log = { workspace = true }
 parking_lot = "0.12.1"
 rand = "0.8.5"
-
-[build-dependencies]
-
-[package.metadata.cargo-machete]
-ignored = ["match-template"]

@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
+use common_catalog::lock_api::LockApi;
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableExt;
@@ -35,7 +36,7 @@ use common_storages_fuse::FuseTable;
 use log::error;
 use log::info;
 use log::warn;
-use storages_common_locks::ListTableLockReq;
+use storages_common_locks::LockManager;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -123,16 +124,11 @@ impl Interpreter for ReclusterTableInterpreter {
                 return Err(err);
             }
 
-            // check if the table is locked.
-            let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+            let table_info = table.get_table_info().clone();
 
-            let list_table_lock_req = Box::new(ListTableLockReq {
-                table_id: table.get_table_info().ident.table_id,
-            });
-            let reply = catalog
-                .list_table_lock_revs(list_table_lock_req.clone())
-                .await?;
-            if !reply.is_empty() {
+            // check if the table is locked.
+            let table_lock = LockManager::create_table_lock(table_info.clone());
+            if table_lock.check_lock(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",
                     self.plan.table
@@ -161,7 +157,7 @@ impl Interpreter for ReclusterTableInterpreter {
             block_count += mutator.recluster_blocks_count;
             let physical_plan = build_recluster_physical_plan(
                 mutator.tasks,
-                table.get_table_info().clone(),
+                table_info,
                 catalog.info(),
                 mutator.snapshot,
                 mutator.remained_blocks,
