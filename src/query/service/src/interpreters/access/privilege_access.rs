@@ -49,7 +49,8 @@ impl PrivilegeAccess {
 
         let object = match object {
             GrantObject::Database(catalog_name, db_name) => {
-                let db_id = self.ctx
+                let db_id = self
+                    .ctx
                     .get_catalog(catalog_name)
                     .await?
                     .get_database(&tenant, db_name)
@@ -80,7 +81,7 @@ impl PrivilegeAccess {
             }
             _ => return Ok(None),
         };
-    
+
         Ok(Some(object))
     }
 
