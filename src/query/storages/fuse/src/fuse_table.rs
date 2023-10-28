@@ -641,16 +641,38 @@ impl Table for FuseTable {
         self.do_analyze(&ctx).await
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
-        let s = &self.table_info.meta.statistics;
-        Ok(Some(TableStatistics {
-            num_rows: Some(s.number_of_rows),
-            data_size: Some(s.data_bytes),
-            data_size_compressed: Some(s.compressed_data_bytes),
-            index_size: Some(s.index_data_bytes),
-            number_of_blocks: s.number_of_blocks,
-            number_of_segments: s.number_of_segments,
-        }))
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+        let stats = match self.table_type {
+            FuseTableType::AttachedReadOnly => {
+                let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
+                    // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
+                    // IO or Deserialization related error should have already been thrown, thus
+                    // `Internal` error is used.
+                    ErrorCode::Internal("Failed to load snapshot of read_only attach table")
+                })?;
+                let summary = &snapshot.summary;
+                TableStatistics {
+                    num_rows: Some(summary.row_count),
+                    data_size: Some(summary.uncompressed_byte_size),
+                    data_size_compressed: Some(summary.compressed_byte_size),
+                    index_size: Some(summary.index_size),
+                    number_of_blocks: Some(summary.block_count),
+                    number_of_segments: Some(snapshot.segments.len() as u64),
+                }
+            }
+            _ => {
+                let s = &self.table_info.meta.statistics;
+                TableStatistics {
+                    num_rows: Some(s.number_of_rows),
+                    data_size: Some(s.data_bytes),
+                    data_size_compressed: Some(s.compressed_data_bytes),
+                    index_size: Some(s.index_data_bytes),
+                    number_of_blocks: s.number_of_blocks,
+                    number_of_segments: s.number_of_segments,
+                }
+            }
+        };
+        Ok(Some(stats))
     }
 
     #[async_backtrace::framed]
