@@ -506,6 +506,7 @@ async fn test_system_tables() -> Result<()> {
         "credits", // slow for ci (> 1s) and maybe flaky
         "metrics", // QueryError: "Prometheus recorder is not initialized yet"
         "tracing",
+        "tasks", // need to connect grpc server, tested on sqllogic test
     ];
     for table_name in table_names {
         if skipped.contains(&table_name.as_str()) {
