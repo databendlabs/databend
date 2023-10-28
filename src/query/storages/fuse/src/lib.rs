@@ -24,7 +24,6 @@
 
 mod constants;
 mod fuse_column;
-mod fuse_lazy_part;
 mod fuse_part;
 mod fuse_table;
 mod fuse_type;
@@ -42,7 +41,7 @@ use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
 pub use constants::*;
 pub use fuse_column::FuseTableColumnStatisticsProvider;
-pub use fuse_lazy_part::FuseLazyPartInfo;
+pub use fuse_part::FuseLazyPartInfo;
 pub use fuse_part::FusePartInfo;
 pub use fuse_table::FuseTable;
 pub use fuse_type::FuseStorageFormat;

@@ -17,6 +17,7 @@ use std::str::FromStr;
 use common_exception::ErrorCode;
 
 /// Fuse engine table type.
+/// This is used to distinguish different table types.
 #[derive(Clone, PartialEq)]
 pub enum FuseTableType {
     // Standard table with full functionality.
@@ -45,6 +46,7 @@ impl FuseTableType {
 }
 
 /// Fuse engine table format.
+/// This is used to distinguish different table formats.
 #[derive(Clone, Copy, Debug)]
 pub enum FuseStorageFormat {
     Parquet,
