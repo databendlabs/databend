@@ -65,10 +65,11 @@ use storages_common_table_meta::table::TableCompression;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use uuid::Uuid;
 
@@ -89,6 +90,21 @@ use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 
+/// Fuse engine table type.
+#[derive(Clone, PartialEq)]
+pub enum FuseTableType {
+    // Standard table with full functionality.
+    Standard,
+    // External table, possibly linked from an external location.
+    External,
+    // Table attached to the system.
+    Attached,
+    // Attached table with read-only access.
+    AttachedReadOnly,
+    // Shared table with read-only access.
+    SharedReadOnly,
+}
+
 #[derive(Clone)]
 pub struct FuseTable {
     pub(crate) table_info: TableInfo,
@@ -102,7 +118,7 @@ pub struct FuseTable {
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
 
-    read_only: bool,
+    table_type: FuseTableType,
 }
 
 impl FuseTable {
@@ -114,29 +130,43 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
-        let read_only;
-        let mut operator = match table_info.db_type.clone() {
+        let (mut operator, table_type) = match table_info.db_type.clone() {
             DatabaseType::ShareDB(share_ident) => {
-                // ShareDB is immutable
-                read_only = true;
-                create_share_table_operator(
+                let operator = create_share_table_operator(
                     ShareTableConfig::share_endpoint_address(),
                     ShareTableConfig::share_endpoint_token(),
                     &share_ident.tenant,
                     &share_ident.share_name,
                     &table_info.name,
-                )
+                )?;
+                (operator, FuseTableType::SharedReadOnly)
             }
             DatabaseType::NormalDB => {
-                // check if table is read-only attached
-                read_only = Self::is_read_only_attach(&table_info.meta.options);
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => Ok(init_operator(&sp)?),
-                    None => Ok(DataOperator::instance().operator()),
+                    // External or attached table.
+                    Some(sp) => {
+                        let table_meta_options = &table_info.meta.options;
+
+                        let table_type = if Self::is_table_attached_read_only(table_meta_options) {
+                            FuseTableType::AttachedReadOnly
+                        } else if Self::is_table_attached(table_meta_options) {
+                            FuseTableType::Attached
+                        } else {
+                            FuseTableType::External
+                        };
+
+                        let operator = init_operator(&sp)?;
+                        (operator, table_type)
+                    }
+                    // Normal table.
+                    None => {
+                        let operator = DataOperator::instance().operator();
+                        (operator, FuseTableType::Standard)
+                    }
                 }
             }
-        }?;
+        };
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
@@ -173,7 +203,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
-            read_only,
+            table_type,
         }))
     }
 
@@ -324,7 +354,7 @@ impl FuseTable {
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
 
-                if options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some() {
+                if options.get(OPT_KEY_TABLE_ATTACHED_READ_ONLY).is_some() {
                     // if table is read-only attached, parse snapshot location from hint
                     let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
                     let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
@@ -379,8 +409,18 @@ impl FuseTable {
         self.bloom_index_cols.clone()
     }
 
-    fn is_read_only_attach(table_meta_options: &BTreeMap<String, String>) -> bool {
-        table_meta_options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some()
+    // Check if table is attached.
+    fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options
+            .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
+            .is_some()
+    }
+
+    // Check if table is read-only attached.
+    fn is_table_attached_read_only(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options
+            .get(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
+            .is_some()
     }
 }
 
@@ -758,7 +798,8 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.read_only
+        self.table_type == FuseTableType::AttachedReadOnly
+            || self.table_type == FuseTableType::SharedReadOnly
     }
 }
 
