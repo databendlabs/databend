@@ -48,7 +48,7 @@ echo "select * from table_read_only order by a;" | $MYSQL_CLIENT_CONNECT
 
 # 2. READ_ONLY attach table should reflects the mutation of table being attached
 # del from the attachED table
-echo "delete from table_to where a=2;" | $MYSQL_CLIENT_CONNECT
+echo "delete from table_from where a=2;" | $MYSQL_CLIENT_CONNECT
 
 echo "check content of attach table, after row has been deleted from attachED table:"
 echo "  there should be only one row"
