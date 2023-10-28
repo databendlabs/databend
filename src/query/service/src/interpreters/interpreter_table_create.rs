@@ -57,10 +57,10 @@ use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_COMMENT;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_ENGINE;
-use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::interpreters::InsertInterpreter;
@@ -320,7 +320,10 @@ impl CreateTableInterpreter {
 
         if self.plan.read_only_attach {
             // mark table as read_only attached
-            options.insert(OPT_KEY_READ_ONLY_ATTACHED.to_string(), "T".to_string());
+            options.insert(
+                OPT_KEY_TABLE_ATTACHED_READ_ONLY.to_string(),
+                "T".to_string(),
+            );
         }
 
         let params = LoadParams {
