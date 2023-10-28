@@ -245,7 +245,22 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
         let probe_block = if is_probe_projected {
-            Some(input)
+            if matches!(
+                self.hash_join_state.hash_join_desc.join_type,
+                JoinType::Right | JoinType::RightSingle | JoinType::Full
+            ) {
+                Some(
+                    input
+                        .columns()
+                        .iter()
+                        .map(|c| {
+                            wrap_true_validity(c, input.num_rows(), &probe_state.true_validity)
+                        })
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                Some(input)
+            }
         } else {
             None
         };
