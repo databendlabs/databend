@@ -55,7 +55,7 @@ pub struct Pipeline {
     pub pipes: Vec<Pipe>,
     on_init: Option<InitCallback>,
     on_finished: Option<FinishedCallback>,
-    lock_guards: Vec<Arc<LockGuard>>,
+    lock_guards: Vec<LockGuard>,
 }
 
 impl Debug for Pipeline {
@@ -133,11 +133,11 @@ impl Pipeline {
 
     pub fn add_lock_guard(&mut self, guard: Option<LockGuard>) {
         if let Some(guard) = guard {
-            self.lock_guards.push(Arc::new(guard));
+            self.lock_guards.push(guard);
         }
     }
 
-    pub fn take_lock_guards(&mut self) -> Vec<Arc<LockGuard>> {
+    pub fn take_lock_guards(&mut self) -> Vec<LockGuard> {
         std::mem::take(&mut self.lock_guards)
     }
 

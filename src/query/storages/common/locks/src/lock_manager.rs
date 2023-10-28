@@ -90,6 +90,17 @@ impl LockManager {
             .await?;
         let revision = res.revision;
 
+        let mut lock_holder = LockHolder::create();
+        lock_holder
+            .start(catalog.clone(), lock, expire_secs, revision)
+            .await?;
+
+        // metrics.
+        record_table_lock_nums(lock.level(), lock.table_id(), 1);
+
+        self.insert_lock(revision, lock_holder);
+        let guard = LockGuard::new(self.clone(), revision);
+
         let duration = Duration::from_secs(expire_secs);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let list_table_lock_req = lock.list_table_lock_req();
@@ -140,20 +151,13 @@ impl LockManager {
             }?;
         }
 
-        let mut lock_holder = LockHolder::create();
-        lock_holder
-            .start(catalog, lock, expire_secs, revision)
-            .await?;
+        Ok(Some(guard))
+    }
 
-        // metrics.
-        record_table_lock_nums(lock.level(), lock.table_id(), 1);
-
+    fn insert_lock(&self, revision: u64, lock_holder: LockHolder) {
         let mut active_locks = self.active_locks.write();
         let prev = active_locks.insert(revision, Arc::new(Mutex::new(lock_holder)));
         assert!(prev.is_none());
-
-        let guard = LockGuard::new(self.clone(), revision);
-        Ok(Some(guard))
     }
 }
 

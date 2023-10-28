@@ -61,7 +61,7 @@ pub struct PipelineExecutor {
     finished_notify: Arc<Notify>,
     finished_error: Mutex<Option<ErrorCode>>,
     #[allow(unused)]
-    lock_guards: Vec<Arc<LockGuard>>,
+    lock_guards: Vec<LockGuard>,
 }
 
 impl PipelineExecutor {
@@ -176,7 +176,7 @@ impl PipelineExecutor {
         on_init_callback: Mutex<Option<InitCallback>>,
         on_finished_callback: Mutex<Option<FinishedCallback>>,
         settings: ExecutorSettings,
-        lock_guards: Vec<Arc<LockGuard>>,
+        lock_guards: Vec<LockGuard>,
     ) -> Result<Arc<PipelineExecutor>> {
         let workers_condvar = WorkersCondvar::create(threads_num);
         let global_tasks_queue = ExecutorTasksQueue::create(threads_num);
