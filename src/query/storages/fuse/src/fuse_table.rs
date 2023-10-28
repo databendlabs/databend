@@ -65,6 +65,7 @@ use storages_common_table_meta::table::TableCompression;
 use storages_common_table_meta::table::OPT_KEY_BLOOM_INDEX_COLUMNS;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
@@ -100,6 +101,8 @@ pub struct FuseTable {
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
+
+    read_only: bool,
 }
 
 impl FuseTable {
@@ -111,15 +114,22 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
+        let read_only;
         let mut operator = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => create_share_table_operator(
-                ShareTableConfig::share_endpoint_address(),
-                ShareTableConfig::share_endpoint_token(),
-                &share_ident.tenant,
-                &share_ident.share_name,
-                &table_info.name,
-            ),
+            DatabaseType::ShareDB(share_ident) => {
+                // ShareDB is immutable
+                read_only = true;
+                create_share_table_operator(
+                    ShareTableConfig::share_endpoint_address(),
+                    ShareTableConfig::share_endpoint_token(),
+                    &share_ident.tenant,
+                    &share_ident.share_name,
+                    &table_info.name,
+                )
+            }
             DatabaseType::NormalDB => {
+                // check if table is read-only attached
+                read_only = Self::is_read_only_attach(&table_info.meta.options);
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
                     Some(sp) => Ok(init_operator(&sp)?),
@@ -163,6 +173,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
+            read_only,
         }))
     }
 
@@ -312,11 +323,25 @@ impl FuseTable {
             }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
-                Ok(options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    // for backward compatibility, we check the legacy table option
-                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                    .cloned())
+
+                if options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some() {
+                    // if table is read-only attached, parse snapshot location from hint
+                    let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
+                    let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                    let snapshot_loc = {
+                        let hint_content = self.operator.read(&hint).await?;
+                        let snapshot_full_path = String::from_utf8(hint_content)?;
+                        let operator_info = self.operator.info();
+                        snapshot_full_path[operator_info.root().len()..].to_string()
+                    };
+                    Ok(Some(snapshot_loc))
+                } else {
+                    Ok(options
+                        .get(OPT_KEY_SNAPSHOT_LOCATION)
+                        // for backward compatibility, we check the legacy table option
+                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                        .cloned())
+                }
             }
         }
     }
@@ -352,6 +377,10 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    fn is_read_only_attach(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options.get(OPT_KEY_READ_ONLY_ATTACHED).is_some()
     }
 }
 
@@ -410,7 +439,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
-        // if new cluter_key_str is the same with old one,
+        // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
             return Ok(())
@@ -510,7 +539,7 @@ impl Table for FuseTable {
         .await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_partitions")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -521,7 +550,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_data")]
+    #[minitrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -552,14 +581,14 @@ impl Table for FuseTable {
         self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
     }
 
-    #[minitrace::trace(name = "fuse_table_truncate")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let purge = false;
         self.do_truncate(ctx, purge).await
     }
 
-    #[minitrace::trace(name = "fuse_table_optimize")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn purge(
         &self,
@@ -583,7 +612,7 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "analyze")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.do_analyze(&ctx).await
@@ -625,7 +654,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace(name = "fuse_table_navigate_to")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
@@ -726,6 +755,10 @@ impl Table for FuseTable {
 
     fn result_can_be_cached(&self) -> bool {
         true
+    }
+
+    fn is_read_only(&self) -> bool {
+        self.read_only
     }
 }
 

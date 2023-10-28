@@ -29,6 +29,7 @@ use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::log::RaftLog;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SnapshotStoreError;
 use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::sm_v002::SnapshotViewV002;
@@ -194,8 +195,8 @@ impl StoreInner {
 
         let (last_applied, last_membership) = {
             let sm = sm.read().await;
-            let last_applied = *sm.last_applied_ref();
-            let last_membership = sm.last_membership_ref().clone();
+            let last_applied = *sm.sys_data_ref().last_applied_ref();
+            let last_membership = sm.sys_data_ref().last_membership_ref().clone();
 
             (last_applied, last_membership)
         };
@@ -335,7 +336,7 @@ impl StoreInner {
         // State machine ensures no modification to `base` during snapshotting.
         {
             let mut s = self.state_machine.write().await;
-            s.replace_base(&snapshot_view);
+            s.replace_frozen(&snapshot_view);
         }
 
         snapshot_view
@@ -507,7 +508,7 @@ impl StoreInner {
 
     pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         let sm = self.state_machine.read().await;
-        let n = sm.nodes_ref().get(node_id).cloned();
+        let n = sm.sys_data_ref().nodes_ref().get(node_id).cloned();
         n
     }
 
@@ -517,7 +518,7 @@ impl StoreInner {
         list_ids: impl Fn(&Membership) -> Vec<NodeId>,
     ) -> Vec<Node> {
         let sm = self.state_machine.read().await;
-        let membership = sm.last_membership_ref().membership();
+        let membership = sm.sys_data_ref().last_membership_ref().membership();
 
         debug!("in-statemachine membership: {:?}", membership);
 
@@ -526,7 +527,7 @@ impl StoreInner {
         let mut ns = vec![];
 
         for id in ids {
-            let node = sm.nodes_ref().get(&id).cloned();
+            let node = sm.sys_data_ref().nodes_ref().get(&id).cloned();
             if let Some(x) = node {
                 ns.push(x);
             }

@@ -1,5 +1,44 @@
 0
 1
 2
+rows after deletion
 0
 2
+Attach READ_ONLY
+check content of attach table
+0
+2
+check content of attach table, after row has been deleted from attachED table:
+  there should be only one row
+0
+delete not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+update not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+truncate not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+alter table column not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+alter table set options not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+alter table flashback not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+alter table recluster not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+analyze table not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table
+optimize table compact not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table compact segment not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+optimize table purge not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
+drop table ALL not allowed
+ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text =  drop table ALL is not allowed for read only table, please consider remove the option ALL
+Mutation not allowed, table [table_read_only] is READ ONLY..
+drop table IS allowed
+undrop table should work
+0
+show create attach table
+table_read_only	ATTACH TABLE `default`.`table_read_only` 'sPLACE_HOLDER://testbucket/admin/data/PLACE_HOLDER/PLACE_HOLDER/' CONNECTION = ( access_key_id = '********', endpoint_url = '********', secret_access_key = '********' ) READ_ONLY

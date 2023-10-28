@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
@@ -32,7 +33,6 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
 pub struct RenameTableColumnInterpreter {
     ctx: Arc<QueryContext>,
     plan: RenameTableColumnPlan,
@@ -65,6 +65,9 @@ impl Interpreter for RenameTableColumnInterpreter {
             .ok();
 
         if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
+
             let table_info = table.get_table_info();
             if table_info.engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(

@@ -504,7 +504,6 @@ endpoint_url = "http://127.0.0.1:9900"
 access_key_id = "minioadmin"
 secret_access_key = "minioadmin"
 ```
-
 </TabItem>
 
 

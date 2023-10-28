@@ -104,7 +104,12 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
                     Cow::Owned(opentelemetry::sdk::Resource::new([
                         opentelemetry::KeyValue::new("service.name", name.clone()),
                     ])),
-                    opentelemetry::InstrumentationLibrary::new(name, None, None),
+                    opentelemetry::InstrumentationLibrary::new(
+                        name,
+                        None::<&'static str>,
+                        None::<&'static str>,
+                        None,
+                    ),
                 )
             });
             (rt, reporter)
