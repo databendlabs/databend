@@ -21,9 +21,9 @@ echo "select sum(number) from attach_read_only;" | $MYSQL_CLIENT_CONNECT
 #  2. data should be in-sync
 echo "attach table should reflects the mutation of table being attached"
 echo "delete from base where number > 0;" | $MYSQL_CLIENT_CONNECT
-echo "rows of base table after deletion"
+echo "content of base table after deletion"
 echo "select * from attach_read_only order by number;" | $MYSQL_CLIENT_CONNECT
-echo "rows of test attach only table after deletion"
+echo "content of test attach only table after deletion"
 echo "select * from attach_read_only order by number;" | $MYSQL_CLIENT_CONNECT
 
 echo "count() of base table after deletion"

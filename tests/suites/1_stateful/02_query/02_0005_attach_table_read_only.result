@@ -3,9 +3,9 @@ sum of base table
 sum of attach_read_only table
 4950
 attach table should reflects the mutation of table being attached
-rows of base table after deletion
+content of base table after deletion
 0
-rows of test attach only table after deletion
+content of test attach only table after deletion
 0
 count() of base table after deletion
 1
