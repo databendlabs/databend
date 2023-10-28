@@ -28,9 +28,9 @@ use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use log::debug;
 use storages_common_table_meta::table::is_internal_opt_key;
-use storages_common_table_meta::table::OPT_KEY_READ_ONLY_ATTACHED;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
-use storages_common_table_meta::table::OPT_KEY_TABLE_DATA_URI;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -224,7 +224,7 @@ impl ShowCreateTableInterpreter {
         let location_not_available = "N/A".to_string();
         let table_data_location = table
             .options()
-            .get(OPT_KEY_TABLE_DATA_URI)
+            .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
             .unwrap_or(&location_not_available);
 
         let mut ddl = format!(
@@ -232,7 +232,10 @@ impl ShowCreateTableInterpreter {
             &self.plan.database, name, table_data_location,
         );
 
-        if table.options().contains_key(OPT_KEY_READ_ONLY_ATTACHED) {
+        if table
+            .options()
+            .contains_key(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
+        {
             ddl.push_str(" READ_ONLY")
         }
 

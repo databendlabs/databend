@@ -78,8 +78,8 @@ use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
-use storages_common_table_meta::table::OPT_KEY_TABLE_DATA_URI;
 
 use crate::binder::location::parse_uri_location;
 use crate::binder::scalar::ScalarBinder;
@@ -629,7 +629,7 @@ impl Binder {
 
         // keep a copy of table data uri_location, will be used in "show create table"
         options.insert(
-            OPT_KEY_TABLE_DATA_URI.to_string(),
+            OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
             stmt.uri_location.to_string(),
         );
 
