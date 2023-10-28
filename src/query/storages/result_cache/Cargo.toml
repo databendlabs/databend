@@ -22,7 +22,7 @@ common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
 storages-common-blocks = { path = "../common/blocks" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
