@@ -3680,7 +3680,7 @@ pub fn resolve_type_name_by_str(name: &str, not_null: bool) -> Result<TableDataT
         common_ast::Dialect::default(),
         &backtrace,
     )) {
-        Ok((_, typename)) => resolve_type_name(&typename.data_type, not_null),
+        Ok((_, typename)) => resolve_type_name(&typename, not_null),
         Err(err) => Err(ErrorCode::SyntaxException(format!(
             "Unsupported type name: {}, error: {}",
             name, err

@@ -1807,7 +1807,7 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     map(
         rule! {
             #ident
-            ~ #type_name
+            ~ #column_type
             ~ ( #comment )?
             : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
@@ -2057,7 +2057,7 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
     map(
         rule! {
             #ident
-            ~ #type_name
+            ~ #column_type
             ~ ( #comment )?
             : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
@@ -2692,11 +2692,18 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
+    let nullable = alt((
+        value(true, rule! { NULL }),
+        value(false, rule! { NOT ~ ^NULL }),
+    ));
     map(
         rule! {
-            #type_name
+            #type_name ~ #nullable?
         },
-        |col_type| col_type.data_type,
+        |(type_name, nullable)| match nullable {
+            Some(false) => type_name,
+            _ => type_name.wrap_nullable(),
+        },
     )(i)
 }
 

@@ -28,7 +28,7 @@ fn data_mask_arg(i: Input) -> IResult<DataMaskArg> {
     map(rule! { #ident ~ #type_name }, |(arg_name, arg_type)| {
         DataMaskArg {
             arg_name: arg_name.name,
-            arg_type: arg_type.data_type,
+            arg_type,
         }
     })(i)
 }
@@ -60,9 +60,7 @@ fn data_mask_body(i: Input) -> IResult<Expr> {
 }
 
 fn data_mask_return_type(i: Input) -> IResult<TypeName> {
-    map(rule! { RETURNS ~ #type_name }, |(_, col_name)| {
-        col_name.data_type
-    })(i)
+    map(rule! { RETURNS ~ #type_name }, |(_, type_name)| type_name)(i)
 }
 
 pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {
