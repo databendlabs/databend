@@ -119,6 +119,7 @@ impl<'a> Binder {
     }
 
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         self.ctx.set_status_info("binding");
         let mut init_bind_context = BindContext::new();

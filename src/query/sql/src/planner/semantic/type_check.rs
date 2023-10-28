@@ -522,6 +522,17 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
+            Expr::JsonOp {
+                span,
+                op,
+                left,
+                right,
+            } => {
+                let func_name = op.to_func_name();
+                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])
+                    .await?
+            }
+
             Expr::UnaryOp { span, op, expr, .. } => {
                 self.resolve_unary_op(*span, op, expr.as_ref()).await?
             }
@@ -2238,7 +2249,7 @@ impl<'a> TypeChecker<'a> {
                         self.ctx
                             .get_current_role()
                             .map(|r| r.name)
-                            .unwrap_or_default(),
+                            .unwrap_or_else(|| "".to_string()),
                     ),
                 })
                 .await,
@@ -3129,7 +3140,7 @@ impl<'a> TypeChecker<'a> {
             if let TableDataType::Tuple {
                 fields_name,
                 fields_type,
-            } = table_data_type
+            } = table_data_type.remove_nullable()
             {
                 let (span, path) = paths.pop_front().unwrap();
                 match path {
@@ -3628,7 +3639,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     fn function_need_collation(&self, name: &str, args: &[ScalarExpr]) -> Result<bool> {
-        let names = ["substr", "substring", "length"];
+        let names = vec!["substr", "substring", "length"];
         let result = !args.is_empty()
             && matches!(args[0].data_type()?.remove_nullable(), DataType::String)
             && self.ctx.get_settings().get_collation().unwrap() != "binary"

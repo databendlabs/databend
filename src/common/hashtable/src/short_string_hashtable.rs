@@ -431,7 +431,14 @@ impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRefInner<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRefInner<'a, K, V> {
     fn clone(&self) -> Self {
-        *self
+        use ShortStringHashtableEntryRefInner::*;
+        match self {
+            Table0(a, b) => Table0(a, *b),
+            Table1(a) => Table1(a),
+            Table2(a) => Table2(a),
+            Table3(a) => Table3(a),
+            Table4(a) => Table4(a),
+        }
     }
 }
 
@@ -511,7 +518,7 @@ impl<'a, K: ?Sized, V> Copy for ShortStringHashtableEntryRef<'a, K, V> {}
 
 impl<'a, K: ?Sized, V> Clone for ShortStringHashtableEntryRef<'a, K, V> {
     fn clone(&self) -> Self {
-        *self
+        Self(self.0)
     }
 }
 
@@ -920,7 +927,7 @@ where A: Allocator + Clone + Default
 
     fn get_mut(&mut self, key: &Self::Key) -> Option<&mut Self::Value> {
         self.entry_mut(key)
-            .map(|e| unsafe { &mut *(e.get_mut_ptr()) })
+            .map(|e| unsafe { &mut *(e.get_mut_ptr() as *mut V) })
     }
 
     unsafe fn insert(

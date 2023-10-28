@@ -14,7 +14,7 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(impl_trait_in_assoc_type)]
-#![allow(clippy::diverging_sub_expression)]
+#![feature(return_position_impl_trait_in_trait)]
 
 // #![allow(incomplete_features)]
 

@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::GetKVReply;
-use common_meta_kvapi::kvapi::ListKVReply;
+use common_meta_kvapi::kvapi::KVStream;
 use common_meta_kvapi::kvapi::MGetKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReply;
 use common_meta_kvapi::kvapi::UpsertKVReq;
@@ -29,26 +29,32 @@ use crate::MetaEmbedded;
 #[async_trait]
 impl kvapi::KVApi for MetaEmbedded {
     type Error = MetaError;
+
+    #[minitrace::trace]
     async fn upsert_kv(&self, act: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.upsert_kv(act).await
     }
 
+    #[minitrace::trace]
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.get_kv(key).await
     }
 
+    #[minitrace::trace]
     async fn mget_kv(&self, key: &[String]) -> Result<MGetKVReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.mget_kv(key).await
     }
 
-    async fn prefix_list_kv(&self, prefix: &str) -> Result<ListKVReply, Self::Error> {
+    #[minitrace::trace]
+    async fn list_kv(&self, prefix: &str) -> Result<KVStream<Self::Error>, Self::Error> {
         let sm = self.inner.lock().await;
-        sm.prefix_list_kv(prefix).await
+        sm.list_kv(prefix).await
     }
 
+    #[minitrace::trace]
     async fn transaction(&self, txn: TxnRequest) -> Result<TxnReply, Self::Error> {
         let sm = self.inner.lock().await;
         sm.transaction(txn).await

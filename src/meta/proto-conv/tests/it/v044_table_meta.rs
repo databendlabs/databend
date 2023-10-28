@@ -22,6 +22,7 @@ use common_expression::ComputedExpr;
 use common_meta_app::schema as mt;
 use maplit::btreemap;
 use maplit::btreeset;
+use minitrace::func_name;
 
 use crate::common;
 

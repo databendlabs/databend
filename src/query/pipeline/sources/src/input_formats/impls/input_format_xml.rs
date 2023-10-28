@@ -232,7 +232,7 @@ impl InputFormatTextBase for InputFormatXML {
                                             num_rows,
                                         ));
                                     }
-                                    let attr = attributes.first().unwrap();
+                                    let attr = attributes.get(0).unwrap();
                                     key = Some(attr.value.clone());
                                 }
                             }

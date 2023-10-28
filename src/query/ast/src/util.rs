@@ -43,7 +43,7 @@ macro_rules! rule {
 }
 
 pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.text() == text) {
+    move |i| match i.0.get(0).filter(|token| token.text() == text) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -53,7 +53,7 @@ pub fn match_text(text: &'static str) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
-    move |i| match i.0.first().filter(|token| token.kind == kind) {
+    move |i| match i.0.get(0).filter(|token| token.kind == kind) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -63,7 +63,7 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
 }
 
 pub fn any_token(i: Input) -> IResult<&Token> {
-    match i.0.first().filter(|token| token.kind != EOI) {
+    match i.0.get(0).filter(|token| token.kind != EOI) {
         Some(token) => Ok((i.slice(1..), token)),
         _ => Err(nom::Err::Error(Error::from_error_kind(
             i,
@@ -154,7 +154,7 @@ fn non_reserved_keyword(
 ) -> impl FnMut(Input) -> IResult<&Token> {
     move |i: Input| match i
         .0
-        .first()
+        .get(0)
         .filter(|token| token.kind.is_keyword() && !is_reserved_keyword(&token.kind))
     {
         Some(token) => Ok((i.slice(1..), token)),

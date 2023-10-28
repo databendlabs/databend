@@ -17,7 +17,7 @@ aws --endpoint-url  ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/
 aws --endpoint-url  ${STORAGE_S3_ENDPOINT_URL} s3 cp s3://testbucket/admin/data/ontime_200.csv.zst s3://testbucket/admin/tempdata/dir/ontime_200.csv.zst >/dev/null 2>&1
 
 ## Copy from named external stage
-echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/tempdata/' credentials=(aws_key_id='minioadmin' aws_secret_key='minioadmin'  endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
+echo "CREATE STAGE named_external_stage url = 's3://testbucket/admin/tempdata/' credentials=(access_key_id ='minioadmin' secret_access_key ='minioadmin'  endpoint_url='${STORAGE_S3_ENDPOINT_URL}');" | $MYSQL_CLIENT_CONNECT
 
 ## List files in internal stage
 echo "=== List files in external stage ==="

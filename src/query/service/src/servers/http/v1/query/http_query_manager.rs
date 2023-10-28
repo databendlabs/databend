@@ -42,6 +42,7 @@ pub(crate) struct HttpQueryConfig {
 }
 
 pub struct HttpQueryManager {
+    #[allow(clippy::type_complexity)]
     pub(crate) queries: Arc<RwLock<HashMap<String, Arc<HttpQuery>>>>,
     pub(crate) sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
     pub(crate) config: HttpQueryConfig,
@@ -83,7 +84,6 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
-    #[minitrace::trace]
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());

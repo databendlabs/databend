@@ -411,7 +411,7 @@ impl AligningStateTextBased for CsvReaderState {
             row_batch.data = if last_remain.is_empty() {
                 buf_out
             } else {
-                [last_remain, buf_out].concat()
+                vec![last_remain, buf_out].concat()
             };
 
             Ok(vec![row_batch])

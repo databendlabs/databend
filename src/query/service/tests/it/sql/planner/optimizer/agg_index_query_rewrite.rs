@@ -71,6 +71,7 @@ fn create_table_plan(fixture: &TestFixture, format: &str) -> CreateTablePlan {
         ]),
         engine: Engine::Fuse,
         storage_params: None,
+        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             // database id is required for FUSE

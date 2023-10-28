@@ -31,7 +31,9 @@ use common_expression::Scalar;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
+use storages_common_table_meta::meta::Location;
 
+/// Fuse table partition information.
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct FusePartInfo {
     pub location: String,
@@ -108,5 +110,42 @@ impl FusePartInfo {
             .as_ref()
             .map(|meta| meta.page_size)
             .unwrap_or(self.nums_rows)
+    }
+}
+
+/// Fuse table lazy partition information.
+/// Lazy partition is a partition that only contains the partition location.
+/// The partition data will be loaded when the partition is used.
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct FuseLazyPartInfo {
+    pub segment_index: usize,
+    pub segment_location: Location,
+}
+
+#[typetag::serde(name = "fuse_lazy")]
+impl PartInfo for FuseLazyPartInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+        info.as_any()
+            .downcast_ref::<FuseLazyPartInfo>()
+            .is_some_and(|other| self == other)
+    }
+
+    fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_location.0.hash(&mut s);
+        s.finish()
+    }
+}
+
+impl FuseLazyPartInfo {
+    pub fn create(idx: usize, segment_location: Location) -> PartInfoPtr {
+        Arc::new(Box::new(FuseLazyPartInfo {
+            segment_index: idx,
+            segment_location,
+        }))
     }
 }

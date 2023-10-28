@@ -97,9 +97,9 @@ impl Column {
         }
 
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..length)
-            }
+            Column::Null { .. } => Column::Null { len: length },
+            Column::EmptyArray { .. } => Column::EmptyArray { len: length },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: length },
             Column::Number(column) => with_number_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => {
                     Column::Number(NumberColumn::NUM_TYPE(Self::filter_primitive_types(

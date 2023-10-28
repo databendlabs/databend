@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -27,6 +28,9 @@ use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use log::debug;
 use storages_common_table_meta::table::is_internal_opt_key;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -59,36 +63,22 @@ impl Interpreter for ShowCreateTableInterpreter {
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
 
-        let name = table.name();
         let engine = table.engine();
         if engine == VIEW_ENGINE {
-            if let Some(query) = table.options().get(QUERY) {
-                let view_create_sql = format!(
-                    "CREATE VIEW `{}`.`{}` AS {}",
-                    &self.plan.database, name, query
-                );
-                let block = DataBlock::new(
-                    vec![
-                        BlockEntry::new(
-                            DataType::String,
-                            Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                        ),
-                        BlockEntry::new(
-                            DataType::String,
-                            Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
-                        ),
-                    ],
-                    1,
-                );
-                debug!("Show create view executor result: {:?}", block);
-
-                return PipelineBuildResult::from_blocks(vec![block]);
-            } else {
-                return Err(ErrorCode::Internal(
-                    "Logical error, View Table must have a SelectQuery inside.",
-                ));
+            self.show_create_view(table.as_ref())
+        } else {
+            match table.options().get(OPT_KEY_STORAGE_PREFIX) {
+                Some(_) => self.show_attach_table(table.as_ref()),
+                None => self.show_create_table(table.as_ref()),
             }
         }
+    }
+}
+
+impl ShowCreateTableInterpreter {
+    fn show_create_table(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+        let name = table.name();
+        let engine = table.engine();
         let schema = table.schema();
         let field_comments = table.field_comments();
         let n_fields = schema.fields().len();
@@ -102,6 +92,11 @@ impl Interpreter for ShowCreateTableInterpreter {
         {
             let mut columns = vec![];
             for (idx, field) in schema.fields().iter().enumerate() {
+                let nullable = if field.is_nullable() {
+                    " NULL".to_string()
+                } else {
+                    " NOT NULL".to_string()
+                };
                 let default_expr = match field.default_expr() {
                     Some(expr) => {
                         format!(" DEFAULT {expr}")
@@ -129,9 +124,10 @@ impl Interpreter for ShowCreateTableInterpreter {
                     "".to_string()
                 };
                 let column = format!(
-                    "  `{}` {}{}{}{}",
+                    "  `{}` {}{}{}{}{}",
                     field.name(),
-                    field.data_type().sql_name(),
+                    field.data_type().remove_recursive_nullable().sql_name(),
+                    nullable,
                     default_expr,
                     computed_expr,
                     comment
@@ -189,6 +185,73 @@ impl Interpreter for ShowCreateTableInterpreter {
         );
         debug!("Show create table executor result: {:?}", block);
 
+        PipelineBuildResult::from_blocks(vec![block])
+    }
+
+    fn show_create_view(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+        let name = table.name();
+        if let Some(query) = table.options().get(QUERY) {
+            let view_create_sql = format!(
+                "CREATE VIEW `{}`.`{}` AS {}",
+                &self.plan.database, name, query
+            );
+            let block = DataBlock::new(
+                vec![
+                    BlockEntry::new(
+                        DataType::String,
+                        Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                    ),
+                    BlockEntry::new(
+                        DataType::String,
+                        Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                    ),
+                ],
+                1,
+            );
+            debug!("Show create view executor result: {:?}", block);
+
+            PipelineBuildResult::from_blocks(vec![block])
+        } else {
+            Err(ErrorCode::Internal(
+                "Logical error, View Table must have a SelectQuery inside.",
+            ))
+        }
+    }
+
+    fn show_attach_table(&self, table: &dyn Table) -> Result<PipelineBuildResult> {
+        let name = table.name();
+        // TODO table that attached before this PR, could not show location properly
+        let location_not_available = "N/A".to_string();
+        let table_data_location = table
+            .options()
+            .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
+            .unwrap_or(&location_not_available);
+
+        let mut ddl = format!(
+            "ATTACH TABLE `{}`.`{}` {}",
+            &self.plan.database, name, table_data_location,
+        );
+
+        if table
+            .options()
+            .contains_key(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
+        {
+            ddl.push_str(" READ_ONLY")
+        }
+
+        let block = DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(ddl.into_bytes())),
+                ),
+            ],
+            1,
+        );
         PipelineBuildResult::from_blocks(vec![block])
     }
 }

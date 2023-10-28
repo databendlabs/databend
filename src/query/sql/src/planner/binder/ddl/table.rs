@@ -78,6 +78,7 @@ use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 
 use crate::binder::location::parse_uri_location;
@@ -576,6 +577,7 @@ impl Binder {
             schema: schema.clone(),
             engine,
             storage_params,
+            read_only_attach: false,
             part_prefix,
             options,
             field_comments,
@@ -625,6 +627,12 @@ impl Binder {
         let mut options = BTreeMap::new();
         options.insert(OPT_KEY_STORAGE_PREFIX.to_string(), storage_prefix);
 
+        // keep a copy of table data uri_location, will be used in "show create table"
+        options.insert(
+            OPT_KEY_TABLE_ATTACHED_DATA_URI.to_string(),
+            stmt.uri_location.to_string(),
+        );
+
         let mut uri = stmt.uri_location.clone();
         uri.path = root;
         let (sp, _) = parse_uri_location(&mut uri).await?;
@@ -645,14 +653,15 @@ impl Binder {
             catalog,
             database,
             table,
-            options,
+            schema: Arc::new(TableSchema::default()),
             engine: Engine::Fuse,
+            storage_params: Some(sp),
+            read_only_attach: stmt.read_only,
+            part_prefix,
+            options,
+            field_comments: vec![],
             cluster_key: None,
             as_select: None,
-            schema: Arc::new(TableSchema::default()),
-            field_comments: vec![],
-            storage_params: Some(sp),
-            part_prefix,
         })))
     }
 

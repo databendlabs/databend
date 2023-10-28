@@ -29,6 +29,77 @@ select get(null, 'aa')
 NULL
 
 query T
+select parse_json('[2.71, 3.14]')->0
+----
+2.71
+
+query T
+select parse_json('[2.71, 3.14]')->2
+----
+NULL
+
+query T
+select parse_json('[[2.71, 3.14]]')->0->1
+----
+3.14
+
+query T
+select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'aA'
+----
+2
+
+query T
+select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->'AA'
+----
+NULL
+
+query T
+select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->'aa'
+----
+null
+
+query T
+select parse_json(null)->'aa'
+----
+NULL
+
+
+query T
+select parse_json('[2.71, 3.14]')->>0
+----
+2.71
+
+query T
+select parse_json('[2.71, 3.14]')->>2
+----
+NULL
+
+query T
+select parse_json('{"aa": 1, "aA": "text", "Aa": 3}')->>'aA'
+----
+"text"
+
+query T
+select parse_json('{"aa": 1, "aA": "text", "Aa": {"a":1}}')->>'Aa'
+----
+{"a":1}
+
+query T
+select parse_json('{"aa": 1, "aA": 2, "Aa": 3}')->>'AA'
+----
+NULL
+
+query T
+select parse_json('{"aa": null, "aA": 2, "Aa": 3}')->>'aa'
+----
+null
+
+query T
+select parse_json(null)->>'aa'
+----
+NULL
+
+query T
 select parse_json('[2.71, 3.14]')[0]
 ----
 2.71
@@ -120,11 +191,106 @@ select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras"
 ----
 NULL
 
-
 query T
 select json_extract_path_text('{"customer":{"id": 1, "name":"databend", "extras":["ext", "test"]}}', '')
 ----
 {"customer":{"extras":["ext","test"],"id":1,"name":"databend"}}
+
+
+query T
+select NULL#>'{0}'
+----
+NULL
+
+query T
+select parse_json('false')#>'{0}'
+----
+NULL
+
+query T
+select parse_json('[1, 2, 3]')#>NULL
+----
+NULL
+
+query T
+select parse_json('[1, 2, 3]')#>'{a}'
+----
+NULL
+
+query I
+select parse_json('[1, 2, 3]')#>'{1}'
+----
+2
+
+query T
+select parse_json('[1, 2, 3]')#>'{3}'
+----
+NULL
+
+query T
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1}'
+----
+[1,2]
+
+query T
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>'{2, 1, 0, 1}'
+----
+NULL
+
+query T
+select parse_json('[1, {"a": 1, "b": 2}, 3]')#>'{1}'
+----
+{"a":1,"b":2}
+
+query I
+select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>'{1, b, 2, k1}'
+----
+1
+
+query T
+select NULL#>>'{0}'
+----
+NULL
+
+query T
+select parse_json('false')#>>'{0}'
+----
+NULL
+
+query T
+select parse_json('[1, 2, 3]')#>>'{a}'
+----
+NULL
+
+query I
+select parse_json('[1, 2, 3]')#>>'{1}'
+----
+2
+
+query T
+select parse_json('[1, 2, 3]')#>>'{3}'
+----
+NULL
+
+query T
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1}'
+----
+[1,2]
+
+query T
+select parse_json('[1, 2, [0, [1, 2], 3]]')#>>'{2, 1, 0, 1}'
+----
+NULL
+
+query T
+select parse_json('[1, {"a": 1, "b": 2}, 3]')#>>'{1}'
+----
+{"a":1,"b":2}
+
+query I
+select parse_json('[1, {"a": 1, "b": [100, 200, {"k1": 1, "k2": 2}]}, 3]')#>>'{1, b, 2, k1}'
+----
+1
 
 query T
 select [][0]
@@ -212,6 +378,26 @@ NULL
 
 query T
 select get(obj, 'a') from t2
+----
+1
+
+query T
+select arr->0 from t1
+----
+1
+
+query T
+select arr->'a' from t1
+----
+NULL
+
+query T
+select obj->0 from t2
+----
+NULL
+
+query T
+select obj->'a' from t2
 ----
 1
 
@@ -484,6 +670,36 @@ select json_path_query_first(obj, '$.测试\\"\\uD83D\\uDC8E') from t5
 ----
 "a"
 NULL
+
+query T
+SELECT arr #> '{3}' FROM t1;
+----
+["a","b","c"]
+
+query T
+SELECT arr #> '{3,1}' FROM t1;
+----
+"b"
+
+query I
+SELECT obj #> '{a}' FROM t2;
+----
+1
+
+query T
+SELECT arr #>> '{3}' FROM t1;
+----
+["a","b","c"]
+
+query T
+SELECT arr #>> '{3,1}' FROM t1;
+----
+"b"
+
+query I
+SELECT obj #>> '{a}' FROM t2;
+----
+1
 
 statement ok
 DROP DATABASE IF EXISTS db1

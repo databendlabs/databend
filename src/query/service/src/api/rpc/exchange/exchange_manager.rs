@@ -31,6 +31,7 @@ use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Status;
@@ -499,7 +500,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
+                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_SENDER)
                 .map(|(_, v)| v.convert_to_sender())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -531,7 +532,7 @@ impl QueryCoordinator {
         match params {
             ExchangeParams::MergeExchange(params) => Ok(self
                 .fragment_exchanges
-                .extract_if(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
+                .drain_filter(|(_, f, r), _| f == &params.fragment_id && *r == FLIGHT_RECEIVER)
                 .map(|(_, v)| v.convert_to_receiver())
                 .collect::<Vec<_>>()),
             ExchangeParams::ShuffleExchange(params) => {
@@ -727,7 +728,14 @@ impl QueryCoordinator {
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
+            let _g = span.set_local_parent();
             statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
