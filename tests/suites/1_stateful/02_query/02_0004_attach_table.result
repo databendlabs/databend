@@ -11,6 +11,10 @@ check content of attach table
 check content of attach table, after row has been deleted from attachED table:
   there should be only one row
 0
+count of the original table after deletion is 1
+1
+count of the attach read_only table should also be 1
+1
 delete not allowed
 ERROR 1105 (HY000) at line 1: InvalidOperation. Code: 3905, Text = Mutation not allowed, table [table_read_only] is READ ONLY..
 update not allowed

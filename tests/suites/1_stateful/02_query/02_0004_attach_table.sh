@@ -52,8 +52,14 @@ echo "delete from table_to where a=2;" | $MYSQL_CLIENT_CONNECT
 
 echo "check content of attach table, after row has been deleted from attachED table:"
 echo "  there should be only one row"
-# ## check table content
+# 2.1 check table content
 echo "select * from table_read_only order by a;" | $MYSQL_CLIENT_CONNECT
+
+# 2.1 check count() table
+echo "count of the original table after deletion is 1"
+echo "select count() from table_from" | $MYSQL_CLIENT_CONNECT
+echo "count of the attach read_only table should also be 1"
+echo "select count() from table_read_only" | $MYSQL_CLIENT_CONNECT
 
 # 3. READ_ONLY attach table should aware of the schema evolution of table being attached
 # TODO currently, there is a design issue blocking this feature (the constructor of table is sync style)
