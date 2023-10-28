@@ -1356,6 +1356,7 @@ pub fn basic_type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
+    let ty_bitmap = value(TypeName::Bitmap, rule! { BITMAP });
     map(
         alt((
             rule! {
@@ -1371,6 +1372,7 @@ pub fn basic_type_name(i: Input) -> IResult<TypeName> {
             | #ty_float32
             | #ty_float64
             | #ty_decimal
+            | #ty_bitmap
             ) : "type name"
             },
             rule! {
@@ -1426,9 +1428,15 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         | #ty_tuple : "TUPLE(<type>, ...)"
         | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
         | #ty_nullable
-        ) : "type name"
+        ) ~ NULL?  : "type name"
         },
-        |ty| ty,
+        |(ty, opt_null)| {
+            if opt_null.is_some() {
+                ty.wrap_nullable()
+            } else {
+                ty
+            }
+        },
     )(i)
 }
 

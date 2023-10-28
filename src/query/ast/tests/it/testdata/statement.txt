@@ -1746,7 +1746,7 @@ DropDatabase(
 ---------- Input ----------
 create table c(a DateTime null, b DateTime(3));
 ---------- Output ---------
-CREATE TABLE c (a TIMESTAMP NULL, b TIMESTAMP)
+CREATE TABLE c (a TIMESTAMP NULL NULL, b TIMESTAMP)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1776,7 +1776,9 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
+                        nullable_constraint: Some(
+                            Null,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2436,7 +2438,7 @@ DropTable(
 ---------- Input ----------
 CREATE TABLE t(c1 int null, c2 bigint null, c3 varchar null);
 ---------- Output ---------
-CREATE TABLE t (c1 Int32 NULL, c2 Int64 NULL, c3 STRING NULL)
+CREATE TABLE t (c1 Int32 NULL NULL, c2 Int64 NULL NULL, c3 STRING NULL NULL)
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -2466,7 +2468,9 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
+                        nullable_constraint: Some(
+                            Null,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2481,7 +2485,9 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
+                        nullable_constraint: Some(
+                            Null,
+                        ),                    
                     },
                     ColumnDefinition {
                         name: Identifier {
@@ -2496,7 +2502,9 @@ CreateTable(
                         ),
                         expr: None,
                         comment: None,
-                        nullable_constraint: None,
+                        nullable_constraint: Some(
+                            Null,
+                        ),
                     },
                 ],
             ),
@@ -7579,7 +7587,7 @@ AlterTable(
 ---------- Input ----------
 ALTER TABLE t ADD COLUMN c int null;
 ---------- Output ---------
-ALTER TABLE t ADD COLUMN c Int32 NULL
+ALTER TABLE t ADD COLUMN c Int32 NULL NULL
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7616,7 +7624,9 @@ AlterTable(
                 ),
                 expr: None,
                 comment: None,
-                nullable_constraint: None,
+                nullable_constraint: Some(
+                    Null,
+                ),
             },
             option: End,
         },
@@ -8044,7 +8054,9 @@ AlterTable(
                             ),
                         ),
                         comment: None,
-                        nullable_constraint: None,
+                        nullable_constraint: Some(
+                            Null,
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
