@@ -17,7 +17,7 @@ common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 opendal = { workspace = true }
