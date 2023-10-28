@@ -37,12 +37,12 @@ use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::table::TableCompression;
 
-use crate::fuse_table::FuseStorageFormat;
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
+use crate::FuseStorageFormat;
 
 // TODO rename this, it is serialization, or pass in a writer(if not rename)
 pub fn serialize_block(

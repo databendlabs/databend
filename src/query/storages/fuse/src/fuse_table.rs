@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -24,7 +23,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::NavigationDescriptor;
@@ -32,7 +30,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::ColumnId;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -45,7 +42,6 @@ use common_sql::parse_exprs;
 use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
 use common_storage::DataOperator;
-use common_storage::Datum;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -54,7 +50,6 @@ use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -73,11 +68,14 @@ use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use uuid::Uuid;
 
+use crate::fuse_column::FuseTableColumnStatisticsProvider;
+use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::pipelines::Pipeline;
 use crate::table_functions::unwrap_tuple;
+use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -89,21 +87,6 @@ use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 use crate::FUSE_OPT_KEY_ROW_PER_PAGE;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
-
-/// Fuse engine table type.
-#[derive(Clone, PartialEq)]
-pub enum FuseTableType {
-    // Standard table with full functionality.
-    Standard,
-    // External table, possibly linked from an external location.
-    External,
-    // Table attached to the system.
-    Attached,
-    // Attached table with read-only access.
-    AttachedReadOnly,
-    // Shared table with read-only access.
-    SharedReadOnly,
-}
 
 #[derive(Clone)]
 pub struct FuseTable {
@@ -798,68 +781,6 @@ impl Table for FuseTable {
     }
 
     fn is_read_only(&self) -> bool {
-        self.table_type == FuseTableType::AttachedReadOnly
-            || self.table_type == FuseTableType::SharedReadOnly
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum FuseStorageFormat {
-    Parquet,
-    Native,
-}
-
-impl FromStr for FuseStorageFormat {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "" | "parquet" => Ok(FuseStorageFormat::Parquet),
-            "native" => Ok(FuseStorageFormat::Native),
-            other => Err(ErrorCode::UnknownFormat(format!(
-                "unknown fuse storage_format {}",
-                other
-            ))),
-        }
-    }
-}
-
-#[derive(Default)]
-struct FuseTableColumnStatisticsProvider {
-    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
-}
-
-impl FuseTableColumnStatisticsProvider {
-    fn new(
-        column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-        column_distinct_values: Option<HashMap<ColumnId, u64>>,
-        row_count: u64,
-    ) -> Self {
-        let column_stats = column_stats
-            .into_iter()
-            .map(|(column_id, stat)| {
-                let ndv = column_distinct_values
-                    .as_ref()
-                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-                let stat = BasicColumnStatistics {
-                    min: Datum::from_scalar(stat.min().clone()),
-                    max: Datum::from_scalar(stat.max().clone()),
-                    ndv: Some(ndv),
-                    null_count: stat.null_count,
-                };
-                (column_id, stat.get_useful_stat(row_count))
-            })
-            .collect();
-        Self { column_stats }
-    }
-}
-
-impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
-        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
-    }
-
-    fn num_rows(&self) -> Option<u64> {
-        None
+        self.table_type.is_readonly()
     }
 }
