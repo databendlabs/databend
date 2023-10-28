@@ -642,7 +642,6 @@ impl Table for FuseTable {
     }
 
     async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
-        let table_info = &self.table_info;
         match self.table_type {
             FuseTableType::AttachedReadOnly => {
                 if let Some(snapshot) = self.read_table_snapshot().await? {
