@@ -655,7 +655,7 @@ impl Table for FuseTable {
                         number_of_segments: Some(snapshot.segments.len() as u64),
                     }))
                 } else {
-                    // For table created with "ATTACH TABLE" ... statement, this should be unreachable:
+                    // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
                     // IO or Deserialization related error should have already been thrown, thus
                     // `Internal` error is used.
                     Err(ErrorCode::Internal(
