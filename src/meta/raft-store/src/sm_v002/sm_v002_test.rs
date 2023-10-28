@@ -33,36 +33,36 @@ async fn test_one_level_upsert_get_range() -> anyhow::Result<()> {
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(1, b("a0"))));
 
-    let got = sm.get_kv("a").await;
+    let got = sm.get_maybe_expired_kv("a").await;
     assert_eq!(got, Some(SeqV::new(1, b("a0"))));
 
     let mut a = sm.new_applier();
     let (prev, result) = a.upsert_kv(&UpsertKV::update("b", b"b0")).await;
     assert_eq!(prev, None);
     assert_eq!(result, Some(SeqV::new(2, b("b0"))));
-    let got = sm.get_kv("b").await;
+    let got = sm.get_maybe_expired_kv("b").await;
     assert_eq!(got, Some(SeqV::new(2, b("b0"))));
 
     let mut a = sm.new_applier();
     let (prev, result) = a.upsert_kv(&UpsertKV::update("a", b"a00")).await;
     assert_eq!(prev, Some(SeqV::new(1, b("a0"))));
     assert_eq!(result, Some(SeqV::new(3, b("a00"))));
-    let got = sm.get_kv("a").await;
+    let got = sm.get_maybe_expired_kv("a").await;
     assert_eq!(got, Some(SeqV::new(3, b("a00"))));
 
     // get_kv_ref()
 
-    let got = sm.get_kv("a").await;
+    let got = sm.get_maybe_expired_kv("a").await;
     assert_eq!(got.seq(), 3);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), Some(&b("a00")));
 
-    let got = sm.get_kv("x").await;
+    let got = sm.get_maybe_expired_kv("x").await;
     assert_eq!(got.seq(), 0);
     assert_eq!(got.meta(), None);
     assert_eq!(got.value(), None);
 
-    let got = sm.prefix_list_kv("").await;
+    let got = sm.list_kv("").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(3, b("a00"))),
         (s("b"), SeqV::new(2, b("b0")))
@@ -93,35 +93,44 @@ async fn test_two_level_upsert_get_range() -> anyhow::Result<()> {
 
     // get_kv_ref()
 
-    let got = sm.get_kv("a").await;
+    let got = sm.get_maybe_expired_kv("a").await;
     assert_eq!((got.seq(), got.value()), (1u64, Some(&b("a0"))));
 
-    let got = sm.get_kv("b").await;
+    let got = sm.get_maybe_expired_kv("b").await;
     assert_eq!((got.seq(), got.value()), (0, None));
 
-    let got = sm.get_kv("c").await;
+    let got = sm.get_maybe_expired_kv("c").await;
     assert_eq!((got.seq(), got.value()), (4, Some(&b("c1"))));
 
-    let got = sm.get_kv("d").await;
+    let got = sm.get_maybe_expired_kv("d").await;
     assert_eq!((got.seq(), got.value()), (5, Some(&b("d1"))));
 
     // get_kv()
 
-    assert_eq!(sm.get_kv("a").await, Some(SeqV::new(1, b("a0"))));
-    assert_eq!(sm.get_kv("b").await, None);
-    assert_eq!(sm.get_kv("c").await, Some(SeqV::new(4, b("c1"))));
-    assert_eq!(sm.get_kv("d").await, Some(SeqV::new(5, b("d1"))));
+    assert_eq!(
+        sm.get_maybe_expired_kv("a").await,
+        Some(SeqV::new(1, b("a0")))
+    );
+    assert_eq!(sm.get_maybe_expired_kv("b").await, None);
+    assert_eq!(
+        sm.get_maybe_expired_kv("c").await,
+        Some(SeqV::new(4, b("c1")))
+    );
+    assert_eq!(
+        sm.get_maybe_expired_kv("d").await,
+        Some(SeqV::new(5, b("d1")))
+    );
 
     // prefix_list_kv()
 
-    let got = sm.prefix_list_kv("").await;
+    let got = sm.list_kv("").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![
         (s("a"), SeqV::new(1, b("a0"))),
         (s("c"), SeqV::new(4, b("c1"))),
         (s("d"), SeqV::new(5, b("d1"))),
     ]);
 
-    let got = sm.prefix_list_kv("a").await;
+    let got = sm.list_kv("a").await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![(s("a"), SeqV::new(1, b("a0"))),]);
     Ok(())
 }
@@ -241,7 +250,7 @@ async fn test_inserting_expired_becomes_deleting() -> anyhow::Result<()> {
     a.upsert_kv(&UpsertKV::update("a", b"a1").with_expire_sec(10))
         .await;
 
-    assert_eq!(sm.get_kv("a").await, None, "a is expired");
+    assert_eq!(sm.get_maybe_expired_kv("a").await, None, "a is expired");
 
     let got = sm.list_expire_index().await.collect::<Vec<_>>().await;
     assert_eq!(got, vec![

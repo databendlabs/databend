@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_license::license::Feature::VirtualColumn;
 use common_license::license_manager::get_license_manager;
@@ -59,6 +60,10 @@ impl Interpreter for RefreshVirtualColumnInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
+
         let catalog = self.ctx.get_catalog(&catalog_name).await?;
 
         let list_virtual_columns_req = ListVirtualColumnsReq {

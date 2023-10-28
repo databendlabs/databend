@@ -41,12 +41,13 @@ use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_metrics::count::Count;
-use common_tracing::func_name;
 use futures::stream::TryChunksError;
 use futures::StreamExt;
 use futures::TryStreamExt;
 use log::debug;
 use log::info;
+use minitrace::full_name;
+use minitrace::func_name;
 use minitrace::prelude::*;
 use prost::Message;
 use tokio_stream;
@@ -258,7 +259,7 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
         let reply = self.handle_kv_api(request).in_span(root).await?;
 
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);
@@ -275,7 +276,7 @@ impl MetaService for MetaServiceImpl {
         self.check_token(request.metadata())?;
 
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         let strm = self.handle_kv_read_v1(request).in_span(root).await?;
 
@@ -291,7 +292,7 @@ impl MetaService for MetaServiceImpl {
         network_metrics::incr_recv_bytes(request.get_ref().encoded_len() as u64);
         let _guard = RequestInFlight::guard();
 
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
         let reply = self.handle_txn(request).in_span(root).await?;
 
         network_metrics::incr_sent_bytes(reply.encoded_len() as u64);

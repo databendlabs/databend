@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_license::license::Feature::ComputedColumn;
@@ -65,6 +66,9 @@ impl Interpreter for AddTableColumnInterpreter {
             .ok();
 
         if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
+
             let table_info = table.get_table_info();
             if table_info.engine() == VIEW_ENGINE {
                 return Err(ErrorCode::TableEngineNotSupported(format!(

@@ -45,6 +45,39 @@ order by a
 5 11 12 8
 5 11 12 8
 
+query I
+select
+  s1.jyje_pm
+from
+  (
+    select
+      dense_rank() over(
+        order by
+          t1.aaa desc
+      ) as jyje_pm
+    from
+      (
+        select
+          'aaa1' as aaa,
+          'ddd1' as dddd
+      ) t1
+  ) s1
+  left join (
+    select
+      dense_rank() over(
+        order by
+          t1.aaa desc
+      ) as jyje_pm
+    from
+      (
+        select
+          'aaa2' as aaa,
+          'ddd2' as dddd
+      ) t1
+  ) s2 on 1 = 1
+----
+1
+
 statement ok
 USE default
 

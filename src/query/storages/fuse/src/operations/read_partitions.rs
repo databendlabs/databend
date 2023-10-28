@@ -52,7 +52,7 @@ use crate::pruning::SegmentLocation;
 use crate::FuseTable;
 
 impl FuseTable {
-    #[minitrace::trace(name = "do_read_partitions")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn do_read_partitions(
         &self,
@@ -123,7 +123,7 @@ impl FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "prune_snapshot_blocks")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     pub async fn prune_snapshot_blocks(
         &self,
