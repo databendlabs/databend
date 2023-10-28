@@ -197,7 +197,7 @@ where TablesTable<T>: HistoryAware
                     .as_ref()
                     .map(|v| v.owner_role_name.as_bytes().to_vec()),
             );
-            let stats = tbl.table_statistics()?;
+            let stats = tbl.table_statistics().await?;
             num_rows.push(stats.as_ref().and_then(|v| v.num_rows));
             number_of_blocks.push(stats.as_ref().and_then(|v| v.number_of_blocks));
             number_of_segments.push(stats.as_ref().and_then(|v| v.number_of_segments));

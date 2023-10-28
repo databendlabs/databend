@@ -99,9 +99,9 @@ impl BuildSpillState {
             self.get_hashes(block, &mut hashes)?;
             let mut indices = Vec::with_capacity(hashes.len());
             for hash in hashes {
-                indices.push(hash2bucket::<2, false>(hash as usize) as u8);
+                indices.push(hash2bucket::<3, false>(hash as usize) as u8);
             }
-            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 2)?;
+            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 3)?;
             for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {
                 partition_blocks
                     .entry(p_id as u8)
@@ -137,16 +137,17 @@ impl BuildSpillState {
             return Ok(false);
         }
 
-        // Todo: if this is the first batch data, directly return false.
-
         let mut total_bytes = 0;
 
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
+        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
+        if buffer.is_empty() && chunks.is_empty() {
+            return Ok(false);
+        }
         for block in buffer.iter() {
             total_bytes += block.memory_size();
         }
 
-        let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
         for block in chunks.iter() {
             total_bytes += block.memory_size();
         }
