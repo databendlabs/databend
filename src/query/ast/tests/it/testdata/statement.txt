@@ -2487,7 +2487,7 @@ CreateTable(
                         comment: None,
                         nullable_constraint: Some(
                             Null,
-                        ),                   
+                        ),
                     },
                     ColumnDefinition {
                         name: Identifier {
