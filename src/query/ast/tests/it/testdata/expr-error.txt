@@ -30,8 +30,10 @@ error:
   --> SQL:1:14
   |
 1 | CAST(col1 AS foo)
-  | ----         ^^^ expected `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `JSON`, `DOUBLE`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, or `NULLABLE`
-  | |             
+  | ----         ^^^
+  | |            |
+  | |            expected `BOOL`, `FLOAT`, `BOOLEAN`, `FLOAT32`, `FLOAT64`, `JSON`, `DOUBLE`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `DECIMAL`, `BITMAP`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `ARRAY`, `MAP`, `TUPLE`, or `NULLABLE`
+  | |            while parsing type name
   | while parsing `CAST(... AS ...)`
   | while parsing expression
 

@@ -29,8 +29,10 @@ error:
   --> SQL:1:19
   |
 1 | create table a (c varch)
-  | ------          - ^^^^^ expected `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TUPLE`, `TIMESTAMP`, `TEXT`, or `JSON`
-  | |               |  
+  | ------          - ^^^^^
+  | |               | |
+  | |               | expected `VARCHAR`, `CHAR`, `VARIANT`, `CHARACTER`, `VARBINARY`, `ARRAY`, `BINARY`, `MAP`, `DATE`, `STRING`, `FLOAT32`, `FLOAT64`, `DECIMAL`, `SMALLINT`, `DATETIME`, `NULLABLE`, `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT`, `DOUBLE`, `BITMAP`, `TIMESTAMP`, `TEXT`, `JSON`, or `TUPLE`
+  | |               | while parsing column type
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -42,9 +44,9 @@ error:
   --> SQL:1:25
   |
 1 | create table a (c tuple())
-  | ------          - ----- ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `NULLABLE`, <Ident>, or <QuotedString>
+  | ------          - ----- ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `BITMAP`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `ARRAY`, `MAP`, `NULLABLE`, `TUPLE`, <Ident>, or <QuotedString>
   | |               | |      
-  | |               | while parsing type name
+  | |               | while parsing column type
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -59,6 +61,7 @@ error:
   | ------          - -------^ expected `(`
   | |               | |       
   | |               | while parsing type name
+  | |               | while parsing column type
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -70,10 +73,11 @@ error:
   --> SQL:1:38
   |
 1 | create table a (b tuple(c int, uint64));
-  | ------          - -----              ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `ARRAY`, `MAP`, `BITMAP`, `TUPLE`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, or `NULLABLE`
-  | |               | |                   
-  | |               | while parsing TUPLE(<name> <type>, ...)
-  | |               | while parsing type name
+  | ------          - -----              ^
+  | |               | |                  |
+  | |               | |                  expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, `UINT32`, `INT`, `INTEGER`, `UINT64`, `UNSIGNED`, `BIGINT`, `INT8`, `INT16`, `INT32`, `INT64`, `SIGNED`, `FLOAT32`, `FLOAT`, `FLOAT64`, `DOUBLE`, `DECIMAL`, `BITMAP`, `DATE`, `DATETIME`, `TIMESTAMP`, `STRING`, `VARCHAR`, `CHAR`, `CHARACTER`, `TEXT`, `BINARY`, `VARBINARY`, `VARIANT`, `JSON`, `ARRAY`, `MAP`, `NULLABLE`, or `TUPLE`
+  | |               | |                  while parsing column type
+  | |               | while parsing column type
   | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -85,8 +89,9 @@ error:
   --> SQL:1:41
   |
 1 | CREATE TABLE t(c1 NULLABLE(int) NOT NULL);
-  | ------                                  ^ ambiguous NOT NULL constraint
-  | |                                        
+  | ------         --                       ^ ambiguous NOT NULL constraint
+  | |              |                         
+  | |              while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
