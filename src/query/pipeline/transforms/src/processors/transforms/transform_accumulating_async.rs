@@ -109,6 +109,7 @@ impl<T: AsyncAccumulatingTransform + 'static> Processor for AsyncAccumulatingTra
         Ok(Event::NeedData)
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
             self.output_data = self.inner.transform(data_block).await?;

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table::NavigationDescriptor;
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_sql::plans::RevertTablePlan;
 
@@ -48,6 +49,9 @@ impl Interpreter for RevertTableInterpreter {
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         let navigation_descriptor = NavigationDescriptor {
             database_name: self.plan.database.clone(),

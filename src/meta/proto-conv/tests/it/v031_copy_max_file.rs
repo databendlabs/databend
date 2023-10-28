@@ -15,7 +15,7 @@
 use common_meta_app as mt;
 use common_meta_app::storage::StorageParams;
 use common_meta_app::storage::StorageWebhdfsConfig;
-use common_tracing::func_name;
+use minitrace::func_name;
 
 use crate::common;
 

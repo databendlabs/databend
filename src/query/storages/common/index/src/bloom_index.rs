@@ -298,7 +298,7 @@ impl BloomIndex {
     /// This happens when the data doesn't show up in the filter.
     ///
     /// Otherwise return `Uncertain`.
-    #[minitrace::trace(name = "block_filter_index_eval")]
+    #[minitrace::trace]
     pub fn apply(
         &self,
         mut expr: Expr<String>,

@@ -375,6 +375,10 @@ pub trait Table: Sync + Send {
     fn broadcast_truncate_to_cluster(&self) -> bool {
         false
     }
+
+    fn is_read_only(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -396,8 +400,19 @@ pub trait TableExt: Table {
         };
         catalog.get_table_by_info(&table_info)
     }
-}
 
+    fn check_mutable(&self) -> Result<()> {
+        if self.is_read_only() {
+            let table_info = self.get_table_info();
+            Err(ErrorCode::InvalidOperation(format!(
+                "Mutation not allowed, table [{}] is READ ONLY.",
+                table_info.name
+            )))
+        } else {
+            Ok(())
+        }
+    }
+}
 impl<T: ?Sized> TableExt for T where T: Table {}
 
 #[derive(Debug, Clone, Eq, PartialEq)]
