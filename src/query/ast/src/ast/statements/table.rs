@@ -712,6 +712,31 @@ pub enum NullableConstraint {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ColumnType {
+    pub data_type: TypeName,
+    pub expr: Option<ColumnExpr>,
+    pub nullable_constraint: Option<NullableConstraint>,
+}
+
+impl Display for ColumnType {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.data_type)?;
+
+        if let Some(constraint) = &self.nullable_constraint {
+            match constraint {
+                NullableConstraint::NotNull => write!(f, " NOT NULL")?,
+                NullableConstraint::Null => write!(f, " NULL")?,
+            }
+        }
+
+        if let Some(expr) = &self.expr {
+            write!(f, "{expr}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,

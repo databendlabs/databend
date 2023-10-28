@@ -42,7 +42,6 @@ use crate::parser::stage::*;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
-use crate::Error;
 use crate::ErrorKind;
 
 pub enum ShowGrantOption {
@@ -1798,39 +1797,6 @@ pub fn rest_str(i: Input) -> IResult<(String, usize)> {
 }
 
 pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
-    #[derive(Clone)]
-    enum ColumnConstraint {
-        Nullable(bool),
-        DefaultExpr(Box<Expr>),
-        VirtualExpr(Box<Expr>),
-        StoredExpr(Box<Expr>),
-    }
-
-    let nullable = alt((
-        value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
-    ));
-    let expr = alt((
-        map(
-            rule! {
-                DEFAULT ~ ^#subexpr(NOT_PREC)
-            },
-            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-        ),
-        map(
-            rule! {
-                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
-            },
-            |(_, _, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
-        ),
-        map(
-            rule! {
-                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
-            },
-            |(_, _, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
-        ),
-    ));
-
     let comment = map(
         rule! {
             COMMENT ~ #literal_string
@@ -1838,54 +1804,21 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         |(_, comment)| comment,
     );
 
-    let (i, (mut def, constraints)) = map(
+    map(
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #expr )*
             ~ ( #comment )?
             : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints, comment)| {
-            let def = ColumnDefinition {
-                name,
-                data_type,
-                expr: None,
-                comment,
-                nullable_constraint: None,
-            };
-            (def, constraints)
+        |(name, col_type, comment)| ColumnDefinition {
+            name,
+            data_type: col_type.data_type,
+            expr: col_type.expr,
+            comment,
+            nullable_constraint: col_type.nullable_constraint,
         },
-    )(i)?;
-
-    for constraint in constraints {
-        match constraint {
-            ColumnConstraint::Nullable(nullable) => {
-                if nullable {
-                    def.data_type = def.data_type.wrap_nullable();
-                    def.nullable_constraint = Some(NullableConstraint::Null);
-                } else if def.data_type.is_nullable() {
-                    return Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::Other("ambiguous NOT NULL constraint"),
-                    )));
-                } else {
-                    def.nullable_constraint = Some(NullableConstraint::NotNull);
-                }
-            }
-            ColumnConstraint::DefaultExpr(default_expr) => {
-                def.expr = Some(ColumnExpr::Default(default_expr))
-            }
-            ColumnConstraint::VirtualExpr(virtual_expr) => {
-                def.expr = Some(ColumnExpr::Virtual(virtual_expr))
-            }
-            ColumnConstraint::StoredExpr(stored_expr) => {
-                def.expr = Some(ColumnExpr::Stored(stored_expr))
-            }
-        }
-    }
-
-    Ok((i, def))
+    )(i)
 }
 
 pub fn role_name(i: Input) -> IResult<String> {
@@ -2114,23 +2047,6 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 }
 
 pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
-    #[derive(Clone)]
-    enum ColumnConstraint {
-        Nullable(bool),
-        DefaultExpr(Box<Expr>),
-    }
-
-    let nullable = alt((
-        value(ColumnConstraint::Nullable(true), rule! { NULL }),
-        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
-    ));
-    let expr = alt((map(
-        rule! {
-            DEFAULT ~ ^#subexpr(NOT_PREC)
-        },
-        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-    ),));
-
     let comment = map(
         rule! {
             COMMENT ~ #literal_string
@@ -2142,34 +2058,15 @@ pub fn modify_column_type(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #expr )*
             ~ ( #comment )?
             : "`<column name> <type> [DEFAULT <expr>] [COMMENT '<comment>']`"
         },
-        |(name, data_type, constraints, comment)| {
-            let mut def = ColumnDefinition {
-                name,
-                data_type,
-                expr: None,
-                comment,
-                nullable_constraint: None,
-            };
-            for constraint in constraints {
-                match constraint {
-                    ColumnConstraint::Nullable(nullable) => {
-                        if nullable {
-                            def.data_type = def.data_type.wrap_nullable();
-                            def.nullable_constraint = Some(NullableConstraint::Null);
-                        } else {
-                            def.nullable_constraint = Some(NullableConstraint::NotNull);
-                        }
-                    }
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.expr = Some(ColumnExpr::Default(default_expr))
-                    }
-                }
-            }
-            def
+        |(name, col_type, comment)| ColumnDefinition {
+            name,
+            data_type: col_type.data_type,
+            expr: col_type.expr,
+            comment,
+            nullable_constraint: col_type.nullable_constraint,
         },
     )(i)
 }
@@ -2795,18 +2692,11 @@ pub fn update_expr(i: Input) -> IResult<UpdateExpr> {
 }
 
 pub fn udf_arg_type(i: Input) -> IResult<TypeName> {
-    let nullable = alt((
-        value(true, rule! { NULL }),
-        value(false, rule! { NOT ~ ^NULL }),
-    ));
     map(
         rule! {
-            #type_name ~ #nullable?
+            #type_name
         },
-        |(type_name, nullable)| match nullable {
-            Some(false) => type_name,
-            _ => type_name.wrap_nullable(),
-        },
+        |col_type| col_type.data_type,
     )(i)
 }
 

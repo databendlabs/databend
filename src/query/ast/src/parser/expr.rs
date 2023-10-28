@@ -735,12 +735,12 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             if cast.kind == CAST {
                 ExprElement::Cast {
                     expr: Box::new(expr),
-                    target_type,
+                    target_type: target_type.data_type,
                 }
             } else {
                 ExprElement::TryCast {
                     expr: Box::new(expr),
-                    target_type,
+                    target_type: target_type.data_type,
                 }
             }
         },
@@ -749,7 +749,9 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         rule! {
             "::" ~ ^#type_name
         },
-        |(_, target_type)| ExprElement::PgCast { target_type },
+        |(_, target_type)| ExprElement::PgCast {
+            target_type: target_type.data_type,
+        },
     );
     let date_part = map(
         rule! {
@@ -1290,141 +1292,39 @@ pub fn at_string(i: Input) -> IResult<String> {
     })(i)
 }
 
-pub fn basic_type_name(i: Input) -> IResult<TypeName> {
-    let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
-    let ty_uint8 = value(
-        TypeName::UInt8,
-        rule! { ( UINT8 | #map(rule! { TINYINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )?  },
-    );
-    let ty_uint16 = value(
-        TypeName::UInt16,
-        rule! { ( UINT16 | #map(rule! { SMALLINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint32 = value(
-        TypeName::UInt32,
-        rule! { ( UINT32 | #map(rule! { ( INT | INTEGER ) ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_uint64 = value(
-        TypeName::UInt64,
-        rule! { ( UINT64 | UNSIGNED | #map(rule! { BIGINT ~ UNSIGNED }, |(t, _)| t) ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_int8 = value(
-        TypeName::Int8,
-        rule! { ( INT8 | TINYINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_int16 = value(
-        TypeName::Int16,
-        rule! { ( INT16 | SMALLINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_int32 = value(
-        TypeName::Int32,
-        rule! { ( INT32 | INT | INTEGER ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_int64 = value(
-        TypeName::Int64,
-        rule! { ( INT64 | SIGNED | BIGINT ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_float32 = value(TypeName::Float32, rule! { FLOAT32 | FLOAT });
-    let ty_float64 = value(
-        TypeName::Float64,
-        rule! { (FLOAT64 | DOUBLE)  ~ PRECISION? },
-    );
-    let ty_decimal = map_res(
-        rule! { DECIMAL ~ "(" ~ #literal_u64 ~ ( "," ~ ^#literal_u64 )? ~ ")" },
-        |(_, _, precision, opt_scale, _)| {
-            Ok(TypeName::Decimal {
-                precision: precision
-                    .try_into()
-                    .map_err(|_| ErrorKind::Other("precision is too large"))?,
-                scale: if let Some((_, scale)) = opt_scale {
-                    scale
-                        .try_into()
-                        .map_err(|_| ErrorKind::Other("scale is too large"))?
-                } else {
-                    0
-                },
-            })
-        },
-    );
-    let ty_array = map(
-        rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
-        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
-    );
-    let ty_map = map(
-        rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
-        |(_, _, key_type, _, val_type, _)| TypeName::Map {
-            key_type: Box::new(key_type),
-            val_type: Box::new(val_type),
-        },
-    );
-    let ty_bitmap = value(TypeName::Bitmap, rule! { BITMAP });
-    let ty_nullable = map(
-        rule! { NULLABLE ~ ( "(" ~ #type_name ~ ")" ) },
-        |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
-    );
-    let ty_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
-        |(_, _, fields_type, _)| TypeName::Tuple {
-            fields_name: None,
-            fields_type,
-        },
-    );
-    let ty_named_tuple = map(
-        rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
-        |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
-                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
-            TypeName::Tuple {
-                fields_name: Some(fields_name),
-                fields_type,
-            }
-        },
-    );
-    let ty_date = value(TypeName::Date, rule! { DATE });
-    let ty_datetime = map(
-        rule! { ( DATETIME | TIMESTAMP ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-        |(_, _)| TypeName::Timestamp,
-    );
-    let ty_string = value(
-        TypeName::String,
-        rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
-    );
-    let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map(
-        alt((
-            rule! {
-            ( #ty_boolean
-            | #ty_uint8
-            | #ty_uint16
-            | #ty_uint32
-            | #ty_uint64
-            | #ty_int8
-            | #ty_int16
-            | #ty_int32
-            | #ty_int64
-            | #ty_float32
-            | #ty_float64
-            | #ty_decimal
-            | #ty_array
-            | #ty_map
-            | #ty_bitmap
-            | #ty_tuple : "TUPLE(<type>, ...)"
-            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) : "type name"
-            },
-            rule! {
-            ( #ty_date
-            | #ty_datetime
-            | #ty_string
-            | #ty_variant
-            | #ty_nullable
-            ) : "type name" },
-        )),
-        |ty| ty,
-    )(i)
-}
+pub fn type_name(i: Input) -> IResult<ColumnType> {
+    #[derive(Clone)]
+    enum ColumnConstraint {
+        Nullable(bool),
+        DefaultExpr(Box<Expr>),
+        VirtualExpr(Box<Expr>),
+        StoredExpr(Box<Expr>),
+    }
 
-pub fn type_name(i: Input) -> IResult<TypeName> {
+    let nullable = alt((
+        value(ColumnConstraint::Nullable(true), rule! { NULL }),
+        value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
+    ));
+    let expr = alt((
+        map(
+            rule! {
+                DEFAULT ~ ^#subexpr(NOT_PREC)
+            },
+            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+        ),
+        map(
+            rule! {
+                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+            },
+            |(_, _, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
+        ),
+        map(
+            rule! {
+                (GENERATED ~ ^ALWAYS)? ~ AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+            },
+            |(_, _, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
+        ),
+    ));
     let ty_boolean = value(TypeName::Boolean, rule! { BOOLEAN | BOOL });
     let ty_uint8 = value(
         TypeName::UInt8,
@@ -1480,44 +1380,39 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             })
         },
     );
-    let _ty_array = map(
-        rule! { ARRAY ~ "(" ~ #basic_type_name ~ NOT? ~ NULL? ~ ")" },
-        |(_, _, item_type, not_opt, null_opt, _)| {
-            if not_opt.is_none() && null_opt.is_some() {
-                TypeName::Array(Box::new(item_type.wrap_nullable()))
-            } else {
-                TypeName::Array(Box::new(item_type))
-            }
-        },
-    );
     let ty_array = map(
         rule! { ARRAY ~ "(" ~ #type_name ~ ")" },
-        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type)),
+        |(_, _, item_type, _)| TypeName::Array(Box::new(item_type.data_type)),
     );
     let ty_map = map(
         rule! { MAP ~ "(" ~ #type_name ~ "," ~ #type_name ~ ")" },
         |(_, _, key_type, _, val_type, _)| TypeName::Map {
-            key_type: Box::new(key_type),
-            val_type: Box::new(val_type),
+            key_type: Box::new(key_type.data_type),
+            val_type: Box::new(val_type.data_type),
         },
     );
     let ty_bitmap = value(TypeName::Bitmap, rule! { BITMAP });
     let ty_nullable = map(
         rule! { NULLABLE ~ ( "(" ~ #type_name ~ ")" ) },
-        |(_, item_type)| TypeName::Nullable(Box::new(item_type.1)),
+        |(_, item_type)| TypeName::Nullable(Box::new(item_type.1.data_type)),
     );
     let ty_tuple = map(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(type_name) ~ ")" },
         |(_, _, fields_type, _)| TypeName::Tuple {
             fields_name: None,
-            fields_type,
+            fields_type: fields_type
+                .into_iter()
+                .map(|item| item.data_type)
+                .collect::<Vec<_>>(),
         },
     );
     let ty_named_tuple = map(
         rule! { TUPLE ~ "(" ~ #comma_separated_list1(rule! { #ident ~ #type_name }) ~ ")" },
         |(_, _, fields, _)| {
-            let (fields_name, fields_type) =
-                fields.into_iter().map(|(name, ty)| (name.name, ty)).unzip();
+            let (fields_name, fields_type) = fields
+                .into_iter()
+                .map(|(name, ty)| (name.name, ty.data_type))
+                .unzip();
             TypeName::Tuple {
                 fields_name: Some(fields_name),
                 fields_type,
@@ -1534,43 +1429,74 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
         rule! { ( STRING | VARCHAR | CHAR | CHARACTER | TEXT | BINARY | VARBINARY ) ~ ( "(" ~ ^#literal_u64 ~ ^")" )? },
     );
     let ty_variant = value(TypeName::Variant, rule! { VARIANT | JSON });
-    map_res(
-        alt((
-            rule! {
-            ( #ty_boolean
-            | #ty_uint8
-            | #ty_uint16
-            | #ty_uint32
-            | #ty_uint64
-            | #ty_int8
-            | #ty_int16
-            | #ty_int32
-            | #ty_int64
-            | #ty_float32
-            | #ty_float64
-            | #ty_decimal
-            | #ty_array
-            | #ty_map
-            | #ty_bitmap
-            | #ty_tuple : "TUPLE(<type>, ...)"
-            | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
-            ) ~ NOT? ~ NULL? : "type name"
-            },
-            rule! {
-            ( #ty_date
-            | #ty_datetime
-            | #ty_string
-            | #ty_variant
-            | #ty_nullable
-            ) ~ NOT? ~ NULL? : "type name" },
-        )),
-        |(ty, opt_not, opt_null)| match (opt_not, opt_null) {
-            (None, Some(_)) => Ok(ty.wrap_nullable()),
-            (Some(_), Some(_)) => Ok(ty),
-            (None, None) => Ok(ty),
-            (Some(_), None) => Err(ErrorKind::Other("invalid type name")),
+    let ty_type = alt((
+        rule! {
+        ( #ty_boolean
+        | #ty_uint8
+        | #ty_uint16
+        | #ty_uint32
+        | #ty_uint64
+        | #ty_int8
+        | #ty_int16
+        | #ty_int32
+        | #ty_int64
+        | #ty_float32
+        | #ty_float64
+        | #ty_decimal
+        | #ty_array
+        | #ty_map
+        | #ty_bitmap
+        | #ty_tuple : "TUPLE(<type>, ...)"
+        | #ty_named_tuple : "TUPLE(<name> <type>, ...)"
+        ): "type name"
         },
-    )(i)
+        rule! {
+        ( #ty_date
+        | #ty_datetime
+        | #ty_string
+        | #ty_variant
+        | #ty_nullable
+        ): "type name" },
+    ));
+    let (i, (mut col_type, constraints)) = map(
+        rule! { #ty_type ~ ( #nullable | #expr)* : "type name"},
+        |(data_type, constraints)| {
+            let col_type = ColumnType {
+                data_type,
+                expr: None,
+                nullable_constraint: None,
+            };
+            (col_type, constraints)
+        },
+    )(i)?;
+
+    for constraint in constraints {
+        match constraint {
+            ColumnConstraint::Nullable(nullable) => {
+                if nullable {
+                    col_type.data_type = col_type.data_type.wrap_nullable();
+                    col_type.nullable_constraint = Some(NullableConstraint::Null);
+                } else if col_type.data_type.is_nullable() {
+                    return Err(nom::Err::Error(Error::from_error_kind(
+                        i,
+                        ErrorKind::Other("ambiguous NOT NULL constraint"),
+                    )));
+                } else {
+                    col_type.nullable_constraint = Some(NullableConstraint::NotNull);
+                }
+            }
+            ColumnConstraint::DefaultExpr(default_expr) => {
+                col_type.expr = Some(ColumnExpr::Default(default_expr))
+            }
+            ColumnConstraint::VirtualExpr(virtual_expr) => {
+                col_type.expr = Some(ColumnExpr::Virtual(virtual_expr))
+            }
+            ColumnConstraint::StoredExpr(stored_expr) => {
+                col_type.expr = Some(ColumnExpr::Stored(stored_expr))
+            }
+        }
+    }
+    Ok((i, col_type))
 }
 
 pub fn interval_kind(i: Input) -> IResult<IntervalKind> {
