@@ -938,7 +938,7 @@ impl Binder {
             }
         }
 
-        let stat = table.table().table_statistics()?;
+        let stat = table.table().table_statistics().await?;
 
         Ok((
             SExpr::create_leaf(Arc::new(
