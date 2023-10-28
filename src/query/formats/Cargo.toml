@@ -34,7 +34,7 @@ common-settings = { path = "../settings" }
 jsonb = { workspace = true }
 
 storages-common-blocks = { path = "../storages/common/blocks" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
+storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 [dev-dependencies]
 common-arrow = { path = "../../common/arrow" }

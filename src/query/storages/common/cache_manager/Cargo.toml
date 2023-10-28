@@ -17,6 +17,6 @@ common-config = { path = "../../../config" }
 common-exception = { path = "../../../../common/exception" }
 storages-common-cache = { path = "../../common/cache" }
 storages-common-index = { path = "../../common/index" }
-storages-common-table-meta = { path = "../../common/table-meta" }
+storages-common-table-meta = { path = "../table_meta" }
 
 log = { workspace = true }

@@ -18,8 +18,7 @@ CREATE STAGE my_minio_stage
   CONNECTION = (
     ENDPOINT_URL = 'http://localhost:9000',
     ACCESS_KEY_ID = 'ROOTUSER',
-    SECRET_ACCESS_KEY = 'CHANGEME123',
-    REGION = 'us-west-2'
+    SECRET_ACCESS_KEY = 'CHANGEME123'
   );
 
 -- This example showcases a 'COPY INTO' command, employing '=' after 'CONNECTION' to copy data, while also specifying file format details.
@@ -70,7 +69,7 @@ The following table lists connection parameters for accessing an Amazon S3-like 
 
 - If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
 
-- The **region** parameter is not required, but it is highly recommended. When you omit this parameter, Databend will attempt to automatically detect the region information. However, if the detection fails, Databend will default to using 'us-east-1' as the region. In such a scenario, errors may occur if your actual region is different from the default setting. When deploying Databend with MinIO, and the region information isn't configured, it will automatically default to using 'us-east-1,' and this setup will work correctly.
+- The **region** parameter is not required because Databend can automatically detect the region information. You typically don't need to manually specify a value for this parameter. In case automatic detection fails, Databend will default to using 'us-east-1' as the region. When deploying Databend with MinIO and not configuring the region information, it will automatically default to using 'us-east-1', and this will work correctly. However, if you receive error messages such as "region is missing" or "The bucket you are trying to access requires a specific endpoint. Please direct all future requests to this particular endpoint", you need to determine your region name and explicitly assign it to the **region** parameter.
 :::
 
 To access your Amazon S3 buckets, you can also specify an AWS IAM role and external ID for authentication. By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html
