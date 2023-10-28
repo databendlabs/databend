@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_sql::executor::CopyIntoTablePhysicalPlan;
 use common_sql::executor::CopyIntoTableSource;
 use common_sql::executor::FragmentKind;
+use common_sql::executor::MergeInto;
 use common_sql::executor::QuerySource;
 use common_sql::executor::ReplaceInto;
 
@@ -146,6 +147,15 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.state = State::SelectLeaf;
 
         Ok(PhysicalPlan::TableScan(plan.clone()))
+    }
+
+    fn replace_merge_into(&mut self, plan: &MergeInto) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        self.state = State::SelectLeaf;
+        Ok(PhysicalPlan::MergeInto(Box::new(MergeInto {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
     }
 
     fn replace_replace_into(

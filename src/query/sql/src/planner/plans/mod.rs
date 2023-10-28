@@ -52,6 +52,7 @@ mod union_all;
 mod update;
 mod window;
 
+pub use add_row_number::AddRowNumber;
 pub use aggregate::*;
 pub use call::CallPlan;
 pub use constant_table_scan::ConstantTableScan;

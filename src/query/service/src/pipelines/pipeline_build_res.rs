@@ -16,14 +16,21 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sources::OneBlockSource;
 use common_profile::SharedProcessorProfiles;
 
+use super::processors::transforms::hash_join::HashJoinBuildState;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+
+pub struct PipelineBuilderData {
+    pub input_join_state: Option<Arc<HashJoinBuildState>>,
+    pub input_probe_schema: Option<Vec<DataField>>,
+}
 
 pub struct PipelineBuildResult {
     pub main_pipeline: Pipeline,

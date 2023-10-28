@@ -22,6 +22,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::RemoteExpr;
+use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
@@ -259,6 +260,12 @@ impl PhysicalPlanBuilder {
             }
         }
 
+        // for distributed merge into, there is a field called "_row_number", but
+        // it's not an internal row_number, we need to add it here
+        if let Ok(index) = build_schema.index_of(ROW_NUMBER_COL_NAME) {
+            build_projections.insert(index);
+        }
+
         let mut merged_fields =
             Vec::with_capacity(probe_projections.len() + build_projections.len());
         let mut probe_fields = Vec::with_capacity(probe_projections.len());
@@ -348,6 +355,12 @@ impl PhysicalPlanBuilder {
             if let Ok(index) = projected_schema.index_of(&column.to_string()) {
                 projections.insert(index);
             }
+        }
+
+        // for distributed merge into, there is a field called "_row_number", but
+        // it's not an internal row_number, we need to add it here
+        if let Ok(index) = projected_schema.index_of(ROW_NUMBER_COL_NAME) {
+            projections.insert(index);
         }
 
         let mut output_fields = Vec::with_capacity(column_projections.len());

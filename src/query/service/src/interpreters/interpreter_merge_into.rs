@@ -210,11 +210,13 @@ impl MergeIntoInterpreter {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
-                break;
             }
 
             if exchange.is_some() && data_field.name() == ROW_NUMBER_COL_NAME {
                 row_number_idx = idx as i32;
+                if found_row_id {
+                    break;
+                }
             }
         }
 
@@ -388,11 +390,12 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::default(),
             }))
         } else {
+            // let (tx, rx) = mpsc::sync_channel::<Any>(0);
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
-                input: Box::new(merge_into_source),
+                input: Box::new(merge_into_source.clone()),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
-                unmatched,
+                unmatched: unmatched.clone(),
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
@@ -413,6 +416,8 @@ impl MergeIntoInterpreter {
                 })),
                 table_info: table_info.clone(),
                 catalog_info: catalog_.info(),
+                unmatched: unmatched.clone(),
+                input_schema: merge_into_source.output_schema()?,
             }))
         };
 
@@ -446,6 +451,7 @@ impl MergeIntoInterpreter {
         //       EvalScalar(source_join_side_expr)
         //          \
         //         SourcePlan
+
         let source_plan = join.child(1)?;
         let join_op = match join.plan() {
             RelOperator::Join(j) => j,
@@ -479,10 +485,19 @@ impl MergeIntoInterpreter {
                 index: source_side_join_expr_index,
             }],
         };
-        let eval_target_side_condition_sexpr = SExpr::create_unary(
-            Arc::new(eval_source_side_join_expr_op.into()),
-            Arc::new(source_plan.clone()),
-        );
+        let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
+        {
+            // there is another row_number operator here
+            SExpr::create_unary(
+                Arc::new(eval_source_side_join_expr_op.into()),
+                Arc::new(source_plan.child(0)?.child(0)?.clone()),
+            )
+        } else {
+            SExpr::create_unary(
+                Arc::new(eval_source_side_join_expr_op.into()),
+                Arc::new(source_plan.clone()),
+            )
+        };
 
         // eval min/max of source side join expr
         let min_display_name = format!("min({:?})", source_side_expr);

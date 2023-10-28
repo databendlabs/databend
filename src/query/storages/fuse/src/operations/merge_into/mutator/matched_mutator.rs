@@ -136,6 +136,7 @@ impl MatchedAggregator {
         // data_block is from matched_split, so there is only one column.
         // that's row_id
         let row_ids = get_row_id(&data_block, 0)?;
+        println!("row_ids: {:?}", row_ids);
         let row_id_kind = RowIdKind::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
         match row_id_kind {
             RowIdKind::Update => {

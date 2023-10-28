@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
@@ -24,6 +25,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+
+use crate::operations::common::MutationLogs;
 
 pub struct RowNumberAndLogSplitProcessor {
     input_port: Arc<InputPort>,
@@ -130,6 +133,10 @@ impl Processor for RowNumberAndLogSplitProcessor {
         if let Some(data_block) = self.input_data.take() {
             // mutation logs
             if data_block.is_empty() {
+                let mix_kind =
+                    MutationLogs::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
+
+                println!("logs:\n{:?}", mix_kind);
                 self.output_data_log = Some(data_block);
             } else {
                 self.output_data_row_number = Some(data_block)

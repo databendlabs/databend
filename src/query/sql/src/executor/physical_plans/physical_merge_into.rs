@@ -55,4 +55,7 @@ pub struct MergeIntoAppendNotMatched {
     pub input: Box<PhysicalPlan>,
     pub table_info: TableInfo,
     pub catalog_info: CatalogInfo,
+    // (DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>,Vec<usize>) => (source_schema, condition, value_exprs)
+    pub unmatched: Vec<(DataSchemaRef, Option<RemoteExpr>, Vec<RemoteExpr>)>,
+    pub input_schema: DataSchemaRef,
 }

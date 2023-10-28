@@ -257,6 +257,36 @@ impl PipelineBuilder {
         })
     }
 
+    pub fn finalize_local(
+        mut self,
+        plan: &PhysicalPlan,
+    ) -> Result<(
+        PipelineBuildResult,
+        Option<Arc<HashJoinBuildState>>,
+        Option<Vec<DataField>>,
+    )> {
+        self.build_pipeline(plan)?;
+
+        for source_pipeline in &self.pipelines {
+            if !source_pipeline.is_complete_pipeline()? {
+                return Err(ErrorCode::Internal(
+                    "Source pipeline must be complete pipeline.",
+                ));
+            }
+        }
+
+        Ok((
+            PipelineBuildResult {
+                main_pipeline: self.main_pipeline,
+                sources_pipelines: self.pipelines,
+                prof_span_set: self.proc_profs,
+                exchange_injector: self.exchange_injector,
+            },
+            self.join_state,
+            self.probe_data_fields,
+        ))
+    }
+
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
@@ -328,6 +358,7 @@ impl PipelineBuilder {
 
     fn build_add_row_number(&mut self, add_row_number: &AddRowNumber) -> Result<()> {
         // it must be distributed merge into execution
+        self.build_pipeline(&add_row_number.input)?;
         let node_index = add_row_number
             .cluster_index
             .get(&self.ctx.get_cluster().local_id);
@@ -353,7 +384,7 @@ impl PipelineBuilder {
 
     fn build_merge_into_append_not_matched(
         &mut self,
-        merge_into_row_id_apply: &MergeIntoAppendNotMatched,
+        merge_into_append_not_macted: &MergeIntoAppendNotMatched,
     ) -> Result<()> {
         // self.main_pipeline
         //     .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
@@ -362,7 +393,9 @@ impl PipelineBuilder {
             input,
             table_info,
             catalog_info,
-        } = merge_into_row_id_apply;
+            unmatched,
+            input_schema,
+        } = merge_into_append_not_macted;
         // receive row numbers and MutationLogs
         self.build_pipeline(input)?;
         self.main_pipeline.try_resize(1)?;
@@ -391,6 +424,17 @@ impl PipelineBuilder {
             )?
             .into_pipe_item(),
         );
+        pipe_items.push(create_dummy_item());
+        self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
+
+        // not macthed operation
+        let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+            unmatched.clone(),
+            input_schema.clone(),
+            self.func_ctx.clone(),
+        )?;
+        let mut pipe_items = Vec::with_capacity(2);
+        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
         pipe_items.push(create_dummy_item());
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
@@ -711,6 +755,7 @@ impl PipelineBuilder {
         // receive matched data and not matched data parallelly.
         let mut pipe_items = Vec::with_capacity(self.main_pipeline.output_len());
         for _ in (0..self.main_pipeline.output_len()).step_by(2) {
+            // Todo(JackTan25): We should optimize pipeline. when only not matched, we should ignore this
             let matched_split_processor = MatchedSplitProcessor::create(
                 self.ctx.clone(),
                 *row_id_idx,
@@ -720,6 +765,7 @@ impl PipelineBuilder {
                 Arc::new(DataSchema::from(tbl.schema())),
             )?;
 
+            // Todo(JackTan25): We should optimize pipeline. when only matched,we should ignore this
             let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
                 unmatched.clone(),
                 input.output_schema()?,
@@ -815,6 +861,7 @@ impl PipelineBuilder {
             for idx in 0..(self.main_pipeline.output_len() / 3) {
                 vec.push(idx + self.main_pipeline.output_len() / 3 * 2);
             }
+            ranges.push(vec);
             self.main_pipeline.resize_partial_one(ranges.clone())?;
         }
 

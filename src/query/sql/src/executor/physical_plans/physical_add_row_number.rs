@@ -39,7 +39,7 @@ pub struct AddRowNumber {
 
 impl AddRowNumber {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        todo!()
+        Ok(self.output_schema.clone())
     }
 }
 

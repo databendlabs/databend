@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
+use crate::plans::AddRowNumber;
 use crate::plans::Exchange::Broadcast;
 use crate::plans::Join;
 use crate::plans::PatternPlan;
@@ -54,20 +55,24 @@ impl MergeSourceOptimizer {
 
             let right_exchange = join_s_expr.child(1)?;
             assert!(right_exchange.children.len() == 1);
-            let right_exchange_input = join_s_expr.child(0)?;
+            let right_exchange_input = right_exchange.child(0)?;
 
             let new_join_children = vec![
                 Arc::new(left_exchange_input.clone()),
                 Arc::new(SExpr::create_unary(
                     Arc::new(RelOperator::Exchange(Broadcast)),
-                    Arc::new(right_exchange_input.clone()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(RelOperator::AddRowNumber(AddRowNumber)),
+                        Arc::new(right_exchange_input.clone()),
+                    )),
                 )),
             ];
 
             let mut join: Join = join_s_expr.plan().clone().try_into()?;
             join.need_hold_hash_table = true;
-            let join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
-            Ok(join_s_expr.replace_children(new_join_children))
+            let mut join_s_expr = join_s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
+            join_s_expr = join_s_expr.replace_children(new_join_children);
+            Ok(s_expr.replace_children(vec![Arc::new(join_s_expr)]))
         }
     }
 
@@ -125,20 +130,12 @@ impl MergeSourceOptimizer {
                         }
                         .into(),
                     ),
-                    Arc::new(SExpr::create_unary(
-                        Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::AddRowNumber,
-                            }
-                            .into(),
-                        ),
-                        Arc::new(SExpr::create_leaf(Arc::new(
-                            PatternPlan {
-                                plan_type: RelOp::Pattern,
-                            }
-                            .into(),
-                        ))),
-                    )),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
                 )),
             )),
         )

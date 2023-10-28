@@ -135,6 +135,7 @@ pub fn optimize(
                 // left join and right join.
                 // input is a Join_SExpr
                 let merge_into_join_sexpr = optimize_distributed_query(ctx.clone(), &plan.input)?;
+
                 let merge_source_optimizer = MergeSourceOptimizer::create();
                 let optimized_distributed_merge_into_join_sexpr =
                     merge_source_optimizer.optimize(&merge_into_join_sexpr)?;

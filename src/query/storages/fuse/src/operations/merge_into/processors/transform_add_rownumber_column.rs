@@ -71,9 +71,9 @@ impl Transform for TransformAddRowNumberColumnProcessor {
     const NAME: &'static str = "TransformAddRowNumberColumnProcessor";
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let num_rows = data.num_rows() as u64;
-        let last_row_number = self.generate_row_number(num_rows);
+        let row_number = self.generate_row_number(num_rows);
         let mut row_ids = Vec::with_capacity(data.num_rows());
-        for number in (last_row_number - num_rows + 1)..=last_row_number {
+        for number in row_number..row_number + num_rows {
             row_ids.push(number);
         }
         let mut data_block = data;

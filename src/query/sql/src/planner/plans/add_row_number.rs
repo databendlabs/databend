@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 
 use super::Operator;
 use super::RelOp;
@@ -35,26 +34,20 @@ impl Operator for AddRowNumber {
 
     fn derive_relational_prop(
         &self,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
     ) -> common_exception::Result<Arc<RelationalProperty>> {
-        Err(ErrorCode::Internal(
-            "Cannot derive relational property for add_row_number plan",
-        ))
+        rel_expr.derive_relational_prop_child(0)
     }
 
     fn derive_physical_prop(
         &self,
-        _rel_expr: &RelExpr,
+        rel_expr: &RelExpr,
     ) -> common_exception::Result<PhysicalProperty> {
-        Err(ErrorCode::Internal(
-            "Cannot derive physical property for add_row_number plan",
-        ))
+        rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
-        Err(ErrorCode::Internal(
-            "Cannot derive cardinality for add_row_number plan",
-        ))
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
+        rel_expr.derive_cardinality_child(0)
     }
 
     fn compute_required_prop_child(
@@ -62,8 +55,8 @@ impl Operator for AddRowNumber {
         _ctx: Arc<dyn TableContext>,
         _rel_expr: &RelExpr,
         _child_index: usize,
-        _required: &RequiredProperty,
+        required: &RequiredProperty,
     ) -> common_exception::Result<RequiredProperty> {
-        unreachable!()
+        Ok(required.clone())
     }
 }
