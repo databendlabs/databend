@@ -110,7 +110,7 @@ query TTT
 merge into corner_target_table as t1 using (select * from corner_source_table) as t2 on t1.a = t2.a when matched then update set t1.a = t2.a when not matched then insert *;
 
 query TTT
-select * from corner_target_table order by a;
+select * from corner_target_table order by a,b;
 ----
 1 a6 b6
 1 a6 b6
