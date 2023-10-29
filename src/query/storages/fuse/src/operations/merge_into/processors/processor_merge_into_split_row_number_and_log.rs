@@ -135,8 +135,6 @@ impl Processor for RowNumberAndLogSplitProcessor {
             if data_block.is_empty() {
                 let mix_kind =
                     MutationLogs::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
-
-                println!("logs:\n{:?}", mix_kind);
                 self.output_data_log = Some(data_block);
             } else {
                 self.output_data_row_number = Some(data_block)

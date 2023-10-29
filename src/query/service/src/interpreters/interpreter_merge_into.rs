@@ -210,13 +210,13 @@ impl MergeIntoInterpreter {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
+                break;
             }
+        }
 
+        for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
             if exchange.is_some() && data_field.name() == ROW_NUMBER_COL_NAME {
                 row_number_idx = idx as i32;
-                if found_row_id {
-                    break;
-                }
             }
         }
 

@@ -62,7 +62,7 @@ impl TransformAddRowNumberColumnProcessor {
         let row_number = self.row_number.fetch_add(num_rows, Ordering::SeqCst);
         let mut prefix_u64 = self.prefix as u64;
         prefix_u64 = prefix_u64 << PREFIX_OFFSET;
-        prefix_u64 & row_number
+        prefix_u64 | row_number
     }
 }
 
@@ -72,14 +72,14 @@ impl Transform for TransformAddRowNumberColumnProcessor {
     fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
         let num_rows = data.num_rows() as u64;
         let row_number = self.generate_row_number(num_rows);
-        let mut row_ids = Vec::with_capacity(data.num_rows());
+        let mut row_numbers = Vec::with_capacity(data.num_rows());
         for number in row_number..row_number + num_rows {
-            row_ids.push(number);
+            row_numbers.push(number);
         }
         let mut data_block = data;
         let row_number_entry = BlockEntry::new(
             DataType::Number(NumberDataType::UInt64),
-            Value::Column(UInt64Type::from_data(row_ids)),
+            Value::Column(UInt64Type::from_data(row_numbers)),
         );
         data_block.add_column(row_number_entry);
         Ok(data_block)

@@ -765,15 +765,40 @@ impl PipelineBuilder {
                 Arc::new(DataSchema::from(tbl.schema())),
             )?;
 
-            // Todo(JackTan25): We should optimize pipeline. when only matched,we should ignore this
-            let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
-                unmatched.clone(),
-                input.output_schema()?,
-                self.func_ctx.clone(),
-            )?;
-
             pipe_items.push(matched_split_processor.into_pipe_item());
-            pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+            if !*distributed {
+                // Todo(JackTan25): We should optimize pipeline. when only matched,we should ignore this
+                let merge_into_not_matched_processor = MergeIntoNotMatchedProcessor::create(
+                    unmatched.clone(),
+                    input.output_schema()?,
+                    self.func_ctx.clone(),
+                )?;
+
+                pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
+            } else {
+                let input_num_columns = input.output_schema()?.num_fields();
+                assert_eq!(
+                    input.output_schema()?.field(input_num_columns - 1).name(),
+                    ROW_NUMBER_COL_NAME
+                );
+                let input_port = InputPort::create();
+                let output_port = OutputPort::create();
+                // project row number column
+                let proc = ProcessorPtr::create(CompoundBlockOperator::create(
+                    input_port.clone(),
+                    output_port.clone(),
+                    input_num_columns,
+                    self.func_ctx.clone(),
+                    vec![BlockOperator::Project {
+                        projection: vec![input_num_columns - 1],
+                    }],
+                ));
+                pipe_items.push(PipeItem {
+                    processor: proc,
+                    inputs_port: vec![input_port],
+                    outputs_port: vec![output_port],
+                })
+            };
         }
         self.main_pipeline.add_pipe(Pipe::create(
             self.main_pipeline.output_len(),
@@ -891,25 +916,9 @@ impl PipelineBuilder {
             builder.add_items_prepend(vec![create_dummy_item()]);
             self.main_pipeline.add_pipe(builder.finalize());
         } else {
-            let input_num_columns = input.output_schema()?.num_fields();
-            assert_eq!(
-                input.output_schema()?.field(input_num_columns - 1).name(),
-                ROW_NUMBER_COL_NAME
-            );
-            let input_port = InputPort::create();
-            let output_port = OutputPort::create();
-            // project row number column
-            let proc = ProcessorPtr::create(CompoundBlockOperator::create(
-                input_port.clone(),
-                output_port.clone(),
-                input_num_columns,
-                self.func_ctx.clone(),
-                vec![BlockOperator::Project {
-                    projection: vec![input_num_columns - 1],
-                }],
-            ));
             builder.add_items_prepend(vec![create_dummy_item()]);
-            builder.add_transform(input_port, output_port, proc);
+            // receive row_number
+            builder.add_items(vec![create_dummy_item()]);
             self.main_pipeline.add_pipe(builder.finalize());
         }
 

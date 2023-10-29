@@ -2,6 +2,9 @@ statement ok
 set enable_experimental_merge_into = 1;
 
 statement ok
+set enable_distributed_merge_into = 1;
+
+statement ok
 drop table if exists t1;
 
 statement ok
@@ -618,6 +621,10 @@ select a, b, c from tt2;
 ----
 0 20 {'k2':'v2'}
 1 30 {'k1':'v1'}
+
+
+statement ok
+set enable_distributed_merge_into = 0;
 
 statement ok
 set enable_experimental_merge_into = 0;

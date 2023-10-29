@@ -136,29 +136,6 @@ impl ExecutingGraph {
 
         let mut pipes_edges: Vec<Vec<Edge>> = Vec::new();
         for pipe in &pipeline.pipes {
-            println!(
-                "pipe:\n{:?},input len:{:?}, output_len:{:?}",
-                pipe, pipe.input_length, pipe.output_length
-            );
-        }
-        println!("==========================================================================");
-        for pipe in &pipeline.pipes {
-            println!(
-                "pipe:\n{:?},input len:{:?}, output_len:{:?}",
-                pipe, pipe.input_length, pipe.output_length
-            );
-            if pipe.input_length != pipes_edges.last().map(|x| x.len()).unwrap_or_default() {
-                println!(
-                    "|==========================================================================|"
-                );
-                println!(
-                    "pipe:\n{:?},input len:{:?}, output_len:{:?}",
-                    pipe, pipe.input_length, pipe.output_length
-                );
-                println!(
-                    "|==========================================================================|"
-                );
-            }
             assert_eq!(
                 pipe.input_length,
                 pipes_edges.last().map(|x| x.len()).unwrap_or_default()

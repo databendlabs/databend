@@ -15,7 +15,6 @@
 use std::collections::HashSet;
 
 use common_exception::Result;
-use common_expression::types::NumberType;
 use common_expression::types::UInt64Type;
 use common_expression::DataBlock;
 use common_expression::FromData;
@@ -90,10 +89,7 @@ impl DeduplicateRowNumber {
 
 pub(crate) fn get_row_number(data_block: &DataBlock, row_number_idx: usize) -> Result<Vec<u64>> {
     let row_number_col = data_block.get_by_offset(row_number_idx);
-    let value = row_number_col
-        .value
-        .try_downcast::<NumberType<u64>>()
-        .unwrap();
+    let value = row_number_col.value.try_downcast::<UInt64Type>().unwrap();
     match value {
         common_expression::Value::Scalar(scalar) => Ok(vec![scalar]),
         common_expression::Value::Column(column) => Ok(column.into_iter().collect_vec()),
