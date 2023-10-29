@@ -46,7 +46,7 @@
 
 - **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
-- **Time-Travel Features**: Provides Git-like MVCC storage, enabling easy data querying, cloning, and reverting from any point in time.
+- **Data Version Control**: Offers Git-like multi-version storage, enabling easy data querying, cloning, and reverting from any point in time.
 
 - **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
