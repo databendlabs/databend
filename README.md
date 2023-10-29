@@ -34,7 +34,8 @@
 
 ## 🐋 Introduction
 
-**Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to [Snowflake](https://snowflake.com). 
+**Databend** is an open-source, elastic, and workload-aware cloud data warehouse, a cutting-edge [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059).
+Developed with Rust, it's engineered for complex analysis of the world's largest datasets.
 
 ## 🚀 Why Databend
 
