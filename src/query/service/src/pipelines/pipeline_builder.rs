@@ -949,7 +949,7 @@ impl PipelineBuilder {
                 self.main_pipeline.add_pipe(builder.finalize());
             } else {
                 builder.add_items_prepend(vec![create_dummy_item()]);
-                // recieve row_number
+                // receive row_number
                 builder.add_items(vec![create_dummy_item()]);
                 self.main_pipeline.add_pipe(builder.finalize());
             }
@@ -1004,7 +1004,7 @@ impl PipelineBuilder {
             pipe_items.push(serialize_block_transform.into_pipe_item());
         }
 
-        // recieve row_number
+        // receive row_number
         if *distributed {
             pipe_items.push(create_dummy_item());
         }

@@ -921,14 +921,10 @@ impl FragmentCoordinator {
             pipeline_builder.join_state = input_builder_data.input_join_state;
             pipeline_builder.probe_data_fields = input_builder_data.input_probe_schema;
 
-            let (res, join_state, probe_schema) =
-                pipeline_builder.finalize_local(&self.physical_plan)?;
+            let (res, builder_data) = pipeline_builder.finalize_local(&self.physical_plan)?;
 
             self.pipeline_build_res = Some(res);
-            return Ok(PipelineBuilderData {
-                input_join_state: join_state,
-                input_probe_schema: probe_schema,
-            });
+            return Ok(builder_data);
         }
 
         Ok(PipelineBuilderData {
