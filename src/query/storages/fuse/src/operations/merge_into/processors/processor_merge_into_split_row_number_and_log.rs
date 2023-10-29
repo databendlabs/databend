@@ -26,7 +26,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
-use crate::operations::common::MutationLogs;
+use super::processor_merge_into_matched_and_split::SourceFullMatched;
 
 pub struct RowNumberAndLogSplitProcessor {
     input_port: Arc<InputPort>,
@@ -131,11 +131,14 @@ impl Processor for RowNumberAndLogSplitProcessor {
 
     fn process(&mut self) -> Result<()> {
         if let Some(data_block) = self.input_data.take() {
-            // mutation logs
-            if data_block.is_empty() {
-                let mix_kind =
-                    MutationLogs::downcast_ref_from(data_block.get_meta().unwrap()).unwrap();
-                self.output_data_log = Some(data_block);
+            // all matched or logs
+            if data_block.get_meta().is_some() {
+                if SourceFullMatched::downcast_ref_from(data_block.get_meta().unwrap()).is_some() {
+                    self.output_data_row_number = Some(data_block)
+                } else {
+                    // mutation logs
+                    self.output_data_log = Some(data_block);
+                }
             } else {
                 self.output_data_row_number = Some(data_block)
             }

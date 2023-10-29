@@ -40,16 +40,16 @@ statement ok
 insert into distributed_source_test values(6,'h',true),(7,'i',true),(8,'j',false),(9,'k',true),(10,'l',false);
 
 statement ok
-create stage source_parquet file_format = (type = parquet);
+create stage distributed_source_parquet file_format = (type = parquet);
 
 statement ok
-remove @source_parquet;
+remove @distributed_source_parquet;
 
 statement ok
-copy into @source_parquet from (select * from distributed_source_test);
+copy into @distributed_source_parquet from (select * from distributed_source_test);
 
 statement ok
-merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
+merge into `distributed_target_test` as tt using (select `a`,`b`,`is_databend_deleted` from @distributed_source_parquet (pattern => '.*[.]parquet')) as ss on (ss.`a` = tt.`a`) 
 when matched and ss.`is_databend_deleted` = true then delete when matched then update * when not matched and ss.`is_databend_deleted` = false then insert *;
 
 query TT
@@ -59,6 +59,64 @@ select * from distributed_target_test order by a;
 5 f
 8 j
 10 l
+
+## cornor case test
+## when a node matched all source, it will give a empty block, 
+## so in this case, we should not insert anything.
+statement ok
+drop table if exists cornor_target_table;
+
+statement ok
+create table cornor_target_table(a int,b string,c string);
+
+statement ok
+drop table if exists cornor_source_table;
+
+statement ok
+create table cornor_source_table(a int,b string,c string);
+
+## add block1
+statement ok
+insert into cornor_target_table values(1,'a1','b1'),(2,'a2','b2');
+
+## add block2
+statement ok
+insert into cornor_target_table values(1,'a3','b3'),(2,'a4','b4'),(3,'a5','b5');
+
+## add two blocks for cornor_source_table
+statement ok
+insert into cornor_source_table values(1,'a6','b6'),(2,'a7','b7');
+
+statement ok
+insert into cornor_source_table values(3,'a8','b8');
+
+statement ok
+select * from cornor_target_table order by a,b;
+----
+1 a1 b1
+1 a3 b3
+2 a2 b2
+2 a4 b4
+3 a5 b5
+
+statement ok
+select * from cornor_source_table order by a,b;
+----
+1 a6 b6
+2 a7 b7
+3 a8 b8
+
+statement ok
+merge into cornor_target_table as t1 using (select * from cornor_source_table) as t2 on t1.a = t2.a when matched then update set t1.a = t2.a when not matched then insert *;
+
+statement ok
+select * from cornor_target_table order by a;
+----
+1 a6 b6
+1 a6 b6
+2 a7 b7
+2 a7 b7
+3 a8 b8
 
 statement ok
 set enable_experimental_merge_into = 0;

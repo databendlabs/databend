@@ -61,7 +61,7 @@ impl TransformAddRowNumberColumnProcessor {
     fn generate_row_number(&mut self, num_rows: u64) -> u64 {
         let row_number = self.row_number.fetch_add(num_rows, Ordering::SeqCst);
         let mut prefix_u64 = self.prefix as u64;
-        prefix_u64 = prefix_u64 << PREFIX_OFFSET;
+        prefix_u64 <<= PREFIX_OFFSET;
         prefix_u64 | row_number
     }
 }

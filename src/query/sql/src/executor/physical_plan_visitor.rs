@@ -88,7 +88,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::Deduplicate(plan) => self.replace_deduplicate(plan),
             PhysicalPlan::ReplaceInto(plan) => self.replace_replace_into(plan),
             PhysicalPlan::MergeInto(plan) => self.replace_merge_into(plan),
-            PhysicalPlan::AddRowNumber(plan) => self.replace_add_row_number(&plan),
+            PhysicalPlan::AddRowNumber(plan) => self.replace_add_row_number(plan),
             PhysicalPlan::MergeIntoSource(plan) => self.replace_merge_into_source(plan),
             PhysicalPlan::MergeIntoAppendNotMatched(plan) => {
                 self.replace_merge_into_row_id_apply(plan)

@@ -35,6 +35,7 @@ use super::RowIdKind;
 // RowIds, because arrow-flight requires this.
 pub struct TransformDistributedMergeIntoBlockDeserialize;
 
+/// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockDeserialize {
     #[allow(dead_code)]
     fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {

@@ -385,7 +385,7 @@ impl MergeIntoInterpreter {
                 matched,
                 field_index_of_input_schema,
                 row_id_idx,
-                segments: segments.clone(),
+                segments,
                 distributed: false,
                 output_schema: DataSchemaRef::default(),
             }))

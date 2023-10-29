@@ -127,7 +127,7 @@ impl Processor for ExtractHashTableByRowNumber {
                         DataType::Number(NumberDataType::UInt64)
                     );
                     let mut bitmap = MutableBitmap::new();
-                    let row_numbers = get_row_number(&block, block.num_columns() - 1)?;
+                    let row_numbers = get_row_number(block, block.num_columns() - 1)?;
                     for row_number in row_numbers.iter() {
                         if row_number_set.contains(row_number) {
                             bitmap.push(true);

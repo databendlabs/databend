@@ -148,6 +148,7 @@ use super::processors::transforms::TransformAddComputedColumns;
 use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use super::processors::TransformResortAddOnWithoutSourceSchema;
+use super::PipelineBuilderData;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 use crate::pipelines::builders::build_append_data_pipeline;
@@ -260,11 +261,7 @@ impl PipelineBuilder {
     pub fn finalize_local(
         mut self,
         plan: &PhysicalPlan,
-    ) -> Result<(
-        PipelineBuildResult,
-        Option<Arc<HashJoinBuildState>>,
-        Option<Vec<DataField>>,
-    )> {
+    ) -> Result<(PipelineBuildResult, PipelineBuilderData)> {
         self.build_pipeline(plan)?;
 
         for source_pipeline in &self.pipelines {
@@ -282,8 +279,10 @@ impl PipelineBuilder {
                 prof_span_set: self.proc_profs,
                 exchange_injector: self.exchange_injector,
             },
-            self.join_state,
-            self.probe_data_fields,
+            PipelineBuilderData {
+                input_join_state: self.join_state,
+                input_probe_schema: self.probe_data_fields,
+            },
         ))
     }
 
@@ -335,9 +334,7 @@ impl PipelineBuilder {
             PhysicalPlan::MergeIntoAppendNotMatched(merge_into_append_not_matched) => {
                 self.build_merge_into_append_not_matched(merge_into_append_not_matched)
             }
-            PhysicalPlan::AddRowNumber(add_row_number) => {
-                self.build_add_row_number(&add_row_number)
-            }
+            PhysicalPlan::AddRowNumber(add_row_number) => self.build_add_row_number(add_row_number),
             PhysicalPlan::ReclusterSource(recluster_source) => {
                 self.build_recluster_source(recluster_source)
             }
@@ -386,9 +383,6 @@ impl PipelineBuilder {
         &mut self,
         merge_into_append_not_macted: &MergeIntoAppendNotMatched,
     ) -> Result<()> {
-        // self.main_pipeline
-        //     .add_pipe(TransformDistributedMergeIntoBlockDeserialize::into_pipe());
-
         let MergeIntoAppendNotMatched {
             input,
             table_info,
@@ -411,20 +405,20 @@ impl PipelineBuilder {
             .add_pipe(RowNumberAndLogSplitProcessor::create()?.into_pipe());
 
         // accumulate source data which is not matched from hashstate
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(DeduplicateRowNumber::create()?.into_pipe_item());
-        pipe_items.push(create_dummy_item());
+        let pipe_items = vec![
+            DeduplicateRowNumber::create()?.into_pipe_item(),
+            create_dummy_item(),
+        ];
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(
+        let pipe_items = vec![
             ExtractHashTableByRowNumber::create(
-                join_state.clone(),
+                join_state,
                 self.probe_data_fields.clone().unwrap(),
             )?
             .into_pipe_item(),
-        );
-        pipe_items.push(create_dummy_item());
+            create_dummy_item(),
+        ];
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
         // not macthed operation
@@ -433,9 +427,10 @@ impl PipelineBuilder {
             input_schema.clone(),
             self.func_ctx.clone(),
         )?;
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(merge_into_not_matched_processor.into_pipe_item());
-        pipe_items.push(create_dummy_item());
+        let pipe_items = vec![
+            merge_into_not_matched_processor.into_pipe_item(),
+            create_dummy_item(),
+        ];
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
         // split row_number and log
@@ -503,12 +498,13 @@ impl PipelineBuilder {
             InputPort::create(),
             OutputPort::create(),
             table,
-            cluster_stats_gen.clone(),
+            cluster_stats_gen,
         )?;
 
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(serialize_block_transform.into_pipe_item());
-        pipe_items.push(create_dummy_item());
+        let pipe_items = vec![
+            serialize_block_transform.into_pipe_item(),
+            create_dummy_item(),
+        ];
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
         // 5. serialize segment
@@ -519,9 +515,10 @@ impl PipelineBuilder {
             table,
             block_thresholds,
         );
-        let mut pipe_items = Vec::with_capacity(2);
-        pipe_items.push(serialize_segment_transform.into_pipe_item());
-        pipe_items.push(create_dummy_item());
+        let pipe_items = vec![
+            serialize_segment_transform.into_pipe_item(),
+            create_dummy_item(),
+        ];
         self.main_pipeline.add_pipe(Pipe::create(2, 2, pipe_items));
 
         // resize to one, because they are all mutation logs now.
@@ -855,12 +852,12 @@ impl PipelineBuilder {
             // ----------------------------------------------------------------------
             // row_id port0_1              row_id port0_1              row_id port
             // matched data port0_2        row_id port1_1            matched data port0_2
-            // unmatched data port0_3      matched data port0_2      matched data port1_2
+            // row_number port0_3          matched data port0_2      matched data port1_2
             // row_id port1_1              matched data port1_2          ......
             // matched data port1_2  ===>       .....           ====>    ......
-            // unmatched data port1_2           .....                    ......
-            // unmatched data port0_3    unmatched data port0_3      unmatched data port
-            // ......                    unmatched data port1_3
+            // row_number port1_2               .....                    ......
+            // row_number port0_3        row_number port0_3          row_number port
+            // ......                    row_number port1_3
             // ......                           .....
             // ----------------------------------------------------------------------
             // do shuffle
@@ -894,7 +891,7 @@ impl PipelineBuilder {
             // remove first row_id port
             self.main_pipeline.output_len() - 1
         } else {
-            // remove first row_id port and last unmatched_port
+            // remove first row_id port and last row_number_port
             self.main_pipeline.output_len() - 2
         };
         // fill default columns
@@ -1068,12 +1065,13 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        // distributed execution
-        // if *distributed {
-        //     self.main_pipeline.try_resize(1)?;
-        //     self.main_pipeline
-        //         .add_pipe(TransformDistributedMergeIntoBlockSerialize::into_pipe())
-        // }
+        for pipe in &self.main_pipeline.pipes {
+            println!(
+                "pipe:\n{:?},input_len:{:?},output_len:{:?}",
+                pipe, pipe.input_length, pipe.output_length
+            );
+        }
+
         Ok(())
     }
 

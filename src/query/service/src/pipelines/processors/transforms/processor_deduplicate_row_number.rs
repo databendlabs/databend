@@ -60,6 +60,12 @@ impl DeduplicateRowNumber {
         // we receive a empty block as expected? the answer is yes.
         // but if there is still also some data unmatched, we won't receive
         // an empty block.
+        if data_block.is_empty() {
+            self.unique_row_number.clear();
+            self.accepted_data = true;
+            return Ok(());
+        }
+
         let row_number_vec = get_row_number(&data_block, 0)?;
         let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
         assert_eq!(row_number_set.len(), row_number_vec.len());

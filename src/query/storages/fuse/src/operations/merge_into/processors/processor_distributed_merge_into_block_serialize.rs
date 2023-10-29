@@ -40,6 +40,7 @@ use crate::operations::common::MutationLogs;
 // RowIds, because arrow-flight requires this.
 pub struct TransformDistributedMergeIntoBlockSerialize;
 
+/// this processor will be used in the future for merge into based on shuffle hash join.
 impl TransformDistributedMergeIntoBlockSerialize {
     #[allow(dead_code)]
     fn create(input: Arc<InputPort>, output: Arc<OutputPort>) -> ProcessorPtr {
