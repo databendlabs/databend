@@ -241,7 +241,7 @@ impl HashJoinProbeState {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, is_probe_projected);
+            return self.left_fast_return(input, is_probe_projected, &probe_state.true_validity);
         }
 
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
