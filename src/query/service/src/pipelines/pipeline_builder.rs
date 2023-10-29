@@ -1065,13 +1065,6 @@ impl PipelineBuilder {
             pipe_items,
         ));
 
-        for pipe in &self.main_pipeline.pipes {
-            println!(
-                "pipe:\n{:?},input_len:{:?},output_len:{:?}",
-                pipe, pipe.input_length, pipe.output_length
-            );
-        }
-
         Ok(())
     }
 

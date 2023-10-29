@@ -46,6 +46,7 @@ use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -141,16 +142,16 @@ impl Binder {
             );
             let source_output_columns = &source_context.columns;
             // we use Vec as the value, because if there could be duplicate names
-            let mut name_map = HashMap::<String, Vec<IndexType>>::new();
+            let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
             for column in source_output_columns {
                 name_map
                     .entry(column.column_name.clone())
                     .or_insert_with(|| vec![])
-                    .push(column.index);
+                    .push(column.clone());
             }
 
             for (field_idx, field) in default_target_table_schema.fields.iter().enumerate() {
-                let index = match name_map.get(field.name()) {
+                let column = match name_map.get(field.name()) {
                     None => {
                         return Err(ErrorCode::SemanticError(
                             format!("can't find {} in source output", field.name).to_string(),
@@ -167,18 +168,19 @@ impl Binder {
                                 .to_string(),
                             ));
                         } else {
-                            indices[0]
+                            indices[0].clone()
                         }
                     }
                 };
                 let column = ColumnBindingBuilder::new(
                     field.name.to_string(),
-                    index,
-                    Box::new(field.data_type().into()),
+                    column.index,
+                    column.data_type.clone(),
                     Visibility::Visible,
                 )
                 .build();
                 let col = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+
                 update_columns.insert(field_idx, col);
             }
             Some(update_columns)

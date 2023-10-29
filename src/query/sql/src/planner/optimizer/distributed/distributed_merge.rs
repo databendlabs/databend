@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
@@ -43,9 +42,7 @@ impl MergeSourceOptimizer {
     // and build hashtable. It means all nodes hold the same hashtable.
     pub fn optimize(&self, s_expr: &SExpr) -> Result<SExpr> {
         if !s_expr.match_pattern(&self.merge_source_pattern) {
-            Err(ErrorCode::BadArguments(
-                "pattern not match for dirstributed merge source".to_string(),
-            ))
+            Ok(s_expr.clone())
         } else {
             let join_s_expr = s_expr.child(0)?;
 
