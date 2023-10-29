@@ -38,11 +38,11 @@
 
 ## 🚀 Why Databend
 
-- **Cloud-Friendly**: Works with cloud storage like AWS S3, Azure Blob, Google Cloud Storage, Alibaba Cloud OSS, Cloudflare R2, Wasabi or MinIO, etc.
+- **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Rust-built with SIMD and vectorized processing for top-speed analytics. [ClickBench](https://databend.rs/blog/clickbench-databend-top).
+- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.rs/blog/clickbench-databend-top).
 
-- **Cost-Efficient Elasticity**: Unique architecture allows for separate scaling of storage and computation, optimizing both costs and performance.
+- **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
 
 - **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
@@ -52,7 +52,7 @@
 
 - **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
 
-- **Community-Driven**: Benefit from a growing community, ensuring transparency, frequent updates, and an open platform for all your cloud analytics requirements.
+- **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 
 ## 📐 Architecture
 
