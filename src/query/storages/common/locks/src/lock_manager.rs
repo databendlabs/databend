@@ -72,12 +72,23 @@ impl LockManager {
         GlobalInstance::get()
     }
 
-    pub fn create_table_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> TableLock {
+    pub fn create_table_lock(
+        ctx: Arc<dyn TableContext>,
+        table_info: TableInfo,
+    ) -> Result<TableLock> {
         let lock_mgr = LockManager::instance();
+        let user = ctx.get_current_user()?.name;
         let node = ctx.get_cluster().local_id.clone();
         let session_id = ctx.get_current_session_id();
-        let expire_secs = ctx.get_settings().get_table_lock_expire_secs().unwrap_or(3);
-        TableLock::create(lock_mgr, table_info, node, session_id, expire_secs)
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
+        Ok(TableLock::create(
+            lock_mgr,
+            table_info,
+            user,
+            node,
+            session_id,
+            expire_secs,
+        ))
     }
 
     #[async_backtrace::framed]

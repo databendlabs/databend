@@ -293,7 +293,7 @@ where F: SnapshotGenerator + Send + 'static
                 let table_lock = LockManager::create_table_lock(
                     self.ctx.clone(),
                     self.table.get_table_info().clone(),
-                );
+                )?;
                 match table_lock.try_lock(self.ctx.clone()).await {
                     Ok(guard) => {
                         self.lock_guard = guard;

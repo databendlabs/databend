@@ -271,7 +271,7 @@ impl ModifyTableColumnInterpreter {
         }
 
         // Add table lock.
-        let table_lock = LockManager::create_table_lock(self.ctx.clone(), table_info.clone());
+        let table_lock = LockManager::create_table_lock(self.ctx.clone(), table_info.clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         // 1. construct sql for selecting data from old table

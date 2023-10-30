@@ -272,6 +272,7 @@ pub(crate) fn new_empty_proto() -> mt::EmptyProto {
 
 pub(crate) fn new_table_lock_meta() -> mt::TableLockMeta {
     mt::TableLockMeta {
+        user: "root".to_string(),
         node: "node".to_string(),
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),

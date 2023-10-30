@@ -851,6 +851,7 @@ pub struct TableLockKey {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct TableLockMeta {
+    pub user: String,
     pub node: String,
     pub session_id: String,
 
@@ -868,6 +869,7 @@ pub struct CreateTableLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
 
+    pub user: String,
     pub node: String,
     pub session_id: String,
 }

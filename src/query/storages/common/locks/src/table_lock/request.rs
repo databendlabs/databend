@@ -48,6 +48,7 @@ impl From<&ListTableLockReq> for ListTableLockRevReq {
 pub struct CreateTableLockReq {
     pub table_id: u64,
     pub expire_secs: u64,
+    pub user: String,
     pub node: String,
     pub session_id: String,
 }
@@ -67,6 +68,7 @@ impl From<&CreateTableLockReq> for CreateTableLockRevReq {
         CreateTableLockRevReq {
             table_id: value.table_id,
             expire_at: Utc::now().timestamp() as u64 + value.expire_secs,
+            user: value.user.clone(),
             node: value.node.clone(),
             session_id: value.session_id.clone(),
         }

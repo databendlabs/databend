@@ -5226,6 +5226,7 @@ impl SchemaApiTestSuite {
             let req1 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                user: "root".to_string(),
                 node: "node1".to_string(),
                 session_id: "session1".to_string(),
             };
@@ -5235,6 +5236,7 @@ impl SchemaApiTestSuite {
             let req2 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                user: "root".to_string(),
                 node: "node1".to_string(),
                 session_id: "session1".to_string(),
             };

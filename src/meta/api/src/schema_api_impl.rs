@@ -3194,6 +3194,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let table_lock_key = TableLockKey { table_id, revision };
 
             let lock_meta = TableLockMeta {
+                user: req.user.clone(),
                 node: req.node.clone(),
                 session_id: req.session_id.clone(),
                 created_on: Utc::now(),

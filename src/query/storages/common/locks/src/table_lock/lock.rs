@@ -34,6 +34,7 @@ pub struct TableLock {
     lock_mgr: Arc<LockManager>,
     table_info: TableInfo,
 
+    user: String,
     node: String,
     session_id: String,
     expire_secs: u64,
@@ -43,6 +44,7 @@ impl TableLock {
     pub fn create(
         lock_mgr: Arc<LockManager>,
         table_info: TableInfo,
+        user: String,
         node: String,
         session_id: String,
         expire_secs: u64,
@@ -50,6 +52,7 @@ impl TableLock {
         TableLock {
             lock_mgr,
             table_info,
+            user,
             node,
             session_id,
             expire_secs,
@@ -87,6 +90,7 @@ impl LockApi for TableLock {
         Box::new(CreateTableLockReq {
             table_id: self.table_id(),
             expire_secs: self.get_expire_secs(),
+            user: self.user.clone(),
             node: self.node.clone(),
             session_id: self.session_id.clone(),
         })

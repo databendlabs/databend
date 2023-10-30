@@ -76,6 +76,7 @@ impl FromToProto for mt::TableLockMeta {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
+            user: p.user,
             node: p.node,
             session_id: p.session_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
@@ -92,6 +93,7 @@ impl FromToProto for mt::TableLockMeta {
         let p = pb::TableLockMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+            user: self.user.clone(),
             node: self.node.clone(),
             session_id: self.session_id.clone(),
             created_on: self.created_on.to_pb()?,
