@@ -49,6 +49,9 @@ impl PrivilegeAccess {
 
         let object = match object {
             GrantObject::Database(catalog_name, db_name) => {
+                if db_name.to_lowercase() == "system" {
+                    return Ok(None);
+                }
                 let db_id = self
                     .ctx
                     .get_catalog(catalog_name)
@@ -64,6 +67,9 @@ impl PrivilegeAccess {
                 }
             }
             GrantObject::Table(catalog_name, db_name, table_name) => {
+                if db_name.to_lowercase() == "system" {
+                    return Ok(None);
+                }
                 let catalog = self.ctx.get_catalog(catalog_name).await?;
                 let db_id = catalog
                     .get_database(&tenant, db_name)

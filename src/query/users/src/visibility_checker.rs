@@ -76,6 +76,11 @@ impl GrantObjectVisibilityChecker {
             return true;
         }
 
+        // TODO(liyz): add check by ownership
+        if db.to_lowercase() == "system" {
+            return true;
+        }
+
         if self
             .granted_databases
             .contains(&(catalog.to_string(), db.to_string()))
@@ -96,6 +101,11 @@ impl GrantObjectVisibilityChecker {
 
     pub fn check_table_visibility(&self, catalog: &str, database: &str, table: &str) -> bool {
         if self.granted_global {
+            return true;
+        }
+
+        // TODO(liyz): add check by ownership
+        if database.to_lowercase() == "system" {
             return true;
         }
 

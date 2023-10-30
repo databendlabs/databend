@@ -79,7 +79,7 @@ impl Interpreter for DropTableInterpreter {
             let role_api = UserApiProvider::instance().get_role_api_client(&self.plan.tenant)?;
             let db = catalog.get_database(&tenant, &self.plan.database).await?;
             role_api
-                .drop_ownership(&GrantObjectByID::Table {
+            .drop_ownership(&GrantObjectByID::Table {
                     catalog_name: self.plan.catalog.clone(),
                     db_id: db.get_db_info().ident.db_id,
                     table_id: tbl.get_table_info().ident.table_id,
