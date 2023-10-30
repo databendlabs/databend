@@ -1289,6 +1289,23 @@ fn float_to_decimal_internal<T: Number + AsPrimitive<f64>>(
     }
 }
 
+fn get_round_val<T: Decimal>(x: T, scale: u32, ctx: &mut EvalContext) -> Option<T> {
+    let mut round_val = None;
+    if ctx.func_ctx.rounding_mode && scale > 0 {
+        // Checking whether numbers need to be added or subtracted to calculate rounding
+        if let Some(r) = x.checked_rem(T::e(scale)) {
+            if let Some(m) = r.checked_div(T::e(scale - 1)) {
+                if m >= T::from_i64(5i64) {
+                    round_val = Some(T::one());
+                } else if m <= T::from_i64(-5i64) {
+                    round_val = Some(T::minus_one());
+                }
+            }
+        }
+    }
+    round_val
+}
+
 fn decimal_256_to_128(
     buffer: Buffer<i256>,
     from_size: DecimalSize,
@@ -1324,28 +1341,11 @@ fn decimal_256_to_128(
             .enumerate()
             .map(|(row, x)| {
                 let x = x * i128::one();
-                let mut round_val = None;
-                if ctx.func_ctx.rounding_mode {
-                    // Checking whether numbers need to be added or subtracted to calculate rounding
-                    if let Some(r) = x.checked_rem(i256::e(scale_diff)) {
-                        if let Some(m) = r.checked_div(i256::e(scale_diff - 1)) {
-                            if m >= i256::from_i64(5i64) {
-                                round_val = Some(i256::one());
-                            } else if m <= i256::from_i64(-5i64) {
-                                round_val = Some(i256::minus_one());
-                            }
-                        }
-                    }
-                }
-                let y = match x.checked_div(factor) {
-                    Some(x) => {
-                        if let Some(val) = round_val {
-                            x.checked_add(val)
-                        } else {
-                            Some(x)
-                        }
-                    }
-                    None => None,
+                let round_val = get_round_val::<i256>(x, scale_diff, ctx);
+                let y = match (x.checked_div(factor), round_val) {
+                    (Some(x), Some(round_val)) => x.checked_add(round_val),
+                    (Some(x), None) => Some(x),
+                    (None, _) => None,
                 };
 
                 match y {
@@ -1391,30 +1391,11 @@ macro_rules! m_decimal_to_decimal {
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
-                        let mut round_val = None;
-                        if $ctx.func_ctx.rounding_mode {
-                            // Checking whether numbers need to be added or subtracted to calculate rounding
-                            if let Some(r) = x.checked_rem(<$dest_type_name>::e(scale_diff)) {
-                                if let Some(m) =
-                                    r.checked_div(<$dest_type_name>::e(scale_diff - 1))
-                                {
-                                    if m >= <$dest_type_name>::from_i64(5i64) {
-                                        round_val = Some(<$dest_type_name>::one());
-                                    } else if m <= <$dest_type_name>::from_i64(-5i64) {
-                                        round_val = Some(<$dest_type_name>::minus_one());
-                                    }
-                                }
-                            }
-                        }
-                        let y = match x.checked_div(factor) {
-                            Some(x) => {
-                                if let Some(val) = round_val {
-                                    x.checked_add(val)
-                                } else {
-                                    Some(x)
-                                }
-                            }
-                            None => None,
+                        let round_val = get_round_val::<$dest_type_name>(x, scale_diff, $ctx);
+                        let y = match (x.checked_div(factor), round_val) {
+                            (Some(x), Some(round_val)) => x.checked_add(round_val),
+                            (Some(x), None) => Some(x),
+                            (None, _) => None,
                         };
                         match y {
                             Some(y)
