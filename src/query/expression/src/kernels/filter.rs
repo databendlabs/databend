@@ -423,6 +423,8 @@ impl Column {
         StringColumn::new(data.into(), offsets.into())
     }
 
+    // # Safety
+    // `builder_ptr + builder_len` must be [valid] for writes of `continuous_bytes` bytes.
     unsafe fn copy_continuous_boolean(
         continuous_bytes: usize,
         builder_ptr: *mut u8,
