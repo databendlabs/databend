@@ -24,6 +24,7 @@ use common_meta_app::principal::UserPrivilegeType::Ownership;
 use common_sql::plans::GrantPrivilegePlan;
 use common_users::UserApiProvider;
 use log::debug;
+use log::info;
 
 use crate::interpreters::common::validate_grant_object_exists;
 use crate::interpreters::Interpreter;
@@ -63,9 +64,12 @@ impl GrantPrivilegeInterpreter {
             }
         };
 
-        debug!(
-            "grant ownership from role: {} to {}",
-            current_role.name, role
+        info!(
+            "{}: grant ownership on {:?} from role {} to {}",
+            ctx.get_id(),
+            object,
+            current_role.name,
+            role,
         );
 
         let (catalog, catalog_name) = match object.catalog() {
@@ -80,7 +84,7 @@ impl GrantPrivilegeInterpreter {
             }
         };
 
-        let ownership_object = match object {
+        let object_by_id = match object {
             GrantObject::Database(_, db_name) => {
                 let db_id = catalog
                     .get_database(tenant, db_name)
@@ -118,7 +122,7 @@ impl GrantPrivilegeInterpreter {
         };
 
         // if the object's owner is None, it's considered as PUBLIC, everyone could access it
-        let owner = user_mgr.get_ownership(tenant, &ownership_object).await?;
+        let owner = user_mgr.get_ownership(tenant, &object_by_id).await?;
         if let Some(owner) = owner {
             let can_grant_ownership = available_roles.iter().any(|r| r.name == owner.role);
             if !can_grant_ownership {
@@ -136,8 +140,9 @@ impl GrantPrivilegeInterpreter {
         }
 
         user_mgr
-            .grant_ownership_to_role(tenant, &ownership_object, role)
+            .grant_ownership_to_role(tenant, &object_by_id, role)
             .await?;
+
         Ok(())
     }
 }
