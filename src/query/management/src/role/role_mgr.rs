@@ -198,7 +198,7 @@ impl RoleApi for RoleMgr {
         object: &GrantObjectByID,
         role: &str,
     ) -> common_exception::Result<()> {
-        let match_seq = MatchSeq::Exact(0);
+        let match_seq = MatchSeq::GE(0);
         let key = self.make_object_owner_key(object);
 
         let value = serde_json::to_vec(&OwnershipInfo {
