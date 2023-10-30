@@ -24,7 +24,7 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
@@ -138,7 +138,7 @@ impl HashJoinProbeState {
                             let nullable_probe_columns = probe_block
                                 .columns()
                                 .iter()
-                                .map(|c| set_true_validity(c, matched_num, true_validity))
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
                                 .collect::<Vec<_>>();
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num);
                         }
@@ -154,30 +154,24 @@ impl HashJoinProbeState {
                             &build_num_rows,
                             string_items_buf,
                         )?;
-                        // For left join, wrap nullable for build block
-                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| BlockEntry {
-                                        value: Value::Scalar(Scalar::Null),
-                                        data_type: c.data_type.wrap_nullable(),
-                                    })
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                        // For left or full join, wrap nullable for build block.
+                        let nullable_columns = if build_num_rows == 0 {
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| BlockEntry {
+                                    value: Value::Scalar(Scalar::Null),
+                                    data_type: c.data_type.wrap_nullable(),
+                                })
+                                .collect::<Vec<_>>()
                         } else {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_true_validity(c, matched_num, true_validity))
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>()
                         };
-                        Some(DataBlock::new(nullable_columns, num_rows))
+                        Some(DataBlock::new(nullable_columns, matched_num))
                     } else {
                         None
                     };
@@ -339,7 +333,7 @@ impl HashJoinProbeState {
                             let nullable_probe_columns = probe_block
                                 .columns()
                                 .iter()
-                                .map(|c| set_true_validity(c, matched_num, true_validity))
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
                                 .collect::<Vec<_>>();
                             probe_block = DataBlock::new(nullable_probe_columns, matched_num)
                         }
@@ -355,30 +349,24 @@ impl HashJoinProbeState {
                             &build_num_rows,
                             string_items_buf,
                         )?;
-                        // For left join, wrap nullable for build block
-                        let (nullable_columns, num_rows) = if build_num_rows == 0 {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| BlockEntry {
-                                        value: Value::Scalar(Scalar::Null),
-                                        data_type: c.data_type.wrap_nullable(),
-                                    })
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                        // For left and full join, wrap nullable for build block.
+                        let nullable_columns = if build_num_rows == 0 {
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| BlockEntry {
+                                    value: Value::Scalar(Scalar::Null),
+                                    data_type: c.data_type.wrap_nullable(),
+                                })
+                                .collect::<Vec<_>>()
                         } else {
-                            (
-                                build_block
-                                    .columns()
-                                    .iter()
-                                    .map(|c| set_true_validity(c, matched_num, true_validity))
-                                    .collect::<Vec<_>>(),
-                                matched_num,
-                            )
+                            build_block
+                                .columns()
+                                .iter()
+                                .map(|c| wrap_true_validity(c, matched_num, true_validity))
+                                .collect::<Vec<_>>()
                         };
-                        Some(DataBlock::new(nullable_columns, num_rows))
+                        Some(DataBlock::new(nullable_columns, matched_num))
                     } else {
                         None
                     };
@@ -534,7 +522,7 @@ impl HashJoinProbeState {
                 let nullable_probe_columns = probe_block
                     .columns()
                     .iter()
-                    .map(|c| set_true_validity(c, matched_num, true_validity))
+                    .map(|c| wrap_true_validity(c, matched_num, true_validity))
                     .collect::<Vec<_>>();
                 probe_block = DataBlock::new(nullable_probe_columns, matched_num);
             }

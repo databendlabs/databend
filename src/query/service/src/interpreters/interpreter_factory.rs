@@ -38,6 +38,12 @@ use crate::interpreters::interpreter_presign::PresignInterpreter;
 use crate::interpreters::interpreter_role_show::ShowRolesInterpreter;
 use crate::interpreters::interpreter_table_create::CreateTableInterpreter;
 use crate::interpreters::interpreter_table_revert::RevertTableInterpreter;
+use crate::interpreters::interpreter_task_alter::AlterTaskInterpreter;
+use crate::interpreters::interpreter_task_create::CreateTaskInterpreter;
+use crate::interpreters::interpreter_task_describe::DescribeTaskInterpreter;
+use crate::interpreters::interpreter_task_drop::DropTaskInterpreter;
+use crate::interpreters::interpreter_task_execute::ExecuteTaskInterpreter;
+use crate::interpreters::interpreter_tasks_show::ShowTasksInterpreter;
 use crate::interpreters::AlterUserInterpreter;
 use crate::interpreters::CreateShareEndpointInterpreter;
 use crate::interpreters::CreateShareInterpreter;
@@ -446,12 +452,21 @@ impl InterpreterFactory {
                 Ok(Arc::new(ShowNetworkPoliciesInterpreter::try_create(ctx)?))
             }
 
-            Plan::CreateTask(_) => todo!(),
-            Plan::AlterTask(_) => todo!(),
-            Plan::DropTask(_) => todo!(),
-            Plan::DescribeTask(_) => todo!(),
-            Plan::ExecuteTask(_) => todo!(),
-            Plan::ShowTasks(_) => todo!(),
+            Plan::CreateTask(p) => Ok(Arc::new(CreateTaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterTask(p) => Ok(Arc::new(AlterTaskInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::DropTask(p) => Ok(Arc::new(DropTaskInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::DescribeTask(p) => Ok(Arc::new(DescribeTaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ExecuteTask(p) => Ok(Arc::new(ExecuteTaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowTasks(p) => Ok(Arc::new(ShowTasksInterpreter::try_create(ctx, *p.clone())?)),
         }
     }
 }
