@@ -19,5 +19,6 @@ mod table_lock;
 
 pub use lock_holder::LockHolder;
 pub use lock_manager::LockManager;
-pub use lock_metrics::record_table_lock_nums;
+pub use lock_metrics::record_created_table_lock_nums;
+pub use lock_metrics::record_acquired_table_lock_nums;
 pub use table_lock::*;

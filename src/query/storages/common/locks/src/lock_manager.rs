@@ -35,7 +35,8 @@ use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use parking_lot::RwLock;
 
-use crate::record_table_lock_nums;
+use crate::record_acquired_table_lock_nums;
+use crate::record_created_table_lock_nums;
 use crate::table_lock::TableLock;
 use crate::LockHolder;
 
@@ -89,12 +90,11 @@ impl LockManager {
             .create_table_lock_rev(lock.create_table_lock_req())
             .await?;
         let revision = res.revision;
+        // metrics.
+        record_created_table_lock_nums(lock.level(), lock.table_id(), 1);
 
         let mut lock_holder = LockHolder::create();
         lock_holder.start(catalog.clone(), lock, revision).await?;
-
-        // metrics.
-        record_table_lock_nums(lock.level(), lock.table_id(), 1);
 
         self.insert_lock(revision, lock_holder);
         let guard = LockGuard::new(self.clone(), revision);
@@ -117,6 +117,8 @@ impl LockManager {
                 // The lock is acquired by current session.
                 let extend_table_lock_req = lock.extend_table_lock_req(revision, true);
                 catalog.extend_table_lock_rev(extend_table_lock_req).await?;
+                // metrics.
+                record_acquired_table_lock_nums(lock.level(), lock.table_id(), 1);
                 break;
             }
 

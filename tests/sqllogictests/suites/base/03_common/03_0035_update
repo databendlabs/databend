@@ -193,7 +193,13 @@ select * from t1 order by id1;
 
 onlyif mysql
 query B
-SELECT COUNT() >= 1 FROM system.metrics where metric = 'table_lock_nums_total'
+SELECT COUNT() >= 1 FROM system.metrics where metric = 'created_table_lock_nums_total'
+----
+1
+
+onlyif mysql
+query B
+SELECT COUNT() >= 1 FROM system.metrics where metric = 'acquired_table_lock_nums_total'
 ----
 1
 

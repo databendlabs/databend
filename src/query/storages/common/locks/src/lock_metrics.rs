@@ -19,20 +19,32 @@ use common_metrics::Family;
 use common_metrics::VecLabels;
 use lazy_static::lazy_static;
 
-const METRIC_TABLE_LOCK_NUMS: &str = "table_lock_nums";
+const METRIC_CREATED_TABLE_LOCK_NUMS: &str = "created_table_lock_nums";
+const METRIC_ACQUIRED_TABLE_LOCK_NUMS: &str = "acquired_table_lock_nums";
 
 lazy_static! {
-    static ref TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
-        register_counter_family(METRIC_TABLE_LOCK_NUMS);
+    static ref CREATED_TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
+        register_counter_family(METRIC_CREATED_TABLE_LOCK_NUMS);
+    
+    static ref ACQUIRED_TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
+        register_counter_family(METRIC_ACQUIRED_TABLE_LOCK_NUMS);
 }
 
 const LABEL_LEVEL: &str = "level";
 const LABEL_TABLE_ID: &str = "table_id";
 
-pub fn record_table_lock_nums(level: LockLevel, table_id: u64, c: u64) {
+pub fn record_created_table_lock_nums(level: LockLevel, table_id: u64, c: u64) {
     let labels = &vec![
         (LABEL_LEVEL, level.to_string()),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
-    TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);
+    CREATED_TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);
+}
+
+pub fn record_acquired_table_lock_nums(level: LockLevel, table_id: u64, c: u64) {
+    let labels = &vec![
+        (LABEL_LEVEL, level.to_string()),
+        (LABEL_TABLE_ID, table_id.to_string()),
+    ];
+    ACQUIRED_TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);
 }
