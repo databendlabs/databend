@@ -48,15 +48,17 @@ impl Interpreter for DropDatabaseInterpreter {
         let tenant = self.ctx.get_tenant();
         let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let role_api = UserApiProvider::instance().get_role_api_client(&tenant)?;
-        let db = catalog.get_database(&tenant, &self.plan.database).await?;
 
-        // unset the ownership of the database
-        role_api
-            .drop_ownership(&GrantObjectByID::Database {
-                catalog_name: self.plan.catalog.clone(),
-                db_id: db.get_db_info().ident.db_id,
-            })
-            .await?;
+        // unset the ownership of the database, the database may not exists.
+        let db = catalog.get_database(&tenant, &self.plan.database).await;
+        if let Ok(db) = db {
+            role_api
+                .drop_ownership(&GrantObjectByID::Database {
+                    catalog_name: self.plan.catalog.clone(),
+                    db_id: db.get_db_info().ident.db_id,
+                })
+                .await?;
+        }
 
         // actual drop database
         let resp = catalog.drop_database(self.plan.clone().into()).await?;
