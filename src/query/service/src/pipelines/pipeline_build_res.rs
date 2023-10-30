@@ -61,16 +61,6 @@ impl PipelineBuildResult {
         }
     }
 
-    pub fn create_with_builder_data(builder_data: PipelineBuilderData) -> PipelineBuildResult {
-        PipelineBuildResult {
-            main_pipeline: Pipeline::create(),
-            sources_pipelines: vec![],
-            prof_span_set: SharedProcessorProfiles::default(),
-            exchange_injector: DefaultExchangeInjector::create(),
-            builder_data,
-        }
-    }
-
     pub fn from_blocks(blocks: Vec<DataBlock>) -> Result<PipelineBuildResult> {
         let mut source_builder = SourcePipeBuilder::create();
 

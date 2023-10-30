@@ -58,7 +58,6 @@ use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
-use crate::pipelines::PipelineBuilderData;
 use crate::schedulers::QueryFragmentActions;
 use crate::schedulers::QueryFragmentsActions;
 use crate::sessions::QueryContext;
@@ -581,30 +580,10 @@ impl QueryCoordinator {
             );
         }
 
-        let mut last_builder_data = PipelineBuilderData {
-            input_join_state: None,
-            input_probe_schema: None,
-        };
-
         for fragment in &packet.fragments {
             let fragment_id = fragment.fragment_id;
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                // before prepare pipeline, it must be none
-                assert!(coordinator.pipeline_build_res.is_none());
-                // reuse last builder data
-                coordinator.pipeline_build_res = Some(
-                    PipelineBuildResult::create_with_builder_data(last_builder_data.clone()),
-                );
-
                 coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
-
-                // after prepare pipeline, it must be some
-                assert!(coordinator.pipeline_build_res.is_some());
-                // update builder_data
-                if coordinator.pipeline_build_res.is_some() {
-                    let new_res = coordinator.pipeline_build_res.as_ref().unwrap();
-                    last_builder_data = new_res.builder_data.clone();
-                }
             }
         }
 
@@ -843,20 +822,13 @@ impl FragmentCoordinator {
 
             let pipeline_ctx = QueryContext::create_from(ctx);
 
-            let mut pipeline_builder = PipelineBuilder::create(
+            let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
                 pipeline_ctx,
                 enable_profiling,
                 SharedProcessorProfiles::default(),
             );
-
-            // has last pipeline_res builder_data, we reuse it
-            if self.pipeline_build_res.is_some() {
-                let res = self.pipeline_build_res.take().unwrap();
-                pipeline_builder.join_state = res.builder_data.input_join_state;
-                pipeline_builder.probe_data_fields = res.builder_data.input_probe_schema;
-            }
 
             let res = pipeline_builder.finalize(&self.physical_plan)?;
 
