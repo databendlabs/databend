@@ -49,9 +49,9 @@ use common_meta_types::MatchSeq::Any;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
-use common_tracing::func_name;
 use log::as_debug;
 use log::debug;
+use minitrace::func_name;
 
 use crate::background_api::BackgroundApi;
 use crate::deserialize_struct;

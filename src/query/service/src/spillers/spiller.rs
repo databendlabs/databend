@@ -95,7 +95,7 @@ impl Spiller {
             operator,
             config,
             spiller_type,
-            partition_set: vec![0, 1, 2, 3],
+            partition_set: vec![0, 1, 2, 3, 4, 5, 6, 7],
             spilled_partition_set: Default::default(),
             partition_location: Default::default(),
             columns_layout: Default::default(),
@@ -170,17 +170,18 @@ impl Spiller {
     pub async fn read_spilled_data_from_partitions(
         &self,
         partitions: &HashSet<u8>,
+        worker_id: usize,
     ) -> Result<Vec<DataBlock>> {
         let mut spilled_data = Vec::with_capacity(partitions.len());
         for p_id in partitions.iter() {
-            spilled_data.append(&mut self.read_spilled_data(p_id).await?);
+            spilled_data.append(&mut self.read_spilled_data(p_id, worker_id).await?);
         }
         Ok(spilled_data)
     }
 
     #[async_backtrace::framed]
     /// Read spilled data with partition id
-    pub async fn read_spilled_data(&self, p_id: &u8) -> Result<Vec<DataBlock>> {
+    pub async fn read_spilled_data(&self, p_id: &u8, worker_id: usize) -> Result<Vec<DataBlock>> {
         debug_assert!(self.partition_location.contains_key(p_id));
         let files = self.partition_location.get(p_id).unwrap();
         let mut spilled_data = Vec::with_capacity(files.len());
@@ -195,17 +196,14 @@ impl Spiller {
                 begin += column_layout;
             }
             let block = DataBlock::new_from_columns(columns);
-            info!(
-                "{:?} read {:?} rows data from {:?}, partition id is {:?}",
-                self.spiller_type,
-                block.num_rows(),
-                file,
-                p_id
-            );
             if block.num_rows() != 0 {
                 spilled_data.push(block);
             }
         }
+        info!(
+            "{:?} read partition {:?}, work id: {:?}",
+            self.spiller_type, p_id, worker_id
+        );
         Ok(spilled_data)
     }
 
@@ -226,7 +224,7 @@ impl Spiller {
         let mut partition_rows = HashMap::new();
         // Classify rows to spill or not spill.
         for (row_idx, hash) in hashes.iter().enumerate() {
-            let partition_id = *hash as u8 & 0b0000_0011;
+            let partition_id = *hash as u8 & 0b0000_0111;
             if spilled_partition_set.contains(&partition_id) {
                 // the row can be directly spilled to corresponding partition
                 partition_rows

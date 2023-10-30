@@ -19,6 +19,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
@@ -76,8 +77,8 @@ impl SegmentsIO {
     }
 
     // Read all segments information from s3 in concurrently.
-    #[minitrace::trace]
     #[async_backtrace::framed]
+    #[minitrace::trace]
     pub async fn read_segments<T>(
         &self,
         segment_locations: &[Location],
@@ -101,7 +102,7 @@ impl SegmentsIO {
                         .try_into()
                         .map_err(|_| ErrorCode::Internal("Failed to convert compact segment info"))
                 }
-                .in_span(Span::enter_with_local_parent("read_segments"))
+                .in_span(Span::enter_with_local_parent(full_name!()))
             })
         });
 

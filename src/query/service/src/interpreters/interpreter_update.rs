@@ -62,7 +62,7 @@ impl Interpreter for UpdateInterpreter {
         "UpdateInterpreter"
     }
 
-    #[minitrace::trace(name = "update_interpreter_execute")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         debug!("ctx.id" = self.ctx.get_id().as_str(); "update_interpreter_execute");

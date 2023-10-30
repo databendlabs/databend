@@ -80,19 +80,6 @@ impl<'a> WriterV002<'a> {
         Ok(writer)
     }
 
-    /// Write entries to the snapshot, without flushing.
-    ///
-    /// Returns the count of entries
-    pub async fn write_entries<E>(
-        &mut self,
-        entries: impl Stream<Item = RaftStoreEntry>,
-    ) -> Result<usize, E>
-    where
-        E: std::error::Error + From<io::Error> + 'static,
-    {
-        self.write_entry_results(entries.map(Ok)).await
-    }
-
     /// Write `Result` of entries to the snapshot, without flushing.
     ///
     /// Returns the count of entries

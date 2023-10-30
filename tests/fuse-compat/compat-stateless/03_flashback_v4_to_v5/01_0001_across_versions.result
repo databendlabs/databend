@@ -35,8 +35,9 @@ checking that after flashback to s2,  the table contains {1,2}
 1
 2
 suite: mixed versioned segment compaction test
-check segments after compaction, there should be 2 segments, all is version v4
-2	4
+check segments after compaction, there should be 2 segments, a version v4 and a version v5
+1   4
+1   5
 check table contains {1,2,3,4} after compaction
 1
 2

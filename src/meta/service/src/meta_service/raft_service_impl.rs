@@ -23,7 +23,7 @@ use common_meta_types::protobuf::raft_service_server::RaftService;
 use common_meta_types::protobuf::RaftReply;
 use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::StreamItem;
-use common_tracing::func_name;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use tonic::codegen::BoxStream;
 use tonic::Request;
@@ -60,7 +60,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let forward_req: ForwardRequest<ForwardRequestBody> = GrpcHelper::parse_req(request)?;
@@ -81,7 +81,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: Request<RaftRequest>,
     ) -> Result<Response<Self::KvReadV1Stream>, Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let forward_req: ForwardRequest<MetaGrpcReadReq> = GrpcHelper::parse_req(request)?;
@@ -102,7 +102,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);
@@ -125,7 +125,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             let start = Instant::now();
@@ -166,7 +166,7 @@ impl RaftService for RaftServiceImpl {
         &self,
         request: tonic::Request<RaftRequest>,
     ) -> Result<tonic::Response<RaftReply>, tonic::Status> {
-        let root = common_tracing::start_trace_for_remote_request(func_name!(), &request);
+        let root = common_tracing::start_trace_for_remote_request(full_name!(), &request);
 
         async {
             self.incr_meta_metrics_recv_bytes_from_peer(&request);

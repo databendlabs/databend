@@ -38,9 +38,9 @@ use common_meta_types::TxnPutResponse;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::With;
-use common_tracing::func_name;
 use log::debug;
 use log::info;
+use minitrace::func_name;
 
 use crate::kvapi;
 use crate::kvapi::UpsertKVReq;
