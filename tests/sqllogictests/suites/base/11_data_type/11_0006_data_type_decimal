@@ -908,7 +908,7 @@ select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7,
 query TTT
 select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0))
 ----
-1.2 1.2340 0
+1.2 1.2340 1
 
 
 statement ok
