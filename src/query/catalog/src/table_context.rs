@@ -154,6 +154,7 @@ pub trait TableContext: Send + Sync {
     fn get_current_session_id(&self) -> String {
         unimplemented!()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>>;
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker>;
     fn get_fuse_version(&self) -> String;
     fn get_format_settings(&self) -> Result<FormatSettings>;

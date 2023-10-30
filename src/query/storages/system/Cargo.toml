@@ -18,6 +18,7 @@ enable-histogram-metrics = ["common-metrics/enable-histogram"]
 common-ast = { path = "../../ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-cloud-control = { path = "../../../common/cloud_control" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
