@@ -401,6 +401,13 @@ impl NumberDataType {
         }
     }
 
+    pub const fn need_round_cast_to(self, dest: Self) -> bool {
+        match (self.is_float(), dest.is_float()) {
+            (true, false) => true,
+            (_, _) => false,
+        }
+    }
+
     pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
         let (precision, scale) = match self {
             NumberDataType::Int8 => (3, 0),
