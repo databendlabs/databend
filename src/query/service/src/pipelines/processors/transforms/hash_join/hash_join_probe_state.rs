@@ -240,7 +240,11 @@ impl HashJoinProbeState {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, probe_state.is_probe_projected, &probe_state.true_validity);
+            return self.left_fast_return(
+                input,
+                probe_state.is_probe_projected,
+                &probe_state.true_validity,
+            );
         }
 
         probe_state.key_nums += if let Some(valids) = &valids {
