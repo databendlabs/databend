@@ -244,7 +244,7 @@ jobs:
       - name: Start Cloud Control Server
         run: |
           pip install grpcio grpcio-reflection protobuf grpcio-tools
-          python3 tests/cloud-control-server/simple_server.py &
+          python3 tests/cloud_control_server/simple_server.py &
           sleep 2
       - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
         timeout-minutes: 15

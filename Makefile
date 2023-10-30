@@ -116,6 +116,6 @@ clean:
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
 genproto:
-	python  -m grpc_tools.protoc -Isrc/common/cloud-control/proto/ --python_out=tests/cloud-control-server/ --grpc_python_out=tests/cloud-control-server/ src/common/cloud-control/proto/task.proto
+	python  -m grpc_tools.protoc -Isrc/common/cloud_control/proto/ --python_out=tests/cloud_control_server/ --grpc_python_out=tests/cloud_control_server/ src/common/cloud_control/proto/task.proto
 
 .PHONY: setup test run build fmt lint clean docs

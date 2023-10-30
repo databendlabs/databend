@@ -59,9 +59,9 @@ common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
-aggregating-index = { path = "../ee-features/aggregating-index" }
-background-service = { path = "../ee-features/background-service" }
-common-cloud-control = { path = "../../common/cloud-control" }
+aggregating-index = { path = "../ee_features/aggregating_index" }
+background-service = { path = "../ee_features/background_service" }
+common-cloud-control = { path = "../../common/cloud_control" }
 common-license = { path = "../../common/license" }
 common-meta-embedded = { path = "../../meta/embedded" }
 common-meta-kvapi = { path = "../../meta/kvapi" }

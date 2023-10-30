@@ -16,7 +16,7 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
-    "src/common/cloud-control",
+    "src/common/cloud_control",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
