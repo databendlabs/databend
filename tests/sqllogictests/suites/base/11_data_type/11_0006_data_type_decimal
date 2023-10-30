@@ -1031,6 +1031,7 @@ select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(1
 -1.23 -1.23 -1.23 -1.23
 -1.45 -1.45 -1.45 -1.45
 
+statement ok
 set numeric_cast_option = 'rounding';
 
 query TT
