@@ -583,81 +583,81 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         let name = format!("to_{dest_type}").to_lowercase();
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                            &name,
-                                            |_, domain| {
-                                                let (domain, overflowing) = domain.overflow_cast();
-                                                debug_assert!(!overflowing);
-                                                FunctionDomain::Domain(domain)
-                                            },
-                                            |val, _|  {
-                                                val.as_()
-                                            },
-                                        );
+                                &name,
+                                |_, domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    debug_assert!(!overflowing);
+                                    FunctionDomain::Domain(domain)
+                                },
+                                |val, _|  {
+                                    val.as_()
+                                },
+                            );
                         } else {
                             registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                            &name,
-                                                        |_, domain| {
-                                                let (domain, overflowing) = domain.overflow_cast();
-                                                if overflowing {
-                                                    FunctionDomain::MayThrow
-                                                } else {
-                                                    FunctionDomain::Domain(domain)
-                                                }
+                                &name,
+                                |_, domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    if overflowing {
+                                        FunctionDomain::MayThrow
+                                    } else {
+                                        FunctionDomain::Domain(domain)
+                                    }
+                                },
+                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
+                                    move |val, output, ctx| {
+                                        match num_traits::cast::cast(val) {
+                                            Some(val) => output.push(val),
+                                            None => {
+                                                ctx.set_error(output.len(),"number overflowed");
+                                                output.push(DEST_TYPE::default());
                                             },
-                                            vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>>(
-                                                move |val, output, ctx| {
-                                                    match num_traits::cast::cast(val) {
-                                                        Some(val) => output.push(val),
-                                                        None => {
-                                                            ctx.set_error(output.len(),"number overflowed");
-                                                            output.push(DEST_TYPE::default());
-                                                        },
-                                                    }
-                                                }
-                                            ),
-                                        );
+                                        }
+                                    }
+                                ),
+                            );
                         }
 
                         let name = format!("try_to_{dest_type}").to_lowercase();
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                            &name,
-                                            |_, domain| {
-                                                let (domain, overflowing) = domain.overflow_cast();
-                                                debug_assert!(!overflowing);
-                                                FunctionDomain::Domain(NullableDomain {
-                                                    has_null: false,
-                                                    value: Some(Box::new(
-                                                        domain,
-                                                    )),
-                                                })
-                                            },
-                                            vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
-                                                Some(val.as_())
-                                            })
-                                        );
+                                &name,
+                                |_, domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    debug_assert!(!overflowing);
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: false,
+                                        value: Some(Box::new(
+                                            domain,
+                                        )),
+                                    })
+                                },
+                                vectorize_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(|val, _| {
+                                    Some(val.as_())
+                                })
+                            );
                         } else {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
-                                            &name,
-                                            |_, domain| {
-                                                let (domain, overflowing) = domain.overflow_cast();
-                                                FunctionDomain::Domain(NullableDomain {
-                                                    has_null: overflowing,
-                                                    value: Some(Box::new(
-                                                        domain,
-                                                    )),
-                                                })
-                                            },
-                                            vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
-                                                |val, output, _| {
-                                                    if let Some(new_val) = num_traits::cast::cast(val) {
-                                                        output.push(new_val);
-                                                    } else {
-                                                        output.push_null();
-                                                    }
-                                                }
-                                            ),
-                                        );
+                                &name,
+                                |_, domain| {
+                                    let (domain, overflowing) = domain.overflow_cast();
+                                    FunctionDomain::Domain(NullableDomain {
+                                        has_null: overflowing,
+                                        value: Some(Box::new(
+                                            domain,
+                                        )),
+                                    })
+                                },
+                                vectorize_with_builder_1_arg::<NumberType<SRC_TYPE>, NullableType<NumberType<DEST_TYPE>>>(
+                                    |val, output, _| {
+                                        if let Some(new_val) = num_traits::cast::cast(val) {
+                                            output.push(new_val);
+                                        } else {
+                                            output.push_null();
+                                        }
+                                    }
+                                ),
+                            );
                         }
                     }
                 }),

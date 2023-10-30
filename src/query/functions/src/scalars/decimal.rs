@@ -1067,10 +1067,11 @@ fn string_to_decimal_column<T: Decimal>(
     ctx: &mut EvalContext,
     string_column: &StringColumn,
     size: DecimalSize,
+    rounding_mode: bool,
 ) -> DecimalColumn {
     let mut values = Vec::<T>::with_capacity(string_column.len());
     for (row, buf) in string_column.iter().enumerate() {
-        match read_decimal_with_size::<T>(buf, size, true) {
+        match read_decimal_with_size::<T>(buf, size, true, rounding_mode) {
             Ok((d, _)) => values.push(d),
             Err(e) => {
                 ctx.set_error(row, e.message());
@@ -1085,8 +1086,9 @@ fn string_to_decimal_scalar<T: Decimal>(
     ctx: &mut EvalContext,
     string_buf: &[u8],
     size: DecimalSize,
+    rounding_mode: bool,
 ) -> DecimalScalar {
-    let value = match read_decimal_with_size::<T>(string_buf, size, true) {
+    let value = match read_decimal_with_size::<T>(string_buf, size, true, rounding_mode) {
         Ok((d, _)) => d,
         Err(e) => {
             ctx.set_error(0, e.message());
@@ -1101,15 +1103,16 @@ fn string_to_decimal(
     ctx: &mut EvalContext,
     dest_type: DecimalDataType,
 ) -> Value<AnyType> {
+    let rounding_mode = ctx.func_ctx.rounding_mode;
     match arg {
         ValueRef::Column(column) => {
             let string_column = StringType::try_downcast_column(column).unwrap();
             let column = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    string_to_decimal_column::<i128>(ctx, &string_column, size)
+                    string_to_decimal_column::<i128>(ctx, &string_column, size, rounding_mode)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    string_to_decimal_column::<i256>(ctx, &string_column, size)
+                    string_to_decimal_column::<i256>(ctx, &string_column, size, rounding_mode)
                 }
             };
             Value::Column(Column::Decimal(column))
@@ -1118,10 +1121,10 @@ fn string_to_decimal(
             let buf = StringType::try_downcast_scalar(scalar).unwrap();
             let scalar = match dest_type {
                 DecimalDataType::Decimal128(size) => {
-                    string_to_decimal_scalar::<i128>(ctx, buf, size)
+                    string_to_decimal_scalar::<i128>(ctx, buf, size, rounding_mode)
                 }
                 DecimalDataType::Decimal256(size) => {
-                    string_to_decimal_scalar::<i128>(ctx, buf, size)
+                    string_to_decimal_scalar::<i128>(ctx, buf, size, rounding_mode)
                 }
             };
             Value::Scalar(Scalar::Decimal(scalar))
@@ -1219,7 +1222,11 @@ macro_rules! m_float_to_decimal {
             .iter()
             .enumerate()
             .map(|(row, x)| {
-                let x = <$type_name>::from_float(x.as_() * multiplier);
+                let mut x = x.as_() * multiplier;
+                if $ctx.func_ctx.rounding_mode {
+                    x = x.round();
+                }
+                let x = <$type_name>::from_float(x);
                 if x > max_for_precision || x < min_for_precision {
                     $ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                     <$type_name>::one()
@@ -1308,7 +1315,8 @@ fn decimal_256_to_128(
             })
             .collect()
     } else {
-        let factor = i256::e((from_size.scale - dest_size.scale) as u32);
+        let scale_diff = (from_size.scale - dest_size.scale) as u32;
+        let factor = i256::e(scale_diff);
         let source_factor = i256::e(from_size.scale as u32);
 
         buffer
@@ -1316,8 +1324,31 @@ fn decimal_256_to_128(
             .enumerate()
             .map(|(row, x)| {
                 let x = x * i128::one();
+                let mut round_val = None;
+                if ctx.func_ctx.rounding_mode {
+                    // Checking whether numbers need to be added or subtracted to calculate rounding
+                    if let Some(r) = x.checked_rem(i256::e(scale_diff)) {
+                        if let Some(m) = r.checked_div(i256::e(scale_diff - 1)) {
+                            if m >= i256::from_i64(5i64) {
+                                round_val = Some(i256::one());
+                            } else if m <= i256::from_i64(-5i64) {
+                                round_val = Some(i256::minus_one());
+                            }
+                        }
+                    }
+                }
+                let y = match x.checked_div(factor) {
+                    Some(x) => {
+                        if let Some(val) = round_val {
+                            x.checked_add(val)
+                        } else {
+                            Some(x)
+                        }
+                    }
+                    None => None,
+                };
 
-                match x.checked_div(factor) {
+                match y {
                     Some(y) if (y <= max && y >= min) && (y != 0 || x / source_factor == 0) => {
                         *y.low()
                     }
@@ -1349,7 +1380,8 @@ macro_rules! m_decimal_to_decimal {
             }
         } else {
             let values: Vec<_> = if $from_size.scale > $dest_size.scale {
-                let factor = <$dest_type_name>::e(($from_size.scale - $dest_size.scale) as u32);
+                let scale_diff = ($from_size.scale - $dest_size.scale) as u32;
+                let factor = <$dest_type_name>::e(scale_diff);
                 let max = <$dest_type_name>::max_for_precision($dest_size.precision);
                 let min = <$dest_type_name>::min_for_precision($dest_size.precision);
 
@@ -1359,8 +1391,32 @@ macro_rules! m_decimal_to_decimal {
                     .enumerate()
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
-
-                        match x.checked_div(factor) {
+                        let mut round_val = None;
+                        if $ctx.func_ctx.rounding_mode {
+                            // Checking whether numbers need to be added or subtracted to calculate rounding
+                            if let Some(r) = x.checked_rem(<$dest_type_name>::e(scale_diff)) {
+                                if let Some(m) =
+                                    r.checked_div(<$dest_type_name>::e(scale_diff - 1))
+                                {
+                                    if m >= <$dest_type_name>::from_i64(5i64) {
+                                        round_val = Some(<$dest_type_name>::one());
+                                    } else if m <= <$dest_type_name>::from_i64(-5i64) {
+                                        round_val = Some(<$dest_type_name>::minus_one());
+                                    }
+                                }
+                            }
+                        }
+                        let y = match x.checked_div(factor) {
+                            Some(x) => {
+                                if let Some(val) = round_val {
+                                    x.checked_add(val)
+                                } else {
+                                    Some(x)
+                                }
+                            }
+                            None => None,
+                        };
+                        match y {
                             Some(y)
                                 if y <= max && y >= min && (y != 0 || x / source_factor == 0) =>
                             {
@@ -1566,8 +1622,7 @@ fn decimal_to_int<T: Number>(
             let mut values = Vec::with_capacity(ctx.num_rows);
 
             for (i, x) in buffer.iter().enumerate() {
-                let x = x.to_int(from_size.scale);
-                match x {
+                match x.to_int(from_size.scale) {
                     Some(x) => values.push(x),
                     None => {
                         ctx.set_error(i, "decimal cast to int overflow");
@@ -1584,8 +1639,7 @@ fn decimal_to_int<T: Number>(
             let mut values = Vec::with_capacity(ctx.num_rows);
 
             for (i, x) in buffer.iter().enumerate() {
-                let x = x.to_int(from_size.scale);
-                match x {
+                match x.to_int(from_size.scale) {
                     Some(x) => values.push(x),
                     None => {
                         ctx.set_error(i, "decimal cast to int overflow");

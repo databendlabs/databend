@@ -271,6 +271,7 @@ pub trait Decimal:
     fn checked_sub(self, rhs: Self) -> Option<Self>;
     fn checked_div(self, rhs: Self) -> Option<Self>;
     fn checked_mul(self, rhs: Self) -> Option<Self>;
+    fn checked_rem(self, rhs: Self) -> Option<Self>;
 
     fn min_for_precision(precision: u8) -> Self;
     fn max_for_precision(precision: u8) -> Self;
@@ -357,6 +358,10 @@ impl Decimal for i128 {
 
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
+    }
+
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -533,6 +538,10 @@ impl Decimal for i256 {
 
     fn checked_mul(self, rhs: Self) -> Option<Self> {
         self.checked_mul(rhs)
+    }
+
+    fn checked_rem(self, rhs: Self) -> Option<Self> {
+        self.checked_rem(rhs)
     }
 
     fn min_for_precision(to_precision: u8) -> Self {

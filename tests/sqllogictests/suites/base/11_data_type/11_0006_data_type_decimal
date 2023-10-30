@@ -1003,3 +1003,48 @@ insert into test_decimal_insert values(10.9);
 
 statement ok
 drop table test_decimal_insert
+
+# for issue #13453 https://github.com/datafuselabs/databend/issues/13453
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t (a string, b float, c decimal(20, 10), d decimal(70, 10))
+
+statement ok
+insert into t values ('1.234', 1.234, 1.234, 1.234), ('1.456', 1.456, 1.456, 1.456), ('-1.234', -1.234, -1.234, -1.234), ('-1.456', -1.456, -1.456, -1.456)
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+query TT
+select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0))
+----
+0 0
+
+query TTT
+select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t
+----
+1.23 1.23 1.23 1.23
+1.45 1.45 1.45 1.45
+-1.23 -1.23 -1.23 -1.23
+-1.45 -1.45 -1.45 -1.45
+
+set numeric_cast_option = 'rounding';
+
+query TT
+select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0))
+----
+1 1
+
+query TTT
+select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t
+----
+1.23 1.23 1.23 1.23
+1.46 1.46 1.46 1.46
+-1.23 -1.23 -1.23 -1.23
+-1.46 -1.46 -1.46 -1.46
+
+statement ok
+drop table t

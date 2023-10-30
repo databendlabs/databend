@@ -452,6 +452,12 @@ impl DefaultSettings {
                         possible_values: None,
                         display_in_show_settings: true,
                 }),
+                ("numeric_cast_option", DefaultSettingValue {
+                    value: UserSettingValue::String("rounding".to_string()),
+                    desc: "Set numeric cast mode as \"rounding\" or \"truncating\".",
+                    possible_values: Some(vec!["rounding", "truncating"]),
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
