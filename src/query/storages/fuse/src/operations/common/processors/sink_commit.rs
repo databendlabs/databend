@@ -294,7 +294,7 @@ where F: SnapshotGenerator + Send + 'static
                     self.ctx.clone(),
                     self.table.get_table_info().clone(),
                 );
-                match table_lock.try_lock().await {
+                match table_lock.try_lock(self.ctx.clone()).await {
                     Ok(guard) => {
                         self.lock_guard = guard;
                         self.state = State::FillDefault;

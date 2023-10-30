@@ -74,16 +74,19 @@ impl LockManager {
 
     pub fn create_table_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> TableLock {
         let lock_mgr = LockManager::instance();
-        TableLock::create(ctx, lock_mgr, table_info)
+        let node = ctx.get_cluster().local_id.clone();
+        let session_id = ctx.get_current_session_id();
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs().unwrap_or(3);
+        TableLock::create(lock_mgr, table_info, node, session_id, expire_secs)
     }
 
     #[async_backtrace::framed]
     pub async fn try_lock<T: LockApi + ?Sized>(
         self: &Arc<Self>,
+        ctx: Arc<dyn TableContext>,
         lock: &T,
-        lock_acquire_timeout: u64,
     ) -> Result<Option<LockGuard>> {
-        let catalog = lock.get_catalog().await?;
+        let catalog = ctx.get_catalog(lock.catalog()).await?;
 
         // get a new table lock revision.
         let res = catalog
@@ -99,7 +102,8 @@ impl LockManager {
         self.insert_lock(revision, lock_holder);
         let guard = LockGuard::new(self.clone(), revision);
 
-        let duration = Duration::from_secs(lock_acquire_timeout);
+        let acquire_lock_timeout = ctx.get_settings().get_acquire_lock_timeout()?;
+        let duration = Duration::from_secs(acquire_lock_timeout);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let list_table_lock_req = lock.list_table_lock_req();
         let delete_table_lock_req = lock.delete_table_lock_req(revision);

@@ -21,10 +21,13 @@ use common_exception::Result;
 use common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
+use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
 pub trait LockApi: Sync + Send {
     fn level(&self) -> LockLevel;
+
+    fn catalog(&self) -> &str;
 
     fn get_expire_secs(&self) -> u64;
 
@@ -40,12 +43,14 @@ pub trait LockApi: Sync + Send {
 
     fn list_table_lock_req(&self) -> Box<dyn LockRequest>;
 
-    async fn try_lock(&self) -> Result<Option<LockGuard>>;
+    async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
 
     /// Return true if the table is locked.
-    async fn check_lock(&self) -> Result<bool>;
-
-    async fn get_catalog(&self) -> Result<Arc<dyn Catalog>>;
+    async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
+        let list_table_lock_req = self.list_table_lock_req();
+        let reply = catalog.list_table_lock_revs(list_table_lock_req).await?;
+        Ok(!reply.is_empty())
+    }
 }
 
 pub enum LockLevel {

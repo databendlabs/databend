@@ -25,7 +25,6 @@ const METRIC_ACQUIRED_TABLE_LOCK_NUMS: &str = "acquired_table_lock_nums";
 lazy_static! {
     static ref CREATED_TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
         register_counter_family(METRIC_CREATED_TABLE_LOCK_NUMS);
-    
     static ref ACQUIRED_TABLE_LOCK_NUMS: Family<VecLabels, Counter> =
         register_counter_family(METRIC_ACQUIRED_TABLE_LOCK_NUMS);
 }
