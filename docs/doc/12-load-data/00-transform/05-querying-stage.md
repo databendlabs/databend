@@ -180,25 +180,35 @@ databend-toronto/
 To query data from all Parquet files in the folder, you can use the PATTERN option:
 
 ```sql
-SELECT * FROM 's3://databend-toronto' 
-connection => (
- access_key_id = '<your-access-key-id>', 
- secret_access_key = '<your-secret-access-key>',
- endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region = 'us-east-2'
-)
- pattern => '.*parquet'; 
+SELECT
+  *
+FROM
+  's3://databend-toronto' (
+    connection => (
+      access_key_id = '<your-access-key-id>',
+      secret_access_key = '<your-secret_access_key>',
+      endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+      region = 'us-east-2'
+    ) pattern => '.*parquet'
+  );
 ```
 
 To query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet" in the folder, you can use the FILES option:
 
 ```sql
-SELECT * FROM 's3://databend-toronto' 
-connection => (
- access_key_id = '<your-access-key-id>', 
- secret_access_key = '<your-secret-access-key>',
- endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region = 'us-east-2'
-)
- files => ('books-2023.parquet','books-2022.parquet','books-2021.parquet'); 
+SELECT
+  *
+FROM
+  's3://databend-toronto' (
+    connection => (
+      access_key_id = '<your-access-key-id>',
+      secret_access_key = '<your-secret_access_key>',
+      endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+      region = 'us-east-2'
+    ) files => (
+      'books-2023.parquet',
+      'books-2022.parquet',
+      'books-2021.parquet'
+    )
+  );
 ```
