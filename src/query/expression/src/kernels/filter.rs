@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::utils::BitChunkIterExact;
 use common_arrow::arrow::bitmap::utils::BitChunksExact;
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::Result;
 
+use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
@@ -115,11 +117,10 @@ impl Column {
                     ))
                 }
             }),
-            Column::Boolean(bm) => Self::filter_scalar_types::<BooleanType>(
-                bm,
-                MutableBitmap::with_capacity(length),
-                filter,
-            ),
+            Column::Boolean(bm) => {
+                let column = Self::filter_boolean_types(bm, filter);
+                Column::Boolean(column)
+            }
             Column::String(column) => {
                 let column = Self::filter_string_scalars(column, filter);
                 Column::String(column)
@@ -164,15 +165,8 @@ impl Column {
 
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
-                let validity = Self::filter_scalar_types::<BooleanType>(
-                    &c.validity,
-                    MutableBitmap::with_capacity(length),
-                    filter,
-                );
-                Column::Nullable(Box::new(NullableColumn {
-                    column,
-                    validity: BooleanType::try_downcast_column(&validity).unwrap(),
-                }))
+                let validity = Self::filter_boolean_types(&c.validity, filter);
+                Column::Nullable(Box::new(NullableColumn { column, validity }))
             }
             Column::Tuple(fields) => {
                 let fields = fields.iter().map(|c| c.filter(filter)).collect();
@@ -238,12 +232,14 @@ impl Column {
         T::upcast_column(T::build_column(builder))
     }
 
-    // low-level API using unsafe to improve performance
+    // low-level API using unsafe to improve performance.
     fn filter_primitive_types<T: Copy>(values: &Buffer<T>, filter: &Bitmap) -> Buffer<T> {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
+        } else if num_rows == 0 {
+            return vec![].into();
         }
 
         let mut builder: Vec<T> = Vec::with_capacity(num_rows);
@@ -303,12 +299,14 @@ impl Column {
         builder.into()
     }
 
-    // low-level API using unsafe to improve performance
+    // low-level API using unsafe to improve performance.
     fn filter_string_scalars(values: &StringColumn, filter: &Bitmap) -> StringColumn {
         debug_assert_eq!(values.len(), filter.len());
         let num_rows = filter.len() - filter.unset_bits();
         if num_rows == values.len() {
             return values.clone();
+        } else if num_rows == 0 {
+            return StringColumn::new(vec![].into(), vec![].into());
         }
 
         // Each element of `items` is (string pointer(u64), string length).
@@ -423,5 +421,218 @@ impl Column {
         }
 
         StringColumn::new(data.into(), offsets.into())
+    }
+
+    unsafe fn copy_continuous_boolean(
+        continuous_bytes: usize,
+        builder_ptr: *mut u8,
+        builder_len: usize,
+    ) {
+        let byte = u8::MAX;
+        // Using the doubling method to copy memory.
+        let max_segment = 1 << (31 - (continuous_bytes as u32).leading_zeros());
+        let base_ptr = builder_ptr.add(builder_len);
+        let mut ptr = base_ptr;
+        store_advance_aligned(byte, &mut ptr);
+        let mut cur_segment = 1;
+        while cur_segment < max_segment {
+            copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
+            cur_segment <<= 1;
+        }
+        // Copy the remaining memory directly.
+        let remain = continuous_bytes - max_segment;
+        if remain > 0 {
+            copy_advance_aligned(base_ptr, &mut ptr, remain);
+        }
+    }
+
+    // low-level API using unsafe to improve performance.
+    fn filter_boolean_types(bitmap: &Bitmap, filter: &Bitmap) -> Bitmap {
+        debug_assert_eq!(bitmap.len(), filter.len());
+        let num_rows = filter.len() - filter.unset_bits();
+        if num_rows == bitmap.len() {
+            return bitmap.clone();
+        } else if num_rows == 0 {
+            return Bitmap::new();
+        }
+        // Fast path.
+        if num_rows <= bitmap.len()
+            && (bitmap.unset_bits() == 0 || bitmap.unset_bits() == bitmap.len())
+        {
+            let mut bitmap = bitmap.clone();
+            bitmap.slice(0, num_rows);
+            return bitmap;
+        }
+
+        let capacity = num_rows.saturating_add(7) / 8;
+        let mut builder: Vec<u8> = Vec::with_capacity(capacity);
+        let builder_ptr = builder.as_mut_ptr();
+        let mut builder_len = 0;
+        let mut unset_bits = 0;
+        let mut buf = 0;
+        let mut count = 0;
+        let mut bitmap_idx = 0;
+
+        let (mut slice, offset, mut length) = filter.as_slice();
+        unsafe {
+            if offset > 0 {
+                let mut mask = slice[0];
+                while mask != 0 {
+                    let n = mask.trailing_zeros() as usize;
+                    if n >= offset {
+                        if bitmap.get_bit_unchecked(n - offset) {
+                            buf |= BIT_MASK[count % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        count += 1;
+                    }
+                    mask = mask & (mask - 1);
+                }
+                length -= 8 - offset;
+                slice = &slice[1..];
+                bitmap_idx += 8 - offset;
+            }
+
+            const CHUNK_SIZE: usize = 64;
+            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut continuous_selected = 0;
+            for mut mask in mask_chunks.by_ref() {
+                if mask == u64::MAX {
+                    continuous_selected += CHUNK_SIZE;
+                } else {
+                    if continuous_selected > 0 {
+                        let value = bitmap.get_bit_unchecked(bitmap_idx);
+                        bitmap_idx += continuous_selected;
+
+                        if count % 8 != 0 {
+                            while continuous_selected > 0 {
+                                if value {
+                                    buf |= BIT_MASK[count % 8];
+                                } else {
+                                    unset_bits += 1;
+                                }
+                                count += 1;
+                                continuous_selected -= 1;
+                                if count % 8 == 0 {
+                                    *builder.get_unchecked_mut(builder_len) = buf;
+                                    builder_len += 1;
+                                    buf = 0;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if continuous_selected > 0 {
+                            let continuous_bytes = continuous_selected / 8;
+                            if value && continuous_bytes > 0 {
+                                Self::copy_continuous_boolean(
+                                    continuous_bytes,
+                                    builder_ptr,
+                                    builder_len,
+                                );
+                            }
+                            builder_len += continuous_bytes;
+                            let mut remainder = continuous_selected % 8;
+                            while remainder > 0 {
+                                if value {
+                                    buf |= BIT_MASK[count % 8];
+                                } else {
+                                    unset_bits += 1;
+                                }
+                                count += 1;
+                                remainder -= 1;
+                            }
+                            continuous_selected = 0;
+                        }
+                    }
+                    while mask != 0 {
+                        let n = mask.trailing_zeros() as usize;
+                        if bitmap.get_bit_unchecked(bitmap_idx + n) {
+                            buf |= BIT_MASK[count % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        count += 1;
+                        if count % 8 == 0 {
+                            *builder.get_unchecked_mut(builder_len) = buf;
+                            builder_len += 1;
+                            buf = 0;
+                        }
+                        mask = mask & (mask - 1);
+                    }
+                    bitmap_idx += CHUNK_SIZE;
+                }
+            }
+
+            if continuous_selected > 0 {
+                let value = bitmap.get_bit_unchecked(bitmap_idx);
+                bitmap_idx += continuous_selected;
+
+                if count % 8 != 0 {
+                    while continuous_selected > 0 {
+                        if value {
+                            buf |= BIT_MASK[count % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        count += 1;
+                        continuous_selected -= 1;
+                        if count % 8 == 0 {
+                            *builder.get_unchecked_mut(builder_len) = buf;
+                            builder_len += 1;
+                            buf = 0;
+                            break;
+                        }
+                    }
+                }
+
+                if continuous_selected > 0 {
+                    let continuous_bytes = continuous_selected / 8;
+                    if value && continuous_bytes > 0 {
+                        Self::copy_continuous_boolean(continuous_bytes, builder_ptr, builder_len);
+                    }
+                    builder_len += continuous_bytes;
+                    let mut remainder = continuous_selected % 8;
+                    while remainder > 0 {
+                        if value {
+                            buf |= BIT_MASK[count % 8];
+                        } else {
+                            unset_bits += 1;
+                        }
+                        count += 1;
+                        remainder -= 1;
+                    }
+                }
+            }
+
+            for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
+                if is_selected {
+                    if bitmap.get_bit_unchecked(bitmap_idx + i) {
+                        buf |= BIT_MASK[count % 8];
+                    } else {
+                        unset_bits += 1;
+                    }
+                    count += 1;
+                    if count % 8 == 0 {
+                        *builder.get_unchecked_mut(builder_len) = buf;
+                        builder_len += 1;
+                        buf = 0;
+                    }
+                }
+            }
+
+            if count % 8 != 0 {
+                *builder.get_unchecked_mut(builder_len) = buf;
+                builder_len += 1;
+            }
+        }
+
+        unsafe {
+            builder.set_len(builder_len);
+            Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
+                .ok()
+                .unwrap()
+        }
     }
 }
