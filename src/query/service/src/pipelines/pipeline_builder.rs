@@ -1032,10 +1032,11 @@ impl PipelineBuilder {
         for idx in 0..output_lens {
             vec.push(idx + 1);
         }
+        ranges.push(vec);
         if *distributed {
             ranges.push(vec![self.main_pipeline.output_len() - 1]);
         }
-        ranges.push(vec);
+
         self.main_pipeline.resize_partial_one(ranges)?;
 
         let pipe_items = if !distributed {
