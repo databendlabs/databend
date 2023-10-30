@@ -219,10 +219,34 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     )
     .await?;
 
-    // append some data again
+    // append some data and do vacuum
+    // it will not vacuum any files, cause orphan file has the same table version with last snapshot
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
+    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_orphan_files step 2: verify files",
+        retention_time,
+        3,
+        4,
+        4,
+    )
+    .await?;
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+
+    // save the last snapshot into orphan_files
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    orphan_files.push(fuse_table.snapshot_loc().await?.unwrap());
 
     // sleep and append some data again
+    // this time will vacuum all the orphan files and first snapshot file
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
@@ -237,7 +261,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
         purge_files,
         "test_fuse_vacuum_orphan_files step 2: verify files",
         retention_time,
-        2,
+        1,
         3,
         3,
     )
@@ -261,7 +285,7 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
     );
 
     // make some purgable data
-    let (purgeable_files, truncated_snapshot_loc) = {
+    let (purgeable_files, _truncated_snapshot_loc) = {
         let number_of_block = 1;
         append_sample_data(number_of_block, &fixture).await?;
 
@@ -291,8 +315,9 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
 
     table_ctx.get_settings().set_retention_period(0)?;
 
-    // step 1. vacuum with now - 5s, it will not delete any files, cause cannot file root gc snapshot
-    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(5);
+    // step 1. sleep 2s, and vacuum with now - 2s, it will not delete any files cause cannot file root gc snapshot
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
     check_vacuum(
         &fixture,
         HashSet::new(),
@@ -304,53 +329,7 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
     )
     .await?;
 
-    // step 2. sleep 2s, and vacuum with now - 2s, it will not delete any files too
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-    check_vacuum(
-        &fixture,
-        HashSet::new(),
-        "test_fuse_vacuum_truncate_files step 2: verify files",
-        retention_time,
-        2,
-        1,
-        1,
-    )
-    .await?;
-
-    // step 3: sleep 2s, and vacuum with now - 2s, append some data,
-    // it only vacuum the truncated snapshot,
-    // and the root gc snapshot contains no referenced files, so no block\index files will be purged.
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    let number_of_block = 1;
-    append_sample_data(number_of_block, &fixture).await?;
-    let data_qry = format!(
-        "select * from {}.{} order by id",
-        fixture.default_db_name(),
-        fixture.default_table_name()
-    );
-    let orig_data_blocks_1: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
-        .await?
-        .try_collect()
-        .await?;
-    assert!(!orig_data_blocks_1.is_empty());
-    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-    let mut purge_files = HashSet::new();
-    purge_files.insert(truncated_snapshot_loc.clone());
-    check_vacuum(
-        &fixture,
-        purge_files.clone(),
-        "test_fuse_vacuum_truncate_files step 3: verify files",
-        retention_time,
-        2,
-        2,
-        2,
-    )
-    .await?;
-    check_query_data(&fixture, &data_qry, &orig_data_blocks_1).await?;
-
-    // step 4: sleep 2s, and vacuum with now - 2s, append some data, it will vacuum all the truncated files
-    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    // step 2: append some data, it will vacuum all the truncated files
     let number_of_block = 1;
     append_sample_data(number_of_block, &fixture).await?;
     let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
@@ -359,20 +338,14 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
         .await?;
     assert!(!orig_data_blocks.is_empty());
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-    let mut purge_files = HashSet::new();
-    for purgeable_file in purgeable_files {
-        if purgeable_file != truncated_snapshot_loc {
-            purge_files.insert(purgeable_file.clone());
-        }
-    }
     check_vacuum(
         &fixture,
-        purge_files.clone(),
-        "test_fuse_vacuum_truncate_files step 4: verify files",
+        purgeable_files,
+        "test_fuse_vacuum_truncate_files step 2: verify files",
         retention_time,
-        2,
-        2,
-        2,
+        1,
+        1,
+        1,
     )
     .await?;
     check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;

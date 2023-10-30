@@ -171,10 +171,9 @@ impl VacuumOperator {
                 break;
             };
 
-            let snapshot_file = snapshot_file.to_string();
-            if prev_snapshot_location != snapshot_file {
+            if &prev_snapshot_location != snapshot_file {
                 status = format!(
-                    "do_vacuum with table {}: last snapshot {:?} 's prev snapshot location is not {:?}",
+                    "do_vacuum with table {}: last snapshot {:?} 's prev snapshot location is not {:?}, it means that it has not been success committed",
                     self.fuse_table.get_table_info().name,
                     last_snapshot_location,
                     snapshot_file
@@ -182,11 +181,11 @@ impl VacuumOperator {
                 break;
             }
 
-            // retturn root gc snapshot that:
+            // return root gc snapshot that:
             //  1. with timestamp in file name
-            //  2. first snapshot that timestamp < retention(it'next snapshot timestamp >= retention.)
+            //  2. first snapshot that timestamp >= retention(it'prev snapshot timestamp < retention.)
             //  3. it has been commit success
-            return Ok(Some((i, snapshot_file)));
+            return Ok(Some((i - 1, last_snapshot_location.to_string())));
         }
 
         self.log_status(status);
@@ -200,7 +199,9 @@ impl VacuumOperator {
         root_gc_snapshot_index: usize,
     ) -> TableVersionSet {
         let mut table_version_set = HashSet::new();
-        for snapshot_file_with_time in snapshot_files_with_time[0..root_gc_snapshot_index].iter() {
+        for snapshot_file_with_time in
+            snapshot_files_with_time[0..root_gc_snapshot_index + 1].iter()
+        {
             let snapshot_file = &snapshot_file_with_time.1;
             // all snapshot file commit after root_gc_snapshot will with table version, so safe to unwrap()
             let table_version =
@@ -242,19 +243,17 @@ impl VacuumOperator {
     #[async_backtrace::framed]
     async fn batch_gc_files(
         &self,
-        batch_purge_files: &mut Vec<String>,
+        batch_purge_files: &[String],
         purge_files: &mut Option<&mut Vec<String>>,
     ) -> Result<bool> {
         if let Some(purge_files) = purge_files {
             purge_files.extend(batch_purge_files.to_vec());
-            batch_purge_files.clear();
             Ok(purge_files.len() >= DRY_RUN_LIMIT)
         } else {
             let files: HashSet<String> = batch_purge_files.iter().cloned().collect();
             self.fuse_table
                 .try_purge_location_files(self.ctx.clone(), files)
                 .await?;
-            batch_purge_files.clear();
             Ok(false)
         }
     }
@@ -267,77 +266,78 @@ impl VacuumOperator {
         referenced_files: &HashSet<String>,
         purge_files: &mut Option<&mut Vec<String>>,
     ) -> Result<bool> {
-        if let Some(referenced_file) = referenced_files.iter().next().cloned() {
-            if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&referenced_file) {
-                let operator = self.fuse_table.get_operator();
-                let mut ds = operator.lister_with(&prefix).metakey(Metakey::Mode).await?;
-                let keep_snapshot_table_versions = &context.keep_snapshot_table_versions;
-                let mut batch_purge_files = Vec::with_capacity(BATCH_PURGE_FILE_NUM);
-                let mut count = 0;
-                while let Some(de) = ds.try_next().await? {
-                    let meta = de.metadata();
-                    match meta.mode() {
-                        EntryMode::FILE => {
-                            let location = de.path().to_string();
+        let referenced_file = if let Some(referenced_file) = referenced_files.iter().next().cloned()
+        {
+            referenced_file
+        } else {
+            return Ok(false);
+        };
 
-                            let is_table_version_in_reference =
-                                match TableMetaLocationGenerator::location_table_version(&location)
-                                {
-                                    Some(table_version) => {
-                                        keep_snapshot_table_versions.contains(&table_version)
-                                    }
-                                    None => false,
-                                };
+        let prefix = if let Some(prefix) = SnapshotsIO::get_s3_prefix_from_file(&referenced_file) {
+            prefix
+        } else {
+            return Ok(false);
+        };
 
-                            if !is_table_version_in_reference
-                                && !referenced_files.contains(&location)
-                            {
-                                batch_purge_files.push(location);
-                                if batch_purge_files.len() >= BATCH_PURGE_FILE_NUM {
-                                    count += batch_purge_files.len();
-                                    let end = self
-                                        .batch_gc_files(&mut batch_purge_files, purge_files)
-                                        .await?;
-                                    let status = format!(
-                                        "do_vacuum with table {}: do_gc_files_in_dir in prefix {}, count:{},cos:{} sec, end: {}",
-                                        self.fuse_table.get_table_info().name,
-                                        prefix,
-                                        count,
-                                        self.start.elapsed().as_secs(),
-                                        end
-                                    );
-                                    self.log_status(status);
-                                    if end {
-                                        return Ok(end);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {
-                            warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
-                            continue;
-                        }
-                    }
+        let operator = self.fuse_table.get_operator();
+        let mut ds = operator.lister_with(&prefix).metakey(Metakey::Mode).await?;
+        let keep_snapshot_table_versions = &context.keep_snapshot_table_versions;
+        let mut batch_purge_files = Vec::with_capacity(BATCH_PURGE_FILE_NUM);
+        let mut count = 0;
+        while let Some(de) = ds.try_next().await? {
+            let meta = de.metadata();
+            if meta.mode() != EntryMode::FILE {
+                warn!("found not snapshot file in {:}, found: {:?}", prefix, de);
+                continue;
+            }
+            let location = de.path().to_string();
+
+            let is_table_version_in_reference =
+                match TableMetaLocationGenerator::location_table_version(&location) {
+                    Some(table_version) => keep_snapshot_table_versions.contains(&table_version),
+                    None => false,
+                };
+
+            // ignore file which is referenced
+            if is_table_version_in_reference || referenced_files.contains(&location) {
+                continue;
+            }
+
+            // batch gc files
+            batch_purge_files.push(location);
+            if batch_purge_files.len() >= BATCH_PURGE_FILE_NUM {
+                count += batch_purge_files.len();
+                let end = self.batch_gc_files(&batch_purge_files, purge_files).await?;
+                batch_purge_files.clear();
+                let status = format!(
+                    "do_vacuum with table {}: do_gc_files_in_dir in prefix {}, count:{},cos:{} sec, end: {}",
+                    self.fuse_table.get_table_info().name,
+                    prefix,
+                    count,
+                    self.start.elapsed().as_secs(),
+                    end
+                );
+                self.log_status(status);
+                if end {
+                    return Ok(end);
                 }
+            }
+        }
 
-                if !batch_purge_files.is_empty() {
-                    count += batch_purge_files.len();
-                    let end = self
-                        .batch_gc_files(&mut batch_purge_files, purge_files)
-                        .await?;
-                    let status = format!(
-                        "do_vacuum with table {}: do_gc_files_in_dir in prefix {}, count:{},cos:{} sec, end: {}",
-                        self.fuse_table.get_table_info().name,
-                        prefix,
-                        count,
-                        self.start.elapsed().as_secs(),
-                        end
-                    );
-                    self.log_status(status);
-                    if end {
-                        return Ok(end);
-                    }
-                }
+        if !batch_purge_files.is_empty() {
+            count += batch_purge_files.len();
+            let end = self.batch_gc_files(&batch_purge_files, purge_files).await?;
+            let status = format!(
+                "do_vacuum with table {}: do_gc_files_in_dir in prefix {}, count:{},cos:{} sec, end: {}",
+                self.fuse_table.get_table_info().name,
+                prefix,
+                count,
+                self.start.elapsed().as_secs(),
+                end
+            );
+            self.log_status(status);
+            if end {
+                return Ok(end);
             }
         }
 
@@ -382,6 +382,10 @@ impl VacuumOperator {
             {
                 return Ok(());
             }
+        }
+
+        if purge_files.is_some() {
+            return Ok(());
         }
 
         // purge old of retention time snapshot files
