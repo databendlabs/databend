@@ -153,7 +153,8 @@ FROM
       secret_access_key = '<your-secret-access-key>',
       endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
       region = 'us-east-2'
-    ) files => ('books.parquet')
+    ) 
+    files => ('books.parquet')
   );  
 ```
 </TabItem>
@@ -209,7 +210,8 @@ FROM
       secret_access_key = '<your-secret_access_key>',
       endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
       region = 'us-east-2'
-    ) files => (
+    ) 
+    files => (
       'books-2023.parquet',
       'books-2022.parquet',
       'books-2021.parquet'
