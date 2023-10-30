@@ -41,8 +41,8 @@ common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-stage = { path = "../storages/stage" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
-data-mask-feature = { path = "../ee-features/data-mask" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
+data-mask-feature = { path = "../ee_features/data_mask" }
+storages-common-table-meta = { path = "../storages/common/table_meta" }
 
 # GitHub dependencies
 

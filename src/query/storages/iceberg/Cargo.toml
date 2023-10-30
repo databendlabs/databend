@@ -21,7 +21,7 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
 common-storages-parquet = { path = "../parquet" }
 storages-common-pruner = { path = "../common/pruner" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
 arrow-schema = { workspace = true }
 async-backtrace = { workspace = true }

@@ -30,27 +30,29 @@
 </div>
 </div>
 
+<img src="https://user-images.githubusercontent.com/172204/219559279-ab7a11a4-9437-4a0a-85e8-cedf9ba0e24b.svg" alt="databend" />
+
 ## 🐋 Introduction
 
-**Databend** is an open-source, Elastic, Workload-Aware cloud data warehouse engineered for blazing-speed data analytics at a massive scale. Crafted with Rust, it's your most efficient alternative to [Snowflake](https://snowflake.com). 
+**Databend** is an open-source, elastic, and workload-aware cloud data warehouse built in Rust, offering a cost-effective [alternative to Snowflake](https://github.com/datafuselabs/databend/issues/13059). It's designed for complex analysis of the world's largest datasets.
 
 ## 🚀 Why Databend
 
-- **Cloud-Friendly**: Works with cloud storage like AWS S3, Azure Blob, Google Cloud Storage, Alibaba Cloud OSS, Cloudflare R2, Wasabi or MinIO, etc.
+- **Cloud-Friendly**: Seamlessly integrates with various cloud storages like AWS S3, Azure Blob, Google Cloud, and more.
 
-- **High Performance**: Rust-built with SIMD and vectorized processing for top-speed analytics. [ClickBench](https://databend.rs/blog/clickbench-databend-top).
+- **High Performance**: Built in Rust, utilizing SIMD and vectorized processing for rapid analytics. [See ClickBench](https://databend.rs/blog/clickbench-databend-top).
 
-- **Cost-Efficient Elasticity**: Unique architecture allows for separate scaling of storage and computation, optimizing both costs and performance.
+- **Cost-Efficient Elasticity**: Innovative design for separate scaling of storage and computation, optimizing both costs and performance.
 
 - **Easy Data Management**: Integrated data preprocessing during ingestion eliminates the need for external ETL tools.
 
-- **Time-Travel Features**: Provides Git-like MVCC storage, enabling easy data querying, cloning, and reverting from any point in time.
+- **Data Version Control**: Offers Git-like multi-version storage, enabling easy data querying, cloning, and reverting from any point in time.
 
 - **Rich Data Support**: Handles diverse data formats and types, including JSON, CSV, Parquet, ARRAY, TUPLE, MAP, and JSON.
 
 - **AI-Enhanced Analytics**: Offers advanced analytics capabilities with integrated [AI Functions](https://databend.rs/doc/sql-functions/ai-functions/).
 
-- **Community-Driven**: Benefit from a growing community, ensuring transparency, frequent updates, and an open platform for all your cloud analytics requirements.
+- **Community-Driven**: Benefit from a friendly, growing community that offers an easy-to-use platform for all your cloud analytics.
 
 ## 📐 Architecture
 

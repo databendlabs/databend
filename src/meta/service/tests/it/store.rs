@@ -136,7 +136,7 @@ async fn test_meta_store_build_snapshot() -> anyhow::Result<()> {
     let (logs, want) = snapshot_logs();
 
     sto.log.write().await.append(logs.clone()).await?;
-    sto.state_machine.write().await.apply_entries(&logs).await;
+    sto.state_machine.write().await.apply_entries(&logs).await?;
 
     let curr_snap = sto.build_snapshot().await?;
     assert_eq!(Some(new_log_id(1, 0, 9)), curr_snap.meta.last_log_id);
@@ -185,7 +185,7 @@ async fn test_meta_store_current_snapshot() -> anyhow::Result<()> {
     sto.log.write().await.append(logs.clone()).await?;
     {
         let mut sm = sto.state_machine.write().await;
-        sm.apply_entries(&logs).await;
+        sm.apply_entries(&logs).await?;
     }
 
     sto.build_snapshot().await?;
@@ -228,7 +228,7 @@ async fn test_meta_store_install_snapshot() -> anyhow::Result<()> {
         info!("--- feed logs and state machine");
 
         sto.log.write().await.append(logs.clone()).await?;
-        sto.state_machine.write().await.apply_entries(&logs).await;
+        sto.state_machine.write().await.apply_entries(&logs).await?;
 
         snap = sto.build_snapshot().await?;
     }
