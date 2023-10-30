@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
@@ -446,6 +447,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
             .ok();
 
         let table = if let Some(table) = &tbl {
+            // check mutability
+            table.check_mutable()?;
             table
         } else {
             return Ok(PipelineBuildResult::create());

@@ -1,0 +1,28 @@
+[package]
+name = "common-cloud-control"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[lib]
+doctest = false
+test = false
+
+[dependencies]
+async-backtrace = { workspace = true }
+chrono = { workspace = true }
+common-base = { path = "../base" }
+common-exception = { path = "../exception" }
+prost = { workspace = true }
+tonic = { workspace = true }
+
+[build-dependencies]
+lenient_semver = "0.4.2"
+prost-build = { workspace = true }
+semver = { workspace = true }
+tonic-build = { workspace = true }
+
+[dev-dependencies]
+tower = { version = "0.4" }

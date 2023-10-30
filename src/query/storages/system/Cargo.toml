@@ -18,6 +18,7 @@ enable-histogram-metrics = ["common-metrics/enable-histogram"]
 common-ast = { path = "../../ast" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-cloud-control = { path = "../../../common/cloud_control" }
 common-config = { path = "../../config" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -36,7 +37,7 @@ common-storages-view = { path = "../view" }
 common-users = { path = "../../users" }
 jsonb = { workspace = true }
 storages-common-cache = { path = "../common/cache" }
-storages-common-cache-manager = { path = "../common/cache-manager" }
+storages-common-cache-manager = { path = "../common/cache_manager" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
@@ -44,7 +45,7 @@ chrono = { workspace = true }
 futures = { workspace = true }
 itertools = "0.10.5"
 log = { workspace = true }
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 opendal = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }

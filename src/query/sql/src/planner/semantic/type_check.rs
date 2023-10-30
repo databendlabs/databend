@@ -522,6 +522,17 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
+            Expr::JsonOp {
+                span,
+                op,
+                left,
+                right,
+            } => {
+                let func_name = op.to_func_name();
+                self.resolve_function(*span, func_name.as_str(), vec![], &[left, right])
+                    .await?
+            }
+
             Expr::UnaryOp { span, op, expr, .. } => {
                 self.resolve_unary_op(*span, op, expr.as_ref()).await?
             }

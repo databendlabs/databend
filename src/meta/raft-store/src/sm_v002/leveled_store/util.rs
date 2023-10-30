@@ -13,34 +13,55 @@
 // limitations under the License.
 
 use std::fmt;
+use std::io;
 
+use crate::sm_v002::leveled_store::map_api::MapKV;
+use crate::sm_v002::leveled_store::map_api::MapKey;
 use crate::sm_v002::marked::Marked;
-
-type Tuple<K, V> = (K, Marked<V>);
 
 /// Sort by key and internal_seq.
 /// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
-pub(in crate::sm_v002) fn by_key_seq<K, V>((k1, v1): &Tuple<K, V>, (k2, v2): &Tuple<K, V>) -> bool
-where K: Ord + fmt::Debug {
-    assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
+pub(in crate::sm_v002) fn by_key_seq<K>(
+    r1: &Result<MapKV<K>, io::Error>,
+    r2: &Result<MapKV<K>, io::Error>,
+) -> bool
+where
+    K: MapKey + Ord + fmt::Debug,
+{
+    // TODO test Result
+    match (r1, r2) {
+        (Ok((k1, v1)), Ok((k2, v2))) => {
+            assert_ne!((k1, v1.internal_seq()), (k2, v2.internal_seq()));
 
-    // Put entries with the same key together, smaller internal-seq first
-    // Tombstone is always greater.
-    (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
+            // Put entries with the same key together, smaller internal-seq first
+            // Tombstone is always greater.
+            (k1, v1.internal_seq()) <= (k2, v2.internal_seq())
+        }
+        // If there is an error, just yield them in order.
+        // It's the caller's responsibility to handle the error.
+        _ => true,
+    }
 }
 
-/// Return `true` if `a` should be placed before `b`, e.g., `a` is smaller.
+/// Result type of a key-value pair and io Error used in a map.
+type KVResult<K> = Result<MapKV<K>, io::Error>;
+
+/// Return a Ok(combined) to merge two consecutive values,
+/// otherwise return Err((x,y)) to not to merge.
 #[allow(clippy::type_complexity)]
-pub(in crate::sm_v002) fn choose_greater<K, V>(
-    (k1, v1): Tuple<K, V>,
-    (k2, v2): Tuple<K, V>,
-) -> Result<Tuple<K, V>, (Tuple<K, V>, Tuple<K, V>)>
+pub(in crate::sm_v002) fn choose_greater<K>(
+    r1: KVResult<K>,
+    r2: KVResult<K>,
+) -> Result<KVResult<K>, (KVResult<K>, KVResult<K>)>
 where
-    K: Ord,
+    K: MapKey + Ord,
 {
-    if k1 == k2 {
-        Ok((k1, Marked::max(v1, v2)))
-    } else {
-        Err(((k1, v1), (k2, v2)))
+    // TODO test Result
+    match (r1, r2) {
+        (Ok((k1, v1)), Ok((k2, v2))) if k1 == k2 => Ok(Ok((k1, Marked::max(v1, v2)))),
+        // If there is an error,
+        // or k1 != k2
+        // just yield them without change.
+        (r1, r2) => Err((r1, r2)),
     }
 }

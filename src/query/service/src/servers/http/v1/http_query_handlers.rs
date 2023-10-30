@@ -14,10 +14,10 @@
 
 use common_exception::ErrorCode;
 use common_expression::DataSchemaRef;
-use common_tracing::func_name;
 use highway::HighwayHash;
 use log::error;
 use log::info;
+use minitrace::full_name;
 use minitrace::prelude::*;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
@@ -221,7 +221,7 @@ async fn query_final_handler(
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
     let root = Span::root(
-        func_name!(),
+        full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
 
@@ -254,7 +254,7 @@ async fn query_cancel_handler(
 ) -> impl IntoResponse {
     let trace_id = query_id_to_trace_id(&query_id);
     let root = Span::root(
-        func_name!(),
+        full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
 
@@ -281,7 +281,7 @@ async fn query_state_handler(
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
     let root = Span::root(
-        func_name!(),
+        full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
 
@@ -306,7 +306,7 @@ async fn query_page_handler(
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&query_id);
     let root = Span::root(
-        func_name!(),
+        full_name!(),
         SpanContext::new(trace_id, SpanId(rand::random())),
     );
 
@@ -335,7 +335,7 @@ pub(crate) async fn query_handler(
     Json(req): Json<HttpQueryRequest>,
 ) -> PoemResult<impl IntoResponse> {
     let trace_id = query_id_to_trace_id(&ctx.query_id);
-    let root = Span::root(func_name!(), SpanContext::new(trace_id, SpanId::default()));
+    let root = Span::root(full_name!(), SpanContext::new(trace_id, SpanId::default()));
 
     async {
         info!("new http query request: {:?}", req);

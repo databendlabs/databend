@@ -95,7 +95,7 @@ pub struct Config {
     #[clap(long)]
     pub cmd: Option<String>,
 
-    #[clap(long, short = 'c', default_value_t)]
+    #[clap(long, short = 'c', value_name = "VALUE", default_value_t)]
     pub config_file: String,
 
     // Query engine config.
@@ -247,7 +247,7 @@ impl Config {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    #[clap(long = "storage-type", default_value = "fs")]
+    #[clap(long = "storage-type", value_name = "VALUE", default_value = "fs")]
     #[serde(rename = "type")]
     pub typ: String,
 
@@ -255,7 +255,7 @@ pub struct StorageConfig {
     #[clap(skip)]
     pub storage_type: Option<String>,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     #[serde(rename = "num_cpus")]
     pub storage_num_cpus: u64,
 
@@ -453,12 +453,16 @@ pub struct CatalogsHiveConfig {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct HiveCatalogConfig {
-    #[clap(long = "hive-meta-store-address", default_value_t)]
+    #[clap(
+        long = "hive-meta-store-address",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub address: String,
     /// Deprecated fields, used for catching error, will be removed later.
     pub meta_store_address: Option<String>,
 
-    #[clap(long = "hive-thrift-protocol", default_value_t)]
+    #[clap(long = "hive-thrift-protocol", value_name = "VALUE", default_value_t)]
     pub protocol: String,
 }
 
@@ -553,7 +557,11 @@ impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
 #[serde(default)]
 pub struct FsStorageConfig {
     /// fs storage backend data path
-    #[clap(long = "storage-fs-data-path", default_value = "_data")]
+    #[clap(
+        long = "storage-fs-data-path",
+        value_name = "VALUE",
+        default_value = "_data"
+    )]
     pub data_path: String,
 }
 
@@ -586,20 +594,21 @@ impl TryInto<InnerStorageFsConfig> for FsStorageConfig {
 pub struct GcsStorageConfig {
     #[clap(
         long = "storage-gcs-endpoint-url",
+        value_name = "VALUE",
         default_value = "https://storage.googleapis.com"
     )]
     #[serde(rename = "endpoint_url")]
     pub gcs_endpoint_url: String,
 
-    #[clap(long = "storage-gcs-bucket", default_value_t)]
+    #[clap(long = "storage-gcs-bucket", value_name = "VALUE", default_value_t)]
     #[serde(rename = "bucket")]
     pub gcs_bucket: String,
 
-    #[clap(long = "storage-gcs-root", default_value_t)]
+    #[clap(long = "storage-gcs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub gcs_root: String,
 
-    #[clap(long = "storage-gcs-credential", default_value_t)]
+    #[clap(long = "storage-gcs-credential", value_name = "VALUE", default_value_t)]
     pub credential: String,
 }
 
@@ -648,54 +657,71 @@ impl TryInto<InnerStorageGcsConfig> for GcsStorageConfig {
 #[serde(default)]
 pub struct S3StorageConfig {
     /// Region for S3 storage
-    #[clap(long = "storage-s3-region", default_value_t)]
+    #[clap(long = "storage-s3-region", value_name = "VALUE", default_value_t)]
     pub region: String,
 
     /// Endpoint URL for S3 storage
     #[clap(
         long = "storage-s3-endpoint-url",
+        value_name = "VALUE",
         default_value = "https://s3.amazonaws.com"
     )]
     pub endpoint_url: String,
 
     /// Access key for S3 storage
-    #[clap(long = "storage-s3-access-key-id", default_value_t)]
+    #[clap(
+        long = "storage-s3-access-key-id",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub access_key_id: String,
 
     /// Secret key for S3 storage
-    #[clap(long = "storage-s3-secret-access-key", default_value_t)]
+    #[clap(
+        long = "storage-s3-secret-access-key",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub secret_access_key: String,
 
     /// Security token for S3 storage
     ///
     /// Check out [documents](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_temp.html) for details
-    #[clap(long = "storage-s3-security-token", default_value_t)]
+    #[clap(
+        long = "storage-s3-security-token",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub security_token: String,
 
     /// S3 Bucket to use for storage
-    #[clap(long = "storage-s3-bucket", default_value_t)]
+    #[clap(long = "storage-s3-bucket", value_name = "VALUE", default_value_t)]
     pub bucket: String,
 
     /// <root>
-    #[clap(long = "storage-s3-root", default_value_t)]
+    #[clap(long = "storage-s3-root", value_name = "VALUE", default_value_t)]
     pub root: String,
 
     // TODO(xuanwo): We should support both AWS SSE and CSE in the future.
-    #[clap(long = "storage-s3-master-key", default_value_t)]
+    #[clap(long = "storage-s3-master-key", value_name = "VALUE", default_value_t)]
     pub master_key: String,
 
-    #[clap(long = "storage-s3-enable-virtual-host-style")]
+    #[clap(long = "storage-s3-enable-virtual-host-style", value_name = "VALUE")]
     pub enable_virtual_host_style: bool,
 
-    #[clap(long = "storage-s3-role-arn", default_value_t)]
+    #[clap(long = "storage-s3-role-arn", value_name = "VALUE", default_value_t)]
     #[serde(rename = "role_arn")]
     pub s3_role_arn: String,
 
-    #[clap(long = "storage-s3-external-id", default_value_t)]
+    #[clap(long = "storage-s3-external-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
 
-    #[clap(long = "storage-s3-allow-anonymous", default_value_t)]
+    #[clap(
+        long = "storage-s3-allow-anonymous",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "allow_anonymous")]
     pub s3_allow_anonymous: bool,
 }
@@ -772,15 +798,27 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
 #[serde(default)]
 pub struct AzblobStorageConfig {
     /// Account for Azblob
-    #[clap(long = "storage-azblob-account-name", default_value_t)]
+    #[clap(
+        long = "storage-azblob-account-name",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub account_name: String,
 
     /// Master key for Azblob
-    #[clap(long = "storage-azblob-account-key", default_value_t)]
+    #[clap(
+        long = "storage-azblob-account-key",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub account_key: String,
 
     /// Container for Azblob
-    #[clap(long = "storage-azblob-container", default_value_t)]
+    #[clap(
+        long = "storage-azblob-container",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub container: String,
 
     /// Endpoint URL for Azblob
@@ -788,14 +826,18 @@ pub struct AzblobStorageConfig {
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use endpoint_url directly.
-    #[clap(long = "storage-azblob-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-azblob-endpoint-url",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "endpoint_url")]
     pub azblob_endpoint_url: String,
 
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use root directly.
-    #[clap(long = "storage-azblob-root", default_value_t)]
+    #[clap(long = "storage-azblob-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub azblob_root: String,
 }
@@ -847,12 +889,12 @@ impl TryInto<InnerStorageAzblobConfig> for AzblobStorageConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args, Debug)]
 #[serde(default)]
 pub struct HdfsConfig {
-    #[clap(long = "storage-hdfs-name-node", default_value_t)]
+    #[clap(long = "storage-hdfs-name-node", value_name = "VALUE", default_value_t)]
     pub name_node: String,
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use root directly.
-    #[clap(long = "storage-hdfs-root", default_value_t)]
+    #[clap(long = "storage-hdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub hdfs_root: String,
 }
@@ -887,17 +929,25 @@ impl TryInto<InnerStorageHdfsConfig> for HdfsConfig {
 #[serde(default)]
 pub struct ObsStorageConfig {
     /// Access key for OBS storage
-    #[clap(long = "storage-obs-access-key-id", default_value_t)]
+    #[clap(
+        long = "storage-obs-access-key-id",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "access_key_id")]
     pub obs_access_key_id: String,
 
     /// Secret key for OBS storage
-    #[clap(long = "storage-obs-secret-access-key", default_value_t)]
+    #[clap(
+        long = "storage-obs-secret-access-key",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "secret_access_key")]
     pub obs_secret_access_key: String,
 
     /// Bucket for OBS
-    #[clap(long = "storage-obs-bucket", default_value_t)]
+    #[clap(long = "storage-obs-bucket", value_name = "VALUE", default_value_t)]
     #[serde(rename = "bucket")]
     pub obs_bucket: String,
 
@@ -906,14 +956,18 @@ pub struct ObsStorageConfig {
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use endpoint_url directly.
-    #[clap(long = "storage-obs-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-obs-endpoint-url",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "endpoint_url")]
     pub obs_endpoint_url: String,
 
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use root directly.
-    #[clap(long = "storage-obs-root", default_value_t)]
+    #[clap(long = "storage-obs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub obs_root: String,
 }
@@ -969,37 +1023,61 @@ impl TryInto<InnerStorageObsConfig> for ObsStorageConfig {
 #[serde(default)]
 pub struct OssStorageConfig {
     /// Access key id for OSS storage
-    #[clap(long = "storage-oss-access-key-id", default_value_t)]
+    #[clap(
+        long = "storage-oss-access-key-id",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "access_key_id")]
     pub oss_access_key_id: String,
 
     /// Access Key Secret for OSS storage
-    #[clap(long = "storage-oss-access-key-secret", default_value_t)]
+    #[clap(
+        long = "storage-oss-access-key-secret",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "access_key_secret")]
     pub oss_access_key_secret: String,
 
     /// Bucket for OSS
-    #[clap(long = "storage-oss-bucket", default_value_t)]
+    #[clap(long = "storage-oss-bucket", value_name = "VALUE", default_value_t)]
     #[serde(rename = "bucket")]
     pub oss_bucket: String,
 
-    #[clap(long = "storage-oss-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-oss-endpoint-url",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "endpoint_url")]
     pub oss_endpoint_url: String,
 
-    #[clap(long = "storage-oss-presign-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-oss-presign-endpoint-url",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "presign_endpoint_url")]
     pub oss_presign_endpoint_url: String,
 
-    #[clap(long = "storage-oss-root", default_value_t)]
+    #[clap(long = "storage-oss-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub oss_root: String,
 
-    #[clap(long = "storage-oss-server-side-encryption", default_value_t)]
+    #[clap(
+        long = "storage-oss-server-side-encryption",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "server_side_encryption")]
     pub oss_server_side_encryption: String,
 
-    #[clap(long = "storage-oss-server-side-encryption-key-id", default_value_t)]
+    #[clap(
+        long = "storage-oss-server-side-encryption-key-id",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "server_side_encryption_key_id")]
     pub oss_server_side_encryption_key_id: String,
 }
@@ -1155,15 +1233,23 @@ impl TryInto<InnerStorageRedisConfig> for RedisStorageConfig {
 #[serde(default)]
 pub struct WebhdfsStorageConfig {
     /// delegation token for webhdfs storage
-    #[clap(long = "storage-webhdfs-delegation", default_value_t)]
+    #[clap(
+        long = "storage-webhdfs-delegation",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "delegation")]
     pub webhdfs_delegation: String,
     /// endpoint url for webhdfs storage
-    #[clap(long = "storage-webhdfs-endpoint", default_value_t)]
+    #[clap(
+        long = "storage-webhdfs-endpoint",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "endpoint_url")]
     pub webhdfs_endpoint_url: String,
     /// working directory root for webhdfs storage
-    #[clap(long = "storage-webhdfs-root", default_value_t)]
+    #[clap(long = "storage-webhdfs-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub webhdfs_root: String,
 }
@@ -1210,29 +1296,33 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
 #[serde(default)]
 pub struct CosStorageConfig {
     /// Access key for COS storage
-    #[clap(long = "storage-cos-secret-id", default_value_t)]
+    #[clap(long = "storage-cos-secret-id", value_name = "VALUE", default_value_t)]
     #[serde(rename = "secret_id")]
     pub cos_secret_id: String,
 
     /// Secret key for COS storage
-    #[clap(long = "storage-cos-secret-key", default_value_t)]
+    #[clap(long = "storage-cos-secret-key", value_name = "VALUE", default_value_t)]
     #[serde(rename = "secret_key")]
     pub cos_secret_key: String,
 
     /// Bucket for COS
-    #[clap(long = "storage-cos-bucket", default_value_t)]
+    #[clap(long = "storage-cos-bucket", value_name = "VALUE", default_value_t)]
     #[serde(rename = "bucket")]
     pub cos_bucket: String,
 
     /// Endpoint URL for COS
-    #[clap(long = "storage-cos-endpoint-url", default_value_t)]
+    #[clap(
+        long = "storage-cos-endpoint-url",
+        value_name = "VALUE",
+        default_value_t
+    )]
     #[serde(rename = "endpoint_url")]
     pub cos_endpoint_url: String,
 
     /// # TODO(xuanwo)
     ///
     /// Clap doesn't allow us to use root directly.
-    #[clap(long = "storage-cos-root", default_value_t)]
+    #[clap(long = "storage-cos-root", value_name = "VALUE", default_value_t)]
     #[serde(rename = "root")]
     pub cos_root: String,
 }
@@ -1288,216 +1378,216 @@ impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct QueryConfig {
     /// Tenant id for get the information from the MetaSrv.
-    #[clap(long, default_value = "admin")]
+    #[clap(long, value_name = "VALUE", default_value = "admin")]
     pub tenant_id: String,
 
     /// ID for construct the cluster.
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub cluster_id: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub num_cpus: u64,
 
-    #[clap(long, default_value = "127.0.0.1")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub mysql_handler_host: String,
 
-    #[clap(long, default_value = "3307")]
+    #[clap(long, value_name = "VALUE", default_value = "3307")]
     pub mysql_handler_port: u16,
 
-    #[clap(long, default_value = "120")]
+    #[clap(long, value_name = "VALUE", default_value = "120")]
     pub mysql_handler_tcp_keepalive_timeout_secs: u64,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub mysql_tls_server_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub mysql_tls_server_key: String,
 
-    #[clap(long, default_value = "256")]
+    #[clap(long, value_name = "VALUE", default_value = "256")]
     pub max_active_sessions: u64,
 
     /// The max total memory in bytes that can be used by this process.
-    #[clap(long, default_value = "0")]
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub max_server_memory_usage: u64,
 
-    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "false")]
+    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "false")]
     pub max_memory_limit_enabled: bool,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
-    #[clap(long, default_value = "127.0.0.1")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub clickhouse_handler_host: String,
 
     #[deprecated(note = "clickhouse tcp support is deprecated")]
-    #[clap(long, default_value = "9000")]
+    #[clap(long, value_name = "VALUE", default_value = "9000")]
     pub clickhouse_handler_port: u16,
 
-    #[clap(long, default_value = "127.0.0.1")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub clickhouse_http_handler_host: String,
 
-    #[clap(long, default_value = "8124")]
+    #[clap(long, value_name = "VALUE", default_value = "8124")]
     pub clickhouse_http_handler_port: u16,
 
-    #[clap(long, default_value = "127.0.0.1")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub http_handler_host: String,
 
-    #[clap(long, default_value = "8000")]
+    #[clap(long, value_name = "VALUE", default_value = "8000")]
     pub http_handler_port: u16,
 
-    #[clap(long, default_value = "60")]
+    #[clap(long, value_name = "VALUE", default_value = "60")]
     pub http_handler_result_timeout_secs: u64,
 
-    #[clap(long, default_value = "127.0.0.1")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1")]
     pub flight_sql_handler_host: String,
 
-    #[clap(long, default_value = "8900")]
+    #[clap(long, value_name = "VALUE", default_value = "8900")]
     pub flight_sql_handler_port: u16,
 
-    #[clap(long, default_value = "127.0.0.1:9090")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:9090")]
     pub flight_api_address: String,
 
-    #[clap(long, default_value = "127.0.0.1:8080")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:8080")]
     pub admin_api_address: String,
 
-    #[clap(long, default_value = "127.0.0.1:7070")]
+    #[clap(long, value_name = "VALUE", default_value = "127.0.0.1:7070")]
     pub metric_api_address: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub http_handler_tls_server_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub http_handler_tls_server_key: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub http_handler_tls_server_root_ca_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub flight_sql_tls_server_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub flight_sql_tls_server_key: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub api_tls_server_cert: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub api_tls_server_key: String,
 
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub api_tls_server_root_ca_cert: String,
 
     /// rpc server cert
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub rpc_tls_server_cert: String,
 
     /// key for rpc server cert
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub rpc_tls_server_key: String,
 
     /// Certificate for client to identify query rpc server
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub rpc_tls_query_server_root_ca_cert: String,
 
-    #[clap(long, default_value = "localhost")]
+    #[clap(long, value_name = "VALUE", default_value = "localhost")]
     pub rpc_tls_query_service_domain_name: String,
 
-    #[clap(long, default_value = "0")]
+    #[clap(long, value_name = "VALUE", default_value = "0")]
     pub rpc_client_timeout_secs: u64,
 
     /// Table engine memory enabled
-    #[clap(long, value_parser = clap::value_parser!(bool), default_value = "true")]
+    #[clap(long,  value_name = "VALUE",value_parser = clap::value_parser!(bool), default_value = "true")]
     pub table_engine_memory_enabled: bool,
 
-    #[clap(long, default_value = "5000")]
+    #[clap(long, value_name = "VALUE", default_value = "5000")]
     pub wait_timeout_mills: u64,
 
-    #[clap(long, default_value = "10000")]
+    #[clap(long, value_name = "VALUE", default_value = "10000")]
     pub max_query_log_size: usize,
     /// Parquet file with smaller size will be read as a whole file, instead of column by column.
     /// For example:
     /// parquet_fast_read_bytes = 52428800
     /// will let databend read whole file for parquet file less than 50MB and read column by column
     /// if file size is greater than 50MB
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub parquet_fast_read_bytes: Option<u64>,
 
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub max_storage_io_requests: Option<u64>,
 
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
 
     /// Deprecated: jwt_key_file is deprecated, use jwt_key_files to add a list of available jwks url
-    #[clap(long, default_value_t)]
+    #[clap(long, value_name = "VALUE", default_value_t)]
     pub jwt_key_file: String,
 
     /// If there are multiple trusted jwt provider put it into additional_jwt_key_files configuration
     #[clap(skip)]
     pub jwt_key_files: Vec<String>,
 
-    #[clap(long, default_value = "auto")]
+    #[clap(long, value_name = "VALUE", default_value = "auto")]
     pub default_storage_format: String,
 
-    #[clap(long, default_value = "auto")]
+    #[clap(long, value_name = "VALUE", default_value = "auto")]
     pub default_compression: String,
 
     #[clap(skip)]
     users: Vec<UserConfig>,
 
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub share_endpoint_address: String,
 
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub share_endpoint_auth_token_file: String,
 
     #[clap(skip)]
     quota: Option<TenantQuota>,
 
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub internal_enable_sandbox_tenant: bool,
 
     /// Experiment config options, DO NOT USE IT IN PRODUCTION ENV
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub internal_merge_on_read_mutation: bool,
 
     // ----- the following options/args are all deprecated               ----
     // ----- and turned into Option<T>, to help user migrate the configs ----
     /// OBSOLETED: Table disk cache size (mb).
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_disk_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table Meta Cached enabled
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_meta_cache_enabled: Option<bool>,
 
     /// OBSOLETED: Max number of cached table block meta
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_block_meta_count: Option<u64>,
 
     /// OBSOLETED: Table memory cache size (mb)
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_memory_cache_mb_size: Option<u64>,
 
     /// OBSOLETED: Table disk cache folder root
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_disk_cache_root: Option<String>,
 
     /// OBSOLETED: Max number of cached table snapshot
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_snapshot_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table snapshot statistics
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_statistic_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached table segment
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_segment_count: Option<u64>,
 
     /// OBSOLETED: Max number of cached bloom index meta objects
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_bloom_index_meta_count: Option<u64>,
 
     /// OBSOLETED:
@@ -1506,48 +1596,59 @@ pub struct QueryConfig {
     ///
     /// For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     /// table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub table_cache_bloom_index_filter_count: Option<u64>,
 
     /// OBSOLETED: (cache of raw bloom filter data is no longer supported)
     /// Max bytes of cached bloom filter bytes.
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub(crate) table_cache_bloom_index_data_bytes: Option<u64>,
 
     /// Disable some system load(For example system.configs) for cloud security.
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub disable_system_table_load: bool,
 
     /// chat base url.
-    #[clap(long, default_value = "https://api.openai.com/v1/")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        default_value = "https://api.openai.com/v1/"
+    )]
     pub openai_api_chat_base_url: String,
 
     /// embedding base url.
-    #[clap(long, default_value = "https://api.openai.com/v1/")]
+    #[clap(
+        long,
+        value_name = "VALUE",
+        default_value = "https://api.openai.com/v1/"
+    )]
     pub openai_api_embedding_base_url: String,
 
     // This will not show in system.configs, put it to mask.rs.
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub openai_api_key: String,
 
     // For azure openai.
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub openai_api_version: String,
 
     /// https://platform.openai.com/docs/models/embeddings
-    #[clap(long, default_value = "text-embedding-ada-002")]
+    #[clap(long, value_name = "VALUE", default_value = "text-embedding-ada-002")]
     pub openai_api_embedding_model: String,
 
     /// https://platform.openai.com/docs/guides/chat
-    #[clap(long, default_value = "gpt-3.5-turbo")]
+    #[clap(long, value_name = "VALUE", default_value = "gpt-3.5-turbo")]
     pub openai_api_completion_model: String,
 
-    #[clap(long, default_value = "false")]
+    #[clap(long, value_name = "VALUE", default_value = "false")]
     pub enable_udf_server: bool,
 
     /// A list of allowed udf server addresses.
-    #[clap(long)]
+    #[clap(long, value_name = "VALUE")]
     pub udf_server_allow_list: Vec<String>,
+
+    #[clap(long)]
+    pub cloud_control_grpc_server_address: Option<String>,
 }
 
 impl Default for QueryConfig {
@@ -1624,6 +1725,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_version: self.openai_api_version,
             enable_udf_server: self.enable_udf_server,
             udf_server_allow_list: self.udf_server_allow_list,
+            cloud_control_grpc_server_address: self.cloud_control_grpc_server_address,
         })
     }
 }
@@ -1710,6 +1812,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             openai_api_embedding_model: inner.openai_api_embedding_model,
             enable_udf_server: inner.enable_udf_server,
             udf_server_allow_list: inner.udf_server_allow_list,
+            cloud_control_grpc_server_address: inner.cloud_control_grpc_server_address,
         }
     }
 }
@@ -1718,7 +1821,7 @@ impl From<InnerQueryConfig> for QueryConfig {
 #[serde(default)]
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
-    #[clap(long = "log-level", default_value = "INFO")]
+    #[clap(long = "log-level", value_name = "VALUE", default_value = "INFO")]
     pub level: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -1726,7 +1829,11 @@ pub struct LogConfig {
     pub log_level: Option<String>,
 
     /// Log file dir
-    #[clap(long = "log-dir", default_value = "./.databend/logs")]
+    #[clap(
+        long = "log-dir",
+        value_name = "VALUE",
+        default_value = "./.databend/logs"
+    )]
     pub dir: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -1832,22 +1939,26 @@ impl From<InnerLogConfig> for LogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct FileLogConfig {
-    #[clap(long = "log-file-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(long = "log-file-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub file_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-file-level", default_value = "INFO")]
+    #[clap(long = "log-file-level", value_name = "VALUE", default_value = "INFO")]
     #[serde(rename = "level")]
     pub file_level: String,
 
     /// Log file dir
-    #[clap(long = "log-file-dir", default_value = "./.databend/logs")]
+    #[clap(
+        long = "log-file-dir",
+        value_name = "VALUE",
+        default_value = "./.databend/logs"
+    )]
     #[serde(rename = "dir")]
     pub file_dir: String,
 
     /// Log file format
-    #[clap(long = "log-file-format", default_value = "json")]
+    #[clap(long = "log-file-format", value_name = "VALUE", default_value = "json")]
     #[serde(rename = "format")]
     pub file_format: String,
 }
@@ -1885,16 +1996,24 @@ impl From<InnerFileLogConfig> for FileLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StderrLogConfig {
-    #[clap(long = "log-stderr-on", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(long = "log-stderr-on", value_name = "VALUE", default_value = "false", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub stderr_on: bool,
 
     /// Log level <DEBUG|INFO|WARN|ERROR>
-    #[clap(long = "log-stderr-level", default_value = "INFO")]
+    #[clap(
+        long = "log-stderr-level",
+        value_name = "VALUE",
+        default_value = "INFO"
+    )]
     #[serde(rename = "level")]
     pub stderr_level: String,
 
-    #[clap(long = "log-stderr-format", default_value = "text")]
+    #[clap(
+        long = "log-stderr-format",
+        value_name = "VALUE",
+        default_value = "text"
+    )]
     #[serde(rename = "format")]
     pub stderr_format: String,
 }
@@ -1930,13 +2049,14 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct QueryLogConfig {
-    #[clap(long = "log-query-on", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
+    #[clap(long = "log-query-on", value_name = "VALUE", default_value = "true", action = ArgAction::Set, num_args = 0..=1, require_equals = true, default_missing_value = "true")]
     #[serde(rename = "on")]
     pub log_query_on: bool,
 
     /// Query Log file dir
     #[clap(
         long = "log-query-dir",
+        value_name = "VALUE",
         default_value = "",
         help = "Default to <log-file-dir>/query-details"
     )]
@@ -1977,7 +2097,7 @@ impl From<InnerQueryLogConfig> for QueryLogConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
-    #[clap(long = "meta-embedded-dir", default_value_t)]
+    #[clap(long = "meta-embedded-dir", value_name = "VALUE", default_value_t)]
     pub embedded_dir: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -1985,11 +2105,15 @@ pub struct MetaConfig {
     pub meta_embedded_dir: Option<String>,
 
     /// MetaStore backend endpoints
-    #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
+    #[clap(
+        long = "meta-endpoints",
+        value_name = "VALUE",
+        help = "MetaStore peers endpoints"
+    )]
     pub endpoints: Vec<String>,
 
     /// MetaStore backend user name
-    #[clap(long = "meta-username", default_value = "root")]
+    #[clap(long = "meta-username", value_name = "VALUE", default_value = "root")]
     pub username: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -1997,7 +2121,7 @@ pub struct MetaConfig {
     pub meta_username: Option<String>,
 
     /// MetaStore backend user password
-    #[clap(long = "meta-password", default_value_t)]
+    #[clap(long = "meta-password", value_name = "VALUE", default_value_t)]
     pub password: String,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -2005,7 +2129,11 @@ pub struct MetaConfig {
     pub meta_password: Option<String>,
 
     /// Timeout for each client request, in seconds
-    #[clap(long = "meta-client-timeout-in-second", default_value = "10")]
+    #[clap(
+        long = "meta-client-timeout-in-second",
+        value_name = "VALUE",
+        default_value = "10"
+    )]
     pub client_timeout_in_second: u64,
 
     /// Deprecated fields, used for catching error, will be removed later.
@@ -2014,18 +2142,27 @@ pub struct MetaConfig {
 
     /// AutoSyncInterval is the interval to update endpoints with its latest members.
     /// 0 disables auto-sync. By default auto-sync is disabled.
-    #[clap(long = "auto-sync-interval", default_value = "0")]
+    #[clap(long = "auto-sync-interval", value_name = "VALUE", default_value = "0")]
     pub auto_sync_interval: u64,
 
-    #[clap(long = "unhealth-endpoint-evict-time", default_value = "120")]
+    #[clap(
+        long = "unhealth-endpoint-evict-time",
+        value_name = "VALUE",
+        default_value = "120"
+    )]
     pub unhealth_endpoint_evict_time: u64,
 
     /// Certificate for client to identify meta rpc serve
-    #[clap(long = "meta-rpc-tls-meta-server-root-ca-cert", default_value_t)]
+    #[clap(
+        long = "meta-rpc-tls-meta-server-root-ca-cert",
+        value_name = "VALUE",
+        default_value_t
+    )]
     pub rpc_tls_meta_server_root_ca_cert: String,
 
     #[clap(
         long = "meta-rpc-tls-meta-service-domain-name",
+        value_name = "VALUE",
         default_value = "localhost"
     )]
     pub rpc_tls_meta_service_domain_name: String,
@@ -2212,11 +2349,11 @@ impl From<AuthInfo> for UserAuthConfig {
 #[serde(default)]
 pub struct LocalConfig {
     // sql to run
-    #[clap(long, default_value = "SELECT 1")]
+    #[clap(long, value_name = "VALUE", default_value = "SELECT 1")]
     pub sql: String,
 
     // name1=filepath1,name2=filepath2
-    #[clap(long, default_value = "")]
+    #[clap(long, value_name = "VALUE", default_value = "")]
     pub table: String,
 }
 
@@ -2255,24 +2392,44 @@ pub struct CacheConfig {
     pub enable_table_meta_cache: bool,
 
     /// Max number of cached table snapshot
-    #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
+    #[clap(
+        long = "cache-table-meta-snapshot-count",
+        value_name = "VALUE",
+        default_value = "256"
+    )]
     pub table_meta_snapshot_count: u64,
 
     /// Max bytes of cached table segment
-    #[clap(long = "cache-table-meta-segment-bytes", default_value = "1073741824")]
+    #[clap(
+        long = "cache-table-meta-segment-bytes",
+        value_name = "VALUE",
+        default_value = "1073741824"
+    )]
     pub table_meta_segment_bytes: u64,
 
     /// Max number of cached table statistic meta
-    #[clap(long = "cache-table-meta-statistic-count", default_value = "256")]
+    #[clap(
+        long = "cache-table-meta-statistic-count",
+        value_name = "VALUE",
+        default_value = "256"
+    )]
     pub table_meta_statistic_count: u64,
 
     /// Enable bloom index cache. Default is enabled. Set it to false to disable all the bloom index caches
-    #[clap(long = "cache-enable-table-bloom-index-cache", default_value = "true")]
+    #[clap(
+        long = "cache-enable-table-bloom-index-cache",
+        value_name = "VALUE",
+        default_value = "true"
+    )]
     #[serde(default = "bool_true")]
     pub enable_table_bloom_index_cache: bool,
 
     /// Max number of cached bloom index meta objects. Set it to 0 to disable it.
-    #[clap(long = "cache-table-bloom-index-meta-count", default_value = "3000")]
+    #[clap(
+        long = "cache-table-bloom-index-meta-count",
+        value_name = "VALUE",
+        default_value = "3000"
+    )]
     pub table_bloom_index_meta_count: u64,
 
     /// DEPRECATING, will be deprecated in the next prduction release.
@@ -2282,22 +2439,36 @@ pub struct CacheConfig {
     //
     // For example, a table of 1024 columns, with 800 data blocks, a query that triggers a full
     // table filter on 2 columns, might populate 2 * 800 bloom index filter cache items (at most)
-    #[clap(long = "cache-table-bloom-index-filter-count", default_value = "0")]
+    #[clap(
+        long = "cache-table-bloom-index-filter-count",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
     pub table_bloom_index_filter_count: u64,
 
     /// Max bytes of cached bloom index filters used. Set it to 0 to disable it.
     // One bloom index filter per column of data block being indexed will be generated if necessary.
     #[clap(
         long = "cache-table-bloom-index-filter-size",
+        value_name = "VALUE",
         default_value = "2147483648"
     )]
     pub table_bloom_index_filter_size: u64,
 
-    #[clap(long = "cache-table-prune-partitions-count", default_value = "256")]
+    #[clap(
+        long = "cache-table-prune-partitions-count",
+        value_name = "VALUE",
+        default_value = "256"
+    )]
     pub table_prune_partitions_count: u64,
 
     /// Type of data cache storage
-    #[clap(long = "cache-data-cache-storage", value_enum, default_value_t)]
+    #[clap(
+        long = "cache-data-cache-storage",
+        value_name = "VALUE",
+        value_enum,
+        default_value_t
+    )]
     pub data_cache_storage: CacheStorageTypeConfig,
 
     /// Max size of external cache population queue length
@@ -2314,7 +2485,11 @@ pub struct CacheConfig {
     ///
     /// default value is 0, which means queue size will be adjusted automatically based on
     /// number of CPU cores.
-    #[clap(long = "cache-data-cache-population-queue-size", default_value = "0")]
+    #[clap(
+        long = "cache-data-cache-population-queue-size",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
     pub table_data_cache_population_queue_size: u32,
 
     /// Storage that hold the data caches
@@ -2328,12 +2503,16 @@ pub struct CacheConfig {
     ///
     /// Only if query nodes have plenty of un-utilized memory, the working set can be fitted into,
     /// and the access pattern will benefit from caching, consider enabled this cache.
-    #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
+    #[clap(
+        long = "cache-table-data-deserialized-data-bytes",
+        value_name = "VALUE",
+        default_value = "0"
+    )]
     pub table_data_deserialized_data_bytes: u64,
 
     // ----- the following options/args are all deprecated               ----
     /// Max number of cached table segment
-    #[clap(long = "cache-table-meta-segment-count")]
+    #[clap(long = "cache-table-meta-segment-count", value_name = "VALUE")]
     pub table_meta_segment_count: Option<u64>,
 }
 
@@ -2367,11 +2546,19 @@ impl Default for CacheStorageTypeConfig {
 #[serde(default, deny_unknown_fields)]
 pub struct DiskCacheConfig {
     /// Max bytes of cached raw table data. Default 20GB, set it to 0 to disable it.
-    #[clap(long = "cache-disk-max-bytes", default_value = "21474836480")]
+    #[clap(
+        long = "cache-disk-max-bytes",
+        value_name = "VALUE",
+        default_value = "21474836480"
+    )]
     pub max_bytes: u64,
 
     /// Table disk cache root path
-    #[clap(long = "cache-disk-path", default_value = "./.databend/_cache")]
+    #[clap(
+        long = "cache-disk-path",
+        value_name = "VALUE",
+        default_value = "./.databend/_cache"
+    )]
     pub path: String,
 }
 

@@ -502,6 +502,9 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_available_roles().await
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         self.shared.session.get_visibility_checker().await

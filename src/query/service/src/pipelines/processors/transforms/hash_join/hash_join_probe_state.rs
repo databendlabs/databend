@@ -46,7 +46,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
@@ -159,22 +159,28 @@ impl HashJoinProbeState {
 
     pub fn probe_join(
         &self,
-        mut input: DataBlock,
+        input: DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        if matches!(
+        let mut _nullable_data_block = None;
+        let evaluator = if matches!(
             self.hash_join_state.hash_join_desc.join_type,
             JoinType::Right | JoinType::RightSingle | JoinType::Full
         ) {
             let nullable_columns = input
                 .columns()
                 .iter()
-                .map(|c| set_true_validity(c, input.num_rows(), &probe_state.true_validity))
+                .map(|c| wrap_true_validity(c, input.num_rows(), &probe_state.true_validity))
                 .collect::<Vec<_>>();
-            input = DataBlock::new(nullable_columns, input.num_rows());
-        }
-        let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
-
+            _nullable_data_block = Some(DataBlock::new(nullable_columns, input.num_rows()));
+            Evaluator::new(
+                _nullable_data_block.as_ref().unwrap(),
+                &probe_state.func_ctx,
+                &BUILTIN_FUNCTIONS,
+            )
+        } else {
+            Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS)
+        };
         let probe_keys = self
             .hash_join_state
             .hash_join_desc
@@ -235,7 +241,7 @@ impl HashJoinProbeState {
                 JoinType::Left | JoinType::LeftSingle | JoinType::Full | JoinType::LeftAnti
             )
         {
-            return self.left_fast_return(input, is_probe_projected);
+            return self.left_fast_return(input, is_probe_projected, &probe_state.true_validity);
         }
 
         let hash_table = unsafe { &*self.hash_join_state.hash_table.get() };
@@ -452,7 +458,7 @@ impl HashJoinProbeState {
                     let nullable_unmatched_build_columns = unmatched_build_block
                         .columns()
                         .iter()
-                        .map(|c| set_true_validity(c, num_rows, true_validity))
+                        .map(|c| wrap_true_validity(c, num_rows, true_validity))
                         .collect::<Vec<_>>();
                     unmatched_build_block =
                         DataBlock::new(nullable_unmatched_build_columns, num_rows);

@@ -23,7 +23,7 @@ use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::sql::plans::JoinType;
@@ -113,7 +113,7 @@ impl HashJoinProbeState {
                         let nullable_columns = probe_block
                             .columns()
                             .iter()
-                            .map(|c| set_true_validity(c, max_block_size, true_validity))
+                            .map(|c| wrap_true_validity(c, max_block_size, true_validity))
                             .collect::<Vec<_>>();
                         Some(DataBlock::new(nullable_columns, max_block_size))
                     } else {
@@ -255,7 +255,7 @@ impl HashJoinProbeState {
             let nullable_columns = probe_block
                 .columns()
                 .iter()
-                .map(|c| set_true_validity(c, matched_num, true_validity))
+                .map(|c| wrap_true_validity(c, matched_num, true_validity))
                 .collect::<Vec<_>>();
             Some(DataBlock::new(nullable_columns, matched_num))
         } else {

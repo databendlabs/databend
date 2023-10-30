@@ -232,8 +232,14 @@ pub enum TokenKind {
     RBrace,
     #[token("->")]
     RArrow,
+    #[token("->>")]
+    LongRArrow,
     #[token("=>")]
     FatRArrow,
+    #[token("#>")]
+    HashRArrow,
+    #[token("#>>")]
+    HashLongRArrow,
     /// A case insensitive match regular expression operator in PostgreSQL
     #[token("~*")]
     TildeAsterisk,
@@ -736,6 +742,8 @@ pub enum TokenKind {
     RANGE,
     #[token("RAWDEFLATE", ignore(ascii_case))]
     RAWDEFLATE,
+    #[token("READ_ONLY", ignore(ascii_case))]
+    READ_ONLY,
     #[token("RECLUSTER", ignore(ascii_case))]
     RECLUSTER,
     #[token("RECORD_DELIMITER", ignore(ascii_case))]
@@ -1088,6 +1096,9 @@ impl TokenKind {
                 | LBrace
                 | RBrace
                 | RArrow
+                | LongRArrow
+                | HashRArrow
+                | HashLongRArrow
                 | FatRArrow
                 | BitWiseXor
                 | BitWiseNot

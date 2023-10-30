@@ -7,10 +7,44 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 The connection parameters refer to a set of essential connection details required for establishing a secure link to supported external storage services, like Amazon S3. These parameters are enclosed within parentheses and consists of key-value pairs separated by commas. It is commonly utilized in operations such as creating a stage, copying data into Databend, and querying staged files from external sources. The provided key-value pairs offer the necessary authentication and configuration information for the connection.
 
-For example, the following statement creates an external stage on MinIO with the connection parameters:
+### Syntax and Examples
 
-```sql
-CREATE STAGE my_minio_stage URL = 's3://databend' CONNECTION = (ENDPOINT_URL = 'http://localhost:9000', ACCESS_KEY_ID = 'ROOTUSER', SECRET_ACCESS_KEY = 'CHANGEME123', region = 'us-west-2');
+The connection parameters are specified using a CONNECTION clause and are separated by comma. When [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md), the CONNECTION clause is enclosed in an additional set of parentheses.
+
+```sql title='Examples:'
+-- This example illustrates a 'CREATE STAGE' command where 'CONNECTION' is followed by '=', establishing a Minio stage with specific connection parameters.
+CREATE STAGE my_minio_stage
+  URL = 's3://databend'
+  CONNECTION = (
+    ENDPOINT_URL = 'http://localhost:9000',
+    ACCESS_KEY_ID = 'ROOTUSER',
+    SECRET_ACCESS_KEY = 'CHANGEME123'
+  );
+
+-- This example showcases a 'COPY INTO' command, employing '=' after 'CONNECTION' to copy data, while also specifying file format details.
+COPY INTO mytable
+    FROM 's3://mybucket/data.csv'
+    CONNECTION = (
+        ACCESS_KEY_ID = '<your-access-key-ID>',
+        SECRET_ACCESS_KEY = '<your-secret-access-key>'
+    )
+    FILE_FORMAT = (
+        TYPE = CSV,
+        FIELD_DELIMITER = ',',
+        RECORD_DELIMITER = '\n',
+        SKIP_HEADER = 1
+    )
+    SIZE_LIMIT = 10;
+
+-- This example uses a 'SELECT' statement to query staged files. 
+-- 'CONNECTION' is followed by '=>' to access Minio data, and the connection clause is enclosed in an additional set of parentheses.
+SELECT * FROM 's3://testbucket/admin/data/parquet/tuple.parquet' 
+    (CONNECTION => (
+        ACCESS_KEY_ID = 'minioadmin', 
+        SECRET_ACCESS_KEY = 'minioadmin', 
+        ENDPOINT_URL = 'http://127.0.0.1:9900/'
+        )
+    );
 ```
 
 The connection parameters vary for different storage services based on their specific requirements and authentication mechanisms. For more information, please refer to the tables below.
@@ -34,6 +68,8 @@ The following table lists connection parameters for accessing an Amazon S3-like 
 - If the **endpoint_url** parameter is not specified in the command, Databend will create the stage on Amazon S3 by default. Therefore, when you create an external stage on an S3-compatible object storage or other object storage solutions, be sure to include the **endpoint_url** parameter.
 
 - If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
+
+- The **region** parameter is not required because Databend can automatically detect the region information. You typically don't need to manually specify a value for this parameter. In case automatic detection fails, Databend will default to using 'us-east-1' as the region. When deploying Databend with MinIO and not configuring the region information, it will automatically default to using 'us-east-1', and this will work correctly. However, if you receive error messages such as "region is missing" or "The bucket you are trying to access requires a specific endpoint. Please direct all future requests to this particular endpoint", you need to determine your region name and explicitly assign it to the **region** parameter.
 :::
 
 To access your Amazon S3 buckets, you can also specify an AWS IAM role and external ID for authentication. By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html

@@ -16,6 +16,7 @@ members = [
     "src/common/base",
     "src/common/building",
     "src/common/cache",
+    "src/common/cloud_control",
     "src/common/compress",
     "src/common/exception",
     "src/common/grpc",
@@ -35,7 +36,7 @@ members = [
     "src/query/constraint",
     "src/query/catalog",
     "src/query/sharing",
-    "src/query/sharing-endpoint",
+    "src/query/sharing_endpoint",
     "src/query/datavalues",
     "src/query/expression",
     "src/query/formats",
@@ -50,15 +51,15 @@ members = [
     "src/query/sql",
     "src/query/storages/common/blocks",
     "src/query/storages/common/cache",
-    "src/query/storages/common/cache-manager",
+    "src/query/storages/common/cache_manager",
     "src/query/storages/common/index",
     "src/query/storages/common/pruner",
-    "src/query/storages/common/table-meta",
+    "src/query/storages/common/table_meta",
     "src/query/storages/factory",
     "src/query/storages/fuse",
     "src/query/storages/hive/hive",
     "src/query/storages/iceberg",
-    "src/query/storages/information-schema",
+    "src/query/storages/information_schema",
     "src/query/storages/memory",
     "src/query/storages/null",
     "src/query/storages/random",
@@ -69,12 +70,12 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
-    "src/query/ee-features/vacuum-handler",
-    "src/query/ee-features/background-service",
-    "src/query/ee-features/aggregating-index",
-    "src/query/ee-features/data-mask",
-    "src/query/ee-features/table-lock",
-    "src/query/ee-features/storage-encryption",
+    "src/query/ee_features/vacuum_handler",
+    "src/query/ee_features/background_service",
+    "src/query/ee_features/aggregating_index",
+    "src/query/ee_features/data_mask",
+    "src/query/ee_features/table_lock",
+    "src/query/ee_features/storage_encryption",
     # databend-query
     "src/query/service",
     # enterprise
@@ -117,7 +118,7 @@ opendal = { version = "0.41", features = [
 ] }
 ethnum = { version = "1.3.2" }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { version = "0.3.0" }
+jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "14143b5" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -130,6 +131,7 @@ openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alph
 derive_more = "0.99.17"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
+once_cell = "1.15.0"
 
 # future and async
 futures = "0.3.24"
@@ -147,7 +149,7 @@ thiserror = { version = "1" }
 semver = "1.0.14"
 
 # CLI
-clap = { version = "4.4.2", features = ["derive", "env"] }
+clap = { version = "4.4.2", features = ["derive"] }
 
 # server
 tonic = { version = "0.10.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
@@ -199,7 +201,7 @@ async-backtrace = "0.2.2"
 # observability
 logcall = "0.1.5"
 log = { version = "0.4.19", features = ["serde", "kv_unstable_std"] }
-minitrace = "0.5.1"
+minitrace = { version = "0.6", features = ["enable"] }
 prometheus-client = "0.21.2"
 
 # test

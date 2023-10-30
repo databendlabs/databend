@@ -21,11 +21,11 @@ common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sinks = { path = "../../pipeline/sinks" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-storage = { path = "../../../common/storage" }
-storages-common-table-meta = { path = "../common/table-meta" }
+storages-common-table-meta = { path = "../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 parking_lot = "0.12.1"
 serde = { workspace = true }
 typetag = "0.2.3"

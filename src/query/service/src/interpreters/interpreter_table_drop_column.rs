@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchema;
@@ -60,6 +61,9 @@ impl Interpreter for DropTableColumnInterpreter {
             .await?
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         let table_info = table.get_table_info();
         if table_info.engine() == VIEW_ENGINE {

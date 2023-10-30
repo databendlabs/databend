@@ -93,6 +93,7 @@ async fn test_block_pruner() -> Result<()> {
         schema: test_schema.clone(),
         engine: Engine::Fuse,
         storage_params: None,
+        read_only_attach: false,
         part_prefix: "".to_string(),
         options: [
             (FUSE_OPT_KEY_ROW_PER_BLOCK.to_owned(), num_blocks_opt),

@@ -152,6 +152,7 @@ impl Processor for TransformRangeJoinLeft {
         Ok(())
     }
 
+    #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         if let RangeJoinStep::Merging = self.step {
             self.state.wait_merge_finish().await?;

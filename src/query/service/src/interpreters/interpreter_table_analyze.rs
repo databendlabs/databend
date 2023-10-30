@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::table::TableExt;
 use common_exception::Result;
 use common_sql::plans::AnalyzeTablePlan;
 
@@ -46,6 +47,9 @@ impl Interpreter for AnalyzeTableInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+
+        // check mutability
+        table.check_mutable()?;
 
         table.analyze(self.ctx.clone()).await?;
         return Ok(PipelineBuildResult::create());
