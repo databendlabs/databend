@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
+use common_meta_app::app_error::TableLockExpired;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownDatabase;
 use common_meta_app::app_error::UnknownDatabaseId;
@@ -44,6 +45,8 @@ use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLockKey;
+use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -1258,4 +1261,40 @@ pub async fn get_virtual_column_by_id_or_err(
     );
 
     Ok((seq, virtual_column_meta))
+}
+
+/// Returns (table_lock_seq, table_lock_meta)
+pub async fn get_table_lock_meta_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    lock_key: &TableLockKey,
+    msg: impl Display,
+) -> Result<(u64, TableLockMeta), KVAppError> {
+    let (table_lock_seq, table_lock_meta): (_, Option<TableLockMeta>) =
+        get_pb_value(kv_api, lock_key).await?;
+    table_lock_has_to_exist(table_lock_seq, lock_key, msg)?;
+
+    Ok((
+        table_lock_seq,
+        // Safe unwrap(): table_lock_seq > 0 implies table_lock_meta is not None.
+        table_lock_meta.unwrap(),
+    ))
+}
+
+/// Return OK if a table lock exists by checking the seq.
+///
+/// Otherwise returns TableLockExpired error
+fn table_lock_has_to_exist(
+    seq: u64,
+    lock_key: &TableLockKey,
+    msg: impl Display,
+) -> Result<(), KVAppError> {
+    if seq == 0 {
+        debug!(seq = seq, table_id = lock_key.table_id, revision = lock_key.revision; "table lock does not exist");
+
+        Err(KVAppError::AppError(AppError::TableLockExpired(
+            TableLockExpired::new(lock_key.table_id, format!("{}: {}", msg, lock_key.table_id)),
+        )))
+    } else {
+        Ok(())
+    }
 }

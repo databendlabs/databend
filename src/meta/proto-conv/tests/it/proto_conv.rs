@@ -270,6 +270,15 @@ pub(crate) fn new_empty_proto() -> mt::EmptyProto {
     mt::EmptyProto {}
 }
 
+pub(crate) fn new_table_lock_meta() -> mt::TableLockMeta {
+    mt::TableLockMeta {
+        node: "node".to_string(),
+        session_id: "session".to_string(),
+        created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
+        locked_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+    }
+}
+
 fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
     common_meta_app::data_mask::DatamaskMeta {
         args: vec![("a".to_string(), "String".to_string())],
@@ -462,6 +471,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("empty_proto:{:?}", buf);
+    }
+
+    // TableLockMeta
+    {
+        let table_lock_meta = new_table_lock_meta();
+        let p = table_lock_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("table_lock_meta:{:?}", buf);
     }
 
     // schema

@@ -21,34 +21,31 @@ use common_exception::Result;
 use common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
-use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
 pub trait LockApi: Sync + Send {
     fn level(&self) -> LockLevel;
 
-    fn catalog(&self) -> &str;
+    fn get_expire_secs(&self) -> u64;
 
     fn table_id(&self) -> u64;
 
     fn watch_delete_key(&self, revision: u64) -> String;
 
-    fn create_table_lock_req(&self, expire_secs: u64) -> Box<dyn LockRequest>;
+    fn create_table_lock_req(&self) -> Box<dyn LockRequest>;
 
-    fn extend_table_lock_req(&self, expire_secs: u64, revision: u64) -> Box<dyn LockRequest>;
+    fn extend_table_lock_req(&self, revision: u64, locked: bool) -> Box<dyn LockRequest>;
 
     fn delete_table_lock_req(&self, revision: u64) -> Box<dyn LockRequest>;
 
     fn list_table_lock_req(&self) -> Box<dyn LockRequest>;
 
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
+    async fn try_lock(&self) -> Result<Option<LockGuard>>;
 
     /// Return true if the table is locked.
-    async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
-        let list_table_lock_req = self.list_table_lock_req();
-        let reply = catalog.list_table_lock_revs(list_table_lock_req).await?;
-        Ok(!reply.is_empty())
-    }
+    async fn check_lock(&self) -> Result<bool>;
+
+    async fn get_catalog(&self) -> Result<Arc<dyn Catalog>>;
 }
 
 pub enum LockLevel {

@@ -58,6 +58,7 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -314,7 +315,10 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, _req: Box<dyn LockRequest>) -> Result<Vec<u64>> {
+    async fn list_table_lock_revs(
+        &self,
+        _req: Box<dyn LockRequest>,
+    ) -> Result<Vec<(u64, TableLockMeta)>> {
         Err(ErrorCode::Unimplemented(
             "list_table_lock_revs not allowed for system database",
         ))

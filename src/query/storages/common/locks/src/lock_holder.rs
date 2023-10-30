@@ -51,12 +51,12 @@ impl LockHolder {
         &mut self,
         catalog: Arc<dyn Catalog>,
         lock: &T,
-        expire_secs: u64,
         revision: u64,
     ) -> Result<()> {
+        let expire_secs = lock.get_expire_secs();
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
         let delete_table_lock_req = lock.delete_table_lock_req(revision);
-        let extend_table_lock_req = lock.extend_table_lock_req(expire_secs, revision);
+        let extend_table_lock_req = lock.extend_table_lock_req(revision, false);
 
         self.shutdown_handler = Some(GlobalIORuntime::instance().spawn({
             let shutdown_flag = self.shutdown_flag.clone();

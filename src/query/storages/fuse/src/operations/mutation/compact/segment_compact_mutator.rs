@@ -139,8 +139,9 @@ impl SegmentCompactMutator {
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-        let table_lock = LockManager::create_table_lock(fuse_table.table_info.clone());
-        let _guard = table_lock.try_lock(self.ctx.clone()).await?;
+        let table_lock =
+            LockManager::create_table_lock(self.ctx.clone(), fuse_table.table_info.clone());
+        let _guard = table_lock.try_lock().await?;
 
         fuse_table
             .commit_mutation(

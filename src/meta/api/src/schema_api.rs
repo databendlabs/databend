@@ -72,6 +72,7 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -238,7 +239,10 @@ pub trait SchemaApi: Send + Sync {
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
-    async fn list_table_lock_revs(&self, req: ListTableLockRevReq) -> Result<Vec<u64>, KVAppError>;
+    async fn list_table_lock_revs(
+        &self,
+        req: ListTableLockRevReq,
+    ) -> Result<Vec<(u64, TableLockMeta)>, KVAppError>;
 
     async fn create_table_lock_rev(
         &self,

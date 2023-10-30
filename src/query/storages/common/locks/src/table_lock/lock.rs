@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::catalog::Catalog;
 use common_catalog::lock_api::LockApi;
 use common_catalog::lock_api::LockLevel;
 use common_catalog::lock_api::LockRequest;
@@ -31,13 +32,19 @@ use crate::table_lock::ListTableLockReq;
 use crate::LockManager;
 
 pub struct TableLock {
+    ctx: Arc<dyn TableContext>,
     lock_mgr: Arc<LockManager>,
     table_info: TableInfo,
 }
 
 impl TableLock {
-    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Self {
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        lock_mgr: Arc<LockManager>,
+        table_info: TableInfo,
+    ) -> Self {
         TableLock {
+            ctx,
             lock_mgr,
             table_info,
         }
@@ -50,8 +57,11 @@ impl LockApi for TableLock {
         LockLevel::Table
     }
 
-    fn catalog(&self) -> &str {
-        self.table_info.catalog()
+    fn get_expire_secs(&self) -> u64 {
+        self.ctx
+            .get_settings()
+            .get_table_lock_expire_secs()
+            .unwrap_or(5)
     }
 
     fn table_id(&self) -> u64 {
@@ -66,18 +76,21 @@ impl LockApi for TableLock {
         lock_key.to_string_key()
     }
 
-    fn create_table_lock_req(&self, expire_secs: u64) -> Box<dyn LockRequest> {
+    fn create_table_lock_req(&self) -> Box<dyn LockRequest> {
         Box::new(CreateTableLockReq {
             table_id: self.table_id(),
-            expire_secs,
+            expire_secs: self.get_expire_secs(),
+            node: self.ctx.get_cluster().local_id.clone(),
+            session_id: self.ctx.get_current_session_id(),
         })
     }
 
-    fn extend_table_lock_req(&self, expire_secs: u64, revision: u64) -> Box<dyn LockRequest> {
+    fn extend_table_lock_req(&self, revision: u64, locked: bool) -> Box<dyn LockRequest> {
         Box::new(ExtendTableLockReq {
             table_id: self.table_id(),
-            expire_secs,
+            expire_secs: self.get_expire_secs(),
             revision,
+            locked,
         })
     }
 
@@ -94,12 +107,27 @@ impl LockApi for TableLock {
         })
     }
 
-    async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>> {
-        let enabled_table_lock = ctx.get_settings().get_enable_table_lock().unwrap_or(false);
+    async fn get_catalog(&self) -> Result<Arc<dyn Catalog>> {
+        self.ctx.get_catalog(self.table_info.catalog()).await
+    }
+
+    async fn try_lock(&self) -> Result<Option<LockGuard>> {
+        let enabled_table_lock = self
+            .ctx
+            .get_settings()
+            .get_enable_table_lock()
+            .unwrap_or(false);
         if enabled_table_lock {
-            self.lock_mgr.try_lock(ctx, self).await
+            self.lock_mgr.try_lock(self).await
         } else {
             Ok(None)
         }
+    }
+
+    async fn check_lock(&self) -> Result<bool> {
+        let list_table_lock_req = self.list_table_lock_req();
+        let catalog = self.get_catalog().await?;
+        let reply = catalog.list_table_lock_revs(list_table_lock_req).await?;
+        Ok(!reply.is_empty())
     }
 }

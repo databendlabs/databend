@@ -71,29 +71,27 @@ impl LockManager {
         GlobalInstance::get()
     }
 
-    pub fn create_table_lock(table_info: TableInfo) -> TableLock {
-        TableLock::create(LockManager::instance(), table_info)
+    pub fn create_table_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> TableLock {
+        let lock_mgr = LockManager::instance();
+        TableLock::create(ctx, lock_mgr, table_info)
     }
 
     #[async_backtrace::framed]
     pub async fn try_lock<T: LockApi + ?Sized>(
         self: &Arc<Self>,
-        ctx: Arc<dyn TableContext>,
         lock: &T,
     ) -> Result<Option<LockGuard>> {
-        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
-        let catalog = ctx.get_catalog(lock.catalog()).await?;
+        let expire_secs = lock.get_expire_secs();
+        let catalog = lock.get_catalog().await?;
 
         // get a new table lock revision.
         let res = catalog
-            .create_table_lock_rev(lock.create_table_lock_req(expire_secs))
+            .create_table_lock_rev(lock.create_table_lock_req())
             .await?;
         let revision = res.revision;
 
         let mut lock_holder = LockHolder::create();
-        lock_holder
-            .start(catalog.clone(), lock, expire_secs, revision)
-            .await?;
+        lock_holder.start(catalog.clone(), lock, revision).await?;
 
         // metrics.
         record_table_lock_nums(lock.level(), lock.table_id(), 1);
@@ -110,19 +108,21 @@ impl LockManager {
             let reply = catalog
                 .list_table_lock_revs(list_table_lock_req.clone())
                 .await?;
-            let position = reply.iter().position(|x| *x == revision).ok_or(
-                // If the current is not found in list,  it means that the current has expired.
-                ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
+            let position = reply.iter().position(|(x, _)| *x == revision).ok_or(
+                // If the current is not found in list,  it means that the current has been expired.
+                ErrorCode::TableLockExpired("the acquired table lock has been expired".to_string()),
             )?;
 
             if position == 0 {
                 // The lock is acquired by current session.
+                let extend_table_lock_req = lock.extend_table_lock_req(revision, true);
+                catalog.extend_table_lock_rev(extend_table_lock_req).await?;
                 break;
             }
 
             // Get the previous revision, watch the delete event.
             let req = WatchRequest {
-                key: lock.watch_delete_key(reply[position - 1]),
+                key: lock.watch_delete_key(reply[position - 1].0),
                 key_end: None,
                 filter_type: FilterType::Delete.into(),
             };

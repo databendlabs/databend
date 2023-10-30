@@ -849,6 +849,15 @@ pub struct TableLockKey {
     pub revision: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct TableLockMeta {
+    pub node: String,
+    pub session_id: String,
+
+    pub created_on: DateTime<Utc>,
+    pub locked_on: Option<DateTime<Utc>>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListTableLockRevReq {
     pub table_id: u64,
@@ -858,6 +867,9 @@ pub struct ListTableLockRevReq {
 pub struct CreateTableLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
+
+    pub node: String,
+    pub session_id: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -870,6 +882,7 @@ pub struct ExtendTableLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
     pub revision: u64,
+    pub locked: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

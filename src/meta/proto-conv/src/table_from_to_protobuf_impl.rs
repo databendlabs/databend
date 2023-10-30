@@ -66,6 +66,44 @@ impl FromToProto for mt::TableCopiedFileInfo {
     }
 }
 
+impl FromToProto for mt::TableLockMeta {
+    type PB = pb::TableLockMeta;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::TableLockMeta) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let v = Self {
+            node: p.node,
+            session_id: p.session_id,
+            created_on: DateTime::<Utc>::from_pb(p.created_on)?,
+            locked_on: match p.locked_on {
+                Some(locked_on) => Some(DateTime::<Utc>::from_pb(locked_on)?),
+                None => None,
+            },
+        };
+
+        Ok(v)
+    }
+
+    fn to_pb(&self) -> Result<pb::TableLockMeta, Incompatible> {
+        let p = pb::TableLockMeta {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            node: self.node.clone(),
+            session_id: self.session_id.clone(),
+            created_on: self.created_on.to_pb()?,
+            locked_on: match self.locked_on {
+                Some(locked_on) => Some(locked_on.to_pb()?),
+                None => None,
+            },
+        };
+        Ok(p)
+    }
+}
+
 impl FromToProto for mt::EmptyProto {
     type PB = pb::EmptyProto;
     fn get_pb_ver(p: &Self::PB) -> u64 {

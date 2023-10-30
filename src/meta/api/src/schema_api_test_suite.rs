@@ -5226,6 +5226,8 @@ impl SchemaApiTestSuite {
             let req1 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                node: "node1".to_string(),
+                session_id: "session1".to_string(),
             };
             let res1 = mt.create_table_lock_rev(req1).await?;
 
@@ -5233,6 +5235,8 @@ impl SchemaApiTestSuite {
             let req2 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
+                node: "node1".to_string(),
+                session_id: "session1".to_string(),
             };
             let res2 = mt.create_table_lock_rev(req2).await?;
             assert!(res2.revision > res1.revision);
@@ -5241,14 +5245,15 @@ impl SchemaApiTestSuite {
             let req3 = ListTableLockRevReq { table_id };
             let res3 = mt.list_table_lock_revs(req3).await?;
             assert_eq!(res3.len(), 2);
-            assert_eq!(res3[0], res1.revision);
-            assert_eq!(res3[1], res2.revision);
+            assert_eq!(res3[0].0, res1.revision);
+            assert_eq!(res3[1].0, res2.revision);
 
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 4) as u64,
                 revision: res2.revision,
+                locked: true,
             };
             mt.extend_table_lock_rev(req4).await?;
 
@@ -5257,7 +5262,7 @@ impl SchemaApiTestSuite {
             let req5 = ListTableLockRevReq { table_id };
             let res5 = mt.list_table_lock_revs(req5).await?;
             assert_eq!(res5.len(), 1);
-            assert_eq!(res5[0], res2.revision);
+            assert_eq!(res5[0].0, res2.revision);
 
             info!("--- delete table lock revision 2");
             let req6 = DeleteTableLockRevReq {
