@@ -82,7 +82,10 @@ echo "select * from default.t20_0012_a order by c" | $TEST_USER_CONNECT
 echo "select * from default.t20_0012_b order by c" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON default.t20_0012_b TO 'test-user'" | $MYSQL_CLIENT_CONNECT
 echo "select * from default.t20_0012_b order by c" | $TEST_USER_CONNECT
+
 ## Create view table
+## TODO(liyz): view is not covered with ownership yet, so the created views are owned by PUBLIC, which
+## is accessible by all users. This need change.
 echo "create database default2" | $MYSQL_CLIENT_CONNECT
 echo "create view default2.v_t20_0012 as select * from default.t20_0012_a" | $MYSQL_CLIENT_CONNECT
 ## Verify view table privilege
@@ -142,13 +145,19 @@ echo "grant select on default.* to a" |  $MYSQL_CLIENT_CONNECT
 echo "grant select on grant_db.t to a" |  $MYSQL_CLIENT_CONNECT
 echo "drop table if exists default.test_t" |  $MYSQL_CLIENT_CONNECT
 echo "create table default.test_t(id int not null)" |  $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show grants for a'" | $MYSQL_CLIENT_CONNECT
 echo "show grants for a" |  $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show databases'" | $MYSQL_CLIENT_CONNECT
 echo "show databases" | $USER_A_CONNECT
+echo "select 'test -- show tables'" | $MYSQL_CLIENT_CONNECT
 echo "show tables" | $USER_A_CONNECT
+echo "select 'test -- show tables from system'" | $MYSQL_CLIENT_CONNECT
 echo "show tables from system" | $USER_A_CONNECT
+echo "select 'test -- show tables from grant_db'" | $MYSQL_CLIENT_CONNECT
 echo "show tables from grant_db" | $USER_A_CONNECT
 echo "use system" | $USER_A_CONNECT
 echo "use grant_db" | $USER_A_CONNECT
+echo "select 'test -- show columns'" | $MYSQL_CLIENT_CONNECT
 echo "show columns from one from system" | $USER_A_CONNECT
 echo "show columns from t from grant_db" | $USER_A_CONNECT
 
