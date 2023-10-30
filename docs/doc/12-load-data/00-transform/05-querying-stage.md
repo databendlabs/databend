@@ -144,14 +144,17 @@ SELECT * FROM @my_external_stage/books.parquet;
 Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) stored in a bucket named *databend-toronto* on Amazon S3 in the region *us-east-2*. You can query the data by specifying the connection parameters:
 
 ```sql
-SELECT *  FROM 's3://databend-toronto' 
-connection => (
- access_key_id = '<your-access-key-id>', 
- secret_access_key = '<your-secret-access-key>',
- endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
- region = 'us-east-2'
-),
- files => ('books.parquet');  
+SELECT
+  *
+FROM
+  's3://databend-toronto' (
+    connection => (
+      access_key_id = '<your-access-key-id>',
+      secret_access_key = '<your-secret-access-key>',
+      endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+      region = 'us-east-2'
+    ) files => ('books.parquet')
+  );  
 ```
 </TabItem>
 <TabItem value="Remote" label="Remote">
@@ -189,7 +192,8 @@ FROM
       secret_access_key = '<your-secret_access_key>',
       endpoint_url = 'https://databend-toronto.s3.us-east-2.amazonaws.com',
       region = 'us-east-2'
-    ) pattern => '.*parquet'
+    ) 
+    pattern => '.*parquet'
   );
 ```
 
