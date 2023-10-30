@@ -255,35 +255,11 @@ impl PipelineBuilder {
             sources_pipelines: self.pipelines,
             prof_span_set: self.proc_profs,
             exchange_injector: self.exchange_injector,
-        })
-    }
-
-    pub fn finalize_local(
-        mut self,
-        plan: &PhysicalPlan,
-    ) -> Result<(PipelineBuildResult, PipelineBuilderData)> {
-        self.build_pipeline(plan)?;
-
-        for source_pipeline in &self.pipelines {
-            if !source_pipeline.is_complete_pipeline()? {
-                return Err(ErrorCode::Internal(
-                    "Source pipeline must be complete pipeline.",
-                ));
-            }
-        }
-
-        Ok((
-            PipelineBuildResult {
-                main_pipeline: self.main_pipeline,
-                sources_pipelines: self.pipelines,
-                prof_span_set: self.proc_profs,
-                exchange_injector: self.exchange_injector,
-            },
-            PipelineBuilderData {
+            builder_data: PipelineBuilderData {
                 input_join_state: self.join_state,
                 input_probe_schema: self.probe_data_fields,
             },
-        ))
+        })
     }
 
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {

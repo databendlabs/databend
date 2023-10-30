@@ -211,28 +211,6 @@ impl DataExchangeManager {
         }
     }
 
-    // Create a pipeline based on query plan
-    #[minitrace::trace]
-    pub fn init_query_fragments_plan_local(
-        &self,
-        ctx: &Arc<QueryContext>,
-        packet: &QueryFragmentsPlanPacket,
-    ) -> Result<()> {
-        let queries_coordinator_guard = self.queries_coordinator.lock();
-        let queries_coordinator = unsafe { &mut *queries_coordinator_guard.deref().get() };
-
-        // TODO: When the query is not executed for a long time after submission, we need to remove it
-        match queries_coordinator.get_mut(&packet.query_id) {
-            None => Err(ErrorCode::Internal(format!(
-                "Query {} not found in cluster.",
-                packet.query_id
-            ))),
-            Some(query_coordinator) => {
-                query_coordinator.prepare_pipeline_local(ctx, packet.enable_profiling, packet)
-            }
-        }
-    }
-
     #[minitrace::trace]
     pub fn handle_statistics_exchange(
         &self,
@@ -320,7 +298,7 @@ impl DataExchangeManager {
             .await?;
 
         // Submit tasks to localhost
-        self.init_query_fragments_plan_local(&ctx, &local_query_fragments_plan_packet)?;
+        self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
         // Get local pipeline of local task
         let build_res = self.get_root_pipeline(ctx, enable_profiling, root_actions)?;
@@ -603,37 +581,7 @@ impl QueryCoordinator {
             );
         }
 
-        for fragment in &packet.fragments {
-            let fragment_id = fragment.fragment_id;
-            if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn prepare_pipeline_local(
-        &mut self,
-        ctx: &Arc<QueryContext>,
-        enable_profiling: bool,
-        packet: &QueryFragmentsPlanPacket,
-    ) -> Result<()> {
-        self.info = Some(QueryInfo {
-            query_ctx: ctx.clone(),
-            query_id: packet.query_id.clone(),
-            current_executor: packet.executor.clone(),
-            query_executor: None,
-        });
-
-        for fragment in &packet.fragments {
-            self.fragments_coordinator.insert(
-                fragment.fragment_id.to_owned(),
-                FragmentCoordinator::create(fragment),
-            );
-        }
-
-        let mut input_builder_data = PipelineBuilderData {
+        let mut last_builder_data = PipelineBuilderData {
             input_join_state: None,
             input_probe_schema: None,
         };
@@ -641,11 +589,22 @@ impl QueryCoordinator {
         for fragment in &packet.fragments {
             let fragment_id = fragment.fragment_id;
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                input_builder_data = coordinator.prepare_pipeline_local(
-                    ctx.clone(),
-                    enable_profiling,
-                    input_builder_data,
-                )?;
+                // before prepare pipeline, it must be none
+                assert!(coordinator.pipeline_build_res.is_none());
+                // reuse last builder data
+                coordinator.pipeline_build_res = Some(
+                    PipelineBuildResult::create_with_builder_data(last_builder_data.clone()),
+                );
+
+                coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
+
+                // after prepare pipeline, it must be some
+                assert!(coordinator.pipeline_build_res.is_some());
+                // update builder_data
+                if coordinator.pipeline_build_res.is_some() {
+                    let new_res = coordinator.pipeline_build_res.as_ref().unwrap();
+                    last_builder_data = new_res.builder_data.clone();
+                }
             }
         }
 
@@ -884,32 +843,6 @@ impl FragmentCoordinator {
 
             let pipeline_ctx = QueryContext::create_from(ctx);
 
-            let pipeline_builder = PipelineBuilder::create(
-                pipeline_ctx.get_function_context()?,
-                pipeline_ctx.get_settings(),
-                pipeline_ctx,
-                enable_profiling,
-                SharedProcessorProfiles::default(),
-            );
-            let res = pipeline_builder.finalize(&self.physical_plan)?;
-
-            self.pipeline_build_res = Some(res);
-        }
-
-        Ok(())
-    }
-
-    pub fn prepare_pipeline_local(
-        &mut self,
-        ctx: Arc<QueryContext>,
-        enable_profiling: bool,
-        input_builder_data: PipelineBuilderData,
-    ) -> Result<PipelineBuilderData> {
-        if !self.initialized {
-            self.initialized = true;
-
-            let pipeline_ctx = QueryContext::create_from(ctx);
-
             let mut pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
@@ -918,18 +851,18 @@ impl FragmentCoordinator {
                 SharedProcessorProfiles::default(),
             );
 
-            pipeline_builder.join_state = input_builder_data.input_join_state;
-            pipeline_builder.probe_data_fields = input_builder_data.input_probe_schema;
+            // has last pipeline_res builder_data, we reuse it
+            if self.pipeline_build_res.is_some() {
+                let res = self.pipeline_build_res.take().unwrap();
+                pipeline_builder.join_state = res.builder_data.input_join_state;
+                pipeline_builder.probe_data_fields = res.builder_data.input_probe_schema;
+            }
 
-            let (res, builder_data) = pipeline_builder.finalize_local(&self.physical_plan)?;
+            let res = pipeline_builder.finalize(&self.physical_plan)?;
 
             self.pipeline_build_res = Some(res);
-            return Ok(builder_data);
         }
 
-        Ok(PipelineBuilderData {
-            input_join_state: None,
-            input_probe_schema: None,
-        })
+        Ok(())
     }
 }

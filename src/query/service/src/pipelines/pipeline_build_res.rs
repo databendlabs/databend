@@ -27,6 +27,7 @@ use super::processors::transforms::hash_join::HashJoinBuildState;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
 
+#[derive(Clone)]
 pub struct PipelineBuilderData {
     pub input_join_state: Option<Arc<HashJoinBuildState>>,
     pub input_probe_schema: Option<Vec<DataField>>,
@@ -42,7 +43,8 @@ pub struct PipelineBuildResult {
     pub prof_span_set: SharedProcessorProfiles,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
-    
+    /// for local fragment data sharing
+    pub builder_data: PipelineBuilderData,
 }
 
 impl PipelineBuildResult {
@@ -52,6 +54,20 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
+            builder_data: PipelineBuilderData {
+                input_join_state: None,
+                input_probe_schema: None,
+            },
+        }
+    }
+
+    pub fn create_with_builder_data(builder_data: PipelineBuilderData) -> PipelineBuildResult {
+        PipelineBuildResult {
+            main_pipeline: Pipeline::create(),
+            sources_pipelines: vec![],
+            prof_span_set: SharedProcessorProfiles::default(),
+            exchange_injector: DefaultExchangeInjector::create(),
+            builder_data,
         }
     }
 
@@ -71,6 +87,10 @@ impl PipelineBuildResult {
             sources_pipelines: vec![],
             prof_span_set: SharedProcessorProfiles::default(),
             exchange_injector: DefaultExchangeInjector::create(),
+            builder_data: PipelineBuilderData {
+                input_join_state: None,
+                input_probe_schema: None,
+            },
         })
     }
 
