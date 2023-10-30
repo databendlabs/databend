@@ -1838,6 +1838,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-cloud-control"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "chrono",
+ "common-base",
+ "common-exception",
+ "lenient_semver",
+ "prost 0.12.1",
+ "prost-build",
+ "semver",
+ "tonic 0.10.2",
+ "tonic-build",
+ "tower",
+]
+
+[[package]]
 name = "common-compress"
 version = "0.1.0"
 dependencies = [
@@ -3026,6 +3043,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-cloud-control",
  "common-config",
  "common-exception",
  "common-expression",
@@ -3853,6 +3871,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-catalog",
+ "common-cloud-control",
  "common-compress",
  "common-config",
  "common-exception",
@@ -7873,7 +7892,8 @@ dependencies = [
 [[package]]
 name = "minitrace"
 version = "0.6.1"
-source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "907a42ce9b352d77449f86c1a6474a18ee5cd0f75d8eeffa4a80bfdf9825899e"
 dependencies = [
  "futures",
  "minitrace-macro 0.6.1",
@@ -7900,7 +7920,8 @@ dependencies = [
 [[package]]
 name = "minitrace-macro"
 version = "0.6.1"
-source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1b4f1e587d486a5fe6bfede00e0efc884aeec0f16976e366ba9ddf1d67506a9"
 dependencies = [
  "proc-macro-error 1.0.4",
  "proc-macro2",
@@ -7911,7 +7932,8 @@ dependencies = [
 [[package]]
 name = "minitrace-opentelemetry"
 version = "0.6.1"
-source = "git+https://github.com/andylokandy/minitrace-rust?rev=0abb76e#0abb76ea004ce0f6503916d45c28cd487523b713"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25cbd2b63767cc825ee3054e68b604b01d67e58ba8764e284acbb16d4c67537c"
 dependencies = [
  "futures",
  "log",
@@ -7962,9 +7984,9 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e4a1c770583dac7ab5e2f6c139153b783a53a1bbee9729613f193e59828326"
+checksum = "4c84490118f2ee2d74570d114f3d0493cbf02790df303d2707606c3e14e07c96"
 dependencies = [
  "cfg-if",
  "downcast",
@@ -7977,9 +7999,9 @@ dependencies = [
 
 [[package]]
 name = "mockall_derive"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "832663583d5fa284ca8810bf7015e46c9fff9622d3cf34bd1eea5003fec06dd0"
+checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
 dependencies = [
  "cfg-if",
  "proc-macro2",
@@ -9604,7 +9626,7 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset 0.9.0",
- "parking_lot 0.12.1",
+ "parking_lot 0.11.2",
  "pyo3-build-config 0.19.1",
  "pyo3-ffi",
  "pyo3-macros",
@@ -12274,7 +12296,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
  "cfg-if",
- "rand 0.8.5",
+ "rand 0.7.3",
  "static_assertions",
 ]
 

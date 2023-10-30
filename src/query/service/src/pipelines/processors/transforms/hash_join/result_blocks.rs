@@ -14,6 +14,7 @@
 
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockEntry;
@@ -24,6 +25,7 @@ use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
 use super::ProbeState;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::sql::planner::plans::JoinType;
 
@@ -140,6 +142,7 @@ impl HashJoinProbeState {
         &self,
         input: DataBlock,
         is_probe_projected: bool,
+        true_validity: &Bitmap,
     ) -> Result<Vec<DataBlock>> {
         if self.hash_join_state.hash_join_desc.join_type == JoinType::LeftAnti {
             return Ok(vec![input]);
@@ -150,7 +153,19 @@ impl HashJoinProbeState {
             .is_build_projected
             .load(Ordering::Relaxed);
         let probe_block = if is_probe_projected {
-            Some(input)
+            if matches!(
+                self.hash_join_state.hash_join_desc.join_type,
+                JoinType::Full
+            ) {
+                let nullable_columns = input
+                    .columns()
+                    .iter()
+                    .map(|c| wrap_true_validity(c, input.num_rows(), true_validity))
+                    .collect::<Vec<_>>();
+                Some(DataBlock::new(nullable_columns, input.num_rows()))
+            } else {
+                Some(input)
+            }
         } else {
             None
         };

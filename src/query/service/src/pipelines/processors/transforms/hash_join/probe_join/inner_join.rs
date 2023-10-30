@@ -25,7 +25,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::common::set_true_validity;
+use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 
@@ -115,7 +115,7 @@ impl HashJoinProbeState {
                                 (true, false) => {
                                     result_block.get_by_offset(*index).clone().remove_nullable()
                                 }
-                                (false, true) => set_true_validity(
+                                (false, true) => wrap_true_validity(
                                     result_block.get_by_offset(*index),
                                     result_block.num_rows(),
                                     &probe_state.true_validity,
@@ -185,7 +185,7 @@ impl HashJoinProbeState {
                         (true, false) => {
                             result_block.get_by_offset(*index).clone().remove_nullable()
                         }
-                        (false, true) => set_true_validity(
+                        (false, true) => wrap_true_validity(
                             result_block.get_by_offset(*index),
                             result_block.num_rows(),
                             &probe_state.true_validity,

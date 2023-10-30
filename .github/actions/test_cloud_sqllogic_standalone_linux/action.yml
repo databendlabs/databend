@@ -1,0 +1,36 @@
+name: "Test cloud control sqllogic Standalone"
+description: "Running cloud control sqllogic tests in standalone mode"
+inputs:
+  target:
+    description: ""
+    required: true
+    default: "x86_64-unknown-linux-gnu"
+  dirs:
+    description: "logic test suites dirs"
+    required: true
+    default: ""
+  handlers:
+    description: "logic test handlers, mysql,http,clickhouse"
+    required: true
+    default: ""
+  storage-format:
+    description: "storage format for databend query to test"
+    required: true
+    default: all
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download artifact
+      uses: ./.github/actions/artifact_download
+      with:
+        sha: ${{ github.sha }}
+        target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+
+    - name: Run sqllogic Tests with Standalone mode
+      if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
+      shell: bash
+      env:
+        TEST_HANDLERS: ${{ inputs.handlers }}
+      run: bash ./scripts/ci/ci-run-sqllogic-tests-cloud.sh ${{ inputs.dirs }}

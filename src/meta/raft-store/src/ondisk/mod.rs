@@ -358,7 +358,7 @@ impl OnDisk {
             }
 
             writer
-                .write_entries::<io::Error>(futures::stream::iter([kv_entry]))
+                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
                 .await
                 .map_err(|e| {
                     let ae = AnyError::new(&e).add_context(|| "write snapshot entry");

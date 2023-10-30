@@ -293,7 +293,7 @@ impl Table for ParquetRSTable {
         Ok(Box::new(provider))
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
         // Unwrap safety: no other thread will hold this lock.
         let parquet_metas = self.parquet_metas.try_lock().unwrap();
         if parquet_metas.is_empty() {
