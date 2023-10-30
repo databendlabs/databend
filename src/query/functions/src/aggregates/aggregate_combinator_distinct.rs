@@ -83,6 +83,9 @@ where State: DistinctStateFunc
         input_rows: usize,
     ) -> Result<()> {
         let state = place.get::<State>();
+
+        println!("columns {:?}", columns);
+        println!("validity {:?}", validity);
         state.batch_add(columns, validity, input_rows)
     }
 
