@@ -42,6 +42,7 @@ pub struct PipelineBuildResult {
     pub prof_span_set: SharedProcessorProfiles,
 
     pub exchange_injector: Arc<dyn ExchangeInjector>,
+    
 }
 
 impl PipelineBuildResult {

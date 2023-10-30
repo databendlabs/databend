@@ -47,8 +47,7 @@ impl AsyncAccumulatingTransform for DeduplicateRowNumber {
         if self.unique_row_number.is_empty() {
             Ok(Some(DataBlock::empty()))
         } else {
-            let block = self.apply().await?;
-            Ok(block)
+            self.apply().await
         }
     }
 }
