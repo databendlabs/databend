@@ -5253,7 +5253,7 @@ impl SchemaApiTestSuite {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 4) as u64,
                 revision: res2.revision,
-                locked: true,
+                acquire_lock: true,
             };
             mt.extend_table_lock_rev(req4).await?;
 

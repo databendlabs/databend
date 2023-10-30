@@ -61,7 +61,7 @@ impl LockApi for TableLock {
         self.ctx
             .get_settings()
             .get_table_lock_expire_secs()
-            .unwrap_or(5)
+            .unwrap_or(3)
     }
 
     fn table_id(&self) -> u64 {
@@ -85,12 +85,12 @@ impl LockApi for TableLock {
         })
     }
 
-    fn extend_table_lock_req(&self, revision: u64, locked: bool) -> Box<dyn LockRequest> {
+    fn extend_table_lock_req(&self, revision: u64, acquire_lock: bool) -> Box<dyn LockRequest> {
         Box::new(ExtendTableLockReq {
             table_id: self.table_id(),
             expire_secs: self.get_expire_secs(),
             revision,
-            locked,
+            acquire_lock,
         })
     }
 
@@ -118,7 +118,8 @@ impl LockApi for TableLock {
             .get_enable_table_lock()
             .unwrap_or(false);
         if enabled_table_lock {
-            self.lock_mgr.try_lock(self).await
+            let acquire_lock_timeout = self.ctx.get_settings().get_acquire_lock_timeout()?;
+            self.lock_mgr.try_lock(self, acquire_lock_timeout).await
         } else {
             Ok(None)
         }

@@ -79,8 +79,8 @@ impl FromToProto for mt::TableLockMeta {
             node: p.node,
             session_id: p.session_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            locked_on: match p.locked_on {
-                Some(locked_on) => Some(DateTime::<Utc>::from_pb(locked_on)?),
+            acquired_on: match p.acquired_on {
+                Some(acquired_on) => Some(DateTime::<Utc>::from_pb(acquired_on)?),
                 None => None,
             },
         };
@@ -95,8 +95,8 @@ impl FromToProto for mt::TableLockMeta {
             node: self.node.clone(),
             session_id: self.session_id.clone(),
             created_on: self.created_on.to_pb()?,
-            locked_on: match self.locked_on {
-                Some(locked_on) => Some(locked_on.to_pb()?),
+            acquired_on: match self.acquired_on {
+                Some(acquired_on) => Some(acquired_on.to_pb()?),
                 None => None,
             },
         };

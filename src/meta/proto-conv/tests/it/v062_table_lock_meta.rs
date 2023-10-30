@@ -41,7 +41,7 @@ fn test_decode_v62_table_lock_meta() -> anyhow::Result<()> {
         node: "node".to_string(),
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
-        locked_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+        acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 62, want())?;

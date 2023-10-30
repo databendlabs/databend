@@ -3197,7 +3197,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 node: req.node.clone(),
                 session_id: req.session_id.clone(),
                 created_on: Utc::now(),
-                locked_on: None,
+                acquired_on: None,
             };
 
             let condition = vec![
@@ -3254,8 +3254,8 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let table_lock_key = TableLockKey { table_id, revision };
             let (table_lock_seq, mut table_lock_meta) =
                 get_table_lock_meta_or_err(self, &table_lock_key, ctx).await?;
-            if req.locked {
-                table_lock_meta.locked_on = Some(Utc::now());
+            if req.acquire_lock {
+                table_lock_meta.acquired_on = Some(Utc::now());
             }
 
             let condition = vec![

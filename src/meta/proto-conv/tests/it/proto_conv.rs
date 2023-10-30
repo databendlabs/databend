@@ -275,7 +275,7 @@ pub(crate) fn new_table_lock_meta() -> mt::TableLockMeta {
         node: "node".to_string(),
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
-        locked_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+        acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
     }
 }
 

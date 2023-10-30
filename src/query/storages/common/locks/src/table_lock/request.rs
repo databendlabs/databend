@@ -78,7 +78,7 @@ pub struct ExtendTableLockReq {
     pub table_id: u64,
     pub expire_secs: u64,
     pub revision: u64,
-    pub locked: bool,
+    pub acquire_lock: bool,
 }
 
 impl LockRequest for ExtendTableLockReq {
@@ -97,7 +97,7 @@ impl From<&ExtendTableLockReq> for ExtendTableLockRevReq {
             table_id: value.table_id,
             expire_at: Utc::now().timestamp() as u64 + value.expire_secs,
             revision: value.revision,
-            locked: value.locked,
+            acquire_lock: value.acquire_lock,
         }
     }
 }

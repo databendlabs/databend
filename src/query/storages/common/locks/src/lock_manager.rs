@@ -80,8 +80,8 @@ impl LockManager {
     pub async fn try_lock<T: LockApi + ?Sized>(
         self: &Arc<Self>,
         lock: &T,
+        lock_acquire_timeout: u64,
     ) -> Result<Option<LockGuard>> {
-        let expire_secs = lock.get_expire_secs();
         let catalog = lock.get_catalog().await?;
 
         // get a new table lock revision.
@@ -99,7 +99,7 @@ impl LockManager {
         self.insert_lock(revision, lock_holder);
         let guard = LockGuard::new(self.clone(), revision);
 
-        let duration = Duration::from_secs(expire_secs);
+        let duration = Duration::from_secs(lock_acquire_timeout);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let list_table_lock_req = lock.list_table_lock_req();
         let delete_table_lock_req = lock.delete_table_lock_req(revision);

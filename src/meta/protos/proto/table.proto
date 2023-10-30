@@ -184,5 +184,5 @@ message TableLockMeta {
   string node = 1;
   string session_id = 2;
   string created_on = 3;
-  optional string locked_on = 4;
+  optional string acquired_on = 4;
 }

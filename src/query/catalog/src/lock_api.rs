@@ -34,7 +34,7 @@ pub trait LockApi: Sync + Send {
 
     fn create_table_lock_req(&self) -> Box<dyn LockRequest>;
 
-    fn extend_table_lock_req(&self, revision: u64, locked: bool) -> Box<dyn LockRequest>;
+    fn extend_table_lock_req(&self, revision: u64, acquire_lock: bool) -> Box<dyn LockRequest>;
 
     fn delete_table_lock_req(&self, revision: u64) -> Box<dyn LockRequest>;
 
