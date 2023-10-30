@@ -15,11 +15,30 @@
 use std::fmt::Write;
 
 #[derive(Debug)]
-struct AsyncTaskItem {
-    stack_frames: Vec<String>,
+pub struct AsyncTaskItem {
+    pub stack_frames: Vec<String>,
 }
 
 pub fn dump_backtrace(wait_for_running_tasks: bool) -> String {
+    let (tasks, polling_tasks) = get_all_tasks(wait_for_running_tasks);
+
+    let mut output = String::new();
+    for mut tasks in [tasks, polling_tasks] {
+        tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
+
+        for item in tasks.into_iter().rev() {
+            for frame in item.stack_frames {
+                writeln!(output, "{}", frame).unwrap();
+            }
+
+            writeln!(output).unwrap();
+        }
+    }
+
+    output
+}
+
+pub fn get_all_tasks(wait_for_running_tasks: bool) -> (Vec<AsyncTaskItem>, Vec<AsyncTaskItem>) {
     let tree = async_backtrace::taskdump_tree(wait_for_running_tasks);
 
     let mut tasks = vec![];
@@ -61,19 +80,5 @@ pub fn dump_backtrace(wait_for_running_tasks: bool) -> String {
             stack_frames: std::mem::take(&mut current_stack_frames),
         }),
     };
-
-    let mut output = String::new();
-    for mut tasks in [tasks, polling_tasks] {
-        tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
-
-        for item in tasks.into_iter().rev() {
-            for frame in item.stack_frames {
-                writeln!(output, "{}", frame).unwrap();
-            }
-
-            writeln!(output).unwrap();
-        }
-    }
-
-    output
+    (tasks, polling_tasks)
 }

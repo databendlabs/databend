@@ -237,21 +237,19 @@ impl MatchedAggregator {
             }
 
             let query_id = aggregation_ctx.ctx.get_id();
-            let handle = io_runtime.spawn(async_backtrace::location!(query_id).frame({
-                async move {
-                    let mutation_log_entry = aggregation_ctx
-                        .apply_update_and_deletion_to_data_block(
-                            segment_idx,
-                            block_idx,
-                            &block_meta,
-                            modified_offsets,
-                        )
-                        .await?;
+            let handle = io_runtime.spawn(query_id, async move {
+                let mutation_log_entry = aggregation_ctx
+                    .apply_update_and_deletion_to_data_block(
+                        segment_idx,
+                        block_idx,
+                        &block_meta,
+                        modified_offsets,
+                    )
+                    .await?;
 
-                    drop(permit);
-                    Ok::<_, ErrorCode>(mutation_log_entry)
-                }
-            }));
+                drop(permit);
+                Ok::<_, ErrorCode>(mutation_log_entry)
+            });
             mutation_log_handlers.push(handle);
         }
 

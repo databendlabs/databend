@@ -21,6 +21,7 @@ use common_base::base::tokio::net::TcpStream;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::AbortHandle;
@@ -109,7 +110,7 @@ impl MySQLHandler {
         keepalive: TcpKeepalive,
         tls: Option<Arc<ServerConfig>>,
     ) {
-        executor.spawn(async move {
+        executor.spawn(GLOBAL_TASK, async move {
             match sessions.create_session(SessionType::MySQL).await {
                 Err(error) => {
                     warn!("create session failed, {:?}", error);

@@ -12,9 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Write;
 use std::sync::Arc;
 
 use common_base::dump_backtrace;
+use common_base::get_all_tasks;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -47,14 +49,26 @@ impl SyncSystemTable for BacktraceTable {
     }
 
     fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let local_node = ctx.get_cluster().local_id.clone();
-        let stack = dump_backtrace(false);
+        let local_node = ctx.get_cluster().local_id.clone().into_bytes();
+        let (tasks, polling_tasks) = get_all_tasks(false);
+        let tasks_size = tasks.len() + polling_tasks.len();
 
-        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(1);
-        let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(1);
+        let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
+        let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
 
-        nodes.push(local_node.into_bytes());
-        stacks.push(stack.into_bytes());
+        for mut tasks in [tasks, polling_tasks] {
+            tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
+
+            for item in tasks.into_iter().rev() {
+                let mut stack_frames = String::new();
+                for frame in item.stack_frames {
+                    writeln!(stack_frames, "{}", frame).unwrap();
+                }
+
+                nodes.push(local_node.clone());
+                stacks.push(stack_frames.into_bytes());
+            }
+        }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(nodes),
@@ -67,6 +81,8 @@ impl BacktraceTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
+            // TableField::new("query_id", TableDataType::String),
+            // TableField::new("status", TableDataType::String),
             TableField::new("stack", TableDataType::String),
         ]);
 

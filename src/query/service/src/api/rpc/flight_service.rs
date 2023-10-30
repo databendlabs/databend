@@ -186,6 +186,7 @@ impl FlightService for DatabendQueryFlightService {
                     let query_id = init_query_fragments_plan.executor_packet.query_id.clone();
                     if let Err(cause) = match_join_handle(
                         spawner.spawn(
+                            ctx.get_id(),
                             async move {
                                 DataExchangeManager::instance().init_query_fragments_plan(
                                     &ctx,

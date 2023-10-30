@@ -47,7 +47,7 @@ impl StatisticsReceiver {
 
         for (_source, exchange) in statistics_exchanges.into_iter() {
             let rx = exchange.convert_to_receiver();
-            exchange_handler.push(runtime.spawn({
+            exchange_handler.push(runtime.spawn(ctx.get_id(), {
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();
 

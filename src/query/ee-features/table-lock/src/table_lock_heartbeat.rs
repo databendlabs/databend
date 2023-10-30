@@ -48,7 +48,7 @@ impl TableLockHeartbeat {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
 
-        self.shutdown_handler = Some(GlobalIORuntime::instance().spawn({
+        self.shutdown_handler = Some(GlobalIORuntime::instance().spawn(ctx.get_id(), {
             let shutdown_flag = self.shutdown_flag.clone();
             let shutdown_notify = self.shutdown_notify.clone();
 

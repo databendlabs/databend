@@ -25,6 +25,7 @@ use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::Thread;
 use common_base::runtime::TrySpawn;
+use common_base::GLOBAL_TASK;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -152,7 +153,7 @@ impl DataExchangeManager {
         let address = address.to_string();
 
         GlobalIORuntime::instance()
-            .spawn(async move {
+            .spawn(GLOBAL_TASK, async move {
                 match config.tls_query_cli_enabled() {
                     true => Ok(FlightClient::new(FlightServiceClient::new(
                         ConnectionFactory::create_rpc_channel(

@@ -2456,6 +2456,7 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "common-base",
+ "common-catalog",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
