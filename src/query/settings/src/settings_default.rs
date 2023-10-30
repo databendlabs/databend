@@ -102,7 +102,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("input_read_buffer_size", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1024 * 1024),
+                    value: UserSettingValue::UInt64(4 * 1024 * 1024),
                     desc: "Sets the memory size in bytes allocated to the buffer used by the buffered reader to read data from storage.",
                     possible_values: None,
                     display_in_show_settings: true,
