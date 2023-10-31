@@ -236,6 +236,7 @@ impl SubqueryRewriter {
             marker_index: None,
             from_correlated_subquery: true,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         };
 
         // Rewrite plan to semi-join.
@@ -306,6 +307,7 @@ impl SubqueryRewriter {
                     marker_index: None,
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -349,6 +351,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 };
                 let s_expr = SExpr::create_binary(
                     Arc::new(join_plan.into()),
@@ -407,6 +410,7 @@ impl SubqueryRewriter {
                     marker_index: Some(marker_index),
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
+                    need_hold_hash_table: false,
                 }
                 .into();
                 Ok((
@@ -502,6 +506,7 @@ impl SubqueryRewriter {
                 marker_index: None,
                 from_correlated_subquery: false,
                 contain_runtime_filter: false,
+                need_hold_hash_table: false,
             }
             .into();
             return Ok(SExpr::create_binary(
@@ -612,6 +617,7 @@ impl SubqueryRewriter {
                             marker_index: join.marker_index,
                             from_correlated_subquery: false,
                             contain_runtime_filter: false,
+                            need_hold_hash_table: false,
                         }
                         .into(),
                     ),

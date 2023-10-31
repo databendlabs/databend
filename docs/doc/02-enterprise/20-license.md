@@ -2,6 +2,8 @@
 title: Licensing Databend
 ---
 
+import DetailsWrap from '@site/src/components/DetailsWrap';
+
 Databend code is distributed under two licensing types:
 
 | Type                | Description                                                                                                                                                                                                                                                                                         |
@@ -53,6 +55,7 @@ call admin$license_info();
 ## License FAQs
 
 If you have any other questions not covered below, please feel free to [contact us](https://www.databend.com/contact-us).
+<DetailsWrap>
 
 <details open>
   <summary>Can I Host Databend as a Service for Internal Use at My Organization?</summary>
@@ -95,6 +98,7 @@ This is permitted under ELv2, because you are not providing the software as a ma
 If your customers do not access Databend. this is permitted under ELv2. If your customers do have access to substantial portions of functionality of Databend as part of your service, this may not be permitted.
 </details>
 
+</DetailsWrap>
 
 
 

@@ -65,7 +65,6 @@ use common_meta_types::MetaHandshakeError;
 use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
-use common_tracing::func_name;
 use futures::stream::StreamExt;
 use log::as_debug;
 use log::as_display;
@@ -73,6 +72,7 @@ use log::debug;
 use log::error;
 use log::info;
 use log::warn;
+use minitrace::full_name;
 use minitrace::future::FutureExt;
 use minitrace::Span;
 use once_cell::sync::OnceCell;
@@ -185,7 +185,9 @@ impl ClientHandle {
                 request_id: META_REQUEST_ID.fetch_add(1, Ordering::Relaxed),
                 resp_tx: tx,
                 req: req.into(),
-                span: Span::enter_with_local_parent("ClientWorkerRequest"),
+                span: Span::enter_with_local_parent(std::any::type_name::<
+                    message::ClientWorkerRequest,
+                >()),
             };
 
             debug!(
@@ -394,7 +396,7 @@ impl MetaGrpcClient {
                 Some(x) => x,
             };
 
-            let span = Span::enter_with_parent(func_name!(), &req.span);
+            let span = Span::enter_with_parent(full_name!(), &req.span);
 
             if req.resp_tx.is_closed() {
                 debug!(

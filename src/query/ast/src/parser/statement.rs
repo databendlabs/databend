@@ -617,14 +617,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let attach_table = map(
         rule! {
-            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location
+            ATTACH ~ TABLE ~ #dot_separated_idents_1_to_3 ~ #uri_location ~ READ_ONLY?
         },
-        |(_, _, (catalog, database, table), uri_location)| {
+        |(_, _, (catalog, database, table), uri_location, opt_read_only)| {
             Statement::AttachTable(AttachTableStmt {
                 catalog,
                 database,
                 table,
                 uri_location,
+                read_only: opt_read_only.is_some(),
             })
         },
     );
@@ -2849,12 +2850,7 @@ pub fn udf_definition(i: Input) -> IResult<UDFDefinition> {
 
 pub fn merge_update_expr(i: Input) -> IResult<MergeUpdateExpr> {
     map(
-        rule! { ( #dot_separated_idents_1_to_3 ~ "=" ~ ^#expr ) },
-        |((catalog, table, name), _, expr)| MergeUpdateExpr {
-            catalog,
-            table,
-            name,
-            expr,
-        },
+        rule! { ( #dot_separated_idents_1_to_2 ~ "=" ~ ^#expr ) },
+        |((table, name), _, expr)| MergeUpdateExpr { table, name, expr },
     )(i)
 }

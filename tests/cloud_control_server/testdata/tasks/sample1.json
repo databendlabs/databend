@@ -1,0 +1,22 @@
+{
+  "Task": {
+    "task_id": 100,
+    "task_name": "SampleTask",
+    "query_text": "SELECT 100",
+    "comment": "This is a sample task.",
+    "owner": "user1",
+    "schedule_options": {
+      "interval": 5,
+      "schedule_type": "interval_type",
+      "time_zone": "UTC"
+    },
+    "warehouse_options": {
+      "warehouse": "sample_warehouse"
+    },
+    "next_scheduled_at": "2023-10-27T10:00:00Z",
+    "suspend_task_after_num_failures": 3,
+    "status": "Started",
+    "created_at": "2023-10-26T09:00:00Z",
+    "updated_at": "2023-10-26T10:00:00Z"
+  }
+}

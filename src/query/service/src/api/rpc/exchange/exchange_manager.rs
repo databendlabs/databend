@@ -32,6 +32,7 @@ use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Status;
@@ -728,7 +729,14 @@ impl QueryCoordinator {
         let mut statistics_sender =
             StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root("Distributed-Executor", parent)
+        } else {
+            Span::noop()
+        };
+
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
+            let _g = span.set_local_parent();
             statistics_sender.shutdown(executor.execute().err());
             query_ctx
                 .get_exchange_manager()
@@ -814,6 +822,7 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
+
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
@@ -821,7 +830,10 @@ impl FragmentCoordinator {
                 enable_profiling,
                 SharedProcessorProfiles::default(),
             );
-            self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
+
+            let res = pipeline_builder.finalize(&self.physical_plan)?;
+
+            self.pipeline_build_res = Some(res);
         }
 
         Ok(())

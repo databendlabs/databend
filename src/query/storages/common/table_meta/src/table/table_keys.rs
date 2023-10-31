@@ -21,9 +21,13 @@ pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
 pub const OPT_KEY_COMMENT: &str = "comment";
-pub const OPT_KEY_EXTERNAL_LOCATION: &str = "external_location";
 pub const OPT_KEY_ENGINE: &str = "engine";
 pub const OPT_KEY_BLOOM_INDEX_COLUMNS: &str = "bloom_index_columns";
+
+// Attached table options.
+pub const OPT_KEY_TABLE_ATTACHED_DATA_URI: &str = "table_data_uri";
+// Read only attached table options.
+pub const OPT_KEY_TABLE_ATTACHED_READ_ONLY: &str = "read_only_attached";
 
 /// Legacy table snapshot location key
 ///

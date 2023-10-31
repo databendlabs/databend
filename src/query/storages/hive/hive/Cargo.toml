@@ -26,9 +26,9 @@ common-sql = { path = "../../../sql" }
 common-storage = { path = "../../../../common/storage" }
 
 storages-common-cache = { path = "../../common/cache" }
-storages-common-cache-manager = { path = "../../common/cache-manager" }
+storages-common-cache-manager = { path = "../../common/cache_manager" }
 storages-common-index = { path = "../../common/index" }
-storages-common-table-meta = { path = "../../common/table-meta" }
+storages-common-table-meta = { path = "../../common/table_meta" }
 
 async-backtrace = { workspace = true }
 async-recursion = "1.0.0"

@@ -1,0 +1,19 @@
+{
+  "Task": {
+    "task_id": 102,
+    "task_name": "CronTask",
+    "query_text": "SELECT 102",
+    "comment": "This is a task scheduled for 5 PM daily in LA timezone.",
+    "owner": "user1",
+    "schedule_options": {
+      "cron": "0 17 * * *",
+      "schedule_type": "cron_type",
+      "time_zone": "America/Los_Angeles"
+    },
+    "status": "Suspended",
+    "next_scheduled_at": "2023-10-27T10:00:00Z",
+    "created_at": "2023-10-26T09:00:00Z",
+    "updated_at": "2023-10-26T10:00:00Z"
+  }
+}
+

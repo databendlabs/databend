@@ -502,6 +502,9 @@ impl TableContext for QueryContext {
     fn get_current_role(&self) -> Option<RoleInfo> {
         self.shared.get_current_role()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        self.get_current_session().get_all_available_roles().await
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         self.shared.session.get_visibility_checker().await
@@ -536,11 +539,14 @@ impl TableContext for QueryContext {
     fn get_function_context(&self) -> Result<FunctionContext> {
         let tz = self.get_settings().get_timezone()?;
         let tz = TzFactory::instance().get_by_name(&tz)?;
+        let numeric_cast_option = self.get_settings().get_numeric_cast_option()?;
+        let rounding_mode = numeric_cast_option.as_str() == "rounding";
 
         let query_config = &GlobalConfig::instance().query;
 
         Ok(FunctionContext {
             tz,
+            rounding_mode,
 
             openai_api_key: query_config.openai_api_key.clone(),
             openai_api_version: query_config.openai_api_version.clone(),

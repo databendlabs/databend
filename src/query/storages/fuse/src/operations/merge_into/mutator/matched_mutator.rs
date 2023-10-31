@@ -97,6 +97,7 @@ impl MatchedAggregator {
     ) -> Result<Self> {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), target_table_schema.clone());
+
         let block_reader = {
             let projection =
                 Projection::Columns((0..target_table_schema.num_fields()).collect_vec());
@@ -128,10 +129,10 @@ impl MatchedAggregator {
 
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, data_block: DataBlock) -> Result<()> {
-        let start = Instant::now();
         if data_block.is_empty() {
             return Ok(());
         }
+        let start = Instant::now();
         // data_block is from matched_split, so there is only one column.
         // that's row_id
         let row_ids = get_row_id(&data_block, 0)?;

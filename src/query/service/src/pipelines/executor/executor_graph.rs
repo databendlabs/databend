@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_pipeline_core::processors::processor::EventCause;
 use log::debug;
 use log::trace;
+use minitrace::prelude::*;
 use petgraph::dot::Config;
 use petgraph::dot::Dot;
 use petgraph::prelude::EdgeIndex;
@@ -379,7 +380,10 @@ impl ScheduleQueue {
                     global_queue,
                     workers_condvar,
                     process_future,
-                )),
+                ))
+                .in_span(Span::enter_with_local_parent(std::any::type_name::<
+                    ProcessorAsyncTask,
+                >())),
             );
         }
     }

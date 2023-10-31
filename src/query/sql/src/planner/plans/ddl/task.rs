@@ -12,12 +12,39 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::AlterTaskOptions;
 use common_ast::ast::ScheduleOptions;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::WarehouseOptions;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType::UInt64;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+
+pub fn task_schema() -> DataSchemaRef {
+    Arc::new(DataSchema::new(vec![
+        DataField::new("created_on", DataType::Timestamp),
+        DataField::new("name", DataType::String),
+        DataField::new("id", DataType::Number(UInt64)),
+        DataField::new("owner", DataType::String),
+        DataField::new("comment", DataType::String.wrap_nullable()),
+        DataField::new("warehouse", DataType::String.wrap_nullable()),
+        DataField::new("schedule", DataType::String.wrap_nullable()),
+        DataField::new("state", DataType::String),
+        DataField::new("definition", DataType::String),
+        DataField::new(
+            "suspend_task_after_num_failures",
+            DataType::Number(UInt64).wrap_nullable(),
+        ),
+        DataField::new("next_schedule_time", DataType::Timestamp.wrap_nullable()),
+        DataField::new("last_committed_on", DataType::Timestamp),
+        DataField::new("last_suspended_on", DataType::Timestamp.wrap_nullable()),
+    ]))
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateTaskPlan {
@@ -72,7 +99,7 @@ pub struct DescribeTaskPlan {
 
 impl DescribeTaskPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![])
+        task_schema()
     }
 }
 
@@ -96,6 +123,6 @@ pub struct ShowTasksPlan {
 
 impl ShowTasksPlan {
     pub fn schema(&self) -> DataSchemaRef {
-        DataSchemaRefExt::create(vec![])
+        task_schema()
     }
 }

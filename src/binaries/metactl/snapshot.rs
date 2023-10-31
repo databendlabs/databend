@@ -36,6 +36,7 @@ use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state::RaftState;
 use common_meta_sled_store::get_sled_db;
@@ -223,7 +224,7 @@ async fn import_v002(
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
             writer
-                .write_entries::<io::Error>(futures::stream::iter([kv_entry]))
+                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
                 .await?;
         } else {
             // Write to sled tree
@@ -369,7 +370,7 @@ async fn init_new_cluster(
 
     let last_applied = {
         let sm2 = sto.get_state_machine().await;
-        *sm2.last_applied_ref()
+        *sm2.sys_data_ref().last_applied_ref()
     };
 
     let last_log_id = std::cmp::max(last_applied, max_log_id);
@@ -382,12 +383,13 @@ async fn init_new_cluster(
     {
         let mut sm2 = sto.get_state_machine().await;
 
-        *sm2.nodes_mut() = nodes.clone();
+        *sm2.sys_data_mut().nodes_mut() = nodes.clone();
 
         // It must set membership to state machine because
         // the snapshot may contain more logs than the last_log_id.
         // In which case, logs will be purged upon startup.
-        *sm2.last_membership_mut() = StoredMembership::new(last_applied, membership.clone());
+        *sm2.sys_data_mut().last_membership_mut() =
+            StoredMembership::new(last_applied, membership.clone());
     }
 
     // Build snapshot to persist state machine.

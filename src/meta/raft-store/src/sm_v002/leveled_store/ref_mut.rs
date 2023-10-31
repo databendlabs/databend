@@ -13,17 +13,20 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::io;
 use std::ops::RangeBounds;
 
 use common_meta_types::KVMeta;
-use futures_util::stream::BoxStream;
 
 use crate::sm_v002::leveled_store::level::Level;
 use crate::sm_v002::leveled_store::map_api::compacted_get;
 use crate::sm_v002::leveled_store::map_api::compacted_range;
+use crate::sm_v002::leveled_store::map_api::KVResultStream;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
 use crate::sm_v002::leveled_store::map_api::MapKey;
+use crate::sm_v002::leveled_store::map_api::MarkedOf;
+use crate::sm_v002::leveled_store::map_api::Transition;
 use crate::sm_v002::leveled_store::ref_::Ref;
 use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::marked::Marked;
@@ -64,7 +67,7 @@ where
     K: MapKey,
     Level: MapApiRO<K>,
 {
-    async fn get<Q>(&self, key: &Q) -> Marked<K::V>
+    async fn get<Q>(&self, key: &Q) -> Result<Marked<K::V>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -73,7 +76,7 @@ where
         compacted_get(key, levels).await
     }
 
-    async fn range<'f, Q, R>(&'f self, range: R) -> BoxStream<'f, (K, Marked<K::V>)>
+    async fn range<Q, R>(&self, range: R) -> Result<KVResultStream<K>, io::Error>
     where
         K: Borrow<Q>,
         Q: Ord + Send + Sync + ?Sized,
@@ -94,21 +97,21 @@ where
         &mut self,
         key: K,
         value: Option<(K::V, Option<KVMeta>)>,
-    ) -> (Marked<K::V>, Marked<K::V>)
+    ) -> Result<Transition<MarkedOf<K>>, io::Error>
     where
         K: Ord,
     {
         // Get from the newest level where there is a tombstone or normal record of this key.
-        let prev = self.get(&key).await.clone();
+        let prev = self.get(&key).await?.clone();
 
         // No such entry at all, no need to create a tombstone for delete
         if prev.not_found() && value.is_none() {
-            return (prev, Marked::new_tomb_stone(0));
+            return Ok((prev, Marked::new_tomb_stone(0)));
         }
 
         // `writeable` is a single level map and the returned `_prev` is only from that level.
         // Therefore it should be ignored and we use the `prev` from the multi-level map.
-        let (_prev, inserted) = self.writable.set(key, value).await;
-        (prev, inserted)
+        let (_prev, inserted) = self.writable.set(key, value).await?;
+        Ok((prev, inserted))
     }
 }

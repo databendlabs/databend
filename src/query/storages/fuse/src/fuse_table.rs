@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::BTreeMap;
-use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -24,7 +23,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::statistics::BasicColumnStatistics;
 use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::NavigationDescriptor;
@@ -32,7 +30,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::ColumnId;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
@@ -45,7 +42,6 @@ use common_sql::parse_exprs;
 use common_sql::BloomIndexColumns;
 use common_storage::init_operator;
 use common_storage::DataOperator;
-use common_storage::Datum;
 use common_storage::ShareTableConfig;
 use common_storage::StorageMetrics;
 use common_storage::StorageMetricsLayer;
@@ -54,7 +50,6 @@ use log::warn;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics as FuseColumnStatistics;
 use storages_common_table_meta::meta::SnapshotId;
 use storages_common_table_meta::meta::Statistics as FuseStatistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -68,14 +63,19 @@ use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_DATA_URI;
+use storages_common_table_meta::table::OPT_KEY_TABLE_ATTACHED_READ_ONLY;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use uuid::Uuid;
 
+use crate::fuse_column::FuseTableColumnStatisticsProvider;
+use crate::fuse_type::FuseTableType;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 use crate::pipelines::Pipeline;
 use crate::table_functions::unwrap_tuple;
+use crate::FuseStorageFormat;
 use crate::NavigationPoint;
 use crate::Table;
 use crate::TableStatistics;
@@ -100,6 +100,8 @@ pub struct FuseTable {
 
     pub(crate) operator: Operator,
     pub(crate) data_metrics: Arc<StorageMetrics>,
+
+    table_type: FuseTableType,
 }
 
 impl FuseTable {
@@ -111,22 +113,43 @@ impl FuseTable {
         let storage_prefix = Self::parse_storage_prefix(&table_info)?;
         let cluster_key_meta = table_info.meta.cluster_key();
 
-        let mut operator = match table_info.db_type.clone() {
-            DatabaseType::ShareDB(share_ident) => create_share_table_operator(
-                ShareTableConfig::share_endpoint_address(),
-                ShareTableConfig::share_endpoint_token(),
-                &share_ident.tenant,
-                &share_ident.share_name,
-                &table_info.name,
-            ),
+        let (mut operator, table_type) = match table_info.db_type.clone() {
+            DatabaseType::ShareDB(share_ident) => {
+                let operator = create_share_table_operator(
+                    ShareTableConfig::share_endpoint_address(),
+                    ShareTableConfig::share_endpoint_token(),
+                    &share_ident.tenant,
+                    &share_ident.share_name,
+                    &table_info.name,
+                )?;
+                (operator, FuseTableType::SharedReadOnly)
+            }
             DatabaseType::NormalDB => {
                 let storage_params = table_info.meta.storage_params.clone();
                 match storage_params {
-                    Some(sp) => Ok(init_operator(&sp)?),
-                    None => Ok(DataOperator::instance().operator()),
+                    // External or attached table.
+                    Some(sp) => {
+                        let table_meta_options = &table_info.meta.options;
+
+                        let table_type = if Self::is_table_attached_read_only(table_meta_options) {
+                            FuseTableType::AttachedReadOnly
+                        } else if Self::is_table_attached(table_meta_options) {
+                            FuseTableType::Attached
+                        } else {
+                            FuseTableType::External
+                        };
+
+                        let operator = init_operator(&sp)?;
+                        (operator, table_type)
+                    }
+                    // Normal table.
+                    None => {
+                        let operator = DataOperator::instance().operator();
+                        (operator, FuseTableType::Standard)
+                    }
                 }
             }
-        }?;
+        };
 
         let data_metrics = Arc::new(StorageMetrics::default());
         operator = operator.layer(StorageMetricsLayer::new(data_metrics.clone()));
@@ -163,6 +186,7 @@ impl FuseTable {
             data_metrics,
             storage_format: FuseStorageFormat::from_str(storage_format.as_str())?,
             table_compression: table_compression.as_str().try_into()?,
+            table_type,
         }))
     }
 
@@ -312,11 +336,25 @@ impl FuseTable {
             }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
-                Ok(options
-                    .get(OPT_KEY_SNAPSHOT_LOCATION)
-                    // for backward compatibility, we check the legacy table option
-                    .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
-                    .cloned())
+
+                if options.get(OPT_KEY_TABLE_ATTACHED_READ_ONLY).is_some() {
+                    // if table is read-only attached, parse snapshot location from hint
+                    let storage_prefix = options.get(OPT_KEY_STORAGE_PREFIX).unwrap();
+                    let hint = format!("{}/{}", storage_prefix, FUSE_TBL_LAST_SNAPSHOT_HINT);
+                    let snapshot_loc = {
+                        let hint_content = self.operator.read(&hint).await?;
+                        let snapshot_full_path = String::from_utf8(hint_content)?;
+                        let operator_info = self.operator.info();
+                        snapshot_full_path[operator_info.root().len()..].to_string()
+                    };
+                    Ok(Some(snapshot_loc))
+                } else {
+                    Ok(options
+                        .get(OPT_KEY_SNAPSHOT_LOCATION)
+                        // for backward compatibility, we check the legacy table option
+                        .or_else(|| options.get(OPT_KEY_LEGACY_SNAPSHOT_LOC))
+                        .cloned())
+                }
             }
         }
     }
@@ -352,6 +390,20 @@ impl FuseTable {
 
     pub fn bloom_index_cols(&self) -> BloomIndexColumns {
         self.bloom_index_cols.clone()
+    }
+
+    // Check if table is attached.
+    fn is_table_attached(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options
+            .get(OPT_KEY_TABLE_ATTACHED_DATA_URI)
+            .is_some()
+    }
+
+    // Check if table is read-only attached.
+    fn is_table_attached_read_only(table_meta_options: &BTreeMap<String, String>) -> bool {
+        table_meta_options
+            .get(OPT_KEY_TABLE_ATTACHED_READ_ONLY)
+            .is_some()
     }
 }
 
@@ -410,7 +462,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         cluster_key_str: String,
     ) -> Result<()> {
-        // if new cluter_key_str is the same with old one,
+        // if new cluster_key_str is the same with old one,
         // no need to change
         if let Some(old_cluster_key_str) = self.cluster_key_str() && *old_cluster_key_str == cluster_key_str{
             return Ok(())
@@ -510,7 +562,7 @@ impl Table for FuseTable {
         .await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_partitions")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
@@ -521,7 +573,7 @@ impl Table for FuseTable {
         self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
-    #[minitrace::trace(name = "fuse_table_read_data")]
+    #[minitrace::trace]
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -552,14 +604,14 @@ impl Table for FuseTable {
         self.do_commit(ctx, pipeline, copied_files, overwrite, prev_snapshot_id)
     }
 
-    #[minitrace::trace(name = "fuse_table_truncate")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn truncate(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         let purge = false;
         self.do_truncate(ctx, purge).await
     }
 
-    #[minitrace::trace(name = "fuse_table_optimize")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn purge(
         &self,
@@ -583,22 +635,44 @@ impl Table for FuseTable {
         }
     }
 
-    #[minitrace::trace(name = "analyze")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn analyze(&self, ctx: Arc<dyn TableContext>) -> Result<()> {
         self.do_analyze(&ctx).await
     }
 
-    fn table_statistics(&self) -> Result<Option<TableStatistics>> {
-        let s = &self.table_info.meta.statistics;
-        Ok(Some(TableStatistics {
-            num_rows: Some(s.number_of_rows),
-            data_size: Some(s.data_bytes),
-            data_size_compressed: Some(s.compressed_data_bytes),
-            index_size: Some(s.index_data_bytes),
-            number_of_blocks: s.number_of_blocks,
-            number_of_segments: s.number_of_segments,
-        }))
+    async fn table_statistics(&self) -> Result<Option<TableStatistics>> {
+        let stats = match self.table_type {
+            FuseTableType::AttachedReadOnly => {
+                let snapshot = self.read_table_snapshot().await?.ok_or_else(|| {
+                    // For table created with "ATTACH TABLE ... READ_ONLY"statement, this should be unreachable:
+                    // IO or Deserialization related error should have already been thrown, thus
+                    // `Internal` error is used.
+                    ErrorCode::Internal("Failed to load snapshot of read_only attach table")
+                })?;
+                let summary = &snapshot.summary;
+                TableStatistics {
+                    num_rows: Some(summary.row_count),
+                    data_size: Some(summary.uncompressed_byte_size),
+                    data_size_compressed: Some(summary.compressed_byte_size),
+                    index_size: Some(summary.index_size),
+                    number_of_blocks: Some(summary.block_count),
+                    number_of_segments: Some(snapshot.segments.len() as u64),
+                }
+            }
+            _ => {
+                let s = &self.table_info.meta.statistics;
+                TableStatistics {
+                    num_rows: Some(s.number_of_rows),
+                    data_size: Some(s.data_bytes),
+                    data_size_compressed: Some(s.compressed_data_bytes),
+                    index_size: Some(s.index_data_bytes),
+                    number_of_blocks: s.number_of_blocks,
+                    number_of_segments: s.number_of_segments,
+                }
+            }
+        };
+        Ok(Some(stats))
     }
 
     #[async_backtrace::framed]
@@ -625,7 +699,7 @@ impl Table for FuseTable {
         Ok(Box::new(provider))
     }
 
-    #[minitrace::trace(name = "fuse_table_navigate_to")]
+    #[minitrace::trace]
     #[async_backtrace::framed]
     async fn navigate_to(&self, point: &NavigationPoint) -> Result<Arc<dyn Table>> {
         let snapshot_location = if let Some(loc) = self.snapshot_loc().await? {
@@ -727,65 +801,8 @@ impl Table for FuseTable {
     fn result_can_be_cached(&self) -> bool {
         true
     }
-}
 
-#[derive(Clone, Copy, Debug)]
-pub enum FuseStorageFormat {
-    Parquet,
-    Native,
-}
-
-impl FromStr for FuseStorageFormat {
-    type Err = ErrorCode;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_lowercase().as_str() {
-            "" | "parquet" => Ok(FuseStorageFormat::Parquet),
-            "native" => Ok(FuseStorageFormat::Native),
-            other => Err(ErrorCode::UnknownFormat(format!(
-                "unknown fuse storage_format {}",
-                other
-            ))),
-        }
-    }
-}
-
-#[derive(Default)]
-struct FuseTableColumnStatisticsProvider {
-    column_stats: HashMap<ColumnId, Option<BasicColumnStatistics>>,
-}
-
-impl FuseTableColumnStatisticsProvider {
-    fn new(
-        column_stats: HashMap<ColumnId, FuseColumnStatistics>,
-        column_distinct_values: Option<HashMap<ColumnId, u64>>,
-        row_count: u64,
-    ) -> Self {
-        let column_stats = column_stats
-            .into_iter()
-            .map(|(column_id, stat)| {
-                let ndv = column_distinct_values
-                    .as_ref()
-                    .map_or(row_count, |map| map.get(&column_id).map_or(0, |v| *v));
-                let stat = BasicColumnStatistics {
-                    min: Datum::from_scalar(stat.min().clone()),
-                    max: Datum::from_scalar(stat.max().clone()),
-                    ndv: Some(ndv),
-                    null_count: stat.null_count,
-                };
-                (column_id, stat.get_useful_stat(row_count))
-            })
-            .collect();
-        Self { column_stats }
-    }
-}
-
-impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
-    fn column_statistics(&self, column_id: ColumnId) -> Option<&BasicColumnStatistics> {
-        self.column_stats.get(&column_id).and_then(|s| s.as_ref())
-    }
-
-    fn num_rows(&self) -> Option<u64> {
-        None
+    fn is_read_only(&self) -> bool {
+        self.table_type.is_readonly()
     }
 }
