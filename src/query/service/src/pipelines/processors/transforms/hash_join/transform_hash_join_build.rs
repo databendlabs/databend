@@ -94,7 +94,6 @@ impl TransformHashJoinBuild {
             // Before notify all processors to spill, we need to collect all buffered data in `RowSpace` and `Chunks`
             // Partition all rows and stat how many partitions and rows in each partition.
             // Then choose the largest partitions(which contain rows that can avoid oom exactly) to spill.
-            // For each partition, we should equally divide the rows into each processor.
             // Then all processors will spill same partitions.
             let mut spill_tasks = spill_state.spill_coordinator.spill_tasks.lock();
             spill_state.split_spill_tasks(
@@ -309,7 +308,6 @@ impl Processor for TransformHashJoinBuild {
                 let spill_state = self.spill_state.as_mut().unwrap();
                 spill_state.spill(self.processor_id).await?;
                 // After spill, the processor should continue to run, and process incoming data.
-                // FIXME: We should wait all processors finish spill, and then continue to run.
                 self.step = HashJoinBuildStep::Running;
             }
             HashJoinBuildStep::FollowSpill => {

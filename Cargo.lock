@@ -3861,6 +3861,7 @@ dependencies = [
  "base64 0.21.0",
  "bincode 1.3.3",
  "bumpalo",
+ "byte-unit",
  "byteorder",
  "chrono",
  "chrono-tz",

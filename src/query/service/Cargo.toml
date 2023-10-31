@@ -169,6 +169,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
 walkdir = "2.3.2"
+byte-unit = "4.0.19"
 
 [dev-dependencies]
 arrow-cast = { workspace = true }

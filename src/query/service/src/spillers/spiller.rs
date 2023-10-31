@@ -104,8 +104,12 @@ impl Spiller {
 
     #[async_backtrace::framed]
     /// Spill partition set
-    pub async fn spill(&mut self, partitions: &[(u8, DataBlock)], worker_id: usize) -> Result<()> {
-        for (partition_id, partition) in partitions.iter() {
+    pub async fn spill(
+        &mut self,
+        partitions: Vec<(u8, DataBlock)>,
+        worker_id: usize,
+    ) -> Result<()> {
+        for (partition_id, partition) in partitions {
             self.spill_with_partition(partition_id, partition, worker_id)
                 .await?;
         }
@@ -116,15 +120,15 @@ impl Spiller {
     /// Spill data block with location
     pub async fn spill_with_partition(
         &mut self,
-        p_id: &u8,
-        data: &DataBlock,
+        p_id: u8,
+        data: DataBlock,
         worker_id: usize,
     ) -> Result<()> {
-        self.spilled_partition_set.insert(*p_id);
+        self.spilled_partition_set.insert(p_id);
         let unique_name = GlobalUniqName::unique();
         let location = format!("{}/{}", self.config.location_prefix, unique_name);
         self.partition_location
-            .entry(*p_id)
+            .entry(p_id)
             .and_modify(|locs| {
                 locs.push(location.clone());
             })
@@ -246,7 +250,7 @@ impl Spiller {
                 row_indexes.len(),
             );
             // Spill block with partition id
-            self.spill_with_partition(p_id, &block, worker_id).await?;
+            self.spill_with_partition(*p_id, block, worker_id).await?;
         }
         // Return unspilled data
         let unspilled_block_row_indexes = unspilled_row_index

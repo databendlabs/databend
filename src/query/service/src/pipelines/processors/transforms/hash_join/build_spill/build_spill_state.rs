@@ -17,6 +17,9 @@ use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
+use byte_unit::Byte;
+use byte_unit::ByteUnit;
+use common_base::runtime::GLOBAL_MEM_STAT;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -91,17 +94,17 @@ impl BuildSpillState {
     // Output is <partition_id, blocks>
     fn partition_input_blocks(
         &self,
-        input_blocks: &[DataBlock],
+        input_blocks: Vec<DataBlock>,
     ) -> Result<HashMap<u8, Vec<DataBlock>>> {
         let mut partition_blocks = HashMap::new();
-        for block in input_blocks.iter() {
+        for block in input_blocks {
             let mut hashes = Vec::with_capacity(block.num_rows());
-            self.get_hashes(block, &mut hashes)?;
+            self.get_hashes(&block, &mut hashes)?;
             let mut indices = Vec::with_capacity(hashes.len());
             for hash in hashes {
                 indices.push(hash2bucket::<3, false>(hash as usize) as u8);
             }
-            let scatter_blocks = DataBlock::scatter(block, &indices, 1 << 3)?;
+            let scatter_blocks = DataBlock::scatter(&block, &indices, 1 << 3)?;
             for (p_id, p_block) in scatter_blocks.into_iter().enumerate() {
                 partition_blocks
                     .entry(p_id as u8)
@@ -122,7 +125,7 @@ impl BuildSpillState {
             let mut spill_tasks = self.spill_coordinator.spill_tasks.lock();
             spill_tasks.pop_back().unwrap()
         };
-        self.spiller.spill(&spill_partitions, p_id).await
+        self.spiller.spill(spill_partitions, p_id).await
     }
 
     // Check if need to spill.
@@ -135,6 +138,14 @@ impl BuildSpillState {
             && self.build_state.hash_join_state.hash_join_desc.join_type == JoinType::Inner;
         if !enable_spill || self.spiller.is_all_spilled() {
             return Ok(false);
+        }
+
+        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
+        let total_gb = byte.get_appropriate_unit(false).format(3);
+        dbg!(total_gb);
+        if global_used as usize > spill_threshold {
+            return Ok(true);
         }
 
         let mut total_bytes = 0;
@@ -152,12 +163,15 @@ impl BuildSpillState {
             total_bytes += block.memory_size();
         }
 
+        let byte = Byte::from_unit(total_bytes as f64, ByteUnit::B).unwrap();
+        let total_gb = byte.get_appropriate_unit(false).format(3);
+
         info!(
             "check if need to spill: total_bytes: {}, spill_threshold: {}",
-            total_bytes, spill_threshold
+            total_gb, spill_threshold
         );
 
-        if total_bytes > spill_threshold {
+        if total_bytes * 2 > spill_threshold {
             return Ok(true);
         }
         Ok(false)
@@ -165,6 +179,16 @@ impl BuildSpillState {
 
     // Pick partitions which need to spill
     fn pick_partitions(&self, partition_blocks: &mut HashMap<u8, Vec<DataBlock>>) -> Result<()> {
+        let mut memory_limit = self
+            .build_state
+            .ctx
+            .get_settings()
+            .get_join_spilling_threshold()?;
+        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        if global_used as usize > memory_limit {
+            return Ok(());
+        }
+        dbg!(&partition_blocks.keys());
         // Compute each partition's data size
         let mut partition_sizes = partition_blocks
             .iter()
@@ -176,13 +200,9 @@ impl BuildSpillState {
             })
             .collect::<Vec<(u8, usize)>>();
         partition_sizes.sort_by_key(|&(_id, size)| size);
-        let mut memory_limit = self
-            .build_state
-            .ctx
-            .get_settings()
-            .get_join_spilling_threshold()?;
+
         for (id, size) in partition_sizes.into_iter() {
-            if size <= memory_limit {
+            if size as f64 <= memory_limit as f64 / 2.0 {
                 // Put the partition's data to chunks
                 let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
                 let blocks = partition_blocks.get_mut(&id).unwrap();
@@ -197,10 +217,10 @@ impl BuildSpillState {
                 break;
             }
         }
+        dbg!(&partition_blocks.keys());
         Ok(())
     }
 
-    // Split all spill tasks equally to all processors
     // Tasks will be sent to `BuildSpillCoordinator`.
     pub(crate) fn split_spill_tasks(
         &self,
@@ -208,37 +228,21 @@ impl BuildSpillState {
         spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
     ) -> Result<()> {
         let blocks = self.collect_rows()?;
-        let mut partition_blocks = self.partition_input_blocks(&blocks)?;
+        let mut partition_blocks = self.partition_input_blocks(blocks)?;
         self.pick_partitions(&mut partition_blocks)?;
-        let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());
-        // Stat how many rows in each partition, then split it equally.
-        for (partition_id, blocks) in partition_blocks.iter() {
-            let merged_block = DataBlock::concat(blocks)?;
-            let total_rows = merged_block.num_rows();
-            // Equally split blocks to `active_processors_num` parts
-            let mut start_row;
-            let mut end_row = 0;
-            for i in 0..active_processors_num {
-                start_row = end_row;
-                end_row = start_row + total_rows / active_processors_num;
-                if i == active_processors_num - 1 {
-                    end_row = total_rows;
-                }
-                let sub_block = merged_block.slice(start_row..end_row);
-                partition_tasks
-                    .entry(*partition_id)
-                    .and_modify(|v: &mut Vec<DataBlock>| v.push(sub_block.clone()))
-                    .or_insert(vec![sub_block]);
+        for (_, blocks) in partition_blocks.iter_mut() {
+            while blocks.len() < active_processors_num {
+                blocks.push(DataBlock::empty());
             }
         }
 
         let mut task_id: usize = 0;
         while task_id < active_processors_num {
-            let mut task = Vec::with_capacity(partition_tasks.len());
-            for partition_id in partition_tasks.keys() {
+            let mut task = Vec::with_capacity(partition_blocks.len());
+            for partition_id in partition_blocks.keys() {
                 task.push((
                     *partition_id,
-                    partition_tasks.get(partition_id).unwrap()[task_id].clone(),
+                    partition_blocks.get(partition_id).unwrap()[task_id].clone(),
                 ))
             }
             spill_tasks.push_back(task);
