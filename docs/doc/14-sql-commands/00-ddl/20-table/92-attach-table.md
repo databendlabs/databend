@@ -3,7 +3,7 @@ title: ATTACH TABLE
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced: v1.2.10"/>
+<FunctionDescription description="Introduced or updated: v1.2.180"/>
 
 Attaches an existing table to another one. The command moves the data and schema of a table from one database to another, but without actually copying the data. Instead, it creates a link that points to the original table data for accessing the data.
 
@@ -12,7 +12,8 @@ Attach Table enables you to seamlessly connect a table in the cloud service plat
 ## Syntax
 
 ```sql
-ATTACH TABLE <target_table_name> '<source-table-data-URI>' CONNECTION=(<connection_parameters>);
+ATTACH TABLE <target_table_name> '<source-table-data-URI>' 
+CONNECTION=(<connection_parameters>) [READ_ONLY]
 ```
 
 `<source-table-data-URI>` represents the path to the source table's data. For S3-like object storage, the format is `s3://<bucket-name>/<database_ID>/<table_ID>`, for example, *s3://databend-toronto/1/23351/*, which represents the exact path to the table folder within the bucket.
