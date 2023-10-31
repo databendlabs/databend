@@ -23,11 +23,11 @@ use common_meta_app::principal::TsvFileFormatParams;
 
 use super::helpers::write_tsv_escaped_string;
 use crate::field_encoder::FieldEncoderRowBased;
-use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
+use crate::OutputCommonSettings;
 
 pub struct FieldEncoderTSV {
-    pub common_settings: CommonSettings,
+    pub common_settings: OutputCommonSettings,
     pub quote_char: u8,
     pub record_delimiter: u8,
 }
@@ -35,14 +35,13 @@ pub struct FieldEncoderTSV {
 impl FieldEncoderTSV {
     pub fn create(params: &TsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldEncoderTSV {
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                 nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
-                disable_variant_check: options_ext.disable_variant_check,
             },
             quote_char: params.quote.as_bytes().to_vec()[0],
             record_delimiter: params.field_delimiter.as_bytes().to_vec()[0],
@@ -51,7 +50,7 @@ impl FieldEncoderTSV {
 }
 
 impl FieldEncoderRowBased for FieldEncoderTSV {
-    fn common_settings(&self) -> &CommonSettings {
+    fn common_settings(&self) -> &OutputCommonSettings {
         &self.common_settings
     }
 

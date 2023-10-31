@@ -23,11 +23,11 @@ use common_io::constants::TRUE_BYTES_LOWER;
 
 use crate::field_encoder::helpers::write_json_string;
 use crate::field_encoder::FieldEncoderRowBased;
-use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
+use crate::OutputCommonSettings;
 
 pub struct FieldEncoderJSON {
-    pub common_settings: CommonSettings,
+    pub common_settings: OutputCommonSettings,
     pub quote_denormals: bool,
     pub escape_forward_slashes: bool,
 }
@@ -35,14 +35,13 @@ pub struct FieldEncoderJSON {
 impl FieldEncoderJSON {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldEncoderJSON {
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 nan_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
-                disable_variant_check: options.disable_variant_check,
             },
             quote_denormals: false,
             escape_forward_slashes: true,
@@ -51,7 +50,7 @@ impl FieldEncoderJSON {
 }
 
 impl FieldEncoderRowBased for FieldEncoderJSON {
-    fn common_settings(&self) -> &CommonSettings {
+    fn common_settings(&self) -> &OutputCommonSettings {
         &self.common_settings
     }
 

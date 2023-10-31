@@ -29,10 +29,10 @@ use micromarshal::Unmarshal;
 use ordered_float::OrderedFloat;
 
 use crate::field_encoder::helpers::PrimitiveWithFormat;
-use crate::CommonSettings;
+use crate::OutputCommonSettings;
 
 pub trait FieldEncoderRowBased {
-    fn common_settings(&self) -> &CommonSettings;
+    fn common_settings(&self) -> &OutputCommonSettings;
 
     /// 'raw' is mainly for string now and types need to be encoded as string in a format,
     /// to determine the quote/escape behavior.
