@@ -440,16 +440,14 @@ impl Column {
             }
         });
 
-        let remainder_offset = len - chunks.remainder_len();
-        dst_idx += remainder_offset;
-        src_idx += remainder_offset;
+        let mut remainder = chunks.remainder_len();
+        dst_idx += len - remainder;
+        src_idx += len - remainder;
 
         let mut buf = 0;
-        let mut remainder = chunks.remainder_len();
         unsafe {
             while remainder > 0 {
-                let val = (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0;
-                if val {
+                if (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0 {
                     buf |= BIT_MASK[dst_idx % 8];
                 } else {
                     unset_bits += 1;
@@ -459,6 +457,7 @@ impl Column {
                 remainder -= 1;
                 if dst_idx % 8 == 0 {
                     store_advance_aligned(buf, ptr);
+                    buf = 0;
                 }
             }
         }
