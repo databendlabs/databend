@@ -24,6 +24,7 @@ use crate::kernels::take::BIT_MASK;
 use crate::kernels::utils::copy_advance_aligned;
 use crate::kernels::utils::set_vec_len_by_ptr;
 use crate::kernels::utils::store_advance_aligned;
+use crate::kernels::utils::BitChunks;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::decimal::DecimalColumn;
@@ -423,29 +424,45 @@ impl Column {
         StringColumn::new(data.into(), offsets.into())
     }
 
-    // # Safety
-    // `builder_ptr + builder_len` must be [valid] for writes of `continuous_bytes` bytes.
-    unsafe fn copy_continuous_boolean(
-        continuous_bytes: usize,
-        builder_ptr: *mut u8,
-        builder_len: usize,
-    ) {
-        let byte = u8::MAX;
-        // Using the doubling method to copy memory.
-        let max_segment = 1 << (31 - (continuous_bytes as u32).leading_zeros());
-        let base_ptr = builder_ptr.add(builder_len);
-        let mut ptr = base_ptr;
-        store_advance_aligned(byte, &mut ptr);
-        let mut cur_segment = 1;
-        while cur_segment < max_segment {
-            copy_advance_aligned(base_ptr, &mut ptr, cur_segment);
-            cur_segment <<= 1;
+    fn copy_continuous_bits(
+        ptr: &mut *mut u8,
+        src: &[u8],
+        mut dst_idx: usize,
+        mut src_idx: usize,
+        len: usize,
+    ) -> (u8, usize) {
+        let mut unset_bits = 0;
+        let chunks = BitChunks::new(src, src_idx, len);
+        chunks.iter().for_each(|chunk| {
+            unset_bits += chunk.count_zeros();
+            unsafe {
+                copy_advance_aligned(&chunk as *const _ as *const u8, ptr, 8);
+            }
+        });
+
+        let remainder_offset = len - chunks.remainder_len();
+        dst_idx += remainder_offset;
+        src_idx += remainder_offset;
+
+        let mut buf = 0;
+        let mut remainder = chunks.remainder_len();
+        unsafe {
+            while remainder > 0 {
+                let val = (*src.as_ptr().add(src_idx >> 3) & BIT_MASK[src_idx & 7]) != 0;
+                if val {
+                    buf |= BIT_MASK[dst_idx % 8];
+                } else {
+                    unset_bits += 1;
+                }
+                src_idx += 1;
+                dst_idx += 1;
+                remainder -= 1;
+                if dst_idx % 8 == 0 {
+                    store_advance_aligned(buf, ptr);
+                }
+            }
         }
-        // Copy the remaining memory directly.
-        let remain = continuous_bytes - max_segment;
-        if remain > 0 {
-            copy_advance_aligned(base_ptr, &mut ptr, remain);
-        }
+        (buf, unset_bits as usize)
     }
 
     // low-level API using unsafe to improve performance.
@@ -468,57 +485,55 @@ impl Column {
 
         let capacity = num_rows.saturating_add(7) / 8;
         let mut builder: Vec<u8> = Vec::with_capacity(capacity);
-        let builder_ptr = builder.as_mut_ptr();
-        let mut builder_len = 0;
+        let mut builder_ptr = builder.as_mut_ptr();
+        let mut builder_idx = 0;
         let mut unset_bits = 0;
         let mut buf = 0;
-        let mut count = 0;
+
+        let (bitmap_slice, bitmap_offset, _) = bitmap.as_slice();
         let mut bitmap_idx = 0;
 
-        let (mut slice, offset, mut length) = filter.as_slice();
+        let (mut filter_slice, filter_offset, mut filter_length) = filter.as_slice();
         unsafe {
-            if offset > 0 {
-                let mut mask = slice[0];
+            if filter_offset > 0 {
+                let mut mask = filter_slice[0];
                 while mask != 0 {
                     let n = mask.trailing_zeros() as usize;
-                    if n >= offset {
-                        if bitmap.get_bit_unchecked(n - offset) {
-                            buf |= BIT_MASK[count % 8];
+                    if n >= filter_offset {
+                        if bitmap.get_bit_unchecked(n - filter_offset) {
+                            buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
                         }
-                        count += 1;
+                        builder_idx += 1;
                     }
                     mask = mask & (mask - 1);
                 }
-                length -= 8 - offset;
-                slice = &slice[1..];
-                bitmap_idx += 8 - offset;
+                filter_length -= 8 - filter_offset;
+                filter_slice = &filter_slice[1..];
+                bitmap_idx += 8 - filter_offset;
             }
 
             const CHUNK_SIZE: usize = 64;
-            let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
+            let mut mask_chunks = BitChunksExact::<u64>::new(filter_slice, filter_length);
             let mut continuous_selected = 0;
             for mut mask in mask_chunks.by_ref() {
                 if mask == u64::MAX {
                     continuous_selected += CHUNK_SIZE;
                 } else {
                     if continuous_selected > 0 {
-                        let value = bitmap.get_bit_unchecked(bitmap_idx);
-                        bitmap_idx += continuous_selected;
-
-                        if count % 8 != 0 {
+                        if builder_idx % 8 != 0 {
                             while continuous_selected > 0 {
-                                if value {
-                                    buf |= BIT_MASK[count % 8];
+                                if bitmap.get_bit_unchecked(bitmap_idx) {
+                                    buf |= BIT_MASK[builder_idx % 8];
                                 } else {
                                     unset_bits += 1;
                                 }
-                                count += 1;
+                                bitmap_idx += 1;
+                                builder_idx += 1;
                                 continuous_selected -= 1;
-                                if count % 8 == 0 {
-                                    *builder.get_unchecked_mut(builder_len) = buf;
-                                    builder_len += 1;
+                                if builder_idx % 8 == 0 {
+                                    store_advance_aligned(buf, &mut builder_ptr);
                                     buf = 0;
                                     break;
                                 }
@@ -526,39 +541,31 @@ impl Column {
                         }
 
                         if continuous_selected > 0 {
-                            let continuous_bytes = continuous_selected / 8;
-                            if value && continuous_bytes > 0 {
-                                Self::copy_continuous_boolean(
-                                    continuous_bytes,
-                                    builder_ptr,
-                                    builder_len,
-                                );
-                            }
-                            builder_len += continuous_bytes;
-                            let mut remainder = continuous_selected % 8;
-                            while remainder > 0 {
-                                if value {
-                                    buf |= BIT_MASK[count % 8];
-                                } else {
-                                    unset_bits += 1;
-                                }
-                                count += 1;
-                                remainder -= 1;
-                            }
+                            let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                                &mut builder_ptr,
+                                bitmap_slice,
+                                builder_idx,
+                                bitmap_idx + bitmap_offset,
+                                continuous_selected,
+                            );
+                            builder_idx += continuous_selected;
+                            bitmap_idx += continuous_selected;
+                            unset_bits += cur_unset_bits;
+                            buf = cur_buf;
                             continuous_selected = 0;
                         }
                     }
+
                     while mask != 0 {
                         let n = mask.trailing_zeros() as usize;
                         if bitmap.get_bit_unchecked(bitmap_idx + n) {
-                            buf |= BIT_MASK[count % 8];
+                            buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
                         }
-                        count += 1;
-                        if count % 8 == 0 {
-                            *builder.get_unchecked_mut(builder_len) = buf;
-                            builder_len += 1;
+                        builder_idx += 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
                             buf = 0;
                         }
                         mask = mask & (mask - 1);
@@ -568,21 +575,18 @@ impl Column {
             }
 
             if continuous_selected > 0 {
-                let value = bitmap.get_bit_unchecked(bitmap_idx);
-                bitmap_idx += continuous_selected;
-
-                if count % 8 != 0 {
+                if builder_idx % 8 != 0 {
                     while continuous_selected > 0 {
-                        if value {
-                            buf |= BIT_MASK[count % 8];
+                        if bitmap.get_bit_unchecked(bitmap_idx) {
+                            buf |= BIT_MASK[builder_idx % 8];
                         } else {
                             unset_bits += 1;
                         }
-                        count += 1;
+                        bitmap_idx += 1;
+                        builder_idx += 1;
                         continuous_selected -= 1;
-                        if count % 8 == 0 {
-                            *builder.get_unchecked_mut(builder_len) = buf;
-                            builder_len += 1;
+                        if builder_idx % 8 == 0 {
+                            store_advance_aligned(buf, &mut builder_ptr);
                             buf = 0;
                             break;
                         }
@@ -590,48 +594,42 @@ impl Column {
                 }
 
                 if continuous_selected > 0 {
-                    let continuous_bytes = continuous_selected / 8;
-                    if value && continuous_bytes > 0 {
-                        Self::copy_continuous_boolean(continuous_bytes, builder_ptr, builder_len);
-                    }
-                    builder_len += continuous_bytes;
-                    let mut remainder = continuous_selected % 8;
-                    while remainder > 0 {
-                        if value {
-                            buf |= BIT_MASK[count % 8];
-                        } else {
-                            unset_bits += 1;
-                        }
-                        count += 1;
-                        remainder -= 1;
-                    }
+                    let (cur_buf, cur_unset_bits) = Self::copy_continuous_bits(
+                        &mut builder_ptr,
+                        bitmap_slice,
+                        builder_idx,
+                        bitmap_idx + bitmap_offset,
+                        continuous_selected,
+                    );
+                    builder_idx += continuous_selected;
+                    bitmap_idx += continuous_selected;
+                    unset_bits += cur_unset_bits;
+                    buf = cur_buf;
                 }
             }
 
             for (i, is_selected) in mask_chunks.remainder_iter().enumerate() {
                 if is_selected {
                     if bitmap.get_bit_unchecked(bitmap_idx + i) {
-                        buf |= BIT_MASK[count % 8];
+                        buf |= BIT_MASK[builder_idx % 8];
                     } else {
                         unset_bits += 1;
                     }
-                    count += 1;
-                    if count % 8 == 0 {
-                        *builder.get_unchecked_mut(builder_len) = buf;
-                        builder_len += 1;
+                    builder_idx += 1;
+                    if builder_idx % 8 == 0 {
+                        store_advance_aligned(buf, &mut builder_ptr);
                         buf = 0;
                     }
                 }
             }
 
-            if count % 8 != 0 {
-                *builder.get_unchecked_mut(builder_len) = buf;
-                builder_len += 1;
+            if builder_idx % 8 != 0 {
+                store_advance_aligned(buf, &mut builder_ptr);
             }
         }
 
         unsafe {
-            builder.set_len(builder_len);
+            set_vec_len_by_ptr(&mut builder, builder_ptr);
             Bitmap::from_inner(Arc::new(builder.into()), 0, num_rows, unset_bits)
                 .ok()
                 .unwrap()
