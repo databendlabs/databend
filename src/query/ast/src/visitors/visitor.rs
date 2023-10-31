@@ -392,7 +392,7 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_engines(&mut self) {}
 
-    fn visit_show_functions(&mut self, _limit: &'ast Option<ShowLimit>) {}
+    fn visit_show_functions(&mut self, _limit: &'ast Option<ShowOptions>) {}
 
     fn visit_show_table_functions(&mut self, _limit: &'ast Option<ShowLimit>) {}
 

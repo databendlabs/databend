@@ -320,7 +320,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
     let show_functions = map(
         rule! {
-            SHOW ~ FUNCTIONS ~ #show_limit?
+            SHOW ~ FUNCTIONS ~ #show_option?
         },
         |(_, _, limit)| Statement::ShowFunctions { limit },
     );
@@ -2571,6 +2571,19 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     rule!(
         #limit_like
         | #limit_where
+    )(i)
+}
+
+pub fn show_option(i: Input) -> IResult<ShowOptions> {
+    map(
+        rule! {
+            #show_limit? ~ ( LIMIT ~ #literal_u64 )?
+        }, |(show_limit, opt_limit)| {
+            ShowOptions {
+                limit_option: show_limit,
+                limit: opt_limit.map(|(_, limit)| limit),
+            }
+        }
     )(i)
 }
 

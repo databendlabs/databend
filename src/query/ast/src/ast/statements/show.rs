@@ -31,3 +31,21 @@ impl Display for ShowLimit {
         }
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ShowOptions { 
+    pub limit_option: Option<ShowLimit>,
+    pub limit: Option<u64>,
+}
+
+impl Display for ShowOptions {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if let Some(limit_option) = self.limit_option.clone() {
+            write!(f, "{}", limit_option)?;
+        }
+        if let Some(limit) = self.limit.clone() {
+            write!(f, " LIMIT = '{}'", limit)?;
+        }
+        Ok(())
+    }
+}

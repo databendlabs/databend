@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_ast::ast::ShowLimit;
+use common_ast::ast::ShowOptions;
 use common_exception::Result;
 
 use crate::plans::Plan;
@@ -25,26 +26,49 @@ impl Binder {
     pub(in crate::planner::binder) async fn bind_show_functions(
         &mut self,
         bind_context: &mut BindContext,
-        limit: &Option<ShowLimit>,
+        show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
-        // rewrite show functions to select * from system.functions ...
-        let query = format!(
-            "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} ORDER BY name",
-            match limit {
-                None => {
-                    "".to_string()
-                }
+        let mut limit_option = "".to_string();
+        let mut limit_str = "".to_string();
+        if let Some(show_option) = show_options.clone() {
+            match show_option.limit_option {
+                None => {}
                 Some(predicate) => {
                     match predicate {
                         ShowLimit::Like { pattern } => {
-                            format!("WHERE name LIKE '{}'", pattern)
+                            limit_option = format!("WHERE name LIKE '{}'", pattern);
                         }
                         ShowLimit::Where { selection } => {
-                            format!("WHERE {}", selection)
+                            limit_option = format!("WHERE {}", selection);
                         }
                     }
                 }
             }
+            
+            if let Some(limit) = show_option.limit {
+                limit_str = limit.to_string();
+            }
+        }
+        // rewrite show functions to select * from system.functions ...
+        let query = format!(
+            "SELECT name, is_builtin, is_aggregate, definition, description FROM system.functions {} {} ORDER BY name",
+            // match show_options {
+            //     None => {
+            //         "".to_string()
+            //     }
+            //     Some(predicate) => {
+            //         match predicate {
+            //             ShowLimit::Like { pattern } => {
+            //                 format!("WHERE name LIKE '{}'", pattern)
+            //             }
+            //             ShowLimit::Where { selection } => {
+            //                 format!("WHERE {}", selection)
+            //             }
+            //         }
+            //     }
+            // }
+            limit_option,
+            limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
             .await
