@@ -910,50 +910,48 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_settings(&mut self, like: &'ast Option<String>) {
+    fn visit_show_settings(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowSetting".to_string());
+    }
+
+    fn visit_show_process_list(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowProcessList".to_string());
+    }
+
+    fn visit_show_metrics(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowMetrics".to_string());
+    }
+
+    fn visit_show_engines(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowEngines".to_string());
+    }
+
+    fn visit_show_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowFunctions".to_string());
+    }
+
+    fn visit_show_table_functions(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowTableFunctions".to_string());
+    }
+
+    fn visit_show_indexes(&mut self, show_options: &'ast Option<ShowOptions>) {
+        self.visit_show_options(show_options, "ShowIndexes".to_string());
+    }
+
+    fn visit_show_options(&mut self, show_options: &'ast Option<ShowOptions>, name: String) {
         let mut children = Vec::new();
-        if let Some(like) = like {
-            let like_name = format!("Like {}", like);
-            let like_format_ctx = AstFormatContext::new(like_name);
-            let like_node = FormatTreeNode::new(like_format_ctx);
-            children.push(like_node);
-        }
-        let name = "ShowSetting".to_string();
-        let format_ctx = AstFormatContext::with_children(name, children.len());
-        let node = FormatTreeNode::with_children(format_ctx, children);
-        self.children.push(node);
-    }
-
-    fn visit_show_process_list(&mut self) {
-        let name = "ShowProcessList".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_metrics(&mut self) {
-        let name = "ShowMetrics".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_engines(&mut self) {
-        let name = "ShowEngines".to_string();
-        let format_ctx = AstFormatContext::new(name);
-        let node = FormatTreeNode::new(format_ctx);
-        self.children.push(node);
-    }
-
-    fn visit_show_functions(&mut self, limit: &'ast Option<ShowOptions>) {
-        let mut children = Vec::new();
-        if let Some(limit) = limit {
-            if let Some(limit_option) = &limit.limit_option {
-                self.visit_show_limit(limit_option);
+        if let Some(show_options) = show_options {
+            if let Some(show_limit) = &show_options.show_limit {
+                self.visit_show_limit(show_limit);
                 children.push(self.children.pop().unwrap());
             }
+            if let Some(limit) = show_options.limit {
+                let name = format!("Limit {}", limit);
+                let limit_format_ctx = AstFormatContext::new(name);
+                let node = FormatTreeNode::new(limit_format_ctx);
+                children.push(node);
+            }
         }
-        let name = "ShowFunctions".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);

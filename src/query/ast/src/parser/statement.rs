@@ -308,29 +308,47 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_settings = map(
         rule! {
-            SHOW ~ SETTINGS ~ (LIKE ~ #literal_string)?
+            SHOW ~ SETTINGS ~ #show_options?
         },
-        |(_, _, opt_like)| Statement::ShowSettings {
-            like: opt_like.map(|(_, like)| like),
-        },
+        |(_, _, show_options)| Statement::ShowSettings { show_options },
     );
     let show_stages = value(Statement::ShowStages, rule! { SHOW ~ STAGES });
-    let show_process_list = value(Statement::ShowProcessList, rule! { SHOW ~ PROCESSLIST });
-    let show_metrics = value(Statement::ShowMetrics, rule! { SHOW ~ METRICS });
-    let show_engines = value(Statement::ShowEngines, rule! { SHOW ~ ENGINES });
+    let show_process_list = map(
+        rule! {
+            SHOW ~ PROCESSLIST ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowProcessList { show_options },
+    );
+    let show_metrics = map(
+        rule! {
+            SHOW ~ METRICS ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowMetrics { show_options },
+    );
+    let show_engines = map(
+        rule! {
+            SHOW ~ ENGINES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowEngines { show_options },
+    );
     let show_functions = map(
         rule! {
-            SHOW ~ FUNCTIONS ~ #show_option?
+            SHOW ~ FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowFunctions { limit },
+        |(_, _, show_options)| Statement::ShowFunctions { show_options },
     );
     let show_table_functions = map(
         rule! {
-            SHOW ~ TABLE_FUNCTIONS ~ #show_limit?
+            SHOW ~ TABLE_FUNCTIONS ~ #show_options?
         },
-        |(_, _, limit)| Statement::ShowTableFunctions { limit },
+        |(_, _, show_options)| Statement::ShowTableFunctions { show_options },
     );
-    let show_indexes = value(Statement::ShowIndexes, rule! { SHOW ~ INDEXES });
+    let show_indexes = map(
+        rule! {
+            SHOW ~ INDEXES ~ #show_options?
+        },
+        |(_, _, show_options)| Statement::ShowIndexes { show_options },
+    );
 
     // kill query 199;
     let kill_stmt = map(
@@ -2574,16 +2592,15 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
     )(i)
 }
 
-pub fn show_option(i: Input) -> IResult<ShowOptions> {
+pub fn show_options(i: Input) -> IResult<ShowOptions> {
     map(
         rule! {
             #show_limit? ~ ( LIMIT ~ #literal_u64 )?
-        }, |(show_limit, opt_limit)| {
-            ShowOptions {
-                limit_option: show_limit,
-                limit: opt_limit.map(|(_, limit)| limit),
-            }
-        }
+        },
+        |(show_limit, opt_limit)| ShowOptions {
+            show_limit,
+            limit: opt_limit.map(|(_, limit)| limit),
+        },
     )(i)
 }
 

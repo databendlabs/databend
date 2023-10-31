@@ -45,18 +45,26 @@ pub enum Statement {
     Call(CallStmt),
 
     ShowSettings {
-        like: Option<String>,
+        show_options: Option<ShowOptions>,
     },
-    ShowProcessList,
-    ShowMetrics,
-    ShowEngines,
+    ShowProcessList {
+        show_options: Option<ShowOptions>,
+    },
+    ShowMetrics {
+        show_options: Option<ShowOptions>,
+    },
+    ShowEngines {
+        show_options: Option<ShowOptions>,
+    },
     ShowFunctions {
-        limit: Option<ShowOptions>,
+        show_options: Option<ShowOptions>,
     },
     ShowTableFunctions {
-        limit: Option<ShowLimit>,
+        show_options: Option<ShowOptions>,
     },
-    ShowIndexes,
+    ShowIndexes {
+        show_options: Option<ShowOptions>,
+    },
 
     KillStmt {
         kill_target: KillTarget,
@@ -304,26 +312,46 @@ impl Display for Statement {
             Statement::Update(update) => write!(f, "{update}")?,
             Statement::CopyIntoTable(stmt) => write!(f, "{stmt}")?,
             Statement::CopyIntoLocation(stmt) => write!(f, "{stmt}")?,
-            Statement::ShowSettings { like } => {
+            Statement::ShowSettings { show_options } => {
                 write!(f, "SHOW SETTINGS")?;
-                if like.is_some() {
-                    write!(f, " LIKE '{}'", like.as_ref().unwrap())?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
-            Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
-            Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
-            Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
-            Statement::ShowIndexes => write!(f, "SHOW INDEXES")?,
-            Statement::ShowFunctions { limit } => {
+            Statement::ShowProcessList { show_options } => {
+                write!(f, "SHOW PROCESSLIST")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowMetrics { show_options } => {
+                write!(f, "SHOW METRICS")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowEngines { show_options } => {
+                write!(f, "SHOW ENGINES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowIndexes { show_options } => {
+                write!(f, "SHOW INDEXES")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
+                }
+            }
+            Statement::ShowFunctions { show_options } => {
                 write!(f, "SHOW FUNCTIONS")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
-            Statement::ShowTableFunctions { limit } => {
+            Statement::ShowTableFunctions { show_options } => {
                 write!(f, "SHOW TABLE_FUNCTIONS")?;
-                if let Some(limit) = limit {
-                    write!(f, " {limit}")?;
+                if let Some(show_options) = show_options {
+                    write!(f, " {show_options}")?;
                 }
             }
             Statement::KillStmt {
