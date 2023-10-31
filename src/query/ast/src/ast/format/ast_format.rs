@@ -945,11 +945,13 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_show_functions(&mut self, limit: &'ast Option<ShowLimit>) {
+    fn visit_show_functions(&mut self, limit: &'ast Option<ShowOptions>) {
         let mut children = Vec::new();
         if let Some(limit) = limit {
-            self.visit_show_limit(limit);
-            children.push(self.children.pop().unwrap());
+            if let Some(limit_option) = &limit.limit_option {
+                self.visit_show_limit(limit_option);
+                children.push(self.children.pop().unwrap());
+            }
         }
         let name = "ShowFunctions".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());

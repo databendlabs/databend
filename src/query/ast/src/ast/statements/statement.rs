@@ -51,7 +51,7 @@ pub enum Statement {
     ShowMetrics,
     ShowEngines,
     ShowFunctions {
-        limit: Option<ShowLimit>,
+        limit: Option<ShowOptions>,
     },
     ShowTableFunctions {
         limit: Option<ShowLimit>,
