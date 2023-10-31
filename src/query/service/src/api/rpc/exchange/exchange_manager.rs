@@ -821,6 +821,7 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
+
             let pipeline_builder = PipelineBuilder::create(
                 pipeline_ctx.get_function_context()?,
                 pipeline_ctx.get_settings(),
@@ -828,7 +829,10 @@ impl FragmentCoordinator {
                 enable_profiling,
                 SharedProcessorProfiles::default(),
             );
-            self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
+
+            let res = pipeline_builder.finalize(&self.physical_plan)?;
+
+            self.pipeline_build_res = Some(res);
         }
 
         Ok(())
