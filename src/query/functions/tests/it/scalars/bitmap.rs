@@ -28,6 +28,7 @@ fn test_bitmap() {
 fn test_build_bitmap(file: &mut impl Write) {
     run_ast(file, "build_bitmap([NULL, 8])", &[]);
     run_ast(file, "build_bitmap([7, 8])", &[]);
+    run_ast(file, "build_bitmap([7, -8])", &[]);
     run_ast(file, "build_bitmap([a, b])", &[
         ("a", UInt16Type::from_data(vec![1u16, 2, 3])),
         ("b", UInt16Type::from_data(vec![1u16, 2, 3])),
