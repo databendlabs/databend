@@ -21,6 +21,21 @@ use enumflags2::BitFlags;
 use crate::principal::UserPrivilegeSet;
 use crate::principal::UserPrivilegeType;
 
+/// [`GrantObjectByID`] is used to maintain the grant object by id. Using ID over name
+/// have many benefits, it can avoid lost privileges after the object get renamed.
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
+pub enum GrantObjectByID {
+    /// used on the fuse databases
+    Database { catalog_name: String, db_id: u64 },
+
+    /// used on the fuse tables
+    Table {
+        catalog_name: String,
+        db_id: u64,
+        table_id: u64,
+    },
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Hash)]
 pub enum GrantObject {
     Global,
@@ -55,6 +70,14 @@ impl GrantObject {
             GrantObject::Global => UserPrivilegeSet::available_privileges_on_global(),
             GrantObject::Database(_, _) => UserPrivilegeSet::available_privileges_on_database(),
             GrantObject::Table(_, _, _) => UserPrivilegeSet::available_privileges_on_table(),
+        }
+    }
+
+    pub fn catalog(&self) -> Option<String> {
+        match self {
+            GrantObject::Global => None,
+            GrantObject::Database(cat, _) => Some(cat.clone()),
+            GrantObject::Table(cat, _, _) => Some(cat.clone()),
         }
     }
 }
