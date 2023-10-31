@@ -205,6 +205,8 @@ impl OptimizeTableInterpreter {
 
                 self.ctx.set_executor(executor.get_inner())?;
                 executor.execute()?;
+                // Make sure the executor is dropped before recluster.
+                drop(executor);
 
                 // refresh table.
                 table = catalog

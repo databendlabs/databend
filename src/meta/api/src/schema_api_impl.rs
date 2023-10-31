@@ -3306,8 +3306,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let table_lock_key = TableLockKey { table_id, revision };
-            let (table_lock_seq, _) =
-                get_table_lock_meta_or_err(self, &table_lock_key, ctx).await?;
+            let table_lock_seq = match get_table_lock_meta_or_err(self, &table_lock_key, ctx).await
+            {
+                Ok((req, _)) => req,
+                Err(_) => {
+                    // The lock has been deleted.
+                    break;
+                }
+            };
 
             let condition = vec![txn_cond_seq(&table_lock_key, Eq, table_lock_seq)];
             let if_then = vec![txn_op_del(&table_lock_key)];
