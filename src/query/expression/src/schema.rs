@@ -51,6 +51,7 @@ pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
 
 pub const ROW_ID_COL_NAME: &str = "_row_id";
+pub const ROW_NUMBER_COL_NAME: &str = "_row_number";
 pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
 pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
 pub const BLOCK_NAME_COL_NAME: &str = "_block_name";

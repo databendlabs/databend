@@ -1,0 +1,156 @@
+// Copyright 2021 Datafuse Labs
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+use std::any::Any;
+use std::collections::HashSet;
+use std::sync::Arc;
+
+use common_arrow::arrow::bitmap::MutableBitmap;
+use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::DataBlock;
+use common_expression::DataField;
+use common_expression::Scalar;
+use common_expression::Value;
+use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
+
+use super::hash_join::HashJoinBuildState;
+use super::processor_deduplicate_row_number::get_row_number;
+
+pub struct ExtractHashTableByRowNumber {
+    input_port: Arc<InputPort>,
+    output_port: Arc<OutputPort>,
+    input_data: Option<DataBlock>,
+    output_data: Vec<DataBlock>,
+    probe_data_fields: Vec<DataField>,
+    hashstate: Arc<HashJoinBuildState>,
+}
+
+impl ExtractHashTableByRowNumber {
+    pub fn create(
+        hashstate: Arc<HashJoinBuildState>,
+        probe_data_fields: Vec<DataField>,
+    ) -> Result<Self> {
+        Ok(Self {
+            input_port: InputPort::create(),
+            output_port: OutputPort::create(),
+            hashstate,
+            probe_data_fields,
+            input_data: None,
+            output_data: Vec::new(),
+        })
+    }
+
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = self.input_port.clone();
+        let output_port = self.output_port.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input], vec![output_port])
+    }
+}
+
+impl Processor for ExtractHashTableByRowNumber {
+    fn name(&self) -> String {
+        "ExtractHashTableByRowNumber".to_owned()
+    }
+
+    #[doc = " Reference used for downcast."]
+    fn as_any(&mut self) -> &mut dyn Any {
+        self
+    }
+
+    fn event(&mut self) -> Result<Event> {
+        let finished = self.input_port.is_finished() && self.output_data.is_empty();
+        if finished {
+            self.output_port.finish();
+            return Ok(Event::Finished);
+        }
+
+        let mut pushed_something = false;
+
+        if self.output_port.can_push() && !self.output_data.is_empty() {
+            self.output_port
+                .push_data(Ok(self.output_data.pop().unwrap()));
+            pushed_something = true
+        }
+
+        if pushed_something {
+            return Ok(Event::NeedConsume);
+        }
+
+        if self.input_port.has_data() {
+            if self.output_data.is_empty() {
+                self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                Ok(Event::Sync)
+            } else {
+                Ok(Event::NeedConsume)
+            }
+        } else {
+            self.input_port.set_need_data();
+            Ok(Event::NeedData)
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        if let Some(data_block) = self.input_data.take() {
+            if data_block.is_empty() {
+                return Ok(());
+            }
+
+            let row_number_vec = get_row_number(&data_block, 0)?;
+            let row_number_set: HashSet<u64> = row_number_vec.iter().cloned().collect();
+            assert_eq!(row_number_set.len(), row_number_vec.len());
+
+            // get datablocks from hashstate.
+            unsafe {
+                for block in &*self.hashstate.hash_join_state.chunks.get() {
+                    assert_eq!(
+                        block.columns()[block.num_columns() - 1].data_type,
+                        DataType::Number(NumberDataType::UInt64)
+                    );
+                    let mut bitmap = MutableBitmap::new();
+                    let row_numbers = get_row_number(block, block.num_columns() - 1)?;
+                    for row_number in row_numbers.iter() {
+                        if row_number_set.contains(row_number) {
+                            bitmap.push(true);
+                        } else {
+                            bitmap.push(false);
+                        }
+                    }
+                    let filtered_block = block.clone().filter_with_bitmap(&bitmap.into())?;
+                    // Create null chunk for unmatched rows in probe side
+                    let mut null_block = DataBlock::new(
+                        self.probe_data_fields
+                            .iter()
+                            .map(|df| {
+                                BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null))
+                            })
+                            .collect(),
+                        filtered_block.num_rows(),
+                    );
+                    null_block.merge_block(filtered_block);
+                    self.output_data.push(null_block);
+                }
+            }
+        }
+        Ok(())
+    }
+}

@@ -19,6 +19,7 @@ pub use transforms::hash_join::TransformHashJoinBuild;
 pub use transforms::hash_join::TransformHashJoinProbe;
 pub use transforms::AggregatorParams;
 pub use transforms::BlockCompactor;
+pub use transforms::DeduplicateRowNumber;
 pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::SinkRuntimeFilterSource;
