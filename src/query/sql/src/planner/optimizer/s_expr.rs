@@ -251,6 +251,7 @@ fn find_subquery(rel_op: &RelOperator) -> bool {
         | RelOperator::Sort(_)
         | RelOperator::DummyTableScan(_)
         | RelOperator::CteScan(_)
+        | RelOperator::AddRowNumber(_)
         | RelOperator::RuntimeFilterSource(_)
         | RelOperator::Pattern(_)
         | RelOperator::MaterializedCte(_)

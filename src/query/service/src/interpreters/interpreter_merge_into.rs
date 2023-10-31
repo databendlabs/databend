@@ -23,14 +23,19 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::SendableDataBlockStream;
+use common_expression::ROW_NUMBER_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_sql::executor::CommitSink;
+use common_sql::executor::Exchange;
+use common_sql::executor::FragmentKind::Merge;
 use common_sql::executor::MergeInto;
+use common_sql::executor::MergeIntoAppendNotMatched;
 use common_sql::executor::MergeIntoSource;
 use common_sql::executor::MutationKind;
 use common_sql::executor::PhysicalPlan;
@@ -163,11 +168,19 @@ impl MergeIntoInterpreter {
         } = &self.plan;
 
         // check mutability
-        let table = self.ctx.get_table(catalog, database, table_name).await?;
-        table.check_mutable()?;
+        let check_table = self.ctx.get_table(catalog, database, table_name).await?;
+        check_table.check_mutable()?;
+
+        let table_name = table_name.clone();
+        let input = input.clone();
+        let (exchange, input) = if let RelOperator::Exchange(exchange) = input.plan() {
+            (Some(exchange), Box::new(input.child(0)?.clone()))
+        } else {
+            (None, input)
+        };
 
         let optimized_input = self
-            .build_static_filter(input, meta_data, self.ctx.clone())
+            .build_static_filter(&input, meta_data, self.ctx.clone())
             .await?;
         let mut builder = PhysicalPlanBuilder::new(meta_data.clone(), self.ctx.clone(), false);
 
@@ -192,12 +205,17 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
+        let mut row_number_idx = None;
         for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
                 found_row_id = true;
                 break;
             }
+        }
+
+        if exchange.is_some() {
+            row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
         // we can't get row_id_idx, throw an exception
@@ -207,6 +225,13 @@ impl MergeIntoInterpreter {
             ));
         }
 
+        if exchange.is_some() && row_number_idx.is_none() {
+            return Err(ErrorCode::InvalidRowIdIndex(
+                "can't get internal row_number_idx when running merge into",
+            ));
+        }
+
+        let table = self.ctx.get_table(catalog, database, &table_name).await?;
         let fuse_table =
             table
                 .as_any()
@@ -340,27 +365,62 @@ impl MergeIntoInterpreter {
                 .insert(*field_index, join_output_schema.index_of(value).unwrap());
         }
 
-        // recv datablocks from matched upstream and unmatched upstream
-        // transform and append dat
-        let merge_into = PhysicalPlan::MergeInto(Box::new(MergeInto {
-            input: Box::new(merge_into_source),
-            table_info: table_info.clone(),
-            catalog_info: catalog_.info(),
-            unmatched,
-            matched,
-            field_index_of_input_schema,
-            row_id_idx,
-            segments: base_snapshot
-                .segments
-                .clone()
-                .into_iter()
-                .enumerate()
-                .collect(),
-        }));
+        let segments: Vec<_> = base_snapshot
+            .segments
+            .clone()
+            .into_iter()
+            .enumerate()
+            .collect();
+
+        let commit_input = if exchange.is_none() {
+            // recv datablocks from matched upstream and unmatched upstream
+            // transform and append dat
+            PhysicalPlan::MergeInto(Box::new(MergeInto {
+                input: Box::new(merge_into_source),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched,
+                matched,
+                field_index_of_input_schema,
+                row_id_idx,
+                segments,
+                distributed: false,
+                output_schema: DataSchemaRef::default(),
+            }))
+        } else {
+            let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
+                input: Box::new(merge_into_source.clone()),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched: unmatched.clone(),
+                matched,
+                field_index_of_input_schema,
+                row_id_idx,
+                segments,
+                distributed: true,
+                output_schema: DataSchemaRef::new(DataSchema::new(vec![
+                    join_output_schema.fields[row_number_idx.unwrap()].clone(),
+                ])),
+            }));
+
+            PhysicalPlan::MergeIntoAppendNotMatched(Box::new(MergeIntoAppendNotMatched {
+                input: Box::new(PhysicalPlan::Exchange(Exchange {
+                    plan_id: 0,
+                    input: Box::new(merge_append),
+                    kind: Merge,
+                    keys: vec![],
+                    ignore_exchange: false,
+                })),
+                table_info: table_info.clone(),
+                catalog_info: catalog_.info(),
+                unmatched: unmatched.clone(),
+                input_schema: merge_into_source.output_schema()?,
+            }))
+        };
 
         // build mutation_aggregate
         let physical_plan = PhysicalPlan::CommitSink(Box::new(CommitSink {
-            input: Box::new(merge_into),
+            input: Box::new(commit_input),
             snapshot: base_snapshot,
             table_info: table_info.clone(),
             catalog_info: catalog_.info(),
@@ -388,7 +448,8 @@ impl MergeIntoInterpreter {
         //       EvalScalar(source_join_side_expr)
         //          \
         //         SourcePlan
-        let source_plan = join.child(0)?;
+
+        let source_plan = join.child(1)?;
         let join_op = match join.plan() {
             RelOperator::Join(j) => j,
             _ => unreachable!(),
@@ -396,8 +457,8 @@ impl MergeIntoInterpreter {
         if join_op.left_conditions.len() != 1 || join_op.right_conditions.len() != 1 {
             return Ok(Box::new(join.clone()));
         }
-        let source_side_expr = &join_op.left_conditions[0];
-        let target_side_expr = &join_op.right_conditions[0];
+        let source_side_expr = &join_op.right_conditions[0];
+        let target_side_expr = &join_op.left_conditions[0];
 
         // eval source side join expr
         let source_side_join_expr_index = metadata.write().add_derived_column(
@@ -421,10 +482,19 @@ impl MergeIntoInterpreter {
                 index: source_side_join_expr_index,
             }],
         };
-        let eval_target_side_condition_sexpr = SExpr::create_unary(
-            Arc::new(eval_source_side_join_expr_op.into()),
-            Arc::new(source_plan.clone()),
-        );
+        let eval_target_side_condition_sexpr = if let RelOperator::Exchange(_) = source_plan.plan()
+        {
+            // there is another row_number operator here
+            SExpr::create_unary(
+                Arc::new(eval_source_side_join_expr_op.into()),
+                Arc::new(source_plan.child(0)?.child(0)?.clone()),
+            )
+        } else {
+            SExpr::create_unary(
+                Arc::new(eval_source_side_join_expr_op.into()),
+                Arc::new(source_plan.clone()),
+            )
+        };
 
         // eval min/max of source side join expr
         let min_display_name = format!("min({:?})", source_side_expr);
@@ -545,10 +615,10 @@ impl MergeIntoInterpreter {
         });
 
         let filters = vec![gte_min, lte_max];
-        let mut target_plan = join.child(1)?.clone();
+        let mut target_plan = join.child(0)?.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
         let new_sexpr =
-            join.replace_children(vec![Arc::new(source_plan.clone()), Arc::new(target_plan)]);
+            join.replace_children(vec![Arc::new(target_plan), Arc::new(source_plan.clone())]);
         Ok(Box::new(new_sexpr))
     }
 
@@ -585,6 +655,7 @@ impl MergeIntoInterpreter {
             RelOperator::Lambda(_) => {}
             RelOperator::ConstantTableScan(_) => {}
             RelOperator::Pattern(_) => {}
+            RelOperator::AddRowNumber(_) => {}
         }
         Ok(())
     }
