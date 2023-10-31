@@ -345,12 +345,12 @@ unsafe fn row_match_string_column(
                 let len_address = address[idx].offset(col_offset as isize);
                 let address = address[idx].offset((col_offset + 4) as isize);
                 let len = load::<u32>(len_address) as usize;
-                let data_address = load::<u64>(address) as usize as *const u8;
 
                 let value = StringType::index_column_unchecked(&col, idx);
                 if len != value.len() {
                     equal = false;
                 } else {
+                    let data_address = load::<u64>(address) as usize as *const u8;
                     let scalar = std::slice::from_raw_parts(data_address, len);
                     equal = scalar.eq(value);
                 }
@@ -372,12 +372,13 @@ unsafe fn row_match_string_column(
             let address = address[idx].offset((col_offset + 4) as isize);
 
             let len = load::<u32>(len_address) as usize;
-            let data_address = load::<u64>(address) as usize as *const u8;
 
             let value = StringType::index_column_unchecked(&col, idx);
             if len != value.len() {
                 equal = false;
             } else {
+                let data_address = load::<u64>(address) as usize as *const u8;
+
                 let scalar = std::slice::from_raw_parts(data_address, len);
                 equal = scalar.eq(value);
             }

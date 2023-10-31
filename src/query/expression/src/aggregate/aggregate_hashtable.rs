@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::Result;
 
 use super::payload::Payload;
+use super::payload_flush::PayloadFlushState;
 use super::probe_state::ProbeState;
 use crate::aggregate::payload_row::row_match_columns;
 use crate::load;
@@ -26,6 +27,7 @@ use crate::select_vector::SelectVector;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::ColumnBuilder;
 use crate::StateAddr;
 
 const LOAD_FACTOR: f64 = 1.5;
@@ -84,7 +86,9 @@ impl AggregateHashTable {
         params: &[&[Column]],
         row_count: usize,
     ) -> Result<usize> {
-        let new_group_count = self.probe_and_create(state, group_columns, row_count);
+        // TODO
+        let group_hashes = vec![];
+        let new_group_count = self.probe_and_create(state, group_columns, row_count, &group_hashes);
 
         for i in 0..row_count {
             state.state_places[i] = unsafe {
@@ -116,6 +120,7 @@ impl AggregateHashTable {
         state: &mut ProbeState,
         group_columns: &[Column],
         row_count: usize,
+        hashes: &[u64],
     ) -> usize {
         if self.capacity - self.len() <= row_count || self.len() > self.resize_threshold() {
             let mut new_capacity = self.capacity * 2;
@@ -126,8 +131,7 @@ impl AggregateHashTable {
             self.resize(new_capacity);
         }
 
-        let hashes = vec![0u64; row_count];
-        state.ajust_group_columns(group_columns, &hashes, row_count, self.capacity);
+        state.ajust_group_columns(group_columns, hashes, row_count, self.capacity);
 
         let mut new_group_count = 0;
         let mut remaining_entries = row_count;
@@ -169,7 +173,7 @@ impl AggregateHashTable {
             if new_entry_count != 0 {
                 self.payload.append_rows(
                     state,
-                    &hashes,
+                    hashes,
                     &select_vector,
                     new_entry_count,
                     group_columns,
@@ -213,10 +217,76 @@ impl AggregateHashTable {
             std::mem::swap(&mut select_vector, &mut state.no_match_vector);
             remaining_entries = no_match_count;
         }
+
+        // set state places
+        for i in 0..row_count {
+            state.state_places[i] = unsafe {
+                StateAddr::new(load::<u64>(
+                    state.addresses[i].offset(self.payload.state_offset as isize),
+                ) as usize)
+            };
+        }
+
         new_group_count
     }
 
-    pub fn combine(&mut self, other: &Self) {}
+    pub fn combine(&mut self, other: Self, flush_state: &mut PayloadFlushState) -> Result<()> {
+        while other.payload.flush(flush_state) {
+            let row_count = flush_state.row_count;
+
+            let _ = self.probe_and_create(
+                &mut flush_state.probe_state,
+                &flush_state.group_columns,
+                row_count,
+                &flush_state.group_hashes,
+            );
+
+            let state = &mut flush_state.probe_state;
+            for (aggr, addr_offset) in self
+                .payload
+                .aggrs
+                .iter()
+                .zip(self.payload.state_addr_offsets.iter())
+            {
+                aggr.batch_merge_states(
+                    &state.state_places.as_slice()[0..row_count],
+                    &flush_state.state_places.as_slice()[0..row_count],
+                    *addr_offset,
+                )?;
+            }
+        }
+        Ok(())
+    }
+
+    pub fn merge_result(
+        &mut self,
+        other: Self,
+        flush_state: &mut PayloadFlushState,
+    ) -> Result<bool> {
+        if other.payload.flush(flush_state) {
+            let row_count = flush_state.row_count;
+
+            flush_state.aggregate_results.clear();
+            for (aggr, addr_offset) in self
+                .payload
+                .aggrs
+                .iter()
+                .zip(self.payload.state_addr_offsets.iter())
+            {
+                let return_type = aggr.return_type()?;
+                let mut builder = ColumnBuilder::with_capacity(&return_type, row_count * 4);
+
+                aggr.batch_merge_result(
+                    &flush_state.state_places.as_slice()[0..row_count],
+                    *addr_offset,
+                    &mut builder,
+                )?;
+                flush_state.aggregate_results.push(builder.build());
+            }
+            return Ok(true);
+        }
+        Ok(false)
+    }
 
     fn resize_threshold(&self) -> usize {
         (self.capacity as f64 / LOAD_FACTOR) as usize

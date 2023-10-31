@@ -39,7 +39,7 @@
 #[allow(dead_code)]
 mod block;
 
-mod aggregate;
+pub mod aggregate;
 mod convert_arrow_rs;
 pub mod converts;
 mod evaluator;
