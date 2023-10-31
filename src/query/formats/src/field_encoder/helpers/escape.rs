@@ -63,13 +63,13 @@ pub fn write_quoted_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8) {
     }
 }
 
-pub fn write_tsv_escaped_string(bytes: &[u8], buf: &mut Vec<u8>, quote: u8, field_delimiter: u8) {
+pub fn write_tsv_escaped_string(bytes: &[u8], buf: &mut Vec<u8>, field_delimiter: u8) {
     let mut start = 0;
 
     for (i, &byte) in bytes.iter().enumerate() {
         let escape = ESCAPE[byte as usize];
         if escape == __ {
-            if byte == quote || byte == field_delimiter {
+            if byte == field_delimiter {
                 if start < i {
                     buf.extend_from_slice(&bytes[start..i]);
                 }

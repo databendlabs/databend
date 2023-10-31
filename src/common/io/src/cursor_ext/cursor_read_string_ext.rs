@@ -34,13 +34,18 @@ pub trait BufferReadStringExt {
 impl<T> BufferReadStringExt for Cursor<T>
 where T: AsRef<[u8]>
 {
-    fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quota: u8) -> Result<()> {
-        self.must_ignore_byte(quota)?;
+    fn read_quoted_text(&mut self, buf: &mut Vec<u8>, quote: u8) -> Result<()> {
+        self.must_ignore_byte(quote)?;
 
         loop {
-            self.keep_read(buf, |b| b != quota && b != b'\\');
-            if self.ignore_byte(quota) {
-                return Ok(());
+            self.keep_read(buf, |b| b != quote && b != b'\\');
+            if self.ignore_byte(quote) {
+                if self.peek_byte() == Some(quote) {
+                    buf.push(quote);
+                    self.consume(1);
+                } else {
+                    return Ok(());
+                }
             } else if self.ignore_byte(b'\\') {
                 let b = self.remaining_slice();
                 if b.is_empty() {
@@ -73,7 +78,7 @@ where T: AsRef<[u8]>
             ErrorKind::InvalidData,
             format!(
                 "Expected to have terminated string literal after quota {:?}, while consumed buf: {:?}",
-                quota as char, buf
+                quote as char, buf
             ),
         ))
     }

@@ -43,7 +43,6 @@ use common_expression::types::DataType;
 use common_expression::Column;
 use common_expression::ScalarRef;
 use common_expression::TableField;
-use common_formats::field_encoder::FieldEncoderRowBased;
 use common_formats::field_encoder::FieldEncoderValues;
 use common_formats::OutputCommonSettings;
 use common_io::constants::FALSE_BYTES_LOWER;
@@ -567,7 +566,7 @@ impl<'a, R: Rng + 'a> SqlGenerator<'a, R> {
                                 _ => unreachable!(),
                             }
                         } else {
-                            encoder.write_field(column, i, &mut buf, false);
+                            encoder.write_field(column, i, &mut buf, true);
                         }
                     }
                     buf.extend_from_slice(b")");
