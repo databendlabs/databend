@@ -17,8 +17,10 @@ use std::collections::HashMap;
 use common_expression::ColumnId;
 use serde::Deserialize;
 use serde::Serialize;
+use snapshot_id::new_snapshot_id;
 
 use super::super::v1;
+use crate::meta::snapshot_id;
 use crate::meta::FormatVersion;
 use crate::meta::SnapshotId;
 use crate::meta::Versioned;
@@ -54,7 +56,7 @@ impl TableSnapshotStatistics {
     pub fn new(column_distinct_values: HashMap<ColumnId, u64>) -> Self {
         Self {
             format_version: TableSnapshotStatistics::VERSION,
-            snapshot_id: SnapshotId::new_v4(),
+            snapshot_id: new_snapshot_id(),
             column_distinct_values,
         }
     }

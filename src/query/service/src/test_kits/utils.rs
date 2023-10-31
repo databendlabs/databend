@@ -37,6 +37,7 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use futures_util::TryStreamExt;
 use opendal::Operator;
 use serde::Serialize;
+use storages_common_table_meta::meta::new_snapshot_id;
 use storages_common_table_meta::meta::testing::SegmentInfoV2;
 use storages_common_table_meta::meta::testing::TableSnapshotV2;
 use storages_common_table_meta::meta::BlockMeta;
@@ -54,15 +55,23 @@ pub async fn generate_snapshot_with_segments(
     fuse_table: &FuseTable,
     segment_locations: Vec<Location>,
     time_stamp: Option<DateTime<Utc>>,
+    with_table_version: bool,
 ) -> Result<String> {
     let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
-    let mut new_snapshot = TableSnapshot::from_previous(
-        current_snapshot.as_ref(),
-        Some(fuse_table.current_table_version()),
-    );
+    let table_version_option = if with_table_version {
+        Some(fuse_table.current_table_version())
+    } else {
+        None
+    };
+    let mut new_snapshot =
+        TableSnapshot::from_previous(current_snapshot.as_ref(), table_version_option);
     new_snapshot.segments = segment_locations;
+    // if not with table version, use snapshot id without timestamp
+    if !with_table_version {
+        new_snapshot.snapshot_id = new_snapshot_id();
+    }
     let new_snapshot_location = location_gen.gen_snapshot_location(
         &new_snapshot.snapshot_id,
         TableSnapshot::VERSION,

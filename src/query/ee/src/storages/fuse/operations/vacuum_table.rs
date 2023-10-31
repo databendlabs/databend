@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::debug_assert;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -35,7 +36,10 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableVersion;
 
 const DRY_RUN_LIMIT: usize = 1000;
-const BATCH_PURGE_FILE_NUM: usize = 100;
+const BATCH_PURGE_FILE_NUM: usize = 1000;
+
+type SnapshotLocationWithTime = (Option<DateTime<Utc>>, String);
+type TableVersionSet = HashSet<TableVersion>;
 
 struct VacuumOperator {
     pub fuse_table: FuseTable,
@@ -58,9 +62,6 @@ struct VacuumContext {
     pub root_gc_snapshot_reference_files: SnapshotReferencedFileSet,
     pub keep_snapshot_table_versions: TableVersionSet,
 }
-
-type SnapshotLocationWithTime = (Option<DateTime<Utc>>, String);
-type TableVersionSet = HashSet<TableVersion>;
 
 impl VacuumOperator {
     // list all snapshot files and sort by time
@@ -117,15 +118,32 @@ impl VacuumOperator {
                     // now we get the first snapshot that timestamp < retention_time, return last_snapshot_location
                     last_snapshot_location
                 } else {
+                    debug_assert!(i == 0);
+                    // when last_snapshot_location_opt == None, check if current snapshot is snapshot_files_with_time[0]
+                    let current_snapshot_location = match self.fuse_table.snapshot_loc().await? {
+                        Some(current_snapshot_location) => current_snapshot_location,
+                        None => {
+                            status = format!(
+                                "do_vacuum with table {}: read current snapshot location fail",
+                                self.fuse_table.get_table_info().name,
+                            );
+                            break;
+                        }
+                    };
+
+                    // if current snapshot == last snapshot, return
+                    if &current_snapshot_location == snapshot_file {
+                        return Ok(Some((0, current_snapshot_location)));
+                    }
+
                     status = format!(
-                        "do_vacuum with table {}: current snapshot timestamp < retention_time",
+                        "do_vacuum with table {}: last snapshot timestamp < retention_time and it isnot current snapshot",
                         self.fuse_table.get_table_info().name,
                     );
-                    // if it is the current snapshot(last_snapshot_location_opt == None), return None
                     break;
                 }
             } else {
-                // if cannot find a snapshot with timestamp, return None
+                // if cannot find a snapshot with timestamp and timestamp < retention_time, return None
                 status = format!(
                     "do_vacuum with table {}: cannot find a snapshot filename with timestamp",
                     self.fuse_table.get_table_info().name,

@@ -34,6 +34,10 @@ pub fn new_snapshot_id_with_timestamp(timestamp: Option<DateTime<Utc>>) -> Snaps
     }
 }
 
+pub fn new_snapshot_id() -> SnapshotId {
+    Uuid::new_v4()
+}
+
 pub fn snapshot_id_from_string(snapshot_id_str: &str) -> Result<SnapshotId> {
     Ok(Uuid::parse_str(snapshot_id_str)?)
 }

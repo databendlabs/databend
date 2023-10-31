@@ -38,7 +38,8 @@ use futures::TryStreamExt;
 // return generate orphan files and snapshot file(optional).
 async fn generate_test_orphan_files(
     fixture: &TestFixture,
-    genetate_snapshot: bool,
+    // if genetate_snapshot with table version
+    genetate_snapshot_with_table_version: Option<bool>,
     orphan_segment_file_num: usize,
     orphan_block_per_segment_num: usize,
 ) -> Result<(Vec<String>, Option<String>)> {
@@ -52,21 +53,27 @@ async fn generate_test_orphan_files(
     .await?;
 
     let mut orphan_files = vec![];
-    let snapshot_opt = if genetate_snapshot {
-        let mut segments = Vec::with_capacity(files.len());
-        files.iter().for_each(|(location, _)| {
-            segments.push(location.clone());
-        });
+    let snapshot_opt =
+        if let Some(genetate_snapshot_with_table_version) = genetate_snapshot_with_table_version {
+            let mut segments = Vec::with_capacity(files.len());
+            files.iter().for_each(|(location, _)| {
+                segments.push(location.clone());
+            });
 
-        let new_timestamp = Utc::now() - Duration::minutes(1);
-        let snapshot_location =
-            generate_snapshot_with_segments(fuse_table, segments, Some(new_timestamp)).await?;
+            let new_timestamp = Utc::now() - Duration::minutes(1);
+            let snapshot_location = generate_snapshot_with_segments(
+                fuse_table,
+                segments,
+                Some(new_timestamp),
+                genetate_snapshot_with_table_version,
+            )
+            .await?;
 
-        orphan_files.push(snapshot_location.clone());
-        Some(snapshot_location)
-    } else {
-        None
-    };
+            orphan_files.push(snapshot_location.clone());
+            Some(snapshot_location)
+        } else {
+            None
+        };
 
     for (location, segment) in files {
         orphan_files.push(location.0);
@@ -163,6 +170,59 @@ async fn check_vacuum(
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_vacuum_old_snapshot_format_orphan_files() -> Result<()> {
+    let number_of_block = 1;
+
+    let orphan_segment_file_num = 1;
+    let orphan_block_per_segment_num = 1;
+
+    // vacuum old snapshot format orphan files
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+
+    let data_qry = format!(
+        "select * from {}.{} order by id",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+
+    append_sample_data(number_of_block, &fixture).await?;
+
+    // generate orphan old format snapshot and segments
+    let _ = generate_test_orphan_files(
+        &fixture,
+        // Some(false) means generate snapshot in old format file name
+        Some(false),
+        orphan_segment_file_num,
+        orphan_block_per_segment_num,
+    )
+    .await?;
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+    append_sample_data(number_of_block, &fixture).await?;
+    let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
+    let orig_data_blocks: Vec<DataBlock> = execute_query(ctx.clone(), data_qry.as_str())
+        .await?
+        .try_collect()
+        .await?;
+    // check that no files has been purged
+    check_vacuum(
+        &fixture,
+        HashSet::new(),
+        "test_fuse_vacuum_orphan_files step 2: verify files",
+        retention_time,
+        3,
+        3,
+        3,
+    )
+    .await?;
+    check_query_data(&fixture, &data_qry, &orig_data_blocks).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     let fixture = TestFixture::new().await;
     let ctx = fixture.ctx();
@@ -189,7 +249,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     // generate orphan snapshot and segments
     let (mut orphan_files, _) = generate_test_orphan_files(
         &fixture,
-        true,
+        Some(true),
         orphan_segment_file_num,
         orphan_block_per_segment_num,
     )
@@ -199,7 +259,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     // generate orphan segments(without snapshot)
     let (orphan_files_2, _) = generate_test_orphan_files(
         &fixture,
-        false,
+        None,
         orphan_segment_file_num,
         orphan_block_per_segment_num,
     )
@@ -220,7 +280,7 @@ async fn test_fuse_vacuum_orphan_files() -> Result<()> {
     .await?;
 
     // append some data and do vacuum
-    // it will not vacuum any files, cause orphan file has the same table version with last snapshot
+    // it will not vacuum any files, cause cannot find root gc snapshot
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
     append_sample_data(number_of_block, &fixture).await?;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(3);
@@ -285,7 +345,7 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
     );
 
     // make some purgable data
-    let (purgeable_files, _truncated_snapshot_loc) = {
+    let (purgeable_files, truncated_snapshot_loc) = {
         let number_of_block = 1;
         append_sample_data(number_of_block, &fixture).await?;
 
@@ -308,22 +368,26 @@ async fn test_fuse_vacuum_truncate_files() -> Result<()> {
             .try_collect()
             .await?;
         assert!(data_blocks.is_empty());
-        let files = get_data_dir_files(None).await?;
+        let mut files = get_data_dir_files(None).await?;
+        files.remove(&snapshot_loc);
 
         (files, snapshot_loc)
     };
 
     table_ctx.get_settings().set_retention_period(0)?;
 
-    // step 1. sleep 2s, and vacuum with now - 2s, it will not delete any files cause cannot file root gc snapshot
+    // step 1. sleep 2s, and vacuum with now - 2s, it will only delete truncated snapshot file
+    // but current snapshot contains no segment/blocks, so truncated segment/blocks will not be purged
     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
+    let mut files = HashSet::new();
+    files.insert(truncated_snapshot_loc);
     check_vacuum(
         &fixture,
-        HashSet::new(),
+        files,
         "test_fuse_vacuum_truncate_files step 1: verify files",
         retention_time,
-        2,
+        1,
         1,
         1,
     )

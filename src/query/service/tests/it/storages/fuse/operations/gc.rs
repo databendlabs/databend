@@ -204,9 +204,13 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
 
     // 2. prepare S_2
     let new_timestamp = base_timestamp + Duration::minutes(1);
-    let _snapshot_location =
-        generate_snapshot_with_segments(fuse_table, segment_locations.clone(), Some(new_timestamp))
-            .await?;
+    let _snapshot_location = generate_snapshot_with_segments(
+        fuse_table,
+        segment_locations.clone(),
+        Some(new_timestamp),
+        true,
+    )
+    .await?;
 
     // 2. prepare S_0
     {
@@ -219,6 +223,7 @@ async fn test_fuse_purge_orphan_retention() -> Result<()> {
             fuse_table,
             segment_locations.clone(),
             Some(new_timestamp),
+            true,
         )
         .await?;
     }
