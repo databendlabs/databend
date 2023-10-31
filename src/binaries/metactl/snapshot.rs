@@ -224,7 +224,7 @@ async fn import_v002(
         if tree_name.starts_with("state_machine/") {
             // Write to snapshot
             writer
-                .write_entries::<io::Error>(futures::stream::iter([kv_entry]))
+                .write_entry_results::<io::Error>(futures::stream::iter([Ok(kv_entry)]))
                 .await?;
         } else {
             // Write to sled tree

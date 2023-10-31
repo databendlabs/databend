@@ -30,13 +30,13 @@ use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
-use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::io::VirtualColumnReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
+use crate::FuseLazyPartInfo;
 use crate::FuseStorageFormat;
 use crate::FuseTable;
 

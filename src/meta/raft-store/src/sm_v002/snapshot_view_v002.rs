@@ -13,19 +13,21 @@
 // limitations under the License.
 
 use std::future;
+use std::io;
 use std::sync::Arc;
 
 use common_meta_types::SeqNum;
 use common_meta_types::SeqV;
 use common_meta_types::SnapshotMeta;
-use futures::Stream;
 use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 
 use crate::key_spaces::RaftStoreEntry;
 use crate::ondisk::Header;
 use crate::ondisk::OnDisk;
 use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::ResultStream;
 use crate::sm_v002::leveled_store::static_levels::StaticLevels;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::state_machine::ExpireValue;
@@ -84,35 +86,37 @@ impl SnapshotViewV002 {
     }
 
     /// Compact into one level and remove all tombstone record.
-    pub async fn compact_mem_levels(&mut self) {
+    pub async fn compact_mem_levels(&mut self) -> Result<(), io::Error> {
         if self.compacted.len() <= 1 {
-            return;
+            return Ok(());
         }
 
         // TODO: use a explicit method to return a compaction base
         let mut data = self.compacted.newest().unwrap().new_level();
 
         // `range()` will compact tombstone internally
-        let strm = self.compacted.str_map().range::<String, _>(..).await;
-        let strm = strm.filter(|(_k, v)| future::ready(v.is_normal()));
+        let strm = self.compacted.str_map().range::<String, _>(..).await?;
+        let strm = strm.try_filter(|(_k, v)| future::ready(v.is_normal()));
 
-        let bt = strm.collect().await;
+        let bt = strm.try_collect().await?;
 
         data.replace_kv(bt);
 
         // `range()` will compact tombstone internally
-        let strm = self.compacted.expire_map().range(..).await;
-        let strm = strm.filter(|(_k, v)| future::ready(v.is_normal()));
+        let strm = self.compacted.expire_map().range(..).await?;
+        let strm = strm.try_filter(|(_k, v)| future::ready(v.is_normal()));
 
-        let bt = strm.collect().await;
+        let bt = strm.try_collect().await?;
 
         data.replace_expire(bt);
 
         self.compacted = StaticLevels::new([Arc::new(data)]);
+        Ok(())
     }
 
     /// Export all its data in RaftStoreEntry format.
-    pub async fn export(&self) -> impl Stream<Item = RaftStoreEntry> + '_ {
+    // pub async fn export(&self) -> Result<impl Stream<Item = RaftStoreEntry> + '_, io::Error> {
+    pub async fn export(&self) -> Result<ResultStream<RaftStoreEntry>, io::Error> {
         let d = self.compacted.newest().unwrap();
 
         let mut sm_meta = vec![];
@@ -163,25 +167,28 @@ impl SnapshotViewV002 {
 
         // kv
 
-        let strm = self.compacted.str_map().range::<String, _>(..).await;
-        let kv_iter = strm.filter_map(|(k, v)| {
+        let strm = self.compacted.str_map().range::<String, _>(..).await?;
+        let kv_iter = strm.try_filter_map(|(k, v)| {
             let seqv: Option<SeqV<_>> = v.into();
             let ent = seqv.map(|value| RaftStoreEntry::GenericKV { key: k, value });
-            future::ready(ent)
+            future::ready(Ok(ent))
         });
 
         // expire index
 
-        let strm = self.compacted.expire_map().range(..).await;
-        let expire_iter = strm.filter_map(|(k, v)| {
+        let strm = self.compacted.expire_map().range(..).await?;
+        let expire_iter = strm.try_filter_map(|(k, v)| {
             let exp_val: Option<ExpireValue> = v.into();
             let ent = exp_val.map(|value| RaftStoreEntry::Expire { key: k, value });
-            future::ready(ent)
+            future::ready(Ok(ent))
         });
 
-        futures::stream::iter(sm_meta)
+        let strm = futures::stream::iter(sm_meta)
+            .map(Ok)
             .chain(kv_iter)
-            .chain(expire_iter)
+            .chain(expire_iter);
+
+        Ok(strm.boxed())
     }
 }
 

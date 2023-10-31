@@ -494,6 +494,9 @@ impl TableContext for CtxDelegation {
     fn get_current_role(&self) -> Option<RoleInfo> {
         todo!()
     }
+    async fn get_available_roles(&self) -> Result<Vec<RoleInfo>> {
+        todo!()
+    }
 
     async fn get_visibility_checker(&self) -> Result<GrantObjectVisibilityChecker> {
         todo!()
