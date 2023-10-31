@@ -175,10 +175,18 @@ impl Session {
         let start = Instant::now();
         let mut lines = r.lines();
         let mut stats: Option<ServerStats> = None;
-        while let Some(Ok(line)) = lines.next() {
-            let queries = self.append_query(&line);
-            for query in queries {
-                stats = self.handle_query(false, &query).await?;
+        loop {
+            match lines.next() {
+                Some(Ok(line)) => {
+                    let queries = self.append_query(&line);
+                    for query in queries {
+                        stats = self.handle_query(false, &query).await?;
+                    }
+                }
+                Some(Err(e)) => {
+                    return Err(anyhow!("read lines err: {}", e.to_string()));
+                }
+                None => break,
             }
         }
 
@@ -385,9 +393,17 @@ impl Session {
         let tmp_file = dir.join(format!("bendsql_{}", now));
         {
             let mut file = File::create(&tmp_file).await?;
-            while let Some(Ok(line)) = lines.next() {
-                file.write_all(line.as_bytes()).await?;
-                file.write_all(b"\n").await?;
+            loop {
+                match lines.next() {
+                    Some(Ok(line)) => {
+                        file.write_all(line.as_bytes()).await?;
+                        file.write_all(b"\n").await?;
+                    }
+                    Some(Err(e)) => {
+                        return Err(anyhow!("stream load stdin err: {}", e.to_string()));
+                    }
+                    None => break,
+                }
             }
             file.flush().await?;
         }
