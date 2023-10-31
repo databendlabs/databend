@@ -21,8 +21,8 @@ See also: [`COPY INTO <table>`](dml-copy-into-table.md)
 COPY INTO { internalStage | externalStage | externalLocation }
 FROM { [<database_name>.]<table_name> | ( <query> ) }
 [ FILE_FORMAT = (
-         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
-         | FORMAT_NAME = '<your-custom-format>'
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
        ) ]
 [ copyOptions ]
 [ VALIDATION_MODE = RETURN_ROWS ]

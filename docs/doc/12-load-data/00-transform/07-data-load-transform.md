@@ -11,8 +11,8 @@ COPY INTO [<database>.]<table_name> [ ( <col_name> [ , <col_name> ... ] ) ]
 [ FILES = ( '<file_name>' [ , '<file_name>' ] [ , ... ] ) ]
 [ PATTERN = '<regex_pattern>' ]
 [ FILE_FORMAT = (
-         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
-         | FORMAT_NAME = '<your-custom-format>'
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
        ) ]
 [ copyOptions ]
 ```

@@ -10,8 +10,8 @@ Creates an internal or external stage.
 -- Internal stage
 CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
   [ FILE_FORMAT = (
-         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
-         | FORMAT_NAME = '<your-custom-format>'
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
        ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
@@ -20,8 +20,8 @@ CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
   [ FILE_FORMAT = (
-         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
-         | FORMAT_NAME = '<your-custom-format>'
+         FORMAT_NAME = '<your-custom-format>'
+         | TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
        ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
