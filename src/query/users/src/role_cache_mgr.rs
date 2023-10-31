@@ -21,14 +21,8 @@ use common_base::base::tokio;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
-use common_meta_api::SchemaApi;
-use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
-use common_meta_app::schema::DatabaseNameIdent;
-use common_meta_app::schema::GetDatabaseReq;
-use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::TableNameIdent;
-use common_meta_kvapi::kvapi::AsKVApi;
 use log::warn;
 use parking_lot::RwLock;
 
@@ -118,62 +112,21 @@ impl RoleCacheManager {
         Ok(cached_roles.roles.get(role).cloned())
     }
 
-    // TODO: add another api provider instead of roleCacheManager
+    // TODO(liyz): really cache it if got any performance issue. IMHO the ownership data won't become a big memory.
     #[async_backtrace::framed]
     pub async fn find_object_owner(
         &self,
         tenant: &str,
-        object: &GrantObject,
+        object: &GrantObjectByID,
     ) -> Result<Option<RoleInfo>> {
-        let owner = match object {
-            // may separate different grant object into separate functions.
-            GrantObject::Database(_, db_name) => {
-                if db_name.to_uppercase() == *"SYSTEM" {
-                    return Ok(None);
-                }
-                let db_meta = self
-                    .user_manager
-                    .get_meta_store_client()
-                    .as_kv_api()
-                    .get_database(GetDatabaseReq {
-                        inner: DatabaseNameIdent {
-                            tenant: tenant.to_owned(),
-                            db_name: db_name.clone(),
-                        },
-                    })
-                    .await?;
-                db_meta.meta.owner.clone()
-            }
-            GrantObject::Table(_, db_name, table_name) => {
-                if db_name.to_uppercase() == *"SYSTEM" {
-                    return Ok(None);
-                }
-                let table_meta = self
-                    .user_manager
-                    .get_meta_store_client()
-                    .as_kv_api()
-                    .get_table(GetTableReq {
-                        inner: TableNameIdent {
-                            tenant: tenant.to_owned(),
-                            db_name: db_name.clone(),
-                            table_name: table_name.clone(),
-                        },
-                    })
-                    .await?;
-                table_meta.meta.owner.clone()
-            }
-            _ => None,
+        let owner = match self.user_manager.get_ownership(tenant, object).await? {
+            None => return Ok(None),
+            Some(owner) => owner,
         };
-        if let Some(owner) = owner {
-            // cache manager would not look into built-in roles.
-            let role = self
-                .user_manager
-                .get_role(tenant, owner.owner_role_name)
-                .await?;
-            return Ok(Some(role));
-        }
 
-        Ok(None)
+        // cache manager would not look into built-in roles.
+        let role = self.user_manager.get_role(tenant, owner.role).await?;
+        Ok(Some(role))
     }
 
     // find_related_roles is called on validating an user's privileges.
