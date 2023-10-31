@@ -725,6 +725,14 @@ Functions overloads:
 5 build_bitmap(Array(UInt32 NULL) NULL) :: Bitmap NULL
 6 build_bitmap(Array(UInt64 NULL)) :: Bitmap
 7 build_bitmap(Array(UInt64 NULL) NULL) :: Bitmap NULL
+8 build_bitmap(Array(Int8 NULL)) :: Bitmap
+9 build_bitmap(Array(Int8 NULL) NULL) :: Bitmap NULL
+10 build_bitmap(Array(Int16 NULL)) :: Bitmap
+11 build_bitmap(Array(Int16 NULL) NULL) :: Bitmap NULL
+12 build_bitmap(Array(Int32 NULL)) :: Bitmap
+13 build_bitmap(Array(Int32 NULL) NULL) :: Bitmap NULL
+14 build_bitmap(Array(Int64 NULL)) :: Bitmap
+15 build_bitmap(Array(Int64 NULL) NULL) :: Bitmap NULL
 0 cbrt(UInt8) :: Float64
 1 cbrt(UInt8 NULL) :: Float64 NULL
 2 cbrt(UInt16) :: Float64

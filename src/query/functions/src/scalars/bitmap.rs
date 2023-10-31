@@ -26,7 +26,7 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
-use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
+use common_expression::types::ALL_INTEGER_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
@@ -67,17 +67,23 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    for num_type in ALL_UNSIGNED_INTEGER_TYPES {
+    for num_type in ALL_INTEGER_TYPES {
         with_integer_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
                 registry.register_passthrough_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType, _, _>(
                     "build_bitmap",
-                    |_, _| FunctionDomain::Full,
-                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, _ctx| {
+                    |_, _| FunctionDomain::MayThrow,
+                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, ctx| {
                         let mut rb = RoaringTreemap::new();
-                        arg.iter().filter(|a| a.is_some()).for_each(|a| {
-                            rb.insert(a.unwrap() as u64);
-                        });
+                        for a in arg.iter() {
+                            if let Some(a) = a {
+                                if a > 0 {
+                                    rb.insert(a.try_into().unwrap());
+                                } else {
+                                    ctx.set_error(builder.len(), "build_bitmap just support positive integer");
+                                }
+                            }
+                        }
 
                         rb.serialize_into(&mut builder.data).unwrap();
                         builder.commit_row();
