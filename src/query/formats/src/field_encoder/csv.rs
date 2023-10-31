@@ -23,12 +23,12 @@ use common_meta_app::principal::CsvFileFormatParams;
 
 use crate::field_encoder::FieldEncoderRowBased;
 use crate::field_encoder::FieldEncoderValues;
-use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
+use crate::OutputCommonSettings;
 
 pub struct FieldEncoderCSV {
     pub nested: FieldEncoderValues,
-    pub common_settings: CommonSettings,
+    pub common_settings: OutputCommonSettings,
     pub quote_char: u8,
 }
 
@@ -36,14 +36,13 @@ impl FieldEncoderCSV {
     pub fn create(params: &CsvFileFormatParams, options_ext: &FileFormatOptionsExt) -> Self {
         FieldEncoderCSV {
             nested: FieldEncoderValues::create(options_ext),
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_ESCAPE.as_bytes().to_vec(),
                 nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
-                disable_variant_check: options_ext.disable_variant_check,
             },
             quote_char: params.quote.as_bytes()[0],
         }
@@ -51,7 +50,7 @@ impl FieldEncoderCSV {
 }
 
 impl FieldEncoderRowBased for FieldEncoderCSV {
-    fn common_settings(&self) -> &CommonSettings {
+    fn common_settings(&self) -> &OutputCommonSettings {
         &self.common_settings
     }
 

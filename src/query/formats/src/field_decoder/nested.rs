@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::io::BufRead;
 use std::io::Cursor;
 
@@ -35,7 +36,14 @@ use common_expression::types::NumberColumnBuilder;
 use common_expression::with_decimal_type;
 use common_expression::with_number_mapped_type;
 use common_expression::ColumnBuilder;
+use common_io::constants::FALSE_BYTES_LOWER;
+use common_io::constants::INF_BYTES_LOWER;
+use common_io::constants::NAN_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_LOWER;
+use common_io::constants::NULL_BYTES_UPPER;
+use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::BufferReadDateTimeExt;
+use common_io::cursor_ext::BufferReadStringExt;
 use common_io::cursor_ext::DateTimeResType;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
@@ -44,17 +52,46 @@ use common_io::parse_bitmap;
 use jsonb::parse_value;
 use lexical_core::FromLexical;
 
-use crate::field_decoder::FieldDecoder;
-use crate::CommonSettings;
+use crate::FileFormatOptionsExt;
+use crate::InputCommonSettings;
 
-pub trait FieldDecoderRowBased: FieldDecoder {
-    fn common_settings(&self) -> &CommonSettings;
+#[derive(Clone)]
+pub struct NestedValues {
+    pub common_settings: InputCommonSettings,
+}
 
-    fn ignore_field_end<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>) -> bool;
+impl NestedValues {
+    /// Consider map/tuple/array as a private object format like JSON.
+    /// Currently we assume it as a fixed format, embed it in "strings" of other formats.
+    /// So we can used the same code to encode/decode in clients.
+    /// It maybe need to be configurable in future,
+    /// to read data from other DB which also support map/tuple/array.
+    pub fn create(options_ext: &FileFormatOptionsExt) -> Self {
+        NestedValues {
+            common_settings: InputCommonSettings {
+                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
+                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
+                null_if: vec![
+                    NULL_BYTES_UPPER.as_bytes().to_vec(),
+                    NULL_BYTES_LOWER.as_bytes().to_vec(),
+                ],
+                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
+                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
+                timezone: options_ext.timezone,
+                disable_variant_check: options_ext.disable_variant_check,
+            },
+        }
+    }
+}
+
+impl NestedValues {
+    fn common_settings(&self) -> &InputCommonSettings {
+        &self.common_settings
+    }
 
     fn match_bytes<R: AsRef<[u8]>>(&self, reader: &mut Cursor<R>, bs: &[u8]) -> bool {
         let pos = reader.checkpoint();
-        if reader.ignore_bytes(bs) && self.ignore_field_end(reader) {
+        if reader.ignore_bytes(bs) {
             true
         } else {
             reader.rollback(pos);
@@ -66,33 +103,34 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut ColumnBuilder,
         reader: &mut Cursor<R>,
-        raw: bool,
     ) -> Result<()> {
         match column {
-            ColumnBuilder::Null { len } => self.read_null(len, reader, raw),
-            ColumnBuilder::Nullable(c) => self.read_nullable(c, reader, raw),
-            ColumnBuilder::Boolean(c) => self.read_bool(c, reader, raw),
+            ColumnBuilder::Null { len } => {
+                *len += 1;
+                Ok(())
+            }
+            ColumnBuilder::Nullable(c) => self.read_nullable(c, reader),
+            ColumnBuilder::Boolean(c) => self.read_bool(c, reader),
             ColumnBuilder::Number(c) => with_number_mapped_type!(|NUM_TYPE| match c {
                 NumberColumnBuilder::NUM_TYPE(c) => {
                     if NUM_TYPE::FLOATING {
-                        self.read_float(c, reader, raw)
+                        self.read_float(c, reader)
                     } else {
-                        self.read_int(c, reader, raw)
+                        self.read_int(c, reader)
                     }
                 }
             }),
             ColumnBuilder::Decimal(c) => with_decimal_type!(|DECIMAL_TYPE| match c {
-                DecimalColumnBuilder::DECIMAL_TYPE(c, size) =>
-                    self.read_decimal(c, *size, reader, raw),
+                DecimalColumnBuilder::DECIMAL_TYPE(c, size) => self.read_decimal(c, *size, reader),
             }),
-            ColumnBuilder::Date(c) => self.read_date(c, reader, raw),
-            ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader, raw),
-            ColumnBuilder::String(c) => self.read_string(c, reader, raw),
-            ColumnBuilder::Array(c) => self.read_array(c, reader, raw),
-            ColumnBuilder::Map(c) => self.read_map(c, reader, raw),
-            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader, raw),
-            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, raw),
-            ColumnBuilder::Variant(c) => self.read_variant(c, reader, raw),
+            ColumnBuilder::Date(c) => self.read_date(c, reader),
+            ColumnBuilder::Timestamp(c) => self.read_timestamp(c, reader),
+            ColumnBuilder::String(c) => self.read_string(c, reader),
+            ColumnBuilder::Array(c) => self.read_array(c, reader),
+            ColumnBuilder::Map(c) => self.read_map(c, reader),
+            ColumnBuilder::Bitmap(c) => self.read_bitmap(c, reader),
+            ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader),
+            ColumnBuilder::Variant(c) => self.read_variant(c, reader),
             _ => unimplemented!(),
         }
     }
@@ -101,7 +139,6 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut MutableBitmap,
         reader: &mut Cursor<R>,
-        _raw: bool,
     ) -> Result<()> {
         if self.match_bytes(reader, &self.common_settings().true_bytes) {
             column.push(true);
@@ -119,49 +156,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         }
     }
 
-    fn read_null<R: AsRef<[u8]>>(
-        &self,
-        column_len: &mut usize,
-        _reader: &mut Cursor<R>,
-        _raw: bool,
-    ) -> Result<()> {
-        *column_len += 1;
-        Ok(())
-    }
-
-    fn read_nullable<R: AsRef<[u8]>>(
-        &self,
-        column: &mut NullableColumnBuilder<AnyType>,
-        reader: &mut Cursor<R>,
-        raw: bool,
-    ) -> Result<()> {
-        if reader.eof() {
-            column.push_null();
-        } else if self.match_bytes(reader, &self.common_settings().null_bytes)
-            && self.ignore_field_end(reader)
-        {
-            column.push_null();
-            return Ok(());
-        } else {
-            self.read_field(&mut column.builder, reader, raw)?;
-            column.validity.push(true);
-        }
-        Ok(())
-    }
-
-    fn read_string_inner<R: AsRef<[u8]>>(
-        &self,
-        reader: &mut Cursor<R>,
-        out_buf: &mut Vec<u8>,
-        raw: bool,
-    ) -> Result<()>;
-
-    fn read_int<T, R: AsRef<[u8]>>(
-        &self,
-        column: &mut Vec<T>,
-        reader: &mut Cursor<R>,
-        _raw: bool,
-    ) -> Result<()>
+    fn read_int<T, R: AsRef<[u8]>>(&self, column: &mut Vec<T>, reader: &mut Cursor<R>) -> Result<()>
     where
         T: Number + From<T::Native>,
         T::Native: FromLexical,
@@ -175,7 +170,6 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut Vec<T>,
         reader: &mut Cursor<R>,
-        _raw: bool,
     ) -> Result<()>
     where
         T: Number + From<T::Native>,
@@ -186,12 +180,30 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         Ok(())
     }
 
+    fn read_string<R: AsRef<[u8]>>(
+        &self,
+        column: &mut StringColumnBuilder,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        reader.read_quoted_text(&mut column.data, b'\'')?;
+        column.commit_row();
+        Ok(())
+    }
+
+    fn read_string_inner<R: AsRef<[u8]>>(
+        &self,
+        reader: &mut Cursor<R>,
+        out_buf: &mut Vec<u8>,
+    ) -> Result<()> {
+        reader.read_quoted_text(out_buf, b'\'')?;
+        Ok(())
+    }
+
     fn read_decimal<R: AsRef<[u8]>, D: Decimal>(
         &self,
         column: &mut Vec<D>,
         size: DecimalSize,
         reader: &mut Cursor<R>,
-        _raw: bool,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
         let (n, n_read) = read_decimal_with_size(buf, size, false)?;
@@ -200,21 +212,13 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         Ok(())
     }
 
-    fn read_string<R: AsRef<[u8]>>(
-        &self,
-        column: &mut StringColumnBuilder,
-        reader: &mut Cursor<R>,
-        _raw: bool,
-    ) -> Result<()>;
-
     fn read_date<R: AsRef<[u8]>>(
         &self,
         column: &mut Vec<i32>,
         reader: &mut Cursor<R>,
-        raw: bool,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, raw)?;
+        self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
         let date = buffer_readr.read_date_text(&self.common_settings().timezone)?;
         let days = uniform_date(date);
@@ -227,10 +231,9 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut Vec<i64>,
         reader: &mut Cursor<R>,
-        raw: bool,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, raw)?;
+        self.read_string_inner(reader, &mut buf)?;
         let mut buffer_readr = Cursor::new(&buf);
         let ts = if !buf.contains(&b'-') {
             buffer_readr.read_num_text_exact()?
@@ -261,10 +264,9 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
-        raw: bool,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, raw)?;
+        self.read_string_inner(reader, &mut buf)?;
         let rb = parse_bitmap(&buf)?;
         rb.serialize_into(&mut column.data).unwrap();
         column.commit_row();
@@ -275,10 +277,9 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         &self,
         column: &mut StringColumnBuilder,
         reader: &mut Cursor<R>,
-        raw: bool,
     ) -> Result<()> {
         let mut buf = Vec::new();
-        self.read_string_inner(reader, &mut buf, raw)?;
+        self.read_string_inner(reader, &mut buf)?;
         match parse_value(&buf) {
             Ok(value) => {
                 value.write_to_vec(&mut column.data);
@@ -296,24 +297,96 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         Ok(())
     }
 
-    fn read_array<R: AsRef<[u8]>>(
+    fn read_nullable<R: AsRef<[u8]>>(
+        &self,
+        column: &mut NullableColumnBuilder<AnyType>,
+        reader: &mut Cursor<R>,
+    ) -> Result<()> {
+        for null in &self.common_settings().null_if {
+            if self.match_bytes(reader, null) {
+                column.push_null();
+                return Ok(());
+            }
+        }
+        self.read_field(&mut column.builder, reader)?;
+        column.validity.push(true);
+        Ok(())
+    }
+
+    pub(crate) fn read_array<R: AsRef<[u8]>>(
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
-        raw: bool,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'[')?;
+        for idx in 0.. {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b']') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(&mut column.builder, reader)?;
+        }
+        column.commit_row();
+        Ok(())
+    }
 
-    fn read_map<R: AsRef<[u8]>>(
+    pub(crate) fn read_map<R: AsRef<[u8]>>(
         &self,
         column: &mut ArrayColumnBuilder<AnyType>,
         reader: &mut Cursor<R>,
-        raw: bool,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        const KEY: usize = 0;
+        const VALUE: usize = 1;
+        reader.must_ignore_byte(b'{')?;
+        let mut set = HashSet::new();
+        let map_builder = column.builder.as_tuple_mut().unwrap();
+        for idx in 0.. {
+            let _ = reader.ignore_white_spaces();
+            if reader.ignore_byte(b'}') {
+                break;
+            }
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(&mut map_builder[KEY], reader)?;
+            // check duplicate map keys
+            let key = map_builder[KEY].pop().unwrap();
+            if set.contains(&key) {
+                return Err(ErrorCode::BadBytes(
+                    "map keys have to be unique".to_string(),
+                ));
+            }
+            map_builder[KEY].push(key.as_ref());
+            set.insert(key);
+            let _ = reader.ignore_white_spaces();
+            reader.must_ignore_byte(b':')?;
+            let _ = reader.ignore_white_spaces();
+            self.read_field(&mut map_builder[VALUE], reader)?;
+        }
+        column.commit_row();
+        Ok(())
+    }
 
-    fn read_tuple<R: AsRef<[u8]>>(
+    pub(crate) fn read_tuple<R: AsRef<[u8]>>(
         &self,
-        fields: &mut Vec<ColumnBuilder>,
+        fields: &mut [ColumnBuilder],
         reader: &mut Cursor<R>,
-        raw: bool,
-    ) -> Result<()>;
+    ) -> Result<()> {
+        reader.must_ignore_byte(b'(')?;
+        for (idx, field) in fields.iter_mut().enumerate() {
+            let _ = reader.ignore_white_spaces();
+            if idx != 0 {
+                reader.must_ignore_byte(b',')?;
+            }
+            let _ = reader.ignore_white_spaces();
+            self.read_field(field, reader)?;
+        }
+        reader.must_ignore_byte(b')')?;
+        Ok(())
+    }
 }

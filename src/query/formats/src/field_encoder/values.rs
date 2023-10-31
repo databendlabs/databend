@@ -26,25 +26,24 @@ use common_io::constants::TRUE_BYTES_NUM;
 
 use crate::field_encoder::helpers::write_quoted_string;
 use crate::field_encoder::FieldEncoderRowBased;
-use crate::CommonSettings;
 use crate::FileFormatOptionsExt;
+use crate::OutputCommonSettings;
 
 pub struct FieldEncoderValues {
-    pub common_settings: CommonSettings,
+    pub common_settings: OutputCommonSettings,
     pub quote_char: u8,
 }
 
 impl FieldEncoderValues {
     pub fn create(options: &FileFormatOptionsExt) -> Self {
         FieldEncoderValues {
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
-                disable_variant_check: false,
             },
             quote_char: b'\'',
         }
@@ -52,14 +51,13 @@ impl FieldEncoderValues {
 
     pub fn create_for_http_handler(timezone: Tz) -> Self {
         FieldEncoderValues {
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone,
-                disable_variant_check: false,
             },
             quote_char: b'\'',
         }
@@ -71,14 +69,13 @@ impl FieldEncoderValues {
     // https://github.com/datafuselabs/databend/discussions/8941
     pub fn create_for_mysql_handler(timezone: Tz) -> Self {
         FieldEncoderValues {
-            common_settings: CommonSettings {
+            common_settings: OutputCommonSettings {
                 true_bytes: TRUE_BYTES_NUM.as_bytes().to_vec(),
                 false_bytes: FALSE_BYTES_NUM.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
                 nan_bytes: NAN_BYTES_SNAKE.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LONG.as_bytes().to_vec(),
                 timezone,
-                disable_variant_check: false,
             },
             quote_char: b'\'',
         }
@@ -86,7 +83,7 @@ impl FieldEncoderValues {
 }
 
 impl FieldEncoderRowBased for FieldEncoderValues {
-    fn common_settings(&self) -> &CommonSettings {
+    fn common_settings(&self) -> &OutputCommonSettings {
         &self.common_settings
     }
 

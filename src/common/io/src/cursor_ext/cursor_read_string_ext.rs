@@ -202,7 +202,7 @@ fn unescape(c: u8) -> u8 {
         b'a' => b'\x07', // \a in c
         b'b' => b'\x08', // \b in c
         b'v' => b'\x0B', // \v in c
-        b'f' => b'\x0C', // \e in c
+        b'f' => b'\x0C', // \f in c
         b'e' => b'\x1B', // \e in c
         b'n' => b'\n',
         b'r' => b'\r',
