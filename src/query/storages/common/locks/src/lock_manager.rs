@@ -22,8 +22,8 @@ use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
-use common_catalog::lock_api::LockApi;
-use common_catalog::lock_api::LockApiExt;
+use common_catalog::lock::Lock;
+use common_catalog::lock::LockExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -93,7 +93,7 @@ impl LockManager {
     }
 
     #[async_backtrace::framed]
-    pub async fn try_lock<T: LockApi + ?Sized>(
+    pub async fn try_lock<T: Lock + ?Sized>(
         self: &Arc<Self>,
         ctx: Arc<dyn TableContext>,
         lock: &T,

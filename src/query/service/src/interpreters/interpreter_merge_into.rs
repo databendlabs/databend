@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use std::u64::MAX;
 
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock::Lock;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;

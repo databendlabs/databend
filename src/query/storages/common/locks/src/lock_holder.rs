@@ -23,8 +23,8 @@ use common_base::base::tokio::time::sleep;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::catalog::Catalog;
-use common_catalog::lock_api::LockApi;
-use common_catalog::lock_api::LockApiExt;
+use common_catalog::lock::Lock;
+use common_catalog::lock::LockExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
@@ -48,7 +48,7 @@ impl LockHolder {
     }
 
     #[async_backtrace::framed]
-    pub async fn start<T: LockApi + ?Sized>(
+    pub async fn start<T: Lock + ?Sized>(
         &mut self,
         catalog: Arc<dyn Catalog>,
         lock: &T,

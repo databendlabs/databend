@@ -27,7 +27,7 @@ use crate::catalog::Catalog;
 use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
-pub trait LockApi: Sync + Send {
+pub trait Lock: Sync + Send {
     fn lock_level(&self) -> LockLevel;
 
     fn get_catalog(&self) -> &str;
@@ -48,7 +48,7 @@ pub trait LockApi: Sync + Send {
 }
 
 #[async_trait::async_trait]
-pub trait LockApiExt: LockApi {
+pub trait LockExt: Lock {
     /// Return true if the table is locked.
     async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
         let req = ListLockRevReq {
@@ -96,4 +96,4 @@ pub trait LockApiExt: LockApi {
     }
 }
 
-impl<T: ?Sized> LockApiExt for T where T: LockApi {}
+impl<T: ?Sized> LockExt for T where T: Lock {}

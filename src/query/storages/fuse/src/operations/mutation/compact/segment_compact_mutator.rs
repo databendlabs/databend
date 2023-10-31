@@ -15,7 +15,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock::Lock;
 use common_catalog::table::Table;
 use common_exception::Result;
 use log::info;

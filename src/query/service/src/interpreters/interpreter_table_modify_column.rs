@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock::Lock;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;

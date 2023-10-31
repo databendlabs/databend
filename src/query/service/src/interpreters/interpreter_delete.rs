@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock::Lock;
 use common_catalog::plan::Filters;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
