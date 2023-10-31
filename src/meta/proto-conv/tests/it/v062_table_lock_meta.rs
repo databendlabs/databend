@@ -14,7 +14,7 @@
 
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::schema::TableLockMeta;
+use common_meta_app::schema::LockMeta;
 use minitrace::func_name;
 
 use crate::common;
@@ -37,7 +37,7 @@ fn test_decode_v62_table_lock_meta() -> anyhow::Result<()> {
         49, 53, 32, 85, 84, 67, 160, 6, 62, 168, 6, 24,
     ];
 
-    let want = || TableLockMeta {
+    let want = || LockMeta {
         user: "root".to_string(),
         node: "node".to_string(),
         session_id: "session".to_string(),

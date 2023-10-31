@@ -116,6 +116,7 @@ use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -135,7 +136,6 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableLockKey;
-use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
@@ -3154,7 +3154,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn list_table_lock_revs(
         &self,
         req: ListTableLockRevReq,
-    ) -> Result<Vec<(u64, TableLockMeta)>, KVAppError> {
+    ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
         let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
         let list = self.prefix_list_kv(&prefix).await?;
 
@@ -3166,7 +3166,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 MetaError::NetworkError(meta_net_err)
             })?;
 
-            let table_lock_meta: TableLockMeta = deserialize_struct(&seq.data)?;
+            let table_lock_meta: LockMeta = deserialize_struct(&seq.data)?;
 
             reply.push((table_lock_key.revision, table_lock_meta));
         }
@@ -3193,7 +3193,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
             let table_lock_key = TableLockKey { table_id, revision };
 
-            let lock_meta = TableLockMeta {
+            let lock_meta = LockMeta {
                 user: req.user.clone(),
                 node: req.node.clone(),
                 session_id: req.session_id.clone(),
@@ -3255,6 +3255,10 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let table_lock_key = TableLockKey { table_id, revision };
             let (table_lock_seq, mut table_lock_meta) =
                 get_table_lock_meta_or_err(self, &table_lock_key, ctx).await?;
+            // Set `acquire_lock = true` to initialize `acquired_on` when the
+            // first time this lock is acquired. Before the lock is
+            // acquired(becoming the first in lock queue), or after being
+            // acquired, this argument is always `false`.
             if req.acquire_lock {
                 table_lock_meta.acquired_on = Some(Utc::now());
             }

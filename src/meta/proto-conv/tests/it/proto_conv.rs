@@ -270,8 +270,8 @@ pub(crate) fn new_empty_proto() -> mt::EmptyProto {
     mt::EmptyProto {}
 }
 
-pub(crate) fn new_table_lock_meta() -> mt::TableLockMeta {
-    mt::TableLockMeta {
+pub(crate) fn new_lock_meta() -> mt::LockMeta {
+    mt::LockMeta {
         user: "root".to_string(),
         node: "node".to_string(),
         session_id: "session".to_string(),
@@ -474,9 +474,9 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("empty_proto:{:?}", buf);
     }
 
-    // TableLockMeta
+    // LockMeta
     {
-        let table_lock_meta = new_table_lock_meta();
+        let table_lock_meta = new_lock_meta();
         let p = table_lock_meta.to_pb()?;
 
         let mut buf = vec![];

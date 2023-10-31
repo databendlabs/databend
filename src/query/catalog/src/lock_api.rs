@@ -13,11 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::fmt::Display;
-use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_meta_app::schema::LockLevel;
 use common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
@@ -50,18 +49,6 @@ pub trait LockApi: Sync + Send {
         let list_table_lock_req = self.list_table_lock_req();
         let reply = catalog.list_table_lock_revs(list_table_lock_req).await?;
         Ok(!reply.is_empty())
-    }
-}
-
-pub enum LockLevel {
-    Table,
-}
-
-impl Display for LockLevel {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        match self {
-            LockLevel::Table => write!(f, "Table"),
-        }
     }
 }
 

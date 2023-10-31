@@ -850,13 +850,36 @@ pub struct TableLockKey {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
-pub struct TableLockMeta {
+pub struct LockMeta {
     pub user: String,
     pub node: String,
     pub session_id: String,
 
     pub created_on: DateTime<Utc>,
     pub acquired_on: Option<DateTime<Utc>>,
+}
+
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+)]
+pub enum LockLevel {
+    #[default]
+    Table = 1,
+}
+
+impl Display for LockLevel {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            LockLevel::Table => write!(f, "Table"),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -1063,7 +1086,7 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_table_lock/table_id/revision -> TableLockMeta
+    /// __fd_table_lock/table_id/revision -> LockMeta
     impl kvapi::Key for TableLockKey {
         const PREFIX: &'static str = PREFIX_TABLE_LOCK;
 

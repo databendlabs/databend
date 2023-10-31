@@ -50,6 +50,7 @@ use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -58,7 +59,6 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -261,10 +261,8 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
-    async fn list_table_lock_revs(
-        &self,
-        req: Box<dyn LockRequest>,
-    ) -> Result<Vec<(u64, TableLockMeta)>>;
+    async fn list_table_lock_revs(&self, req: Box<dyn LockRequest>)
+    -> Result<Vec<(u64, LockMeta)>>;
 
     async fn create_table_lock_rev(
         &self,

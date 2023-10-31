@@ -61,6 +61,7 @@ use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -72,7 +73,6 @@ use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -242,7 +242,7 @@ pub trait SchemaApi: Send + Sync {
     async fn list_table_lock_revs(
         &self,
         req: ListTableLockRevReq,
-    ) -> Result<Vec<(u64, TableLockMeta)>, KVAppError>;
+    ) -> Result<Vec<(u64, LockMeta)>, KVAppError>;
 
     async fn create_table_lock_rev(
         &self,

@@ -41,12 +41,12 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableLockKey;
-use common_meta_app::schema::TableLockMeta;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -1268,8 +1268,8 @@ pub async fn get_table_lock_meta_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     lock_key: &TableLockKey,
     msg: impl Display,
-) -> Result<(u64, TableLockMeta), KVAppError> {
-    let (table_lock_seq, table_lock_meta): (_, Option<TableLockMeta>) =
+) -> Result<(u64, LockMeta), KVAppError> {
+    let (table_lock_seq, table_lock_meta): (_, Option<LockMeta>) =
         get_pb_value(kv_api, lock_key).await?;
     table_lock_has_to_exist(table_lock_seq, lock_key, msg)?;
 

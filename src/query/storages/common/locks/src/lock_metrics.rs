@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_catalog::lock_api::LockLevel;
+use common_meta_app::schema::LockLevel;
 use common_metrics::register_counter_family;
 use common_metrics::Counter;
 use common_metrics::Family;

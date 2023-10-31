@@ -66,13 +66,13 @@ impl FromToProto for mt::TableCopiedFileInfo {
     }
 }
 
-impl FromToProto for mt::TableLockMeta {
-    type PB = pb::TableLockMeta;
+impl FromToProto for mt::LockMeta {
+    type PB = pb::LockMeta;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
 
-    fn from_pb(p: pb::TableLockMeta) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::LockMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
@@ -89,8 +89,8 @@ impl FromToProto for mt::TableLockMeta {
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableLockMeta, Incompatible> {
-        let p = pb::TableLockMeta {
+    fn to_pb(&self) -> Result<pb::LockMeta, Incompatible> {
+        let p = pb::LockMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             user: self.user.clone(),
