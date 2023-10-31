@@ -9,14 +9,20 @@ Creates an internal or external stage.
 ```sql
 -- Internal stage
 CREATE STAGE [ IF NOT EXISTS ] <internal_stage_name>
-  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = (
+         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+         | FORMAT_NAME = '<your-custom-format>'
+       ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 
 -- External stage
 CREATE STAGE [ IF NOT EXISTS ] <external_stage_name>
     externalStageParams
-  [ FILE_FORMAT = ( { TYPE = { PARQUET | CSV | TSV | NDJSON } [ formatTypeOptions ] ) } ]
+  [ FILE_FORMAT = (
+         TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ]
+         | FORMAT_NAME = '<your-custom-format>'
+       ) ]
   [ COPY_OPTIONS = ( copyOptions ) ]
   [ COMMENT = '<string_literal>' ]
 ```
@@ -124,9 +130,9 @@ For the connection parameters available for accessing WebHDFS, see [Connection P
 </TabItem>
 </Tabs>
 
-### formatTypeOptions
+### FILE_FORMAT
 
-For details about `FILE_FORMAT`, see [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md).
+See [Input & Output File Formats](../../../13-sql-reference/50-file-format-options.md) for details.
 
 ### copyOptions
 
