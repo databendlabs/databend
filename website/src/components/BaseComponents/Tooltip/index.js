@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import PropTypes from "prop-types";
+import styles from './styles.module.scss';
+import clsx from "clsx";
 
-const Tooltip = ({ content, children }) => {
+const Tooltip = ({ content, children, style, contentStyle }) => {
   const [showTooltip, setShowTooltip] = useState(false);
 
   const handleMouseEnter = () => setShowTooltip(true);
   const handleMouseLeave = () => setShowTooltip(false);
 
   return (
-    <div style={{ position: "relative" }}>
+    <div style={{ position: "relative", ...style }}>
       <div
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -16,23 +18,14 @@ const Tooltip = ({ content, children }) => {
       >
         {children}
       </div>
-      {showTooltip && (
-        <div
-          style={{
-            position: "absolute",
-            zIndex: 1,
-            top: "-40px",
-            left: "50%",
-            transform: "translateX(-50%)",
-            backgroundColor: "var(--color-bg-5)",
-            color: "#fff",
-            padding: "4px 12px",
-            borderRadius: "6px",
-          }}
-        >
-          {content}
-        </div>
-      )}
+      <div
+        className={clsx(styles.tooltip,  showTooltip && styles.visible)}
+        style={{
+          ...contentStyle
+        }}
+      >
+        {content}
+      </div>
     </div>
   );
 };
@@ -40,6 +33,8 @@ const Tooltip = ({ content, children }) => {
 Tooltip.propTypes = {
   content: PropTypes.string.isRequired,
   children: PropTypes.element.isRequired,
+  style: PropTypes.object,
+  contentStyle: PropTypes.object
 };
 
 export default Tooltip;
