@@ -57,7 +57,7 @@ pub async fn generate_snapshot_with_segments(
     time_stamp: Option<DateTime<Utc>>,
     with_table_version: bool,
 ) -> Result<String> {
-    let current_snapshot = fuse_table.read_table_snapshot().await?.unwrap();
+    let current_snapshot = fuse_table.read_table_snapshot().await?;
     let operator = fuse_table.get_operator();
     let location_gen = fuse_table.meta_location_generator();
     let table_version_option = if with_table_version {
@@ -65,8 +65,20 @@ pub async fn generate_snapshot_with_segments(
     } else {
         None
     };
-    let mut new_snapshot =
-        TableSnapshot::from_previous(current_snapshot.as_ref(), table_version_option);
+    let mut new_snapshot = if let Some(current_snapshot) = current_snapshot {
+        TableSnapshot::from_previous(current_snapshot.as_ref(), table_version_option)
+    } else {
+        TableSnapshot::new(
+            &None,
+            None,
+            Some(fuse_table.current_table_version()),
+            fuse_table.schema().as_ref().to_owned(),
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+        )
+    };
     new_snapshot.segments = segment_locations;
     // if not with table version, use snapshot id without timestamp
     if !with_table_version {
