@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::type_name;
 use std::fmt::Write;
 use std::sync::Arc;
 
-use common_base::dump_backtrace;
 use common_base::get_all_tasks;
+use common_base::runtime::Runtime;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -54,24 +55,55 @@ impl SyncSystemTable for BacktraceTable {
         let tasks_size = tasks.len() + polling_tasks.len();
 
         let mut nodes: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
+        let mut queries_id: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
+        let mut queries_status: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
         let mut stacks: Vec<Vec<u8>> = Vec::with_capacity(tasks_size);
 
-        for mut tasks in [tasks, polling_tasks] {
+        for (status, mut tasks) in [("PENDING", tasks), ("RUNNING", polling_tasks)] {
             tasks.sort_by(|l, r| Ord::cmp(&l.stack_frames.len(), &r.stack_frames.len()));
 
             for item in tasks.into_iter().rev() {
+                let mut query_id = String::from("Global");
+
                 let mut stack_frames = String::new();
-                for frame in item.stack_frames {
+                let mut frames_iter = item.stack_frames.into_iter();
+
+                if let Some(mut frame) = frames_iter.next() {
+                    let matcher = "╼ Running query ";
+                    if let Some(_pos) = frame.find(matcher) {
+                        let task_matcher = " spawn task";
+                        if let Some(pos) = frame.find(task_matcher) {
+                            query_id = (&frame[matcher.len()..pos]).to_string();
+
+                            frame = format!(
+                                "╼ {}::spawn{}",
+                                type_name::<Runtime>(),
+                                (&frame[pos + task_matcher.len()..]).to_string()
+                            );
+                        }
+                    } else if let Some(_pos) = frame.find("╼ Global spawn task") {
+                        let replaced = format!("{}::spawn", type_name::<Runtime>());
+                        frame = frame.replace("╼ Global spawn task", &replaced)
+                    }
+
+                    writeln!(stack_frames, "{}", frame).unwrap();
+                }
+
+                for frame in frames_iter {
                     writeln!(stack_frames, "{}", frame).unwrap();
                 }
 
                 nodes.push(local_node.clone());
                 stacks.push(stack_frames.into_bytes());
+                queries_id.push(query_id.into_bytes());
+                queries_status.push(status.as_bytes().to_vec());
             }
         }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(nodes),
+            StringType::from_data(queries_id),
+            StringType::from_data(queries_status),
             StringType::from_data(stacks),
         ]))
     }
@@ -81,8 +113,8 @@ impl BacktraceTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("node", TableDataType::String),
-            // TableField::new("query_id", TableDataType::String),
-            // TableField::new("status", TableDataType::String),
+            TableField::new("query_id", TableDataType::String),
+            TableField::new("status", TableDataType::String),
             TableField::new("stack", TableDataType::String),
         ]);
 
