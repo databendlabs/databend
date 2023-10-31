@@ -16,10 +16,11 @@ use std::any::Any;
 
 use chrono::Utc;
 use common_catalog::lock_api::LockRequest;
-use common_meta_app::schema::CreateTableLockRevReq;
-use common_meta_app::schema::DeleteTableLockRevReq;
-use common_meta_app::schema::ExtendTableLockRevReq;
-use common_meta_app::schema::ListTableLockRevReq;
+use common_meta_app::schema::CreateLockRevReq;
+use common_meta_app::schema::DeleteLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
+use common_meta_app::schema::ListLockRevReq;
+use common_meta_app::schema::LockLevel;
 
 #[derive(Clone)]
 pub struct ListTableLockReq {
@@ -36,10 +37,11 @@ impl LockRequest for ListTableLockReq {
     }
 }
 
-impl From<&ListTableLockReq> for ListTableLockRevReq {
+impl From<&ListTableLockReq> for ListLockRevReq {
     fn from(value: &ListTableLockReq) -> Self {
-        ListTableLockRevReq {
+        ListLockRevReq {
             table_id: value.table_id,
+            level: LockLevel::Table,
         }
     }
 }
@@ -63,9 +65,10 @@ impl LockRequest for CreateTableLockReq {
     }
 }
 
-impl From<&CreateTableLockReq> for CreateTableLockRevReq {
+impl From<&CreateTableLockReq> for CreateLockRevReq {
     fn from(value: &CreateTableLockReq) -> Self {
-        CreateTableLockRevReq {
+        CreateLockRevReq {
+            level: LockLevel::Table,
             table_id: value.table_id,
             expire_at: Utc::now().timestamp() as u64 + value.expire_secs,
             user: value.user.clone(),
@@ -93,13 +96,14 @@ impl LockRequest for ExtendTableLockReq {
     }
 }
 
-impl From<&ExtendTableLockReq> for ExtendTableLockRevReq {
+impl From<&ExtendTableLockReq> for ExtendLockRevReq {
     fn from(value: &ExtendTableLockReq) -> Self {
-        ExtendTableLockRevReq {
+        ExtendLockRevReq {
             table_id: value.table_id,
             expire_at: Utc::now().timestamp() as u64 + value.expire_secs,
             revision: value.revision,
             acquire_lock: value.acquire_lock,
+            level: LockLevel::Table,
         }
     }
 }
@@ -120,11 +124,12 @@ impl LockRequest for DeleteTableLockReq {
     }
 }
 
-impl From<&DeleteTableLockReq> for DeleteTableLockRevReq {
+impl From<&DeleteTableLockReq> for DeleteLockRevReq {
     fn from(value: &DeleteTableLockReq) -> Self {
-        DeleteTableLockRevReq {
+        DeleteLockRevReq {
             table_id: value.table_id,
             revision: value.revision,
+            level: LockLevel::Table,
         }
     }
 }

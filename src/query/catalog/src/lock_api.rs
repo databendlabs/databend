@@ -47,7 +47,7 @@ pub trait LockApi: Sync + Send {
     /// Return true if the table is locked.
     async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
         let list_table_lock_req = self.list_table_lock_req();
-        let reply = catalog.list_table_lock_revs(list_table_lock_req).await?;
+        let reply = catalog.list_lock_revisions(list_table_lock_req).await?;
         Ok(!reply.is_empty())
     }
 }

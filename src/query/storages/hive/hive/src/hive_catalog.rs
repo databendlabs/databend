@@ -34,7 +34,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -566,7 +566,7 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(
+    async fn list_lock_revisions(
         &self,
         _req: Box<dyn LockRequest>,
     ) -> Result<Vec<(u64, LockMeta)>> {
@@ -574,20 +574,17 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table_lock_rev(
-        &self,
-        _req: Box<dyn LockRequest>,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         unimplemented!()
     }
 

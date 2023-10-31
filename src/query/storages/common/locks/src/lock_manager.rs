@@ -101,7 +101,7 @@ impl LockManager {
 
         // get a new table lock revision.
         let res = catalog
-            .create_table_lock_rev(lock.create_table_lock_req())
+            .create_lock_revision(lock.create_table_lock_req())
             .await?;
         let revision = res.revision;
         // metrics.
@@ -121,7 +121,7 @@ impl LockManager {
         loop {
             // List all revisions and check if the current is the minimum.
             let reply = catalog
-                .list_table_lock_revs(list_table_lock_req.clone())
+                .list_lock_revisions(list_table_lock_req.clone())
                 .await?;
             let position = reply.iter().position(|(x, _)| *x == revision).ok_or(
                 // If the current is not found in list,  it means that the current has been expired.
@@ -131,7 +131,7 @@ impl LockManager {
             if position == 0 {
                 // The lock is acquired by current session.
                 let extend_table_lock_req = lock.extend_table_lock_req(revision, true);
-                catalog.extend_table_lock_rev(extend_table_lock_req).await?;
+                catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
                 record_acquired_table_lock_nums(lock.level(), lock.table_id(), 1);
                 break;
@@ -159,7 +159,7 @@ impl LockManager {
                 Ok(_) => Ok(()),
                 Err(_) => {
                     catalog
-                        .delete_table_lock_rev(delete_table_lock_req.clone())
+                        .delete_lock_revision(delete_table_lock_req.clone())
                         .await?;
                     Err(ErrorCode::TableAlreadyLocked(
                         "table is locked by other session, please retry later".to_string(),

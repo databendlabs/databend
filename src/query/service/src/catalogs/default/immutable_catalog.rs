@@ -29,7 +29,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -315,36 +315,33 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(
+    async fn list_lock_revisions(
         &self,
         _req: Box<dyn LockRequest>,
     ) -> Result<Vec<(u64, LockMeta)>> {
         Err(ErrorCode::Unimplemented(
-            "list_table_lock_revs not allowed for system database",
+            "list_lock_revisions not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn create_table_lock_rev(
-        &self,
-        _req: Box<dyn LockRequest>,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
         Err(ErrorCode::Unimplemented(
-            "create_table_lock_rev not allowed for system database",
+            "create_lock_revision not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
-            "extend_table_lock_rev not allowed for system database",
+            "extend_lock_revision not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
         Err(ErrorCode::Unimplemented(
-            "delete_table_lock_rev not allowed for system database",
+            "delete_lock_revision not allowed for system database",
         ))
     }
 

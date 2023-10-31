@@ -33,7 +33,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -611,29 +611,23 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(
-        &self,
-        req: Box<dyn LockRequest>,
-    ) -> Result<Vec<(u64, LockMeta)>> {
-        self.mutable_catalog.list_table_lock_revs(req).await
+    async fn list_lock_revisions(&self, req: Box<dyn LockRequest>) -> Result<Vec<(u64, LockMeta)>> {
+        self.mutable_catalog.list_lock_revisions(req).await
     }
 
     #[async_backtrace::framed]
-    async fn create_table_lock_rev(
-        &self,
-        req: Box<dyn LockRequest>,
-    ) -> Result<CreateTableLockRevReply> {
-        self.mutable_catalog.create_table_lock_rev(req).await
+    async fn create_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
+        self.mutable_catalog.create_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
-        self.mutable_catalog.extend_table_lock_rev(req).await
+    async fn extend_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
+        self.mutable_catalog.extend_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
-        self.mutable_catalog.delete_table_lock_rev(req).await
+    async fn delete_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
+        self.mutable_catalog.delete_lock_revision(req).await
     }
 
     async fn get_drop_table_infos(

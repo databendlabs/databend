@@ -72,13 +72,13 @@ impl LockHolder {
                     let sleep = Box::pin(sleep(Duration::from_millis(mills)));
                     match select(notified, sleep).await {
                         Either::Left((_, _)) => {
-                            catalog.delete_table_lock_rev(delete_table_lock_req).await?;
+                            catalog.delete_lock_revision(delete_table_lock_req).await?;
                             break;
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .extend_table_lock_rev(extend_table_lock_req.clone())
+                                .extend_lock_revision(extend_table_lock_req.clone())
                                 .await?;
                         }
                     }

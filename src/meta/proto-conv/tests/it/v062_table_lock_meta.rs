@@ -14,6 +14,7 @@
 
 use chrono::TimeZone;
 use chrono::Utc;
+use common_meta_app::schema::LockLevel;
 use common_meta_app::schema::LockMeta;
 use minitrace::func_name;
 
@@ -34,7 +35,7 @@ fn test_decode_v62_table_lock_meta() -> anyhow::Result<()> {
         10, 4, 114, 111, 111, 116, 18, 4, 110, 111, 100, 101, 26, 7, 115, 101, 115, 115, 105, 111,
         110, 34, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58, 48, 57,
         32, 85, 84, 67, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 57, 32, 49, 50, 58, 48, 48, 58,
-        49, 53, 32, 85, 84, 67, 160, 6, 62, 168, 6, 24,
+        49, 53, 32, 85, 84, 67, 50, 8, 10, 0, 160, 6, 62, 168, 6, 24, 160, 6, 62, 168, 6, 24,
     ];
 
     let want = || LockMeta {
@@ -43,6 +44,7 @@ fn test_decode_v62_table_lock_meta() -> anyhow::Result<()> {
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
+        level: LockLevel::Table,
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 62, want())?;

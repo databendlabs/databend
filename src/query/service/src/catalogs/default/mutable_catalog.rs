@@ -29,7 +29,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
-use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -515,48 +515,42 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(
-        &self,
-        req: Box<dyn LockRequest>,
-    ) -> Result<Vec<(u64, LockMeta)>> {
+    async fn list_lock_revisions(&self, req: Box<dyn LockRequest>) -> Result<Vec<(u64, LockMeta)>> {
         let req = req
             .as_any()
             .downcast_ref::<ListTableLockReq>()
             .expect("must success");
-        let res = self.ctx.meta.list_table_lock_revs(req.into()).await?;
+        let res = self.ctx.meta.list_lock_revisions(req.into()).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn create_table_lock_rev(
-        &self,
-        req: Box<dyn LockRequest>,
-    ) -> Result<CreateTableLockRevReply> {
+    async fn create_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
         let req = req
             .as_any()
             .downcast_ref::<CreateTableLockReq>()
             .expect("must success");
-        let res = self.ctx.meta.create_table_lock_rev(req.into()).await?;
+        let res = self.ctx.meta.create_lock_revision(req.into()).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn extend_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
         let req = req
             .as_any()
             .downcast_ref::<ExtendTableLockReq>()
             .expect("must success");
-        self.ctx.meta.extend_table_lock_rev(req.into()).await?;
+        self.ctx.meta.extend_lock_revision(req.into()).await?;
         Ok(())
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(&self, req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
         let req = req
             .as_any()
             .downcast_ref::<DeleteTableLockReq>()
             .expect("must success");
-        let reply = self.ctx.meta.delete_table_lock_rev(req.into()).await?;
+        let reply = self.ctx.meta.delete_lock_revision(req.into()).await?;
         Ok(reply)
     }
 
