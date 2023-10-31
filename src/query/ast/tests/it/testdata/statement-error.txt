@@ -91,6 +91,16 @@ error:
 
 
 ---------- Input ----------
+create table if not exists a.b (a int) 's3://testbucket/admin/data/' URL = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
+---------- Output ---------
+error: 
+  --> SQL:1:117
+  |
+1 | create table if not exists a.b (a int) 's3://testbucket/admin/data/' URL = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
+  |                                                                                                                     ^ expected <QuotedString>, <Ident>, <LiteralInteger>, <MySQLLiteralHex>, or <PGLiteralHex>
+
+
+---------- Input ----------
 drop table if a.b
 ---------- Output ---------
 error: 
@@ -361,7 +371,7 @@ error:
   --> SQL:1:9
   |
 1 | PRESIGN INVALID @my_stage/path/to/file
-  | ------- ^^^^^^^ expected `DOWNLOAD`, `AtString`, `UPLOAD`, or <QuotedString>
+  | ------- ^^^^^^^ expected `DOWNLOAD`, `AtString`, `UPLOAD`, `URL`, or <QuotedString>
   | |        
   | while parsing `PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`
 
@@ -503,7 +513,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -534,7 +544,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -553,7 +563,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = 
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -572,7 +582,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -591,7 +601,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -610,7 +620,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -629,7 +639,7 @@ error:
   --> SQL:1:19
   |
 1 | copy into t1 from "" FILE_FORMAT = (TYPE =
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
@@ -648,7 +658,7 @@ error:
   --> SQL:1:19
   |
 1 | COPY INTO t1 FROM "" PATTERN = '.*[.]csv' FILE_FORMAT = (type = TSV field_delimiter = '\t' skip_headerx = 0);
-  | ----              ^^ expected <QuotedString>, `AtString`, or `(`
+  | ----              ^^ expected <QuotedString>, `AtString`, `(`, or `URL`
   | |                  
   | while parsing `COPY
                 INTO { [<database_name>.]<table_name> { ( <columns> ) } }
