@@ -1063,7 +1063,7 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_table_lock/table_id/revision -> ""
+    /// __fd_table_lock/table_id/revision -> TableLockMeta
     impl kvapi::Key for TableLockKey {
         const PREFIX: &'static str = PREFIX_TABLE_LOCK;
 
