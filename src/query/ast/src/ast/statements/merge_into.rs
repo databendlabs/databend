@@ -98,7 +98,7 @@ impl Display for MergeIntoStmt {
         write!(f, "MERGE INTO ")?;
         write_dot_separated_list(
             f,
-            self.database
+            self.catalog
                 .iter()
                 .chain(&self.database)
                 .chain(Some(&self.table_ident)),

@@ -434,7 +434,6 @@ impl PipelineBuilder {
         self.main_pipeline.add_pipe(builder.finalize());
 
         // 2.fill computed columns
-        // fill computed columns
         let table_computed_schema = &tbl.schema().remove_virtual_computed_fields();
         let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
         let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());

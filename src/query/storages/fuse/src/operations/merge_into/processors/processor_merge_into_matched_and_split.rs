@@ -62,6 +62,8 @@ enum MutationKind {
     Delete(DeleteDataBlockMutation),
 }
 
+// if we use hash shuffle join strategy, the enum
+// type can't be parser when transform data between nodes.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct MixRowNumberKindAndLog {
     pub log: Option<MutationLogs>,

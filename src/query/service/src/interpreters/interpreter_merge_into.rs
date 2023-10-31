@@ -205,7 +205,7 @@ impl MergeIntoInterpreter {
         };
 
         let mut found_row_id = false;
-        let mut row_number_idx = -1;
+        let mut row_number_idx = None;
         for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
             if *data_field.name() == row_id_idx.to_string() {
                 row_id_idx = idx;
@@ -214,10 +214,8 @@ impl MergeIntoInterpreter {
             }
         }
 
-        for (idx, data_field) in join_output_schema.fields().iter().enumerate() {
-            if exchange.is_some() && data_field.name() == ROW_NUMBER_COL_NAME {
-                row_number_idx = idx as i32;
-            }
+        if exchange.is_some() {
+            row_number_idx = Some(join_output_schema.index_of(ROW_NUMBER_COL_NAME)?);
         }
 
         // we can't get row_id_idx, throw an exception
@@ -227,7 +225,7 @@ impl MergeIntoInterpreter {
             ));
         }
 
-        if exchange.is_some() && row_number_idx == -1 {
+        if exchange.is_some() && row_number_idx.is_none() {
             return Err(ErrorCode::InvalidRowIdIndex(
                 "can't get internal row_number_idx when running merge into",
             ));
@@ -390,7 +388,6 @@ impl MergeIntoInterpreter {
                 output_schema: DataSchemaRef::default(),
             }))
         } else {
-            // let (tx, rx) = mpsc::sync_channel::<Any>(0);
             let merge_append = PhysicalPlan::MergeInto(Box::new(MergeInto {
                 input: Box::new(merge_into_source.clone()),
                 table_info: table_info.clone(),
@@ -402,7 +399,7 @@ impl MergeIntoInterpreter {
                 segments,
                 distributed: true,
                 output_schema: DataSchemaRef::new(DataSchema::new(vec![
-                    join_output_schema.fields[row_number_idx as usize].clone(),
+                    join_output_schema.fields[row_number_idx.unwrap()].clone(),
                 ])),
             }));
 
