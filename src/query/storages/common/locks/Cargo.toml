@@ -24,7 +24,6 @@ common-users = { path = "../../../users" }
 async-backtrace = { workspace = true }
 async-channel = "1.7.1"
 async-trait = "0.1.57"
-chrono = { workspace = true }
 futures = "0.3.24"
 futures-util = { workspace = true }
 lazy_static = { workspace = true }

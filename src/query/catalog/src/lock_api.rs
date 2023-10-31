@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_exception::Result;
+use common_meta_app::schema::CreateLockRevReq;
+use common_meta_app::schema::DeleteLockRevReq;
+use common_meta_app::schema::ExtendLockRevReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::LockLevel;
 use common_pipeline_core::LockGuard;
 
@@ -24,42 +28,72 @@ use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
 pub trait LockApi: Sync + Send {
-    fn level(&self) -> LockLevel;
+    fn lock_level(&self) -> LockLevel;
 
-    fn catalog(&self) -> &str;
+    fn get_catalog(&self) -> &str;
 
     fn get_expire_secs(&self) -> u64;
 
-    fn table_id(&self) -> u64;
+    fn get_table_id(&self) -> u64;
+
+    fn get_user(&self) -> String;
+
+    fn get_node(&self) -> String;
+
+    fn get_session_id(&self) -> String;
 
     fn watch_delete_key(&self, revision: u64) -> String;
 
-    fn create_table_lock_req(&self) -> Box<dyn LockRequest>;
-
-    fn extend_table_lock_req(&self, revision: u64, acquire_lock: bool) -> Box<dyn LockRequest>;
-
-    fn delete_table_lock_req(&self, revision: u64) -> Box<dyn LockRequest>;
-
-    fn list_table_lock_req(&self) -> Box<dyn LockRequest>;
-
     async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>>;
+}
 
+#[async_trait::async_trait]
+pub trait LockApiExt: LockApi {
     /// Return true if the table is locked.
     async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
-        let list_table_lock_req = self.list_table_lock_req();
-        let reply = catalog.list_lock_revisions(list_table_lock_req).await?;
+        let req = ListLockRevReq {
+            table_id: self.get_table_id(),
+            level: self.lock_level(),
+        };
+        let reply = catalog.list_lock_revisions(req).await?;
         Ok(!reply.is_empty())
     }
-}
 
-pub trait LockRequest: Send + Sync {
-    fn as_any(&self) -> &dyn Any;
+    fn gen_create_lock_req(&self) -> CreateLockRevReq {
+        CreateLockRevReq {
+            table_id: self.get_table_id(),
+            level: self.lock_level(),
+            user: self.get_user(),
+            node: self.get_node(),
+            session_id: self.get_session_id(),
+            expire_at: Utc::now().timestamp() as u64 + self.get_expire_secs(),
+        }
+    }
 
-    fn clone_self(&self) -> Box<dyn LockRequest>;
-}
+    fn gen_list_lock_req(&self) -> ListLockRevReq {
+        ListLockRevReq {
+            table_id: self.get_table_id(),
+            level: self.lock_level(),
+        }
+    }
 
-impl Clone for Box<dyn LockRequest> {
-    fn clone(&self) -> Self {
-        self.clone_self()
+    fn gen_delete_lock_req(&self, revision: u64) -> DeleteLockRevReq {
+        DeleteLockRevReq {
+            table_id: self.get_table_id(),
+            level: self.lock_level(),
+            revision,
+        }
+    }
+
+    fn gen_extend_lock_req(&self, revision: u64, acquire_lock: bool) -> ExtendLockRevReq {
+        ExtendLockRevReq {
+            table_id: self.get_table_id(),
+            level: self.lock_level(),
+            revision,
+            acquire_lock,
+            expire_at: Utc::now().timestamp() as u64 + self.get_expire_secs(),
+        }
     }
 }
+
+impl<T: ?Sized> LockApiExt for T where T: LockApi {}

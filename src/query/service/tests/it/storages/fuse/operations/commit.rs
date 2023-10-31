@@ -23,7 +23,6 @@ use common_base::base::ProgressValues;
 use common_catalog::catalog::Catalog;
 use common_catalog::cluster_info::Cluster;
 use common_catalog::database::Database;
-use common_catalog::lock_api::LockRequest;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
@@ -50,10 +49,12 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -62,6 +63,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -69,6 +71,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -861,22 +864,19 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_lock_revisions(
-        &self,
-        _req: Box<dyn LockRequest>,
-    ) -> Result<Vec<(u64, LockMeta)>> {
+    async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         todo!()
     }
 
-    async fn create_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
+    async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         todo!()
     }
 
-    async fn extend_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
         todo!()
     }
 
-    async fn delete_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         todo!()
     }
 }

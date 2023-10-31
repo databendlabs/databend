@@ -13,7 +13,5 @@
 // limitations under the License.
 
 mod lock;
-mod request;
 
 pub use lock::TableLock;
-pub use request::*;

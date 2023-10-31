@@ -20,7 +20,6 @@ use std::sync::Arc;
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::database::Database;
-use common_catalog::lock_api::LockRequest;
 use common_catalog::table_args::TableArgs;
 use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
@@ -34,10 +33,12 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -47,6 +48,7 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
@@ -57,6 +59,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -611,22 +614,22 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_lock_revisions(&self, req: Box<dyn LockRequest>) -> Result<Vec<(u64, LockMeta)>> {
+    async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         self.mutable_catalog.list_lock_revisions(req).await
     }
 
     #[async_backtrace::framed]
-    async fn create_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
+    async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         self.mutable_catalog.create_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
-    async fn extend_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
         self.mutable_catalog.extend_lock_revision(req).await
     }
 
     #[async_backtrace::framed]
-    async fn delete_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
         self.mutable_catalog.delete_lock_revision(req).await
     }
 

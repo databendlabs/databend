@@ -26,10 +26,12 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -39,6 +41,7 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
@@ -49,6 +52,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -79,7 +83,6 @@ use common_meta_types::MetaId;
 use dyn_clone::DynClone;
 
 use crate::database::Database;
-use crate::lock_api::LockRequest;
 use crate::table::Table;
 use crate::table_args::TableArgs;
 use crate::table_function::TableFunction;
@@ -261,13 +264,13 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
-    async fn list_lock_revisions(&self, req: Box<dyn LockRequest>) -> Result<Vec<(u64, LockMeta)>>;
+    async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>>;
 
-    async fn create_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<CreateLockRevReply>;
+    async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply>;
 
-    async fn extend_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()>;
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()>;
 
-    async fn delete_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()>;
+    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()>;
 
     /// Table function
 

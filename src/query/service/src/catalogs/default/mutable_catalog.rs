@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::lock_api::LockRequest;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
@@ -30,6 +29,7 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
@@ -39,6 +39,7 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -48,6 +49,7 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::DroppedId;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetDatabaseReq;
@@ -60,6 +62,7 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListDroppedTableReq;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -89,10 +92,6 @@ use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
 use log::info;
-use storages_common_locks::CreateTableLockReq;
-use storages_common_locks::DeleteTableLockReq;
-use storages_common_locks::ExtendTableLockReq;
-use storages_common_locks::ListTableLockReq;
 
 use crate::catalogs::default::catalog_context::CatalogContext;
 use crate::databases::Database;
@@ -515,43 +514,23 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_lock_revisions(&self, req: Box<dyn LockRequest>) -> Result<Vec<(u64, LockMeta)>> {
-        let req = req
-            .as_any()
-            .downcast_ref::<ListTableLockReq>()
-            .expect("must success");
-        let res = self.ctx.meta.list_lock_revisions(req.into()).await?;
-        Ok(res)
+    async fn list_lock_revisions(&self, req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
+        Ok(self.ctx.meta.list_lock_revisions(req).await?)
     }
 
     #[async_backtrace::framed]
-    async fn create_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
-        let req = req
-            .as_any()
-            .downcast_ref::<CreateTableLockReq>()
-            .expect("must success");
-        let res = self.ctx.meta.create_lock_revision(req.into()).await?;
-        Ok(res)
+    async fn create_lock_revision(&self, req: CreateLockRevReq) -> Result<CreateLockRevReply> {
+        Ok(self.ctx.meta.create_lock_revision(req).await?)
     }
 
     #[async_backtrace::framed]
-    async fn extend_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
-        let req = req
-            .as_any()
-            .downcast_ref::<ExtendTableLockReq>()
-            .expect("must success");
-        self.ctx.meta.extend_lock_revision(req.into()).await?;
-        Ok(())
+    async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<()> {
+        Ok(self.ctx.meta.extend_lock_revision(req).await?)
     }
 
     #[async_backtrace::framed]
-    async fn delete_lock_revision(&self, req: Box<dyn LockRequest>) -> Result<()> {
-        let req = req
-            .as_any()
-            .downcast_ref::<DeleteTableLockReq>()
-            .expect("must success");
-        let reply = self.ctx.meta.delete_lock_revision(req.into()).await?;
-        Ok(reply)
+    async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<()> {
+        Ok(self.ctx.meta.delete_lock_revision(req).await?)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

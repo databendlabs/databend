@@ -17,7 +17,7 @@ use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::catalog::Catalog;
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock_api::LockApiExt;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::Table;

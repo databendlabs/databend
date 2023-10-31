@@ -24,6 +24,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::catalog::Catalog;
 use common_catalog::lock_api::LockApi;
+use common_catalog::lock_api::LockApiExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use futures::future::select;
@@ -55,8 +56,8 @@ impl LockHolder {
     ) -> Result<()> {
         let expire_secs = lock.get_expire_secs();
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
-        let delete_table_lock_req = lock.delete_table_lock_req(revision);
-        let extend_table_lock_req = lock.extend_table_lock_req(revision, false);
+        let delete_table_lock_req = lock.gen_delete_lock_req(revision);
+        let extend_table_lock_req = lock.gen_extend_lock_req(revision, false);
 
         self.shutdown_handler = Some(GlobalIORuntime::instance().spawn({
             let shutdown_flag = self.shutdown_flag.clone();

@@ -18,7 +18,6 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
-use common_catalog::lock_api::LockRequest;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -30,10 +29,12 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateLockRevReply;
+use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::CreateVirtualColumnReply;
 use common_meta_app::schema::CreateVirtualColumnReq;
+use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -42,6 +43,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -49,6 +51,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesByIdReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::LockMeta;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -315,31 +318,28 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_lock_revisions(
-        &self,
-        _req: Box<dyn LockRequest>,
-    ) -> Result<Vec<(u64, LockMeta)>> {
+    async fn list_lock_revisions(&self, _req: ListLockRevReq) -> Result<Vec<(u64, LockMeta)>> {
         Err(ErrorCode::Unimplemented(
             "list_lock_revisions not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn create_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<CreateLockRevReply> {
+    async fn create_lock_revision(&self, _req: CreateLockRevReq) -> Result<CreateLockRevReply> {
         Err(ErrorCode::Unimplemented(
             "create_lock_revision not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn extend_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn extend_lock_revision(&self, _req: ExtendLockRevReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "extend_lock_revision not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn delete_lock_revision(&self, _req: Box<dyn LockRequest>) -> Result<()> {
+    async fn delete_lock_revision(&self, _req: DeleteLockRevReq) -> Result<()> {
         Err(ErrorCode::Unimplemented(
             "delete_lock_revision not allowed for system database",
         ))

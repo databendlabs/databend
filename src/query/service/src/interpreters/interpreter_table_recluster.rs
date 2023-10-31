@@ -16,7 +16,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::time::SystemTime;
 
-use common_catalog::lock_api::LockApi;
+use common_catalog::lock_api::LockApiExt;
 use common_catalog::plan::Filters;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::TableExt;

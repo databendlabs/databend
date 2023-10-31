@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_catalog::lock_api::LockApi;
-use common_catalog::lock_api::LockRequest;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_meta_app::schema::LockLevel;
@@ -24,10 +23,6 @@ use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
 use common_pipeline_core::LockGuard;
 
-use crate::table_lock::CreateTableLockReq;
-use crate::table_lock::DeleteTableLockReq;
-use crate::table_lock::ExtendTableLockReq;
-use crate::table_lock::ListTableLockReq;
 use crate::LockManager;
 
 pub struct TableLock {
@@ -62,11 +57,11 @@ impl TableLock {
 
 #[async_trait::async_trait]
 impl LockApi for TableLock {
-    fn level(&self) -> LockLevel {
+    fn lock_level(&self) -> LockLevel {
         LockLevel::Table
     }
 
-    fn catalog(&self) -> &str {
+    fn get_catalog(&self) -> &str {
         self.table_info.catalog()
     }
 
@@ -74,48 +69,28 @@ impl LockApi for TableLock {
         self.expire_secs
     }
 
-    fn table_id(&self) -> u64 {
+    fn get_table_id(&self) -> u64 {
         self.table_info.ident.table_id
+    }
+
+    fn get_user(&self) -> String {
+        self.user.clone()
+    }
+
+    fn get_node(&self) -> String {
+        self.node.clone()
+    }
+
+    fn get_session_id(&self) -> String {
+        self.session_id.clone()
     }
 
     fn watch_delete_key(&self, revision: u64) -> String {
         let lock_key = TableLockKey {
-            table_id: self.table_id(),
+            table_id: self.get_table_id(),
             revision,
         };
         lock_key.to_string_key()
-    }
-
-    fn create_table_lock_req(&self) -> Box<dyn LockRequest> {
-        Box::new(CreateTableLockReq {
-            table_id: self.table_id(),
-            expire_secs: self.get_expire_secs(),
-            user: self.user.clone(),
-            node: self.node.clone(),
-            session_id: self.session_id.clone(),
-        })
-    }
-
-    fn extend_table_lock_req(&self, revision: u64, acquire_lock: bool) -> Box<dyn LockRequest> {
-        Box::new(ExtendTableLockReq {
-            table_id: self.table_id(),
-            expire_secs: self.get_expire_secs(),
-            revision,
-            acquire_lock,
-        })
-    }
-
-    fn delete_table_lock_req(&self, revision: u64) -> Box<dyn LockRequest> {
-        Box::new(DeleteTableLockReq {
-            table_id: self.table_id(),
-            revision,
-        })
-    }
-
-    fn list_table_lock_req(&self) -> Box<dyn LockRequest> {
-        Box::new(ListTableLockReq {
-            table_id: self.table_id(),
-        })
     }
 
     async fn try_lock(&self, ctx: Arc<dyn TableContext>) -> Result<Option<LockGuard>> {

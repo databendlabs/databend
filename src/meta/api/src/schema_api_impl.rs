@@ -3165,9 +3165,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
             })?;
-            let table_lock_meta: LockMeta = deserialize_struct(&seq.data)?;
+            let lock_meta: LockMeta = deserialize_struct(&seq.data)?;
 
-            reply.push((revision, table_lock_meta));
+            reply.push((revision, lock_meta));
         }
         Ok(reply)
     }
@@ -3191,7 +3191,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-            let lock_key = level.key(table_id, revision);
+            let lock_key = level.gen_key(table_id, revision);
 
             let lock_meta = LockMeta {
                 level: level.clone(),
@@ -3254,7 +3254,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let tbid = TableId { table_id };
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
-            let lock_key = level.key(table_id, revision);
+            let lock_key = level.gen_key(table_id, revision);
             let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) =
                 get_pb_value(self, &lock_key).await?;
             table_lock_has_to_exist(lock_seq, table_id, ctx)?;
@@ -3314,7 +3314,7 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let lock_key = level.key(table_id, revision);
+            let lock_key = level.gen_key(table_id, revision);
             let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &lock_key).await?;
             if lock_seq == 0 {
                 // The lock has been deleted.

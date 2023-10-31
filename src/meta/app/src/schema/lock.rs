@@ -21,12 +21,6 @@ use common_exception::Result;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::KeyError;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TableLockKey {
-    pub table_id: u64,
-    pub revision: u64,
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
     pub level: LockLevel,
@@ -40,6 +34,7 @@ pub struct LockMeta {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum LockLevel {
+    /// table-level lock.
     Table,
 }
 
@@ -59,7 +54,7 @@ impl LockLevel {
         }
     }
 
-    pub fn key(&self, table_id: u64, revision: u64) -> impl Key {
+    pub fn gen_key(&self, table_id: u64, revision: u64) -> impl Key {
         match self {
             LockLevel::Table => TableLockKey { table_id, revision },
         }
@@ -101,8 +96,8 @@ pub struct ExtendLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
     pub revision: u64,
-    pub acquire_lock: bool,
     pub level: LockLevel,
+    pub acquire_lock: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -110,6 +105,12 @@ pub struct DeleteLockRevReq {
     pub table_id: u64,
     pub revision: u64,
     pub level: LockLevel,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TableLockKey {
+    pub table_id: u64,
+    pub revision: u64,
 }
 
 mod kvapi_key_impl {

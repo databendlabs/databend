@@ -11286,7 +11286,6 @@ dependencies = [
  "async-backtrace",
  "async-channel",
  "async-trait",
- "chrono",
  "common-base",
  "common-catalog",
  "common-exception",

@@ -23,6 +23,7 @@ use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_catalog::lock_api::LockApi;
+use common_catalog::lock_api::LockApiExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -97,15 +98,15 @@ impl LockManager {
         ctx: Arc<dyn TableContext>,
         lock: &T,
     ) -> Result<Option<LockGuard>> {
-        let catalog = ctx.get_catalog(lock.catalog()).await?;
+        let catalog = ctx.get_catalog(lock.get_catalog()).await?;
 
         // get a new table lock revision.
         let res = catalog
-            .create_lock_revision(lock.create_table_lock_req())
+            .create_lock_revision(lock.gen_create_lock_req())
             .await?;
         let revision = res.revision;
         // metrics.
-        record_created_table_lock_nums(lock.level(), lock.table_id(), 1);
+        record_created_table_lock_nums(lock.lock_level(), lock.get_table_id(), 1);
 
         let mut lock_holder = LockHolder::create();
         lock_holder.start(catalog.clone(), lock, revision).await?;
@@ -116,8 +117,8 @@ impl LockManager {
         let acquire_lock_timeout = ctx.get_settings().get_acquire_lock_timeout()?;
         let duration = Duration::from_secs(acquire_lock_timeout);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
-        let list_table_lock_req = lock.list_table_lock_req();
-        let delete_table_lock_req = lock.delete_table_lock_req(revision);
+        let list_table_lock_req = lock.gen_list_lock_req();
+        let delete_table_lock_req = lock.gen_delete_lock_req(revision);
         loop {
             // List all revisions and check if the current is the minimum.
             let reply = catalog
@@ -130,10 +131,10 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req = lock.extend_table_lock_req(revision, true);
+                let extend_table_lock_req = lock.gen_extend_lock_req(revision, true);
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_table_lock_nums(lock.level(), lock.table_id(), 1);
+                record_acquired_table_lock_nums(lock.lock_level(), lock.get_table_id(), 1);
                 break;
             }
 
