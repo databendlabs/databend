@@ -181,7 +181,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
             ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
-            // make suren the executor is dropped before the next loop.
+            // make sure the executor is dropped before the next loop.
             drop(complete_executor);
 
             let elapsed_time = SystemTime::now().duration_since(start).unwrap();
