@@ -15,6 +15,7 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -212,7 +213,7 @@ impl FromToProto for mt::TableMeta {
                 .map(mt::TableStatistics::from_pb)
                 .transpose()?
                 .unwrap_or_default(),
-            shared_by: BTreeSet::from_iter(p.shared_by),
+            shared_by: BTreeSet::from_iter(p.shared_by.into_iter()),
             column_mask_policy: if p.column_mask_policy.is_empty() {
                 None
             } else {
@@ -256,8 +257,8 @@ impl FromToProto for mt::TableMeta {
             comment: self.comment.clone(),
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
-            shared_by: Vec::from_iter(self.shared_by.clone()),
-            column_mask_policy: self.column_mask_policy.clone().unwrap_or_default(),
+            shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
+            column_mask_policy: self.column_mask_policy.clone().unwrap_or(BTreeMap::new()),
             owner: match self.owner.as_ref() {
                 Some(o) => Some(o.to_pb()?),
                 None => None,

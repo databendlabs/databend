@@ -116,7 +116,7 @@ for t in nation region; do
 	echo "loading into $t ..."
 	cat <<SQL | bendsql
 COPY INTO $t FROM 's3://repo.databend.rs/tpch100/${t}.tbl'
-credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY')
+credentials=(access_key_id ='$REPO_ACCESS_KEY_ID' secret_access_key ='$REPO_SECRET_ACCESS_KEY')
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=1);
 ANALYZE TABLE "${t}";
 SELECT count(*) as count_${t} FROM "${t}";
@@ -127,7 +127,7 @@ for t in customer lineitem orders partsupp part supplier; do
 	echo "loading into $t ..."
 	cat <<SQL | bendsql
 COPY INTO $t FROM 's3://repo.databend.rs/tpch100/${t}/'
-credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.tbl.*'
+credentials=(access_key_id ='$REPO_ACCESS_KEY_ID' secret_access_key ='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.tbl.*'
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=1);
 ANALYZE TABLE "${t}";
 SELECT count(*) as count_${t} FROM "${t}";

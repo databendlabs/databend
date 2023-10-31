@@ -72,6 +72,26 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: all
 
+  build_address_sanitizer:
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}_asan
+    runs-on: [ self-hosted, X64, Linux, 16c32g, "${{ inputs.runner_provider }}" ]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, libc: gnu }
+          - { arch: aarch64, libc: gnu }
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux_sanitizer
+        timeout-minutes: 60
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          artifacts: query
+
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 8c16g, "${{ inputs.runner_provider }}"]
@@ -200,6 +220,33 @@ jobs:
           python3 tests/udf-server/udf_test.py &
           sleep 2
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: mysql,http,clickhouse
+          storage-format: all
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-standalone-${{ matrix.dirs }}
+
+  sqllogic_standalone_cloud:
+    name: sqllogic_standalone_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g, "${{ inputs.runner_provider }}"]
+    needs: [build, check]
+    strategy:
+      matrix:
+        dirs:
+          - "task"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Start Cloud Control Server
+        run: |
+          pip install grpcio grpcio-reflection protobuf grpcio-tools
+          python3 tests/cloud_control_server/simple_server.py &
+          sleep 2
+      - uses: ./.github/actions/test_cloud_sqllogic_standalone_linux
         timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}

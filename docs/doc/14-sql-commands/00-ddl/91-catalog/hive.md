@@ -7,6 +7,26 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 Databend supports the integration of an [Apache Hive](https://hive.apache.org/) catalog, enhancing its compatibility and versatility for data management and analytics. This extends Databend's capabilities by seamlessly incorporating the powerful metadata and storage management capabilities of Apache Hive into the platform.
 
+## Datatype Mapping to Databend
+
+This table maps data types between Apache Hive and Databend. Please note that Databend does not currently support Hive data types that are not listed in the table.
+
+| Apache Hive         | Databend             |
+| ------------------- | -------------------- |
+| BOOLEAN             | [BOOLEAN](../../../13-sql-reference/10-data-types/00-data-type-logical-types.md)              |
+| TINYINT             | [TINYINT (INT8)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)       |
+| SMALLINT            | [SMALLINT (INT16)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)     |
+| INT                 | [INT (INT32)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)          |
+| BIGINT              | [BIGINT (INT64)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#integer-data-types)       |
+| DATE                | [DATE](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)                 |
+| TIMESTAMP           | [TIMESTAMP](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)            |
+| FLOAT               | [FLOAT (FLOAT32)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#floating-point-data-types)      |
+| DOUBLE              | [DOUBLE (FLOAT64)](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md#floating-point-data-types)     |
+| VARCHAR             | [VARCHAR (STRING)](../../../13-sql-reference/10-data-types/30-data-type-string-types.md)     |
+| DECIMAL             | [DECIMAL](../../../13-sql-reference/10-data-types/11-data-type-decimal-types.md)              |
+| ARRAY&lt;TYPE&gt;    | [ARRAY](../../../13-sql-reference/10-data-types/40-data-type-array-types.md), supports nesting |
+| MAP&lt;KEYTYPE, VALUETYPE&gt; | [MAP](../../../13-sql-reference/10-data-types/42-data-type-map.md)             |
+
 ## Managing Apache Hive Catalogs
 
 Databend provides you the following commands to manage Apache Hive catalogs:

@@ -16,6 +16,7 @@ use std::collections::HashSet;
 
 use common_meta_app::principal::UserPrivilegeType;
 use enumflags2::make_bitflags;
+use minitrace::func_name;
 
 use crate::common;
 

@@ -55,6 +55,12 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             left,
             right,
         } => visitor.visit_binary_op(*span, op, left, right),
+        Expr::JsonOp {
+            span,
+            op,
+            left,
+            right,
+        } => visitor.visit_json_op(*span, op, left, right),
         Expr::UnaryOp { span, op, expr } => visitor.visit_unary_op(*span, op, expr),
         Expr::Cast {
             span,

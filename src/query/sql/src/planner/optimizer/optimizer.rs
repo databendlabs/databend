@@ -55,6 +55,7 @@ impl OptimizerContext {
     }
 }
 
+#[minitrace::trace]
 pub fn optimize(
     ctx: Arc<dyn TableContext>,
     opt_ctx: Arc<OptimizerContext>,

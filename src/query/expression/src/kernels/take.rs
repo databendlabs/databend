@@ -86,9 +86,9 @@ impl Column {
     pub fn take<I>(&self, indices: &[I], string_items_buf: &mut Option<Vec<(u64, usize)>>) -> Self
     where I: common_arrow::arrow::types::Index {
         match self {
-            Column::Null { .. } | Column::EmptyArray { .. } | Column::EmptyMap { .. } => {
-                self.slice(0..indices.len())
-            }
+            Column::Null { .. } => Column::Null { len: indices.len() },
+            Column::EmptyArray { .. } => Column::EmptyArray { len: indices.len() },
+            Column::EmptyMap { .. } => Column::EmptyMap { len: indices.len() },
             Column::Number(column) => with_number_mapped_type!(|NUM_TYPE| match column {
                 NumberColumn::NUM_TYPE(values) => {
                     let builder = Self::take_primitive_types(values, indices);

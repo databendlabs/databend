@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
-use std::convert::Infallible;
 use std::fmt::Debug;
 use std::future;
 use std::io;
@@ -29,24 +27,22 @@ use common_meta_stoerr::MetaBytesError;
 use common_meta_types::protobuf::StreamItem;
 use common_meta_types::AppliedState;
 use common_meta_types::Entry;
-use common_meta_types::LogId;
 use common_meta_types::MatchSeqExt;
-use common_meta_types::Node;
-use common_meta_types::NodeId;
 use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::SeqValue;
 use common_meta_types::SnapshotData;
-use common_meta_types::StoredMembership;
+use common_meta_types::StorageIOError;
 use common_meta_types::TxnReply;
 use common_meta_types::TxnRequest;
 use common_meta_types::UpsertKV;
 use futures::Stream;
-use futures_util::stream::BoxStream;
 use futures_util::StreamExt;
+use futures_util::TryStreamExt;
 use log::debug;
 use log::info;
 use log::warn;
+use openraft::RaftLogId;
 use tokio::io::AsyncBufReadExt;
 use tokio::io::BufReader;
 use tokio::sync::RwLock;
@@ -59,6 +55,8 @@ use crate::sm_v002::leveled_store::map_api::AsMap;
 use crate::sm_v002::leveled_store::map_api::MapApi;
 use crate::sm_v002::leveled_store::map_api::MapApiExt;
 use crate::sm_v002::leveled_store::map_api::MapApiRO;
+use crate::sm_v002::leveled_store::map_api::ResultStream;
+use crate::sm_v002::leveled_store::sys_data::SysData;
 use crate::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use crate::sm_v002::marked::Marked;
 use crate::sm_v002::sm_v002;
@@ -75,14 +73,14 @@ pub struct SMV002KVApi<'a> {
 
 #[async_trait::async_trait]
 impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
-    type Error = Infallible;
+    type Error = io::Error;
 
     async fn upsert_kv(&self, _req: UpsertKVReq) -> Result<UpsertKVReply, Self::Error> {
         unreachable!("write operation SM2KVApi::upsert_kv is disabled")
     }
 
     async fn get_kv(&self, key: &str) -> Result<GetKVReply, Self::Error> {
-        let got = self.sm.get_kv(key).await;
+        let got = self.sm.get_maybe_expired_kv(key).await?;
 
         let local_now_ms = SeqV::<()>::now_ms();
         let got = Self::non_expired(got, local_now_ms);
@@ -95,7 +93,7 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         let mut values = Vec::with_capacity(keys.len());
 
         for k in keys {
-            let got = self.sm.get_kv(k.as_str()).await;
+            let got = self.sm.get_maybe_expired_kv(k.as_str()).await?;
             let v = Self::non_expired(got, local_now_ms);
             values.push(v);
         }
@@ -109,9 +107,9 @@ impl<'a> kvapi::KVApi for SMV002KVApi<'a> {
         let strm = self
             .sm
             .list_kv(prefix)
-            .await
-            .filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
-            .map(|kv: (String, SeqV)| Ok(StreamItem::from(kv)));
+            .await?
+            .try_filter(move |(_k, v)| future::ready(!v.is_expired(local_now_ms)))
+            .map_ok(StreamItem::from);
 
         Ok(strm.boxed())
     }
@@ -188,11 +186,13 @@ impl SMV002 {
             // The snapshot is empty but contains Nodes data that are manually added.
             //
             // See: `databend_metactl::snapshot`
-            if &new_last_applied <= sm.last_applied_ref() && sm.last_applied_ref().is_some() {
+            if &new_last_applied <= sm.sys_data_ref().last_applied_ref()
+                && sm.sys_data_ref().last_applied_ref().is_some()
+            {
                 info!(
                     "no need to install: snapshot({:?}) <= sm({:?})",
                     new_last_applied,
-                    sm.last_applied_ref()
+                    sm.sys_data_ref().last_applied_ref()
                 );
                 return Ok(());
             }
@@ -239,51 +239,47 @@ impl SMV002 {
     pub async fn apply_entries<'a>(
         &mut self,
         entries: impl IntoIterator<Item = &'a Entry>,
-    ) -> Vec<AppliedState> {
+    ) -> Result<Vec<AppliedState>, StorageIOError> {
         let mut applier = Applier::new(self);
 
         let mut res = vec![];
 
-        for l in entries.into_iter() {
-            let r = applier.apply(l).await;
+        for ent in entries.into_iter() {
+            let log_id = *ent.get_log_id();
+            let r = applier
+                .apply(ent)
+                .await
+                .map_err(|e| StorageIOError::apply(log_id, &e))?;
             res.push(r);
         }
-        res
+        Ok(res)
     }
 
     /// Get a cloned value by key.
     ///
     /// It does not check expiration of the returned entry.
-    pub async fn get_kv(&self, key: &str) -> Option<SeqV> {
-        let got = self.levels.str_map().get(key).await;
-        Into::<Option<SeqV>>::into(got)
+    pub async fn get_maybe_expired_kv(&self, key: &str) -> Result<Option<SeqV>, io::Error> {
+        let got = self.levels.str_map().get(key).await?;
+        let seqv = Into::<Option<SeqV>>::into(got);
+        Ok(seqv)
     }
 
     /// List kv entries by prefix.
     ///
     /// If a value is expired, it is not returned.
-    // TODO: #[deprecated]
-    pub async fn prefix_list_kv(&self, prefix: &str) -> Vec<(String, SeqV)> {
-        let strm = self.list_kv(prefix).await;
-        strm.collect::<Vec<_>>().await
-    }
-
-    /// List kv entries by prefix.
-    ///
-    /// If a value is expired, it is not returned.
-    pub async fn list_kv(&self, prefix: &str) -> BoxStream<'static, (String, SeqV)> {
+    pub async fn list_kv(&self, prefix: &str) -> Result<ResultStream<(String, SeqV)>, io::Error> {
         let p = prefix.to_string();
 
-        let strm = self.levels.str_map().range(p.clone()..).await;
+        let strm = self.levels.str_map().range(p.clone()..).await?;
 
         let strm = strm
             // Return only keys with the expected prefix
-            .take_while(move |(k, _)| future::ready(k.starts_with(&p)))
+            .try_take_while(move |(k, _)| future::ready(Ok(k.starts_with(&p))))
             // Skip tombstone
-            .filter_map(|(k, marked)| {
+            .try_filter_map(|(k, marked)| {
                 let seqv = Into::<Option<SeqV>>::into(marked);
                 let res = seqv.map(|x| (k, x));
-                future::ready(res)
+                future::ready(Ok(res))
             });
 
         // Make it static
@@ -291,7 +287,7 @@ impl SMV002 {
         let vs = strm.collect::<Vec<_>>().await;
         let strm = futures::stream::iter(vs);
 
-        strm.boxed()
+        Ok(strm.boxed())
     }
 
     pub(crate) fn update_expire_cursor(&mut self, log_time_ms: u64) {
@@ -307,47 +303,31 @@ impl SMV002 {
     }
 
     /// List expiration index by expiration time.
-    pub(crate) async fn list_expire_index(&self) -> impl Stream<Item = (ExpireKey, String)> + '_ {
-        self.levels
+    pub(crate) async fn list_expire_index(
+        &self,
+    ) -> Result<impl Stream<Item = Result<(ExpireKey, String), io::Error>> + '_, io::Error> {
+        let strm = self
+            .levels
             .expire_map()
             .range(&self.expire_cursor..)
-            .await
+            .await?;
+
+        let strm = strm
             // Return only non-deleted records
-            .filter_map(|(k, v)| async move {
-                //
-                v.unpack().map(|(v, _v_meta)| (k, v))
-            })
+            .try_filter_map(|(k, marked)| {
+                let expire_entry = marked.unpack().map(|(v, _v_meta)| (k, v));
+                future::ready(Ok(expire_entry))
+            });
+
+        Ok(strm)
     }
 
-    pub fn curr_seq(&self) -> u64 {
-        self.levels.writable_ref().curr_seq()
+    pub fn sys_data_ref(&self) -> &SysData {
+        self.levels.writable_ref().sys_data_ref()
     }
 
-    pub fn last_applied_ref(&self) -> &Option<LogId> {
-        self.levels.writable_ref().last_applied_ref()
-    }
-
-    pub fn last_membership_ref(&self) -> &StoredMembership {
-        self.levels.writable_ref().last_membership_ref()
-    }
-
-    pub fn nodes_ref(&self) -> &BTreeMap<NodeId, Node> {
-        self.levels.writable_ref().nodes_ref()
-    }
-
-    pub fn last_applied_mut(&mut self) -> &mut Option<LogId> {
-        self.levels.writable_mut().sys_data_mut().last_applied_mut()
-    }
-
-    pub fn last_membership_mut(&mut self) -> &mut StoredMembership {
-        self.levels
-            .writable_mut()
-            .sys_data_mut()
-            .last_membership_mut()
-    }
-
-    pub fn nodes_mut(&mut self) -> &mut BTreeMap<NodeId, Node> {
-        self.levels.writable_mut().sys_data_mut().nodes_mut()
+    pub fn sys_data_mut(&mut self) -> &mut SysData {
+        self.levels.writable_mut().sys_data_mut()
     }
 
     pub fn set_subscriber(&mut self, subscriber: Box<dyn StateMachineSubscriber>) {
@@ -385,14 +365,16 @@ impl SMV002 {
         self.expire_cursor = ExpireKey::new(0, 0);
     }
 
-    /// Keep the top(writable) level, replace the base level and all levels below it.
-    pub fn replace_base(&mut self, snapshot: &SnapshotViewV002) {
+    /// Keep the top(writable) level, replace all the frozen levels.
+    ///
+    /// This is called after compacting some of the frozen levels.
+    pub fn replace_frozen(&mut self, snapshot: &SnapshotViewV002) {
         assert!(
             Arc::ptr_eq(
                 self.levels.frozen_ref().newest().unwrap(),
                 snapshot.original_ref().newest().unwrap()
             ),
-            "the base must not be changed"
+            "the frozen must not change"
         );
 
         self.levels.replace_frozen(snapshot.compacted());
@@ -402,11 +384,11 @@ impl SMV002 {
     pub(crate) async fn upsert_kv_primary_index(
         &mut self,
         upsert_kv: &UpsertKV,
-    ) -> (Marked<Vec<u8>>, Marked<Vec<u8>>) {
-        let prev = self.levels.str_map().get(&upsert_kv.key).await.clone();
+    ) -> Result<(Marked<Vec<u8>>, Marked<Vec<u8>>), io::Error> {
+        let prev = self.levels.str_map().get(&upsert_kv.key).await?.clone();
 
         if upsert_kv.seq.match_seq(prev.seq()).is_err() {
-            return (prev.clone(), prev);
+            return Ok((prev.clone(), prev));
         }
 
         let (prev, mut result) = match &upsert_kv.value {
@@ -416,16 +398,16 @@ impl SMV002 {
                         upsert_kv.key.clone(),
                         Some((v.clone(), upsert_kv.value_meta.clone())),
                     )
-                    .await
+                    .await?
             }
-            Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await,
+            Operation::Delete => self.levels.set(upsert_kv.key.clone(), None).await?,
             Operation::AsIs => {
                 MapApiExt::update_meta(
                     &mut self.levels,
                     upsert_kv.key.clone(),
                     upsert_kv.value_meta.clone(),
                 )
-                .await
+                .await?
             }
         };
 
@@ -436,7 +418,7 @@ impl SMV002 {
             // Note that it must update first then delete,
             // in order to keep compatibility with the old state machine.
             // Old SM will just insert an expired record, and that causes the system seq increase by 1.
-            let (_p, r) = self.levels.set(upsert_kv.key.clone(), None).await;
+            let (_p, r) = self.levels.set(upsert_kv.key.clone(), None).await?;
             result = r;
         };
 
@@ -445,7 +427,7 @@ impl SMV002 {
             upsert_kv, prev, result
         );
 
-        (prev, result)
+        Ok((prev, result))
     }
 
     /// Update the secondary index for speeding up expiration operation.
@@ -456,10 +438,10 @@ impl SMV002 {
         key: impl ToString,
         removed: &Marked<Vec<u8>>,
         added: &Marked<Vec<u8>>,
-    ) {
+    ) -> Result<(), io::Error> {
         // No change, no need to update expiration index
         if removed == added {
-            return;
+            return Ok(());
         }
 
         // Remove previous expiration index, add a new one.
@@ -467,13 +449,15 @@ impl SMV002 {
         if let Some(exp_ms) = removed.expire_at_ms() {
             self.levels
                 .set(ExpireKey::new(exp_ms, removed.internal_seq().seq()), None)
-                .await;
+                .await?;
         }
 
         if let Some(exp_ms) = added.expire_at_ms() {
             let k = ExpireKey::new(exp_ms, added.internal_seq().seq());
             let v = key.to_string();
-            self.levels.set(k, Some((v, None))).await;
+            self.levels.set(k, Some((v, None))).await?;
         }
+
+        Ok(())
     }
 }

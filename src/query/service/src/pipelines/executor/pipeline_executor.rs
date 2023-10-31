@@ -30,6 +30,8 @@ use futures_util::future::Either;
 use log::info;
 use log::warn;
 use log::LevelFilter;
+use minitrace::full_name;
+use minitrace::prelude::*;
 use parking_lot::Mutex;
 use petgraph::matrix_graph::Zero;
 
@@ -90,6 +92,7 @@ impl PipelineExecutor {
         }
     }
 
+    #[minitrace::trace]
     pub fn from_pipelines(
         mut pipelines: Vec<Pipeline>,
         settings: ExecutorSettings,
@@ -208,6 +211,7 @@ impl PipelineExecutor {
         self.global_tasks_queue.is_finished()
     }
 
+    #[minitrace::trace]
     pub fn execute(self: &Arc<Self>) -> Result<()> {
         self.init()?;
 
@@ -221,20 +225,25 @@ impl PipelineExecutor {
             {
                 let finished_error_guard = self.finished_error.lock();
                 if let Some(error) = finished_error_guard.as_ref() {
-                    let may_error = error.clone();
+                    let may_error = Some(error.clone());
                     drop(finished_error_guard);
 
-                    self.on_finished(&Some(may_error.clone()))?;
-                    return Err(may_error);
+                    self.on_finished(&may_error)?;
+                    return Err(may_error.unwrap());
                 }
             }
 
             // We will ignore the abort query error, because returned by finished_error if abort query.
             if matches!(&thread_res, Err(error) if error.code() != ErrorCode::ABORTED_QUERY) {
-                let may_error = thread_res.unwrap_err();
-                self.on_finished(&Some(may_error.clone()))?;
-                return Err(may_error);
+                let may_error = Some(thread_res.unwrap_err());
+                self.on_finished(&may_error)?;
+                return Err(may_error.unwrap());
             }
+        }
+
+        if let Err(error) = self.graph.assert_finished_graph() {
+            self.on_finished(&Some(error.clone()))?;
+            return Err(error);
         }
 
         self.on_finished(&None)?;
@@ -314,19 +323,22 @@ impl PipelineExecutor {
         for thread_num in 0..threads {
             let this = self.clone();
             #[allow(unused_mut)]
-            let mut name = Some(format!("PipelineExecutor-{}", thread_num));
+            let mut name = format!("PipelineExecutor-{}", thread_num);
 
             #[cfg(debug_assertions)]
             {
                 // We need to pass the thread name in the unit test, because the thread name is the test name
                 if matches!(std::env::var("UNIT_TEST"), Ok(var_value) if var_value == "TRUE") {
                     if let Some(cur_thread_name) = std::thread::current().name() {
-                        name = Some(cur_thread_name.to_string());
+                        name = cur_thread_name.to_string();
                     }
                 }
             }
 
-            thread_join_handles.push(Thread::named_spawn(name, move || unsafe {
+            let span = Span::enter_with_local_parent(full_name!())
+                .with_property(|| ("thread_name", name.clone()));
+            thread_join_handles.push(Thread::named_spawn(Some(name), move || unsafe {
+                let _g = span.set_local_parent();
                 let this_clone = this.clone();
                 let try_result = catch_unwind(move || -> Result<()> {
                     match this_clone.execute_single_thread(thread_num) {

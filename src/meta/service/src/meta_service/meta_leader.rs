@@ -17,6 +17,7 @@ use std::collections::BTreeSet;
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_client::MetaGrpcReadReq;
 use common_meta_kvapi::kvapi::KVApi;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SMV002;
 use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
@@ -47,7 +48,7 @@ use crate::message::ForwardRequestBody;
 use crate::message::ForwardResponse;
 use crate::message::JoinRequest;
 use crate::message::LeaveRequest;
-use crate::meta_service::raftmeta::MetaRaft;
+use crate::meta_service::meta_node::MetaRaft;
 use crate::meta_service::MetaNode;
 use crate::metrics::server_metrics;
 use crate::metrics::ProposalPending;
@@ -284,7 +285,7 @@ impl<'a> MetaLeader<'a> {
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
         let membership = {
             let sm = self.get_state_machine().await;
-            sm.last_membership_ref().membership().clone()
+            sm.sys_data_ref().last_membership_ref().membership().clone()
         };
         info!("check can_leave: id: {}, membership: {:?}", id, membership);
 

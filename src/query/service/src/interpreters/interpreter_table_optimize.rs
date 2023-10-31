@@ -16,8 +16,10 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::catalog::Catalog;
 use common_catalog::plan::Partitions;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -33,8 +35,10 @@ use common_sql::executor::PhysicalPlan;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
+use common_storages_fuse::FuseTable;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use crate::interpreters::interpreter_table_recluster::build_recluster_physical_plan;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
@@ -65,18 +69,32 @@ impl Interpreter for OptimizeTableInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
+
+        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
+        let tenant = self.ctx.get_tenant();
+        let table = catalog
+            .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+            .await?;
+        // check mutability
+        table.check_mutable()?;
+
         match self.plan.action.clone() {
             OptimizeTableAction::CompactBlocks => {
-                self.build_pipeline(CompactTarget::Blocks, false).await
+                self.build_pipeline(catalog, table, CompactTarget::Blocks, false)
+                    .await
             }
             OptimizeTableAction::CompactSegments => {
-                self.build_pipeline(CompactTarget::Segments, false).await
+                self.build_pipeline(catalog, table, CompactTarget::Segments, false)
+                    .await
             }
             OptimizeTableAction::Purge(point) => {
-                purge(ctx, plan, point).await?;
+                purge(ctx, catalog, plan, point).await?;
                 Ok(PipelineBuildResult::create())
             }
-            OptimizeTableAction::All => self.build_pipeline(CompactTarget::Blocks, true).await,
+            OptimizeTableAction::All => {
+                self.build_pipeline(catalog, table, CompactTarget::Blocks, true)
+                    .await
+            }
         }
     }
 }
@@ -119,17 +137,14 @@ impl OptimizeTableInterpreter {
 
     async fn build_pipeline(
         &self,
+        catalog: Arc<dyn Catalog>,
+        mut table: Arc<dyn Table>,
         target: CompactTarget,
         need_purge: bool,
     ) -> Result<PipelineBuildResult> {
-        let mut table = self
-            .ctx
-            .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
-            .await?;
-
+        let tenant = self.ctx.get_tenant();
         let table_info = table.get_table_info().clone();
         // check if the table is locked.
-        let catalog = self.ctx.get_catalog(&self.plan.catalog).await?;
         let reply = catalog
             .list_table_lock_revs(table_info.ident.table_id)
             .await?;
@@ -174,7 +189,6 @@ impl OptimizeTableInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
-        let mut reclustered_block_count = 0;
         let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
         if need_recluster {
             if !compact_pipeline.is_empty() {
@@ -189,50 +203,70 @@ impl OptimizeTableInterpreter {
                 executor.execute()?;
 
                 // refresh table.
-                table = table.as_ref().refresh(self.ctx.as_ref()).await?;
+                table = catalog
+                    .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
+                    .await?;
             }
 
-            reclustered_block_count = table
-                .recluster(
-                    self.ctx.clone(),
-                    None,
-                    self.plan.limit,
-                    &mut build_res.main_pipeline,
-                )
-                .await?;
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            if let Some(mutator) = fuse_table
+                .build_recluster_mutator(self.ctx.clone(), None, self.plan.limit)
+                .await?
+            {
+                if !mutator.tasks.is_empty() {
+                    let reclustered_block_count = mutator.recluster_blocks_count;
+                    let physical_plan = build_recluster_physical_plan(
+                        mutator.tasks,
+                        table.get_table_info().clone(),
+                        catalog.info(),
+                        mutator.snapshot,
+                        mutator.remained_blocks,
+                        mutator.removed_segment_indexes,
+                        mutator.removed_segment_summary,
+                    )?;
+
+                    build_res = build_query_pipeline_without_render_result_set(
+                        &self.ctx,
+                        &physical_plan,
+                        false,
+                    )
+                    .await?;
+
+                    let ctx = self.ctx.clone();
+                    let plan = self.plan.clone();
+                    let start = SystemTime::now();
+                    build_res
+                        .main_pipeline
+                        .set_on_finished(move |may_error| match may_error {
+                            None => InterpreterClusteringHistory::write_log(
+                                &ctx,
+                                start,
+                                &plan.database,
+                                &plan.table,
+                                reclustered_block_count,
+                            ),
+                            Some(error_code) => Err(error_code.clone()),
+                        });
+                }
+            }
         } else {
             build_res.main_pipeline = compact_pipeline;
         }
 
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
-        if build_res.main_pipeline.is_empty() {
-            if need_purge {
-                purge(ctx, plan, None).await?;
+        if need_purge {
+            if build_res.main_pipeline.is_empty() {
+                purge(ctx, catalog, plan, None).await?;
+            } else {
+                build_res
+                    .main_pipeline
+                    .set_on_finished(move |may_error| match may_error {
+                        None => GlobalIORuntime::instance()
+                            .block_on(async move { purge(ctx, catalog, plan, None).await }),
+                        Some(error_code) => Err(error_code.clone()),
+                    });
             }
-        } else {
-            let start = SystemTime::now();
-            build_res
-                .main_pipeline
-                .set_on_finished(move |may_error| match may_error {
-                    None => {
-                        if need_recluster {
-                            InterpreterClusteringHistory::write_log(
-                                &ctx,
-                                start,
-                                &plan.database,
-                                &plan.table,
-                                reclustered_block_count,
-                            )?;
-                        }
-                        if need_purge {
-                            GlobalIORuntime::instance()
-                                .block_on(async move { purge(ctx, plan, None).await })?;
-                        }
-                        Ok(())
-                    }
-                    Some(error_code) => Err(error_code.clone()),
-                });
         }
 
         Ok(build_res)
@@ -241,14 +275,13 @@ impl OptimizeTableInterpreter {
 
 async fn purge(
     ctx: Arc<QueryContext>,
+    catalog: Arc<dyn Catalog>,
     plan: OptimizeTablePlan,
     instant: Option<NavigationPoint>,
 ) -> Result<()> {
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
-    let table = ctx
-        .get_catalog(&plan.catalog)
-        .await?
+    let table = catalog
         .get_table(ctx.get_tenant().as_str(), &plan.database, &plan.table)
         .await?;
 

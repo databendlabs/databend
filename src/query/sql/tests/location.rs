@@ -164,7 +164,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                [
+                vec![
                     ("access_key_id", "access_key_id"),
                     ("secret_access_key", "secret_access_key"),
                     ("session_token", "session_token"),
@@ -199,7 +199,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                [
+                vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("session_token", "security_token"),
@@ -234,7 +234,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                [
+                vec![
                     ("aws_key_id", "access_key_id"),
                     ("aws_secret_key", "secret_access_key"),
                     ("aws_token", "security_token"),
@@ -269,7 +269,7 @@ async fn test_parse_uri_location() -> Result<()> {
                 "test".to_string(),
                 "/tmp/".to_string(),
                 "".to_string(),
-                [("role_arn", "aws::iam::xxxx")]
+                vec![("role_arn", "aws::iam::xxxx")]
                     .iter()
                     .map(|(k, v)| (k.to_string(), v.to_string()))
                     .collect::<BTreeMap<String, String>>(),

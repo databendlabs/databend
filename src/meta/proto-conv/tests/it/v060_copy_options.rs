@@ -14,6 +14,7 @@
 
 use common_meta_app::principal::CopyOptions;
 use common_meta_app::principal::OnErrorMode;
+use minitrace::func_name;
 
 use crate::common;
 

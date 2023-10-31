@@ -20,7 +20,7 @@ common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
 common-functions = { path = "../../../functions" }
 
-storages-common-table-meta = { path = "../table-meta" }
+storages-common-table-meta = { path = "../table_meta" }
 
 anyerror = { workspace = true }
 cbordata = { version = "0.6.0" }

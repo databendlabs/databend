@@ -20,6 +20,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_raft_store::sm_v002::leveled_store::sys_data_api::SysDataApiRO;
 use common_meta_raft_store::sm_v002::SnapshotStoreV002;
 use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::openraft::ErrorSubject;
@@ -311,7 +312,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         }
 
         let mut sm = self.state_machine.write().await;
-        let res = sm.apply_entries(entries).await;
+        let res = sm.apply_entries(entries).await?;
 
         Ok(res)
     }
@@ -437,8 +438,8 @@ impl RaftStorage<TypeConfig> for RaftStore {
         &mut self,
     ) -> Result<(Option<LogId>, StoredMembership), StorageError> {
         let sm = self.state_machine.read().await;
-        let last_applied = *sm.last_applied_ref();
-        let last_membership = sm.last_membership_ref().clone();
+        let last_applied = *sm.sys_data_ref().last_applied_ref();
+        let last_membership = sm.sys_data_ref().last_membership_ref().clone();
 
         debug!(
             "last_applied_state: applied: {:?}, membership: {:?}",

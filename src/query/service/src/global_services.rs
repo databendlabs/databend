@@ -19,6 +19,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::GlobalQueryRuntime;
 use common_catalog::catalog::CatalogCreator;
 use common_catalog::catalog::CatalogManager;
+use common_cloud_control::cloud_api::CloudControlApiProvider;
 use common_config::GlobalConfig;
 use common_config::InnerConfig;
 use common_exception::Result;
@@ -118,6 +119,10 @@ impl GlobalServices {
             config.query.tenant_id.clone(),
         )?;
         CacheManager::init(&config.cache, &config.query.tenant_id)?;
+
+        if let Some(addr) = config.query.cloud_control_grpc_server_address.clone() {
+            CloudControlApiProvider::init(addr).await?;
+        }
 
         Ok(())
     }

@@ -293,13 +293,11 @@ impl HttpQuery {
         if let Some(ua) = user_agent {
             ctx.set_ua(ua.clone());
         }
-        if let Some(query_id) = query_id {
-            // TODO: validate the query_id to be uuid format
-            ctx.set_id(query_id);
-        }
+
+        // TODO: validate the query_id to be uuid format
+        ctx.set_id(query_id.clone());
 
         let session_id = session.get_id().clone();
-        let query_id = ctx.get_id();
         let sql = &request.sql;
         info!(query_id = query_id, session_id = session_id, sql = sql; "create query");
 
@@ -329,6 +327,12 @@ impl HttpQuery {
 
         let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
         let schema = plan.schema();
+
+        let span = if let Some(parent) = SpanContext::current_local_parent() {
+            Span::root(std::any::type_name::<ExecuteState>(), parent)
+        } else {
+            Span::noop()
+        };
 
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance.runtime().try_spawn(
@@ -360,9 +364,7 @@ impl HttpQuery {
                     block_sender_closer.close();
                 }
             }
-            .in_span(Span::enter_with_local_parent(
-                "ExecuteState::try_start_query",
-            )),
+            .in_span(span),
         )?;
 
         let format_settings = ctx.get_format_settings()?;

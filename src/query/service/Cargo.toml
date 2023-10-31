@@ -59,9 +59,11 @@ common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
-aggregating-index = { path = "../ee-features/aggregating-index" }
-background-service = { path = "../ee-features/background-service" }
+aggregating-index = { path = "../ee_features/aggregating_index" }
+background-service = { path = "../ee_features/background_service" }
+common-cloud-control = { path = "../../common/cloud_control" }
 common-license = { path = "../../common/license" }
+common-meta-embedded = { path = "../../meta/embedded" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
@@ -80,7 +82,7 @@ common-storages-factory = { path = "../storages/factory" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-storages-hive = { path = "../storages/hive/hive" }
 common-storages-iceberg = { path = "../storages/iceberg" }
-common-storages-information-schema = { path = "../storages/information-schema" }
+common-storages-information-schema = { path = "../storages/information_schema" }
 common-storages-null = { path = "../storages/null" }
 common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
@@ -90,15 +92,16 @@ common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-data-mask-feature = { path = "../ee-features/data-mask" }
+data-mask-feature = { path = "../ee_features/data_mask" }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache = { path = "../storages/common/cache" }
-storages-common-cache-manager = { path = "../storages/common/cache-manager" }
+storages-common-cache-manager = { path = "../storages/common/cache_manager" }
 storages-common-index = { path = "../storages/common/index" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
-table-lock = { path = "../ee-features/table-lock" }
-vacuum-handler = { path = "../ee-features/vacuum-handler" }
-virtual-column = { path = "../ee-features/virtual-column" }
+storages-common-table-meta = { path = "../storages/common/table_meta" }
+table-lock = { path = "../ee_features/table_lock" }
+vacuum-handler = { path = "../ee_features/vacuum_handler" }
+virtual-column = { path = "../ee_features/virtual_column" }
+
 # GitHub dependencies
 
 # Crates.io dependencies
@@ -121,10 +124,9 @@ dashmap = "5.4"
 ethnum = { workspace = true }
 futures = "0.3.24"
 futures-util = { workspace = true }
-
-common-meta-embedded = { path = "../../meta/embedded" }
 h2 = "0.3.17"
 headers = "0.3.8"
+highway = "1.1"
 http = "0.2.8"
 humantime = "2.1.0"
 indicatif = "0.17.5"
@@ -137,7 +139,7 @@ match-template = "0.0.1"
 metrics = "0.20.1"
 minitrace = { workspace = true }
 naive-cityhash = "0.2.0"
-once_cell = "1.15.0"
+once_cell = { workspace = true }
 opendal = { workspace = true }
 opensrv-mysql = { version = "0.4.1", features = ["tls"] }
 parking_lot = "0.12.1"

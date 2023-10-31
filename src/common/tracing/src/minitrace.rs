@@ -84,6 +84,7 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
             // Init runtime with 2 threads.
             let rt = tokio::runtime::Builder::new_multi_thread()
                 .worker_threads(2)
+                .enable_all()
                 .build()
                 .unwrap();
             let reporter = rt.block_on(async {
@@ -103,7 +104,12 @@ pub fn init_logging(name: &str, cfg: &Config) -> Vec<Box<dyn Drop + Send + Sync 
                     Cow::Owned(opentelemetry::sdk::Resource::new([
                         opentelemetry::KeyValue::new("service.name", name.clone()),
                     ])),
-                    opentelemetry::InstrumentationLibrary::new(name, None, None),
+                    opentelemetry::InstrumentationLibrary::new(
+                        name,
+                        None::<&'static str>,
+                        None::<&'static str>,
+                        None,
+                    ),
                 )
             });
             (rt, reporter)
