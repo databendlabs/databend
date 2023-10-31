@@ -99,12 +99,15 @@ impl PrivilegeAccess {
     ) -> Result<()> {
         let session = self.ctx.get_current_session();
         if verify_ownership {
-        let object_by_id = self.convert_grant_object_by_id(object).await.or_else(|e| {
-            match e.code() {
-                ErrorCode::UNKNOWN_DATABASE | ErrorCode::UNKNOWN_TABLE | ErrorCode::UNKNOWN_CATALOG => Ok(None),
-                _ => Err(e.add_message("error on validating access")),
-            }
-        })?;
+            let object_by_id =
+                self.convert_grant_object_by_id(object)
+                    .await
+                    .or_else(|e| match e.code() {
+                        ErrorCode::UNKNOWN_DATABASE
+                        | ErrorCode::UNKNOWN_TABLE
+                        | ErrorCode::UNKNOWN_CATALOG => Ok(None),
+                        _ => Err(e.add_message("error on validating access")),
+                    })?;
             if let Some(object_by_id) = &object_by_id {
                 let result = session.validate_ownership(object_by_id).await;
                 if result.is_ok() {
