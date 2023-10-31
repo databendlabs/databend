@@ -21,6 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::GrantObject;
+use common_meta_app::principal::GrantObjectByID;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeType;
@@ -232,14 +233,21 @@ impl Session {
         self: &Arc<Self>,
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
-        verify_ownership: bool,
     ) -> Result<()> {
         if matches!(self.get_type(), SessionType::Local) {
             return Ok(());
         }
         self.privilege_mgr
-            .validate_privilege(object, privilege, verify_ownership)
+            .validate_privilege(object, privilege)
             .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn validate_ownership(self: &Arc<Self>, object: &GrantObjectByID) -> Result<()> {
+        if matches!(self.get_type(), SessionType::Local) {
+            return Ok(());
+        }
+        self.privilege_mgr.validate_ownership(object).await
     }
 
     #[async_backtrace::framed]

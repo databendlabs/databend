@@ -908,7 +908,7 @@ select try_cast('34343'  as Decimal(7,2)), try_cast(number::String as Decimal(7,
 query TTT
 select 1.234::DECIMAL(76,3)::DECIMAL(2,1), 1.234::DECIMAL(76,3)::DECIMAL(6,4),  cast(0.50 as decimal(10,0))
 ----
-1.2 1.2340 0
+1.2 1.2340 1
 
 
 statement ok
@@ -1003,3 +1003,65 @@ insert into test_decimal_insert values(10.9);
 
 statement ok
 drop table test_decimal_insert
+
+# for issue #13453 https://github.com/datafuselabs/databend/issues/13453
+
+statement ok
+drop table if exists t
+
+statement ok
+create table t (a string, b float, c decimal(20, 10), d decimal(70, 10))
+
+statement ok
+insert into t values ('1.234', 1.234, 1.234, 1.234), ('1.567', 1.567, 1.567, 1.567), ('-1.234', -1.234, -1.234, -1.234), ('-1.567', -1.567, -1.567, -1.567)
+
+statement ok
+set numeric_cast_option = 'truncating'
+
+query TTI
+select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
+----
+0 0 1
+
+query TTTT
+select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t
+----
+1.23 1.23 1.23 1.23
+1.56 1.56 1.56 1.56
+-1.23 -1.23 -1.23 -1.23
+-1.56 -1.56 -1.56 -1.56
+
+query III
+select cast(b as int), cast(c as int), cast(d as int) from t
+----
+1 1 1
+1 1 1
+-1 -1 -1
+-1 -1 -1
+
+statement ok
+set numeric_cast_option = 'rounding'
+
+query TTI
+select cast('0.6' as decimal(10, 0)), cast(0.6 as decimal(10, 0)), cast(1.5 as int)
+----
+1 1 2
+
+query TTTT
+select cast(a as decimal(10, 2)), cast(b as decimal(10, 2)), cast(c as decimal(10, 2)), cast(d as decimal(10, 2)) from t
+----
+1.23 1.23 1.23 1.23
+1.57 1.57 1.57 1.57
+-1.23 -1.23 -1.23 -1.23
+-1.57 -1.57 -1.57 -1.57
+
+query III
+select cast(b as int), cast(c as int), cast(d as int) from t
+----
+1 1 1
+2 2 2
+-1 -1 -1
+-2 -2 -2
+
+statement ok
+drop table t

@@ -45,7 +45,7 @@ import TabItem from '@theme/TabItem';
 
 Databend's high-level architecture is composed of a `meta-service layer`, a `query layer`, and a `storage layer`.
 
-![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/0b1db46c-4900-497c-ab7a-d7949d0ce096)
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 <Tabs groupId="databendlay">
 <TabItem value="Meta-Service Layer" label="Meta-Service Layer">

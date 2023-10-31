@@ -80,6 +80,7 @@ impl Display for FormatContext {
                 RelOperator::MaterializedCte(_) => write!(f, "MaterializedCte"),
                 RelOperator::Lambda(_) => write!(f, "Lambda"),
                 RelOperator::ConstantTableScan(_) => write!(f, "ConstantTableScan"),
+                RelOperator::AddRowNumber(_) => write!(f, "AddRowNumber"),
             },
             Self::Text(text) => write!(f, "{}", text),
         }
