@@ -1,6 +1,6 @@
-## databend-driver
+# databend-driver
 
-### Build
+## Build
 
 ```shell
 cd bindings/python
@@ -10,44 +10,36 @@ maturin develop
 ## Usage
 
 ```python
-import databend_driver
 import asyncio
+from databend_driver import AsyncDatabendClient
+
 async def main():
-	s = databend_driver.AsyncDatabendDriver('databend+http://root:root@localhost:8000/?sslmode=disable')
-	await s.exec("CREATE TABLE if not exists test_upload (x Int32,y VARCHAR)")
+    client = AsyncDatabendClient('databend+http://root:root@localhost:8000/?sslmode=disable')
+    conn = await client.get_conn()
+    await conn.exec(
+        """
+        CREATE TABLE test (
+            i64 Int64,
+            u64 UInt64,
+            f64 Float64,
+            s   String,
+            s2  String,
+            d   Date,
+            t   DateTime
+        )
+        """
+    )
+    rows = await conn.query_iter("SELECT * FROM test")
+    async for row in rows:
+        print(row.values())
 
 asyncio.run(main())
 ```
 
 ## Development
 
-Setup virtualenv:
-
 ```shell
-python -m venv venv
-```
-
-Activate venv:
-
-```shell
-source venv/bin/activate
-````
-
-Install `maturin`:
-
-```shell
-pip install maturin[patchelf]
-```
-
-Build bindings:
-
-```shell
+pipenv install --dev
 maturin develop
-```
-
-Run some tests:
-
-```shell
-maturin develop -E test
-behave tests
+pipenv run behave tests
 ```
