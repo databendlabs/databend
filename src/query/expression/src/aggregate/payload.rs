@@ -21,11 +21,13 @@ use super::payload_row::rowformat_size;
 use super::payload_row::serialize_column_to_rowformat;
 use super::probe_state::ProbeState;
 use crate::get_layout_offsets;
+use crate::load;
 use crate::select_vector::SelectVector;
 use crate::store;
 use crate::types::DataType;
 use crate::AggregateFunctionRef;
 use crate::Column;
+use crate::StateAddr;
 
 const MAX_PAGE_SIZE: usize = 256 * 1024;
 // payload layout
@@ -206,6 +208,24 @@ impl Payload {
                 unsafe {
                     let dst = address[idx].offset(write_offset as isize);
                     store(&(place.as_ptr() as u64), dst as *mut u8);
+                }
+            }
+        }
+    }
+}
+
+impl Drop for Payload {
+    fn drop(&mut self) {
+        // drop states
+        for (aggr, addr_offset) in self.aggrs.iter().zip(self.state_addr_offsets.iter()) {
+            if aggr.need_manual_drop_state() {
+                for row in 0..self.len() {
+                    let row_ptr = self.get_row_ptr(row);
+
+                    unsafe {
+                        let state_addr: u64 = load(row_ptr.offset(self.state_offset as isize));
+                        aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
+                    };
                 }
             }
         }

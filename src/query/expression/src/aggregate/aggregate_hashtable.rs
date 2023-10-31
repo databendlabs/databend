@@ -249,27 +249,3 @@ impl AggregateHashTable {
         self.capacity = new_capacity;
     }
 }
-
-impl Drop for AggregateHashTable {
-    fn drop(&mut self) {
-        // drop states
-        for (aggr, addr_offset) in self
-            .payload
-            .aggrs
-            .iter()
-            .zip(self.payload.state_addr_offsets.iter())
-        {
-            if aggr.need_manual_drop_state() {
-                for row in 0..self.len() {
-                    let row_ptr = self.payload.get_row_ptr(row);
-
-                    unsafe {
-                        let state_addr: u64 =
-                            load(row_ptr.offset(self.payload.state_offset as isize));
-                        aggr.drop_state(StateAddr::new(state_addr as usize + *addr_offset))
-                    };
-                }
-            }
-        }
-    }
-}
