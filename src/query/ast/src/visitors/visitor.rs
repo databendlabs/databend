@@ -382,23 +382,25 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_call(&mut self, _call: &'ast CallStmt) {}
 
-    fn visit_show_settings(&mut self, _like: &'ast Option<String>) {}
+    fn visit_show_settings(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_unset_variable(&mut self, _stmt: &'ast UnSetStmt) {}
 
-    fn visit_show_process_list(&mut self) {}
+    fn visit_show_process_list(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_show_metrics(&mut self) {}
+    fn visit_show_metrics(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_show_engines(&mut self) {}
+    fn visit_show_engines(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_show_functions(&mut self, _limit: &'ast Option<ShowOptions>) {}
+    fn visit_show_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
-    fn visit_show_table_functions(&mut self, _limit: &'ast Option<ShowLimit>) {}
+    fn visit_show_table_functions(&mut self, _show_options: &'ast Option<ShowOptions>) {}
+
+    fn visit_show_options(&mut self, _show_options: &'ast Option<ShowOptions>, _name: String) {}
 
     fn visit_show_limit(&mut self, _limit: &'ast ShowLimit) {}
 
-    fn visit_show_indexes(&mut self) {}
+    fn visit_show_indexes(&mut self, _show_options: &'ast Option<ShowOptions>) {}
 
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 

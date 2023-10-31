@@ -397,19 +397,19 @@ pub trait VisitorMut: Sized {
 
     fn visit_call(&mut self, _call: &mut CallStmt) {}
 
-    fn visit_show_settings(&mut self, _like: &mut Option<String>) {}
+    fn visit_show_settings(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_process_list(&mut self) {}
+    fn visit_show_process_list(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_metrics(&mut self) {}
+    fn visit_show_metrics(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_engines(&mut self) {}
+    fn visit_show_engines(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_functions(&mut self, _limit: &mut Option<ShowOptions>) {}
+    fn visit_show_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_indexes(&mut self) {}
+    fn visit_show_indexes(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
-    fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_table_functions(&mut self, _show_options: &mut Option<ShowOptions>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
 
