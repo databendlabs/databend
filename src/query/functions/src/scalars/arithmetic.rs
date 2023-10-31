@@ -54,7 +54,7 @@ use common_expression::with_float_mapped_type;
 use common_expression::with_integer_mapped_type;
 use common_expression::with_number_mapped_type;
 use common_expression::with_number_mapped_type_without_64;
-use common_expression::with_unsigned_number_mapped_type;
+use common_expression::with_unsigned_integer_mapped_type;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Domain;
@@ -445,7 +445,7 @@ fn register_binary_arithmetic(registry: &mut FunctionRegistry) {
     for left in ALL_INTEGER_TYPES {
         for right in ALL_UNSIGNED_INTEGER_TYPES {
             with_integer_mapped_type!(|L| match left {
-                NumberDataType::L => with_unsigned_number_mapped_type!(|R| match right {
+                NumberDataType::L => with_unsigned_integer_mapped_type!(|R| match right {
                     NumberDataType::R => {
                         register_bitwise_shift!(L, R, registry);
                     }

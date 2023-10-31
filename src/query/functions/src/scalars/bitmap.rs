@@ -26,11 +26,13 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
-use common_expression::types::ALL_INTEGER_TYPES;
+use common_expression::types::ALL_SIGNED_INTEGER_TYPES;
+use common_expression::types::ALL_UNSIGNED_INTEGER_TYPES;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
 use common_expression::vectorize_with_builder_3_arg;
-use common_expression::with_integer_mapped_type;
+use common_expression::with_signed_integer_mapped_type;
+use common_expression::with_unsigned_integer_mapped_type;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
@@ -67,8 +69,31 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
-    for num_type in ALL_INTEGER_TYPES {
-        with_integer_mapped_type!(|NUM_TYPE| match num_type {
+    for num_type in ALL_UNSIGNED_INTEGER_TYPES {
+        with_unsigned_integer_mapped_type!(|NUM_TYPE| match num_type {
+            NumberDataType::NUM_TYPE => {
+                registry.register_passthrough_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType, _, _>(
+                    "build_bitmap",
+                    |_, _| FunctionDomain::Full,
+                    vectorize_with_builder_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType>(|arg, builder, _ctx| {
+                        let mut rb = RoaringTreemap::new();
+                        for a in arg.iter() {
+                            if let Some(a) = a {
+                                rb.insert(a.try_into().unwrap());
+                            }
+                        }
+
+                        rb.serialize_into(&mut builder.data).unwrap();
+                        builder.commit_row();
+                    }),
+                );
+            }
+            _ => unreachable!(),
+        })
+    }
+
+    for num_type in ALL_SIGNED_INTEGER_TYPES {
+        with_signed_integer_mapped_type!(|NUM_TYPE| match num_type {
             NumberDataType::NUM_TYPE => {
                 registry.register_passthrough_nullable_1_arg::<ArrayType<NullableType<NumberType<NUM_TYPE>>>, BitmapType, _, _>(
                     "build_bitmap",
