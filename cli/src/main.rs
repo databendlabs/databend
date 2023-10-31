@@ -225,7 +225,7 @@ impl ConnectionArgs {
             }
         }
         if self.tls {
-            query.append_pair("sslmode", "enable");
+            query.append_pair("sslmode", "require");
         } else {
             query.append_pair("sslmode", "disable");
         }

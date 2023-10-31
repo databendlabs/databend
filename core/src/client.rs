@@ -115,11 +115,16 @@ impl APIClient {
                 "warehouse" => {
                     client.warehouse = Arc::new(Mutex::new(Some(v.to_string())));
                 }
-                "sslmode" => {
-                    if v == "disable" {
-                        scheme = "http";
+                "sslmode" => match v.as_ref() {
+                    "disable" => scheme = "http",
+                    "require" | "enable" => scheme = "https",
+                    _ => {
+                        return Err(Error::BadArgument(format!(
+                            "Invalid value for sslmode: {}",
+                            v
+                        )))
                     }
-                }
+                },
                 "tls_ca_file" => {
                     client.tls_ca_file = Some(v.to_string());
                 }

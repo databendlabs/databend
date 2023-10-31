@@ -231,12 +231,22 @@ impl Args {
             match k.as_ref() {
                 "tenant" => args.tenant = Some(v.to_string()),
                 "warehouse" => args.warehouse = Some(v.to_string()),
-                "sslmode" => {
-                    if v == "disable" {
+                "sslmode" => match v.as_ref() {
+                    "disable" => {
                         scheme = "http";
                         args.tls = false;
                     }
-                }
+                    "require" | "enable" => {
+                        scheme = "https";
+                        args.tls = true;
+                    }
+                    _ => {
+                        return Err(Error::BadArgument(format!(
+                            "Invalid value for sslmode: {}",
+                            v.as_ref()
+                        )))
+                    }
+                },
                 "tls_ca_file" => args.tls_ca_file = Some(v.to_string()),
                 "connect_timeout" => args.connect_timeout = Duration::from_secs(v.parse()?),
                 "query_timeout" => args.query_timeout = Duration::from_secs(v.parse()?),
