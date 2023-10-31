@@ -194,7 +194,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
         _raw: bool,
     ) -> Result<()> {
         let buf = reader.remaining_slice();
-        let (n, n_read) = read_decimal_with_size(buf, size, false)?;
+        let (n, n_read) = read_decimal_with_size(buf, size, false, true)?;
         column.push(n);
         reader.consume(n_read);
         Ok(())
