@@ -99,11 +99,11 @@ impl<const STRINGS: bool, const COMPACT: bool, const WITH_NAMES: bool, const WIT
                     let mut tmp = vec![];
                     self.field_encoder.write_field(column, row_index, &mut tmp);
                     if !tmp.is_empty() && tmp[0] == b'\"' {
-                        buf.push(b'"');
                         buf.extend_from_slice(&tmp);
-                        buf.push(b'"');
                     } else {
+                        buf.push(b'"');
                         buf.extend_from_slice(&tmp);
+                        buf.push(b'"');
                     }
                 } else {
                     self.field_encoder.write_field(column, row_index, &mut buf)
