@@ -223,12 +223,12 @@ impl<'a> Binder {
                 Plan::ExplainAnalyze { plan: Box::new(plan) }
             }
 
-            Statement::ShowFunctions { limit } => {
-                self.bind_show_functions(bind_context, limit).await?
+            Statement::ShowFunctions { show_options } => {
+                self.bind_show_functions(bind_context, show_options).await?
             }
 
-            Statement::ShowTableFunctions { limit } => {
-                self.bind_show_table_functions(bind_context, limit).await?
+            Statement::ShowTableFunctions { show_options } => {
+                self.bind_show_table_functions(bind_context, show_options).await?
             }
 
             Statement::CopyIntoTable(stmt) => {
@@ -249,27 +249,11 @@ impl<'a> Binder {
                 self.bind_copy_into_location(bind_context, stmt).await?
             }
 
-            Statement::ShowMetrics => {
-                self.bind_rewrite_to_query(
-                    bind_context,
-                    "SELECT metric, kind, labels, value FROM system.metrics",
-                    RewriteKind::ShowMetrics,
-                )
-                    .await?
-            }
-            Statement::ShowProcessList => {
-                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.processes", RewriteKind::ShowProcessList)
-                    .await?
-            }
-            Statement::ShowEngines => {
-                self.bind_rewrite_to_query(bind_context, "SELECT \"Engine\", \"Comment\" FROM system.engines ORDER BY \"Engine\" ASC", RewriteKind::ShowEngines)
-                    .await?
-            }
-            Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
-            Statement::ShowIndexes => {
-                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.indexes", RewriteKind::ShowProcessList)
-                    .await?
-            }
+            Statement::ShowMetrics { show_options } => self.bind_show_metrics(bind_context, show_options).await?,
+            Statement::ShowProcessList { show_options } => self.bind_show_process_list(bind_context, show_options).await?,
+            Statement::ShowEngines { show_options } => self.bind_show_engines(bind_context, show_options).await?,
+            Statement::ShowSettings { show_options } => self.bind_show_settings(bind_context, show_options).await?,
+            Statement::ShowIndexes { show_options } => self.bind_show_indexes(bind_context, show_options).await?,
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,

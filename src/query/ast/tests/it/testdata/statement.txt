@@ -287,9 +287,16 @@ ShowColumns(
 ---------- Input ----------
 show processlist;
 ---------- Output ---------
-SHOW PROCESSLIST
+SHOW PROCESSLIST 
 ---------- AST ------------
-ShowProcessList
+ShowProcessList {
+    show_options: Some(
+        ShowOptions {
+            show_limit: None,
+            limit: None,
+        },
+    ),
+}
 
 
 ---------- Input ----------
@@ -10233,8 +10240,15 @@ show settings like 'enable%'
 SHOW SETTINGS LIKE 'enable%'
 ---------- AST ------------
 ShowSettings {
-    like: Some(
-        "enable%",
+    show_options: Some(
+        ShowOptions {
+            show_limit: Some(
+                Like {
+                    pattern: "enable%",
+                },
+            ),
+            limit: None,
+        },
     ),
 }
 
