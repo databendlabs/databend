@@ -149,15 +149,15 @@ echo "drop table if exists default.test_t" |  $BENDSQL_CLIENT_CONNECT
 echo "create table default.test_t(id int not null)" |  $BENDSQL_CLIENT_CONNECT
 echo "show grants for a" |  $BENDSQL_CLIENT_CONNECT
 echo "show databases" | $USER_A_CONNECT
-echo "select 'test -- show tables'" | $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show tables'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables" | $USER_A_CONNECT
-echo "select 'test -- show tables from system'" | $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show tables from system'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from system" | $USER_A_CONNECT
-echo "select 'test -- show tables from grant_db'" | $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show tables from grant_db'" | $BENDSQL_CLIENT_CONNECT
 echo "show tables from grant_db" | $USER_A_CONNECT
 echo "use system" | $USER_A_CONNECT
 echo "use grant_db" | $USER_A_CONNECT
-echo "select 'test -- show columns'" | $MYSQL_CLIENT_CONNECT
+echo "select 'test -- show columns'" | $BENDSQL_CLIENT_CONNECT
 echo "show columns from one from system" | $USER_A_CONNECT
 echo "show columns from t from grant_db" | $USER_A_CONNECT
 
