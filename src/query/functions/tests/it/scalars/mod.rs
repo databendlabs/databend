@@ -31,6 +31,8 @@ use itertools::Itertools;
 
 mod arithmetic;
 mod array;
+mod bitmap;
+
 mod boolean;
 mod cast;
 mod comparison;
