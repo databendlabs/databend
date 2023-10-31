@@ -93,5 +93,23 @@ async def _(context):
 @then("Stream load and Select should be equal")
 @async_run_until_complete
 async def _(context):
-    # TODO:
-    pass
+    values = [
+        ["-1", "1", "1.0", "1", "1", "2011-03-06", "2011-03-06T06:20:00Z"],
+        ["-2", "2", "2.0", "2", "2", "2012-05-31", "2012-05-31T11:20:00Z"],
+        ["-3", "3", "3.0", "3", "2", "2016-04-04", "2016-04-04T11:30:00Z"],
+    ]
+    progress = await context.conn.stream_load("INSERT INTO test VALUES", values)
+    assert progress.write_rows == 3
+    assert progress.write_bytes == 185
+
+    rows = await context.conn.query_iter("SELECT * FROM test")
+    ret = []
+    async for row in rows:
+        ret.append(row.values())
+    expected = [
+        (-1, 1, 1.0, "1", "1", "2011-03-06", "2011-03-06 06:20:00"),
+        (-2, 2, 2.0, "2", "2", "2012-05-31", "2012-05-31 11:20:00"),
+        (-3, 3, 3.0, "3", "2", "2016-04-04", "2016-04-04 11:30:00"),
+    ]
+    print("==>", ret)
+    assert ret == expected

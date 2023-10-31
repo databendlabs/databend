@@ -62,6 +62,22 @@ pub struct AsyncDatabendConnection(Box<dyn databend_driver::Connection>);
 
 #[pymethods]
 impl AsyncDatabendConnection {
+    pub fn info<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let info = this.info().await;
+            Ok(ConnectionInfo(info))
+        })
+    }
+
+    pub fn version<'p>(&'p self, py: Python<'p>) -> PyResult<&'p PyAny> {
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let version = this.version().await.unwrap();
+            Ok(version)
+        })
+    }
+
     pub fn exec<'p>(&'p self, py: Python<'p>, sql: String) -> PyResult<&'p PyAny> {
         let this = self.0.clone();
         future_into_py(py, async move {
@@ -84,6 +100,32 @@ impl AsyncDatabendConnection {
         future_into_py(py, async move {
             let streamer = this.query_iter(&sql).await.unwrap();
             Ok(RowIterator(Arc::new(Mutex::new(streamer))))
+        })
+    }
+
+    pub fn stream_load<'p>(
+        &self,
+        py: Python<'p>,
+        sql: String,
+        data: Vec<Vec<String>>,
+    ) -> PyResult<&'p PyAny> {
+        let mut wtr = csv::WriterBuilder::new().from_writer(vec![]);
+        for row in data {
+            wtr.write_record(row)
+                .map_err(|e| PyException::new_err(format!("{}", e)))?;
+        }
+        let bytes = wtr
+            .into_inner()
+            .map_err(|e| PyException::new_err(format!("{}", e)))?;
+        let size = bytes.len() as u64;
+        let reader = Box::new(std::io::Cursor::new(bytes));
+        let this = self.0.clone();
+        future_into_py(py, async move {
+            let ss = this
+                .stream_load(&sql, reader, size, None, None)
+                .await
+                .map_err(|e| PyException::new_err(format!("{}", e)))?;
+            Ok(ServerStats(ss))
         })
     }
 }
@@ -202,5 +244,71 @@ impl RowIterator {
             }
         });
         Ok(Some(future?.into()))
+    }
+}
+
+#[pyclass(module = "databend_driver")]
+pub struct ConnectionInfo(databend_driver::ConnectionInfo);
+
+#[pymethods]
+impl ConnectionInfo {
+    #[getter]
+    pub fn handler(&self) -> String {
+        self.0.handler.to_string()
+    }
+    #[getter]
+    pub fn host(&self) -> String {
+        self.0.host.to_string()
+    }
+    #[getter]
+    pub fn port(&self) -> u16 {
+        self.0.port
+    }
+    #[getter]
+    pub fn user(&self) -> String {
+        self.0.user.to_string()
+    }
+    #[getter]
+    pub fn database(&self) -> Option<String> {
+        self.0.database.clone()
+    }
+    #[getter]
+    pub fn warehouse(&self) -> Option<String> {
+        self.0.warehouse.clone()
+    }
+}
+
+#[pyclass(module = "databend_driver")]
+pub struct ServerStats(databend_driver::ServerStats);
+
+#[pymethods]
+impl ServerStats {
+    #[getter]
+    pub fn total_rows(&self) -> usize {
+        self.0.total_rows
+    }
+    #[getter]
+    pub fn total_bytes(&self) -> usize {
+        self.0.total_bytes
+    }
+    #[getter]
+    pub fn read_rows(&self) -> usize {
+        self.0.read_rows
+    }
+    #[getter]
+    pub fn read_bytes(&self) -> usize {
+        self.0.read_bytes
+    }
+    #[getter]
+    pub fn write_rows(&self) -> usize {
+        self.0.write_rows
+    }
+    #[getter]
+    pub fn write_bytes(&self) -> usize {
+        self.0.write_bytes
+    }
+    #[getter]
+    pub fn running_time_ms(&self) -> f64 {
+        self.0.running_time_ms
     }
 }

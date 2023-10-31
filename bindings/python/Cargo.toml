@@ -13,6 +13,7 @@ name = "databend_driver"
 doc = false
 
 [dependencies]
+csv = "1.2"
 databend-driver = { workspace = true, features = ["rustls", "flight-sql"] }
 pyo3 = { version = "0.19", features = ["abi3-py37"] }
 pyo3-asyncio = { version = "0.19", features = ["tokio-runtime"] }

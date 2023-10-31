@@ -16,7 +16,7 @@ Feature: Databend Driver
 
     Scenario: Select Simple
         Given A new Databend Driver Client
-        Then Select string "Hello, World!" should be equal to "Hello, World!"
+        Then Select string "Hello, Databend!" should be equal to "Hello, Databend!"
 
     Scenario: Select Iter
         Given A new Databend Driver Client
