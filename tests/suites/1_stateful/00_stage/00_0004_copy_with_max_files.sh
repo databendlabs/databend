@@ -11,11 +11,11 @@ do
 	for purge in 'false'  'true'
 	do
 		table="test_max_files_force_${force}_purge_${purge}"
-		echo "drop table if exists ${table}" | $MYSQL_CLIENT_CONNECT
+		echo "drop table if exists ${table}" | $BENDSQL_CLIENT_CONNECT
 		echo "CREATE TABLE ${table} (
       id INT,
       c1 INT
-    ) ENGINE=FUSE;" | $MYSQL_CLIENT_CONNECT
+    ) ENGINE=FUSE;" | $BENDSQL_CLIENT_CONNECT
 	done
 done
 
@@ -48,8 +48,8 @@ do
 		for i in {1..3}
 		do
 			table="test_max_files_force_${force}_purge_${purge}"
-			echo "copy into ${table} from 'fs:///tmp/00_0004/' FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | $MYSQL_CLIENT_CONNECT
-			echo "select count(*) from ${table}" | $MYSQL_CLIENT_CONNECT
+			echo "copy into ${table} from 'fs:///tmp/00_0004/' FILE_FORMAT = (type = CSV) max_files=2 force=${force} purge=${purge}" | $BENDSQL_CLIENT_CONNECT
+			echo "select count(*) from ${table}" | $BENDSQL_CLIENT_CONNECT
 		  remain=$(ls -1 /tmp/00_0004/ | wc -l |  sed 's/ //g')
 			echo "remain ${remain} files"
 		done
@@ -60,6 +60,6 @@ for force in 'false'  'true'
 do
 	for purge in 'false'  'true'
 	do
-		echo "drop table if exists test_max_files_force_${force}_purge_${purge}" | $MYSQL_CLIENT_CONNECT
+		echo "drop table if exists test_max_files_force_${force}_purge_${purge}" | $BENDSQL_CLIENT_CONNECT
 	done
 done

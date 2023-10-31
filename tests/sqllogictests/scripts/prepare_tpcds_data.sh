@@ -37,14 +37,14 @@ tables=(
 # Clear Data
 # shellcheck disable=SC2068
 for t in ${tables[@]}; do
-    echo "DROP TABLE IF EXISTS ${db}.$t" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS ${db}.$t" | $BENDSQL_CLIENT_CONNECT
 done
 
-echo "CREATE DATABASE IF NOT EXISTS tpcds" | $MYSQL_CLIENT_CONNECT
+echo "CREATE DATABASE IF NOT EXISTS tpcds" | $BENDSQL_CLIENT_CONNECT
 
 # Create Tables;
 # shellcheck disable=SC2002
-cat ${target_dir}/scripts/tpcds.sql | $MYSQL_CLIENT_CONNECT
+cat ${target_dir}/scripts/tpcds.sql | $BENDSQL_CLIENT_CONNECT
 
 # download data
 mkdir -p ${target_dir}/data/
@@ -60,7 +60,7 @@ for t in ${tables[@]}; do
     echo $t
     insert_sql="insert into ${db}.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
     curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${target_dir}'/data/data/'$t'.csv"' >/dev/null 2>&1
-    echo "analyze table $db.$t" | $MYSQL_CLIENT_CONNECT
+    echo "analyze table $db.$t" | $BENDSQL_CLIENT_CONNECT
 done
 
 if [ -d "tests/sqllogictests/data" ]; then
