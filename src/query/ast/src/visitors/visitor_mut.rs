@@ -405,7 +405,7 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_engines(&mut self) {}
 
-    fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+    fn visit_show_functions(&mut self, _limit: &mut Option<ShowOptions>) {}
 
     fn visit_show_indexes(&mut self) {}
 
