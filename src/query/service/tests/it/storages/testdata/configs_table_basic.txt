@@ -55,6 +55,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'clickhouse_handler_port'                  | '9000'                                                         | ''       |
 | 'query'   | 'clickhouse_http_handler_host'             | '127.0.0.1'                                                    | ''       |
 | 'query'   | 'clickhouse_http_handler_port'             | '8124'                                                         | ''       |
+| 'query'   | 'cloud_control_grpc_server_address'        | 'null'                                                         | ''       |
 | 'query'   | 'cluster_id'                               | ''                                                             | ''       |
 | 'query'   | 'databend_enterprise_license'              | 'null'                                                         | ''       |
 | 'query'   | 'default_compression'                      | 'auto'                                                         | ''       |

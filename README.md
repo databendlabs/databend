@@ -56,8 +56,7 @@
 
 ## 📐 Architecture
 
-![databend-arch](https://user-images.githubusercontent.com/172204/181448994-2b7c1623-6b20-4398-8917-45acca95ba90.png)
-
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 ## 🚀 Try Databend
 
@@ -147,7 +146,7 @@ docker run --net=host  datafuselabs/databend
 - [How to Create a Role](https://databend.rs/doc/sql-commands/ddl/user/user-create-role)
 - [How to Grant Privileges to a Role](https://databend.rs/doc/sql-commands/ddl/user/grant-privileges)
 - [How to Grant Role to a User](https://databend.rs/doc/sql-commands/ddl/user/grant-role)
-- [How to Revoke Role from a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
+- [How to Revoke the Role of a User](https://databend.rs/doc/sql-commands/ddl/user/revoke-role)
 </details>
 
 <details>
@@ -211,7 +210,6 @@ docker run --net=host  datafuselabs/databend
 - [How to Alter Network Policy](https://databend.rs/doc/sql-commands/ddl/network-policy/ddl-alter-policy)
 
 </details>
-
 
 <details>
 <summary>Performance</summary>

@@ -1844,6 +1844,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-cloud-control"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "chrono",
+ "common-base",
+ "common-exception",
+ "lenient_semver",
+ "prost 0.12.1",
+ "prost-build",
+ "semver",
+ "tonic 0.10.2",
+ "tonic-build",
+ "tower",
+]
+
+[[package]]
 name = "common-compress"
 version = "0.1.0"
 dependencies = [
@@ -3032,6 +3049,7 @@ dependencies = [
  "common-base",
  "common-building",
  "common-catalog",
+ "common-cloud-control",
  "common-config",
  "common-exception",
  "common-expression",
@@ -3859,6 +3877,7 @@ dependencies = [
  "common-building",
  "common-cache",
  "common-catalog",
+ "common-cloud-control",
  "common-compress",
  "common-config",
  "common-exception",
@@ -7971,9 +7990,9 @@ dependencies = [
 
 [[package]]
 name = "mockall"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50e4a1c770583dac7ab5e2f6c139153b783a53a1bbee9729613f193e59828326"
+checksum = "4c84490118f2ee2d74570d114f3d0493cbf02790df303d2707606c3e14e07c96"
 dependencies = [
  "cfg-if",
  "downcast",
@@ -7986,9 +8005,9 @@ dependencies = [
 
 [[package]]
 name = "mockall_derive"
-version = "0.11.3"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "832663583d5fa284ca8810bf7015e46c9fff9622d3cf34bd1eea5003fec06dd0"
+checksum = "22ce75669015c4f47b289fd4d4f56e894e4c96003ffdf3ac51313126f94c6cbb"
 dependencies = [
  "cfg-if",
  "proc-macro2",

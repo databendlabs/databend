@@ -43,9 +43,9 @@ import TabItem from '@theme/TabItem';
 
 ## Databend Architecture
 
-Databend's high-level architecture is composed of a meta-service layer, a compute layer, and a storage layer.
+Databend's high-level architecture is composed of a `meta-service layer`, a `query layer`, and a `storage layer`.
 
-![Databend Architecture](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/arch/datafuse-arch-20210817.svg)
+![Databend Architecture](https://github.com/datafuselabs/databend/assets/172204/68b1adc6-0ec1-41d4-9e1d-37b80ce0e5ef)
 
 <Tabs groupId="databendlay">
 <TabItem value="Meta-Service Layer" label="Meta-Service Layer">
@@ -55,18 +55,18 @@ Databend efficiently supports multiple tenants through its meta-service layer, w
 - **Metadata Management**: Handles metadata for databases, tables, clusters, transactions, and more.
 - **Security**: Manages user authentication and authorization for a secure environment.
 
-Discover more about the meta layer in the [meta](https://github.com/datafuselabs/databend/tree/main/src/meta) on GitHub.
+Discover more about the meta-service layer in the [meta](https://github.com/datafuselabs/databend/tree/main/src/meta) on GitHub.
 
 </TabItem>
-<TabItem value="Compute Layer" label="Compute Layer">
+<TabItem value="Query Layer" label="Query Layer">
 
-The compute layer in Databend handles query computations and is composed of multiple clusters, each containing several nodes.
-Each node, a core unit in the compute layer, consists of:
+The query layer in Databend handles query computations and is composed of multiple clusters, each containing several nodes.
+Each node, a core unit in the query layer, consists of:
 - **Planner**: Develops execution plans for SQL statements using elements from [relational algebra](https://en.wikipedia.org/wiki/Relational_algebra), incorporating operators like Projection, Filter, and Limit.
 - **Optimizer**: A rule-based optimizer applies predefined rules, such as "predicate pushdown" and "pruning of unused columns", for optimal query execution.
 - **Processors**: Constructs a query execution pipeline based on planner instructions, following a Pull&Push approach. Processors are interconnected, forming a pipeline that can be distributed across nodes for enhanced performance.
 
-Discover more about the compute layer in the [query](https://github.com/datafuselabs/databend/tree/main/src/query) directory on GitHub.
+Discover more about the query layer in the [query](https://github.com/datafuselabs/databend/tree/main/src/query) directory on GitHub.
 
 </TabItem>
 <TabItem value="Storage Layer" label="Storage Layer">

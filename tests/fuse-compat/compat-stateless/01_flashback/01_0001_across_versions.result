@@ -28,9 +28,9 @@ checking that after compaction, 2 snapshots of version 2, and 1 snapshot of vers
 1	5
 2	2
 checking the version and location of snapshots s2 is correct
-1	1
+true	true
 checking that flashback works as expected (to s2)
-1	1
+true	true
 checking that after flashback to s2,  the table contains {1,2}
 1
 2
