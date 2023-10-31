@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_ast::ast::Join;
 use common_ast::ast::JoinCondition;
-use common_ast::ast::JoinOperator::LeftOuter;
+use common_ast::ast::JoinOperator::RightOuter;
 use common_ast::ast::MatchOperation;
 use common_ast::ast::MatchedClause;
 use common_ast::ast::MergeIntoStmt;
@@ -46,6 +46,7 @@ use crate::plans::MergeInto;
 use crate::plans::Plan;
 use crate::plans::UnmatchedEvaluator;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::ColumnBindingBuilder;
 use crate::ColumnEntry;
 use crate::IndexType;
@@ -70,7 +71,7 @@ impl Binder {
             .unwrap_or_default()
         {
             return Err(ErrorCode::Unimplemented(
-                "merge into is unstable for now, you can use 'set enable_experimental_merge_into = 1' to set up it",
+                "merge into is experimental for now, you can use 'set enable_experimental_merge_into = 1' to set it up",
             ));
         }
         let MergeIntoStmt {
@@ -124,12 +125,12 @@ impl Binder {
         let source_data = source.transform_table_reference();
 
         // bind source data
-        let (source_expr, mut left_context) =
+        let (source_expr, mut source_context) =
             self.bind_single_table(bind_context, &source_data).await?;
 
         // add all left source columns for read
         // todo: (JackTan25) do column prune after finish "split expr for target and source"
-        let mut columns_set = left_context.column_set();
+        let mut columns_set = source_context.column_set();
 
         let update_columns_star = if self.has_star_clause(&matched_clauses, &unmatched_clauses) {
             // when there are "update *"/"insert *", we need to get the index of correlated columns in source.
@@ -139,18 +140,18 @@ impl Binder {
                     .remove_computed_fields()
                     .num_fields(),
             );
-            let source_output_columns = &left_context.columns;
+            let source_output_columns = &source_context.columns;
             // we use Vec as the value, because if there could be duplicate names
-            let mut name_map = HashMap::<String, Vec<IndexType>>::new();
+            let mut name_map = HashMap::<String, Vec<ColumnBinding>>::new();
             for column in source_output_columns {
                 name_map
                     .entry(column.column_name.clone())
                     .or_insert_with(|| vec![])
-                    .push(column.index);
+                    .push(column.clone());
             }
 
             for (field_idx, field) in default_target_table_schema.fields.iter().enumerate() {
-                let index = match name_map.get(field.name()) {
+                let column = match name_map.get(field.name()) {
                     None => {
                         return Err(ErrorCode::SemanticError(
                             format!("can't find {} in source output", field.name).to_string(),
@@ -167,18 +168,19 @@ impl Binder {
                                 .to_string(),
                             ));
                         } else {
-                            indices[0]
+                            indices[0].clone()
                         }
                     }
                 };
                 let column = ColumnBindingBuilder::new(
                     field.name.to_string(),
-                    index,
-                    Box::new(field.data_type().into()),
+                    column.index,
+                    column.data_type.clone(),
                     Visibility::Visible,
                 )
                 .build();
                 let col = ScalarExpr::BoundColumnRef(BoundColumnRef { span: None, column });
+
                 update_columns.insert(field_idx, col);
             }
             Some(update_columns)
@@ -189,8 +191,8 @@ impl Binder {
         // Todo: (JackTan25) Maybe we can remove bind target_table
         // when the target table has been binded in bind_merge_into_source
         // bind table for target table
-        let (mut target_expr, mut right_context) = self
-            .bind_single_table(&mut left_context, &target_table)
+        let (mut target_expr, mut target_context) = self
+            .bind_single_table(&mut source_context, &target_table)
             .await?;
 
         // add internal_column (_row_id)
@@ -209,7 +211,7 @@ impl Binder {
             },
         };
 
-        let column_binding = right_context
+        let column_binding = target_context
             .add_internal_column_binding(&row_id_column_binding, self.metadata.clone())?;
 
         target_expr =
@@ -223,19 +225,20 @@ impl Binder {
 
         // add join,use left outer join in V1, we use _row_id to check_duplicate join row.
         let join = Join {
-            op: LeftOuter,
+            op: RightOuter,
             condition: JoinCondition::On(Box::new(join_expr.clone())),
-            left: Box::new(source_data.clone()),
-            right: Box::new(target_table),
+            left: Box::new(target_table),
+            // use source as build table
+            right: Box::new(source_data.clone()),
         };
 
         let (join_sexpr, mut bind_ctx) = self
             .bind_join(
                 bind_context,
-                left_context,
-                right_context.clone(),
-                source_expr,
+                target_context.clone(),
+                source_context,
                 target_expr,
+                source_expr,
                 &join,
             )
             .await?;
@@ -268,6 +271,14 @@ impl Binder {
             }
         }
 
+        let target_name = if let Some(target_identify) = target_alias {
+            normalize_identifier(&target_identify.name, &self.name_resolution_ctx)
+                .name
+                .clone()
+        } else {
+            table_name.clone()
+        };
+
         // bind matched clause columns and add update fields and exprs
         for clause in &matched_clauses {
             matched_evaluators.push(
@@ -277,6 +288,7 @@ impl Binder {
                     &mut columns_set,
                     table_schema.clone(),
                     update_columns_star.clone(),
+                    target_name.as_ref(),
                 )
                 .await?,
             );
@@ -320,6 +332,7 @@ impl Binder {
         columns: &mut HashSet<IndexType>,
         schema: TableSchemaRef,
         update_columns_star: Option<HashMap<FieldIndex, ScalarExpr>>,
+        target_name: &str,
     ) -> Result<MatchedEvaluator> {
         // not supported for update clauses
         let f = |scalar: &ScalarExpr| {
@@ -366,6 +379,17 @@ impl Binder {
                     let (scalar_expr, _) = scalar_binder.bind(&update_expr.expr).await?;
                     let col_name =
                         normalize_identifier(&update_expr.name, &self.name_resolution_ctx).name;
+                    if let Some(tbl_identify) = &update_expr.table {
+                        let update_table_name =
+                            normalize_identifier(tbl_identify, &self.name_resolution_ctx).name;
+                        if update_table_name != target_name {
+                            return Err(ErrorCode::BadArguments(format!(
+                                "Update Identify's `{}` should be `{}`",
+                                update_table_name, target_name
+                            )));
+                        }
+                    }
+
                     let index = schema.index_of(&col_name)?;
 
                     if update_columns.contains_key(&index) {
