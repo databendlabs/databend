@@ -1,9 +1,6 @@
 @use "sass:math";
 
 // function
-@function mpx($px:0){
-  @return math.div($px*1920,375)+px;
-}
 $phoneW:997px;
 @mixin media($phone:$phoneW){
   @media screen and (max-width: $phone) {
@@ -82,53 +79,4 @@ $phoneW:997px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: $line-num;
   overflow: hidden;
-}
-.fontSize12{
-  font-size: 12px;
-}
-.fontSize14{
-  font-size: 14px;
-}
-.fontSize16{
-  font-size: 16px;
-}
-.fontSize18{
-  font-size: 18px;
-}
-.fontSize20{
-  font-size: 20px;
-}
-.fontSize22{
-  font-size: 22px;
-}
-.fontSize24{
-  font-size: 24px;
-}
-.fontSize26{
-  font-size: 26px;
-}
-.fontSize28{
-  font-size: 28px;
-}
-.fontSize30{
-  font-size: 30px;
-}
-.g-db {
-  display: block;
-}
-.g-dib {
-  display: inline-block;
-}
-.g-dn {
-  display: none;
-}
-.g-w100 {
-  width: 100%;
-}
-.g-h100 {
-  height: 100%;
-}
-.g-wh100 {
-  width: 100%;
-  height: 100%;
 }

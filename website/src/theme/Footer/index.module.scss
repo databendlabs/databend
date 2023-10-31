@@ -8,10 +8,12 @@
   justify-content: space-between;
   color: var(--color-text-0);
   flex-wrap: wrap;
+  align-items: center;
   p{
     min-width: 360px;
     width: fit-content;
     font-size: 14px;
+    font-weight: 500;
   }
   .footerItems{
     display: flex;
