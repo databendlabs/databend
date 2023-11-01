@@ -321,7 +321,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("table_lock_expire_secs", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(3),
+                    value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table lock will expire in.",
                     possible_values: None,
                     display_in_show_settings: true,
