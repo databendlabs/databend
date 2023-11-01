@@ -127,6 +127,26 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         operator: &Operator,
     ) -> Result<()> {
+        let catalog = table_info.catalog();
+        let catalog = ctx.get_catalog(catalog).await?;
+        let lvt = catalog.get_table_lvt(table_info.ident.table_id).await?;
+        if let Some(lvt) = lvt.time {
+            let now_ms = if let Some(snapshot_time) = snapshot.timestamp {
+                snapshot_time.timestamp_micros() as u64
+            } else {
+                chrono::Utc::now().timestamp_micros() as u64
+            };
+            if lvt > now_ms {
+                info!(
+                    "when commit table {:?}, lvt {} conflict",
+                    table_info.name, lvt
+                );
+                return Err(ErrorCode::StorageOther(
+                    "commit fail by lvt conflict".to_string(),
+                ));
+            }
+        }
+
         let snapshot_location = location_generator.gen_snapshot_location(
             &snapshot.snapshot_id,
             TableSnapshot::VERSION,

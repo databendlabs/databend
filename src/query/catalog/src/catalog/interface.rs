@@ -43,6 +43,7 @@ use common_meta_app::schema::GcDroppedTableReq;
 use common_meta_app::schema::GcDroppedTableResp;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -54,6 +55,7 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::SetLVTReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReply;
 use common_meta_app::schema::SetTableColumnMaskPolicyReq;
 use common_meta_app::schema::TableIdent;
@@ -302,6 +304,14 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
 
     // Get table engines
     fn get_table_engines(&self) -> Vec<StorageDescription> {
+        unimplemented!()
+    }
+
+    async fn set_table_lvt(&self, _table_id: u64, _time: u64) -> Result<SetLVTReply> {
+        unimplemented!()
+    }
+
+    async fn get_table_lvt(&self, _table_id: u64) -> Result<GetLVTReply> {
         unimplemented!()
     }
 }
