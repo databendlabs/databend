@@ -262,6 +262,7 @@ impl PartitionPruner {
                 self.read_and_prune_file_meta(path, file_meta, operator.clone())?;
 
             for p in parts {
+                stats.partitions_total += 1;
                 max_compression_ratio = max_compression_ratio
                     .max(p.uncompressed_size() as f64 / p.compressed_size() as f64);
                 max_compressed_size = max_compressed_size.max(p.compressed_size());

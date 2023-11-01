@@ -290,6 +290,8 @@ impl Parquet2Reader {
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
             ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
+            // todo
+            ParquetPart::Parquet2Groups(_) => unreachable!(),
         }
     }
 
@@ -354,6 +356,8 @@ impl Parquet2Reader {
                 Ok(Parquet2PartData::SmallFiles(buffers))
             }
             ParquetPart::ParquetRSRowGroup(_) => unreachable!(),
+            // todo
+            ParquetPart::Parquet2Groups(_) => unreachable!(),
         }
     }
 }

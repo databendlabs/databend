@@ -394,6 +394,13 @@ impl Processor for Parquet2DeserializeTransform {
         if let Some((part, data)) = self.parts.pop_front() {
             let part = ParquetPart::from_part(&part)?;
             match (&part, data) {
+                (ParquetPart::Parquet2Groups(rgs), Parquet2PartData::RowGroup(mut reader)) => {
+                    for rg in rgs.groups.values() {
+                        if let Some(block) = self.process_row_group(rg, &mut reader)? {
+                            self.add_block(block)?;
+                        }
+                    }
+                }
                 (ParquetPart::Parquet2RowGroup(rg), Parquet2PartData::RowGroup(mut reader)) => {
                     if let Some(block) = self.process_row_group(rg, &mut reader)? {
                         self.add_block(block)?;

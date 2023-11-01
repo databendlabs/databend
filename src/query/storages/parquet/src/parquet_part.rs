@@ -26,11 +26,13 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use crate::parquet2::Parquet2GroupsPart;
 use crate::parquet2::Parquet2RowGroupPart;
 use crate::parquet_rs::ParquetRSRowGroupPart;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
 pub enum ParquetPart {
+    Parquet2Groups(Parquet2GroupsPart),
     Parquet2RowGroup(Parquet2RowGroupPart),
     ParquetFiles(ParquetFilesPart),
     ParquetRSRowGroup(ParquetRSRowGroupPart),
@@ -39,6 +41,7 @@ pub enum ParquetPart {
 impl ParquetPart {
     pub fn uncompressed_size(&self) -> u64 {
         match self {
+            ParquetPart::Parquet2Groups(r) => r.uncompressed_size(),
             ParquetPart::Parquet2RowGroup(r) => r.uncompressed_size(),
             ParquetPart::ParquetFiles(p) => p.uncompressed_size(),
             ParquetPart::ParquetRSRowGroup(p) => p.uncompressed_size(),
@@ -47,6 +50,7 @@ impl ParquetPart {
 
     pub fn compressed_size(&self) -> u64 {
         match self {
+            ParquetPart::Parquet2Groups(r) => r.compressed_size(),
             ParquetPart::Parquet2RowGroup(r) => r.compressed_size(),
             ParquetPart::ParquetFiles(p) => p.compressed_size(),
             ParquetPart::ParquetRSRowGroup(p) => p.compressed_size(),
@@ -83,6 +87,7 @@ impl PartInfo for ParquetPart {
 
     fn hash(&self) -> u64 {
         let path = match self {
+            ParquetPart::Parquet2Groups(g) => &g.groups.values().next().unwrap().location,
             ParquetPart::Parquet2RowGroup(r) => &r.location,
             ParquetPart::ParquetFiles(p) => &p.files[0].0,
             ParquetPart::ParquetRSRowGroup(p) => &p.location,

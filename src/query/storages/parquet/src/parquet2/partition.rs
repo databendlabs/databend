@@ -19,6 +19,8 @@ use common_arrow::parquet::indexes::Interval;
 use common_expression::FieldIndex;
 use common_expression::Scalar;
 
+type GroupIndex = usize;
+
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug)]
 pub struct ColumnMeta {
     pub offset: u64,
@@ -52,5 +54,20 @@ impl Parquet2RowGroupPart {
 
     pub fn compressed_size(&self) -> u64 {
         self.column_metas.values().map(|c| c.length).sum()
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug, Clone)]
+pub struct Parquet2GroupsPart {
+    pub groups: HashMap<GroupIndex, Parquet2RowGroupPart>,
+}
+
+impl Parquet2GroupsPart {
+    pub fn uncompressed_size(&self) -> u64 {
+        self.groups.values().map(|r| r.uncompressed_size()).sum()
+    }
+
+    pub fn compressed_size(&self) -> u64 {
+        self.groups.values().map(|r| r.compressed_size()).sum()
     }
 }
