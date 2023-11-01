@@ -252,7 +252,7 @@ impl FastHash for i256 {
                 let state = ahash::RandomState::with_seeds(SEEDS[0], SEEDS[1], SEEDS[2], SEEDS[3]);
                 let mut hasher = state.build_hasher();
                 for x in self.0 {
-                    hasher.write_u128(x);
+                    hasher.write_i128(x);
                 }
                 hasher.finish()
             }

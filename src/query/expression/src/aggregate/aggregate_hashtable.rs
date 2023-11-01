@@ -154,7 +154,6 @@ impl AggregateHashTable {
                 // cell is empty, could be occupied
                 if entry.page_nr == 0 {
                     entry.salt = state.hash_salts[index];
-                    // set to 1 to mark it's occupied, will be corrected later
                     entry.page_nr = payload_page_nr as u32;
                     entry.page_offset = payload_page_offset as u16;
 
@@ -201,6 +200,7 @@ impl AggregateHashTable {
                 state.addresses[index] = unsafe { page_ptr.add(page_offset) };
             }
 
+            // 4. compare
             unsafe {
                 row_match_columns(
                     group_columns,
