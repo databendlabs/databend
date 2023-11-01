@@ -28,6 +28,16 @@ pub struct SetLVTReply {
     pub time: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetLVTReq {
+    pub table_id: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetLVTReply {
+    pub time: Option<u64>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
 pub struct LeastVisibleTimeKey {
     pub table_id: u64,
