@@ -18,13 +18,13 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
-use common_expression::types::string::StringColumnBuilder;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::ColumnBuilder;
-use common_expression::Scalar;
 
 use super::StateAddr;
+use crate::types::string::StringColumnBuilder;
+use crate::types::DataType;
+use crate::Column;
+use crate::ColumnBuilder;
+use crate::Scalar;
 
 pub type AggregateFunctionRef = Arc<dyn AggregateFunction>;
 
@@ -91,6 +91,7 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
 
     fn merge(&self, _place: StateAddr, _reader: &mut &[u8]) -> Result<()>;
 
+    /// Batch merge and deserialize the state from binary array
     fn batch_merge(&self, places: &[StateAddr], offset: usize, column: &Column) -> Result<()> {
         let c = column.as_string().unwrap();
         for (place, mut data) in places.iter().zip(c.iter()) {
@@ -109,11 +110,28 @@ pub trait AggregateFunction: fmt::Display + Sync + Send {
         Ok(())
     }
 
+    fn batch_merge_states(
+        &self,
+        places: &[StateAddr],
+        rhses: &[StateAddr],
+        offset: usize,
+    ) -> Result<()> {
+        for (place, rhs) in places.iter().zip(rhses.iter()) {
+            self.merge_states(place.next(offset), rhs.next(offset))?;
+        }
+        Ok(())
+    }
+
     fn merge_states(&self, _place: StateAddr, _rhs: StateAddr) -> Result<()>;
 
-    fn batch_merge_result(&self, places: &[StateAddr], builder: &mut ColumnBuilder) -> Result<()> {
+    fn batch_merge_result(
+        &self,
+        places: &[StateAddr],
+        offset: usize,
+        builder: &mut ColumnBuilder,
+    ) -> Result<()> {
         for place in places {
-            self.merge_result(*place, builder)?;
+            self.merge_result(place.next(offset), builder)?;
         }
         Ok(())
     }
