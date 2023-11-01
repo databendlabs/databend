@@ -28,16 +28,16 @@ checking that after compaction, 2 snapshots of version 3, and 1 snapshot of vers
 1	5
 2	4
 checking the version and location of snapshots s2 is correct
-true    true
+true	true
 checking that flashback works as expected (to s2)
-true    true
+true	true
 checking that after flashback to s2,  the table contains {1,2}
 1
 2
 suite: mixed versioned segment compaction test
 check segments after compaction, there should be 2 segments, a version v4 and a version v5
-1   4
-1   5
+1	4
+1	5
 check table contains {1,2,3,4} after compaction
 1
 2
