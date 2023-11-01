@@ -312,6 +312,6 @@ pub trait Catalog: DynClone + Send + Sync + Debug {
     }
 
     async fn get_table_lvt(&self, _table_id: u64) -> Result<GetLVTReply> {
-        Ok(GetLVTReply { time: None })
+        unimplemented!()
     }
 }

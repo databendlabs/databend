@@ -63,6 +63,7 @@ use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -881,5 +882,9 @@ impl Catalog for FakedCatalog {
 
     async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
         todo!()
+    }
+
+    async fn get_table_lvt(&self, _table_id: u64) -> Result<GetLVTReply> {
+        Ok(GetLVTReply { time: None })
     }
 }
