@@ -20,3 +20,6 @@ query TBBTT
 SHOW FUNCTIONS WHERE name='to_day_of_year' LIMIT 1
 ----
 to_day_of_year 1 0 (empty) (empty)
+
+statement error
+SHOW FUNCTIONS WHERE mu='err' LIMIT 1
