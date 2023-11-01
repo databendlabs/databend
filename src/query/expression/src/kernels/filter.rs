@@ -202,7 +202,7 @@ impl Column {
                     }
                 });
             slice = &slice[1..];
-            length -= n;
+            length = if length >= n { length - n } else { 0 };
         }
 
         let mut mask_chunks = BitChunksExact::<u64>::new(slice, length);
@@ -258,9 +258,14 @@ impl Column {
                     }
                     mask = mask & (mask - 1);
                 }
-                length -= 8 - offset;
+                let bits_to_align = 8 - offset;
+                length = if length >= bits_to_align {
+                    length - bits_to_align
+                } else {
+                    0
+                };
                 slice = &slice[1..];
-                values_ptr = values_ptr.add(8 - offset);
+                values_ptr = values_ptr.add(bits_to_align);
             }
 
             const CHUNK_SIZE: usize = 64;
@@ -342,9 +347,14 @@ impl Column {
                     }
                     mask = mask & (mask - 1);
                 }
-                length -= 8 - offset;
+                let bits_to_align = 8 - offset;
+                length = if length >= bits_to_align {
+                    length - bits_to_align
+                } else {
+                    0
+                };
                 slice = &slice[1..];
-                idx += 8 - offset;
+                idx += bits_to_align;
             }
 
             const CHUNK_SIZE: usize = 64;
@@ -507,9 +517,14 @@ impl Column {
                     }
                     mask = mask & (mask - 1);
                 }
-                filter_length -= 8 - filter_offset;
+                let bits_to_align = 8 - filter_offset;
+                filter_length = if filter_length >= bits_to_align {
+                    filter_length - bits_to_align
+                } else {
+                    0
+                };
                 filter_slice = &filter_slice[1..];
-                bitmap_idx += 8 - filter_offset;
+                bitmap_idx += bits_to_align;
             }
 
             const CHUNK_SIZE: usize = 64;
