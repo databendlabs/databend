@@ -42,7 +42,7 @@ impl ProbeState {
         ht_size: usize,
     ) {
         self.group_columns = group_columns.to_owned();
-        self.ajust_row_count(row_count);
+        self.adjust_row_count(row_count);
 
         for ((hash, salt), ht_offset) in hashes
             .iter()
@@ -54,7 +54,7 @@ impl ProbeState {
         }
     }
 
-    pub fn ajust_row_count(&mut self, row_count: usize) {
+    pub fn adjust_row_count(&mut self, row_count: usize) {
         if self.row_count < row_count {
             self.ht_offsets.resize(row_count, 0);
             self.hash_salts.resize(row_count, 0);

@@ -64,7 +64,7 @@ impl Payload {
 
         state.group_columns.clear();
         state.row_count = rows;
-        state.probe_state.ajust_row_count(rows);
+        state.probe_state.adjust_row_count(rows);
 
         for row in state.flush_offset..flush_end {
             state.addresses[row - state.flush_offset] = self.get_row_ptr(row);
