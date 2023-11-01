@@ -30,7 +30,7 @@
 </div>
 </div>
 
-<img src="https://github.com/datafuselabs/databend/assets/172204/a6f09a9e-8c14-49f9-878f-3ab504230d8b" alt="databend" />
+<img src="https://github.com/datafuselabs/databend/assets/172204/4cf602fb-5417-40e7-9c1d-a9da7f60ae29" alt="databend" />
 
 ## 🐋 Introduction
 
