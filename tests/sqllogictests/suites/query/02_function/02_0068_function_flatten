@@ -41,8 +41,6 @@ select * from flatten(input => parse_json('{"a":1, "b":[77,88], "c": {"d":"X"}}'
 ----
 1 a a NULL 1 {"a":1,"b":[77,88],"c":{"d":"X"}}
 1 b b NULL [77,88] {"a":1,"b":[77,88],"c":{"d":"X"}}
-1 NULL b[0] 0 77 [77,88]
-1 NULL b[1] 1 88 [77,88]
 1 c c NULL {"d":"X"} {"a":1,"b":[77,88],"c":{"d":"X"}}
 1 d c.d NULL "X" {"d":"X"}
 
