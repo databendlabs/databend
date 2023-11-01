@@ -138,7 +138,6 @@ pub async fn test_snapshot_consistency() -> Result<()> {
     let query_handler = runtime.spawn(query_task);
 
     let compact_task = async move {
-        println!("compact");
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
         if let Plan::OptimizeTable(plan) = compact_plan {
@@ -146,7 +145,6 @@ pub async fn test_snapshot_consistency() -> Result<()> {
                 OptimizeTableInterpreter::try_create(ctx.clone(), *plan.clone())?;
             optimize_interpreter.execute(ctx).await?;
         }
-        println!("compact over");
         Ok::<(), ErrorCode>(())
     };
 
