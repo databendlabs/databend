@@ -1,2 +1,8 @@
 statement ok
 SHOW PROCESSLIST
+
+statement ok
+SHOW PROCESSLIST LIKE 't%' LIMIT 2
+
+statement ok
+SHOW PROCESSLIST WHERE database='default' LIMIT 2
