@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
+
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::schema::LockLevel;
 use common_meta_app::schema::LockMeta;
+use common_meta_app::schema::LockType;
 use minitrace::func_name;
 
 use crate::common;
@@ -44,7 +46,8 @@ fn test_decode_v62_table_lock_meta() -> anyhow::Result<()> {
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
-        level: LockLevel::Table,
+        lock_type: LockType::TABLE,
+        extra_info: BTreeMap::from([("key".to_string(), "val".to_string())]),
     };
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 62, want())?;

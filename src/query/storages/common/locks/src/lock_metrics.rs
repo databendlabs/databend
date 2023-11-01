@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::schema::LockLevel;
+use common_meta_app::schema::LockType;
 use common_metrics::register_counter_family;
 use common_metrics::Counter;
 use common_metrics::Family;
@@ -29,20 +29,20 @@ lazy_static! {
         register_counter_family(METRIC_ACQUIRED_TABLE_LOCK_NUMS);
 }
 
-const LABEL_LEVEL: &str = "level";
+const LABEL_TYPE: &str = "type";
 const LABEL_TABLE_ID: &str = "table_id";
 
-pub fn record_created_table_lock_nums(level: LockLevel, table_id: u64, c: u64) {
+pub fn record_created_table_lock_nums(lock_type: LockType, table_id: u64, c: u64) {
     let labels = &vec![
-        (LABEL_LEVEL, level.to_string()),
+        (LABEL_TYPE, lock_type.to_string()),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
     CREATED_TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);
 }
 
-pub fn record_acquired_table_lock_nums(level: LockLevel, table_id: u64, c: u64) {
+pub fn record_acquired_table_lock_nums(lock_type: LockType, table_id: u64, c: u64) {
     let labels = &vec![
-        (LABEL_LEVEL, level.to_string()),
+        (LABEL_TYPE, lock_type.to_string()),
         (LABEL_TABLE_ID, table_id.to_string()),
     ];
     ACQUIRED_TABLE_LOCK_NUMS.get_or_create(labels).inc_by(c);

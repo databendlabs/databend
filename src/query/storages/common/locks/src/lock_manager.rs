@@ -106,7 +106,7 @@ impl LockManager {
             .await?;
         let revision = res.revision;
         // metrics.
-        record_created_table_lock_nums(lock.lock_level(), lock.get_table_id(), 1);
+        record_created_table_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
 
         let mut lock_holder = LockHolder::create();
         lock_holder.start(catalog.clone(), lock, revision).await?;
@@ -134,7 +134,7 @@ impl LockManager {
                 let extend_table_lock_req = lock.gen_extend_lock_req(revision, true);
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
-                record_acquired_table_lock_nums(lock.lock_level(), lock.get_table_id(), 1);
+                record_acquired_table_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
                 break;
             }
 

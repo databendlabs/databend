@@ -77,7 +77,7 @@ use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
-use common_meta_app::schema::LockLevel;
+use common_meta_app::schema::LockKey;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::SetLVTReq;
@@ -5225,8 +5225,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- create table lock revision 1");
             let req1 = CreateLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -5236,8 +5235,7 @@ impl SchemaApiTestSuite {
 
             info!("--- create table lock revision 2");
             let req2 = CreateLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 user: "root".to_string(),
                 node: "node1".to_string(),
@@ -5248,8 +5246,7 @@ impl SchemaApiTestSuite {
 
             info!("--- list table lock revisiosn");
             let req3 = ListLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
             };
             let res3 = mt.list_lock_revisions(req3).await?;
             assert_eq!(res3.len(), 2);
@@ -5258,8 +5255,7 @@ impl SchemaApiTestSuite {
 
             info!("--- extend table lock revision 2 expire");
             let req4 = ExtendLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
                 expire_at: (Utc::now().timestamp() + 4) as u64,
                 revision: res2.revision,
                 acquire_lock: true,
@@ -5269,8 +5265,7 @@ impl SchemaApiTestSuite {
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
             let req5 = ListLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
             };
             let res5 = mt.list_lock_revisions(req5).await?;
             assert_eq!(res5.len(), 1);
@@ -5278,16 +5273,14 @@ impl SchemaApiTestSuite {
 
             info!("--- delete table lock revision 2");
             let req6 = DeleteLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
                 revision: res2.revision,
             };
             mt.delete_lock_revision(req6).await?;
 
             info!("--- check table locks is empty");
             let req7 = ListLockRevReq {
-                level: LockLevel::Table,
-                table_id,
+                lock_key: LockKey::Table { table_id },
             };
             let res7 = mt.list_lock_revisions(req7).await?;
             assert_eq!(res7.len(), 0);

@@ -3154,13 +3154,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         &self,
         req: ListLockRevReq,
     ) -> Result<Vec<(u64, LockMeta)>, KVAppError> {
-        let level = &req.level;
-        let prefix = level.prefix(req.table_id);
+        let lock_key = &req.lock_key;
+        let lock_type = lock_key.lock_type();
+
+        let prefix = lock_key.gen_prefix();
         let list = self.prefix_list_kv(&prefix).await?;
 
         let mut reply = vec![];
         for (k, seq) in list.into_iter() {
-            let revision = level.revision(&k).map_err(|e| {
+            let revision = lock_type.revision_from_str(&k).map_err(|e| {
                 let inv = InvalidReply::new("list_lock_revisions", &e);
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
@@ -3179,11 +3181,15 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     ) -> Result<CreateLockRevReply, KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let level = &req.level;
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+        let lock_type = lock_key.lock_type();
+        let extra_info = lock_key.get_extra_info();
+
+        let table_id = lock_key.get_table_id();
         let tbid = TableId { table_id };
 
         let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
+        let key = lock_key.gen_key(revision);
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3191,26 +3197,26 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             trials.next().unwrap()?;
 
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-            let lock_key = level.gen_key(table_id, revision);
 
             let lock_meta = LockMeta {
-                level: level.clone(),
                 user: req.user.clone(),
                 node: req.node.clone(),
                 session_id: req.session_id.clone(),
                 created_on: Utc::now(),
                 acquired_on: None,
+                lock_type: lock_type.clone(),
+                extra_info: extra_info.clone(),
             };
 
             let condition = vec![
                 // table is not changed
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
                 // assumes lock are absent.
-                txn_cond_seq(&lock_key, Eq, 0),
+                txn_cond_seq(&key, Eq, 0),
             ];
 
             let if_then = vec![txn_op_put_with_expire(
-                &lock_key,
+                &key,
                 serialize_struct(&lock_meta)?,
                 req.expire_at,
             )];
@@ -3241,9 +3247,12 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn extend_lock_revision(&self, req: ExtendLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let level = &req.level;
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+        let table_id = lock_key.get_table_id();
+        let tbid = TableId { table_id };
+
         let revision = req.revision;
+        let key = lock_key.gen_key(revision);
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3251,12 +3260,9 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
             let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
-            let lock_key = level.gen_key(table_id, revision);
-            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) =
-                get_pb_value(self, &lock_key).await?;
+            let (lock_seq, lock_meta_opt): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
             table_lock_has_to_exist(lock_seq, table_id, ctx)?;
             let mut lock_meta = lock_meta_opt.unwrap();
             // Set `acquire_lock = true` to initialize `acquired_on` when the
@@ -3270,11 +3276,11 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
             let condition = vec![
                 // table is not changed
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                txn_cond_seq(&lock_key, Eq, lock_seq),
+                txn_cond_seq(&key, Eq, lock_seq),
             ];
 
             let if_then = vec![txn_op_put_with_expire(
-                &lock_key,
+                &key,
                 serialize_struct(&lock_meta)?,
                 req.expire_at,
             )];
@@ -3304,9 +3310,13 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
     async fn delete_lock_revision(&self, req: DeleteLockRevReq) -> Result<(), KVAppError> {
         debug!(req = as_debug!(&req); "SchemaApi: {}", func_name!());
 
-        let table_id = req.table_id;
+        let lock_key = &req.lock_key;
+
         let revision = req.revision;
-        let level = &req.level;
+        let key = lock_key.gen_key(revision);
+
+        let table_id = lock_key.get_table_id();
+        let tbid = TableId { table_id };
 
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
@@ -3314,15 +3324,14 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let lock_key = level.gen_key(table_id, revision);
-            let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &lock_key).await?;
+            let (lock_seq, _): (_, Option<LockMeta>) = get_pb_value(self, &key).await?;
             if lock_seq == 0 {
                 // The lock has been deleted.
                 break;
             }
 
-            let condition = vec![txn_cond_seq(&lock_key, Eq, lock_seq)];
-            let if_then = vec![txn_op_del(&lock_key)];
+            let condition = vec![txn_cond_seq(&key, Eq, lock_seq)];
+            let if_then = vec![txn_op_del(&key)];
 
             let txn_req = TxnRequest {
                 condition,
@@ -3332,7 +3341,6 @@ impl<KV: kvapi::KVApi<Error = MetaError> + ?Sized> SchemaApi for KV {
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
-            let tbid = TableId { table_id };
             debug!(
                 ident = as_display!(&tbid),
                 succ = succ;

@@ -20,7 +20,8 @@ use common_meta_app::schema::CreateLockRevReq;
 use common_meta_app::schema::DeleteLockRevReq;
 use common_meta_app::schema::ExtendLockRevReq;
 use common_meta_app::schema::ListLockRevReq;
-use common_meta_app::schema::LockLevel;
+use common_meta_app::schema::LockKey;
+use common_meta_app::schema::LockType;
 use common_pipeline_core::LockGuard;
 
 use crate::catalog::Catalog;
@@ -28,7 +29,9 @@ use crate::table_context::TableContext;
 
 #[async_trait::async_trait]
 pub trait Lock: Sync + Send {
-    fn lock_level(&self) -> LockLevel;
+    fn lock_type(&self) -> LockType;
+
+    fn gen_lock_key(&self) -> LockKey;
 
     fn get_catalog(&self) -> &str;
 
@@ -52,8 +55,7 @@ pub trait LockExt: Lock {
     /// Return true if the table is locked.
     async fn check_lock(&self, catalog: Arc<dyn Catalog>) -> Result<bool> {
         let req = ListLockRevReq {
-            table_id: self.get_table_id(),
-            level: self.lock_level(),
+            lock_key: self.gen_lock_key(),
         };
         let reply = catalog.list_lock_revisions(req).await?;
         Ok(!reply.is_empty())
@@ -61,8 +63,7 @@ pub trait LockExt: Lock {
 
     fn gen_create_lock_req(&self) -> CreateLockRevReq {
         CreateLockRevReq {
-            table_id: self.get_table_id(),
-            level: self.lock_level(),
+            lock_key: self.gen_lock_key(),
             user: self.get_user(),
             node: self.get_node(),
             session_id: self.get_session_id(),
@@ -72,23 +73,20 @@ pub trait LockExt: Lock {
 
     fn gen_list_lock_req(&self) -> ListLockRevReq {
         ListLockRevReq {
-            table_id: self.get_table_id(),
-            level: self.lock_level(),
+            lock_key: self.gen_lock_key(),
         }
     }
 
     fn gen_delete_lock_req(&self, revision: u64) -> DeleteLockRevReq {
         DeleteLockRevReq {
-            table_id: self.get_table_id(),
-            level: self.lock_level(),
+            lock_key: self.gen_lock_key(),
             revision,
         }
     }
 
     fn gen_extend_lock_req(&self, revision: u64, acquire_lock: bool) -> ExtendLockRevReq {
         ExtendLockRevReq {
-            table_id: self.get_table_id(),
-            level: self.lock_level(),
+            lock_key: self.gen_lock_key(),
             revision,
             acquire_lock,
             expire_at: Utc::now().timestamp() as u64 + self.get_expire_secs(),

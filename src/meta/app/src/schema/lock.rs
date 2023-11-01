@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -23,64 +24,92 @@ use common_meta_kvapi::kvapi::KeyError;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct LockMeta {
-    pub level: LockLevel,
     pub user: String,
     pub node: String,
     pub session_id: String,
 
     pub created_on: DateTime<Utc>,
     pub acquired_on: Option<DateTime<Utc>>,
+    pub lock_type: LockType,
+    pub extra_info: BTreeMap<String, String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub enum LockLevel {
-    /// table-level lock.
-    Table,
+#[derive(
+    serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, num_derive::FromPrimitive,
+)]
+pub enum LockType {
+    TABLE = 0,
 }
 
-impl LockLevel {
-    pub fn prefix(&self, table_id: u64) -> String {
+impl LockType {
+    pub fn revision_from_str(&self, s: &str) -> Result<u64, KeyError> {
         match self {
-            LockLevel::Table => format!("{}/{}", TableLockKey::PREFIX, table_id),
-        }
-    }
-
-    pub fn revision(&self, s: &str) -> Result<u64, KeyError> {
-        match self {
-            LockLevel::Table => {
+            LockType::TABLE => {
                 let key = TableLockKey::from_str_key(s)?;
                 Ok(key.revision)
             }
         }
     }
+}
 
-    pub fn gen_key(&self, table_id: u64, revision: u64) -> impl Key {
+impl Display for LockType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            LockLevel::Table => TableLockKey { table_id, revision },
+            LockType::TABLE => write!(f, "TABLE"),
         }
     }
 }
 
-impl Display for LockLevel {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum LockKey {
+    /// table-level lock.
+    Table { table_id: u64 },
+}
+
+impl LockKey {
+    pub fn get_table_id(&self) -> u64 {
         match self {
-            LockLevel::Table => write!(f, "Table"),
+            LockKey::Table { table_id } => *table_id,
+        }
+    }
+
+    pub fn get_extra_info(&self) -> BTreeMap<String, String> {
+        match self {
+            LockKey::Table { .. } => BTreeMap::new(),
+        }
+    }
+
+    pub fn lock_type(&self) -> LockType {
+        match self {
+            LockKey::Table { .. } => LockType::TABLE,
+        }
+    }
+
+    pub fn gen_prefix(&self) -> String {
+        match self {
+            LockKey::Table { table_id } => format!("{}/{}", TableLockKey::PREFIX, table_id),
+        }
+    }
+
+    pub fn gen_key(&self, revision: u64) -> impl Key {
+        match self {
+            LockKey::Table { table_id } => TableLockKey {
+                table_id: *table_id,
+                revision,
+            },
         }
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListLockRevReq {
-    pub table_id: u64,
-    pub level: LockLevel,
+    pub lock_key: LockKey,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateLockRevReq {
-    pub table_id: u64,
+    pub lock_key: LockKey,
     pub expire_at: u64,
-
-    pub level: LockLevel,
     pub user: String,
     pub node: String,
     pub session_id: String,
@@ -93,18 +122,16 @@ pub struct CreateLockRevReply {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ExtendLockRevReq {
-    pub table_id: u64,
+    pub lock_key: LockKey,
     pub expire_at: u64,
     pub revision: u64,
-    pub level: LockLevel,
     pub acquire_lock: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DeleteLockRevReq {
-    pub table_id: u64,
+    pub lock_key: LockKey,
     pub revision: u64,
-    pub level: LockLevel,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

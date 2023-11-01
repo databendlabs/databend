@@ -17,7 +17,8 @@ use std::sync::Arc;
 use common_catalog::lock::Lock;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_meta_app::schema::LockLevel;
+use common_meta_app::schema::LockKey;
+use common_meta_app::schema::LockType;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableLockKey;
 use common_meta_kvapi::kvapi::Key;
@@ -57,8 +58,14 @@ impl TableLock {
 
 #[async_trait::async_trait]
 impl Lock for TableLock {
-    fn lock_level(&self) -> LockLevel {
-        LockLevel::Table
+    fn lock_type(&self) -> LockType {
+        LockType::TABLE
+    }
+
+    fn gen_lock_key(&self) -> LockKey {
+        LockKey::Table {
+            table_id: self.table_info.ident.table_id,
+        }
     }
 
     fn get_catalog(&self) -> &str {
@@ -87,7 +94,7 @@ impl Lock for TableLock {
 
     fn watch_delete_key(&self, revision: u64) -> String {
         let lock_key = TableLockKey {
-            table_id: self.get_table_id(),
+            table_id: self.table_info.ident.table_id,
             revision,
         };
         lock_key.to_string_key()

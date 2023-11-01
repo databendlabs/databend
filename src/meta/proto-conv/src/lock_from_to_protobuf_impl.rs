@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
+use num::FromPrimitive;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -26,34 +27,38 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl FromToProto for mt::LockLevel {
-    type PB = pb::LockLevel;
+impl FromToProto for mt::LockKey {
+    type PB = pb::LockKey;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
 
-    fn from_pb(p: pb::LockLevel) -> Result<Self, Incompatible>
+    fn from_pb(p: pb::LockKey) -> Result<Self, Incompatible>
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
-        match p.level {
-            Some(pb::lock_level::Level::Table(pb::lock_level::Table {})) => {
-                Ok(mt::LockLevel::Table)
+        match p.key {
+            Some(pb::lock_key::Key::Table(pb::lock_key::Table { table_id })) => {
+                Ok(mt::LockKey::Table { table_id })
             }
             None => Err(Incompatible {
-                reason: "LockLevel cannot be None".to_string(),
+                reason: "LockKey cannot be None".to_string(),
             }),
         }
     }
 
-    fn to_pb(&self) -> Result<pb::LockLevel, Incompatible> {
-        let level = match self {
-            mt::LockLevel::Table => Some(pb::lock_level::Level::Table(pb::lock_level::Table {})),
+    fn to_pb(&self) -> Result<pb::LockKey, Incompatible> {
+        let key = match self {
+            mt::LockKey::Table { table_id } => {
+                Some(pb::lock_key::Key::Table(pb::lock_key::Table {
+                    table_id: *table_id,
+                }))
+            }
         };
-        Ok(pb::LockLevel {
+        Ok(pb::LockKey {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            level,
+            key,
         })
     }
 }
@@ -76,9 +81,10 @@ impl FromToProto for mt::LockMeta {
                 Some(acquired_on) => Some(DateTime::<Utc>::from_pb(acquired_on)?),
                 None => None,
             },
-            level: mt::LockLevel::from_pb(p.level.ok_or_else(|| Incompatible {
-                reason: "LockMeta.level cannot be None".to_string(),
-            })?)?,
+            lock_type: FromPrimitive::from_i32(p.lock_type).ok_or_else(|| Incompatible {
+                reason: format!("invalid LockType: {}", p.lock_type),
+            })?,
+            extra_info: p.extra_info,
         };
 
         Ok(v)
@@ -96,7 +102,8 @@ impl FromToProto for mt::LockMeta {
                 Some(acquired_on) => Some(acquired_on.to_pb()?),
                 None => None,
             },
-            level: Some(mt::LockLevel::to_pb(&self.level)?),
+            lock_type: self.lock_type.clone() as i32,
+            extra_info: self.extra_info.clone(),
         };
         Ok(p)
     }

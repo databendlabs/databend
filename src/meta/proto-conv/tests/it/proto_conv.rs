@@ -30,7 +30,7 @@ use common_meta_app::schema as mt;
 use common_meta_app::schema::CatalogOption;
 use common_meta_app::schema::IcebergCatalogOption;
 use common_meta_app::schema::IndexType;
-use common_meta_app::schema::LockLevel;
+use common_meta_app::schema::LockType;
 use common_meta_app::share;
 use common_meta_app::storage::StorageS3Config;
 use common_proto_conv::FromToProto;
@@ -278,7 +278,8 @@ pub(crate) fn new_lock_meta() -> mt::LockMeta {
         session_id: "session".to_string(),
         created_on: Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 9).unwrap(),
         acquired_on: Some(Utc.with_ymd_and_hms(2014, 11, 29, 12, 0, 15).unwrap()),
-        level: LockLevel::Table,
+        lock_type: LockType::TABLE,
+        extra_info: BTreeMap::from([("key".to_string(), "val".to_string())]),
     }
 }
 
