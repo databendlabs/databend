@@ -126,7 +126,10 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        let query = format!("SELECT * FROM system.indexes {} order by name {}", show_limit, limit_str,);
+        let query = format!(
+            "SELECT * FROM system.indexes {} order by name {}",
+            show_limit, limit_str,
+        );
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowProcessList)
             .await
