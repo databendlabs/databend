@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use common_base::base::tokio;
+use common_base::runtime::Runtime;
+use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::Plan;
@@ -20,7 +22,7 @@ use common_sql::Planner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::OptimizeTableInterpreter;
-use databend_query::test_kits::table_test_fixture::do_insert;
+use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::TestFixture;
 
 #[test]
@@ -37,23 +39,24 @@ pub fn test_format_field_name() {
 #[tokio::test(flavor = "multi_thread")]
 pub async fn test_snapshot_consistency() -> Result<()> {
     let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
+    let ctx = fixture.ctx();
     let tbl = fixture.default_table_name();
+    let db = fixture.default_db_name();
+    fixture.create_normal_table().await?;
+
     let db2 = db.clone();
     let tbl2 = tbl.clone();
-    let ctx = fixture.ctx();
-    fixture.create_default_table().await?;
+
+    let runtime = Runtime::with_default_worker_threads()?;
 
     // 1. insert into tbl
-    let insert_sql = format!("insert into {}.{} values(1,(1,2))", db, tbl);
     let mut planner = Planner::new(ctx.clone());
     let mut planner2 = Planner::new(ctx.clone());
     // generate 3 segments
-    for _ in 0..3 {
-        let (insert_plan, _) = planner.plan_sql(&insert_sql).await?;
-        if let Plan::Insert(insert) = insert_plan {
-            do_insert(ctx.clone(), *insert).await?;
-        }
+    // insert
+    for i in 0..3 {
+        let qry = format!("insert into {}.{}(id) values({})", db, tbl, i);
+        execute_command(ctx.clone(), qry.as_str()).await?;
     }
 
     let query_task = async move {
@@ -64,9 +67,8 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         );
 
         // a. thread 1: read table
-        println!("read plan");
-
         let (query_plan, _) = planner.plan_sql(&query).await?;
+
         if let Plan::Query {
             s_expr: _s_expr,
             metadata,
@@ -76,8 +78,10 @@ pub async fn test_snapshot_consistency() -> Result<()> {
             ignore_result: _ignore_result,
         } = query_plan
         {
-            let meta = metadata.read();
-            let tbl_entries = meta.tables();
+            let tbl_entries = {
+                let meta = metadata.read();
+                meta.tables().to_vec()
+            };
             let mut tables = Vec::with_capacity(2);
             for entry in tbl_entries {
                 if entry.name() == &tbl {
@@ -131,9 +135,10 @@ pub async fn test_snapshot_consistency() -> Result<()> {
         Ok::<(), ErrorCode>(())
     };
 
-    query_task.await?;
+    let query_handler = runtime.spawn(query_task);
 
     let compact_task = async move {
+        println!("compact");
         let compact_sql = format!("optimize table {}.{} compact", db2, tbl2);
         let (compact_plan, _) = planner2.plan_sql(&compact_sql).await?;
         if let Plan::OptimizeTable(plan) = compact_plan {
@@ -141,11 +146,15 @@ pub async fn test_snapshot_consistency() -> Result<()> {
                 OptimizeTableInterpreter::try_create(ctx.clone(), *plan.clone())?;
             optimize_interpreter.execute(ctx).await?;
         }
+        println!("compact over");
         Ok::<(), ErrorCode>(())
     };
 
     // b. thread2: optmize table
-    tokio::spawn(compact_task);
+    let compact_handler = runtime.spawn(compact_task);
+
+    query_handler.await.unwrap()?;
+    compact_handler.await.unwrap()?;
 
     Ok(())
 }
