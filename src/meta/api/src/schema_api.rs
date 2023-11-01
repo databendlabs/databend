@@ -48,6 +48,8 @@ use common_meta_app::schema::GetCatalogReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetIndexReply;
 use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::GetLVTReply;
+use common_meta_app::schema::GetLVTReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -261,6 +263,7 @@ pub trait SchemaApi: Send + Sync {
 
     // least visible time
     async fn set_table_lvt(&self, req: SetLVTReq) -> Result<SetLVTReply, KVAppError>;
+    async fn get_table_lvt(&self, req: GetLVTReq) -> Result<GetLVTReply, KVAppError>;
 
     fn name(&self) -> String;
 }

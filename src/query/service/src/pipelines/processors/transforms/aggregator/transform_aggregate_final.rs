@@ -215,7 +215,7 @@ where Method: HashMethodBounds
                         );
                     }
                 }
-                aggregate_function.batch_merge_result(&places, builder)?;
+                aggregate_function.batch_merge_result(&places, 0, builder)?;
             }
 
             // Build final state block.
