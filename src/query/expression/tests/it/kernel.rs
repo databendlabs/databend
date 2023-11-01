@@ -447,7 +447,7 @@ pub fn test_take_compact() -> common_exception::Result<()> {
     Ok(())
 }
 
-/// Test filter boolean when offset != 0. 
+/// Test filter boolean when offset != 0.
 #[test]
 pub fn test_filter_boolean() -> common_exception::Result<()> {
     use common_expression::types::DataType;
