@@ -47,7 +47,7 @@ impl Binder {
         let (show_limit, limit_str) = get_show_options(show_options, None);
         // rewrite show functions to select * from system.table_functions ...
         let query = format!(
-            "SELECT name FROM system.table_functions {} {}",
+            "SELECT name FROM system.table_functions {} ORDER BY name {}",
             show_limit, limit_str,
         );
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowFunctions)
@@ -78,7 +78,7 @@ impl Binder {
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, Some("metric".to_string()));
         let query = format!(
-            "SELECT metric, kind, labels, value FROM system.metrics {} {}",
+            "SELECT metric, kind, labels, value FROM system.metrics {} order by metric {}",
             show_limit, limit_str,
         );
 
@@ -126,7 +126,7 @@ impl Binder {
         show_options: &Option<ShowOptions>,
     ) -> Result<Plan> {
         let (show_limit, limit_str) = get_show_options(show_options, None);
-        let query = format!("SELECT * FROM system.indexes {} {}", show_limit, limit_str,);
+        let query = format!("SELECT * FROM system.indexes {} order by name {}", show_limit, limit_str,);
 
         self.bind_rewrite_to_query(bind_context, &query, RewriteKind::ShowProcessList)
             .await
@@ -134,28 +134,28 @@ impl Binder {
 }
 
 fn get_show_options(show_options: &Option<ShowOptions>, col: Option<String>) -> (String, String) {
-    let mut show_limit = "".to_string();
-    let mut limit_str = "".to_string();
-    if let Some(show_option) = show_options.clone() {
-        match show_option.show_limit {
+    let mut show_limit = String::new();
+    let mut limit_str = String::new();
+
+    if let Some(show_option) = show_options {
+        match &show_option.show_limit {
+            Some(ShowLimit::Like { pattern }) => {
+                if let Some(col) = &col {
+                    show_limit = format!("WHERE {} LIKE '{}'", col, pattern);
+                } else {
+                    show_limit = format!("WHERE name LIKE '{}'", pattern);
+                }
+            }
+            Some(ShowLimit::Where { selection }) => {
+                show_limit = format!("WHERE {}", selection);
+            }
             None => {}
-            Some(predicate) => match predicate {
-                ShowLimit::Like { pattern } => {
-                    if let Some(col) = col {
-                        show_limit = format!("WHERE {} LIKE '{}'", col, pattern);
-                    } else {
-                        show_limit = format!("WHERE name LIKE '{}'", pattern);
-                    }
-                }
-                ShowLimit::Where { selection } => {
-                    show_limit = format!("WHERE {}", selection);
-                }
-            },
         }
 
         if let Some(limit) = show_option.limit {
             limit_str = format!("LIMIT {}", limit);
         }
     }
+
     (show_limit, limit_str)
 }

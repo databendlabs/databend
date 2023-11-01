@@ -16,3 +16,6 @@ query TT
 SHOW ENGINES WHERE engine='MEMORY' LIMIT 1
 ----
 MEMORY MEMORY Storage Engine
+
+statement error
+SHOW ENGINES WHERE name_engine='MEMORY' LIMIT 1
