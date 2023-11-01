@@ -22,7 +22,6 @@ use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ConstantFolder;
-use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
@@ -611,46 +610,59 @@ impl MergeIntoInterpreter {
         let stream: SendableDataBlockStream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.collect::<Result<Vec<_>>>().await?;
 
-        debug_assert_eq!(blocks.len(), 1);
-        let block = &blocks[0];
-        debug_assert_eq!(block.num_columns(), m_join.source_conditions.len() * 2);
+        // 2. build filter and push down to target side
+        let mut filters = Vec::with_capacity(m_join.target_conditions.len());
 
-        let get_scalar_expr = |block: &DataBlock, index: usize| {
-            let block_entry = &block.columns()[index];
-            let scalar = match &block_entry.value {
-                common_expression::Value::Scalar(scalar) => scalar.clone(),
-                common_expression::Value::Column(column) => {
-                    debug_assert_eq!(column.len(), 1);
-                    let value_ref = column.index(0).unwrap();
-                    value_ref.to_owned()
-                }
-            };
-            ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            })
-        };
-
-        let mut filters = Vec::with_capacity(m_join.target_conditions.len() * 2);
         for (i, target_side_expr) in m_join.target_conditions.iter().enumerate() {
-            let min_scalar = get_scalar_expr(block, i * 2);
-            let max_scalar = get_scalar_expr(block, i * 2 + 1);
-
-            // 2. build filter and push down to target side
-            let gte_min = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "gte".to_string(),
-                params: vec![],
-                arguments: vec![target_side_expr.clone(), min_scalar],
-            });
-            let lte_max = ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "lte".to_string(),
-                params: vec![],
-                arguments: vec![target_side_expr.clone(), max_scalar],
-            });
-            filters.push(gte_min);
-            filters.push(lte_max);
+            let mut filter_parts = vec![];
+            for block in blocks.iter() {
+                let block = block.convert_to_full();
+                let min_column = block.get_by_offset(i * 2).value.as_column().unwrap();
+                let max_column = block.get_by_offset(i * 2 + 1).value.as_column().unwrap();
+                for (min_scalar, max_scalar) in min_column.iter().zip(max_column.iter()) {
+                    let gte_min = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "gte".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            target_side_expr.clone(),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: min_scalar.to_owned(),
+                            }),
+                        ],
+                    });
+                    let lte_max = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "lte".to_string(),
+                        params: vec![],
+                        arguments: vec![
+                            target_side_expr.clone(),
+                            ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: None,
+                                value: max_scalar.to_owned(),
+                            }),
+                        ],
+                    });
+                    let and = ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![gte_min, lte_max],
+                    });
+                    filter_parts.push(and);
+                }
+            }
+            let mut or = filter_parts[0].clone();
+            for filter_part in filter_parts.iter().skip(1) {
+                or = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "or".to_string(),
+                    params: vec![],
+                    arguments: vec![or, filter_part.clone()],
+                });
+            }
+            filters.push(or);
         }
         let mut target_plan = m_join.target_sexpr.clone();
         Self::push_down_filters(&mut target_plan, &filters)?;
