@@ -14,3 +14,13 @@ fuse_block
 fuse_column
 fuse_statistic
 fuse_encoding
+
+query T
+SHOW TABLE_FUNCTIONS LIKE 'fuse%' LIMIT 1
+----
+fuse_snapshot
+
+query T
+SHOW TABLE_FUNCTIONS WHERE name='fuse_snapshot' LIMIT 1
+----
+fuse_snapshot
