@@ -159,10 +159,9 @@ impl Spiller {
             self.ctx.get_join_spill_progress().incr(&progress_val);
         }
         info!(
-            "{:?} spilled {:?} rows data into {:?}, partition id is {:?}, worker id is {:?}",
+            "{:?} spilled {:?} rows data, partition id is {:?}, worker id is {:?}",
             self.spiller_type,
             data.num_rows(),
-            location,
             p_id,
             worker_id
         );

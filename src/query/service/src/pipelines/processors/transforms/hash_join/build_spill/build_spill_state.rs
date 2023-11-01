@@ -87,6 +87,8 @@ impl BuildSpillState {
         // Collect rows in `Chunks`
         let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
         blocks.append(chunks);
+        let build_num_rows = unsafe { &mut *self.build_state.hash_join_state.build_num_rows.get() };
+        *build_num_rows = 0;
         Ok(blocks)
     }
 
@@ -140,21 +142,27 @@ impl BuildSpillState {
             return Ok(false);
         }
 
-        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
-        let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
-        let total_gb = byte.get_appropriate_unit(false).format(3);
-        dbg!(total_gb);
-        if global_used as usize > spill_threshold {
-            return Ok(true);
-        }
-
-        let mut total_bytes = 0;
-
+        // Check if there are rows in `RowSpace`'s buffer and `Chunks`.
+        // If not, directly return false, no need to spill.
         let buffer = self.build_state.hash_join_state.row_space.buffer.read();
         let chunks = unsafe { &*self.build_state.hash_join_state.chunks.get() };
         if buffer.is_empty() && chunks.is_empty() {
             return Ok(false);
         }
+
+        // Check if global memory usage exceeds the threshold.
+        let global_used = GLOBAL_MEM_STAT.get_memory_usage();
+        let byte = Byte::from_unit(global_used as f64, ByteUnit::B).unwrap();
+        let total_gb = byte.get_appropriate_unit(false).format(3);
+        if global_used as usize > spill_threshold {
+            info!(
+                "need to spill due to global memory usage {:?} is greater than spill threshold",
+                total_gb
+            );
+            return Ok(true);
+        }
+
+        let mut total_bytes = 0;
         for block in buffer.iter() {
             total_bytes += block.memory_size();
         }
@@ -166,18 +174,14 @@ impl BuildSpillState {
         let byte = Byte::from_unit(total_bytes as f64, ByteUnit::B).unwrap();
         let total_gb = byte.get_appropriate_unit(false).format(3);
 
-        info!(
-            "check if need to spill: total_bytes: {}, spill_threshold: {}",
-            total_gb, spill_threshold
-        );
-
-        if total_bytes * 2 > spill_threshold {
+        if total_bytes * 3 > spill_threshold {
             return Ok(true);
         }
         Ok(false)
     }
 
     // Pick partitions which need to spill
+    #[allow(unused)]
     fn pick_partitions(&self, partition_blocks: &mut HashMap<u8, Vec<DataBlock>>) -> Result<()> {
         let mut memory_limit = self
             .build_state
@@ -188,7 +192,6 @@ impl BuildSpillState {
         if global_used as usize > memory_limit {
             return Ok(());
         }
-        dbg!(&partition_blocks.keys());
         // Compute each partition's data size
         let mut partition_sizes = partition_blocks
             .iter()
@@ -202,7 +205,7 @@ impl BuildSpillState {
         partition_sizes.sort_by_key(|&(_id, size)| size);
 
         for (id, size) in partition_sizes.into_iter() {
-            if size as f64 <= memory_limit as f64 / 2.0 {
+            if size as f64 <= memory_limit as f64 / 3.0 {
                 // Put the partition's data to chunks
                 let chunks = unsafe { &mut *self.build_state.hash_join_state.chunks.get() };
                 let blocks = partition_blocks.get_mut(&id).unwrap();
@@ -217,7 +220,6 @@ impl BuildSpillState {
                 break;
             }
         }
-        dbg!(&partition_blocks.keys());
         Ok(())
     }
 
@@ -228,21 +230,37 @@ impl BuildSpillState {
         spill_tasks: &mut VecDeque<Vec<(u8, DataBlock)>>,
     ) -> Result<()> {
         let blocks = self.collect_rows()?;
-        let mut partition_blocks = self.partition_input_blocks(blocks)?;
-        self.pick_partitions(&mut partition_blocks)?;
-        for (_, blocks) in partition_blocks.iter_mut() {
-            while blocks.len() < active_processors_num {
-                blocks.push(DataBlock::empty());
+        let partition_blocks = self.partition_input_blocks(blocks)?;
+        // self.pick_partitions(&mut partition_blocks)?;
+        let mut partition_tasks = HashMap::with_capacity(partition_blocks.len());
+        // Stat how many rows in each partition, then split it equally.
+        for (partition_id, blocks) in partition_blocks.iter() {
+            let merged_block = DataBlock::concat(blocks)?;
+            let total_rows = merged_block.num_rows();
+            // Equally split blocks to `active_processors_num` parts
+            let mut start_row;
+            let mut end_row = 0;
+            for i in 0..active_processors_num {
+                start_row = end_row;
+                end_row = start_row + total_rows / active_processors_num;
+                if i == active_processors_num - 1 {
+                    end_row = total_rows;
+                }
+                let sub_block = merged_block.slice(start_row..end_row);
+                partition_tasks
+                    .entry(*partition_id)
+                    .and_modify(|v: &mut Vec<DataBlock>| v.push(sub_block.clone()))
+                    .or_insert(vec![sub_block]);
             }
         }
 
         let mut task_id: usize = 0;
         while task_id < active_processors_num {
-            let mut task = Vec::with_capacity(partition_blocks.len());
-            for partition_id in partition_blocks.keys() {
+            let mut task = Vec::with_capacity(partition_tasks.len());
+            for partition_id in partition_tasks.keys() {
                 task.push((
                     *partition_id,
-                    partition_blocks.get(partition_id).unwrap()[task_id].clone(),
+                    partition_tasks.get(partition_id).unwrap()[task_id].clone(),
                 ))
             }
             spill_tasks.push_back(task);

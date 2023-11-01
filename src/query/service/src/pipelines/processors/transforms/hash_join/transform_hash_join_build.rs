@@ -185,7 +185,7 @@ impl Processor for TransformHashJoinBuild {
                     self.build_state.row_space_build_done()?;
                     return Ok(Event::Async);
                 }
-
+                // Before pulling data, check if need spill.
                 if let Some(spill_state) = self.spill_state.as_ref() {
                     if spill_state.check_need_spill()? {
                         spill_state.spill_coordinator.need_spill()?;
@@ -199,7 +199,6 @@ impl Processor for TransformHashJoinBuild {
                         return Ok(Event::Async);
                     }
                 }
-
                 match self.input_port.has_data() {
                     true => {
                         self.input_data = Some(self.input_port.pull_data().unwrap()?);
@@ -251,6 +250,20 @@ impl Processor for TransformHashJoinBuild {
                         self.step = HashJoinBuildStep::FollowSpill;
                         self.spill_data = Some(data_block);
                     } else {
+                        // Before write data to `RowSpace` and `Chunks`, check if need spill.
+                        if let Some(spill_state) = self.spill_state.as_ref() {
+                            if spill_state.check_need_spill()? {
+                                spill_state.spill_coordinator.need_spill()?;
+                                self.wait_spill()?;
+                                // WaitProbe or FirstSpill, so set Event to Async
+                                return Ok(());
+                            } else if spill_state.spill_coordinator.get_need_spill() {
+                                // even if input can fit into memory, but there exists one processor need to spill,
+                                // then it needs to wait spill.
+                                self.wait_spill()?;
+                                return Ok(());
+                            }
+                        }
                         self.build_state.build(data_block)?;
                     }
                 }
