@@ -102,8 +102,8 @@ impl<'a> BitChunks<'a> {
 }
 
 #[derive(Debug)]
-pub struct BitChunkIterator<'a> {
-    buffer: &'a [u8],
+pub struct BitChunkIterator {
+    buffer: *const u64,
     bit_offset: usize,
     chunk_len: usize,
     index: usize,
@@ -118,9 +118,9 @@ impl<'a> BitChunks<'a> {
 
     /// Returns an iterator over chunks of 64 bits represented as an u64
     #[inline]
-    pub const fn iter(&self) -> BitChunkIterator<'a> {
-        BitChunkIterator::<'a> {
-            buffer: self.buffer,
+    pub const fn iter(&self) -> BitChunkIterator {
+        BitChunkIterator {
+            buffer: self.buffer.as_ptr() as *const u64,
             bit_offset: self.bit_offset,
             chunk_len: self.chunk_len,
             index: 0,
@@ -128,7 +128,7 @@ impl<'a> BitChunks<'a> {
     }
 }
 
-impl Iterator for BitChunkIterator<'_> {
+impl Iterator for BitChunkIterator {
     type Item = u64;
 
     #[inline]
@@ -138,13 +138,9 @@ impl Iterator for BitChunkIterator<'_> {
             return None;
         }
 
-        // cast to *const u64 should be fine since we are using read_unaligned below
-        #[allow(clippy::cast_ptr_alignment)]
-        let raw_data = self.buffer.as_ptr() as *const u64;
-
         // bit-packed buffers are stored starting with the least-significant byte first
         // so when reading as u64 on a big-endian machine, the bytes need to be swapped
-        let current = unsafe { std::ptr::read_unaligned(raw_data.add(index)).to_le() };
+        let current = unsafe { std::ptr::read_unaligned(self.buffer.add(index)).to_le() };
 
         let bit_offset = self.bit_offset;
 
@@ -154,7 +150,7 @@ impl Iterator for BitChunkIterator<'_> {
             // the constructor ensures that bit_offset is in 0..8
             // that means we need to read at most one additional byte to fill in the high bits
             let next =
-                unsafe { std::ptr::read_unaligned(raw_data.add(index + 1) as *const u8) as u64 };
+                unsafe { std::ptr::read_unaligned(self.buffer.add(index + 1) as *const u8) as u64 };
 
             (current >> bit_offset) | (next << (64 - bit_offset))
         };
