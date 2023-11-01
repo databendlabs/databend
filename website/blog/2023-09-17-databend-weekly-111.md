@@ -50,7 +50,7 @@ For example, if Tenant A shares data with Tenant B, then Tenant B needs to creat
 
 ```SQL
 CREATE SHARE ENDPOINT IF NOT EXISTS from_TenantA
-    '<share_endpoint_url>'
+    URL = '<share_endpoint_url>'
     TENANT = A
     COMMENT = 'Share endpoint to access data from Tenant A';
 ```

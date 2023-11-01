@@ -9,7 +9,7 @@ For example, if Tenant A is sharing data with Tenant B, Tenant B needs to create
 
 ```sql title='Create Share Endpoint on Tenant B:'
 CREATE SHARE ENDPOINT IF NOT EXISTS from_TenantA
-    '<share_endpoint_url>'
+    URL = '<share_endpoint_url>'
     TENANT = A
     COMMENT = 'Share endpoint to access data from Tenant A';
 ```

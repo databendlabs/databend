@@ -1220,12 +1220,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
-             ~ (URL ~ ^"=")? ~ #share_endpoint_uri_location
+             ~ URL ~ "=" ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
-        |(_, _, _, opt_if_not_exists, endpoint, _, url, _, _, tenant, args_opt, comment_opt)| {
+        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
             Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 endpoint,

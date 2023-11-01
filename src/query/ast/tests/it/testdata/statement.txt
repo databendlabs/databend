@@ -10511,49 +10511,6 @@ CreateShareEndpoint(
 
 
 ---------- Input ----------
-CREATE SHARE ENDPOINT IF NOT EXISTS t 'http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
----------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
----------- AST ------------
-CreateShareEndpoint(
-    CreateShareEndpointStmt {
-        if_not_exists: true,
-        endpoint: Identifier {
-            name: "t",
-            quote: None,
-            span: Some(
-                36..37,
-            ),
-        },
-        url: UriLocation {
-            protocol: "http",
-            name: "127.0.0.1",
-            path: "/",
-            part_prefix: "",
-            connection: Connection {
-                visited_keys: {},
-                conns: {},
-            },
-        },
-        tenant: Identifier {
-            name: "x",
-            quote: None,
-            span: Some(
-                64..65,
-            ),
-        },
-        args: {
-            "jwks_key_file": "https://eks.public/keys",
-            "ssl_cert": "cert.pem",
-        },
-        comment: Some(
-            "share endpoint comment",
-        ),
-    },
-)
-
-
----------- Input ----------
 CREATE SHARE t COMMENT='share comment';
 ---------- Output ---------
 CREATE SHARE t COMMENT = 'share comment'
