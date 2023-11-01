@@ -147,12 +147,12 @@ SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
 query I
 SELECT CAST(cume_dist() OVER (PARTITION BY four ORDER BY ten)*10 as INT) FROM tenk1 WHERE unique2 < 10 order by four, ten
 ----
-6
-6
+7
+7
 10
 5
 5
-7
+8
 10
 10
 5

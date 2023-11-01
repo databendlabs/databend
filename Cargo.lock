@@ -2160,7 +2160,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait",
- "chrono",
  "common-base",
  "common-exception",
  "common-expression",
@@ -3129,7 +3128,6 @@ dependencies = [
  "common-expression",
  "common-grpc",
  "common-management",
- "common-meta-api",
  "common-meta-app",
  "common-meta-kvapi",
  "common-meta-store",

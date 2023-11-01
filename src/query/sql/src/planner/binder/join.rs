@@ -211,6 +211,7 @@ impl Binder {
             marker_index: None,
             from_correlated_subquery: false,
             contain_runtime_filter: false,
+            need_hold_hash_table: false,
         };
         Ok(SExpr::create_binary(
             Arc::new(logical_join.into()),
