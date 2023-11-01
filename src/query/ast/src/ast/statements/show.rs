@@ -44,7 +44,7 @@ impl Display for ShowOptions {
             write!(f, "{}", limit_option)?;
         }
         if let Some(limit) = self.limit {
-            write!(f, " LIMIT = '{}'", limit)?;
+            write!(f, " LIMIT {limit}")?;
         }
         Ok(())
     }
