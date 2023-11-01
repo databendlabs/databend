@@ -13,6 +13,11 @@ SELECT build_bitmap([1,4,5])::String, bitmap_count(build_bitmap([1,2,5])), bitma
 ----
 1,4,5 3 4
 
+query IT
+select build_bitmap(list(cast(uid as uint32)))::String,typeof(uid) from (select 1 uid union all select 2 uid union all select null uid) where uid is not null group by all
+----
+1,2 TINYINT UNSIGNED NULL
+
 query BB
 SELECT bitmap_contains(build_bitmap([1,4,5]), 1), bitmap_contains(build_bitmap([1,4,5]), 2)
 ----
