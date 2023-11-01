@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod build_spill;
+mod build_state;
 mod common;
 mod desc;
 mod hash_join_build_state;

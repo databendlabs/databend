@@ -281,17 +281,20 @@ impl HashJoinProbeState {
                 // Using hashes to probe hash table and converting them in-place to pointers for memory reuse.
                 if Self::check_for_selection(&self.hash_join_state.hash_join_desc.join_type) {
                     probe_state.selection_count = if prefer_early_filtering {
+                        probe_state.probe_with_selection = true;
                         table.hash_table.early_filtering_probe_with_selection(
                             &mut probe_state.hashes,
                             valids,
                             &mut probe_state.selection,
                         )
                     } else {
+                        probe_state.probe_with_selection = false;
                         table.hash_table.probe(&mut probe_state.hashes, valids)
                     };
                     probe_state.key_hash_matched_nums += probe_state.selection_count as u64;
                 } else {
                     // For these join types, we don't use selection: full, left, left single, left anti.
+                    probe_state.probe_with_selection = false;
                     let count = if prefer_early_filtering {
                         table
                             .hash_table

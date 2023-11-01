@@ -23,8 +23,10 @@ use common_expression::Evaluator;
 use common_expression::KeyAccessor;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
+use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use crate::pipelines::processors::transforms::hash_join::build_state::BuildState;
 use crate::pipelines::processors::transforms::hash_join::common::wrap_true_validity;
 use crate::pipelines::processors::transforms::hash_join::HashJoinProbeState;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
@@ -46,156 +48,112 @@ impl HashJoinProbeState {
         let build_indexes = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_indexes.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
-        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
-        let is_probe_projected = probe_state.is_probe_projected;
-        let string_items_buf = &mut probe_state.string_items_buf;
 
         // Build states.
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
 
         // Results.
-        let mut matched_num = 0;
+        let mut matched_idx = 0;
         let mut result_blocks = vec![];
 
-        for idx in selection.iter() {
-            let key = unsafe { keys.key_unchecked(*idx as usize) };
-            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
-            let (mut match_count, mut incomplete_ptr) =
-                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_num, max_block_size);
+        // Probe hash table and generate data blocks.
+        if probe_state.probe_with_selection {
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
 
-            if match_count == 0 {
-                continue;
-            }
+                // Probe hash table and fill build_indexes.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                if match_count == 0 {
+                    continue;
+                }
 
-            for _ in 0..match_count {
-                probe_indexes[matched_num] = *idx;
-                matched_num += 1;
-            }
-            if matched_num >= max_block_size {
-                loop {
-                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-                        return Err(ErrorCode::AbortedQuery(
-                            "Aborted query, because the server is shutting down or the query was killed.",
-                        ));
-                    }
+                // Fill probe_indexes.
+                for _ in 0..match_count {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                    matched_idx += 1;
+                }
 
-                    let probe_block = if is_probe_projected {
-                        Some(DataBlock::take(input, probe_indexes, string_items_buf)?)
-                    } else {
-                        None
-                    };
-                    let build_block = if is_build_projected {
-                        Some(self.hash_join_state.row_space.gather(
-                            build_indexes,
-                            build_columns,
-                            build_columns_data_type,
-                            build_num_rows,
-                            string_items_buf,
-                        )?)
-                    } else {
-                        None
-                    };
-                    let mut result_block =
-                        self.merge_eq_block(probe_block, build_block, matched_num);
-                    if !self.hash_join_state.probe_to_build.is_empty() {
-                        for (index, (is_probe_nullable, is_build_nullable)) in
-                            self.hash_join_state.probe_to_build.iter()
-                        {
-                            let entry = match (is_probe_nullable, is_build_nullable) {
-                                (true, true) | (false, false) => {
-                                    result_block.get_by_offset(*index).clone()
-                                }
-                                (true, false) => {
-                                    result_block.get_by_offset(*index).clone().remove_nullable()
-                                }
-                                (false, true) => wrap_true_validity(
-                                    result_block.get_by_offset(*index),
-                                    result_block.num_rows(),
-                                    &probe_state.true_validity,
-                                ),
-                            };
-                            result_block.add_column(entry);
-                        }
-                    }
-
-                    result_blocks.push(result_block);
-                    matched_num = 0;
-
-                    if incomplete_ptr == 0 {
-                        break;
-                    }
+                while matched_idx == max_block_size {
+                    result_blocks.push(Self::new_inner_data_block(
+                        &self,
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        probe_state,
+                        build_state,
+                    )?);
+                    matched_idx = 0;
                     (match_count, incomplete_ptr) = hash_table.next_probe(
                         key,
                         incomplete_ptr,
                         build_indexes_ptr,
-                        matched_num,
+                        matched_idx,
                         max_block_size,
                     );
-                    if match_count == 0 {
-                        break;
-                    }
-
                     for _ in 0..match_count {
-                        probe_indexes[matched_num] = *idx;
-                        matched_num += 1;
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = *idx };
+                        matched_idx += 1;
                     }
+                }
+            }
+        } else {
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
 
-                    if matched_num < max_block_size {
-                        break;
+                // Probe hash table and fill build_indexes.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                if match_count == 0 {
+                    continue;
+                }
+
+                // Fill probe_indexes.
+                for _ in 0..match_count {
+                    unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                    matched_idx += 1;
+                }
+
+                while matched_idx == max_block_size {
+                    result_blocks.push(Self::new_inner_data_block(
+                        &self,
+                        matched_idx,
+                        input,
+                        probe_indexes,
+                        build_indexes,
+                        probe_state,
+                        build_state,
+                    )?);
+                    matched_idx = 0;
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        matched_idx,
+                        max_block_size,
+                    );
+                    for _ in 0..match_count {
+                        unsafe { *probe_indexes.get_unchecked_mut(matched_idx) = idx as u32 };
+                        matched_idx += 1;
                     }
                 }
             }
         }
 
-        if matched_num > 0 {
-            let probe_block = if is_probe_projected {
-                Some(DataBlock::take(
-                    input,
-                    &probe_indexes[0..matched_num],
-                    string_items_buf,
-                )?)
-            } else {
-                None
-            };
-            let build_block = if is_build_projected {
-                Some(self.hash_join_state.row_space.gather(
-                    &build_indexes[0..matched_num],
-                    build_columns,
-                    build_columns_data_type,
-                    build_num_rows,
-                    string_items_buf,
-                )?)
-            } else {
-                None
-            };
-            let mut result_block = self.merge_eq_block(probe_block, build_block, matched_num);
-            if !self.hash_join_state.probe_to_build.is_empty() {
-                for (index, (is_probe_nullable, is_build_nullable)) in
-                    self.hash_join_state.probe_to_build.iter()
-                {
-                    let entry = match (is_probe_nullable, is_build_nullable) {
-                        (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
-                        (true, false) => {
-                            result_block.get_by_offset(*index).clone().remove_nullable()
-                        }
-                        (false, true) => wrap_true_validity(
-                            result_block.get_by_offset(*index),
-                            result_block.num_rows(),
-                            &probe_state.true_validity,
-                        ),
-                    };
-                    result_block.add_column(entry);
-                }
-            }
-
-            result_blocks.push(result_block);
+        if matched_idx > 0 {
+            result_blocks.push(Self::new_inner_data_block(
+                &self,
+                matched_idx,
+                input,
+                probe_indexes,
+                build_indexes,
+                probe_state,
+                build_state,
+            )?);
         }
 
         match &self.hash_join_state.hash_join_desc.other_predicate {
@@ -228,5 +186,61 @@ impl HashJoinProbeState {
                 Ok(filtered_blocks)
             }
         }
+    }
+
+    #[inline]
+    fn new_inner_data_block(
+        &self,
+        matched_idx: usize,
+        input: &DataBlock,
+        probe_indexes: &[u32],
+        build_indexes: &[RowPtr],
+        probe_state: &mut ProbeState,
+        build_state: &BuildState,
+    ) -> Result<DataBlock> {
+        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+
+        let probe_block = if probe_state.is_probe_projected {
+            Some(DataBlock::take(
+                input,
+                &probe_indexes[0..matched_idx],
+                &mut probe_state.string_items_buf,
+            )?)
+        } else {
+            None
+        };
+        let build_block = if build_state.is_build_projected {
+            Some(self.hash_join_state.row_space.gather(
+                &build_indexes[0..matched_idx],
+                &build_state.build_columns,
+                &build_state.build_columns_data_type,
+                &build_state.build_num_rows,
+                &mut probe_state.string_items_buf,
+            )?)
+        } else {
+            None
+        };
+        let mut result_block = self.merge_eq_block(probe_block, build_block, matched_idx);
+        if !self.hash_join_state.probe_to_build.is_empty() {
+            for (index, (is_probe_nullable, is_build_nullable)) in
+                self.hash_join_state.probe_to_build.iter()
+            {
+                let entry = match (is_probe_nullable, is_build_nullable) {
+                    (true, true) | (false, false) => result_block.get_by_offset(*index).clone(),
+                    (true, false) => result_block.get_by_offset(*index).clone().remove_nullable(),
+                    (false, true) => wrap_true_validity(
+                        result_block.get_by_offset(*index),
+                        result_block.num_rows(),
+                        &probe_state.true_validity,
+                    ),
+                };
+                result_block.add_column(entry);
+            }
+        }
+        Ok(result_block)
     }
 }

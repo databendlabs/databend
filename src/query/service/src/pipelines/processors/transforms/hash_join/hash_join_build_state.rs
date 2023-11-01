@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use core::sync::atomic::AtomicBool;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicU8;
@@ -177,18 +178,15 @@ impl HashJoinBuildState {
         {
             // Acquire lock in current scope
             let _lock = self.mutex.lock();
+            let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
             if self.hash_join_state.need_outer_scan() {
-                let outer_scan_map = unsafe { &mut *self.hash_join_state.outer_scan_map.get() };
-                outer_scan_map.push(block_outer_scan_map);
+                build_state.outer_scan_map.push(block_outer_scan_map);
             }
             if self.hash_join_state.need_mark_scan() {
-                let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
-                mark_scan_map.push(block_mark_scan_map);
+                build_state.mark_scan_map.push(block_mark_scan_map);
             }
-            let build_num_rows = unsafe { &mut *self.hash_join_state.build_num_rows.get() };
-            *build_num_rows += data_block.num_rows();
-            let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
-            chunks.push(data_block);
+            build_state.build_num_rows += data_block.num_rows();
+            build_state.chunks.push(data_block);
         }
         Ok(())
     }
@@ -218,7 +216,8 @@ impl HashJoinBuildState {
             }
 
             // Get the number of rows of the build side.
-            let build_num_rows = unsafe { *self.hash_join_state.build_num_rows.get() };
+            let build_num_rows =
+                unsafe { (*self.hash_join_state.build_state.get()).build_num_rows };
 
             if self.hash_join_state.hash_join_desc.join_type == JoinType::Cross {
                 return Ok(());
@@ -435,7 +434,7 @@ impl HashJoinBuildState {
             }};
         }
 
-        let chunks = unsafe { &mut *self.hash_join_state.chunks.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
         let mut has_null = false;
         for chunk_index in task.0..task.1 {
             if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
@@ -444,7 +443,7 @@ impl HashJoinBuildState {
                 ));
             }
 
-            let chunk = &mut chunks[chunk_index];
+            let chunk = &mut build_state.chunks[chunk_index];
 
             let mut _nullable_chunk = None;
             let evaluator = if matches!(
@@ -491,9 +490,7 @@ impl HashJoinBuildState {
                 block_entries.push(chunk.get_by_offset(index).clone());
             }
             if block_entries.is_empty() {
-                self.hash_join_state
-                    .is_build_projected
-                    .store(false, Ordering::SeqCst);
+                build_state.is_build_projected = false;
             }
             *chunk = DataBlock::new(block_entries, chunk.num_rows());
 
@@ -575,10 +572,12 @@ impl HashJoinBuildState {
             .hash_table_builders
             .fetch_sub(1, Ordering::Relaxed);
         if old_count == 1 {
-            info!("finish build hash table with {} rows", unsafe {
-                *self.hash_join_state.build_num_rows.get()
-            });
-            let data_blocks = unsafe { &mut *self.hash_join_state.chunks.get() };
+            let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+            info!(
+                "finish build hash table with {} rows",
+                build_state.build_num_rows
+            );
+            let data_blocks = &mut build_state.chunks;
             if !data_blocks.is_empty()
                 && self.hash_join_state.hash_join_desc.join_type != JoinType::Cross
             {
@@ -609,11 +608,17 @@ impl HashJoinBuildState {
                         )
                     })
                     .collect();
-                let build_columns_data_type =
-                    unsafe { &mut *self.hash_join_state.build_columns_data_type.get() };
-                let build_columns = unsafe { &mut *self.hash_join_state.build_columns.get() };
-                *build_columns_data_type = columns_data_type;
-                *build_columns = columns;
+                build_state.build_columns_data_type = columns_data_type;
+                build_state.build_columns = columns;
+                if self.hash_join_state.hash_join_desc.join_type == JoinType::RightSingle {
+                    build_state.right_single_scan_map = build_state
+                        .outer_scan_map
+                        .iter_mut()
+                        .map(|scan_map| unsafe {
+                            std::mem::transmute::<*mut bool, *mut AtomicBool>(scan_map.as_mut_ptr())
+                        })
+                        .collect::<Vec<_>>();
+                }
             }
             self.hash_join_state
                 .build_done_watcher

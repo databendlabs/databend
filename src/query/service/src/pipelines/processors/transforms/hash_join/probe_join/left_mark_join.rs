@@ -58,50 +58,87 @@ impl HashJoinProbeState {
         let build_index = &mut probe_state.build_indexes;
         let build_indexes_ptr = build_index.as_mut_ptr();
         let pointers = probe_state.hashes.as_slice();
-        let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
 
         // Build states.
         // If find join partner, set the marker to true.
-        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let mark_scan_map = &mut build_state.mark_scan_map;
 
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
+        let mut matched_idx = 0;
 
-        let mut matched_num = 0;
-        for idx in selection.iter() {
-            let key = unsafe { keys.key_unchecked(*idx as usize) };
-            let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
-            let (mut match_count, mut incomplete_ptr) =
-                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_num, max_block_size);
-
-            if match_count == 0 {
-                continue;
-            }
-
-            matched_num += match_count;
-            loop {
-                for probed_row in &build_index[0..matched_num] {
-                    mark_scan_map[probed_row.chunk_index as usize][probed_row.row_index as usize] =
-                        MARKER_KIND_TRUE;
-                }
-                matched_num = 0;
-                if incomplete_ptr == 0 {
-                    break;
-                }
-                (match_count, incomplete_ptr) = hash_table.next_probe(
-                    key,
-                    incomplete_ptr,
-                    build_indexes_ptr,
-                    matched_num,
-                    max_block_size,
-                );
+        // Probe hash table and update `mark_scan_map`.
+        if probe_state.probe_with_selection {
+            let selection = &probe_state.selection.as_slice()[0..probe_state.selection_count];
+            for idx in selection.iter() {
+                let key = unsafe { keys.key_unchecked(*idx as usize) };
+                let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
+    
+                // Probe hash table and fill build_indexes.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
                 if match_count == 0 {
-                    break;
+                    continue;
                 }
-                matched_num += match_count;
+    
+                matched_idx += match_count;
+    
+                while matched_idx == max_block_size {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+                    for probed_row in &build_index[0..matched_idx] {
+                        unsafe {
+                            *mark_scan_map.get_unchecked_mut(probed_row.chunk_index as usize).get_unchecked_mut(probed_row.row_index as usize) = MARKER_KIND_TRUE;
+                        }
+                    }
+                    matched_idx = 0;
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        matched_idx,
+                        max_block_size,
+                    );
+                    matched_idx += match_count;
+                }
+            }
+        } else {
+            for idx in 0..input.num_rows() {
+                let key = unsafe { keys.key_unchecked(idx) };
+                let ptr = unsafe { *pointers.get_unchecked(idx) };
+    
+                // Probe hash table and fill build_indexes.
+                let (mut match_count, mut incomplete_ptr) =
+                    hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
+                if match_count == 0 {
+                    continue;
+                }
+    
+                matched_idx += match_count;
+    
+                while matched_idx == max_block_size {
+                    if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
+                        return Err(ErrorCode::AbortedQuery(
+                            "Aborted query, because the server is shutting down or the query was killed.",
+                        ));
+                    }
+                    for probed_row in &build_index[0..matched_idx] {
+                        unsafe {
+                            *mark_scan_map.get_unchecked_mut(probed_row.chunk_index as usize).get_unchecked_mut(probed_row.row_index as usize) = MARKER_KIND_TRUE;
+                        }
+                    }
+                    matched_idx = 0;
+                    (match_count, incomplete_ptr) = hash_table.next_probe(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        matched_idx,
+                        max_block_size,
+                    );
+                    matched_idx += match_count;
+                }
             }
         }
 
@@ -142,15 +179,8 @@ impl HashJoinProbeState {
         let string_items_buf = &mut probe_state.string_items_buf;
 
         // Build states.
-        let build_columns = unsafe { &*self.hash_join_state.build_columns.get() };
-        let build_columns_data_type =
-            unsafe { &*self.hash_join_state.build_columns_data_type.get() };
-        let build_num_rows = unsafe { &*self.hash_join_state.build_num_rows.get() };
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
-        let mark_scan_map = unsafe { &mut *self.hash_join_state.mark_scan_map.get() };
+        let build_state = unsafe { &mut *self.hash_join_state.build_state.get() };
+        let mark_scan_map = &mut build_state.mark_scan_map;
         let _mark_scan_map_lock = self.mark_scan_map_lock.lock();
 
         let other_predicate = self
@@ -160,28 +190,22 @@ impl HashJoinProbeState {
             .as_ref()
             .unwrap();
 
-        if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
-            return Err(ErrorCode::AbortedQuery(
-                "Aborted query, because the server is shutting down or the query was killed.",
-            ));
-        }
-
-        let mut matched_num = 0;
+        let mut matched_idx = 0;
         for idx in selection.iter() {
             let key = unsafe { keys.key_unchecked(*idx as usize) };
             let ptr = unsafe { *pointers.get_unchecked(*idx as usize) };
             let (mut match_count, mut incomplete_ptr) =
-                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_num, max_block_size);
+                hash_table.next_probe(key, ptr, build_indexes_ptr, matched_idx, max_block_size);
 
             if match_count == 0 {
                 continue;
             }
 
             for _ in 0..match_count {
-                probe_indexes[matched_num] = *idx;
-                matched_num += 1;
+                probe_indexes[matched_idx] = *idx;
+                matched_idx += 1;
             }
-            if matched_num >= max_block_size {
+            if matched_idx == max_block_size {
                 loop {
                     if self.hash_join_state.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(

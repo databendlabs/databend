@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic::Ordering;
-
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -73,7 +71,7 @@ impl HashJoinProbeState {
                     .other_predicate
                     .is_none()
                 {
-                    self.probe_right_semi_anti_join::<_>(keys, hash_table, probe_state)
+                    self.probe_right_semi_anti_join::<_>(input, keys, hash_table, probe_state)
                 } else {
                     self.probe_right_semi_anti_join_with_conjunct::<_>(
                         input,
@@ -148,10 +146,7 @@ impl HashJoinProbeState {
             return Ok(vec![input]);
         }
         let input_num_rows = input.num_rows();
-        let is_build_projected = self
-            .hash_join_state
-            .is_build_projected
-            .load(Ordering::Relaxed);
+        let build_state = unsafe { &*self.hash_join_state.build_state.get() };
         let probe_block = if is_probe_projected {
             if matches!(
                 self.hash_join_state.hash_join_desc.join_type,
@@ -169,7 +164,7 @@ impl HashJoinProbeState {
         } else {
             None
         };
-        let build_block = if is_build_projected {
+        let build_block = if build_state.is_build_projected {
             let null_build_block = DataBlock::new(
                 self.hash_join_state
                     .row_space
