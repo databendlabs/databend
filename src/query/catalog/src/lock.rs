@@ -35,15 +35,7 @@ pub trait Lock: Sync + Send {
 
     fn get_catalog(&self) -> &str;
 
-    fn get_expire_secs(&self) -> u64;
-
     fn get_table_id(&self) -> u64;
-
-    fn get_user(&self) -> String;
-
-    fn get_node(&self) -> String;
-
-    fn get_session_id(&self) -> String;
 
     fn watch_delete_key(&self, revision: u64) -> String;
 
@@ -61,13 +53,19 @@ pub trait LockExt: Lock {
         Ok(!reply.is_empty())
     }
 
-    fn gen_create_lock_req(&self) -> CreateLockRevReq {
+    fn gen_create_lock_req(
+        &self,
+        user: String,
+        node: String,
+        session_id: String,
+        expire_secs: u64,
+    ) -> CreateLockRevReq {
         CreateLockRevReq {
             lock_key: self.gen_lock_key(),
-            user: self.get_user(),
-            node: self.get_node(),
-            session_id: self.get_session_id(),
-            expire_at: Utc::now().timestamp() as u64 + self.get_expire_secs(),
+            user,
+            node,
+            session_id,
+            expire_at: Utc::now().timestamp() as u64 + expire_secs,
         }
     }
 
@@ -84,12 +82,17 @@ pub trait LockExt: Lock {
         }
     }
 
-    fn gen_extend_lock_req(&self, revision: u64, acquire_lock: bool) -> ExtendLockRevReq {
+    fn gen_extend_lock_req(
+        &self,
+        revision: u64,
+        expire_secs: u64,
+        acquire_lock: bool,
+    ) -> ExtendLockRevReq {
         ExtendLockRevReq {
             lock_key: self.gen_lock_key(),
             revision,
             acquire_lock,
-            expire_at: Utc::now().timestamp() as u64 + self.get_expire_secs(),
+            expire_at: Utc::now().timestamp() as u64 + expire_secs,
         }
     }
 }

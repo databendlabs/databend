@@ -123,8 +123,7 @@ impl Interpreter for DeleteInterpreter {
         tbl.check_mutable()?;
 
         // Add table lock.
-        let table_lock =
-            LockManager::create_table_lock(self.ctx.clone(), tbl.get_table_info().clone())?;
+        let table_lock = LockManager::create_table_lock(tbl.get_table_info().clone())?;
         let lock_guard = table_lock.try_lock(self.ctx.clone()).await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {

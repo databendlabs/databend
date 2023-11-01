@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_channel::Sender;
-use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::time::timeout;
 use common_base::base::GlobalInstance;
 use common_base::runtime::GlobalIORuntime;
@@ -36,13 +35,15 @@ use common_users::UserApiProvider;
 use futures_util::StreamExt;
 use parking_lot::RwLock;
 
+use crate::metrics_inc_shutdown_lock_holder_nums;
+use crate::metrics_inc_start_lock_holder_nums;
 use crate::record_acquired_lock_nums;
 use crate::record_created_lock_nums;
 use crate::table_lock::TableLock;
 use crate::LockHolder;
 
 pub struct LockManager {
-    active_locks: Arc<RwLock<HashMap<u64, Arc<Mutex<LockHolder>>>>>,
+    active_locks: Arc<RwLock<HashMap<u64, Arc<LockHolder>>>>,
     tx: Sender<u64>,
 }
 
@@ -55,12 +56,9 @@ impl LockManager {
             let active_locks = lock_manager.active_locks.clone();
             async move {
                 while let Ok(revision) = rx.recv().await {
-                    let lock = active_locks.write().remove(&revision);
-                    if let Some(lock) = lock {
-                        let mut guard = lock.lock().await;
-                        if let Err(cause) = guard.shutdown().await {
-                            log::warn!("Cannot release table lock, cause {:?}", cause);
-                        }
+                    metrics_inc_shutdown_lock_holder_nums();
+                    if let Some(lock) = active_locks.write().remove(&revision) {
+                        lock.shutdown();
                     }
                 }
             }
@@ -73,43 +71,43 @@ impl LockManager {
         GlobalInstance::get()
     }
 
-    pub fn create_table_lock(
-        ctx: Arc<dyn TableContext>,
-        table_info: TableInfo,
-    ) -> Result<TableLock> {
+    pub fn create_table_lock(table_info: TableInfo) -> Result<TableLock> {
         let lock_mgr = LockManager::instance();
-        let user = ctx.get_current_user()?.name;
-        let node = ctx.get_cluster().local_id.clone();
-        let session_id = ctx.get_current_session_id();
-        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
-        Ok(TableLock::create(
-            lock_mgr,
-            table_info,
-            user,
-            node,
-            session_id,
-            expire_secs,
-        ))
+        Ok(TableLock::create(lock_mgr, table_info))
     }
 
+    /// The requested lock returns a global incremental revision, listing all existing revisions,
+    /// and if the current revision is the smallest, the lock is acquired successfully.
+    /// Otherwise, listen to the deletion event of the previous revision in a loop until get lock success.
+    ///
+    /// NOTICE: the lock holder is not 100% reliable.
+    /// E.g., there is a very small probability of a lock renewal failure.
+    /// There is also a possibility of failure in deleting a lease.
     #[async_backtrace::framed]
     pub async fn try_lock<T: Lock + ?Sized>(
         self: &Arc<Self>,
         ctx: Arc<dyn TableContext>,
         lock: &T,
     ) -> Result<Option<LockGuard>> {
+        let user = ctx.get_current_user()?.name;
+        let node = ctx.get_cluster().local_id.clone();
+        let session_id = ctx.get_current_session_id();
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
+
         let catalog = ctx.get_catalog(lock.get_catalog()).await?;
 
         // get a new table lock revision.
         let res = catalog
-            .create_lock_revision(lock.gen_create_lock_req())
+            .create_lock_revision(lock.gen_create_lock_req(user, node, session_id, expire_secs))
             .await?;
         let revision = res.revision;
         // metrics.
         record_created_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
 
-        let mut lock_holder = LockHolder::create();
-        lock_holder.start(catalog.clone(), lock, revision).await?;
+        let lock_holder = Arc::new(LockHolder::default());
+        lock_holder
+            .start(catalog.clone(), lock, revision, expire_secs)
+            .await?;
 
         self.insert_lock(revision, lock_holder);
         let guard = LockGuard::new(self.clone(), revision);
@@ -131,7 +129,7 @@ impl LockManager {
 
             if position == 0 {
                 // The lock is acquired by current session.
-                let extend_table_lock_req = lock.gen_extend_lock_req(revision, true);
+                let extend_table_lock_req = lock.gen_extend_lock_req(revision, expire_secs, true);
                 catalog.extend_lock_revision(extend_table_lock_req).await?;
                 // metrics.
                 record_acquired_lock_nums(lock.lock_type(), lock.get_table_id(), 1);
@@ -172,10 +170,13 @@ impl LockManager {
         Ok(Some(guard))
     }
 
-    fn insert_lock(&self, revision: u64, lock_holder: LockHolder) {
+    fn insert_lock(&self, revision: u64, lock_holder: Arc<LockHolder>) {
         let mut active_locks = self.active_locks.write();
-        let prev = active_locks.insert(revision, Arc::new(Mutex::new(lock_holder)));
+        let prev = active_locks.insert(revision, lock_holder);
         assert!(prev.is_none());
+
+        // metrics.
+        metrics_inc_start_lock_holder_nums();
     }
 }
 

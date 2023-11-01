@@ -127,7 +127,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let table_info = table.get_table_info().clone();
 
             // check if the table is locked.
-            let table_lock = LockManager::create_table_lock(self.ctx.clone(), table_info.clone())?;
+            let table_lock = LockManager::create_table_lock(table_info.clone())?;
             if table_lock.check_lock(catalog.clone()).await? {
                 return Err(ErrorCode::TableAlreadyLocked(format!(
                     "table '{}' is locked, please retry recluster later",

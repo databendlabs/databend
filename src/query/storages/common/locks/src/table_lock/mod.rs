@@ -29,29 +29,13 @@ use crate::LockManager;
 pub struct TableLock {
     lock_mgr: Arc<LockManager>,
     table_info: TableInfo,
-
-    user: String,
-    node: String,
-    session_id: String,
-    expire_secs: u64,
 }
 
 impl TableLock {
-    pub fn create(
-        lock_mgr: Arc<LockManager>,
-        table_info: TableInfo,
-        user: String,
-        node: String,
-        session_id: String,
-        expire_secs: u64,
-    ) -> Self {
+    pub fn create(lock_mgr: Arc<LockManager>, table_info: TableInfo) -> Self {
         TableLock {
             lock_mgr,
             table_info,
-            user,
-            node,
-            session_id,
-            expire_secs,
         }
     }
 }
@@ -72,24 +56,8 @@ impl Lock for TableLock {
         self.table_info.catalog()
     }
 
-    fn get_expire_secs(&self) -> u64 {
-        self.expire_secs
-    }
-
     fn get_table_id(&self) -> u64 {
         self.table_info.ident.table_id
-    }
-
-    fn get_user(&self) -> String {
-        self.user.clone()
-    }
-
-    fn get_node(&self) -> String {
-        self.node.clone()
-    }
-
-    fn get_session_id(&self) -> String {
-        self.session_id.clone()
     }
 
     fn watch_delete_key(&self, revision: u64) -> String {
