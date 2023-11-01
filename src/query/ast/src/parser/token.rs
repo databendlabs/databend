@@ -283,8 +283,15 @@ pub enum TokenKind {
     #[token("||/")]
     CubeRoot,
     /// Placeholder used in prepared stmt
+    /// Also used as JSON operator.
     #[token("?")]
     Placeholder,
+    /// Used as JSON operator.
+    #[token("?|")]
+    QuestionOr,
+    /// Used as JSON operator.
+    #[token("?&")]
+    QuestionAnd,
 
     // Keywords
     //
@@ -1113,6 +1120,8 @@ impl TokenKind {
                 | CubeRoot
                 | L2DISTANCE
                 | Placeholder
+                | QuestionOr
+                | QuestionAnd
                 | EOI
         )
     }
