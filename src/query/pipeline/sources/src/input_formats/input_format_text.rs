@@ -558,6 +558,7 @@ pub struct BlockBuilder<T> {
     pub num_rows: usize,
     pub projection: Option<Vec<usize>>,
     pub file_status: FileStatus,
+    pub ident_case_sensitive: bool,
     phantom: PhantomData<T>,
 }
 
@@ -581,13 +582,14 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
         let projection = ctx.projection.clone();
 
         BlockBuilder {
-            ctx,
+            ident_case_sensitive: ctx.file_format_options_ext.ident_case_sensitive,
             mutable_columns: columns,
             num_rows: 0,
             field_decoder,
             phantom: PhantomData,
             projection,
             file_status: Default::default(),
+            ctx,
         }
     }
 

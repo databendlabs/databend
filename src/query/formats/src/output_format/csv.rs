@@ -20,7 +20,6 @@ use common_meta_app::principal::CsvFileFormatParams;
 
 use crate::field_encoder::write_csv_string;
 use crate::field_encoder::FieldEncoderCSV;
-use crate::field_encoder::FieldEncoderRowBased;
 use crate::output_format::OutputFormat;
 use crate::FileFormatOptionsExt;
 
@@ -42,7 +41,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> CSVOutputFormatBase<WITH_NA
         params: &CsvFileFormatParams,
         options_ext: &FileFormatOptionsExt,
     ) -> Self {
-        let field_encoder = FieldEncoderCSV::create(params, options_ext);
+        let field_encoder = FieldEncoderCSV::create_csv(params, options_ext);
         Self {
             schema,
             field_encoder,
@@ -90,8 +89,7 @@ impl<const WITH_NAMES: bool, const WITH_TYPES: bool> OutputFormat
                 if col_index != 0 {
                     buf.push(fd);
                 }
-                self.field_encoder
-                    .write_field(column, row_index, &mut buf, false);
+                self.field_encoder.write_field(column, row_index, &mut buf);
             }
             buf.extend_from_slice(rd)
         }

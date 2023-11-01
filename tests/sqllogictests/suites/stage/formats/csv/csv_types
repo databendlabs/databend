@@ -37,3 +37,19 @@ select * from iv
 ----
 1 invalidvariant
 2 {"k":"v"}
+
+statement ok
+DROP TABLE if exists books;
+
+statement ok
+CREATE TABLE books ( title VARCHAR NULL, author VARCHAR NULL, date VARCHAR NULL, publish_time TIMESTAMP NULL );
+
+query 
+copy into books from @data/csv/books.csv file_format = (type = 'csv' null_display= 'NULL')
+----
+csv/books.csv 3 0 NULL NULL
+
+query 
+select count(), count_if(title is null), count_if(author is null), count_if(date is null), count_if(publish_time is null) from books
+----
+3 0 0 1 0

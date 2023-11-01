@@ -31,4 +31,5 @@ pub use file_format_type::parse_timezone;
 pub use file_format_type::FileFormatOptionsExt;
 pub use file_format_type::FileFormatTypeExt;
 
-pub use crate::common_settings::CommonSettings;
+pub use crate::common_settings::InputCommonSettings;
+pub use crate::common_settings::OutputCommonSettings;
