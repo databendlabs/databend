@@ -1110,7 +1110,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ STAGE ~ ( IF ~ ^NOT ~ ^EXISTS )?
             ~ ( #stage_name )
-            ~ ( URL ~ ^"=" ~ ^#uri_location )?
+            ~ ( (URL ~ ^"=")? ~ #uri_location )?
             ~ ( #file_format_clause )?
             ~ ( ON_ERROR ~ ^"=" ~ ^#ident )?
             ~ ( SIZE_LIMIT ~ ^"=" ~ ^#literal_u64 )?
@@ -1132,7 +1132,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Ok(Statement::CreateStage(CreateStageStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 stage_name: stage.to_string(),
-                location: url_opt.map(|v| v.2),
+                location: url_opt.map(|(_, location)| location),
                 file_format_options: file_format_opt.unwrap_or_default(),
                 on_error: on_error_opt.map(|v| v.2.to_string()).unwrap_or_default(),
                 size_limit: size_limit_opt.map(|v| v.2 as usize).unwrap_or_default(),
@@ -1220,12 +1220,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ SHARE ~ ENDPOINT ~ ( IF ~ ^NOT ~ ^EXISTS )?
              ~ #ident
-             ~ URL ~ "=" ~ #share_endpoint_uri_location
+             ~ (URL ~ ^"=")? ~ #share_endpoint_uri_location
              ~ TENANT ~ "=" ~ #ident
              ~ ( ARGS ~ ^"=" ~ ^#options)?
              ~ ( COMMENT ~ ^"=" ~ ^#literal_string)?
         },
-        |(_, _, _, opt_if_not_exists, endpoint, _, _, url, _, _, tenant, args_opt, comment_opt)| {
+        |(_, _, _, opt_if_not_exists, endpoint, _, url, _, _, tenant, args_opt, comment_opt)| {
             Statement::CreateShareEndpoint(CreateShareEndpointStmt {
                 if_not_exists: opt_if_not_exists.is_some(),
                 endpoint,

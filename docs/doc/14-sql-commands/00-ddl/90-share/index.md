@@ -49,7 +49,7 @@ These steps create a share endpoint and a database using the share created in [S
 
 ```sql
 -- Create a share endpoint named "to_share"
-CREATE SHARE ENDPOINT to_share URL = 'http://<shared-tenant-endpoint>:<port>' TENANT = <shared-tenant-name>;
+CREATE SHARE ENDPOINT to_share 'http://<shared-tenant-endpoint>:<port>' TENANT = <shared-tenant-name>;
 ```
 
 2. Create a database from the share using the [CREATE DATABASE](../10-database/ddl-create-database.md) command.

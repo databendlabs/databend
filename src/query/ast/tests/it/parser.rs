@@ -94,7 +94,6 @@ fn test_statement() {
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
-        r#"create table if not exists a.b (a int) URL = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';"#,
@@ -170,6 +169,7 @@ fn test_statement() {
         r#"insert into table t select * from t2;"#,
         r#"select parse_json('{"k1": [0, 1, 2]}').k1[0];"#,
         r#"CREATE STAGE ~"#,
+        r#"CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')"#,
         r#"CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')"#,
         r#"DROP STAGE abc"#,
@@ -418,6 +418,7 @@ fn test_statement() {
         r#"PRESIGN UPLOAD @my_stage/path/to/file EXPIRE=7200 CONTENT_TYPE='application/octet-stream'"#,
         r#"PRESIGN UPLOAD @my_stage/path/to/file CONTENT_TYPE='application/octet-stream' EXPIRE=7200"#,
         r#"CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
+        r#"CREATE SHARE ENDPOINT IF NOT EXISTS t 'http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';"#,
         r#"CREATE SHARE t COMMENT='share comment';"#,
         r#"CREATE SHARE IF NOT EXISTS t;"#,
         r#"DROP SHARE a;"#,
@@ -514,7 +515,6 @@ fn test_statement_error() {
         r#"create table a (c decimal)"#,
         r#"create table a (b tuple(c int, uint64));"#,
         r#"CREATE TABLE t(c1 NULLABLE(int) NOT NULL);"#,
-        r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' URL = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
         r#"drop table if a.b"#,
         r#"truncate table a.b.c.d"#,
         r#"truncate a"#,

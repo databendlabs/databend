@@ -1309,76 +1309,7 @@ CreateTable(
 ---------- Input ----------
 create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) URL = 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
----------- AST ------------
-CreateTable(
-    CreateTableStmt {
-        if_not_exists: true,
-        catalog: None,
-        database: Some(
-            Identifier {
-                name: "a",
-                quote: None,
-                span: Some(
-                    27..28,
-                ),
-            },
-        ),
-        table: Identifier {
-            name: "b",
-            quote: None,
-            span: Some(
-                29..30,
-            ),
-        },
-        source: Some(
-            Columns(
-                [
-                    ColumnDefinition {
-                        name: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                32..33,
-                            ),
-                        },
-                        data_type: Int32,
-                        expr: None,
-                        comment: None,
-                        nullable_constraint: None,
-                    },
-                ],
-            ),
-        ),
-        engine: None,
-        uri_location: Some(
-            UriLocation {
-                protocol: "s3",
-                name: "testbucket",
-                path: "/admin/data/",
-                part_prefix: "",
-                connection: Connection {
-                    visited_keys: {},
-                    conns: {
-                        "aws_key_id": "minioadmin",
-                        "aws_secret_key": "minioadmin",
-                        "endpoint_url": "http://127.0.0.1:9900",
-                    },
-                },
-            },
-        ),
-        cluster_by: [],
-        table_options: {},
-        as_query: None,
-        transient: false,
-    },
-)
-
-
----------- Input ----------
-create table if not exists a.b (a int) URL = 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');
----------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) URL = 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -1449,7 +1380,7 @@ create table if not exists a.b (a int) 's3://testbucket/admin/data/'
              connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900')
              location_prefix = 'db';
 ---------- Output ---------
-CREATE TABLE IF NOT EXISTS a.b (a Int32) URL = 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
+CREATE TABLE IF NOT EXISTS a.b (a Int32) 's3://testbucket/admin/data/' LOCATION_PREFIX = 'db' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********', endpoint_url = '********' )
 ---------- AST ------------
 CreateTable(
     CreateTableStmt {
@@ -7085,9 +7016,46 @@ CreateStage(
 
 
 ---------- Input ----------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
+---------- Output ---------
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+---------- AST ------------
+CreateStage(
+    CreateStageStmt {
+        if_not_exists: true,
+        stage_name: "test_stage",
+        location: Some(
+            UriLocation {
+                protocol: "s3",
+                name: "load",
+                path: "/files/",
+                part_prefix: "",
+                connection: Connection {
+                    visited_keys: {},
+                    conns: {
+                        "aws_key_id": "1a2b3c",
+                        "aws_secret_key": "4x5y6z",
+                    },
+                },
+            },
+        ),
+        file_format_options: {
+            "compression": "GZIP",
+            "record_delimiter": ",",
+            "type": "CSV",
+        },
+        on_error: "",
+        size_limit: 0,
+        validation_mode: "",
+        comments: "",
+    },
+)
+
+
+---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='s3://load/files/' credentials=(aws_key_id='1a2b3c', aws_secret_key='4x5y6z') file_format=(type = CSV, compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = URL = 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 's3://load/files/' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -7124,7 +7092,7 @@ CreateStage(
 ---------- Input ----------
 CREATE STAGE IF NOT EXISTS test_stage url='azblob://load/files/' connection=(account_name='1a2b3c' account_key='4x5y6z') file_format=(type = CSV compression = GZIP record_delimiter=',')
 ---------- Output ---------
-CREATE STAGE IF NOT EXISTS test_stage URL = URL = 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
+CREATE STAGE IF NOT EXISTS test_stage 'azblob://load/files/' CONNECTION = ( account_key = '********', account_name = '********' ) FILE_FORMAT = (compression = 'GZIP', record_delimiter = ',', type = 'CSV' )
 ---------- AST ------------
 CreateStage(
     CreateStageStmt {
@@ -9357,7 +9325,7 @@ COPY INTO mytable
                 size_limit=10
                 max_files=10;
 ---------- Output ---------
-COPY INTO mytable FROM URL = 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9422,7 +9390,7 @@ COPY INTO mytable
                 size_limit=10
                 max_files=3000;
 ---------- Output ---------
-COPY INTO mytable FROM URL = 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 MAX_FILES = 2000 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9489,7 +9457,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM URL = 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9558,7 +9526,7 @@ COPY INTO mytable
                     skip_header = 1
                 );
 ---------- Output ---------
-COPY INTO mytable FROM URL = 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -9617,7 +9585,7 @@ CopyIntoTable(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM URL = 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9668,7 +9636,7 @@ CopyIntoTable(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM URL = 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1/' PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -9782,7 +9750,7 @@ COPY INTO 's3://mybucket/data.csv'
                     skip_header = 1
                 )
 ---------- Output ---------
-COPY INTO URL = 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SINGLE = false MAX_FILE_SIZE= 0
 ---------- AST ------------
 CopyIntoLocation(
@@ -9916,7 +9884,7 @@ COPY INTO mytable
                 )
                 size_limit=10;
 ---------- Output ---------
-COPY INTO mytable FROM URL = 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id = '********', aws_secret_key = '********' ) FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -10149,7 +10117,7 @@ COPY INTO mytable
                 size_limit=10
                 disable_variant_check=true;
 ---------- Output ---------
-COPY INTO mytable FROM URL = 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
+COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = (field_delimiter = ',', record_delimiter = '
 ', skip_header = '1', type = 'CSV') SIZE_LIMIT = 10 PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
@@ -10212,7 +10180,7 @@ COPY INTO books FROM 's3://databend/books.csv'
                 )
                 FILE_FORMAT = (type = CSV);
 ---------- Output ---------
-COPY INTO books FROM URL = 's3://databend/books.csv' CONNECTION = ( access_key_id = '********', endpoint_url = '********', region = '********', secret_access_key = '********' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
+COPY INTO books FROM 's3://databend/books.csv' CONNECTION = ( access_key_id = '********', endpoint_url = '********', region = '********', secret_access_key = '********' ) FILE_FORMAT = (type = 'CSV') PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 CopyIntoTable(
     CopyIntoTableStmt {
@@ -10502,7 +10470,7 @@ Presign(
 ---------- Input ----------
 CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
 ---------- Output ---------
-CREATE SHARE ENDPOINT IF NOT EXISTS t URL=URL = 'http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
 ---------- AST ------------
 CreateShareEndpoint(
     CreateShareEndpointStmt {
@@ -10529,6 +10497,49 @@ CreateShareEndpoint(
             quote: None,
             span: Some(
                 68..69,
+            ),
+        },
+        args: {
+            "jwks_key_file": "https://eks.public/keys",
+            "ssl_cert": "cert.pem",
+        },
+        comment: Some(
+            "share endpoint comment",
+        ),
+    },
+)
+
+
+---------- Input ----------
+CREATE SHARE ENDPOINT IF NOT EXISTS t 'http://127.0.0.1' TENANT=x ARGS=(jwks_key_file="https://eks.public/keys" ssl_cert="cert.pem") COMMENT='share endpoint comment';
+---------- Output ---------
+CREATE SHARE ENDPOINT IF NOT EXISTS t URL='http://127.0.0.1/' TENANT=x ARGS=(jwks_key_file=https://eks.public/keys,ssl_cert=cert.pem,) COMMENT = 'share endpoint comment'
+---------- AST ------------
+CreateShareEndpoint(
+    CreateShareEndpointStmt {
+        if_not_exists: true,
+        endpoint: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                36..37,
+            ),
+        },
+        url: UriLocation {
+            protocol: "http",
+            name: "127.0.0.1",
+            path: "/",
+            part_prefix: "",
+            connection: Connection {
+                visited_keys: {},
+                conns: {},
+            },
+        },
+        tenant: Identifier {
+            name: "x",
+            quote: None,
+            span: Some(
+                64..65,
             ),
         },
         args: {
@@ -11470,7 +11481,7 @@ Query(
 ---------- Input ----------
 SELECT c1 FROM 's3://test/bucket' (PATTERN => '*.parquet', connection => (ENDPOINT_URL = 'xxx')) t;
 ---------- Output ---------
-SELECT c1 FROM URL = 's3://test/bucket' ( PATTERN => '*.parquet', CONNECTION => (endpoint_url = 'xxx' ) ) AS t
+SELECT c1 FROM 's3://test/bucket' ( PATTERN => '*.parquet', CONNECTION => (endpoint_url = 'xxx' ) ) AS t
 ---------- AST ------------
 Query(
     Query {

@@ -177,12 +177,12 @@ pub fn uri_location(i: Input) -> IResult<UriLocation> {
 pub fn string_location(i: Input) -> IResult<FileLocation> {
     map_res(
         rule! {
-            (URL ~ ^"=")? ~ #literal_string
+            #literal_string
             ~ (CONNECTION ~ ^"=" ~ ^#connection_options ~ ","?)?
             ~ (CREDENTIALS ~ ^"=" ~ ^#connection_options ~ ","?)?
             ~ (LOCATION_PREFIX ~ ^"=" ~ ^#literal_string ~ ","?)?
         },
-        |(_, location, connection_opts, credentials_opts, location_prefix)| {
+        |(location, connection_opts, credentials_opts, location_prefix)| {
             if let Some(stripped) = location.strip_prefix('@') {
                 if location_prefix.is_none()
                     && connection_opts.is_none()
