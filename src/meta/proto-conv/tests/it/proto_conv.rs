@@ -484,7 +484,6 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("table_lock_meta:{:?}", buf);
     }
 
     // schema
