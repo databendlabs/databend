@@ -47,7 +47,7 @@ For example, the following statement creates an external stage on Amazon S3 with
 
 ```sql
 CREATE STAGE my_s3_stage
-URL = 's3://load/files/'
+'s3://load/files/'
 CONNECTION = (
     ACCESS_KEY_ID = '<your-access-key-id>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
